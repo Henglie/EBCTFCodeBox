@@ -20,6 +20,7 @@
 
 - [项目简介](#项目简介)
 - [特点](#特点)
+- [界面预览](#界面预览)
 - [运行](#运行)
 - [平台兼容性](#平台兼容性)
 - [性能要求](#性能要求)
@@ -55,6 +56,47 @@
 - **文件拖入分析**：拖入文件自动检测类型、附加数据、图像宽高异常等。
 - **全 Unicode 显示**：内置天珩全字库，按 Unicode 平面按需加载，生僻字、古文字、Emoji 均可正常显示。
 - **Material 3 温和红主题**，暗/亮色切换，中英双语。
+
+> 想看完整的功能介绍与场景演示，见 [`介绍文章.md`](./介绍文章.md)。
+
+## 界面预览
+
+<p align="center">
+  <img src="介绍图片/一把梭界面.png" alt="一把梭 · 智能解码" width="80%" />
+</p>
+
+<p align="center"><i>一把梭 · 智能解码：粘进去自动识别编码链并给出候选结果</i></p>
+
+<p align="center">
+  <img src="介绍图片/解析文件演示.gif" alt="文件解析演示" width="80%" />
+</p>
+
+<p align="center"><i>拖入文件自动识别类型 + 剥离附加数据</i></p>
+
+<p align="center">
+  <img src="介绍图片/配方链演示.gif" alt="配方链演示" width="80%" />
+</p>
+
+<p align="center"><i>配方链：把多个算法串成一条可视化流水线</i></p>
+
+<table>
+  <tr>
+    <td><img src="介绍图片/编码图片.png" alt="图形编码图鉴" /></td>
+    <td><img src="介绍图片/Edu演示.png" alt="密码学教学科普卡" /></td>
+  </tr>
+  <tr>
+    <td align="center"><i>图形编码图鉴 · 253 张对照表</i></td>
+    <td align="center"><i>每个算法附带 edu 科普卡</i></td>
+  </tr>
+  <tr>
+    <td><img src="介绍图片/关于页面-白.png" alt="亮色主题" /></td>
+    <td><img src="介绍图片/关于页面-暗.png" alt="暗色主题" /></td>
+  </tr>
+  <tr>
+    <td align="center"><i>亮色主题</i></td>
+    <td align="center"><i>暗色主题（Material 3 昼夜切换）</i></td>
+  </tr>
+</table>
 
 ## 运行
 
