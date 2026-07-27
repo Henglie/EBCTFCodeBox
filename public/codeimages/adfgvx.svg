@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="430" viewBox="0 0 360 430" font-family="'Segoe UI',Arial,sans-serif">
+  <rect width="360" height="430" fill="#ffffff"/>
+  <text x="180" y="30" text-anchor="middle" font-size="20" font-weight="bold" fill="#8a2b2b">ADFGVX 密码表 (6×6)</text>
+  <text x="180" y="50" text-anchor="middle" font-size="12" fill="#666">行列首字母取 A/D/F/G/V/X   含 A-Z 0-9   每字符→双码(行,列)</text>
+  <g transform="translate(60,80)">
+    <!-- 列头 A D F G V X -->
+    <g font-size="17" font-weight="bold" fill="#8a2b2b" text-anchor="middle">
+      <text x="50" y="20">A</text><text x="90" y="20">D</text><text x="130" y="20">F</text><text x="170" y="20">G</text><text x="210" y="20">V</text><text x="250" y="20">X</text>
+    </g>
+    <!-- 行头 A D F G V X -->
+    <g font-size="17" font-weight="bold" fill="#8a2b2b" text-anchor="middle">
+      <text x="8" y="56">A</text><text x="8" y="96">D</text><text x="8" y="136">F</text><text x="8" y="176">G</text><text x="8" y="216">V</text><text x="8" y="256">X</text>
+    </g>
+    <g stroke="#8a2b2b" stroke-width="1.5" fill="none">
+      <rect x="30" y="30" width="240" height="240"/>
+      <line x1="70" y1="30" x2="70" y2="270"/>
+      <line x1="110" y1="30" x2="110" y2="270"/>
+      <line x1="150" y1="30" x2="150" y2="270"/>
+      <line x1="190" y1="30" x2="190" y2="270"/>
+      <line x1="230" y1="30" x2="230" y2="270"/>
+      <line x1="30" y1="70" x2="270" y2="70"/>
+      <line x1="30" y1="110" x2="270" y2="110"/>
+      <line x1="30" y1="150" x2="270" y2="150"/>
+      <line x1="30" y1="190" x2="270" y2="190"/>
+      <line x1="30" y1="230" x2="270" y2="230"/>
+    </g>
+    <!-- A B C D E F / G H I J K L / M N O P Q R / S T U V W X / Y Z 0 1 2 3 / 4 5 6 7 8 9 -->
+    <g font-size="17" fill="#222" text-anchor="middle">
+      <text x="50" y="56">A</text><text x="90" y="56">B</text><text x="130" y="56">C</text><text x="170" y="56">D</text><text x="210" y="56">E</text><text x="250" y="56">F</text>
+      <text x="50" y="96">G</text><text x="90" y="96">H</text><text x="130" y="96">I</text><text x="170" y="96">J</text><text x="210" y="96">K</text><text x="250" y="96">L</text>
+      <text x="50" y="136">M</text><text x="90" y="136">N</text><text x="130" y="136">O</text><text x="170" y="136">P</text><text x="210" y="136">Q</text><text x="250" y="136">R</text>
+      <text x="50" y="176">S</text><text x="90" y="176">T</text><text x="130" y="176">U</text><text x="170" y="176">V</text><text x="210" y="176">W</text><text x="250" y="176">X</text>
+      <text x="50" y="216">Y</text><text x="90" y="216">Z</text><text x="130" y="216">0</text><text x="170" y="216">1</text><text x="210" y="216">2</text><text x="250" y="216">3</text>
+      <text x="50" y="256">4</text><text x="90" y="256">5</text><text x="130" y="256">6</text><text x="170" y="256">7</text><text x="210" y="256">8</text><text x="250" y="256">9</text>
+    </g>
+  </g>
+  <text x="180" y="390" text-anchor="middle" font-size="12" fill="#666">例：C = AF (行 A,列 F)   N = FD (行 F,列 D)   5 = XD (行 X,列 D)</text>
+  <text x="180" y="412" text-anchor="middle" font-size="11" fill="#999">注：实战方阵按密钥打乱，本图为标准字母序示例</text>
+</svg>

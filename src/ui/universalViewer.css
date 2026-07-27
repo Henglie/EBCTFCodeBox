@@ -1,0 +1,690 @@
+/* universalViewer.css — 字符显示器视图（M3 温和红，对齐 exhaustiveView 范式） */
+
+.uv-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+ /* 字符显示器整体默认字号比项目其他处大 3px（不依赖 main.js，就近在本视图作用域设）。
+     基准 body 为 --fs-md(17px)，此处 +3 → 20px。子元素多用 em 或 var(--fs-*)，
+     其中用 em 的会随之放大，用固定 var 的保持既有层级。 */
+  font-size: calc(var(--fs-md) + 3px);
+}
+
+.uv-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 200px; /* 编辑框默认高一档（与 JS 内联 min-height 一致，双保险） */
+}
+.uv-input.dragover {
+  border-color: var(--primary);
+  background: var(--surface-hi);
+}
+
+.uv-run-btn {
+  align-self: flex-start;
+}
+
+.uv-stat {
+  font-size: var(--fs-sm);
+  color: var(--on-surface-var);
+  min-height: 1.2em;
+}
+
+/* Tab 栏 */
+.uv-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  border-bottom: 1px solid var(--outline-var);
+  padding-bottom: var(--sp-2);
+}
+.uv-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-3);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-full);
+  background: var(--surface-1);
+  color: var(--on-surface-var);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  transition: background var(--dur-short) var(--ease), color var(--dur-short) var(--ease);
+}
+.uv-tab:hover {
+  background: var(--surface-hi);
+}
+.uv-tab.active {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--primary);
+}
+.uv-tab .msym {
+  font-size: var(--fs-base);
+}
+
+.uv-out {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.uv-empty {
+  text-align: center;
+  color: var(--on-surface-var);
+  font-size: var(--fs-base);
+  padding: var(--sp-4);
+}
+.uv-truncate {
+  font-size: var(--fs-sm);
+  color: var(--on-surface-var);
+  text-align: center;
+  padding: var(--sp-2);
+}
+
+/* ============================================================
+   视图 ①：Hex+ASCII 双栏
+   ============================================================ */
+.uv-hex-wrap {
+  overflow-x: auto;
+}
+
+/* 悬停提示条：显示当前字节 offset / 值 */
+.uv-hex-hint {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: var(--fs-sm);
+  color: var(--on-surface-var);
+  padding: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-2);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-lg);
+  min-height: 1.5em;
+}
+
+/* OllyDbg 风格 hex 表：偏移 | hex 字节 | ASCII，逐字节 span + 双向联动高亮 */
+.uv-hexview {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-lg);
+  padding: var(--sp-2) 0;
+  overflow-x: auto;
+}
+.uv-hexview-head {
+  display: flex;
+  gap: 1.2rem;
+  padding: 0 var(--sp-3) var(--sp-2);
+  border-bottom: 1px solid var(--outline-var);
+  margin-bottom: var(--sp-1);
+  white-space: pre;
+}
+.uv-hexview-head .uv-hexview-hex {
+  color: var(--primary);
+  font-weight: 600;
+}
+.uv-hexrow {
+  display: flex;
+  gap: 1.2rem;
+  padding: 0.05rem var(--sp-3);
+  white-space: pre;
+}
+.uv-hexrow:hover {
+  background: color-mix(in srgb, var(--on-surface) 4%, transparent);
+}
+.uv-hexview-off {
+  color: var(--primary);
+  flex: 0 0 auto;
+  width: 8ch;
+  box-sizing: content-box;
+  user-select: none;
+}
+.uv-hexview-hex {
+  flex: 0 0 auto;
+  color: var(--on-surface);
+}
+.uv-hexview-ascii {
+  flex: 0 0 auto;
+  color: var(--on-surface-var);
+  white-space: pre;
+}
+.uv-hexview .hb,
+.uv-hexview .ac {
+  border-radius: 3px;
+  cursor: default;
+}
+.uv-hexview .hb.hl,
+.uv-hexview .ac.hl {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+/* ============================================================
+   视图 ②：全字库 Unicode 逐字符表
+   ============================================================ */
+.uv-unicode-wrap {
+  overflow-x: auto;
+}
+.uv-unicode-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.uv-unicode-tbl thead {
+  background: var(--surface-2);
+}
+.uv-unicode-tbl th {
+  padding: var(--sp-2) var(--sp-2);
+  text-align: start;
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--on-surface-var);
+  border-bottom: 1px solid var(--outline-var);
+  white-space: nowrap;
+}
+.uv-unicode-tbl td {
+  padding: var(--sp-1) var(--sp-2);
+  border-bottom: 1px solid color-mix(in srgb, var(--outline-var) 50%, transparent);
+  vertical-align: top;
+}
+.uv-unicode-row:hover {
+  background: var(--surface-hi);
+}
+.uv-glyph-cell {
+  font-size: var(--fs-lg, 1.25rem);
+ /* 天珩全字库渲染冷僻码位（字库变量已在 fonts.css 定义） */
+  font-family: var(--font-content), var(--mono, ui-monospace, monospace);
+  font-feature-settings: var(--font-features);
+  text-align: center;
+  min-width: 2em;
+  color: var(--on-surface);
+}
+.uv-cp-cell {
+  font-family: var(--mono, ui-monospace, monospace);
+  color: var(--primary);
+  white-space: nowrap;
+}
+.uv-name-cell {
+  color: var(--on-surface-var);
+  white-space: nowrap;
+}
+.uv-cat-cell {
+  color: var(--on-surface-var);
+  white-space: nowrap;
+}
+.uv-utf8-cell, .uv-utf16-cell {
+  font-family: var(--mono, ui-monospace, monospace);
+  color: var(--on-surface-var);
+  white-space: nowrap;
+}
+.uv-plane-cell {
+  font-size: var(--fs-xs);
+  color: var(--on-surface-var);
+  white-space: nowrap;
+}
+
+/* ============================================================
+   视图 ③：编码探测
+   ============================================================ */
+.uv-encoding-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.uv-encoding-desc {
+  font-size: var(--fs-sm);
+  color: var(--on-surface-var);
+}
+.uv-encoding-bom {
+  padding: var(--sp-2);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-xs);
+  font-size: var(--fs-sm);
+}
+.uv-encoding-bom-line {
+  display: flex;
+  gap: var(--sp-2);
+}
+.uv-encoding-label {
+  font-weight: 600;
+  color: var(--on-surface-var);
+}
+.uv-encoding-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.uv-encoding-tbl th {
+  padding: var(--sp-2);
+  text-align: start;
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--on-surface-var);
+  border-bottom: 1px solid var(--outline-var);
+  background: var(--surface-2);
+}
+.uv-encoding-tbl td {
+  padding: var(--sp-1) var(--sp-2);
+  border-bottom: 1px solid color-mix(in srgb, var(--outline-var) 50%, transparent);
+  vertical-align: top;
+}
+.uv-encoding-row:hover {
+  background: var(--surface-hi);
+}
+.uv-encoding-row.ok .uv-enc-status-cell {
+  color: var(--success, #4caf50);
+}
+.uv-encoding-row.fail .uv-enc-status-cell {
+  color: var(--error, #f44336);
+}
+.uv-enc-name-cell {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.uv-enc-status-cell {
+  white-space: nowrap;
+}
+.uv-enc-ratio-cell {
+  font-family: var(--mono, ui-monospace, monospace);
+  text-align: end;
+  white-space: nowrap;
+}
+.uv-enc-preview-cell {
+  font-family: var(--mono, ui-monospace, monospace);
+  word-break: break-all;
+  max-width: 400px;
+}
+
+/* ============================================================
+   视图 ④：不可见字符
+   ============================================================ */
+.uv-invisible-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.uv-invisible-ok {
+  padding: var(--sp-3);
+  text-align: center;
+  color: var(--success, #4caf50);
+  font-size: var(--fs-base);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-lg);
+}
+.uv-invisible-stat {
+  padding: var(--sp-2) var(--sp-3);
+  background: color-mix(in srgb, var(--warning, #ff9800) 15%, var(--surface-1));
+  border: 1px solid var(--warning, #ff9800);
+  border-radius: var(--r-xs);
+  font-size: var(--fs-base);
+  color: var(--on-surface);
+  font-weight: 600;
+}
+.uv-invisible-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.uv-invisible-type-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-2);
+  background: var(--surface-2);
+  border-radius: var(--r-full);
+  font-size: var(--fs-sm);
+}
+.uv-inv-type-name {
+  color: var(--on-surface-var);
+}
+.uv-inv-type-count {
+  font-weight: 700;
+  color: var(--primary);
+}
+.uv-invisible-viz-label, .uv-invisible-list-label {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--on-surface-var);
+}
+.uv-invisible-viz {
+  padding: var(--sp-2);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-lg);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.uv-invisible-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.uv-invisible-tbl th {
+  padding: var(--sp-2);
+  text-align: start;
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--on-surface-var);
+  border-bottom: 1px solid var(--outline-var);
+  background: var(--surface-2);
+}
+.uv-invisible-tbl td {
+  padding: var(--sp-1) var(--sp-2);
+  border-bottom: 1px solid color-mix(in srgb, var(--outline-var) 50%, transparent);
+}
+.uv-invisible-tbl tr:hover {
+  background: var(--surface-hi);
+}
+.uv-inv-glyph {
+  font-family: var(--mono, ui-monospace, monospace);
+  color: var(--error, #f44336);
+  font-weight: 700;
+}
+.uv-invisible-clean {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.uv-clean-label {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--on-surface-var);
+}
+.uv-clean-pre {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: var(--fs-sm);
+  margin: 0;
+  padding: var(--sp-2);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-lg);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.uv-copy-clean-btn {
+  align-self: flex-start;
+}
+
+/* ---- 新增：视图① 字节统计条 ---- */
+.uv-hex-stat {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--on-surface-var);
+  padding: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-2);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-lg);
+}
+.uv-hex-stat > span:first-child {
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+/* ---- 新增：视图② 区块列 ---- */
+.uv-block-cell {
+  font-size: var(--fs-sm);
+  color: var(--on-surface-var);
+  white-space: nowrap;
+}
+
+/* ---- 新增：视图③ detect 指纹打分表 ---- */
+.uv-detect-title {
+  margin-top: var(--sp-4);
+  margin-bottom: var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--on-surface);
+}
+.uv-detect-none {
+  font-size: var(--fs-sm);
+  color: var(--on-surface-var);
+  padding: var(--sp-2) 0;
+}
+.uv-detect-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.uv-detect-tbl th,
+.uv-detect-tbl td {
+  padding: var(--sp-1) var(--sp-2);
+  text-align: start;
+  border-bottom: 1px solid color-mix(in srgb, var(--outline-var) 50%, transparent);
+}
+.uv-detect-tbl thead th {
+  background: var(--surface-2);
+  font-weight: 600;
+}
+.uv-detect-tbl tr:hover {
+  background: var(--surface-hi);
+}
+.uv-detect-id {
+  font-family: var(--mono, ui-monospace, monospace);
+  color: var(--on-surface-var);
+}
+.uv-detect-conf {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--primary, #d05a5a);
+}
+
+/* ---- 新增：视图④ 同形异义字块 ---- */
+.uv-confus-box {
+  margin-bottom: var(--sp-4);
+  padding: var(--sp-3);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-lg);
+}
+.uv-confus-title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--on-surface);
+  margin-bottom: var(--sp-2);
+}
+.uv-confus-ok {
+  font-size: var(--fs-sm);
+  color: var(--on-surface-var);
+}
+.uv-confus-stat {
+  font-size: var(--fs-sm);
+  color: var(--error, #f44336);
+  margin-bottom: var(--sp-2);
+}
+.uv-confus-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.uv-confus-tbl th,
+.uv-confus-tbl td {
+  padding: var(--sp-1) var(--sp-2);
+  text-align: start;
+  border-bottom: 1px solid color-mix(in srgb, var(--outline-var) 50%, transparent);
+}
+.uv-confus-tbl thead th {
+  background: var(--surface-2);
+  font-weight: 600;
+}
+.uv-confus-ch {
+  font-family: var(--font-content), var(--mono, ui-monospace, monospace);
+  font-weight: 700;
+  color: var(--error, #f44336);
+}
+
+/* ============================================================
+   视图 ④：渲染全部（Markdown / LaTeX / 天珩全字库）
+   ============================================================ */
+.uv-renderall-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.uv-render-sec {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-lg);
+}
+.uv-render-sec-title {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--on-surface);
+}
+.uv-render-sec-desc {
+  font-size: var(--fs-xs);
+  color: var(--on-surface-var);
+}
+
+/* --- 区①：Markdown 渲染体 --- */
+.uv-md-body {
+  font-family: var(--font-content), var(--font);
+  font-feature-settings: var(--font-features);
+  line-height: 1.6;
+  color: var(--on-surface);
+  word-break: break-word;
+}
+.uv-md-body h1, .uv-md-body h2, .uv-md-body h3,
+.uv-md-body h4, .uv-md-body h5, .uv-md-body h6 {
+  margin: var(--sp-3) 0 var(--sp-2);
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--on-surface);
+}
+.uv-md-body h1 { font-size: 1.6em; }
+.uv-md-body h2 { font-size: 1.4em; }
+.uv-md-body h3 { font-size: 1.2em; }
+.uv-md-body h4 { font-size: 1.1em; }
+.uv-md-body h5, .uv-md-body h6 { font-size: 1em; }
+.uv-md-body p { margin: var(--sp-2) 0; }
+.uv-md-body ul, .uv-md-body ol { margin: var(--sp-2) 0; padding-inline-start: 1.6em; }
+.uv-md-body li { margin: var(--sp-1) 0; }
+.uv-md-body a { color: var(--primary); text-decoration: underline; }
+.uv-md-body code {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  background: var(--surface-2);
+  border-radius: var(--r-xs);
+}
+.uv-md-code {
+  margin: var(--sp-2) 0;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-sm);
+  overflow-x: auto;
+}
+.uv-md-code code {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.9em;
+  padding: 0;
+  background: none;
+  white-space: pre;
+}
+.uv-md-table {
+  border-collapse: collapse;
+  margin: var(--sp-2) 0;
+  font-size: 0.95em;
+}
+.uv-md-table th, .uv-md-table td {
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--outline-var);
+  text-align: start;
+}
+.uv-md-table thead th {
+  background: var(--surface-2);
+  font-weight: 600;
+}
+
+/* --- 区②：LaTeX 公式体 --- */
+.uv-math-body {
+  line-height: 1.8;
+  color: var(--on-surface);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.uv-math-body .katex-fallback {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  background: var(--surface-2);
+  border-radius: var(--r-xs);
+  color: var(--on-surface-var);
+}
+.uv-math-body .katex-fallback-block {
+  display: block;
+  margin: var(--sp-2) 0;
+  padding: var(--sp-2) var(--sp-3);
+  text-align: center;
+}
+
+/* --- 区③：天珩全字库渲染体（div + OpenType 特性全开，堆叠/连字生效） --- */
+.uv-cheon-body {
+  font-family: var(--font-content), var(--font);
+  font-feature-settings: "ccmp" 1, "calt" 1, "liga" 1;
+  line-height: 1.9;
+  color: var(--on-surface);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* --- 文本输出框（当前 tab 结果的可复制/导出纯文本） --- */
+.uv-out-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.uv-out-label {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--on-surface-var);
+}
+.uv-copy-out-btn {
+  flex: none;
+}
+.uv-out-text {
+  width: 100%;
+  min-height: 160px;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-sm);
+  white-space: pre;
+  overflow: auto;
+}

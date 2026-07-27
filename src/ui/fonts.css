@@ -1,0 +1,63 @@
+/*
+ * fonts.css — 字体分层加载（本地优先，绝不挂 CDN）。
+ *
+ * 分两层，兼顾「秒开」与「全字库显示能力」：
+ * 1. UI 图标：内联 SVG（src/ui/icons.js，官方 Material Symbols Rounded path，Apache-2.0）。
+ * 零请求、零闪烁、可换色。不再依赖图标字体 woff2（已移除 5.3MB 全字库死重）。
+ * 2. 内容区（输入/输出）：天珩 Unicode 全字库，按 Unicode 平面（0/1/2/其余）分 4 片
+ * unicode-range 让浏览器只在页面真出现某平面字符时才下载那一片 ttf。
+ * 顶栏「字库」面板可主动预载 / 查看各平面加载状态（见 src/ui/fontLoader.js）。
+ *
+ * 内容区字体文件放 public/fonts/th/（天珩子集 woff2，本机切分）。
+ * 天珩全字库来源：http://cheonhyeong.com/index.html（沈天珩「全字堂」，覆盖全 Unicode）。
+ * 许可：天珩说明第六条「请勿用于商业用途」——本工具开源非商用，纯本地引用开源字库，合规。
+ *
+ * 双层加载（MT8），首屏轻 + 最终全：
+ * 1. 首屏：本文件只挂 th-ctf-subset.woff2（约 1.52 MB，14594 字形）——扫全项目源码 + i18n
+ * + GB2312 全集 + ASCII/标点合成，覆盖全部 CTF 编码表（社会主义核心价值观/佛曰/玛卡巴卡/
+ * 天干地支/百家姓/六十四卦/当铺 等）零缺失。首屏只下这一片，秒开。
+ * 2. 后台：页面渲染完后 fontLoader.js 的 preloadAllPlanes 趁空闲逐个把天珩全量 4 平面
+ * woff2（共约 31 MB，ttf 无损转码砍 64%）拉进 document.fonts，补齐子集外冷僻字。
+ * 全量随发行版打包、本地加载、零外发、不阻塞 UI。
+ * 子集未命中且全量尚未加载完的瞬间，系统 CJK 字体顶上（font-display: swap），绝不白屏。
+ */
+
+/* ============ UI 图标（内联 SVG 容器） ============ */
+/* icons.js 把 <svg> 注入 .msym；此处只管容器尺寸与居中，SVG 用 currentColor 继承文字色。 */
+.msym {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25em;
+  height: 1.25em;
+  line-height: 1;
+  user-select: none;
+  flex: none;
+}
+.msym > svg { width: 1em; height: 1em; display: block; }
+
+/* ============ 天珩 CTF 常用字子集（内容区专用，单文件 woff2） ============ */
+/*
+ * 只随包一个子集 woff2（th-ctf-subset.woff2，约 1.52 MB）：覆盖全项目用到的字 + GB2312
+ * 全集 + ASCII/标点 + 全部 CTF 编码表生僻字。不写 unicode-range（全码位优先命中此族）；
+ * 子集里没有的字自动回退到下方 --font-content 里的系统 CJK 字体，绝不白屏。
+ * font-display: swap —— 字体到位前系统字体顶上，到了再换。
+ */
+@font-face {
+  font-family: "Cheonhyeong";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../../public/fonts/th/th-ctf-subset.woff2") format("woff2");
+}
+
+/*
+ * 内容区用这个字体族：先天珩子集（命中即用），子集外的字回退系统 CJK 字体。
+ * UI 外壳不用它，保证秒开。
+ */
+:root {
+  --font-content: "Cheonhyeong", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+ /* 天珩全字库靠 OpenType 组合特性拼字：ccmp 组合分解、calt 上下文替换、liga 连字。
+     不开则堆叠/连字规则失效（一键解码框显示不对）。内容区统一引用此变量。 */
+  --font-features: "ccmp" 1, "calt" 1, "liga" 1;
+}

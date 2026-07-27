@@ -1,0 +1,3030 @@
+{
+  "source": "随波逐流工作室 (1o1o.xyz) — 224 种编码图",
+  "note": "图形编码对照表，人肉对照解码用。webp/png 图版权归随波逐流工作室，本项目仅内嵌展示并致谢；另 4 张 .svg（polybius/tapcode/adfgx/adfgvx）为本项目自制（无版权顾虑），补古典密码常用对照表缺口。",
+  "count": 253,
+  "images": [
+    {
+      "id": "25paircolorcode",
+      "en": "25paircolorcode",
+      "cn": "25对电缆色码",
+      "alias": [
+        "电话线色标"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/25paircolorcode.png",
+      "w": 275,
+      "h": 560,
+      "lineart": false
+    },
+    {
+      "id": "alphabetcode",
+      "en": "alphabetcode",
+      "cn": "字母代码表",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/alphabetcode.webp",
+      "w": 602,
+      "h": 502,
+      "lineart": true
+    },
+    {
+      "id": "ancienthylian",
+      "en": "ancienthylian",
+      "cn": "古海拉尔文",
+      "alias": [
+        "塞尔达传说"
+      ],
+      "cat": "game",
+      "file": "codeimages/ancienthylian.webp",
+      "w": 490,
+      "h": 450,
+      "lineart": true
+    },
+    {
+      "id": "andorian",
+      "en": "andorian",
+      "cn": "安多利亚文",
+      "alias": [
+        "星际迷航"
+      ],
+      "cat": "alien",
+      "file": "codeimages/andorian.webp",
+      "w": 1500,
+      "h": 524,
+      "lineart": true
+    },
+    {
+      "id": "antiker",
+      "en": "antiker",
+      "cn": "antiker",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/antiker.webp",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "antilife",
+      "en": "antilife",
+      "cn": "antilife",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/antilife.webp",
+      "w": 1218,
+      "h": 1238,
+      "lineart": true
+    },
+    {
+      "id": "arcadian",
+      "en": "arcadian",
+      "cn": "阿卡迪亚文",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/arcadian.png",
+      "w": 266,
+      "h": 242,
+      "lineart": true
+    },
+    {
+      "id": "astronomy",
+      "en": "astronomy",
+      "cn": "天文符号",
+      "alias": [
+        "天体符号"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/astronomy.webp",
+      "w": 770,
+      "h": 410,
+      "lineart": true
+    },
+    {
+      "id": "ath",
+      "en": "ath",
+      "cn": "ath",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/ath.webp",
+      "w": 1120,
+      "h": 1070,
+      "lineart": true
+    },
+    {
+      "id": "atlantis",
+      "en": "atlantis",
+      "cn": "亚特兰蒂斯文",
+      "alias": [
+        "星际之门"
+      ],
+      "cat": "alien",
+      "file": "codeimages/atlantis.webp",
+      "w": 287,
+      "h": 374,
+      "lineart": true
+    },
+    {
+      "id": "aurebesh",
+      "en": "aurebesh",
+      "cn": "奥拉贝什",
+      "alias": [
+        "星球大战",
+        "银河标准文"
+      ],
+      "cat": "alien",
+      "file": "codeimages/aurebesh.png",
+      "w": 490,
+      "h": 650,
+      "lineart": true
+    },
+    {
+      "id": "autobot",
+      "en": "autobot",
+      "cn": "汽车人文字",
+      "alias": [
+        "变形金刚"
+      ],
+      "cat": "alien",
+      "file": "codeimages/autobot.webp",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "baal",
+      "en": "baal",
+      "cn": "巴力文",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/baal.webp",
+      "w": 812,
+      "h": 786,
+      "lineart": true
+    },
+    {
+      "id": "baaldiagonal",
+      "en": "baaldiagonal",
+      "cn": "巴力斜排文",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/baaldiagonal.png",
+      "w": 945,
+      "h": 706,
+      "lineart": true
+    },
+    {
+      "id": "babylonian",
+      "en": "babylonian",
+      "cn": "巴比伦数字",
+      "alias": [
+        "楔形数字"
+      ],
+      "cat": "ancient",
+      "file": "codeimages/babylonian.webp",
+      "w": 1120,
+      "h": 730,
+      "lineart": true
+    },
+    {
+      "id": "backslash",
+      "en": "backslash",
+      "cn": "反斜杠码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/backslash.png",
+      "w": 215,
+      "h": 453,
+      "lineart": true
+    },
+    {
+      "id": "bacon",
+      "en": "bacon",
+      "cn": "培根密码",
+      "alias": [
+        "Bacon 密码",
+        "双字母密码"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/bacon.png",
+      "w": 462,
+      "h": 497,
+      "lineart": true
+    },
+    {
+      "id": "baku",
+      "en": "baku",
+      "cn": "baku",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/baku.webp",
+      "w": 1218,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "ballet",
+      "en": "ballet",
+      "cn": "芭蕾舞谱",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/ballet.png",
+      "w": 721,
+      "h": 782,
+      "lineart": true
+    },
+    {
+      "id": "barcode39",
+      "en": "barcode39",
+      "cn": "Code 39 条形码",
+      "alias": [
+        "3 of 9 码"
+      ],
+      "cat": "barcode",
+      "file": "codeimages/barcode39.webp",
+      "w": 1120,
+      "h": 1070,
+      "lineart": true
+    },
+    {
+      "id": "beardedmen",
+      "en": "beardedmen",
+      "cn": "大胡子小人",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/beardedmen.webp",
+      "w": 546,
+      "h": 530,
+      "lineart": false
+    },
+    {
+      "id": "birdsonawire",
+      "en": "birdsonawire",
+      "cn": "电线上的鸟",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/birdsonawire.webp",
+      "w": 749,
+      "h": 726,
+      "lineart": true
+    },
+    {
+      "id": "blokscript",
+      "en": "blokscript",
+      "cn": "blokscript",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/blokscript.png",
+      "w": 490,
+      "h": 370,
+      "lineart": true
+    },
+    {
+      "id": "blox",
+      "en": "blox",
+      "cn": "blox",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/blox.webp",
+      "w": 917,
+      "h": 1034,
+      "lineart": true
+    },
+    {
+      "id": "book",
+      "en": "book",
+      "cn": "书密码",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/book.webp",
+      "w": 693,
+      "h": 615,
+      "lineart": true
+    },
+    {
+      "id": "botw",
+      "en": "botw",
+      "cn": "旷野之息文字",
+      "alias": [
+        "塞尔达传说",
+        "希卡文"
+      ],
+      "cat": "game",
+      "file": "codeimages/botw.png",
+      "w": 469,
+      "h": 512,
+      "lineart": false
+    },
+    {
+      "id": "box",
+      "en": "box",
+      "cn": "方框码",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/box.png",
+      "w": 378,
+      "h": 290,
+      "lineart": true
+    },
+    {
+      "id": "brahmi",
+      "en": "brahmi",
+      "cn": "婆罗米文",
+      "alias": [],
+      "cat": "ancient",
+      "file": "codeimages/brahmi.png",
+      "w": 700,
+      "h": 535,
+      "lineart": true
+    },
+    {
+      "id": "braille",
+      "en": "braille",
+      "cn": "盲文",
+      "alias": [
+        "点字"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/braille.png",
+      "w": 280,
+      "h": 522,
+      "lineart": true
+    },
+    {
+      "id": "builder",
+      "en": "builder",
+      "cn": "builder",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/builder.webp",
+      "w": 336,
+      "h": 318,
+      "lineart": true
+    },
+    {
+      "id": "caps",
+      "en": "caps",
+      "cn": "caps",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/caps.webp",
+      "w": 294,
+      "h": 368,
+      "lineart": true
+    },
+    {
+      "id": "centauri",
+      "en": "centauri",
+      "cn": "半人马文",
+      "alias": [
+        "巴比伦5"
+      ],
+      "cat": "alien",
+      "file": "codeimages/centauri.webp",
+      "w": 1456,
+      "h": 1274,
+      "lineart": true
+    },
+    {
+      "id": "chappe",
+      "en": "chappe",
+      "cn": "沙普信号机",
+      "alias": [
+        "法国旗语电报"
+      ],
+      "cat": "flag",
+      "file": "codeimages/chappe.png",
+      "w": 301,
+      "h": 428,
+      "lineart": true
+    },
+    {
+      "id": "chappe2",
+      "en": "chappe2",
+      "cn": "沙普信号机 2",
+      "alias": [],
+      "cat": "flag",
+      "file": "codeimages/chappe2.png",
+      "w": 406,
+      "h": 778,
+      "lineart": true
+    },
+    {
+      "id": "chappe3",
+      "en": "chappe3",
+      "cn": "沙普信号机 3",
+      "alias": [],
+      "cat": "flag",
+      "file": "codeimages/chappe3.webp",
+      "w": 1120,
+      "h": 390,
+      "lineart": true
+    },
+    {
+      "id": "chinesecode",
+      "en": "chinesecode",
+      "cn": "中文电码",
+      "alias": [
+        "电报码"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/chinesecode.png",
+      "w": 238,
+      "h": 222,
+      "lineart": true
+    },
+    {
+      "id": "chinesenumbers",
+      "en": "chinesenumbers",
+      "cn": "苏州码子",
+      "alias": [
+        "中文数字",
+        "花码"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/chinesenumbers.webp",
+      "w": 800,
+      "h": 634,
+      "lineart": true
+    },
+    {
+      "id": "chocolate",
+      "en": "chocolate",
+      "cn": "chocolate",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/chocolate.webp",
+      "w": 1120,
+      "h": 730,
+      "lineart": true
+    },
+    {
+      "id": "circle",
+      "en": "circle",
+      "cn": "圆圈码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/circle.png",
+      "w": 490,
+      "h": 450,
+      "lineart": true
+    },
+    {
+      "id": "circles",
+      "en": "circles",
+      "cn": "圆圈码（复）",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/circles.webp",
+      "w": 1092,
+      "h": 1040,
+      "lineart": true
+    },
+    {
+      "id": "circularglyphs",
+      "en": "circularglyphs",
+      "cn": "圆形字符",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/circularglyphs.png",
+      "w": 574,
+      "h": 602,
+      "lineart": true
+    },
+    {
+      "id": "cistern",
+      "en": "cistern",
+      "cn": "熙笃会数字",
+      "alias": [
+        "Cistercian"
+      ],
+      "cat": "ancient",
+      "file": "codeimages/cistern.webp",
+      "w": 1120,
+      "h": 1070,
+      "lineart": true
+    },
+    {
+      "id": "clutter",
+      "en": "clutter",
+      "cn": "clutter",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/clutter.webp",
+      "w": 189,
+      "h": 486,
+      "lineart": true
+    },
+    {
+      "id": "code_s",
+      "en": "code_s",
+      "cn": "code_s",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/code_s.webp",
+      "w": 1500,
+      "h": 1357,
+      "lineart": true
+    },
+    {
+      "id": "codescript",
+      "en": "codescript",
+      "cn": "codescript",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/codescript.webp",
+      "w": 952,
+      "h": 778,
+      "lineart": true
+    },
+    {
+      "id": "color",
+      "en": "color",
+      "cn": "颜色码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/color.webp",
+      "w": 1470,
+      "h": 930,
+      "lineart": true
+    },
+    {
+      "id": "colorhoney",
+      "en": "colorhoney",
+      "cn": "colorhoney",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/colorhoney.png",
+      "w": 1120,
+      "h": 730,
+      "lineart": false
+    },
+    {
+      "id": "colorsquares",
+      "en": "colorsquares",
+      "cn": "彩色方块码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/colorsquares.webp",
+      "w": 409,
+      "h": 337,
+      "lineart": true
+    },
+    {
+      "id": "colortokki",
+      "en": "colortokki",
+      "cn": "colortokki",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/colortokki.webp",
+      "w": 1120,
+      "h": 730,
+      "lineart": true
+    },
+    {
+      "id": "conway",
+      "en": "conway",
+      "cn": "conway",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/conway.png",
+      "w": 931,
+      "h": 1130,
+      "lineart": true
+    },
+    {
+      "id": "covenant",
+      "en": "covenant",
+      "cn": "星盟文字",
+      "alias": [
+        "光环 Halo"
+      ],
+      "cat": "game",
+      "file": "codeimages/covenant.png",
+      "w": 560,
+      "h": 470,
+      "lineart": true
+    },
+    {
+      "id": "dadaurka",
+      "en": "dadaurka",
+      "cn": "dadaurka",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/dadaurka.webp",
+      "w": 378,
+      "h": 290,
+      "lineart": true
+    },
+    {
+      "id": "dagger",
+      "en": "dagger",
+      "cn": "匕首码",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/dagger.webp",
+      "w": 826,
+      "h": 786,
+      "lineart": true
+    },
+    {
+      "id": "dancingmen",
+      "en": "dancingmen",
+      "cn": "跳舞的小人",
+      "alias": [
+        "福尔摩斯"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/dancingmen.png",
+      "w": 490,
+      "h": 650,
+      "lineart": true
+    },
+    {
+      "id": "deadspyscrawls",
+      "en": "deadspyscrawls",
+      "cn": "deadspyscrawls",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/deadspyscrawls.png",
+      "w": 294,
+      "h": 332,
+      "lineart": true
+    },
+    {
+      "id": "decepticon",
+      "en": "decepticon",
+      "cn": "霸天虎文字",
+      "alias": [
+        "变形金刚"
+      ],
+      "cat": "alien",
+      "file": "codeimages/decepticon.png",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "demonscript",
+      "en": "demonscript",
+      "cn": "恶魔文字",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/demonscript.webp",
+      "w": 784,
+      "h": 530,
+      "lineart": true
+    },
+    {
+      "id": "devanagari",
+      "en": "devanagari",
+      "cn": "天城文",
+      "alias": [
+        "梵文"
+      ],
+      "cat": "ancient",
+      "file": "codeimages/devanagari.webp",
+      "w": 1120,
+      "h": 390,
+      "lineart": true
+    },
+    {
+      "id": "dli",
+      "en": "dli",
+      "cn": "dli",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/dli.webp",
+      "w": 490,
+      "h": 524,
+      "lineart": true
+    },
+    {
+      "id": "dna",
+      "en": "dna",
+      "cn": "DNA 碱基码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/dna.webp",
+      "w": 1232,
+      "h": 1178,
+      "lineart": true
+    },
+    {
+      "id": "dniletters",
+      "en": "dniletters",
+      "cn": "迪尼字母",
+      "alias": [
+        "神秘岛 Myst"
+      ],
+      "cat": "game",
+      "file": "codeimages/dniletters.webp",
+      "w": 259,
+      "h": 258,
+      "lineart": true
+    },
+    {
+      "id": "dninumbers",
+      "en": "dninumbers",
+      "cn": "迪尼数字",
+      "alias": [
+        "神秘岛 Myst"
+      ],
+      "cat": "game",
+      "file": "codeimages/dninumbers.webp",
+      "w": 1428,
+      "h": 874,
+      "lineart": true
+    },
+    {
+      "id": "doctor",
+      "en": "doctor",
+      "cn": "加里弗雷文",
+      "alias": [
+        "神秘博士"
+      ],
+      "cat": "other",
+      "file": "codeimages/doctor.webp",
+      "w": 693,
+      "h": 494,
+      "lineart": true
+    },
+    {
+      "id": "doop",
+      "en": "doop",
+      "cn": "doop",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/doop.webp",
+      "w": 1120,
+      "h": 900,
+      "lineart": true
+    },
+    {
+      "id": "dorabella",
+      "en": "dorabella",
+      "cn": "多拉贝拉密码",
+      "alias": [
+        "埃尔加"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/dorabella.png",
+      "w": 350,
+      "h": 290,
+      "lineart": true
+    },
+    {
+      "id": "dots",
+      "en": "dots",
+      "cn": "点码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/dots.webp",
+      "w": 280,
+      "h": 390,
+      "lineart": false
+    },
+    {
+      "id": "dotsies",
+      "en": "dotsies",
+      "cn": "Dotsies 字体",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/dotsies.webp",
+      "w": 196,
+      "h": 446,
+      "lineart": true
+    },
+    {
+      "id": "draconic",
+      "en": "draconic",
+      "cn": "龙语文字",
+      "alias": [
+        "龙与地下城"
+      ],
+      "cat": "other",
+      "file": "codeimages/draconic.webp",
+      "w": 266,
+      "h": 494,
+      "lineart": true
+    },
+    {
+      "id": "dragon",
+      "en": "dragon",
+      "cn": "龙文",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/dragon.webp",
+      "w": 308,
+      "h": 290,
+      "lineart": true
+    },
+    {
+      "id": "dragon_skyrim",
+      "en": "dragon_skyrim",
+      "cn": "龙语",
+      "alias": [
+        "上古卷轴 天际"
+      ],
+      "cat": "game",
+      "file": "codeimages/dragon_skyrim.webp",
+      "w": 1120,
+      "h": 1240,
+      "lineart": true
+    },
+    {
+      "id": "drazi",
+      "en": "drazi",
+      "cn": "德拉齐文",
+      "alias": [
+        "巴比伦5"
+      ],
+      "cat": "alien",
+      "file": "codeimages/drazi.webp",
+      "w": 1456,
+      "h": 1028,
+      "lineart": true
+    },
+    {
+      "id": "dwemeri",
+      "en": "dwemeri",
+      "cn": "矮人文",
+      "alias": [
+        "上古卷轴 Dwemer"
+      ],
+      "cat": "game",
+      "file": "codeimages/dwemeri.webp",
+      "w": 364,
+      "h": 506,
+      "lineart": true
+    },
+    {
+      "id": "efkolia",
+      "en": "efkolia",
+      "cn": "efkolia",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/efkolia.webp",
+      "w": 1456,
+      "h": 926,
+      "lineart": true
+    },
+    {
+      "id": "egyptian",
+      "en": "egyptian",
+      "cn": "埃及象形文字",
+      "alias": [
+        "圣书体"
+      ],
+      "cat": "ancient",
+      "file": "codeimages/egyptian.webp",
+      "w": 490,
+      "h": 434,
+      "lineart": true
+    },
+    {
+      "id": "elia",
+      "en": "elia",
+      "cn": "Elia 文字",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/elia.webp",
+      "w": 1120,
+      "h": 1070,
+      "lineart": true
+    },
+    {
+      "id": "enochian",
+      "en": "enochian",
+      "cn": "以诺文",
+      "alias": [
+        "天使文字"
+      ],
+      "cat": "ancient",
+      "file": "codeimages/enochian.webp",
+      "w": 1120,
+      "h": 730,
+      "lineart": true
+    },
+    {
+      "id": "etruscan",
+      "en": "etruscan",
+      "cn": "伊特鲁里亚文",
+      "alias": [],
+      "cat": "ancient",
+      "file": "codeimages/etruscan.png",
+      "w": 231,
+      "h": 290,
+      "lineart": true
+    },
+    {
+      "id": "fabrini",
+      "en": "fabrini",
+      "cn": "法布里尼文",
+      "alias": [
+        "星际迷航"
+      ],
+      "cat": "alien",
+      "file": "codeimages/fabrini.webp",
+      "w": 1365,
+      "h": 890,
+      "lineart": true
+    },
+    {
+      "id": "fakoo",
+      "en": "fakoo",
+      "cn": "Fakoo 字母",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/fakoo.webp",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "fennim",
+      "en": "fennim",
+      "cn": "fennim",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/fennim.png",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "ferengi",
+      "en": "ferengi",
+      "cn": "弗瑞吉文",
+      "alias": [
+        "星际迷航"
+      ],
+      "cat": "alien",
+      "file": "codeimages/ferengi.webp",
+      "w": 525,
+      "h": 338,
+      "lineart": true
+    },
+    {
+      "id": "fez",
+      "en": "fez",
+      "cn": "Fez 文字",
+      "alias": [],
+      "cat": "game",
+      "file": "codeimages/fez.png",
+      "w": 329,
+      "h": 392,
+      "lineart": true
+    },
+    {
+      "id": "flags",
+      "en": "flags",
+      "cn": "国际信号旗",
+      "alias": [
+        "海事旗"
+      ],
+      "cat": "flag",
+      "file": "codeimages/flags.png",
+      "w": 490,
+      "h": 620,
+      "lineart": false
+    },
+    {
+      "id": "fonic",
+      "en": "fonic",
+      "cn": "谱术文字",
+      "alias": [
+        "情热传说"
+      ],
+      "cat": "other",
+      "file": "codeimages/fonic.webp",
+      "w": 1120,
+      "h": 1070,
+      "lineart": true
+    },
+    {
+      "id": "forerunner",
+      "en": "forerunner",
+      "cn": "先行者文字",
+      "alias": [
+        "光环 Halo"
+      ],
+      "cat": "game",
+      "file": "codeimages/forerunner.webp",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "foursquare",
+      "en": "foursquare",
+      "cn": "四方密码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/foursquare.webp",
+      "w": 420,
+      "h": 330,
+      "lineart": true
+    },
+    {
+      "id": "freezemarks",
+      "en": "freezemarks",
+      "cn": "freezemarks",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/freezemarks.png",
+      "w": 1435,
+      "h": 474,
+      "lineart": true
+    },
+    {
+      "id": "futhark",
+      "en": "futhark",
+      "cn": "卢恩字母",
+      "alias": [
+        "如尼文",
+        "Runic"
+      ],
+      "cat": "ancient",
+      "file": "codeimages/futhark.png",
+      "w": 1456,
+      "h": 926,
+      "lineart": true
+    },
+    {
+      "id": "futurama",
+      "en": "futurama",
+      "cn": "飞出个未来外星文 1",
+      "alias": [],
+      "cat": "alien",
+      "file": "codeimages/futurama.png",
+      "w": 280,
+      "h": 380,
+      "lineart": true
+    },
+    {
+      "id": "futurama2",
+      "en": "futurama2",
+      "cn": "飞出个未来外星文 2",
+      "alias": [],
+      "cat": "alien",
+      "file": "codeimages/futurama2.webp",
+      "w": 1120,
+      "h": 730,
+      "lineart": true
+    },
+    {
+      "id": "gaim",
+      "en": "gaim",
+      "cn": "gaim",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/gaim.webp",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "galactic",
+      "en": "galactic",
+      "cn": "标准银河字母/我的世界附魔",
+      "alias": [
+        "指挥官基恩",
+        "神秘浮空字母"
+      ],
+      "cat": "game",
+      "file": "codeimages/galactic.webp",
+      "w": 1456,
+      "h": 926,
+      "lineart": true
+    },
+    {
+      "id": "gerudo",
+      "en": "gerudo",
+      "cn": "格鲁德文",
+      "alias": [
+        "塞尔达传说"
+      ],
+      "cat": "game",
+      "file": "codeimages/gerudo.png",
+      "w": 210,
+      "h": 318,
+      "lineart": true
+    },
+    {
+      "id": "giovannifontana",
+      "en": "giovannifontana",
+      "cn": "乔瓦尼·丰塔纳密码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/giovannifontana.png",
+      "w": 406,
+      "h": 410,
+      "lineart": true
+    },
+    {
+      "id": "glagolitic",
+      "en": "glagolitic",
+      "cn": "格拉哥里字母",
+      "alias": [],
+      "cat": "ancient",
+      "file": "codeimages/glagolitic.webp",
+      "w": 1120,
+      "h": 1070,
+      "lineart": true
+    },
+    {
+      "id": "gnommish",
+      "en": "gnommish",
+      "cn": "侏儒文",
+      "alias": [
+        "阿特米斯·奇幻历险"
+      ],
+      "cat": "game",
+      "file": "codeimages/gnommish.webp",
+      "w": 1120,
+      "h": 900,
+      "lineart": true
+    },
+    {
+      "id": "gravity_falls_author",
+      "en": "gravity_falls_author",
+      "cn": "怪诞小镇·作者密码",
+      "alias": [],
+      "cat": "game",
+      "file": "codeimages/gravity_falls_author.png",
+      "w": 280,
+      "h": 226,
+      "lineart": true
+    },
+    {
+      "id": "gravity_falls_bill",
+      "en": "gravity_falls_bill",
+      "cn": "怪诞小镇·比尔密码",
+      "alias": [],
+      "cat": "game",
+      "file": "codeimages/gravity_falls_bill.png",
+      "w": 280,
+      "h": 238,
+      "lineart": true
+    },
+    {
+      "id": "greatmachine",
+      "en": "greatmachine",
+      "cn": "greatmachine",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/greatmachine.png",
+      "w": 1456,
+      "h": 1136,
+      "lineart": true
+    },
+    {
+      "id": "hexacode",
+      "en": "hexacode",
+      "cn": "六边形码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/hexacode.png",
+      "w": 1134,
+      "h": 950,
+      "lineart": true
+    },
+    {
+      "id": "hexahue",
+      "en": "hexahue",
+      "cn": "Hexahue 颜色码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/hexahue.png",
+      "w": 420,
+      "h": 614,
+      "lineart": false
+    },
+    {
+      "id": "hvd",
+      "en": "hvd",
+      "cn": "hvd",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/hvd.webp",
+      "w": 350,
+      "h": 290,
+      "lineart": true
+    },
+    {
+      "id": "hylian",
+      "en": "hylian",
+      "cn": "海拉尔文",
+      "alias": [
+        "塞尔达传说"
+      ],
+      "cat": "game",
+      "file": "codeimages/hylian.png",
+      "w": 647,
+      "h": 1500,
+      "lineart": true
+    },
+    {
+      "id": "hylian64",
+      "en": "hylian64",
+      "cn": "海拉尔文（N64）",
+      "alias": [
+        "时之笛"
+      ],
+      "cat": "game",
+      "file": "codeimages/hylian64.webp",
+      "w": 294,
+      "h": 434,
+      "lineart": true
+    },
+    {
+      "id": "hymmnos",
+      "en": "hymmnos",
+      "cn": "咏唱语",
+      "alias": [
+        "魔塔大陆"
+      ],
+      "cat": "game",
+      "file": "codeimages/hymmnos.png",
+      "w": 1081,
+      "h": 1500,
+      "lineart": true
+    },
+    {
+      "id": "iching",
+      "en": "iching",
+      "cn": "易经卦象",
+      "alias": [
+        "八卦"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/iching.webp",
+      "w": 392,
+      "h": 790,
+      "lineart": true
+    },
+    {
+      "id": "iconian",
+      "en": "iconian",
+      "cn": "iconian",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/iconian.webp",
+      "w": 1500,
+      "h": 664,
+      "lineart": true
+    },
+    {
+      "id": "illuminati_1",
+      "en": "illuminati_1",
+      "cn": "光明会文字 1",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/illuminati_1.png",
+      "w": 917,
+      "h": 1046,
+      "lineart": true
+    },
+    {
+      "id": "illuminati_2",
+      "en": "illuminati_2",
+      "cn": "光明会文字 2",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/illuminati_2.png",
+      "w": 882,
+      "h": 1118,
+      "lineart": true
+    },
+    {
+      "id": "indianajones",
+      "en": "indianajones",
+      "cn": "夺宝奇兵密码",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/indianajones.webp",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "jenks",
+      "en": "jenks",
+      "cn": "jenks",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/jenks.webp",
+      "w": 448,
+      "h": 482,
+      "lineart": true
+    },
+    {
+      "id": "kabouter",
+      "en": "kabouter",
+      "cn": "kabouter",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/kabouter.png",
+      "w": 490,
+      "h": 350,
+      "lineart": true
+    },
+    {
+      "id": "kabouter_1947",
+      "en": "kabouter_1947",
+      "cn": "kabouter 1947",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/kabouter_1947.webp",
+      "w": 1120,
+      "h": 730,
+      "lineart": true
+    },
+    {
+      "id": "kartrak",
+      "en": "kartrak",
+      "cn": "KarTrak 铁路条码",
+      "alias": [],
+      "cat": "barcode",
+      "file": "codeimages/kartrak.webp",
+      "w": 1120,
+      "h": 390,
+      "lineart": true
+    },
+    {
+      "id": "kenny",
+      "en": "kenny",
+      "cn": "kenny",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/kenny.webp",
+      "w": 312,
+      "h": 370,
+      "lineart": true
+    },
+    {
+      "id": "kix",
+      "en": "kix",
+      "cn": "KIX 荷兰邮政条码",
+      "alias": [],
+      "cat": "barcode",
+      "file": "codeimages/kix.webp",
+      "w": 210,
+      "h": 320,
+      "lineart": true
+    },
+    {
+      "id": "klingon",
+      "en": "klingon",
+      "cn": "克林贡文",
+      "alias": [
+        "星际迷航",
+        "pIqaD"
+      ],
+      "cat": "alien",
+      "file": "codeimages/klingon.webp",
+      "w": 490,
+      "h": 620,
+      "lineart": true
+    },
+    {
+      "id": "klinzhai",
+      "en": "klinzhai",
+      "cn": "克林贡 Klinzhai 文",
+      "alias": [
+        "星际迷航"
+      ],
+      "cat": "alien",
+      "file": "codeimages/klinzhai.webp",
+      "w": 1120,
+      "h": 900,
+      "lineart": true
+    },
+    {
+      "id": "korean",
+      "en": "korean",
+      "cn": "谚文",
+      "alias": [
+        "韩文"
+      ],
+      "cat": "other",
+      "file": "codeimages/korean.png",
+      "w": 217,
+      "h": 298,
+      "lineart": true
+    },
+    {
+      "id": "krakoan",
+      "en": "krakoan",
+      "cn": "克拉科文",
+      "alias": [
+        "X战警"
+      ],
+      "cat": "other",
+      "file": "codeimages/krakoan.webp",
+      "w": 756,
+      "h": 794,
+      "lineart": true
+    },
+    {
+      "id": "kryptonian",
+      "en": "kryptonian",
+      "cn": "氪星文",
+      "alias": [
+        "超人"
+      ],
+      "cat": "alien",
+      "file": "codeimages/kryptonian.webp",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "leprechaun",
+      "en": "leprechaun",
+      "cn": "leprechaun",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/leprechaun.webp",
+      "w": 420,
+      "h": 330,
+      "lineart": true
+    },
+    {
+      "id": "letterstonumbers",
+      "en": "letterstonumbers",
+      "cn": "字母转数字",
+      "alias": [
+        "A1Z26"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/letterstonumbers.webp",
+      "w": 448,
+      "h": 161,
+      "lineart": true
+    },
+    {
+      "id": "life",
+      "en": "life",
+      "cn": "生命游戏码",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/life.png",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "llort",
+      "en": "llort",
+      "cn": "llort",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/llort.png",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "lunar",
+      "en": "lunar",
+      "cn": "月球文",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/lunar.webp",
+      "w": 693,
+      "h": 510,
+      "lineart": true
+    },
+    {
+      "id": "magicode",
+      "en": "magicode",
+      "cn": "magicode",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/magicode.webp",
+      "w": 1120,
+      "h": 730,
+      "lineart": true
+    },
+    {
+      "id": "malachim",
+      "en": "malachim",
+      "cn": "玛拉基姆文",
+      "alias": [
+        "天使文字"
+      ],
+      "cat": "ancient",
+      "file": "codeimages/malachim.png",
+      "w": 637,
+      "h": 362,
+      "lineart": true
+    },
+    {
+      "id": "malcorian",
+      "en": "malcorian",
+      "cn": "马尔科文",
+      "alias": [
+        "星际迷航"
+      ],
+      "cat": "alien",
+      "file": "codeimages/malcorian.webp",
+      "w": 1169,
+      "h": 956,
+      "lineart": true
+    },
+    {
+      "id": "mandalorian",
+      "en": "mandalorian",
+      "cn": "曼达洛文",
+      "alias": [
+        "星球大战"
+      ],
+      "cat": "alien",
+      "file": "codeimages/mandalorian.png",
+      "w": 182,
+      "h": 638,
+      "lineart": true
+    },
+    {
+      "id": "marain",
+      "en": "marain",
+      "cn": "马拉因文",
+      "alias": [
+        "文化系列"
+      ],
+      "cat": "other",
+      "file": "codeimages/marain.png",
+      "w": 238,
+      "h": 234,
+      "lineart": true
+    },
+    {
+      "id": "markab",
+      "en": "markab",
+      "cn": "马卡布文",
+      "alias": [
+        "巴比伦5"
+      ],
+      "cat": "alien",
+      "file": "codeimages/markab.webp",
+      "w": 1484,
+      "h": 1448,
+      "lineart": true
+    },
+    {
+      "id": "maryqueenofscots",
+      "en": "maryqueenofscots",
+      "cn": "苏格兰玛丽女王密码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/maryqueenofscots.webp",
+      "w": 525,
+      "h": 370,
+      "lineart": true
+    },
+    {
+      "id": "masterofmagic",
+      "en": "masterofmagic",
+      "cn": "魔法大师文字",
+      "alias": [],
+      "cat": "game",
+      "file": "codeimages/masterofmagic.webp",
+      "w": 168,
+      "h": 266,
+      "lineart": true
+    },
+    {
+      "id": "matoran",
+      "en": "matoran",
+      "cn": "马托兰文",
+      "alias": [
+        "生化战士 Bionicle"
+      ],
+      "cat": "game",
+      "file": "codeimages/matoran.webp",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "maximal",
+      "en": "maximal",
+      "cn": "巨无霸文字",
+      "alias": [
+        "超能勇士"
+      ],
+      "cat": "alien",
+      "file": "codeimages/maximal.webp",
+      "w": 1081,
+      "h": 1500,
+      "lineart": true
+    },
+    {
+      "id": "mayan",
+      "en": "mayan",
+      "cn": "玛雅数字",
+      "alias": [],
+      "cat": "ancient",
+      "file": "codeimages/mayan.webp",
+      "w": 1120,
+      "h": 560,
+      "lineart": true
+    },
+    {
+      "id": "maze",
+      "en": "maze",
+      "cn": "迷宫码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/maze.webp",
+      "w": 1120,
+      "h": 1240,
+      "lineart": true
+    },
+    {
+      "id": "mesoppotanic",
+      "en": "mesoppotanic",
+      "cn": "美索不达米亚文",
+      "alias": [],
+      "cat": "ancient",
+      "file": "codeimages/mesoppotanic.png",
+      "w": 224,
+      "h": 290,
+      "lineart": true
+    },
+    {
+      "id": "minbari",
+      "en": "minbari",
+      "cn": "明巴利文",
+      "alias": [
+        "巴比伦5"
+      ],
+      "cat": "alien",
+      "file": "codeimages/minbari.webp",
+      "w": 933,
+      "h": 1500,
+      "lineart": true
+    },
+    {
+      "id": "minimoys",
+      "en": "minimoys",
+      "cn": "迷你魔文字",
+      "alias": [
+        "亚瑟和他的迷你魔"
+      ],
+      "cat": "game",
+      "file": "codeimages/minimoys.webp",
+      "w": 1120,
+      "h": 730,
+      "lineart": true
+    },
+    {
+      "id": "mirrornumbers1",
+      "en": "mirrornumbers1",
+      "cn": "镜像数字 1",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/mirrornumbers1.png",
+      "w": 350,
+      "h": 154,
+      "lineart": true
+    },
+    {
+      "id": "mirrornumbers2",
+      "en": "mirrornumbers2",
+      "cn": "镜像数字 2",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/mirrornumbers2.png",
+      "w": 287,
+      "h": 154,
+      "lineart": true
+    },
+    {
+      "id": "moon",
+      "en": "moon",
+      "cn": "月光文",
+      "alias": [
+        "盲人凸字"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/moon.png",
+      "w": 1456,
+      "h": 926,
+      "lineart": true
+    },
+    {
+      "id": "morseircle",
+      "en": "morseircle",
+      "cn": "圆形摩尔斯码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/morseircle.webp",
+      "w": 602,
+      "h": 438,
+      "lineart": true
+    },
+    {
+      "id": "morsemountain",
+      "en": "morsemountain",
+      "cn": "山形摩尔斯码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/morsemountain.webp",
+      "w": 1500,
+      "h": 638,
+      "lineart": true
+    },
+    {
+      "id": "murray1796",
+      "en": "murray1796",
+      "cn": "murray 1796",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/murray1796.webp",
+      "w": 434,
+      "h": 578,
+      "lineart": true
+    },
+    {
+      "id": "murray2003",
+      "en": "murray2003",
+      "cn": "murray 2003",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/murray2003.webp",
+      "w": 378,
+      "h": 554,
+      "lineart": true
+    },
+    {
+      "id": "murray2007",
+      "en": "murray2007",
+      "cn": "murray 2007",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/murray2007.webp",
+      "w": 1120,
+      "h": 1070,
+      "lineart": true
+    },
+    {
+      "id": "murray2016",
+      "en": "murray2016",
+      "cn": "murray 2016",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/murray2016.webp",
+      "w": 420,
+      "h": 482,
+      "lineart": false
+    },
+    {
+      "id": "music",
+      "en": "music",
+      "cn": "音乐符号",
+      "alias": [
+        "乐谱"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/music.webp",
+      "w": 210,
+      "h": 806,
+      "lineart": true
+    },
+    {
+      "id": "narn",
+      "en": "narn",
+      "cn": "纳恩文",
+      "alias": [
+        "巴比伦5"
+      ],
+      "cat": "alien",
+      "file": "codeimages/narn.webp",
+      "w": 602,
+      "h": 1346,
+      "lineart": true
+    },
+    {
+      "id": "nato",
+      "en": "nato",
+      "cn": "北约音标字母",
+      "alias": [
+        "NATO 拼读"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/nato.png",
+      "w": 1120,
+      "h": 1070,
+      "lineart": true
+    },
+    {
+      "id": "nazcaan",
+      "en": "nazcaan",
+      "cn": "纳斯卡文",
+      "alias": [
+        "塞尔达传说"
+      ],
+      "cat": "game",
+      "file": "codeimages/nazcaan.webp",
+      "w": 651,
+      "h": 692,
+      "lineart": true
+    },
+    {
+      "id": "nko",
+      "en": "nko",
+      "cn": "西非书面文字 N'Ko",
+      "alias": [],
+      "cat": "ancient",
+      "file": "codeimages/nko.png",
+      "w": 98,
+      "h": 404,
+      "lineart": true
+    },
+    {
+      "id": "numberpadlines",
+      "en": "numberpadlines",
+      "cn": "数字键盘连线",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/numberpadlines.webp",
+      "w": 1500,
+      "h": 1230,
+      "lineart": true
+    },
+    {
+      "id": "nyctographic",
+      "en": "nyctographic",
+      "cn": "夜写法",
+      "alias": [
+        "刘易斯·卡罗尔"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/nyctographic.webp",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "ogham",
+      "en": "ogham",
+      "cn": "欧甘文",
+      "alias": [],
+      "cat": "ancient",
+      "file": "codeimages/ogham.webp",
+      "w": 1078,
+      "h": 659,
+      "lineart": true
+    },
+    {
+      "id": "ophidean",
+      "en": "ophidean",
+      "cn": "ophidean",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/ophidean.webp",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "orkhon",
+      "en": "orkhon",
+      "cn": "鄂尔浑文",
+      "alias": [
+        "突厥如尼文"
+      ],
+      "cat": "ancient",
+      "file": "codeimages/orkhon.png",
+      "w": 210,
+      "h": 230,
+      "lineart": true
+    },
+    {
+      "id": "outerrim",
+      "en": "outerrim",
+      "cn": "外环文",
+      "alias": [
+        "星球大战"
+      ],
+      "cat": "other",
+      "file": "codeimages/outerrim.webp",
+      "w": 924,
+      "h": 1244,
+      "lineart": true
+    },
+    {
+      "id": "pakmara",
+      "en": "pakmara",
+      "cn": "帕克玛拉文",
+      "alias": [
+        "巴比伦5"
+      ],
+      "cat": "alien",
+      "file": "codeimages/pakmara.webp",
+      "w": 1127,
+      "h": 1280,
+      "lineart": true
+    },
+    {
+      "id": "pasley",
+      "en": "pasley",
+      "cn": "pasley",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/pasley.webp",
+      "w": 287,
+      "h": 366,
+      "lineart": true
+    },
+    {
+      "id": "periodictable",
+      "en": "periodictable",
+      "cn": "元素周期表",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/periodictable.webp",
+      "w": 738,
+      "h": 547,
+      "lineart": true
+    },
+    {
+      "id": "pigpen",
+      "en": "pigpen",
+      "cn": "猪圈密码",
+      "alias": [
+        "共济会密码"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/pigpen.webp",
+      "w": 1120,
+      "h": 1070,
+      "lineart": true
+    },
+    {
+      "id": "pigpen2",
+      "en": "pigpen2",
+      "cn": "猪圈密码 2",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/pigpen2.webp",
+      "w": 1120,
+      "h": 1070,
+      "lineart": true
+    },
+    {
+      "id": "pipeline",
+      "en": "pipeline",
+      "cn": "管道码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/pipeline.webp",
+      "w": 1120,
+      "h": 1070,
+      "lineart": true
+    },
+    {
+      "id": "pixel",
+      "en": "pixel",
+      "cn": "像素码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/pixel.webp",
+      "w": 1078,
+      "h": 862,
+      "lineart": true
+    },
+    {
+      "id": "planet",
+      "en": "planet",
+      "cn": "行星符号",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/planet.webp",
+      "w": 1500,
+      "h": 477,
+      "lineart": true
+    },
+    {
+      "id": "planetbarcode",
+      "en": "planetbarcode",
+      "cn": "PLANET 邮政条码",
+      "alias": [],
+      "cat": "barcode",
+      "file": "codeimages/planetbarcode.webp",
+      "w": 525,
+      "h": 176,
+      "lineart": true
+    },
+    {
+      "id": "poolballs",
+      "en": "poolballs",
+      "cn": "台球码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/poolballs.webp",
+      "w": 1500,
+      "h": 711,
+      "lineart": false
+    },
+    {
+      "id": "popham",
+      "en": "popham",
+      "cn": "波帕姆密码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/popham.png",
+      "w": 287,
+      "h": 512,
+      "lineart": true
+    },
+    {
+      "id": "postnetbarcode",
+      "en": "postnetbarcode",
+      "cn": "POSTNET 邮政条码",
+      "alias": [],
+      "cat": "barcode",
+      "file": "codeimages/postnetbarcode.webp",
+      "w": 539,
+      "h": 176,
+      "lineart": true
+    },
+    {
+      "id": "precursor",
+      "en": "precursor",
+      "cn": "前身文",
+      "alias": [
+        "杰克与达斯特"
+      ],
+      "cat": "game",
+      "file": "codeimages/precursor.webp",
+      "w": 1456,
+      "h": 926,
+      "lineart": true
+    },
+    {
+      "id": "predacon",
+      "en": "predacon",
+      "cn": "掠食兽文字",
+      "alias": [
+        "变形金刚"
+      ],
+      "cat": "alien",
+      "file": "codeimages/predacon.webp",
+      "w": 1258,
+      "h": 1500,
+      "lineart": true
+    },
+    {
+      "id": "predator",
+      "en": "predator",
+      "cn": "铁血战士文",
+      "alias": [],
+      "cat": "alien",
+      "file": "codeimages/predator.webp",
+      "w": 1295,
+      "h": 1220,
+      "lineart": true
+    },
+    {
+      "id": "preservers",
+      "en": "preservers",
+      "cn": "守护者文",
+      "alias": [
+        "星际迷航"
+      ],
+      "cat": "alien",
+      "file": "codeimages/preservers.webp",
+      "w": 1500,
+      "h": 1329,
+      "lineart": true
+    },
+    {
+      "id": "puzzle",
+      "en": "puzzle",
+      "cn": "拼图码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/puzzle.webp",
+      "w": 1120,
+      "h": 1070,
+      "lineart": true
+    },
+    {
+      "id": "quadoo",
+      "en": "quadoo",
+      "cn": "Quadoo 字母",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/quadoo.webp",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "r2units",
+      "en": "r2units",
+      "cn": "R2 机器人语",
+      "alias": [
+        "星球大战"
+      ],
+      "cat": "game",
+      "file": "codeimages/r2units.webp",
+      "w": 1500,
+      "h": 630,
+      "lineart": true
+    },
+    {
+      "id": "reality",
+      "en": "reality",
+      "cn": "reality",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/reality.png",
+      "w": 252,
+      "h": 334,
+      "lineart": true
+    },
+    {
+      "id": "redherring",
+      "en": "redherring",
+      "cn": "redherring",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/redherring.webp",
+      "w": 1120,
+      "h": 390,
+      "lineart": true
+    },
+    {
+      "id": "rich",
+      "en": "rich",
+      "cn": "rich",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/rich.webp",
+      "w": 399,
+      "h": 338,
+      "lineart": true
+    },
+    {
+      "id": "riddler",
+      "en": "riddler",
+      "cn": "谜语人密码",
+      "alias": [
+        "蝙蝠侠"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/riddler.webp",
+      "w": 1022,
+      "h": 626,
+      "lineart": true
+    },
+    {
+      "id": "rm4scc",
+      "en": "rm4scc",
+      "cn": "RM4SCC 英国邮政条码",
+      "alias": [],
+      "cat": "barcode",
+      "file": "codeimages/rm4scc.webp",
+      "w": 1120,
+      "h": 1070,
+      "lineart": true
+    },
+    {
+      "id": "romulan",
+      "en": "romulan",
+      "cn": "罗慕兰文",
+      "alias": [
+        "星际迷航"
+      ],
+      "cat": "alien",
+      "file": "codeimages/romulan.png",
+      "w": 1086,
+      "h": 1500,
+      "lineart": true
+    },
+    {
+      "id": "rosicrucian",
+      "en": "rosicrucian",
+      "cn": "玫瑰十字会密码",
+      "alias": [
+        "猪圈变体"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/rosicrucian.png",
+      "w": 350,
+      "h": 274,
+      "lineart": true
+    },
+    {
+      "id": "sanluca",
+      "en": "sanluca",
+      "cn": "sanluca",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/sanluca.png",
+      "w": 273,
+      "h": 314,
+      "lineart": true
+    },
+    {
+      "id": "seltorian",
+      "en": "seltorian",
+      "cn": "塞尔托里安文",
+      "alias": [
+        "星际迷航"
+      ],
+      "cat": "alien",
+      "file": "codeimages/seltorian.webp",
+      "w": 1449,
+      "h": 1400,
+      "lineart": true
+    },
+    {
+      "id": "semaphore",
+      "en": "semaphore",
+      "cn": "旗语",
+      "alias": [
+        "信号旗手旗"
+      ],
+      "cat": "flag",
+      "file": "codeimages/semaphore.webp",
+      "w": 1500,
+      "h": 939,
+      "lineart": true
+    },
+    {
+      "id": "semaphore_clock",
+      "en": "semaphore_clock",
+      "cn": "时钟旗语",
+      "alias": [],
+      "cat": "flag",
+      "file": "codeimages/semaphore_clock.webp",
+      "w": 1500,
+      "h": 1124,
+      "lineart": true
+    },
+    {
+      "id": "semaphore_man",
+      "en": "semaphore_man",
+      "cn": "人形旗语",
+      "alias": [],
+      "cat": "flag",
+      "file": "codeimages/semaphore_man.webp",
+      "w": 896,
+      "h": 750,
+      "lineart": true
+    },
+    {
+      "id": "semaphore_trousers",
+      "en": "semaphore_trousers",
+      "cn": "裤装旗语",
+      "alias": [],
+      "cat": "flag",
+      "file": "codeimages/semaphore_trousers.webp",
+      "w": 392,
+      "h": 370,
+      "lineart": true
+    },
+    {
+      "id": "shadow",
+      "en": "shadow",
+      "cn": "暗影文",
+      "alias": [
+        "巴比伦5"
+      ],
+      "cat": "alien",
+      "file": "codeimages/shadow.webp",
+      "w": 1232,
+      "h": 1268,
+      "lineart": true
+    },
+    {
+      "id": "sheliak",
+      "en": "sheliak",
+      "cn": "谢利亚克文",
+      "alias": [
+        "星际迷航"
+      ],
+      "cat": "alien",
+      "file": "codeimages/sheliak.webp",
+      "w": 1295,
+      "h": 1220,
+      "lineart": true
+    },
+    {
+      "id": "sign",
+      "en": "sign",
+      "cn": "手势符号",
+      "alias": [],
+      "cat": "flag",
+      "file": "codeimages/sign.webp",
+      "w": 1120,
+      "h": 1070,
+      "lineart": true
+    },
+    {
+      "id": "signlanguage",
+      "en": "signlanguage",
+      "cn": "手语字母",
+      "alias": [
+        "指语"
+      ],
+      "cat": "flag",
+      "file": "codeimages/signlanguage.webp",
+      "w": 742,
+      "h": 634,
+      "lineart": true
+    },
+    {
+      "id": "signlanguage_color",
+      "en": "signlanguage_color",
+      "cn": "彩色手语字母",
+      "alias": [],
+      "cat": "flag",
+      "file": "codeimages/signlanguage_color.webp",
+      "w": 658,
+      "h": 770,
+      "lineart": true
+    },
+    {
+      "id": "simlish",
+      "en": "simlish",
+      "cn": "模拟人生语",
+      "alias": [
+        "Simlish"
+      ],
+      "cat": "game",
+      "file": "codeimages/simlish.png",
+      "w": 245,
+      "h": 506,
+      "lineart": true
+    },
+    {
+      "id": "sith",
+      "en": "sith",
+      "cn": "西斯文",
+      "alias": [
+        "星球大战"
+      ],
+      "cat": "alien",
+      "file": "codeimages/sith.webp",
+      "w": 434,
+      "h": 422,
+      "lineart": true
+    },
+    {
+      "id": "slashandpipe",
+      "en": "slashandpipe",
+      "cn": "斜杠竖线码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/slashandpipe.webp",
+      "w": 1120,
+      "h": 730,
+      "lineart": true
+    },
+    {
+      "id": "snooker",
+      "en": "snooker",
+      "cn": "斯诺克码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/snooker.webp",
+      "w": 896,
+      "h": 326,
+      "lineart": true
+    },
+    {
+      "id": "solresol",
+      "en": "solresol",
+      "cn": "索尔雷索尔语",
+      "alias": [
+        "音乐语言"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/solresol.png",
+      "w": 259,
+      "h": 144,
+      "lineart": true
+    },
+    {
+      "id": "sona",
+      "en": "sona",
+      "cn": "sona",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/sona.png",
+      "w": 800,
+      "h": 653,
+      "lineart": true
+    },
+    {
+      "id": "spaceinvaders",
+      "en": "spaceinvaders",
+      "cn": "太空侵略者文字",
+      "alias": [],
+      "cat": "game",
+      "file": "codeimages/spaceinvaders.webp",
+      "w": 1081,
+      "h": 1500,
+      "lineart": true
+    },
+    {
+      "id": "spintype",
+      "en": "spintype",
+      "cn": "spintype",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/spintype.webp",
+      "w": 476,
+      "h": 518,
+      "lineart": true
+    },
+    {
+      "id": "sprykski",
+      "en": "sprykski",
+      "cn": "sprykski",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/sprykski.png",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "sumerian",
+      "en": "sumerian",
+      "cn": "苏美尔楔形文字",
+      "alias": [],
+      "cat": "ancient",
+      "file": "codeimages/sumerian.png",
+      "w": 322,
+      "h": 290,
+      "lineart": true
+    },
+    {
+      "id": "takcha",
+      "en": "takcha",
+      "cn": "takcha",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/takcha.webp",
+      "w": 623,
+      "h": 1346,
+      "lineart": true
+    },
+    {
+      "id": "templar",
+      "en": "templar",
+      "cn": "圣殿骑士密码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/templar.webp",
+      "w": 1120,
+      "h": 730,
+      "lineart": true
+    },
+    {
+      "id": "tenctonese",
+      "en": "tenctonese",
+      "cn": "特恩克顿文",
+      "alias": [
+        "天外来客"
+      ],
+      "cat": "alien",
+      "file": "codeimages/tenctonese.webp",
+      "w": 1081,
+      "h": 1500,
+      "lineart": true
+    },
+    {
+      "id": "tengwar",
+      "en": "tengwar",
+      "cn": "腾格瓦文",
+      "alias": [
+        "托尔金精灵语",
+        "魔戒"
+      ],
+      "cat": "game",
+      "file": "codeimages/tengwar.webp",
+      "w": 1456,
+      "h": 926,
+      "lineart": true
+    },
+    {
+      "id": "terzi",
+      "en": "terzi",
+      "cn": "terzi",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/terzi.webp",
+      "w": 1120,
+      "h": 730,
+      "lineart": true
+    },
+    {
+      "id": "tetragrammaton",
+      "en": "tetragrammaton",
+      "cn": "四字神名",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/tetragrammaton.png",
+      "w": 392,
+      "h": 242,
+      "lineart": true
+    },
+    {
+      "id": "theban",
+      "en": "theban",
+      "cn": "底比斯字母",
+      "alias": [
+        "女巫字母"
+      ],
+      "cat": "ancient",
+      "file": "codeimages/theban.webp",
+      "w": 1456,
+      "h": 926,
+      "lineart": true
+    },
+    {
+      "id": "tholian",
+      "en": "tholian",
+      "cn": "索利安文",
+      "alias": [
+        "星际迷航"
+      ],
+      "cat": "alien",
+      "file": "codeimages/tholian.webp",
+      "w": 1386,
+      "h": 1208,
+      "lineart": true
+    },
+    {
+      "id": "threesquare",
+      "en": "threesquare",
+      "cn": "三方密码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/threesquare.webp",
+      "w": 420,
+      "h": 330,
+      "lineart": true
+    },
+    {
+      "id": "tictactoe",
+      "en": "tictactoe",
+      "cn": "井字棋密码",
+      "alias": [
+        "猪圈变体"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/tictactoe.webp",
+      "w": 896,
+      "h": 602,
+      "lineart": true
+    },
+    {
+      "id": "time",
+      "en": "time",
+      "cn": "时间码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/time.webp",
+      "w": 1500,
+      "h": 904,
+      "lineart": true
+    },
+    {
+      "id": "tkon",
+      "en": "tkon",
+      "cn": "特孔文",
+      "alias": [
+        "星际迷航"
+      ],
+      "cat": "alien",
+      "file": "codeimages/tkon.webp",
+      "w": 1500,
+      "h": 867,
+      "lineart": true
+    },
+    {
+      "id": "tomtom",
+      "en": "tomtom",
+      "cn": "tomtom",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/tomtom.webp",
+      "w": 1120,
+      "h": 730,
+      "lineart": true
+    },
+    {
+      "id": "trees",
+      "en": "trees",
+      "cn": "树码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/trees.webp",
+      "w": 1036,
+      "h": 662,
+      "lineart": true
+    },
+    {
+      "id": "triangle",
+      "en": "triangle",
+      "cn": "三角码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/triangle.png",
+      "w": 294,
+      "h": 258,
+      "lineart": true
+    },
+    {
+      "id": "triangles",
+      "en": "triangles",
+      "cn": "三角码（复）",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/triangles.png",
+      "w": 378,
+      "h": 510,
+      "lineart": true
+    },
+    {
+      "id": "ugaritic",
+      "en": "ugaritic",
+      "cn": "乌加里特文",
+      "alias": [],
+      "cat": "ancient",
+      "file": "codeimages/ugaritic.webp",
+      "w": 336,
+      "h": 290,
+      "lineart": true
+    },
+    {
+      "id": "ulog",
+      "en": "ulog",
+      "cn": "ulog",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/ulog.webp",
+      "w": 1120,
+      "h": 1070,
+      "lineart": true
+    },
+    {
+      "id": "umbaran",
+      "en": "umbaran",
+      "cn": "昂巴拉文",
+      "alias": [
+        "星球大战"
+      ],
+      "cat": "alien",
+      "file": "codeimages/umbaran.webp",
+      "w": 924,
+      "h": 896,
+      "lineart": true
+    },
+    {
+      "id": "unitology",
+      "en": "unitology",
+      "cn": "星耀教文字",
+      "alias": [
+        "死亡空间"
+      ],
+      "cat": "game",
+      "file": "codeimages/unitology.webp",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "unown",
+      "en": "unown",
+      "cn": "未知图腾文字",
+      "alias": [
+        "宝可梦"
+      ],
+      "cat": "game",
+      "file": "codeimages/unown.webp",
+      "w": 287,
+      "h": 450,
+      "lineart": false
+    },
+    {
+      "id": "utopian",
+      "en": "utopian",
+      "cn": "乌托邦字母",
+      "alias": [
+        "托马斯·莫尔"
+      ],
+      "cat": "ancient",
+      "file": "codeimages/utopian.webp",
+      "w": 896,
+      "h": 666,
+      "lineart": true
+    },
+    {
+      "id": "videogame",
+      "en": "videogame",
+      "cn": "电子游戏文字",
+      "alias": [],
+      "cat": "game",
+      "file": "codeimages/videogame.webp",
+      "w": 840,
+      "h": 498,
+      "lineart": false
+    },
+    {
+      "id": "vidiian",
+      "en": "vidiian",
+      "cn": "维迪安文",
+      "alias": [
+        "星际迷航"
+      ],
+      "cat": "alien",
+      "file": "codeimages/vidiian.png",
+      "w": 903,
+      "h": 1500,
+      "lineart": true
+    },
+    {
+      "id": "visitor",
+      "en": "visitor",
+      "cn": "访客文",
+      "alias": [
+        "V 外星访客"
+      ],
+      "cat": "alien",
+      "file": "codeimages/visitor.png",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "vorlon",
+      "en": "vorlon",
+      "cn": "沃隆文",
+      "alias": [
+        "巴比伦5"
+      ],
+      "cat": "alien",
+      "file": "codeimages/vorlon.webp",
+      "w": 1456,
+      "h": 1364,
+      "lineart": true
+    },
+    {
+      "id": "vulcan_modern",
+      "en": "vulcan_modern",
+      "cn": "瓦肯文（现代）",
+      "alias": [
+        "星际迷航"
+      ],
+      "cat": "alien",
+      "file": "codeimages/vulcan_modern.png",
+      "w": 1456,
+      "h": 926,
+      "lineart": true
+    },
+    {
+      "id": "vulcan_old",
+      "en": "vulcan_old",
+      "cn": "瓦肯文（古代）",
+      "alias": [
+        "星际迷航"
+      ],
+      "cat": "alien",
+      "file": "codeimages/vulcan_old.png",
+      "w": 1456,
+      "h": 926,
+      "lineart": true
+    },
+    {
+      "id": "wakanda",
+      "en": "wakanda",
+      "cn": "瓦坎达文",
+      "alias": [
+        "黑豹"
+      ],
+      "cat": "alien",
+      "file": "codeimages/wakanda.webp",
+      "w": 483,
+      "h": 858,
+      "lineart": true
+    },
+    {
+      "id": "window",
+      "en": "window",
+      "cn": "窗户码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/window.webp",
+      "w": 294,
+      "h": 258,
+      "lineart": true
+    },
+    {
+      "id": "wraith",
+      "en": "wraith",
+      "cn": "幽灵文",
+      "alias": [
+        "星际之门"
+      ],
+      "cat": "alien",
+      "file": "codeimages/wraith.png",
+      "w": 161,
+      "h": 490,
+      "lineart": true
+    },
+    {
+      "id": "xelbet",
+      "en": "xelbet",
+      "cn": "xelbet",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/xelbet.webp",
+      "w": 301,
+      "h": 374,
+      "lineart": true
+    },
+    {
+      "id": "yankoryani",
+      "en": "yankoryani",
+      "cn": "yankoryani",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/yankoryani.webp",
+      "w": 1120,
+      "h": 730,
+      "lineart": true
+    },
+    {
+      "id": "yinyang",
+      "en": "yinyang",
+      "cn": "阴阳码",
+      "alias": [],
+      "cat": "symbol",
+      "file": "codeimages/yinyang.webp",
+      "w": 343,
+      "h": 350,
+      "lineart": true
+    },
+    {
+      "id": "zentlardy",
+      "en": "zentlardy",
+      "cn": "zentlardy",
+      "alias": [],
+      "cat": "other",
+      "file": "codeimages/zentlardy.webp",
+      "w": 637,
+      "h": 1136,
+      "lineart": true
+    },
+    {
+      "id": "zodiac",
+      "en": "zodiac",
+      "cn": "黄道十二宫符号",
+      "alias": [
+        "星座符号"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/zodiac.webp",
+      "w": 245,
+      "h": 298,
+      "lineart": true
+    },
+    {
+      "id": "polybius",
+      "en": "Polybius square",
+      "cn": "波利比奥斯方阵",
+      "alias": [
+        "Polybius",
+        "波利比乌斯棋盘",
+        "5x5坐标密码"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/polybius.svg",
+      "w": 360,
+      "h": 360,
+      "lineart": true
+    },
+    {
+      "id": "tapcode",
+      "en": "Tap code",
+      "cn": "敲击码",
+      "alias": [
+        "Tap code",
+        "叩击码",
+        "监狱密码",
+        "knock code"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/tapcode.svg",
+      "w": 380,
+      "h": 380,
+      "lineart": true
+    },
+    {
+      "id": "adfgx",
+      "en": "ADFGX cipher",
+      "cn": "ADFGX 密码表",
+      "alias": [
+        "ADFGX",
+        "德军战地密码"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/adfgx.svg",
+      "w": 380,
+      "h": 400,
+      "lineart": true
+    },
+    {
+      "id": "adfgvx",
+      "en": "ADFGVX cipher",
+      "cn": "ADFGVX 密码表",
+      "alias": [
+        "ADFGVX",
+        "德军战地密码",
+        "6x6方阵"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/adfgvx.svg",
+      "w": 360,
+      "h": 430,
+      "lineart": true
+    },
+    {
+      "id": "teyvat",
+      "en": "Teyvat script",
+      "cn": "提瓦特大陆文字",
+      "alias": [
+        "原神",
+        "Genshin Impact"
+      ],
+      "cat": "game",
+      "file": "codeimages/teyvat.png",
+      "w": 844,
+      "h": 1125,
+      "lineart": true
+    },
+    {
+      "id": "xianzhou",
+      "en": "Xianzhou script",
+      "cn": "仙舟文字",
+      "alias": [
+        "崩坏星穹铁道",
+        "Honkai Star Rail"
+      ],
+      "cat": "game",
+      "file": "codeimages/xianzhou.png",
+      "w": 1094,
+      "h": 678,
+      "lineart": true
+    },
+    {
+      "id": "madokarunes",
+      "en": "Madoka runes",
+      "cn": "魔法少女小圆·魔女文字",
+      "alias": [
+        "Madoka Magica",
+        "魔女之夜"
+      ],
+      "cat": "game",
+      "file": "codeimages/madokarunes.png",
+      "w": 624,
+      "h": 534,
+      "lineart": true
+    },
+    {
+      "id": "makkapakka",
+      "en": "Makka Pakka script",
+      "cn": "玛卡巴卡文字",
+      "alias": [
+        "花园宝宝",
+        "In the Night Garden"
+      ],
+      "cat": "game",
+      "file": "codeimages/makkapakka.png",
+      "w": 1001,
+      "h": 1318,
+      "lineart": true
+    },
+    {
+      "id": "cosmicuniversal",
+      "en": "cosmic universal script",
+      "cn": "宇宙通用文",
+      "alias": [],
+      "cat": "alien",
+      "file": "codeimages/cosmicuniversal.png",
+      "w": 1140,
+      "h": 605,
+      "lineart": true
+    }
+  ]
+}

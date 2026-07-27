@@ -1,0 +1,290 @@
+/* recipeView.css — 配方链 UI 样式（M3 温和红，不套玻璃） */
+
+.recipe-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+}
+
+/* 工具条 */
+.recipe-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-lg);
+}
+.recipe-preset-picker,
+.recipe-op-picker {
+  flex: 1 1 180px;
+  min-width: 160px;
+  padding: var(--sp-2) var(--sp-3);  /* select 左右 padding 令牌化 */
+  font-size: var(--fs-sm);
+  color: var(--on-surface);
+  background: var(--field-bg);
+  border: 1px solid var(--outline);
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+/* 输入/select 统一 focus 态（2px primary outline，对齐 app.css 统一化规范） */
+.recipe-preset-picker:focus,
+.recipe-op-picker:focus,
+.recipe-param input[type="text"]:focus,
+.recipe-param input[type="number"]:focus,
+.recipe-param select:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
+}
+.recipe-op-picker { font-weight: 600; }
+.recipe-step-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--on-surface-var);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.recipe-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--on-surface);
+  background: var(--surface-2);
+  border: 1px solid var(--outline);
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.recipe-clear-btn:hover { background: var(--surface-3); }
+
+/* 手动执行按钮「执行！（Bake！）」——M3 filled 主色按钮，致敬 CyberChef */
+.recipe-bake-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-4);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--on-primary);
+  background: var(--primary);
+  border: none;
+  border-radius: var(--r-full, 999px);
+  cursor: pointer;
+  transition: background var(--dur-short) var(--ease), box-shadow var(--dur-short) var(--ease);
+}
+.recipe-bake-btn:hover { box-shadow: var(--elev-1, 0 1px 3px rgba(0,0,0,.3)); }
+.recipe-bake-btn:active { transform: scale(.97); }
+/* 大输入有挂起改动时脉冲高亮，提示「该点我了」 */
+.recipe-bake-btn.pending { animation: recipeBakePulse 1.2s var(--ease) infinite; }
+@keyframes recipeBakePulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 55%, transparent); }
+  50%      { box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary) 0%, transparent); }
+}
+/* 大输入挂起提示条 */
+.recipe-bake-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin: var(--sp-1) 0 var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--on-surface-variant, var(--on-surface));
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface-2));
+  border-radius: var(--r-md);
+}
+
+/* IO 标签 */
+.recipe-io-label {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--on-surface-var);
+  margin-bottom: -6px;  /* 负边距贴合 IO 框，--sp-* 无负值令牌，保留 */
+}
+.recipe-io { min-height: 140px; resize: vertical; }
+.recipe-io.error { color: var(--error); }
+
+/* A4②：拖拽操作提示（常驻，弱化提示语气） */
+.recipe-drag-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-xs);
+  color: var(--on-surface-var);
+  margin-bottom: calc(-1 * var(--sp-1));  /* 贴合下方链区 */
+}
+.recipe-drag-hint .msym { font-size: 16px; }
+
+/* 链容器 */
+.recipe-chain {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  align-items: stretch;
+}
+/* A4②：左侧 op 拖入画布时的落区高亮（用 theme 令牌，不硬编色） */
+.recipe-chain.recipe-drop-active {
+  outline: 2px dashed var(--primary);
+  outline-offset: 4px;
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+}
+.recipe-empty {
+  padding: var(--sp-5);
+  text-align: center;
+  color: var(--on-surface-var);
+  font-size: var(--fs-sm);
+  background: var(--surface-1);
+  border: 1px dashed var(--outline);
+  border-radius: var(--r-lg);
+}
+.recipe-arrow {
+  display: flex;
+  justify-content: center;
+  color: var(--primary);
+  padding: 2px 0;  /* 箭头微垂直间距 2px，--sp-* 最小 4px，保留 */
+}
+.recipe-arrow .msym { font-size: 20px; }
+
+/* 节点卡 */
+.recipe-node {
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-inline-start: 3px solid var(--primary);
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
+}
+.recipe-node.error {
+  border-color: var(--error);
+  border-inline-start-color: var(--error);
+  color: var(--error);
+  padding: var(--sp-3);
+}
+/* 拖拽重排态（CyberChef 式手感） */
+.recipe-node[draggable="true"] { cursor: grab; }
+.recipe-node.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+/* drag-over：目标卡顶部一条 primary 指示线，提示将插入到此处 */
+.recipe-node.drag-over {
+  box-shadow: inset 0 3px 0 0 var(--primary);
+}
+.recipe-node-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.recipe-node-idx {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--on-primary);
+  background: var(--primary);
+  border-radius: var(--r-full);
+}
+.recipe-node-name {
+  flex: 1 1 auto;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--on-surface);
+}
+.recipe-node-dir {
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--on-surface);
+  background: var(--field-bg);
+  border: 1px solid var(--outline);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.recipe-node-dir-fixed {
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--on-surface-var);
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+}
+.recipe-node-ctrl { display: inline-flex; gap: 2px; }  /* 控制按钮组微间距 2px，--sp-* 最小 4px，保留 */
+.recipe-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--on-surface-var);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.recipe-mini-btn:hover { background: var(--surface-3); color: var(--on-surface); }
+.recipe-mini-btn.danger:hover { background: color-mix(in srgb, var(--error) 14%, transparent); color: var(--error); }
+.recipe-mini-btn .msym { font-size: 18px; }
+
+/* 节点参数 */
+.recipe-node-params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+  padding-top: var(--sp-2);
+  border-top: 1px dashed var(--outline-var);
+}
+.recipe-param {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);  /* 参数行内间距令牌化（8px） */
+  font-size: var(--fs-sm);
+  color: var(--on-surface-var);
+}
+.recipe-param label { white-space: nowrap; }
+.recipe-param input[type="text"],
+.recipe-param input[type="number"],
+.recipe-param select {
+  padding: var(--sp-1) var(--sp-2);  /* 输入框上下 padding 令牌化 */
+  font-size: var(--fs-sm);
+  color: var(--on-surface);
+  background: var(--field-bg);
+  border: 1px solid var(--outline);
+  border-radius: var(--r-sm);
+}
+.recipe-param input[type="number"] { width: 80px; }
+
+/* 每步结果 */
+.recipe-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.recipe-steps:empty { display: none; }
+.recipe-step {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;  /* 步骤内微间距 2px，--sp-* 最小 4px，保留 */
+  padding: var(--sp-2);
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+}
+.recipe-step-idx {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--primary);
+}
+.recipe-step-out {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--on-surface);
+  white-space: pre-wrap;
+  word-break: break-all;
+}

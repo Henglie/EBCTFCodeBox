@@ -1,0 +1,259 @@
+/*
+ * envPanel.css — 环境管理面板样式（M3 温和红，独立表）。
+ * 不改 app.css / theme.css。在 index.html link 本文件 + envPanel.js。
+ * 令牌全取 theme.css（--surface-* / --on-surface* / --primary / --outline-var / --sp-* / --r-* / --el-*）。
+ */
+
+/* ============ 下拉面板容器 ============ */
+.env-panel {
+  position: fixed;
+  z-index: 50;
+  width: 380px;
+  max-width: calc(100vw - 16px);
+  max-height: 76vh;
+  overflow-y: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-lg);
+  box-shadow: var(--el-3);
+  padding: var(--sp-3);
+  animation: env-pop var(--dur-medium) var(--ease-out);
+}
+/* 内联形态（renderEnvPanel 挂容器内，非 fixed） */
+.env-panel-inline {
+  position: relative;
+  width: 100%;
+  max-height: none;
+  box-shadow: none;
+  animation: none;
+}
+@keyframes env-pop {
+  from { opacity: 0; transform: translateY(-6px) scale(.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.env-panel-inner { display: flex; flex-direction: column; gap: var(--sp-3); }
+
+/* ============ 头：标题 + 隐私声明 + 刷新 ============ */
+.env-panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--outline-var);
+}
+.env-panel-title {
+  display: flex; align-items: center; gap: var(--sp-2);
+  font-size: var(--fs-md); font-weight: 700; color: var(--on-surface);
+}
+.env-panel-title .msym { color: var(--primary); font-size: 22px; }
+.env-refresh-btn {
+  width: 32px; height: 32px; border-radius: var(--r-full);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--on-surface-var);
+  transition: background var(--dur-short) var(--ease), color var(--dur-short) var(--ease);
+}
+.env-refresh-btn:hover { background: var(--surface-hi); color: var(--on-surface); }
+.env-refresh-btn:active { transform: scale(.92); }
+.env-refresh-btn .msym { font-size: 20px; }
+
+/* 隐私声明条：主色淡底 + lock 图标，醒目但不刺眼 */
+.env-privacy-note {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: color-mix(in srgb, var(--success) 10%, var(--surface-1));
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm); color: var(--on-surface);
+  font-weight: 600;
+}
+.env-privacy-note .msym { font-size: 18px; color: var(--success); flex: none; }
+
+/* ============ 检测区 ============ */
+.env-detect-box { display: flex; flex-direction: column; gap: var(--sp-3); }
+.env-detect-content { display: flex; flex-direction: column; gap: var(--sp-3); }
+
+/* 检测中态 */
+.env-detecting {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-3); justify-content: center;
+  color: var(--on-surface-var); font-size: var(--fs-base);
+}
+.env-detecting .msym.spin { animation: env-spin 1s linear infinite; }
+@keyframes env-spin { to { transform: rotate(360deg); } }
+
+/* 模式标签 */
+.env-mode-tag {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-base); font-weight: 600;
+}
+.env-mode-tag.local { background: color-mix(in srgb, var(--success) 12%, transparent); color: var(--success); }
+.env-mode-tag.server { background: color-mix(in srgb, var(--on-surface-var) 12%, transparent); color: var(--on-surface-var); }
+.env-mode-tag .msym { font-size: 18px; flex: none; }
+.env-mode-note {
+  font-size: var(--fs-sm); color: var(--on-surface-var);
+  line-height: 1.55; padding: 0 var(--sp-2);
+}
+
+/* ============ section（系统/浏览器/工具/字库共用） ============ */
+.env-section { display: flex; flex-direction: column; gap: var(--sp-1); }
+.env-section-title {
+  display: flex; align-items: center; gap: var(--sp-2);
+  font-size: var(--fs-xs); font-weight: 700; color: var(--on-surface-var);
+  text-transform: uppercase; letter-spacing: .5px;
+  margin-bottom: var(--sp-1);
+}
+.env-section-title .msym { font-size: 16px; color: var(--primary); flex: none; }
+
+/* 通用键值行 */
+.env-row {
+  display: flex; gap: var(--sp-3); align-items: baseline;
+  padding: 2px var(--sp-2);
+  font-size: var(--fs-sm);
+}
+.env-row-label { flex: none; min-width: 5em; color: var(--on-surface-var); font-weight: 600; }
+.env-row-val { flex: 1; color: var(--on-surface); word-break: break-all; font-family: var(--mono); font-size: var(--fs-xs); }
+
+/* ============ 工具行（Python/Node/Java/7z） ============ */
+.env-tool-row {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
+}
+.env-tool-row.miss { opacity: .7; }
+.env-tool-name { flex: none; min-width: 4em; font-weight: 600; font-size: var(--fs-sm); color: var(--on-surface); }
+.env-tool-version { flex: 1; font-family: var(--mono); font-size: var(--fs-xs); color: var(--on-surface-var); word-break: break-all; }
+.env-tool-version.err { color: var(--error); }
+.env-tool-tag {
+  flex: none; font-size: var(--fs-xs); font-weight: 600;
+  padding: 2px var(--sp-2); border-radius: var(--r-full);
+}
+.env-tool-tag.ok { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
+.env-tool-tag.miss { background: var(--surface-3); color: var(--on-surface-var); }
+
+.env-error {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--error) 10%, var(--surface-1));
+  color: var(--error); font-size: var(--fs-sm);
+}
+.env-error .msym { font-size: 18px; flex: none; }
+
+/* ============ 字库区 ============ */
+.env-font-row {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
+}
+.env-font-row.subset { background: color-mix(in srgb, var(--success) 6%, var(--surface-1)); }
+.env-font-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.env-font-label { font-size: var(--fs-sm); font-weight: 600; color: var(--on-surface); display: flex; align-items: baseline; gap: var(--sp-2); }
+.env-font-size { font-size: var(--fs-xs); color: var(--on-surface-var); font-weight: 400; flex: none; }
+.env-font-desc { font-size: var(--fs-xs); color: var(--on-surface-var); line-height: 1.4; }
+.env-font-tag {
+  flex: none; font-size: var(--fs-xs); font-weight: 600;
+  padding: 2px var(--sp-2); border-radius: var(--r-full);
+}
+.env-font-tag.loaded { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
+
+.env-font-btn {
+  flex: none; height: 30px; padding: 0 var(--sp-3);
+  border-radius: var(--r-full);
+  font-size: var(--fs-xs); font-weight: 600;
+  background: var(--surface-3); color: var(--on-surface);
+  transition: background var(--dur-short) var(--ease), transform var(--dur-short) var(--ease);
+}
+.env-font-btn:hover:not(:disabled) { background: var(--surface-hi); }
+.env-font-btn:active:not(:disabled) { transform: scale(.94); }
+.env-font-btn:disabled { opacity: .6; cursor: default; }
+.env-font-btn.loaded { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
+.env-font-btn.error { background: color-mix(in srgb, var(--error) 16%, transparent); color: var(--error); }
+
+/* ============ 强调色区（动态取色） ============ */
+.env-accent-note {
+  font-size: var(--fs-xs); color: var(--on-surface-var);
+  line-height: 1.5; margin-bottom: var(--sp-1);
+}
+
+/* 预设色板：圆形色块横排换行 */
+.env-accent-swatches {
+  display: flex; flex-wrap: wrap; gap: var(--sp-2);
+  padding: var(--sp-1) 0;
+}
+.env-accent-swatch {
+  width: 28px; height: 28px; flex: none;
+  border-radius: var(--r-full);
+  border: 1px solid var(--outline-var);
+  cursor: pointer;
+  transition: transform var(--dur-short) var(--ease), box-shadow var(--dur-short) var(--ease);
+}
+.env-accent-swatch:hover { transform: scale(1.08); }
+.env-accent-swatch:active { transform: scale(.94); }
+.env-accent-swatch.selected {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 2px var(--surface-2), 0 0 0 4px var(--primary);
+}
+
+/* 自定义选色器：label 包 native color input */
+.env-accent-custom-wrap {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-sm); color: var(--on-surface);
+  cursor: pointer; border-radius: var(--r-sm);
+  transition: background var(--dur-short) var(--ease);
+}
+.env-accent-custom-wrap:hover { background: var(--surface-hi); }
+.env-accent-custom-wrap .msym { font-size: 18px; color: var(--on-surface-var); flex: none; }
+.env-accent-custom {
+  width: 28px; height: 28px; flex: none;
+  padding: 0; border: none; background: none; cursor: pointer;
+  border-radius: var(--r-full);
+}
+.env-accent-custom.selected { box-shadow: 0 0 0 2px var(--surface-2), 0 0 0 4px var(--primary); }
+/* 抹平各内核 color input 默认样式，露出纯色块 */
+.env-accent-custom::-webkit-color-swatch-wrapper { padding: 0; }
+.env-accent-custom::-webkit-color-swatch { border: 1px solid var(--outline-var); border-radius: var(--r-full); }
+.env-accent-custom::-moz-color-swatch { border: 1px solid var(--outline-var); border-radius: var(--r-full); }
+
+/* 恢复默认：M3 小 outlined 按钮 */
+.env-accent-reset {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: var(--sp-1);
+  height: 30px; padding: 0 var(--sp-3); margin-top: var(--sp-1);
+  border: 1px solid var(--outline);
+  border-radius: var(--r-full);
+  background: transparent; color: var(--primary);
+  font-size: var(--fs-xs); font-weight: 600; cursor: pointer;
+  transition: background var(--dur-short) var(--ease), transform var(--dur-short) var(--ease);
+}
+.env-accent-reset:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.env-accent-reset:active { transform: scale(.96); }
+.env-accent-reset .msym { font-size: 16px; flex: none; }
+
+/* ============ 昼夜切换（外观区，与强调色同组） ============ */
+.env-theme-toggle {
+  display: flex; flex-wrap: wrap; gap: var(--sp-2);
+  padding: var(--sp-1) 0;
+}
+.env-theme-btn {
+  display: inline-flex; align-items: center; gap: var(--sp-1);
+  height: 34px; padding: 0 var(--sp-3);
+  border: 1px solid var(--outline);
+  border-radius: var(--r-full);
+  background: transparent; color: var(--on-surface-var);
+  font-size: var(--fs-sm); font-weight: 600; cursor: pointer;
+  transition: background var(--dur-short) var(--ease), color var(--dur-short) var(--ease),
+    border-color var(--dur-short) var(--ease), transform var(--dur-short) var(--ease);
+}
+.env-theme-btn:hover { background: var(--surface-hi); }
+.env-theme-btn:active { transform: scale(.96); }
+.env-theme-btn .msym { font-size: 18px; flex: none; }
+.env-theme-btn.selected {
+  border-color: var(--primary); color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+/* ============ 窄屏适配（与 topbar-responsive.css 协同） ============ */
+@media (max-width: 480px) {
+  .env-panel { width: calc(100vw - 16px); inset-inline-end: 8px !important; }
+}

@@ -1,0 +1,130 @@
+/*
+ * topbar-responsive.css — 顶栏响应式与文字不换行。
+ * 独立样式表，不改 app.css / main.js / index.html。在 index.html 的 app.css 之后 link 本文件。
+ *
+ * 依赖顶栏 DOM 结构（class 名，已核对 index.html 第 16-64 行）：
+ * .topbar / .topbar-brand / .brand-icon / .brand-text / .brand-title / .brand-ver
+ * .topbar-search / .topbar-search-input / .topbar-actions
+ * .icon-btn（8 个按钮共用具名 class：btnExhaust/btnRecipe/btnAbout/btnFont/
+ * btnLang/btnUpdate/btnRepo/btnTheme，id 仅供 main.js 绑事件，CSS 不靠 id）
+ * .icon-btn-label（按钮文字 span）/ .octocat（GitHub svg）
+ * .msym（Material Symbols 图标容器）
+ *
+ * 设计：
+ * 1. 顶栏所有文字 white-space:nowrap，杜绝换行（标题/版本/按钮名/搜索 placeholder）。
+ * 2. 窄屏分级收起——720px 隐藏按钮文字只留图标；480px 再隐藏品牌文字只留 brand-icon。
+ * 3. 与 app.css 第 60 行既有 .icon-btn-label 旧 720px 规则协同：本表同特异性
+ * 后加载覆盖，断点统一到 720，并补 padding/品牌/搜索收紧。
+ * 4. 间距令牌取 theme.css 的 --sp-* / --r-* / --fs-*，不引入硬编码。
+ */
+
+/* === 1. 顶栏所有文字不换行 === */
+.topbar,
+.topbar-brand,
+.brand-text,
+.brand-title,
+.brand-ver,
+.topbar-search,
+.topbar-actions,
+.icon-btn,
+.icon-btn-label {
+  white-space: nowrap;
+}
+/* input 元素本身不会换行，但显式声明防 placeholder 折行异常 */
+.topbar-search-input { white-space: nowrap; }
+
+/* === 2. 窄屏第一档（≤720px）：按钮文字全隐藏，只留 Material Symbols 图标 === */
+/* 8 个按钮带文字在 56px 高的顶栏里 ≤720px 必挤换行/溢出；隐藏 label 后纯图标占地最小。 */
+@media (max-width: 720px) {
+ /* 隐藏所有按钮文字（含 btnRepo 的 "GitHub"） */
+  .icon-btn-label { display: none; }
+
+ /* 纯图标按钮收紧水平 padding，圆形占地更小，防溢出（btnTheme 本就无 label，同规则适用） */
+  .icon-btn { padding: 0 var(--sp-2); }
+
+ /* 品牌版本号窄屏隐藏，只留标题（防止标题+版本号挤成两行） */
+  .brand-ver { display: none; }
+
+ /* 搜索框窄屏收紧左右边距，让位给按钮 */
+  .topbar-search { margin: 0 var(--sp-2); }
+
+ /* 顶栏整体左右 padding 收一档 */
+  .topbar { padding: 0 var(--sp-2); }
+}
+
+/* === 3. 超窄屏（≤480px）：品牌文字全隐藏，只留 brand-icon，腾最大空间给搜索+按钮 === */
+@media (max-width: 480px) {
+  .brand-text { display: none; }
+  .topbar-search { margin: 0 var(--sp-1); max-width: none; }
+  .topbar { padding: 0 var(--sp-1); }
+ /* 按钮间距收到最小 */
+  .topbar-actions { gap: 0; }
+  .icon-btn { padding: 0 var(--sp-1); }
+}
+
+/* === 4. 窄屏导航抽屉化（跨平台移动端） === */
+/*
+ * 窄屏（≤720px）sidenav 从 flex 列转 fixed overlay 抽屉，默认左移隐藏
+ * 点顶栏汉堡按钮弹出，点遮罩或选中 op 后收起。
+ *
+ * DOM 需求（归并进 index.html）：
+ * 1. <header class="topbar"> 内最前（topbar-brand 之前）加：
+ * <button class="icon-btn nav-drawer-toggle" id="btnNavDrawer" title="菜单">
+ * <span class="msym">menu</span>
+ * </button>
+ * 2. </body> 之前加：
+ * <div class="nav-drawer-mask" id="navDrawerMask"></div>
+ *
+ * JS 需求（归并进 main.js）：
+ * - btnNavDrawer.click → sidenav.classList.toggle("drawer-open") + mask.classList.toggle("show")
+ * - navDrawerMask.click → 移除 drawer-open + show（点遮罩关抽屉）
+ * - selectOp(id) 末尾 → 若 window.innerWidth <= 720 则移除 drawer-open + show（选完即关）
+ * - 窄屏初次进入若 sidenav.collapsed 残留，建议清掉（抽屉模式下 collapsed 无意义，CSS 已覆盖宽度）
+ *
+ * 令牌：顶栏高 56px 取 app.css .topbar height（硬编码，未抽 --topbar-h 变量，这里复用）；
+ * 阴影/圆角/间距/动效全走 theme.css 令牌，不引入新硬编码。
+ */
+
+/* 宽屏默认：汉堡按钮 + 遮罩层隐藏（不占空间不响应） */
+.nav-drawer-toggle { display: none; }
+.nav-drawer-mask { display: none; }
+
+@media (max-width: 720px) {
+ /* 窄屏侧栏不再抽屉化。原抽屉方案（fixed + translateX(-100%) + 汉堡/遮罩）
+ * 依赖 btnNavDrawer/navDrawerMask 的 JS 接线，而 main.js/index.html 从未实现
+ * 导致 sidenav 被推出屏外且无从召回 = 视觉消失。
+ * 改为：窄屏强制收缩成 60px rail 图标态，留在 layout flex 内常驻可见
+ * 无论有无 .collapsed class 都表现为图标条（复用 app.css 既有 rail 视觉）。 */
+  .sidenav,
+  .sidenav.collapsed {
+    width: 60px;
+  }
+ /* 窄屏 rail 态：隐藏文字/计数/箭头、nav-item 居中。
+ * 对齐 app.css .sidenav.collapsed 内部行为——因窄屏 sidenav 未必带 .collapsed，此处显式补齐。 */
+  .sidenav .nav-label,
+  .sidenav .nav-count,
+  .sidenav .nav-caret {
+    display: none;
+  }
+  .sidenav .nav-item {
+    justify-content: center;
+    padding: 0;
+    gap: 0;
+  }
+ /* 窄屏隐藏 sidenav 内的折叠开关（rail 常驻，手动折叠无意义） */
+  .nav-toggle { display: none; }
+ /* 拖拽把手窄屏隐藏（rail 宽度锁定 60px 不可调） */
+  .nav-resizer { display: none; }
+}
+
+/* === 5. 超窄屏搜索框收缩（≤480px） === */
+/* 第一档 720px 已隐藏按钮文字腾空间，但搜索框仍可能挤汉堡+图标按钮。
+ * ≤480px 让搜索框 flex 收缩（min-width:0 + flex:1 占剩余空间），避免溢出顶栏。 */
+@media (max-width: 480px) {
+  .topbar-search {
+    flex: 1;
+    min-width: 0;         /* 允许 flex 收缩，防 input 固有宽度撑顶栏 */
+  }
+ /* 搜索图标 + input 紧凑：input 占满剩余，图标固定 */
+  .topbar-search-input { width: 100%; }
+}

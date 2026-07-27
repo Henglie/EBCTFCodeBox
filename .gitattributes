@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.ttf binary
+*.ttc binary
+*.woff2 binary
+*.png binary
+*.pdf binary
+*.exe binary

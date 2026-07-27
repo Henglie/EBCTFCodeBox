@@ -1,0 +1,138 @@
+/*
+ * pluginPanel.css — 插件/MCP 页样式（独立路由 #/plugins，工作区内渲染，独立表）。
+ * 不改 app.css / theme.css。link 引入由 index.html 负责。
+ * 令牌全取 theme.css（--surface-* / --on-surface* / --primary / --on-primary /
+ * --outline-var / --error / --success / --sp-* / --r-* / --el-3 / --fs-* /
+ * --dur-* / --ease*）。深浅色主题靠令牌自动适配，无硬编码颜色。
+ */
+
+/* ============ 独立页容器（路由 #/plugins，工作区内渲染，非弹窗） ============ */
+.plugin-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding-bottom: var(--sp-6);
+  animation: plugin-fade var(--dur-medium) var(--ease-out);
+}
+@keyframes plugin-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ============ 头：标题 + 说明 ============ */
+.plugin-page-head {
+  padding: var(--sp-4) 0 var(--sp-3);
+  border-bottom: 1px solid var(--outline-var);
+  margin-bottom: var(--sp-3);
+}
+.plugin-page-title {
+  font-size: var(--fs-xl); font-weight: 700; color: var(--on-surface);
+}
+.plugin-page-note {
+  margin: var(--sp-2) 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  background: color-mix(in srgb, var(--success) 10%, var(--surface-1));
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm); color: var(--on-surface-var);
+  line-height: 1.5;
+}
+
+/* ============ 分区块（插件区 / MCP 区） ============ */
+.plugin-sect {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  margin: var(--sp-3) 0;
+}
+.plugin-sect h4 {
+  margin: 0;
+  font-size: var(--fs-md); font-weight: 700; color: var(--on-surface);
+}
+
+/* 空状态 / 说明文字 */
+.plugin-empty {
+  font-size: var(--fs-sm); color: var(--on-surface-var);
+  line-height: 1.5;
+}
+
+/* ============ 已装插件卡片 ============ */
+.plugin-item {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-1);
+  border-radius: var(--r-sm);
+}
+.plugin-item-main {
+  display: flex; flex-direction: column; gap: 2px;
+  min-width: 0;
+}
+.plugin-item-name {
+  font-weight: 600; color: var(--on-surface);
+  word-break: break-word;
+}
+.plugin-item-ver {
+  font-size: var(--fs-sm); color: var(--on-surface-var);
+  font-weight: 400;
+}
+.plugin-item-meta {
+  font-size: var(--fs-sm); color: var(--on-surface-var);
+}
+.plugin-item-actions {
+  display: flex; gap: var(--sp-2); flex: none;
+}
+
+/* ============ 从 URL 加载行 ============ */
+.plugin-load-row {
+  display: flex; align-items: center; gap: var(--sp-2);
+}
+
+/* 输入框 */
+.plugin-input {
+  flex: 1; min-width: 0;
+  padding: var(--sp-2);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-sm);
+  color: var(--on-surface);
+  font-size: var(--fs-sm);
+  transition: border-color var(--dur-short) var(--ease);
+}
+.plugin-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* ============ 胶囊按钮 ============ */
+.chip-btn {
+  padding: var(--sp-1) var(--sp-3);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--on-surface);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  transition: background var(--dur-short) var(--ease), transform var(--dur-short) var(--ease);
+}
+.chip-btn:hover { background: var(--surface-hi); }
+.chip-btn:active { transform: scale(.95); }
+
+.chip-btn.primary {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--primary);
+}
+.chip-btn.primary:hover {
+  background: color-mix(in srgb, var(--on-primary) 10%, var(--primary));
+}
+
+.chip-btn.danger {
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 40%, transparent);
+}
+.chip-btn.danger:hover {
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+}
+
+/* ============ 窄屏适配 ============ */
+@media (max-width: 520px) {
+  .plugin-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .plugin-item-actions { align-self: flex-start; }
+}

@@ -1,0 +1,40 @@
+# ── 依赖 / 构建 ──
+node_modules/
+dist/
+*.log
+
+# ── 资料区（红线：全部本地留存，不上传公开仓库）──
+资料/
+
+# ── 文档备份 ──
+*.bak
+*.bak.*
+# public/fonts/th/ 天珩全字库 4 平面 ttf 随包分发（作者要求，非商用引用），纳入版本库。
+
+# ── 系统杂物 ──
+.DS_Store
+Thumbs.db
+desktop.ini
+__pycache__/
+*.pyc
+
+# ── 开发工具区（工具/）（红线：全部本地留存，不上传公开仓库）──
+工具/
+
+# ── 根目录一次性诊断脚本 / 中间产物（下划线前缀 mjs、临时 json、源图）──
+/_*.mjs
+/_*.json
+/b45g.json
+/HenglieICO.png
+
+# ── 项目内部文档（恒烈红线：进度/多 agent 协作文档保留本地，不上交）──
+PROGRESS.md
+多Agent协作.md
+
+# ── 授权签发工具（红线：私钥绝密，整个目录 + license.bin 永不上传）──
+授权/
+license.bin
+
+# 一次性草稿 / 本地脚本，不入库
+介绍文章.md
+启动无限制克劳德.cmd

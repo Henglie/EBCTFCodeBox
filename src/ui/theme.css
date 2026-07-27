@@ -1,0 +1,165 @@
+/*
+ * theme.css — Material 3 温和红主题令牌（轻量手写，不引 @material/web）。
+ *
+ * 配色取 M3 tonal 思路，primary 用柔和砖红（陶土红），不刺眼、不喧宾夺主。
+ * 暗色为默认，浅色由 html[data-theme="light"] 覆盖。
+ * 只放「颜色 / 圆角 / 间距 / 阴影 / 字体」令牌，组件样式在 app.css。
+ */
+
+:root {
+ /* ---- 柔和砖红 primary tonal ---- */
+  --red-10: #2b0f0c;
+  --red-20: #4a1c17;
+  --red-30: #6b2b23;
+  --red-40: #8f3d33;   /* 主色（暗色主题用） */
+  --red-50: #b0503f;
+  --red-60: #c86f5e;
+  --red-70: #dd8f80;
+  --red-80: #f0b3a7;
+  --red-90: #ffdad1;
+  --red-95: #ffede8;
+
+ /* ---- 中性 tonal（近中性，仅一丝暖调，压掉可辨酒红；R-B≤3） ---- */
+  --n-04: #100f0e;
+  --n-06: #151312;
+  --n-10: #1e1c1b;
+  --n-12: #232120;
+  --n-17: #2e2b2a;
+  --n-20: #353231;
+  --n-24: #403d3b;
+  --n-30: #4e4b49;
+  --n-50: #7d7a77;
+  --n-60: #979390;
+  --n-70: #b3afac;
+  --n-80: #cfcbc7;
+  --n-90: #e8e3df;
+ /* 浅色高层容器专用档（近中性微暖，压掉可辨酒红；动态取色时随种子重染） */
+  --n-94: #f2efed;
+  --n-92: #ebe7e5;
+  --n-91: #e7e3e0;
+  --n-89: #e0dcd9;
+  --n-95: #f6f3f1;
+  --n-99: #fffbff;
+
+ /* ---- 圆角（M3 shape scale） ---- */
+  --r-xs: 4px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 28px;
+  --r-full: 999px;
+
+ /* ---- 间距 ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+
+ /* ---- 字体 ---- */
+  --font: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+  --mono: "Cascadia Code", "Consolas", "SF Mono", "Roboto Mono", ui-monospace, monospace;
+
+ /* ---- 字号令牌（整体上调一档，标题永远高正文一档，层级比例不压平） ---- */
+  --fs-xs: 13px;     /* 超小：版本号 / 计数 / 展开按钮（旧 12） */
+  --fs-sm: 14px;     /* 小标题 / uppercase 标签 / 提示（旧 13） */
+  --fs-base: 16px;   /* 基准正文：参数 / 描述 / 按钮 / 二级菜单 / IO（旧 15） */
+  --fs-md: 17px;     /* body 全局基准 / 品牌名（旧 16） */
+  --fs-lg: 20px;     /* 强调：文件名焦点（旧 18） */
+  --fs-xl: 26px;     /* op 页标题（旧 24） */
+  --fs-2xl: 32px;    /* 首页大标题（旧 28） */
+
+ /* ---- 高度阴影（M3 elevation） ---- */
+  --el-1: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.15);
+  --el-2: 0 1px 2px rgba(0,0,0,.3), 0 2px 6px 2px rgba(0,0,0,.15);
+  --el-3: 0 4px 8px 3px rgba(0,0,0,.15), 0 1px 3px rgba(0,0,0,.3);
+
+ /* ---- 动效（M3 标准时长 ×0.5，仿安卓开发者选项动画缩放 0.5x，更跟手流畅） ---- */
+  --ease: cubic-bezier(.2, 0, 0, 1);          /* M3 standard easing */
+  --ease-emph: cubic-bezier(.2, 0, 0, 1);     /* emphasized */
+  --ease-out: cubic-bezier(0, 0, 0, 1);       /* decelerate（入场） */
+  --ease-in: cubic-bezier(.3, 0, 1, 1);       /* accelerate（出场） */
+  --dur-1: 50ms;    /* M3 short2 100ms ×0.5 */
+  --dur-2: 100ms;   /* M3 short4 200ms ×0.5 */
+  --dur-3: 125ms;   /* M3 medium1 250ms ×0.5 */
+  --dur-4: 175ms;   /* M3 medium3 350ms ×0.5 */
+  --dur: var(--dur-2);   /* 默认过渡 */
+ /* 语义别名（组件按语义引用，不直接用数字档） */
+  --dur-short: var(--dur-2);    /* 小交互：hover/开关/按钮 100ms */
+  --dur-medium: var(--dur-4);   /* 入场/展开 175ms */
+}
+
+/* ============ 暗色主题（默认） ============ */
+:root, html[data-theme="dark"] {
+  --primary: var(--red-80);
+  --on-primary: var(--red-20);
+  --primary-container: var(--red-30);
+  --on-primary-container: var(--red-90);
+
+  --bg: var(--n-06);
+  --surface: var(--n-06);
+  --surface-1: var(--n-10);
+  --surface-2: var(--n-12);
+  --surface-3: var(--n-17);
+  --surface-4: var(--n-20);
+  --surface-hi: var(--n-24);
+
+  --on-surface: var(--n-90);
+  --on-surface-var: var(--n-70);
+  --outline: var(--n-50);
+  --outline-var: var(--n-30);
+
+  --error: #ffb4ab;
+  --on-error: #690005;
+  --success: #7ad39a;
+
+ /* ---- 警告色：M3 tonal 柔和橙，替换全站硬编码 #ff9800 ---- */
+  --warning: #ffb77c;      /* 暗色柔和橙，容器/图标/文字通用 */
+  --on-warning: #4a2500;   /* 橙上深色文字 */
+  --warning-text: #ffb77c; /* 警告文字色：暗色下柔和橙对深底已达 ≥4.5:1，直接沿用 */
+
+ /* ---- 输入框统一底色：全站输入框收敛到 surface-1 语义 ---- */
+  --field-bg: var(--surface-1);
+
+ /* ---- 穷举全解 flag 高亮金色三档（原硬编码 #ffd54f/#ffca28/#ffb300 系） ---- */
+  --flag-hit: #ffe082;     /* flag 命中：暗色亮金 */
+  --flag-format: #ffca28;  /* flag 格式匹配：暗色中金 */
+}
+
+/* ============ 浅色主题 ============ */
+html[data-theme="light"] {
+  --primary: var(--red-40);
+  --on-primary: #ffffff;
+  --primary-container: var(--red-90);
+  --on-primary-container: var(--red-10);
+
+  --bg: var(--n-99);
+  --surface: var(--n-99);
+  --surface-1: var(--n-95);
+  --surface-2: var(--n-94);
+  --surface-3: var(--n-92);
+  --surface-4: var(--n-91);
+  --surface-hi: var(--n-89);
+
+  --on-surface: var(--n-10);
+  --on-surface-var: var(--n-30);
+  --outline: var(--n-50);
+  --outline-var: var(--n-80);
+
+  --error: #ba1a1a;
+  --on-error: #ffffff;
+  --success: #256d47;
+
+ /* ---- 警告色：M3 tonal 橙，替换全站硬编码 #ff9800 ---- */
+  --warning: #ff9800;      /* 亮色标准橙 */
+  --on-warning: #ffffff;   /* 橙上白字，保证对比度 */
+  --warning-text: #a34e00; /* 警告文字色：深橙对浅底 ≥4.5:1（#ff9800 作正文对比不足，仅留边框/图标） */
+
+ /* ---- 输入框统一底色：全站输入框收敛到 surface-1 语义 ---- */
+  --field-bg: var(--surface-1);
+
+ /* ---- 穷举全解 flag 高亮金色三档（原硬编码 #ffd54f/#ffca28/#ffb300 系） ---- */
+  --flag-hit: #ffb300;     /* flag 命中：亮色深金，浅底上够醒目 */
+  --flag-format: #ffca28;  /* flag 格式匹配：亮色中金 */
+}

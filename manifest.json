@@ -1,0 +1,36 @@
+{
+  "name": "恒烈 CTF 编码工具箱",
+  "short_name": "恒烈CTF",
+  "description": "全平台 · 纯前端 · 零外发的 CTF 编解码工具箱",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "id": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "any",
+  "background_color": "#1b1614",
+  "theme_color": "#8f3d33",
+  "categories": ["utilities", "developer", "security", "education"],
+  "icons": [
+    {
+      "src": "public/icons/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "public/icons/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "public/icons/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

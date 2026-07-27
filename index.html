@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>恒烈 CTF 编码工具箱</title>
+  <meta name="description" content="全平台 · 纯前端 · 零外发的 CTF 编解码工具箱" />
+  <link rel="icon" type="image/png" sizes="32x32" href="public/icons/app-icon-32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="public/icons/app-icon-192.png" />
+  <link rel="apple-touch-icon" href="public/icons/app-icon-180.png" />
+  <link rel="stylesheet" href="src/ui/fonts.css" />
+  <link rel="stylesheet" href="src/ui/theme.css" />
+  <link rel="stylesheet" href="src/ui/app.css" />
+  <link rel="stylesheet" href="src/ui/topbar-responsive.css" />
+  <link rel="stylesheet" href="src/ui/recipeView.css" />
+  <link rel="stylesheet" href="src/ui/exhaustiveView.css" />
+  <link rel="stylesheet" href="src/ui/envPanel.css" />
+  <link rel="stylesheet" href="src/ui/universalViewer.css" />
+  <link rel="stylesheet" href="src/ui/codeImageViewer.css" />
+  <link rel="stylesheet" href="src/ui/pluginPanel.css" />
+</head>
+<body>
+  <!-- ============ 顶栏 ============ -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <img class="brand-icon" src="public/icons/app-icon-192.png" alt="" width="28" height="28" />
+      <div class="brand-text">
+        <span class="brand-title" id="brandTitle">恒烈 CTF 编码工具箱</span>
+        <span class="brand-ver" id="appVer">v0.1.1</span>
+      </div>
+    </div>
+    <!-- 居中搜索框（问题6：搜功能，含别名） -->
+    <div class="topbar-search" id="topbarSearch">
+      <span class="msym topbar-search-icon"></span>
+      <input type="text" id="opSearchInput" class="topbar-search-input"
+             placeholder="搜索编解码 / 加解密…" spellcheck="false" autocomplete="off" />
+      <div class="op-search-panel" id="opSearchPanel"></div>
+    </div>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="btnAbout" title="关于">
+        <span class="msym"></span>
+        <span class="icon-btn-label" id="btnAboutLabel">关于</span>
+      </button>
+      <button class="icon-btn" id="btnFont" title="环境">
+        <span class="msym"></span>
+        <span class="icon-btn-label" id="btnFontLabel">环境</span>
+      </button>
+      <button class="icon-btn" id="btnPlugins" title="插件 / 扩展">
+        <span class="msym"></span>
+        <span class="icon-btn-label" id="btnPluginsLabel">插件</span>
+      </button>
+      <button class="icon-btn" id="btnLang" title="语言 / Language">
+        <span class="msym"></span>
+        <span class="icon-btn-label" id="btnLangLabel">中</span>
+      </button>
+      <button class="icon-btn" id="btnUpdate" title="检查更新">
+        <span class="msym"></span>
+        <span class="icon-btn-label" id="btnUpdateLabel">检查更新</span>
+      </button>
+      <a class="icon-btn" id="btnRepo" href="https://github.com/henglie/EBCTFCodeBox" target="_blank" rel="noopener" title="GitHub 仓库">
+        <svg class="octocat" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+        <span class="icon-btn-label">GitHub</span>
+      </a>
+      <button class="icon-btn" id="btnTheme" title="切换主题">
+        <span class="msym"></span>
+      </button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- ============ 左侧分类导航 ============ -->
+    <nav class="sidenav" id="sidenav"><!-- 由 main.js 按 CATEGORIES 渲染 --></nav>
+    <!-- 拖拽把手（问题3：调侧栏宽度，会话态不持久化；折叠态隐藏） -->
+    <div class="nav-resizer" id="navResizer" title="拖动调整菜单宽度"></div>
+
+    <!-- ============ 中心工作区 ============ -->
+    <main class="workspace" id="workspace"><!-- 由 main.js 按当前视图渲染 --></main>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

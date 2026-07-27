@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="恒烈 CTF 编码工具箱">
+  <title>恒烈 CTF 编码工具箱</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8f3d33"/>
+      <stop offset="1" stop-color="#6b2b23"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g fill="none" stroke="#fffbff" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="196,176 132,256 196,336"/>
+    <polyline points="316,176 380,256 316,336"/>
+    <line x1="292" y1="164" x2="220" y2="348"/>
+  </g>
+</svg>
