@@ -13,18 +13,37 @@
  */
 import { register } from "./registry.js";
 
-const BRIDGE_URL = "http://localhost:8181";
+const BRIDGE_URL = "http://127.0.0.1:8181";  // 127.0.0.1 保证命中 bridge 监听的 IPv4 地址（localhost 可能解析到 ::1）
 const BRIDGE_TIMEOUT = 70000; // 略大于 bridge 的 60s
 
-// 探测 bridge 是否在线（GET /api/health）。不抛错，返回 {ok, win, tools} 或 {ok:false, error}。
+// 探测 bridge 是否在线。先试 /api/health，404 则 fallback 到 /api/tools。
+// localhost 可能解析到 ::1（IPv6）而 bridge 监听在 127.0.0.1；此处同时试两个地址。
+// 不抛错，返回 {ok, win, tools} 或 {ok:false, error}。
 async function bridgeHealth() {
+  const urls = [
+    "http://127.0.0.1:8181/api/health",
+    "http://localhost:8181/api/health",
+    "http://127.0.0.1:8181/api/tools",
+    "http://localhost:8181/api/tools",
+  ];
+  for (const url of urls) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 2000);
+      const r = await fetch(url, { signal: ctrl.signal });
+      clearTimeout(t);
+      if (r.ok) {
+        try { return await r.json(); } catch { /* fall through */ }
+      }
+    } catch { /* 连接失败/超时，继续试下一个 */ }
+  }
+  // 全失败时再发一次原始 health 请求取具体错误信息
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 3000);
     const r = await fetch(`${BRIDGE_URL}/api/health`, { signal: ctrl.signal });
     clearTimeout(t);
-    if (!r.ok) return { ok: false, error: `health HTTP ${r.status}` };
-    return await r.json();
+    return { ok: false, error: `health HTTP ${r.status}` };
   } catch (e) {
     return { ok: false, error: String(e) };
   }

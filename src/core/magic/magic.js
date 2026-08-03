@@ -57,6 +57,8 @@ const DEFAULTS = {
   paramScan: true,        // MT3：带参 op 参数网格扫描（白名单绕过 detect 要求直接扫描）
   paramScanLimit: PARAM_SCAN_DEFAULT_LIMIT, // 总组合数上限，超限只扫 P0
   key: null,              // 用户在工具栏填的密钥（需求3）——带 key 时试各加解密 op
+  allowOps: null,         // 参与解码的 op id 白名单（Set/数组）。null=不限制（旧行为）。
+                          // 由 UI 的「解码强度」预设/自定义勾选传入，见 core/decodeProfile.js。
   timeBudget: 30000,      // 硬墙钟死线（毫秒）：兜底上限，超时无条件收尾（防病态输入无限跑）
   signal: null,           // AbortSignal（看门狗/新输入接管）——aborted 立即收尾返回已有候选
   softDeadlineMs: 5000,   // 软死线（毫秒）：到点回调 onPartial(已得结果) 让 UI 先渲染，之后继续跑
@@ -362,9 +364,19 @@ function outputCheckPasses(text, check) {
  * @returns {Promise<Array<{chain:string[], result:string, confidence:number, score:number, matchesCrib:boolean}>>}
  * 候选数组，按综合分升序（分低=优）。chain 含合成 id（xor:K / rot:R）或 op id。
  */
+// 大输入安全线：超过则跳过 paramScan/intensive/plainOps（只跑有 detect 的解码）。
+// 原因：这些网格/暴力对长输入是同步长任务，timeBudget 的让出检查点无法中断它们，
+// 用户 force 一键解码跑 100KB+ 输入会卡死主线程。detect 解码（base64 等）无此问题。
+const BIG_INPUT_LIMIT = 100000;
+
 export async function magicDecode(input, opts = {}) {
   const o = { ...DEFAULTS, ...opts };
   if (!input || typeof input !== "string" || input.length === 0) return [];
+  if (input.length > BIG_INPUT_LIMIT && !o._forceBig) {
+    o.paramScan = false;
+    o.intensive = false;
+    o.maxDepth = 1;
+  }
 
  // crib 正则编译
   let cribRe = null;
@@ -378,6 +390,14 @@ export async function magicDecode(input, opts = {}) {
 
   const f = inputFeatures(input);
 
+ // ---- 解码强度白名单（UI「解码强度」预设/自定义）----
+ // o.allowOps 为 null 时 allowed() 恒真 = 完全保持旧行为；给了集合则只让集合内 op 参与。
+ // 作用于全部四个候选来源：decoders / plainOps / paramScan / keyed，避免「关了却仍在跑」。
+  const _allowSet = o.allowOps == null
+    ? null
+    : (o.allowOps instanceof Set ? o.allowOps : new Set(o.allowOps));
+  const allowed = (opId) => _allowSet === null || _allowSet.has(opId);
+
  // 候选 op 分两层（恒烈需求1：所有编解码 op 都安排上，花式算法不遗漏）：
  // ① detectOps：有 detect 的 op —— 强信号，允许参与多层 BFS 链（≤maxDepth）。
  // ② plainOps ：无 detect 的纯编解码/花式 op —— 按字符集定义域(coarseAdmitPlain)预筛
@@ -386,6 +406,7 @@ export async function magicDecode(input, opts = {}) {
   const decoders = OPS.filter(
     (op) => typeof op.detect === "function" && typeof op.decode === "function"
       && !op.requiresBridge && !op.noAuto && !NO_MAGIC_OPS.has(op.id)
+      && allowed(op.id)
   );
  // 无 detect 的**纯解码** op（radix/base 变体/花式衍生…），按定义域预筛后单层跑。
  // **只收 op.decode**（真解码器）——run-only 的 op 是哈希/分析/取证报告工具（md5/crc32/
@@ -399,7 +420,8 @@ export async function magicDecode(input, opts = {}) {
       && !op.requiresBridge && !op.noAuto && !NO_MAGIC_OPS.has(op.id)
       && !PARAM_SWEEP[op.id]
       && !KEYED_OPS.has(op.id)
-      && coarseAdmitPlain(op, f)
+      && allowed(op.id)
+      && coarseAdmitPlain(op, f, !!o.lenient)
   );
 
  // MT3：参数网格扫描预算。白名单 op（caesar/affine/railFence 等无 detect 的经典密码）
@@ -474,9 +496,12 @@ export async function magicDecode(input, opts = {}) {
  // 触发 → 用户看到「后台继续」却画面全空（恒烈实测「你好？」5s 后空白的根因）。故内层循环每
  // 轮都调此心跳：软死线一到立刻回调已得候选让 UI 先渲染，并周期让出使倒计时/中断生效。
  // 返回 true 表示已中断（新输入接管），调用方 break 收尾。
+  // innerTick 额外检查硬死线：maxDepth=1 时全部 op 扫描都在内层 for 一次跑完，
+  // 若只在 while 顶层查 deadline，timeBudget 形同虚设（实测 10KB base64 跑 52s）。
   const innerTick = async () => {
     await maybeYield();
     maybeFirePartial();
+    if (Date.now() > hardDeadline) return true;  // 硬死线到 → 中断内层 op 扫描
     return aborted();
   };
   while (queue.length > 0) {
@@ -542,6 +567,7 @@ export async function magicDecode(input, opts = {}) {
         if (scanOver) break;
         const op = getOp(opId);
         if (!op || typeof op.decode !== "function") continue;
+        if (!allowed(opId)) continue;   // 强度档白名单外的不扫参数网格
         const grid = sweepGrids.get(opId);
         if (!grid || grid.length === 0) continue;
         for (const params of grid) {
@@ -600,6 +626,7 @@ export async function magicDecode(input, opts = {}) {
       for (const opId of KEYED_OP_IDS) {
         const op = getOp(opId);
         if (!op || typeof op.decode !== "function" || op.noAuto) continue;
+        if (!allowed(opId)) continue;   // 强度档白名单外的不试带密钥解密
         const attempts = keyedAttackParams(opId, o.key);
         for (const { params, tag } of attempts) {
           if (guard++ > o.guard) break;
@@ -633,6 +660,13 @@ export async function magicDecode(input, opts = {}) {
         score = op.detect(cur.text);
       } catch {
         continue;
+      }
+      // lenient（增强+/自定义档，恒烈 2026-08-03）：detect 未命中但输入字符种类数与
+      // 该分类字符集大小匹配（如「喵呜」2 种字符 ≈ 二进制 2 字符表）→ 给低分兜底参与。
+      // 只认「种类数」，不认具体字符——变体题（喵呜/emoji/自定义表）也能被尝试解码。
+      if (o.lenient && (!score || score <= 0)) {
+        const lim = { base: 64, radix: 16, classic: 26, modern: 128, text: 256 }[op.cat];
+        if (lim !== undefined && f && f.nCharKinds <= lim) score = 0.15;  // f = inputFeatures(input)，381 行
       }
       if (!score || score <= 0) continue;
 

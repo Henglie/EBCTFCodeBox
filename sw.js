@@ -22,7 +22,7 @@
  *   - 缓存版本号 CACHE_VER 变更即触发全量刷新，避免旧壳卡死。
  */
 
-const CACHE_VER = "ebctf-shell-0.1.1";
+const CACHE_VER = "ebctf-shell-0.1.2";
 
 const CORE_SHELL = [
   "./",
@@ -39,6 +39,7 @@ const CORE_SHELL = [
   "./src/ui/universalViewer.css",
   "./src/ui/codeImageViewer.css",
   "./src/ui/pluginPanel.css",
+  "./src/ui/decodeStrength.css",
   "./public/icons/app-icon.svg",
   "./public/icons/app-icon-maskable.svg",
   "./public/icons/app-icon-192.png",

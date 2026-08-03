@@ -21,18 +21,20 @@ const MAX_STEPS = 5_000_000;
 // 8 指令 > < + - . , [ ]；无输入源时 , 读 0；步数上限保护。
 function bfRun(bf) {
   const code = String(bf).replace(/[^><+\-.,\[\]]/g, "");
- // 括号配对表
+ // 括号配对表。宽容孤儿括号：无匹配的 ] 与多余 [ 当 NOP（同 fancy2 brainfuckDecode 口径）
   const jump = new Map();
   const stack = [];
   for (let i = 0; i < code.length; i++) {
     if (code[i] === "[") stack.push(i);
     else if (code[i] === "]") {
-      if (!stack.length) throw new Error("BF: ] 不配对");
-      const j = stack.pop();
-      jump.set(i, j); jump.set(j, i);
+      if (stack.length) {
+        const j = stack.pop();
+        jump.set(i, j); jump.set(j, i);
+      }
+      // 孤儿 ]：不进 jump 表，执行时当 NOP
     }
   }
-  if (stack.length) throw new Error("BF: [ 不配对");
+  // 多余的 [：同样不进 jump 表（等效匹配到程序尾）
 
   const tape = new Uint8Array(30000);
   let ptr = 0, ip = 0, steps = 0;
@@ -46,8 +48,8 @@ function bfRun(bf) {
       case "-": tape[ptr] = (tape[ptr] - 1 + 256) & 0xff; break;
       case ".": out += String.fromCharCode(tape[ptr]); break;
       case ",": tape[ptr] = 0; break; // 无输入源
-      case "[": if (tape[ptr] === 0) ip = jump.get(ip); break;
-      case "]": if (tape[ptr] !== 0) ip = jump.get(ip); break;
+      case "[": if (tape[ptr] === 0 && jump.has(ip)) ip = jump.get(ip); break;
+      case "]": if (tape[ptr] !== 0 && jump.has(ip)) ip = jump.get(ip); break;
     }
     ip++;
   }

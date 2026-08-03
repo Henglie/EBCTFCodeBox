@@ -173,11 +173,40 @@ import "./nonogram.js"; // 数织 Nonogram nonogram（analysis, run, 线求解�
 import "./simonSpeck.js"; // NSA Simon/Speck 轻量分组密码 simonSpeck（modern, 双向, BigInt, NSA 官方向量验证, 无 detect）
 import "./knapsack.js"; // 背包加密 Merkle-Hellman knapsack（modern, 双向, BigInt 超递增背包, 无 detect）
 import "./dsa.js"; // DSA 签名/验签/重用k攻击 dsa（crypto, run, FIPS 186 + 内置纯 JS SHA-1, 无 detect）
+import "./shamir.js"; // Shamir 秘密共享 shamir（crypto, 双向, GF(2^8) 拉格朗日插值, split→combine 往返验证, 无 detect）
+import "./a51.js"; // GSM A5/1 流密码 a51（modern, 双向自反, 三 LFSR 19/22/23 多数表决钟控, Briceno/Goldberg/Wagner 官方向量验证, 无 detect）
+import "./ecdsaReuseK.js"; // ECDSA nonce 重用攻击 ecdsaReuseK（crypto, run, 纯数论恢复 k+私钥 d + 内置 secp256k1/P-256 EC 点乘公钥校验消歧, 自造签名验证, 无 detect）
+import "./rabin.js"; // Rabin 密码 rabin（crypto, 双向, p,q≡3mod4 平方根 4 解, 往返验证, 无 detect）
+import "./x25519.js"; // X25519 密钥交换 x25519（crypto, run, RFC 7748 Montgomery ladder, 官方向量验证, 无 detect）
+import "./ed25519.js"; // Ed25519 签名/验签 ed25519（crypto, run, RFC 8032 EdDSA, Node 原生对拍验证, 无 detect）
+import "./siphash.js"; // SipHash-2-4 MAC siphash（hash, run, 官方 vectors_sip64 8 向量验证, 无 detect）
+import "./scrypt.js"; // scrypt 口令 KDF scrypt（crypto, run async, RFC 7914 + Node scryptSync 对拍 5 向量验证, 无 detect）
+import "./blake3.js"; // BLAKE3 哈希 blake3（hash, run, 官方 10 向量含多 chunk 树边界 1024/1025/2048/3072 验证, 无 detect）
+import "./paillier.js"; // Paillier 加法同态加密 paillier（crypto, run, decrypt(encrypt)=m + 同态性质 E(m1)·E(m2)=E(m1+m2) 验证, 无 detect）
+import "./schnorr.js"; // Schnorr 签名 schnorr（crypto, run, secp256k1 + 内嵌 SHA-256, sign/verify + nonce 重用恢复 d/k 验证, 无 detect）
+import "./magma.js"; // GOST Magma 分组密码 magma（modern, 双向, GOST R 34.12-2015 32轮 Feistel, 官方 §A.2 向量验证, 无 detect）
+import "./present.js"; // PRESENT 轻量分组密码 present（modern, 双向, PRESENT-80 31轮 SPN, 官方论文 4 向量验证, 无 detect）
+import "./serpent.js"; // Serpent 分组密码 serpent（modern, 双向, AES 竞赛亚军 32轮 SPN, 128/192/256位密钥, NESSIE 514 向量全过, 无 detect）
+import "./aria.js"; // ARIA 分组密码 aria（modern, 双向, 韩国标准 KS X 1213/RFC 5794, 128位分组 128/192/256位密钥, RFC 5794 附录A 三向量验证, 无 detect）
+import "./seed.js"; // SEED 分组密码 seed（modern, 双向, 韩国 KISA 标准 RFC 4269, 128位分组 128位密钥 16轮 Feistel, RFC 4269 附录B 两向量+中间轮密钥验证, 无 detect）
+import "./camellia.js"; // Camellia 分组密码 camellia（modern, 双向, NTT/三菱 RFC 3713, 128位分组 128/192/256位密钥 18/24轮, RFC 3713 附录C 三向量+参考实现逐段对拍, 无 detect）
+import "./pearson.js"; // Pearson 哈希 pearson（hash, run, 8-bit 逐字节查表, 表为 0-255 合法排列 + 确定性自检, 无 detect）
+import "./whirlpool.js"; // Whirlpool 哈希 whirlpool（hash, run, ISO/IEC 10118-3 512-bit Miyaguchi-Preneel, 官方 8 向量验证, 无 detect）
+import "./streebog.js"; // Streebog 哈希 streebog（hash, run, 俄罗斯国标 GOST R 34.11-2012/RFC 6986, 512/256 位, RFC §10 三向量验证, 无 detect）
+import "./threefish.js"; // Threefish 可调分组密码 threefish（modern, 双向, Skein v1.3 内建 256/512/1024 位分组, 72/80轮, Crypto++ threefish.txt 官方向量验证, 无 detect）
+import "./skipjack.js"; // Skipjack 分组密码 skipjack（modern, 双向, NSA 1998 解密 64位分组 80位密钥 32轮, NIST SP800-17 Table 6 官方向量验证, 无 detect）
+import "./mars.js"; // MARS 分组密码 mars（modern, 双向, IBM 1998 AES决赛圈 128位分组 128/192/256位密钥 32轮, Crypto++ marsval.dat 官方向量验证, 无 detect）
+import "./cityhash.js"; // CityHash 非加密哈希 cityhash（hash, run, Google CityHash32/64, city-test.cc 官方 299 向量全过, 无 detect）
+import "./xxhash.js"; // xxHash 极速哈希 xxhash（hash, run, xxHash32/64 官方向量自检, 非加密, 无 detect）
 import "./bmpPalette.js"; // BMP 调色板隐写分析 bmpPalette（stego, run, 1/4/8-bit 索引 BMP 调色板 LSB/索引序/未用索引, 无 detect）
 import "./stegosaurus.js"; // Stegosaurus pyc 隐写检测 stegosaurus（forensic, run, marshal code object 静态解析 + lnotab LSB, 无 detect）
+import "./geffe.js"; // Geffe 生成器/相关攻击 geffe（analysis, run, 子代理交付, 无 detect）
 import "./pcapRepair.js"; // pcap 文件修复 pcapRepair（analysis, run, magic/字节序/全局头/incl_len 诊断修复, 无 detect）
 import "./spectrogram.js"; // 音频频谱图 spectrogram（stego, run, STFT + radix-2 FFT + Hann 窗 + magma 色阶 → PNG dataURL, 复用 audiostego/mcMap, 无 detect）
 import "./lfsrRecover.js"; // LFSR 序列恢复 lfsrRecover（analysis, run, Berlekamp-Massey 求最短 LFSR + 反馈多项式 + 外推预测, 无 detect）
+import "./xorshiftRecover.js"; // xorshift 状态恢复 xorshiftRecover（analysis, run, Marsaglia xorshift32/64/128 逆位运算恢复种子+预测, 无 detect）
+import "./yenc.js"; // yEnc 编解码 yenc（text, 双向, +42 mod 256 + '=' 转义关键字节, UTF-8 字节, 往返验证, 无 detect）
+import "./binhex.js"; // BinHex 4.0 编解码 binhex（text, 双向, 6-bit 码表 + RLE90 + crc_hqx CRC 校验, Python binhex 参考, 往返验证, 无 detect）
 import "./rc4Visualize.js"; // RC4 KSA/PRGA 可视化 rc4Visualize（analysis, run, 逐步展示 KSA 打乱 + PRGA 密钥流, 无 detect）
 import "./f5stego.js"; // F5 JPEG 隐写提取 f5stego（stego, run, acceptsBytes, 熵解码+密钥置换+(1,2^k-1,k)矩阵编码, 仅提取, 无 detect）
 import "./lllAttack.js"; // 格基归约 LLL + 背包低密度攻击 CJLOSS（crypto, run, BigInt 精确有理 GSO, 无 detect）

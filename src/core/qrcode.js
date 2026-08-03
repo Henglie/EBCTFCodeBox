@@ -35,6 +35,7 @@
  * ============================================================
  */
 import { register } from "./registry.js";
+import { rgbaToDataURL } from "./mcMap.js";
 
 // ECL 索引：0=L, 1=M, 2=Q, 3=H
 const ECL_NAME = ["L", "M", "Q", "H"];
@@ -520,8 +521,45 @@ function qrGenerate(text, p = {}) {
   };
 }
 
+// 0/1 矩阵 → PNG dataURL：加 4 模块静默区（ISO/IEC 18004 要求），每模块放大
+// scale×scale 像素，黑=暗模块、白=浅模块。复用 mcMap 手写 PNG 编码器（零 canvas）。
+function matrixToDataURL(matrix, scale) {
+  const size = matrix.length;
+  const quiet = 4;
+  const full = size + quiet * 2;
+  const outW = full * scale;
+  const outH = full * scale;
+  const rgba = new Uint8Array(outW * outH * 4);
+ // 先整体填白
+  for (let i = 0; i < rgba.length; i += 4) {
+    rgba[i] = rgba[i + 1] = rgba[i + 2] = 255;
+    rgba[i + 3] = 255;
+  }
+ // 暗模块画黑（含静默区偏移）
+  for (let my = 0; my < size; my++) {
+    const row = matrix[my];
+    for (let mx = 0; mx < size; mx++) {
+      if (!row[mx]) continue;
+      const px0 = (mx + quiet) * scale;
+      const py0 = (my + quiet) * scale;
+      for (let dy = 0; dy < scale; dy++) {
+        const o = ((py0 + dy) * outW + px0) * 4;
+        for (let dx = 0; dx < scale; dx++) {
+          const p = o + dx * 4;
+          rgba[p] = rgba[p + 1] = rgba[p + 2] = 0;
+        }
+      }
+    }
+  }
+  return rgbaToDataURL(rgba, outW, outH);
+}
+
 function qrEncodeOp(text, p = {}) {
-  return JSON.stringify(qrGenerate(text, p));
+  const g = qrGenerate(text, p);
+  let scale = parseInt(p.scale, 10);
+  if (!Number.isFinite(scale) || scale < 1 || scale > 20) scale = 6;
+  g.image = matrixToDataURL(g.matrix, scale);
+  return JSON.stringify(g);
 }
 
 // ============================================================
@@ -832,7 +870,7 @@ function barcodeIdentifyOp(text) {
 // ============================================================
 register({
   id: "qrGen", cat: "stego", name: "QR 码生成",
-  desc: "纯 JS QR 编码（数字/字母/字节模式 + L/M/Q/H 纠错），输出 0/1 矩阵 JSON。核心移植自 Nayuki (MIT)",
+  desc: "纯 JS QR 编码（数字/字母/字节模式 + L/M/Q/H 纠错），输出可扫描二维码 PNG（含静默区）+ 0/1 矩阵 JSON。核心移植自 Nayuki (MIT)",
   params: [
     { key: "ecl", label: "纠错级", type: "select", default: "M",
       options: [
@@ -844,6 +882,7 @@ register({
     },
     { key: "version", label: "版本", type: "number", default: 0, placeholder: "0=自动，1-40 指定" },
     { key: "mask", label: "掩码", type: "number", default: -1, placeholder: "-1=自动，0-7 指定" },
+    { key: "scale", label: "放大倍数", type: "number", default: 6, placeholder: "每模块像素数（1-20）" },
   ],
   encode: qrEncodeOp,
 });
@@ -863,7 +902,7 @@ register({
 });
 
 export {
-  qrGenerate, qrEncodeOp, qrParseOp, barcodeIdentifyOp,
+  qrGenerate, qrEncodeOp, matrixToDataURL, qrParseOp, barcodeIdentifyOp,
   pickMode, pickVersion, getNumDataCodewords, getNumRawDataModules,
   ECL_NAME, ECL_INDEX, ALPHANUMERIC_CHARSET,
   parseAsciiMatrix, isFinderAt, countFinders, detectAztec, detectDataMatrix,

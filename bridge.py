@@ -82,7 +82,9 @@ TOOL_TIMEOUTS = {
     "bkcrack": 1800,
 }
 MAX_STDIN = 50 * 1024 * 1024  # 50MB
-CORS_ORIGIN = "http://localhost:8180"  # 前端 start.py 默认端口
+# 前端页面端口不固定（start.py 8180 起，用户也可能自己起别的端口），且可能用 127.0.0.1 或 localhost 打开。
+# 故按请求 Origin 反射放行：只认本机来源（localhost/127.0.0.1/::1 任意端口），外部站点一律拒绝。
+ALLOWED_ORIGIN_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 # ---- 环境探测（T159）：CTF 常用本机工具版本，供顶栏「环境管理」面板懒检测 ----
 # (key, [候选命令名或绝对路径], [version 参数], 是否取 stderr)。
@@ -448,7 +450,13 @@ def decompile_env():
 
 class BridgeHandler(BaseHTTPRequestHandler):
     def _cors(self):
-        self.send_header("Access-Control-Allow-Origin", CORS_ORIGIN)
+        # 反射本机 Origin（修 127.0.0.1 vs localhost 不一致导致的 CORS 拦截）；无 Origin 请求（curl/同源）不带该头
+        from urllib.parse import urlparse
+        origin = self.headers.get("Origin", "")
+        if origin:
+            host = urlparse(origin).netloc.split(":")[0].lower()
+            if host in ALLOWED_ORIGIN_HOSTS:
+                self.send_header("Access-Control-Allow-Origin", origin)
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Cache-Control", "no-cache")

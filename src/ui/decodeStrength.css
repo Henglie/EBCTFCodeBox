@@ -1,0 +1,283 @@
+/*
+ * decodeStrength.css — 「解码强度」弹窗样式（M3 温和红，对齐 codeImageViewer 的模态范式）。
+ *
+ * 结构：
+ *   .ds-overlay > .ds-dialog > [.ds-head, .ds-body(滚动), .ds-foot]
+ *   .ds-body 内三段：.ds-sec-level（滑块）/.ds-sec-tools + .ds-list（分类折叠多选）/.ds-sec-prof（方案）
+ *
+ * 防卡死相关：.ds-list 固定高度 + overflow-y:auto（自带滑动条），列表再长也不撑爆弹窗。
+ * 变量全用 theme.css 既有 token，不引入新色值。
+ */
+
+/* ---- 遮罩 + 对话框 ---- */
+.ds-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-4);
+  background: rgba(0, 0, 0, .5);
+  animation: ds-fade var(--dur-medium) var(--ease-out);
+}
+@keyframes ds-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.ds-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 960px;
+  max-height: 88vh;
+  background: var(--surface-2);
+  border: 1px solid var(--outline-var);
+  border-radius: 28px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.18), 0 1px 4px rgba(0,0,0,.08);
+  overflow: hidden;
+  animation: ds-pop var(--dur-medium) var(--ease-out);
+}
+@keyframes ds-pop {
+  from { opacity: 0; transform: scale(.96) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ---- 头部 ---- */
+.ds-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--outline-var);
+  flex: none;
+}
+.ds-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ds-title {
+  display: flex; align-items: center; gap: var(--sp-2);
+  font-size: var(--fs-md); font-weight: 600; color: var(--on-surface);
+}
+.ds-title .msym { color: var(--primary); font-size: 20px; }
+.ds-note { font-size: var(--fs-xs); color: var(--on-surface-var); line-height: 1.4; }
+.ds-close {
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: var(--r-full);
+  color: var(--on-surface-var);
+  transition: background var(--dur-short) var(--ease), transform var(--dur-short) var(--ease);
+}
+.ds-close:hover { background: var(--surface-hi); color: var(--on-surface); }
+.ds-close:active { transform: scale(.92); }
+
+/* ---- 主体（双列布局：左=滑块+列表 右=方案）---- */
+.ds-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-3) var(--sp-4);
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  grid-template-rows: auto auto 1fr;
+  gap: var(--sp-3) var(--sp-4);
+}
+.ds-body > .ds-sec-level { grid-column: 1; grid-row: 1; }
+.ds-body > .ds-sec-tools { grid-column: 1; grid-row: 2; }
+.ds-body > .ds-list { grid-column: 1; grid-row: 3; }
+.ds-body > .ds-sec-prof {
+  grid-column: 2; grid-row: 1 / 4;
+  overflow-y: auto;
+  max-height: 100%;
+  border-left: 1px solid var(--outline-var);
+  padding-left: var(--sp-3);
+}
+.ds-sec { display: flex; flex-direction: column; gap: var(--sp-2); }
+.ds-sec-title {
+  display: flex; align-items: center; gap: var(--sp-2);
+  font-size: var(--fs-sm); font-weight: 600; color: var(--on-surface);
+}
+.ds-sec-title .msym { color: var(--primary); font-size: 18px; }
+
+/* ---- 强度滑块 ---- */
+.ds-slider-row { display: flex; flex-direction: column; gap: var(--sp-1); }
+.ds-slider {
+  width: 100%;
+  accent-color: var(--primary);
+  height: 24px;
+}
+.ds-ticks {
+  display: flex; justify-content: space-between;
+  font-size: var(--fs-xs); color: var(--on-surface-var);
+}
+.ds-tick { flex: 1; text-align: center; }
+.ds-tick:first-child { text-align: start; }
+.ds-tick:last-child { text-align: end; }
+/* 中间4个刻度微调间距：默认左2增强左1极强右1最强右2 */
+.ds-tick:nth-child(2) { transform: translateX(-12px); }
+.ds-tick:nth-child(3) { transform: translateX(-6px); }
+.ds-tick:nth-child(4) { transform: translateX(6px); }
+.ds-tick:nth-child(5) { transform: translateX(12px); }
+.ds-tick.active { color: var(--primary); font-weight: 600; }
+
+.ds-level-meta {
+  display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-md);
+}
+.ds-level-name { font-size: var(--fs-sm); font-weight: 600; color: var(--primary); }
+.ds-level-hint { font-size: var(--fs-xs); color: var(--on-surface-var); flex: 1; min-width: 0; }
+.ds-count {
+  font-size: var(--fs-xs);
+  color: var(--on-surface-var);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+/* ---- 搜索 + 快捷操作 ---- */
+.ds-sec-tools { gap: var(--sp-2); }
+.ds-search-wrap {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 0 var(--sp-2);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-md);
+}
+.ds-search-wrap .msym { color: var(--on-surface-var); font-size: 18px; flex: none; }
+.ds-search {
+  flex: 1; min-width: 0;
+  padding: var(--sp-2) 0;
+  font-family: inherit; font-size: var(--fs-sm);
+  color: var(--on-surface);
+  background: none; border: none; outline: none;
+}
+.ds-mini-row { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.ds-mini {
+  padding: 4px var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--on-surface-var);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-full);
+  transition: all var(--dur-short) var(--ease);
+}
+.ds-mini:hover { background: var(--surface-hi); color: var(--on-surface); }
+.ds-mini:active { transform: scale(.94); }
+.ds-mini.danger { color: var(--error); }
+.ds-mini.danger:hover { background: color-mix(in srgb, var(--error) 12%, transparent); }
+
+/* ---- op 多选列表（固定高度 + 滑动条，防撑爆）---- */
+.ds-list {
+  max-height: 340px;  /* 双列下可以高一点 */
+  overflow-y: auto;
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+}
+/* 分类折叠：默认隐藏行，open 类才展开。双列 grid 提升空间利用率 */
+.ds-cat-rows { display: none; border-bottom: 1px solid var(--outline-var); grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.ds-cat.open .ds-cat-rows { display: grid; }
+.ds-cat-head {
+  display: flex; align-items: center; gap: var(--sp-2);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--on-surface);
+  text-align: start;
+  transition: background var(--dur-short) var(--ease);
+}
+.ds-cat-head:hover { background: var(--surface-hi); }
+.ds-cat-head .msym { font-size: 18px; color: var(--on-surface-var); flex: none; transition: transform var(--dur-short) var(--ease); }
+.ds-cat.open .ds-cat-head .msym { transform: rotate(90deg); }
+.ds-cat-name { flex: 1; min-width: 0; font-weight: 500; }
+.ds-cat-count { font-size: var(--fs-xs); color: var(--on-surface-var); font-variant-numeric: tabular-nums; flex: none; }
+.ds-cat-headrow {
+  display: flex; align-items: center;
+  border-bottom: 1px solid var(--outline-var);
+}
+.ds-cat-headrow:last-child { border-bottom: none; }
+
+.ds-op-row {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3) var(--sp-1) var(--sp-5);
+  min-width: 0;
+  font-size: var(--fs-sm);
+  color: var(--on-surface);
+  transition: background var(--dur-short) var(--ease);
+}
+.ds-op-row:hover { background: var(--surface-hi); }
+.ds-op-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds-op-id { font-size: var(--fs-xs); color: var(--on-surface-var); font-family: var(--mono, ui-monospace, monospace); flex: none; }
+.ds-op-tier {
+  flex: none;
+  min-width: 18px; padding: 0 5px;
+  font-size: var(--fs-xs); text-align: center;
+  color: var(--on-surface-var);
+  background: var(--surface-4);
+  border-radius: var(--r-full);
+}
+.ds-empty { padding: var(--sp-4); text-align: center; font-size: var(--fs-sm); color: var(--on-surface-var); }
+.ds-cb { accent-color: var(--primary); flex: none; width: 16px; height: 16px; }
+.ds-cat-cb { margin-inline-start: var(--sp-3); }
+
+/* ---- 方案（命名保存 / 导入导出）---- */
+.ds-prof-row { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.ds-prof-name,
+.ds-prof-sel {
+  padding: var(--sp-2);
+  font-family: inherit; font-size: var(--fs-sm);
+  color: var(--on-surface);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-md);
+  outline: none;
+}
+.ds-prof-name { flex: 1; min-width: 120px; }
+.ds-prof-name:focus, .ds-prof-sel:focus { border-color: var(--primary); }
+.ds-prof-sel { flex: 1; min-width: 120px; }
+.ds-prof-msg { font-size: var(--fs-xs); color: var(--on-surface-var); min-height: 1em; }
+.ds-prof-dump {
+  width: 100%;
+  min-height: 90px;
+  padding: var(--sp-2);
+  font-family: var(--mono, ui-monospace, monospace); font-size: var(--fs-xs);
+  color: var(--on-surface);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-md);
+  resize: vertical;
+  outline: none;
+}
+.ds-prof-dump:focus { border-color: var(--primary); }
+
+/* ---- 底部操作 ---- */
+.ds-foot {
+  display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--outline-var);
+  flex: none;
+}
+
+/* ---- 窄屏：回退单列 ---- */
+@media (max-width: 640px) {
+  .ds-overlay { padding: var(--sp-2); }
+  .ds-dialog { max-height: 94vh; max-width: 100%; }
+  .ds-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+  .ds-body > .ds-sec-level,
+  .ds-body > .ds-sec-tools,
+  .ds-body > .ds-list,
+  .ds-body > .ds-sec-prof {
+    grid-column: 1; grid-row: auto;
+    border-left: none; padding-left: 0;
+    max-height: none; overflow-y: visible;
+  }
+  .ds-list { max-height: 240px; }
+  .ds-op-id { display: none; }
+}
+
+/* 减弱动态效果：尊重系统无障碍设置（与 app.css 同口径） */
+@media (prefers-reduced-motion: reduce) {
+  .ds-overlay, .ds-dialog { animation: none; }
+}

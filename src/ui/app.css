@@ -70,8 +70,8 @@ label:has(> input[type="radio"]) { cursor: pointer; }
 .topbar-brand { display: flex; align-items: center; gap: var(--sp-3); }
 .brand-icon { width: 28px; height: 28px; border-radius: 7px; object-fit: cover; display: block; }
 .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
-.brand-title { font-size: var(--fs-md); font-weight: 600; letter-spacing: .2px; }
-.brand-ver { font-size: var(--fs-xs); color: var(--on-surface-var); }
+.brand-title { font-size: 15px; font-weight: 600; letter-spacing: .2px; }
+.brand-ver { font-size: 11px; color: var(--on-surface-var); }
 
 .topbar-actions { display: flex; align-items: center; gap: var(--sp-1); }
 .icon-btn {
@@ -86,7 +86,7 @@ label:has(> input[type="radio"]) { cursor: pointer; }
 }
 .icon-btn:hover:not(:disabled) { background: var(--surface-hi); color: var(--on-surface); }
 .icon-btn:active:not(:disabled) { transform: scale(.96); }
-.icon-btn-label { font-size: var(--fs-base); }
+.icon-btn-label { font-size: 14px; }
 @media (max-width: 720px) { .icon-btn-label { display: none; } }
 
 /* ---- 语言下拉菜单（16 语言，各显自称名） ---- */
@@ -117,7 +117,7 @@ label:has(> input[type="radio"]) { cursor: pointer; }
 }
 .lang-menu-item:hover, .lang-menu-item:focus-visible { background: var(--surface-hi); outline: none; }
 .lang-menu-item.active { background: var(--primary); color: var(--on-primary); }
-.lang-menu-name { font-size: var(--fs-base); }
+.lang-menu-name { font-size: 14px; }
 .lang-menu-tag {
   font-size: var(--fs-xs);
   font-weight: 600;
@@ -140,7 +140,7 @@ label:has(> input[type="radio"]) { cursor: pointer; }
   border-inline-end: 1px solid var(--outline-var);
   overflow-y: auto;
   overflow-x: hidden;
-  padding: var(--sp-2) var(--sp-2) var(--sp-4);
+  padding: 7px 7px 15px;
  /* 宽度过渡 = rail 折叠动画核心；拖拽时加 .no-anim 去掉过渡跟手。
     260ms + M3 emphasized decelerate（比全局 --dur-medium 175ms 更从容，消除生硬） */
   transition: width 260ms cubic-bezier(.2, 0, 0, 1);
@@ -166,23 +166,24 @@ label:has(> input[type="radio"]) { cursor: pointer; }
 /* 折叠开关（导航顶部） */
 .nav-toggle {
   display: flex; align-items: center; justify-content: flex-end;
-  height: 36px; padding: 0 var(--sp-2); margin-bottom: var(--sp-1);
+  height: 35px; padding: 0 var(--sp-2); margin-bottom: 3px;
   border-radius: var(--r-sm); color: var(--on-surface-var);
   cursor: pointer; user-select: none;
   transition: background var(--dur-short) var(--ease), color var(--dur-short) var(--ease);
 }
 .nav-toggle:hover { background: var(--surface-hi); color: var(--on-surface); }
 .sidenav.collapsed .nav-toggle { justify-content: center; }
-.nav-toggle .msym { font-size: 22px; }
+.nav-toggle .msym { font-size: 20px; }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  height: 50px;
-  padding: 0 var(--sp-3);
+  gap: 11px;
+  height: 49px;
+  padding: 0 11px;
   border-radius: var(--r-full);
   color: var(--on-surface-var);
+  font-size: 15px;
   transition: background var(--dur-short) var(--ease), color var(--dur-short) var(--ease);
   user-select: none;
   cursor: pointer;
@@ -192,17 +193,20 @@ label:has(> input[type="radio"]) { cursor: pointer; }
 .nav-item:hover { background: var(--surface-hi); }
 .nav-item.on { background: var(--primary-container); color: var(--on-primary-container); font-weight: 600; }
 .nav-item.expanded:not(.on) { color: var(--on-surface); }
-.nav-item .msym { font-size: 22px; flex: none; }
-.nav-item.pinned { margin-bottom: var(--sp-2); }
+.nav-item .msym { font-size: 20px; flex: none; }
+.nav-item.pinned { margin-bottom: 7px; }
+/* 本地桥分类一级菜单：主题色高亮（二级项恢复原色，仅 EXE 徽章保留区分） */
+.nav-item.bridge { color: var(--accent); }
+.nav-item.bridge:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 /* 配方链导航置顶项——紧贴首页下方，底边距与下方分类分组 */
-.nav-recipe { margin-bottom: var(--sp-2); }
+.nav-recipe { margin-bottom: 7px; }
 .nav-recipe .msym { color: var(--primary); }
 /* 字符显示器置顶项：补底边距，令其与下方编码图鉴项间距与前几项一致 */
-.nav-inspect { margin-bottom: var(--sp-2); }
-.nav-sep { height: 1px; background: var(--outline-var); margin: var(--sp-2) var(--sp-3); }
+.nav-inspect { margin-bottom: 7px; }
+.nav-sep { height: 1px; background: var(--outline-var); margin: 7px 11px; }
 .nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-.nav-count { font-size: var(--fs-xs); color: var(--on-surface-var); opacity: .7; flex: none; }
-.nav-caret { font-size: 18px !important; opacity: .6; flex: none; margin-inline-end: -4px; }
+.nav-count { font-size: 11px; color: var(--on-surface-var); opacity: .7; flex: none; }
+.nav-caret { font-size: 16px !important; opacity: .6; flex: none; margin-inline-end: -4px; }
 /* 折叠态：只剩图标，文字/计数/箭头收起（不占位、不换行） */
 .sidenav.collapsed .nav-label,
 .sidenav.collapsed .nav-count,
@@ -217,11 +221,14 @@ label:has(> input[type="radio"]) { cursor: pointer; }
   border-radius: var(--r-full);
 }
 
-/* 二级菜单（分类下 op 列表，手风琴展开） */
+/* 二级菜单（分类下 op 列表，支持多分类同时展开） */
 .nav-sub {
   display: flex; flex-direction: column;
-  margin: 2px 0 var(--sp-2) 0;
+  margin: 3px 0 8px 0;
   overflow: hidden;
+  /* 整个二级菜单块用深色块填充（类阴影深底） */
+  background: var(--surface-3);
+  border-radius: var(--r-md);
 }
 /* 入场动画只在「分类刚展开」时放（main.js 加 .animate-in）
    已展开态下切 op 重渲染不带此类 → 不重放 → 消除闪烁 */
@@ -229,22 +236,25 @@ label:has(> input[type="radio"]) { cursor: pointer; }
 @keyframes navSubIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 .nav-subitem {
   display: flex; align-items: center;
-  min-height: 40px; padding-block: var(--sp-2); padding-inline: 46px var(--sp-3);
+  min-height: 36px; padding-block: var(--sp-1); padding-inline: 24px var(--sp-3);
   border-radius: var(--r-sm);
-  font-size: var(--fs-base); color: var(--on-surface-var);
+  font-size: 14px; color: var(--on-surface-var);
   cursor: pointer; user-select: none;
   text-decoration: none; /* 去下划线，层级/选中只靠加粗 + 主色 */
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   transition: background var(--dur-short) var(--ease), color var(--dur-short) var(--ease);
 }
 .nav-subitem:hover { text-decoration: none; }
-.nav-subitem:hover { background: var(--surface-hi); color: var(--on-surface); }
-.nav-subitem.on { color: var(--primary); font-weight: 600; background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.nav-subitem:hover { background: color-mix(in srgb, var(--surface-hi) 60%, transparent); color: var(--on-surface); }
+.nav-subitem.on { color: var(--primary); font-weight: 600; background: color-mix(in srgb, var(--primary) 12%, transparent); }
+/* 本地桥 op（需本地 exe）：强调色高光 —— warning 橙文字 + 淡橙底，一眼可辨外部依赖 */
+/* 本地桥 exe 二级项：文字恢复原本颜色（一级菜单已用主题色区分），仅 EXE 徽章保留橙色 */
+.nav-subitem.bridge .exe-badge { background: var(--warning); color: var(--on-warning); }
 /* CTF 常考项：主色 + 加粗，一眼可辨 */
 .nav-subitem.hot { color: var(--primary); font-weight: 600; }
 .nav-subitem.hot:hover { color: var(--primary); }
 /* 常考星标：小尺寸主色圆点，右侧留隙，不抢文字 */
-.nav-hot-star { font-size: 10px; line-height: 1; color: var(--primary); margin-inline-end: var(--sp-1); flex: none; }
+.nav-hot-star { font-size: 8px; line-height: 1; color: var(--primary); margin-inline-end: var(--sp-1); flex: none; }
 /* main.js 用的类名别名：ctf-hot 同 hot；rank1（ctf-hot-top）更强调；ctf-star 星标 */
 .nav-subitem.ctf-hot { color: var(--primary); font-weight: 600; }
 .nav-subitem.ctf-hot-top { font-weight: 700; }
@@ -449,6 +459,38 @@ label:has(> input[type="radio"]) { cursor: pointer; }
 .onekey-card .ok-name { font-size: var(--fs-sm); color: var(--primary); font-weight: 600; }
 .onekey-card .ok-val { font-family: var(--font-content), var(--mono); font-feature-settings: var(--font-features); margin-top: var(--sp-1); line-height: 1.55; word-break: break-all; }
 .onekey-empty { color: var(--on-surface-var); text-align: center; padding: var(--sp-6); }
+/* ---- 暴力爆破独立通道结果区（不参与主排序，单独折叠区） ---- */
+.onekey-brute {
+  margin-top: var(--sp-4);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+.onekey-brute-sum {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+}
+.onekey-brute-list { padding: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-2); }
+.onekey-brute-item { border: 1px solid var(--outline-var); border-radius: var(--r-sm); overflow: hidden; }
+.onekey-brute-item-sum {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+}
+.onekey-brute-name { font-weight: 600; }
+.onekey-brute-id { font-size: var(--fs-xs); color: var(--on-surface-var); font-family: var(--mono, ui-monospace, monospace); }
+.onekey-brute-out {
+  margin: 0; padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-xs);
+  white-space: pre-wrap; word-break: break-all;
+  background: var(--surface-var, var(--surface-hi));
+  max-height: 240px; overflow: auto;
+}
 
 /* 超长输入横幅提示（非整块卡，一条横条，按钮走工具栏一键解码） */
 .onekey-banner {
@@ -794,7 +836,7 @@ label:has(> input[type="radio"]) { cursor: pointer; }
   border-radius: var(--r-full);
   color: var(--on-surface);
   font-family: var(--font);
-  font-size: var(--fs-base);
+  font-size: 14px;
   transition: border-color var(--dur-short) var(--ease),
               background var(--dur-short) var(--ease),
               box-shadow var(--dur-short) var(--ease);

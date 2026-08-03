@@ -32,7 +32,11 @@ function el(tag, attrs = {}, ...children) {
     if (v == null) continue;
     if (k === "class") n.className = v;
     else if (k.startsWith("on") && typeof v === "function") n.addEventListener(k.slice(2), v);
-    else n.setAttribute(k, v);
+    // 布尔属性（disabled/checked/hidden…）：false 必须「不设属性」。
+    // setAttribute(k,false) 会写成 disabled="false"，HTML 布尔属性只看存在性 → 按钮永久变灰点不动。
+    // 对齐 main.js el() 的写法：false 跳过，true 设空串。
+    else if (v === false) continue;
+    else n.setAttribute(k, v === true ? "" : v);
   }
   for (const c of children.flat()) {
     if (c == null) continue;
@@ -102,7 +106,7 @@ function t(key, ...a) {
 // ---- bridge 探测 ----
 // bridge.py 默认端口 8181，CORS 放行 localhost:8180（前端端口）。
 // 仅试默认端口；被占用递增的场景后续可扩展多端口探测。
-const BRIDGE_BASE = "http://localhost:8181";
+const BRIDGE_BASE = "http://127.0.0.1:8181";  // 127.0.0.1 而非 localhost：避免 IPv6 解析问题（bridge 只监听 127.0.0.1:8181）
 const HEALTH_TIMEOUT = 1500;  // health 探测超时（短，防阻塞面板）
 
 async function fetchWithTimeout(url, ms) {
@@ -118,12 +122,21 @@ async function fetchWithTimeout(url, ms) {
 
 /** 探测 bridge 连通性 + 本机环境。返回 {mode:"local", env} 或 {mode:"server", error}。 */
 async function detectEnvironment() {
-  try {
-    const h = await fetchWithTimeout(BRIDGE_BASE + "/api/health", HEALTH_TIMEOUT);
-    if (!h.ok) return { mode: "server", error: "health " + h.status };
-    const hj = await h.json();
-    if (!hj.ok) return { mode: "server", error: "health not ok" };
+  // 先试 /api/health，失败则试 /api/tools（两个端点任一命中 = 桥在线）
+  const healthUrls = [BRIDGE_BASE + "/api/health", "http://localhost:8181/api/health",
+                      BRIDGE_BASE + "/api/tools", "http://localhost:8181/api/tools"];
+  let hj = null;
+  for (const url of healthUrls) {
+    try {
+      const h = await fetchWithTimeout(url, HEALTH_TIMEOUT);
+      if (h.ok) {
+        try { hj = await h.json(); if (hj) break; } catch { /* continue */ }
+      }
+    } catch { /* continue */ }
+  }
+  if (!hj) return { mode: "server", error: "bridge unreachable" };
  // bridge 在线 → 拉 /api/env（含本机工具版本）
+  try {
     const e = await fetchWithTimeout(BRIDGE_BASE + "/api/env", 8000);
     if (!e.ok) return { mode: "local", env: { platform: hj.platform, win: hj.win, tools: {} }, envError: "env " + e.status };
     const ej = await e.json();
@@ -155,7 +168,14 @@ export function openEnvPanel(anchor) {
  // 点面板外关闭
   setTimeout(() => {
     const onDoc = (ev) => {
-      if (_panel && !_panel.contains(ev.target) && ev.target !== anchor && !anchor.contains(ev.target)) {
+      if (!_panel) return;
+      // 面板内控件（如字库「加载」）点击后会触发局部重渲染，等事件冒泡到 document 时
+      // 原节点已被替换、脱离文档 → contains() 判不出「来自面板内」，会误关面板。
+      // 故先看事件路径里有没有面板；节点已脱离文档的一律视为面板内点击，不关。
+      const path = typeof ev.composedPath === "function" ? ev.composedPath() : [];
+      if (path.includes(_panel)) return;
+      if (ev.target instanceof Node && !ev.target.isConnected) return;
+      if (!_panel.contains(ev.target) && ev.target !== anchor && !anchor.contains(ev.target)) {
         closeEnvPanel();
         document.removeEventListener("click", onDoc);
       }

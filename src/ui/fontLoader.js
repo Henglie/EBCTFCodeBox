@@ -103,7 +103,11 @@ export async function loadFontPlane(id) {
     const desc = { style: "normal", weight: "400", display: "swap" };
  // 子集单文件不限码位；若某条目带 range 才设 unicodeRange。
     if (plane.range) desc.unicodeRange = `U+${plane.range[0].toString(16)}-${plane.range[1].toString(16)}`;
-    const face = new FontFace("Cheonhyeong", `url("${plane.file}") format("woff2")`, desc);
+    // 绝对化：部署在子路径（GitHub Pages /仓库名/）或 hash 路由深层时，
+    // 页面相对 url 会解析到错误基址 → 404 → 状态转 error（按钮变「重试」再失败，
+    // 看起来像点不动）。对齐 katexLoader/dynamicColor 的 new URL(..., document.baseURI) 模式。
+    const href = new URL(plane.file, document.baseURI).href;
+    const face = new FontFace("Cheonhyeong", `url("${href}") format("woff2")`, desc);
     await face.load();
     document.fonts.add(face);
     _status.set(id, "loaded");

@@ -90,14 +90,19 @@ import EDU_CLASSIC_NEW from "./edu/edu-classic-new.js";      // routeCipher/rotS
 import EDU_EXE from "./edu/edu-exe.js";                      // pycExeDecompile 1
 import EDU_FANCY_NEW from "./edu/edu-fancy-new.js";          // jjencode 1
 import EDU_MODERN_NEW from "./edu/edu-modern-new.js";        // rabbit/pbkdf2/hkdf/md2 4
+import EDU_CRYPTO_PG from "./edu/edu-crypto-pg.js";          // shamir/schnorr/ecdsaReuseK/rabin/x25519/ed25519/paillier/a51/magma 9
 import EDU_UNIFIED_MISC from "./edu/edu-unified-misc.js";    // archiveUnified/cryptoAddrUnified/imageStructUnified/numToPinyin/hanziToPinyin 5
 // ---- 发布前补全：91 个原无科普 op 的科普卡（按分类分片，各代理独占文件）----
 import EDU_FORENSIC_NEW from "./edu/edu-forensic-new.js";        // john 系/pcap 系/mc 系/取证 19
 import EDU_ANA_CRYPTO_NEW from "./edu/edu-ana-crypto-new.js";    // analysis 工具 + crypto 攻击 17
+import EDU_ANA_GEFTE from "./edu/edu-ana-geffe.js";  // geffe 1
 import EDU_FANCY_MODERN_NEW from "./edu/edu-fancy-modern-new.js";// fancy 深奥语言 + modern 轻量密码 16
 import EDU_MISC2_NEW from "./edu/edu-misc2-new.js";              // cn/stego/hash/base/radix/classic 24
 import EDU_BRIDGE_NEW from "./edu/edu-bridge-new.js";            // 本地桥 exe 15
 import EDU_BATCH_NEW from "./edu/edu-batch-new.js";              // 本轮新增 9：txtmoji/webshell/二进制图像/取证/爆破
+import EDU_CRYPTO_PG2 from "./edu/edu-crypto-pg2.js";       // present/siphash/scrypt/blake3/whirlpool/pearson/xorshiftRecover/yenc/binhex 9
+import EDU_HASH_XXHASH from "./edu/edu-hash-xxhash.js";    // xxhash 1
+import EDU_HASH_CITYHASH from "./edu/edu-hash-cityhash.js";  // cityhash 1
 
 // 合并所有分片。后者不覆盖前者（分区不重叠）；重叠时以后者为准，构建期应避免。
 const EDU = Object.assign(
@@ -151,13 +156,18 @@ const EDU = Object.assign(
   EDU_EXE,
   EDU_FANCY_NEW,
   EDU_MODERN_NEW,
+  EDU_CRYPTO_PG,
   EDU_UNIFIED_MISC,
   EDU_FORENSIC_NEW,
   EDU_ANA_CRYPTO_NEW,
   EDU_FANCY_MODERN_NEW,
   EDU_MISC2_NEW,
   EDU_BRIDGE_NEW,
+  EDU_ANA_GEFTE,
   EDU_BATCH_NEW,
+  EDU_CRYPTO_PG2,
+  EDU_HASH_XXHASH,
+  EDU_HASH_CITYHASH,
 );
 
 /** 取某 op 的科普内容，无则返回 null。

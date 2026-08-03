@@ -30,6 +30,8 @@ import { renderMathIn } from "./ui/katexLoader.js";
 import { showLoadingScreen, setLoadingProgress, hideLoadingScreen } from "./ui/loadingScreen.js";
 import { renderEnhancedView, invisibleReport, invisibleToggle } from "./ui/inputEnhance.js";
 import { openEnvPanel } from "./ui/envPanel.js";
+import { resolveDecodeConfig, loadLastConfig, saveLastConfig } from "./core/decodeProfile.js"; // 解码强度档 → op 白名单 + 预算
+import { openDecodeStrength } from "./ui/decodeStrength.js"; // 「解码强度」弹窗（5 档滑块 + 参与算法多选 + 命名方案）
 import { applyAccent, enableHctEngine, DEFAULT_ACCENT } from "./ui/dynamicColor.js"; // M3 动态取色（HSL 近似 + HCT 精确引擎）
 import { attachEditorToolbar } from "./ui/editorToolbar.js"; // 通用编辑框工具条（记事本化，全站复用）
 import { attachTextContextMenu } from "./ui/textContextMenu.js"; // 编辑框右键文本处理菜单
@@ -242,11 +244,40 @@ import "./core/nonogram.js"; // 数织 Nonogram nonogram（analysis, run, 线求
 import "./core/simonSpeck.js"; // NSA Simon/Speck 轻量分组密码 simonSpeck（modern, 双向, BigInt, NSA 官方向量验证, 无 detect）
 import "./core/knapsack.js"; // 背包加密 Merkle-Hellman knapsack（modern, 双向, BigInt 超递增背包, 无 detect）
 import "./core/dsa.js"; // DSA 签名/验签/重用k攻击 dsa（crypto, run, FIPS 186 + 内置纯 JS SHA-1, 无 detect）
+import "./core/shamir.js"; // Shamir 秘密共享 shamir（crypto, 双向, GF(2^8) 拉格朗日插值, split→combine 往返验证, 无 detect）
 import "./core/bmpPalette.js"; // BMP 调色板隐写分析 bmpPalette（stego, run, 1/4/8-bit 索引 BMP 调色板 LSB/索引序/未用索引, 无 detect）
 import "./core/stegosaurus.js"; // Stegosaurus pyc 隐写检测 stegosaurus（forensic, run, marshal code object 静态解析 + lnotab LSB, 无 detect）
+import "./core/geffe.js"; // Geffe 生成器/相关攻击 geffe（analysis, run, 3 LFSR 组合 + 相关攻击, 子代理交付, 无 detect）
 import "./core/pcapRepair.js"; // pcap 文件修复 pcapRepair（analysis, run, magic/字节序/全局头/incl_len 诊断修复, 无 detect）
 import "./core/spectrogram.js"; // 音频频谱图 spectrogram（stego, run, STFT + radix-2 FFT + Hann 窗 + magma 色阶 → PNG dataURL, 复用 audiostego/mcMap, 无 detect）
 import "./core/lfsrRecover.js"; // LFSR 序列恢复 lfsrRecover（analysis, run, Berlekamp-Massey 求最短 LFSR + 反馈多项式 + 外推预测, 无 detect）
+import "./core/xorshiftRecover.js"; // xorshift 状态恢复 xorshiftRecover（analysis, run, Marsaglia xorshift32/64/128 逆位运算恢复种子+预测, 无 detect）
+import "./core/yenc.js"; // yEnc 编解码 yenc（text, 双向, +42 mod 256 + '=' 转义关键字节, UTF-8 字节, 往返验证, 无 detect）
+import "./core/binhex.js"; // BinHex 4.0 编解码 binhex（text, 双向, 6-bit 码表 + RLE90 + crc_hqx CRC 校验, Python binhex 参考, 往返验证, 无 detect）
+import "./core/a51.js"; // GSM A5/1 流密码 a51（modern, 双向自反, 三 LFSR 19/22/23 多数表决钟控, Briceno/Goldberg/Wagner 官方向量验证, 无 detect）
+import "./core/ecdsaReuseK.js"; // ECDSA nonce 重用攻击 ecdsaReuseK（crypto, run, 纯数论恢复 k+私钥 d + 内置 secp256k1/P-256 EC 点乘公钥校验消歧, 自造签名验证, 无 detect）
+import "./core/rabin.js"; // Rabin 密码 rabin（crypto, 双向, x²≡c mod n 平方根解密四根, RFC 无但经典教学, 往返验证, 无 detect）
+import "./core/x25519.js"; // X25519 密钥交换 x25519（crypto, run, Curve25519 Montgomery ladder, RFC 7748 §5.2 官方向量验证, 无 detect）
+import "./core/ed25519.js"; // Ed25519 签名/验签 ed25519（crypto, run, RFC 8032 EdDSA, Node 原生预言机多种子交叉验证, 无 detect）
+import "./core/siphash.js"; // SipHash-2-4 MAC siphash（hash, run, 官方 vectors_sip64 8 向量验证, 无 detect）
+import "./core/scrypt.js"; // scrypt 口令密钥派生 scrypt（crypto, run async, RFC 7914, Node crypto.scryptSync 对拍 5 向量验证, 无 detect）
+import "./core/blake3.js"; // BLAKE3 哈希 blake3（hash, run, 官方 test_vectors.json 10 向量验证含多 chunk 树边界, 无 detect）
+import "./core/paillier.js"; // Paillier 加法同态加密 paillier（crypto, run, decrypt(encrypt)=m + E(m1)·E(m2)=E(m1+m2) 同态性质验证, 无 detect）
+import "./core/schnorr.js"; // Schnorr 签名 schnorr（crypto, run, secp256k1 + 内嵌 SHA-256, sign/verify + nonce 重用恢复 d/k, Node SHA 对拍验证, 无 detect）
+import "./core/magma.js"; // GOST Magma 分组密码 magma（modern, 双向, GOST R 34.12-2015 32轮 Feistel, 官方 §A.2 向量验证, 无 detect）
+import "./core/present.js"; // PRESENT 轻量分组密码 present（modern, 双向, PRESENT-80 31轮 SPN, 官方论文 4 向量验证, 无 detect）
+import "./core/serpent.js"; // Serpent 分组密码 serpent（modern, 双向, AES 竞赛亚军 32轮 SPN, 128/192/256位密钥, NESSIE 514 向量全过, 无 detect）
+import "./core/aria.js"; // ARIA 分组密码 aria（modern, 双向, 韩国标准 KS X 1213/RFC 5794, 128位分组 128/192/256位密钥, RFC 5794 附录A 三向量验证, 无 detect）
+import "./core/seed.js"; // SEED 分组密码 seed（modern, 双向, 韩国 KISA 标准 RFC 4269, 128位分组 128位密钥 16轮 Feistel, RFC 4269 附录B 两向量+中间轮密钥验证, 无 detect）
+import "./core/camellia.js"; // Camellia 分组密码 camellia（modern, 双向, NTT/三菱 RFC 3713, 128位分组 128/192/256位密钥 18/24轮, RFC 3713 附录C 三向量+参考实现逐段对拍, 无 detect）
+import "./core/pearson.js"; // Pearson 哈希 pearson（hash, run, 8-bit 逐字节查表, 表为 0-255 合法排列自检 + 确定性验证, 无 detect）
+import "./core/whirlpool.js"; // Whirlpool 哈希 whirlpool（hash, run, ISO/IEC 10118-3 512-bit Miyaguchi-Preneel, 官方 8 向量验证, 无 detect）
+import "./core/streebog.js"; // Streebog 哈希 streebog（hash, run, 俄罗斯国标 GOST R 34.11-2012/RFC 6986, 512/256 位, RFC §10 三向量验证, 无 detect）
+import "./core/threefish.js"; // Threefish 可调分组密码 threefish（modern, 双向, Skein v1.3 内建 256/512/1024 位分组, 72/80轮无密钥调度器+128位tweak, Crypto++ threefish.txt 官方向量验证, 无 detect）
+import "./core/skipjack.js"; // Skipjack 分组密码 skipjack（modern, 双向, NSA 1998 解密 64位分组 80位密钥 32轮, NIST SP800-17 Table 6 官方向量验证, 无 detect）
+import "./core/mars.js"; // MARS 分组密码 mars（modern, 双向, IBM 1998 AES决赛圈 128位分组 128/192/256位密钥 32轮, Crypto++ marsval.dat 官方向量验证, 无 detect）
+import "./core/xxhash.js"; // xxHash 极速哈希 xxhash（hash, run, xxHash32/64 官方向量自检, 非加密, 无 detect）
+import "./core/cityhash.js"; // CityHash 非加密哈希 cityhash（hash, run, Google CityHash32/64, city-test.cc 官方 299 组向量全过, 无 detect）
 import "./core/rc4Visualize.js"; // RC4 KSA/PRGA 可视化 rc4Visualize（analysis, run, 逐步展示 KSA 打乱 + PRGA 密钥流, 无 detect）
 import "./core/f5stego.js"; // F5 JPEG 隐写提取 f5stego（stego, run, acceptsBytes, 熵解码+密钥置换+(1,2^k-1,k)矩阵编码, 仅提取, 无 detect）
 import "./core/lllAttack.js"; // 格基归约 LLL + 背包低密度攻击 CJLOSS（crypto, run, BigInt 精确有理 GSO, 无 detect）
@@ -272,11 +303,11 @@ const state = {
   dir: "decode",        // "encode" | "decode"
   params: {},           // 当前 op 的参数值
   navCollapsed: false,  // 侧栏 rail 折叠态（仿 Win11 任务管理器：只留图标）
-  expandedCat: null,    // 当前展开二级菜单的分类 id（手风琴）
+  expandedCats: [],     // 展开二级菜单的分类 id 集合（支持多个同时展开，非手风琴）
  // 首页一把梭输入缓存（切到别的菜单再回首页，输入/工具栏不丢）
   home: { input: "", crib: "", intensive: false },
   _routing: false,      // 路由驱动渲染时置位，避免 selectOp 回写 hash 造成回环
-  _animCat: null,       // 上一次真正「展开动画」过的分类，防止 selectOp 重渲染时二级菜单动画重放
+  _animatedCats: [],    // 已放过展开动画的分类集合，防 selectOp 重渲染时二级菜单动画重放
   ioFont: 17,           // IO 框字号（会话态，不持久化），A-/A+ 调节，范围 11-28（默认 17）
   navW: 0,              // 侧栏拖拽宽度（会话态，不持久化，0=用 CSS 默认）
 };
@@ -437,7 +468,7 @@ function renderNav() {
   $nav.innerHTML = "";
   $nav.classList.toggle("collapsed", state.navCollapsed);
  // 收起态清空动画追踪：下次展开任意分类都重新播入场动画
-  if (!state.expandedCat) state._animatedCat = null;
+  if (!state.expandedCats.length) state._animatedCats = [];
 
  // 折叠/展开开关（顶部）
   const toggle = el("div",
@@ -453,10 +484,10 @@ function renderNav() {
     const count = isHome ? 0 : opsByCat(cat.id).length;
     const curCat = state.view === "op" ? getOp(state.opId)?.cat : (state.view === "home" ? "home" : null);
     const active = curCat === cat.id;
-    const expanded = state.expandedCat === cat.id && !state.navCollapsed && !isHome;
+    const expanded = state.expandedCats.includes(cat.id) && !state.navCollapsed && !isHome;
 
     const item = el("div",
-      { class: "nav-item" + (active ? " on" : "") + (cat.pinned ? " pinned" : "") + (expanded ? " expanded" : ""),
+      { class: "nav-item" + (active ? " on" : "") + (cat.pinned ? " pinned" : "") + (expanded ? " expanded" : "") + (cat.id.startsWith("bridge") ? " bridge" : ""),
         title: state.navCollapsed ? catName(cat) : "",
         onclick: () => onNavClick(cat), ...keyBtn(() => onNavClick(cat)) },
       msym(cat.icon),
@@ -505,13 +536,14 @@ function renderNav() {
  // 二级菜单：展开态且非折叠时，列出该分类全部 op
     if (expanded) {
  // 仅「分类刚展开」那一刻放入场动画；已展开态下切 op（selectOp 重渲染）不重放，消除闪烁
-      const justOpened = state.expandedCat !== state._animatedCat;
+      const justOpened = !state._animatedCats.includes(cat.id);
       const sub = el("div", { class: "nav-sub" + (justOpened ? " animate-in" : "") });
       for (const op of opsByCat(cat.id)) {
         const hot = CTF_HOT.has(op.id);            // CTF 常考项高亮
         const meta = hot ? CTF_HOT_META[op.id] : null;
         const cls = "nav-subitem"
           + (state.opId === op.id ? " on" : "")
+          + (op.requiresBridge ? " bridge" : "")
           + (hot ? " ctf-hot" : "")
           + (meta && meta.rank === 1 ? " ctf-hot-top" : "");
  // 渲成 <a href="#/op/id">，中键/Ctrl 点可在新标签打开；左键仍走 SPA 选中
@@ -537,7 +569,7 @@ function renderNav() {
         sub.append(a);
       }
       $nav.append(sub);
-      state._animatedCat = state.expandedCat; // 记录已放过动画的分类
+      if (!state._animatedCats.includes(cat.id)) state._animatedCats.push(cat.id); // 记录已放过动画的分类
     }
 
     if (cat.pinned) $nav.append(el("div", { class: "nav-sep" }));
@@ -546,7 +578,7 @@ function renderNav() {
 
 function toggleNav() {
   state.navCollapsed = !state.navCollapsed;
-  if (state.navCollapsed) state.expandedCat = null; // 折叠时收起所有二级
+  if (state.navCollapsed) state.expandedCats = []; // 折叠时收起所有二级
   try { localStorage.setItem("ebctf_nav_collapsed", state.navCollapsed ? "1" : "0"); } catch { /* 忽略 */ }
   renderNav();
 }
@@ -562,8 +594,10 @@ function onNavClick(cat) {
  // 折叠态：没地方摆二级菜单，直接跳该分类首个 op
   if (state.navCollapsed) { selectOp(ops[0].id); return; }
 
- // 展开态：手风琴切换。点已展开的分类头 → 收起；否则展开该分类。
-  state.expandedCat = state.expandedCat === cat.id ? null : cat.id;
+ // 展开态：点已展开的分类头 → 收起；否则展开。支持多个分类同时展开（非手风琴）。
+  state.expandedCats = state.expandedCats.includes(cat.id)
+    ? state.expandedCats.filter((c) => c !== cat.id)
+    : [...state.expandedCats, cat.id];
   renderNav();
 }
 
@@ -571,7 +605,7 @@ function onNavClick(cat) {
 function goHome() {
   state.view = "home";
   state.opId = null;
-  state.expandedCat = null;
+  state.expandedCats = [];
   writeHash("#/home");
   renderNav();
   renderWorkspace();
@@ -583,7 +617,7 @@ function selectOp(id) {
   state.view = "op";
   state.opId = id;
   state.params = defaultParams(op);
-  state.expandedCat = op.cat; // 保持该 op 所在分类展开，二级菜单高亮当前 op
+  if (!state.expandedCats.includes(op.cat)) state.expandedCats.push(op.cat); // 保持该 op 所在分类展开，二级菜单高亮当前 op
  // 单向 run 工具无方向；双向的默认 decode（CTF 场景解码为主）
   state.dir = op.decode ? "decode" : (op.encode ? "encode" : "run");
   writeHash("#/op/" + id);   // 地址栏反映当前 op，可中键多开 / 刷新保持
@@ -610,37 +644,37 @@ function applyRoute() {
   if (h === "#/recipe") {
     state.view = "recipe";
     state.opId = null;
-    state.expandedCat = null;
+    state.expandedCats = [];
     renderNav();
     renderWorkspace();
   } else if (h === "#/exhaust") {
     state.view = "exhaust";
     state.opId = null;
-    state.expandedCat = null;
+    state.expandedCats = [];
     renderNav();
     renderWorkspace();
   } else if (h === "#/inspect") {
     state.view = "inspect";
     state.opId = null;
-    state.expandedCat = null;
+    state.expandedCats = [];
     renderNav();
     renderWorkspace();
   } else if (h === "#/codeimg") {
     state.view = "codeimg";
     state.opId = null;
-    state.expandedCat = null;
+    state.expandedCats = [];
     renderNav();
     renderWorkspace();
   } else if (h === "#/about") {
     state.view = "about";
     state.opId = null;
-    state.expandedCat = null;
+    state.expandedCats = [];
     renderNav();
     renderWorkspace();
   } else if (h === "#/plugins") {
     state.view = "plugins";
     state.opId = null;
-    state.expandedCat = null;
+    state.expandedCats = [];
     renderNav();
     renderWorkspace();
   } else if (m && getOp(decodeURIComponent(m[1]))) {
@@ -649,7 +683,7 @@ function applyRoute() {
  // 无匹配 / #/home → 首页
     state.view = "home";
     state.opId = null;
-    state.expandedCat = null;
+    state.expandedCats = [];
     renderNav();
     renderWorkspace();
   }
@@ -661,7 +695,7 @@ function selectOpFromRoute(id) {
   state.view = "op";
   state.opId = id;
   state.params = defaultParams(op);
-  state.expandedCat = op.cat;
+  if (!state.expandedCats.includes(op.cat)) state.expandedCats.push(op.cat);
   state.dir = op.decode ? "decode" : (op.encode ? "encode" : "run");
   renderNav();
   renderWorkspace();
@@ -688,7 +722,7 @@ function renderWorkspace() {
 function goRecipe() {
   state.view = "recipe";
   state.opId = null;
-  state.expandedCat = null;
+  state.expandedCats = [];
   writeHash("#/recipe");
   renderNav();
   renderWorkspace();
@@ -698,7 +732,7 @@ function goRecipe() {
 function goInspect() {
   state.view = "inspect";
   state.opId = null;
-  state.expandedCat = null;
+  state.expandedCats = [];
   writeHash("#/inspect");
   renderNav();
   renderWorkspace();
@@ -708,7 +742,7 @@ function goInspect() {
 function goCodeImg() {
   state.view = "codeimg";
   state.opId = null;
-  state.expandedCat = null;
+  state.expandedCats = [];
   writeHash("#/codeimg");
   renderNav();
   renderWorkspace();
@@ -718,7 +752,7 @@ function goCodeImg() {
 function goAbout() {
   state.view = "about";
   state.opId = null;
-  state.expandedCat = null;
+  state.expandedCats = [];
   writeHash("#/about");
   renderNav();
   renderWorkspace();
@@ -728,7 +762,7 @@ function goAbout() {
 function goPlugins() {
   state.view = "plugins";
   state.opId = null;
-  state.expandedCat = null;
+  state.expandedCats = [];
   writeHash("#/plugins");
   renderNav();
   renderWorkspace();
@@ -772,14 +806,35 @@ function renderHome() {
     spellcheck: "false",
   });
   keyInput.value = state.homeKey || "";
- // 深度爆破用 M3 switch（与 op 参数栏一致，不再是裸 checkbox）
-  const intensiveCb = el("input", { type: "checkbox", id: "magicIntensive" });
-  intensiveCb.checked = !!state.homeIntensive;      // 恢复上次 intensive
- // 多层链式解码开关（默认关闭）：开启后 magic 走 ≤3 层 BFS 链式解码 + 追加穷举全解。
- // 默认单层（快、够用）；多层留给用户主动开（恒烈需求1：多层只放此选项，≤3 层）。
-  if (state.homeExhaust === undefined) state.homeExhaust = false; // 默认关闭
-  const exhaustCb = el("input", { type: "checkbox", id: "magicExhaust" });
-  exhaustCb.checked = !!state.homeExhaust;
+ // 解码强度（替代原「深度爆破 / 多层链式」两个裸开关）：按钮开弹窗，
+ // 内含 5 档预设滑块（快速→最强，按 CTF 考点热→冷逐层放开）+ 参与算法多选 + 命名方案。
+ // 文本/文件两套配置各存各的（弹窗内切页签）。配置存 localStorage，回首页沿用上次。
+ // 强度档决定：参与哪些 op（allowOps 白名单）+ 层数/暴力/参数网格/时间预算，见 core/decodeProfile.js。
+ // 配置形状 = 双作用域 { text:{level,customIds}, file:{level,customIds} }（与弹窗契约一致）。
+ // 首页文本解码用 .text；拖入文件走 .file。两套各自持久化（localStorage，见 decodeProfile）。
+  if (state.homeStrength === undefined) {
+    state.homeStrength = loadLastConfig("text") || { level: "normal", customIds: [] };
+  }
+  const strengthBtn = el("button", { class: "act-btn magic-strength-btn", type: "button" },
+    msym("tune"), el("span", { class: "magic-strength-text" }, ""));
+  const syncStrengthBtn = () => {
+    const cfg = state.homeStrength || { level: "normal", customIds: [] };
+    const lvName = t("ui.ds.level." + (cfg.level || "normal"));
+    const n = (cfg.customIds || []).length;
+    strengthBtn.querySelector(".magic-strength-text").textContent =
+      t("ui.home.strengthBtn") + "：" + lvName + (cfg.level === "custom" ? `(${n})` : "");
+  };
+  syncStrengthBtn();
+  strengthBtn.addEventListener("click", () => {
+    openDecodeStrength({
+      cfg: { text: state.homeStrength },    // 弹窗仍接受 text 键名（兼容旧形状的 src = cfg.text）
+      onApply: (cfg) => {
+        state.homeStrength = cfg;            // cfg 现在是 {level, customIds} 单层
+        saveLastConfig(cfg, "text");
+        syncStrengthBtn();
+      },
+    });
+  });
   const runBtn = el("button", { class: "act-btn primary magic-run" },
     msym("bolt"), el("span", {}, t("ui.home.runBtn")));
   const toolbar = el("div", { class: "magic-toolbar" },
@@ -791,16 +846,9 @@ function renderHome() {
     el("div", { class: "magic-row" },
       el("label", { class: "magic-crib-label" }, t("ui.home.keyLabel"), keyInput),
     ),
- // 第三行：开关 + 一键解码按钮
+ // 第三行：解码强度 + 一键解码按钮
     el("div", { class: "magic-row magic-row-actions" },
-      el("label", { class: "magic-intensive-label", for: "magicIntensive" },
-        el("span", { class: "switch" }, intensiveCb, el("span", { class: "track" }), el("span", { class: "knob" })),
-        el("span", {}, t("ui.home.intensive")),
-      ),
-      el("label", { class: "magic-intensive-label", for: "magicExhaust" },
-        el("span", { class: "switch" }, exhaustCb, el("span", { class: "track" }), el("span", { class: "knob" })),
-        el("span", {}, t("ui.home.exhaustToggle")),
-      ),
+      strengthBtn,
       runBtn,
     ),
   );
@@ -818,12 +866,11 @@ function renderHome() {
  // 解码只由「点按钮」触发（force=true，绕过长度上限）。
  // 逐字输入不再自动解码——magicDecode + exhaustiveDecode 每次击键同步跑会逐字卡顿（恒烈反馈）。
  // 打字/改 crib/切开关只存 state，不解码；要出结果点「一键解码」按钮。
-  const forceTrigger = () => { runOneKey(input.value, outWrap, cribInput.value.trim(), intensiveCb.checked, exhaustCb.checked, true, topBanner, keyInput.value.trim(), runBtn); };
+ // 文本解码取 .text 档（拖入文件的路径另取 .file 档，见 drop 处理）。
+  const forceTrigger = () => { runOneKey(input.value, outWrap, cribInput.value.trim(), state.homeStrength, true, topBanner, keyInput.value.trim(), runBtn); };
   input.addEventListener("input", () => { state.homeInput = input.value; });
   cribInput.addEventListener("input", () => { state.homeCrib = cribInput.value; });
   keyInput.addEventListener("input", () => { state.homeKey = keyInput.value; });
-  intensiveCb.addEventListener("change", () => { state.homeIntensive = intensiveCb.checked; });
-  exhaustCb.addEventListener("change", () => { state.homeExhaust = exhaustCb.checked; });
  // 一键解码按钮 = 唯一解码入口。有输入才跑，空则聚焦回输入框。
   runBtn.addEventListener("click", () => { if (input.value.trim()) forceTrigger(); else input.focus(); });
  // 回车（非 Shift）也触发解码，键盘流用户方便。
@@ -880,7 +927,9 @@ function renderHome() {
 // 看门狗软死线（毫秒）：到点先渲染已得结果 + 倒计时读到此值，之后 Worker 后台继续。
 const SOFT_DEADLINE_MS = 5000;
 
-async function runOneKey(text, outWrap, crib, intensive, multiLayer, force = false, topBanner = null, key = "", runBtn = null) {
+// strengthCfg = { level, customIds }（来自「解码强度」弹窗）。resolveDecodeConfig 解析成
+// allowOps 白名单 + 层数/暴力/参数网格/时间预算，替代原先的 intensive/multiLayer 两个布尔。
+async function runOneKey(text, outWrap, crib, strengthCfg, force = false, topBanner = null, key = "", runBtn = null) {
   outWrap.innerHTML = "";
   if (topBanner) topBanner.innerHTML = "";   // 横幅容器每次运行先清空
   const q = text.trim();          // 注意：不要用 t，会遮蔽 i18n 的 t()
@@ -902,7 +951,14 @@ async function runOneKey(text, outWrap, crib, intensive, multiLayer, force = fal
  // 本次运行令牌：输入变化快时丢弃过期结果，避免异步竞态覆盖
   const token = (runOneKey._token = (runOneKey._token || 0) + 1);
 
- // 看门狗倒计时（恒烈需求）：一键解码按钮左边显示读秒，5 秒软死线到点先渲染已得结果、
+ // 强度档（decodeProfile.resolveDecodeConfig）产出层数/暴力/参数网格/时间预算 + op 白名单。
+ // 提前解析：倒计时读秒要用档内软死线（fast 0.8s…max 8s），不能再写死 5s 否则读秒与实际不符。
+  const resolved = resolveDecodeConfig(
+    strengthCfg && strengthCfg.level ? strengthCfg : { level: "normal", scope: "text", customIds: [] }
+  );
+  const softMs = resolved.magic.softDeadlineMs || SOFT_DEADLINE_MS;
+
+ // 看门狗倒计时（恒烈需求）：一键解码按钮左边显示读秒，软死线到点先渲染已得结果、
  // 后台继续；出最终结果 / 被新输入接管则清除。runBtn 由 renderHome 传入（可空，如拖文件路径）。
   let countdownTimer = null;
   const clearCountdown = () => {
@@ -912,7 +968,7 @@ async function runOneKey(text, outWrap, crib, intensive, multiLayer, force = fal
   const startCountdown = () => {
     if (!runBtn) return;
     clearCountdown();
-    const secs = Math.ceil((SOFT_DEADLINE_MS) / 1000);
+    const secs = Math.max(1, Math.ceil(softMs / 1000));
     let left = secs;
     const cd = el("span", { class: "magic-countdown" }, t("ui.home.countdown", left));
     runBtn._cd = cd;
@@ -933,9 +989,11 @@ async function runOneKey(text, outWrap, crib, intensive, multiLayer, force = fal
  // 单层默认覆盖全部编解码 op（含花式/古典）+ 综合分排序；multiLayer→maxDepth 3 多层链式（≤3）。
  // key（工具栏密钥框）→ 带密钥加解密 op（AES/DES/RC4/XOR/vigenere… + CTF 默认参数）参与。
  // onPartial：软死线（5s）到点先渲染已得结果，Worker 后台继续，最终结果到再整体重渲染。
-  const opts = { maxDepth: multiLayer ? 3 : 1, maxCandidates: 30, softDeadlineMs: SOFT_DEADLINE_MS };
+ // allowOps=null（最强档）表示不限制，等同旧行为。resolved 已在上方（倒计时要用软死线）解析。
+  const opts = { ...resolved.magic };
+  if (resolved.allowOps) opts.allowOps = Array.from(resolved.allowOps);  // Worker 需可结构化克隆
+  opts.softDeadlineMs = softMs;
   if (crib) opts.crib = crib;
-  if (intensive) opts.intensive = true;
   if (key) opts.key = key;
   opts.onPartial = (parts) => {
     if (token !== runOneKey._token) return;  // 已被新输入接管，弃
@@ -959,6 +1017,52 @@ async function runOneKey(text, outWrap, crib, intensive, multiLayer, force = fal
   if (token !== runOneKey._token) return;  // 已有更新的输入，弃
 
   renderMagicCands(outWrap, q, cands, crib);
+
+ // 暴力爆破独立通道（decodeProfile 独立池勾选的 op）：主排序之外单独归组跑，
+ // 结果追加在候选区末尾、不参与 magic 综合分排序。每个 op 30s 兜底超时。
+  const bruteOps = (resolved && resolved.bruteOps) || [];
+  if (bruteOps.length) {
+    const results = [];
+    for (const opId of bruteOps) {
+      const bop = getOp(opId);
+      if (!bop || typeof bop.run !== "function") continue;
+      if (token !== runOneKey._token) return;  // 被新输入接管，弃未跑完的爆破
+      try {
+        const r = await Promise.race([
+          Promise.resolve().then(() => bop.run(q, {})),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 30000)),
+        ]);
+        results.push({ id: bop.id, name: bop.name || bop.id, output: String(r), timedOut: false });
+      } catch (e) {
+        results.push({ id: bop.id, name: bop.name || bop.id, output: String((e && e.message) || e), timedOut: String(e) === "Error: timeout" });
+      }
+    }
+    if (token === runOneKey._token && results.length) renderBruteResults(outWrap, q, results);
+  }
+}
+
+// 渲染暴力爆破结果（独立通道）：追加在魔法候选区末尾，单独一个折叠区。
+// run 型 op 输出是报告文本（可能很长），每项截断到 1200 字符，完整内容可点开。
+function renderBruteResults(outWrap, q, results) {
+  const sec = el("details", { class: "onekey-brute" });
+  sec.open = true;
+  sec.append(el("summary", { class: "onekey-brute-sum" },
+    msym("bolt"),
+    el("span", {}, t("ui.home.bruteTitle", results.length)),
+  ));
+  const list = el("div", { class: "onekey-brute-list" });
+  for (const r of results) {
+    const body = r.timedOut ? t("ui.home.bruteTimeout") : (r.output.length > 1200 ? r.output.slice(0, 1200) + "…" : r.output);
+    const item = el("details", { class: "onekey-brute-item" });
+    item.append(el("summary", { class: "onekey-brute-item-sum" },
+      el("span", { class: "onekey-brute-name" }, r.name),
+      el("span", { class: "onekey-brute-id" }, r.id),
+    ));
+    item.append(el("pre", { class: "onekey-brute-out" }, body));
+    list.append(item);
+  }
+  sec.append(list);
+  outWrap.append(sec);
 }
 
 // 渲染 magic 候选（供 onPartial 部分结果 + 最终结果两处复用；每次全量重渲染 outWrap）。
@@ -1446,6 +1550,47 @@ function openSectionView(title, act) {
   document.addEventListener("keydown", onKey);
 }
 
+// dataURL → 字节 / MIME（出图类 op 下载复用）。
+function dataUrlToBytes(url) {
+  const comma = url.indexOf(",");
+  const b64 = comma >= 0 ? url.slice(comma + 1) : url;
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function mimeOfDataUrl(url) {
+  const m = /^data:([^;,]+)/.exec(url);
+  return m ? m[1] : "image/png";
+}
+
+// 输出区图片渲染：扫描 op 输出文本里的 data:image/*;base64,...（出图类 op 约定：
+// qrGen 二维码 / gifFrames 逐帧 / mcMap / bin2img / imgFft / spectrogram 等），
+// 逐个渲染成可见缩略图 + 下载按钮，点缩略图走灯箱放大。无匹配则清空媒体区。
+const OUT_IMG_RE = /data:image\/(?:png|jpe?g|gif|webp|bmp);base64,[A-Za-z0-9+/]+=*/g;
+function renderOutMedia(container, text) {
+  if (!container) return;
+  container.innerHTML = "";
+  if (!text) return;
+  const urls = String(text).match(OUT_IMG_RE);
+  if (!urls || !urls.length) return;
+  const grid = el("div", { class: "io-out-media-grid", style: "display:flex;flex-wrap:wrap;gap:12px;margin-top:8px" });
+  const multi = urls.length > 1;
+  urls.forEach((url, i) => {
+    const img = el("img", {
+      class: "io-out-media-img", src: url, alt: "", loading: "lazy",
+      style: "max-width:180px;max-height:180px;cursor:zoom-in;border-radius:6px;image-rendering:pixelated;background:#fff",
+    });
+    img.addEventListener("click", () => openImageLightbox(url, ""));
+    const dl = el("button", {
+      type: "button", class: "file-section-act",
+      onclick: (e) => { e.stopPropagation(); downloadBytes(dataUrlToBytes(url), (state.opId || "image") + (multi ? "_" + (i + 1) : "") + ".png", mimeOfDataUrl(url)); },
+    }, msym("download", "file-act-glyph"), el("span", {}, t("ui.op.export")));
+    grid.append(el("figure", { class: "io-out-media-cell", style: "display:flex;flex-direction:column;gap:4px;align-items:center;margin:0" }, img, dl));
+  });
+  container.append(grid);
+}
+
 // 图片灯箱：全屏遮罩内居中大图，点击遮罩/图片或 Esc 关闭。
 // 与 openSectionView 的小编辑弹窗分开——灯箱要尽量大 + 高保真渲染（不套 stego 的 pixelated）。
 function openImageLightbox(url, alt) {
@@ -1632,6 +1777,7 @@ function renderOp() {
   const clearAll = () => {
     inArea.value = "";
     outArea.value = "";
+    renderOutMedia(document.getElementById("ioOutMedia"), "");
     if (hasFields) fieldAreas.forEach((w) => { const ta = w.querySelector(".io-field-area"); if (ta) ta.value = ""; });
   };
 
@@ -1664,6 +1810,8 @@ function renderOp() {
         ),
       ),
       outArea,
+ // 出图类 op 的图片预览区（convert 检测输出中的 data:image URL 后填充，可预览+下载）。
+      el("div", { class: "io-out-media", id: "ioOutMedia" }),
     ),
   );
   $ws.append(io);
@@ -2117,11 +2265,11 @@ async function convert() {
   if (hasFields) {
     const vals = op.fields.map((f) => (document.getElementById("fld_" + f.key)?.value ?? ""));
  // 全空则清空输出（等价单框空输入）
-    if (vals.every((v) => v === "")) { outArea.value = ""; return; }
+    if (vals.every((v) => v === "")) { outArea.value = ""; renderOutMedia(document.getElementById("ioOutMedia"), ""); return; }
     text = vals.join(op.fieldsJoin ?? "\n");
   } else {
     text = inArea.value;
-    if (text === "") { outArea.value = ""; return; }
+    if (text === "") { outArea.value = ""; renderOutMedia(document.getElementById("ioOutMedia"), ""); return; }
   }
   const fn = op.run || (state.dir === "encode" ? op.encode : op.decode);
   const seq = ++_convSeq;
@@ -2138,11 +2286,13 @@ async function convert() {
     outArea.value = out;
     outArea.style.color = "";
     outArea.classList.remove("error");
+    renderOutMedia(document.getElementById("ioOutMedia"), out);
   } catch (e) {
     if (seq !== _convSeq) return;
     outArea.value = "✗ " + (e.message || t("ui.toast.convertFail"));
     outArea.style.color = "var(--error)";
     outArea.classList.add("error");
+    renderOutMedia(document.getElementById("ioOutMedia"), "");
   }
 }
 
@@ -2481,7 +2631,7 @@ function catNameById(catId) {
 // ---- 关于页：顶栏「关于」→ 居中 modal ----
 // 内容：项目名 / 作者(EternalBlaze) / 版本 / op 统计 / 技术栈 / 零外发声明 /
 // GitHub 仓库入口 / 依赖致谢 / 参考项目 / 许可。
-const APP_VERSION = "0.1.1";
+const APP_VERSION = "0.1.2";
 const REPO_URL = "https://github.com/Henglie/EBCTFCodeBox";
 // 参考项目：写明引用/借鉴内容与地址。
 const REFERENCE_PROJECTS = [
@@ -2499,6 +2649,11 @@ const REFERENCE_PROJECTS = [
     name: "flowforge-crypto",
     url: "https://github.com/marlkiller/flowforge-crypto",
     borrow: "早期评估过节点式数据流编排，最终选择更轻的线性配方链，此处记录来源。",
+  },
+  {
+    name: "剪贴板里有什么？ (WhatsInYourClipboard)",
+    url: "https://github.com/Henglie/WhatsInYourClipboard",
+    borrow: "同作者的前置工程：剪贴板内容智能分类识别（格式嗅探 + 隐写透视）的思路与本工具的「一键解码」相承。",
   },
 ];
 // 关于页：独立路由 #/about，像 op 页一样在工作区渲染（非弹窗）。
@@ -2593,6 +2748,8 @@ function renderAbout(host) {
     { name: "yy2m1a0", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribY2m1a0" },
     { name: "霍雅", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribHuoya" },
     { name: "0x0off", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contrib0x0off" },
+    { name: "懒羊羊大王", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribLyy" },
+    { name: "风之遐想", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribFzxx" },
   ];
   for (const c of OTHER_CONTRIBUTORS) {
     const cap = el("span", { class: c.avatar ? "about-capsule about-capsule-founder" : "about-capsule" });
@@ -2857,7 +3014,7 @@ async function fetchSystemAccent() {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 1500);
-    const r = await fetch("http://localhost:8181/api/accent", { signal: ctrl.signal, cache: "no-store" });
+    const r = await fetch("http://127.0.0.1:8181/api/accent", { signal: ctrl.signal, cache: "no-store" });
     clearTimeout(timer);
     if (!r.ok) return null;                 // 501（非 Win/读失败）→ 降级
     const j = await r.json();

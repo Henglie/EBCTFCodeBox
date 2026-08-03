@@ -168,6 +168,8 @@ export function inputFeatures(text) {
   return {
     compact,
     compactLen: compact.length,
+    // 非空白字符种类数（lenient 宽松档用：只判种类不判具体字符，喵呜/emoji 等变体二进制也能准入）
+    nCharKinds: new Set(compact).size,
     isHex: compact.length > 0 && /^[0-9a-fA-F]+$/.test(compact),
     isDigits: compact.length > 0 && /^[0-9]+$/.test(compact),
     isBinary: compact.length > 0 && /^[01]+$/.test(compact),
@@ -208,21 +210,34 @@ const OP_FINGERPRINT = {
   sternBrocot: "BASE64ISH", twosquare: "BASE64ISH",
 };
 // 字符集指纹准入：op 无指纹 → 放行；有指纹 → compact 全落入类才纳入（类外字符即排除）。
-function fingerprintAdmit(op, f) {
+// lenient（增强+/自定义档）：只判字符种类数 ≤ 类字符集大小，不判具体字符——
+// CTF 变体题（喵呜=01、emoji=01…）用非标准字符表也能准入参与解码（恒烈 2026-08-03）。
+function fingerprintAdmit(op, f, lenient) {
   const cls = OP_FINGERPRINT[op.id];
   if (!cls) return true;                        // 未登记指纹的 op 不受此门限制
   if (f.compactLen === 0) return true;          // 空输入交后续逻辑，不在此排除
+  if (lenient) {
+    const LIMIT = { BINARY: 2, DIGIT: 10, HEX: 17, BASE64ISH: 70 };
+    return f.nCharKinds <= (LIMIT[cls] ?? 70);
+  }
   return FP_CLASS[cls].test(f.compact);
 }
 
 // 无 detect 的 op 按 cat 粗筛（保守：只在明显不适用时排除，默认纳入）。
-export function coarseAdmitPlain(op, f) {
- // 字符集指纹优先（精确到单 op）：输入含算法字符集外字符即排除。
-  if (!fingerprintAdmit(op, f)) return false;
+// lenient=true（增强/极强/最强/自定义档）：只按字符种类数放行，全部相关算法参与。
+export function coarseAdmitPlain(op, f, lenient) {
+ // 字符集指纹优先（精确到单 op）：输入含算法字符集外字符即排除（lenient 放宽为种类数）。
+  if (!fingerprintAdmit(op, f, lenient)) return false;
  // Base 系：只在输入是 base 字母表子集时纳入（含可能的 = 尾）。
-  if (op.cat === "base") return f.isBase64ish;
+  if (op.cat === "base") {
+    if (lenient) return f.compactLen > 0 && f.nCharKinds <= 70;  // 变体 base 表（emoji 等）也能参与
+    return f.isBase64ish;
+  }
  // 进制/字符集 系：需 hex/纯数字/二进制/base 字母表（纯文本、非 ASCII 不是进制串）。
-  if (op.cat === "radix") return f.isHex || f.isDigits || f.isBinary || f.isBase64ish;
+  if (op.cat === "radix") {
+    if (lenient) return f.compactLen > 0 && f.nCharKinds >= 2 && f.nCharKinds <= 17;  // 2~16 进制变体字符
+    return f.isHex || f.isDigits || f.isBinary || f.isBase64ish;
+  }
  // 其余分类（text/fancy/cn/classic/modern/hash/analysis/stego…）默认纳入。
   return true;
 }
