@@ -124,6 +124,22 @@ export default {
   "op.md4.name": "MD4",
   "op.sha1.name": "SHA-1",
   "op.sha256.name": "SHA-256",
+
+  "op.shaLengthExtend.name": "SHA लंबाई विस्तार",
+
+  "op.birthdayCollision.name": "जन्मदिन कोलिज़न डेमो",
+
+  "op.babaiCvp.name": "Babai Nearest Plane (CVP)",
+
+  "op.hnpRecover.name": "HNP Hidden Number Problem",
+
+  "op.spnAnalysis.name": "SPN Differential/Linear Analysis",
+
+  "op.md5CollisionShow.name": "MD5 Truncated Collision Demo",
+
+  "op.lweToy.name": "LWE Toy Encryption",
+
+  "op.ntruToy.name": "NTRU Toy Encryption",
   "op.sha384.name": "SHA-384",
   "op.sha3.name": "SHA-3",
   "op.fnv1a.name": "FNV-1a",
@@ -145,6 +161,8 @@ export default {
   "op.aes.name": "AES",
   "op.des.name": "DES",
   "op.des3.name": "3DES / TripleDES",
+
+  "op.cast128.name": "CAST-128",
   "op.rc4.name": "RC4",
   "op.xor.name": "XOR",
   "op.fernet.name": "Fernet",
@@ -523,6 +541,14 @@ export default {
   "op.lsbImage.name": "LSB Image Steganography",
   "op.pixelJihad.name": "PixelJihad",
   "op.arnoldCat.name": "Arnold Cat Map",
+
+  "op.arnoldCatBrute.name": "अर्नोल्ड कैट मैप ब्रूट-फोर्स",
+
+  "op.stegpy.name": "stegpy स्टेग्नोग्राफी (stegv3)",
+
+  "op.stereogramSolver.name": "स्टीरियोग्राम सॉल्वर",
+
+  "op.ppencode.name": "ppencode",
   "op.imageBasic.name": "Image Basic Ops",
 
  // ---- op names: radix/hash/stego new ops ----
@@ -682,6 +708,8 @@ export default {
   "op.cookieParse.name": "Cookie Parse",
   "op.httpBasicAuth.name": "HTTP Basic Auth",
   "op.dataUriParse.name": "Data URI Parse",
+
+  "op.mimeMultipart.name": "MIME मल्टीपार्ट पार्सर",
   "op.magnetParse.name": "Magnet Link Parse",
  // stego · confusables
   "op.confusablesSkeleton.name": "Confusables Skeleton",
@@ -832,6 +860,10 @@ export default {
   "op.emojiAes.name": "emoji-aes Encrypt",
   "op.moyue.name": "Moyue (Abracadabra CN)",
   "op.prngAttack.name": "PRNG Cracker (LCG / MT19937)",
+
+  "op.randu.name": "RANDU कमजोर LCG",
+
+  "op.truncLcgRecover.name": "ट्रंकेटेड LCG सीड रिकवरी",
   "op.hashLengthExtension.name": "Hash Length Extension (MD5)",
   "op.flagExtract.name": "Flag Auto-Extractor",
   "op.xorAnalyze.name": "xortool All-in-One (Repeated-Key XOR)",
@@ -844,6 +876,11 @@ export default {
   "op.spectrogram.name": "Audio Spectrogram (STFT)",
   "op.lfsrRecover.name": "LFSR Sequence Recovery",
   "op.geffe.name": "Geffe जनरेटर / सहसंबंध हमला",
+  "op.bfSwap.name": "Brainfuck·स्वैप रीरन",
+  "op.roar.name": "रोअर अनुवादक (4-वर्ण कोडेक)",
+  "op.crc32Reverse.name": "CRC32 रिवर्स कोलिजन",
+  "op.jsEscape.name": "JS escape एन्कोडिंग",
+  "op.bubblebabble.name": "BubbleBabble एन्कोडिंग",
   "op.rc4Visualize.name": "RC4 KSA/PRGA Visualizer",
   "op.f5stego.name": "F5 JPEG Steganography Extract",
   "op.lllAttack.name": "LLL Lattice Reduction Attack",
@@ -861,6 +898,9 @@ export default {
   "op.ed25519.name": "Ed25519 Sign / Verify",
   "op.siphash.name": "SipHash MAC",
   "op.scrypt.name": "scrypt KDF",
+  "op.balloon.name": "Balloon KDF",
+  "op.lyra2.name": "Lyra2 KDF",
+  "op.yescrypt.name": "yescrypt KDF",
   "op.blake3.name": "BLAKE3 Hash",
   "op.paillier.name": "Paillier Homomorphic Encryption",
   "op.schnorr.name": "Schnorr Sign / Verify / Attack",
@@ -873,6 +913,12 @@ export default {
   "op.md4.name": "MD4 Hash",
   "op.pearson.name": "Pearson Hash",
   "op.whirlpool.name": "Whirlpool",
+
+  "op.skein.name": "Skein",
+
+  "op.grostl.name": "Grøstl",
+
+  "op.jh.name": "JH",
   "op.streebog.name": "Streebog",
   "op.threefish.name": "Threefish",
   "op.skipjack.name": "Skipjack",
@@ -880,11 +926,21 @@ export default {
   "op.xxhash.name": "xxHash32 / xxHash64",
   "op.cityhash.name": "CityHash गैर-क्रिप्टोग्राफ़िक हैश",
   "op.a51.name": "A5/1 Stream Cipher",
+  "op.a52.name": "A5/2 Stream Cipher",
+  "op.mickey.name": "undefined",
+  "op.e0.name": "E0 Stream Cipher",
+  "op.hc128.name": "HC-128 Stream Cipher",
+  "op.hc256.name": "HC-256 Stream Cipher",
+  "op.sosemanuk.name": "Sosemanuk Stream Cipher",
+  "op.spritz.name": "Spritz Stream Cipher",
+  "op.vmpc.name": "VMPC Stream Cipher",
   "op.binhex.name": "BinHex 4.0 Decode",
   "op.yenc.name": "yEnc Encode / Decode",
   "op.xorshiftRecover.name": "xorshift State Recovery",
   "op.shamir.name": "शमीर सीक्रेट शेयरिंग (Shamir)",
   "op.dsa.name": "DSA Sign / Verify / Attack",
+
+  "op.des2Mitm.name": "2DES मीट-इन-द-मिडिल",
   "op.mcLevelDat.name": "Minecraft level.dat Parser",
   "op.mcTextExtract.name": "Minecraft Text Intel Extractor",
   "op.mcMapRender.name": "Minecraft Map Renderer",

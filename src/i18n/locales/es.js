@@ -119,6 +119,22 @@ export default {
   "op.md4.name": "MD4",
   "op.sha1.name": "SHA-1",
   "op.sha256.name": "SHA-256",
+
+  "op.shaLengthExtend.name": "Extensión de longitud SHA",
+
+  "op.birthdayCollision.name": "Demostración de colisión de cumpleaños",
+
+  "op.babaiCvp.name": "Babai Nearest Plane (CVP)",
+
+  "op.hnpRecover.name": "HNP Hidden Number Problem",
+
+  "op.spnAnalysis.name": "SPN Differential/Linear Analysis",
+
+  "op.md5CollisionShow.name": "MD5 Truncated Collision Demo",
+
+  "op.lweToy.name": "LWE Toy Encryption",
+
+  "op.ntruToy.name": "NTRU Toy Encryption",
   "op.sha384.name": "SHA-384",
   "op.sha3.name": "SHA-3",
   "op.fnv1a.name": "FNV-1a",
@@ -140,6 +156,8 @@ export default {
   "op.aes.name": "AES",
   "op.des.name": "DES",
   "op.des3.name": "3DES / TripleDES",
+
+  "op.cast128.name": "CAST-128",
   "op.rc4.name": "RC4",
   "op.xor.name": "XOR",
   "op.fernet.name": "Fernet",
@@ -494,6 +512,14 @@ export default {
   "op.lsbImage.name": "Esteganografía LSB en imagen",
   "op.pixelJihad.name": "PixelJihad",
   "op.arnoldCat.name": "Mapa del gato de Arnold",
+
+  "op.arnoldCatBrute.name": "Fuerza bruta Arnold Cat Map",
+
+  "op.stegpy.name": "Esteganografía stegpy (stegv3)",
+
+  "op.stereogramSolver.name": "Resolvedor de estereogramas",
+
+  "op.ppencode.name": "ppencode",
   "op.imageBasic.name": "Operaciones básicas de imagen",
 
  // ---- op names: radix/hash/stego new ops ----
@@ -653,6 +679,8 @@ export default {
   "op.cookieParse.name": "Análisis de cookie",
   "op.httpBasicAuth.name": "HTTP Basic Auth",
   "op.dataUriParse.name": "Análisis de Data URI",
+
+  "op.mimeMultipart.name": "Analizador MIME multipart",
   "op.magnetParse.name": "Análisis de enlace Magnet",
  // stego · confusables
   "op.confusablesSkeleton.name": "Esqueleto de confusables",
@@ -803,6 +831,10 @@ export default {
   "op.emojiAes.name": "Cifrado emoji-aes",
   "op.moyue.name": "Moyue (Abracadabra CN / 魔曰)",
   "op.prngAttack.name": "Crackeador PRNG (LCG / MT19937)",
+
+  "op.randu.name": "RANDU LCG débil",
+
+  "op.truncLcgRecover.name": "Recuperación de semilla LCG truncada",
   "op.hashLengthExtension.name": "Extensión de longitud de hash (MD5)",
   "op.flagExtract.name": "Extractor automático de flags",
   "op.xorAnalyze.name": "xortool todo en uno (XOR de clave repetida)",
@@ -815,6 +847,11 @@ export default {
   "op.spectrogram.name": "Espectrograma de audio (STFT)",
   "op.lfsrRecover.name": "Recuperación de secuencia LFSR",
   "op.geffe.name": "Generador Geffe / Ataque de correlación",
+  "op.bfSwap.name": "Brainfuck·Reintento con intercambio",
+  "op.roar.name": "Traductor Roar (códec de 4 caracteres)",
+  "op.crc32Reverse.name": "Colisión inversa CRC32",
+  "op.jsEscape.name": "Codificación escape JS",
+  "op.bubblebabble.name": "Codificación BubbleBabble",
   "op.rc4Visualize.name": "Visualizador RC4 KSA/PRGA",
   "op.f5stego.name": "Extracción de esteganografía JPEG F5",
   "op.lllAttack.name": "Ataque por reducción de retículo LLL",
@@ -832,6 +869,9 @@ export default {
   "op.ed25519.name": "Ed25519 Sign / Verify",
   "op.siphash.name": "SipHash MAC",
   "op.scrypt.name": "scrypt KDF",
+  "op.balloon.name": "Balloon KDF",
+  "op.lyra2.name": "Lyra2 KDF",
+  "op.yescrypt.name": "yescrypt KDF",
   "op.blake3.name": "BLAKE3 Hash",
   "op.paillier.name": "Paillier Homomorphic Encryption",
   "op.schnorr.name": "Schnorr Sign / Verify / Attack",
@@ -844,6 +884,12 @@ export default {
   "op.md4.name": "MD4 Hash",
   "op.pearson.name": "Pearson Hash",
   "op.whirlpool.name": "Whirlpool",
+
+  "op.skein.name": "Skein",
+
+  "op.grostl.name": "Grøstl",
+
+  "op.jh.name": "JH",
   "op.streebog.name": "Streebog",
   "op.threefish.name": "Threefish",
   "op.skipjack.name": "Skipjack",
@@ -851,11 +897,21 @@ export default {
   "op.xxhash.name": "xxHash32 / xxHash64",
   "op.cityhash.name": "CityHash Hash no criptográfico",
   "op.a51.name": "A5/1 Stream Cipher",
+  "op.a52.name": "Cifrado de flujo A5/2",
+  "op.mickey.name": "Cifrado de flujo MICKEY-128 2.0",
+  "op.e0.name": "Cifrado de flujo E0",
+  "op.hc128.name": "Cifrado de flujo HC-128",
+  "op.hc256.name": "Cifrado de flujo HC-256",
+  "op.sosemanuk.name": "Cifrado de flujo Sosemanuk",
+  "op.spritz.name": "Cifrado de flujo Spritz",
+  "op.vmpc.name": "Cifrado de flujo VMPC",
   "op.binhex.name": "BinHex 4.0 Decode",
   "op.yenc.name": "yEnc Encode / Decode",
   "op.xorshiftRecover.name": "xorshift State Recovery",
   "op.shamir.name": "Compartición de secreto de Shamir",
   "op.dsa.name": "DSA Firmar / Verificar / Atacar",
+
+  "op.des2Mitm.name": "2DES Encuentro en el Medio",
   "op.mcLevelDat.name": "Analizador de level.dat de Minecraft",
   "op.mcTextExtract.name": "Extractor de información de texto de Minecraft",
   "op.mcMapRender.name": "Renderizador de mapas de Minecraft",

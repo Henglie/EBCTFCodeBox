@@ -316,8 +316,8 @@ register({
 // 文本模式：文本 → UTF-8 字节整串倒序 → Hex（因倒序后多字节 UTF-8 序列被打散，无法直接还原文本）。
 // Hex 模式：Hex ↔ Hex 整串字节倒序（自逆，最常用于二进制文件字节流反转）。
 function byteReverseBytes(bytes) {
-  const out = new Uint8Array(bytes.length);
-  for (let i = 0; i < bytes.length; i++) out[i] = bytes[bytes.length - 1 - i];
+  const out = bytes.slice();
+  out.reverse();
   return out;
 }
 register({

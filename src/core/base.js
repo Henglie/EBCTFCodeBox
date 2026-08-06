@@ -47,12 +47,18 @@ const B16 = "0123456789ABCDEF";
 function hexEncode(text, p) {
   const D = (p && p.dict) || B16;
   const bytes = te(text);
-  let out = "";
-  for (const b of bytes) {
-    const h = D[(b >> 4) & 0xf] + D[b & 0xf];
-    out += p && p.upper === false ? h.toLowerCase() : h;
+  const lower = p && p.upper === false;
+  // 预分配数组 + join 替代逐字节拼串；小写仅预建一次字典，免逐字符 toLowerCase
+  const L = lower ? D.toLowerCase() : D;
+  const n = bytes.length;
+  const out = new Array(n * 2);
+  for (let i = 0; i < n; i++) {
+    const b = bytes[i];
+    out[i * 2] = L[(b >> 4) & 0xf];
+    out[i * 2 + 1] = L[b & 0xf];
   }
-  return p && p.space && out ? out.match(/.{1,2}/g).join(" ") : out;
+  let s = out.join("");
+  return p && p.space && s ? s.match(/.{1,2}/g).join(" ") : s;
 }
 function hexDecode(text, p) {
   const D = (p && p.dict) || B16;
@@ -194,18 +200,28 @@ const B64_STD = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+
 function base64Encode(text, p) {
   const D = (p && p.dict) || B64_STD;
   const bytes = te(text);
+  const wantPad = (p && p.padding !== undefined) ? p.padding : true;
+  // 标准码表快路径：btoa 原生（urlsafe 仅 +/→-_ 字符替换，同样可走；大输入分块防 apply 参数上限）
+  // 块大小取 3 的倍数（32766=0x7FFE），否则每块 btoa 自补 "=" 会拼进输出中间
+  if (D === B64_STD) {
+    let out = "";
+    for (let i = 0; i < bytes.length; i += 0x7ffe) {
+      out += btoa(String.fromCharCode.apply(null, bytes.subarray(i, i + 0x7ffe)));
+    }
+    if (p && p.urlsafe) out = out.replace(/\+/g, "-").replace(/\//g, "_");
+    if (!wantPad) out = out.replace(/=+$/, "");
+    return out;
+  }
+  // 自定义码表：手工编码（直接索引读字节，避免逐 3 字节 slice 数组分配）
   let out = "";
   for (let i = 0; i < bytes.length; i += 3) {
-    const chunk = bytes.slice(i, i + 3);
-    const n = (chunk[0] << 16) | ((chunk[1] || 0) << 8) | (chunk[2] || 0);
+    const b0 = bytes[i], b1 = bytes[i + 1], b2 = bytes[i + 2];
+    const n = (b0 << 16) | ((b1 || 0) << 8) | (b2 || 0);
     out += D[(n >> 18) & 63] + D[(n >> 12) & 63];
-    out += chunk.length > 1 ? D[(n >> 6) & 63] : "=";
-    out += chunk.length > 2 ? D[n & 63] : "=";
+    out += b1 !== undefined ? D[(n >> 6) & 63] : "=";
+    out += b2 !== undefined ? D[n & 63] : "=";
   }
- // urlsafe 只管字符替换（+/→-_），与 padding 解耦。
   if (p && p.urlsafe) out = out.replace(/\+/g, "-").replace(/\//g, "_");
- // padding 默认 true；padding=false 才去掉尾部 =（标准与 url 变体都受控）。
-  const wantPad = (p && p.padding !== undefined) ? p.padding : true;
   if (!wantPad) out = out.replace(/=+$/, "");
   return out;
 }

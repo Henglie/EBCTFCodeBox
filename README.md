@@ -18,6 +18,8 @@
 
 ## 目录
 
+- [快速下载](#快速下载)
+- [更新日志](#更新日志)
 - [项目简介](#项目简介)
 - [特点](#特点)
 - [界面预览](#界面预览)
@@ -30,6 +32,35 @@
 - [开源协议](#开源协议)
 - [第三方资源与许可](#第三方资源与许可)
 - [隐私](#隐私)
+
+## 快速下载
+
+> 纯前端零外发，下载解压后双击 `点我启动.py` 即可使用（需本机有 Python 3）。Windows 全功能，macOS / Linux 桥接类 op 自动跳过。
+
+| 网盘 | 链接 | 提取码 |
+|---|---|---|
+| 百度网盘 | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
+| 夸克网盘 | https://pan.quark.cn/s/3b7e573b19c0 | 无 |
+
+当前版本 **v0.1.2**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
+
+## 更新日志
+
+### v0.1.2
+
+- **新增 12 个密码学算法**（585 op，全部官方向量验证）：B 组流密码 8 项（A5/2 / Spritz / VMPC / E0 / HC-128 / HC-256 / Sosemanuk / MICKEY-128 2.0）、哈希 3 项（Skein / Grøstl / JH）、KDF 3 项（Balloon / Lyra2 / yescrypt）、CAST-128（RFC 2144）、CityHash、Threefish、Skipjack、MARS。
+- **解码强度四件套**：强度档位 + 自定义算法池 + 暴力爆破独立通道（XOR/凯撒/字典/彩虹表/HMAC/PBE/Playfair/ZIP/CRC32/bkcrack，结果单独归组展示不污染主排序）+ 解析层数 1~3 选择。
+- **宽松判定模式**：增强 / 极强 / 最强 / 自定义档只按字符种类数放行算法，变体编码题（「喵呜」表 0/1、emoji 表二进制）也能参与解码；默认 / 快速档保持严格定义域识别。
+- **随波逐流四点对齐**：ROT8000 加 offset 参数、Morse 兼容 BA 替代 + 0/1 数字形式、Caesar 加 mode 参数、天干地支加 mode 参数含错别字兼容字典。
+- **拖入 pcap / pcapng 流量包自动跑协议级分析**：一键输出流量概览 + TCP 流重组 + HTTP 对象提取 + DNS 隧道检测 + ICMP 载荷提取四项协议级报告，含 flag 正则检测自动提级告警。
+- **修复一键解码「解码强度」弹窗参与算法选择消失**：CSS grid 布局未给「解析层数」段分配行位导致选项不可见，已显式定位 4 行布局并补全按钮组样式。
+- **暴力爆破算法移入左侧算法列表**：作为虚拟分类与普通算法共用同一折叠 / 搜索 / 勾选 UI，右侧栏仅保留「我的方案」管理。
+- **纯 JS 快路径优化**：base64 encode 12× 提速、hexEncode / byteReverse / xorCrypt 大文件性能优化。
+- **BrainFuck 括号宽容**：孤儿 `]` / 多余 `[` 不再报错，按 NOP 处理。
+- **本地桥 CORS 拦截修复**：白名单从写死 `localhost:8180` 改为按 Origin 反射，127.0.0.1 打开页面时桥不再失效。
+- **左侧导航 UI 收紧**：多分类同时展开、二级菜单整块深色填充、字体与间距收紧。
+- **版本号全局变量化**：统一由 `src/core/version.js` 导出，main.js / mcpBridge.js / index.html 共用同一来源，消除版本号割裂。
+- i18n 16 语言全 979 key 同构。
 
 ## 项目简介
 

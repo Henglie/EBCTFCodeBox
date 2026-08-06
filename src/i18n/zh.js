@@ -130,6 +130,22 @@ export default {
   "op.md4.name": "MD4",
   "op.sha1.name": "SHA-1",
   "op.sha256.name": "SHA-256",
+
+  "op.shaLengthExtend.name": "SHA 长度扩展",
+
+  "op.birthdayCollision.name": "生日碰撞演示",
+
+  "op.babaiCvp.name": "Babai 最近平面",
+
+  "op.hnpRecover.name": "HNP 隐藏数问题",
+
+  "op.spnAnalysis.name": "SPN 差分/线性分析",
+
+  "op.md5CollisionShow.name": "MD5 截断碰撞演示",
+
+  "op.lweToy.name": "LWE 玩具加解密",
+
+  "op.ntruToy.name": "NTRU 玩具加解密",
   "op.sha384.name": "SHA-384",
   "op.sha3.name": "SHA-3",
   "op.fnv1a.name": "FNV-1a",
@@ -151,6 +167,8 @@ export default {
   "op.aes.name": "AES",
   "op.des.name": "DES",
   "op.des3.name": "3DES / TripleDES",
+
+  "op.cast128.name": "CAST-128",
   "op.rc4.name": "RC4",
   "op.xor.name": "XOR",
   "op.fernet.name": "Fernet",
@@ -532,6 +550,14 @@ export default {
   "op.lsbImage.name": "LSB 像素隐写",
   "op.pixelJihad.name": "PixelJihad",
   "op.arnoldCat.name": "Arnold 猫脸变换",
+
+  "op.arnoldCatBrute.name": "Arnold 猫脸暴破",
+
+  "op.stegpy.name": "stegpy 隐写（stegv3）",
+
+  "op.stereogramSolver.name": "立体图求解",
+
+  "op.ppencode.name": "ppencode",
   "op.imageBasic.name": "图像基础操作",
 
  // ---- op 名：radix/hash/stego 新增 op ----
@@ -691,6 +717,8 @@ export default {
   "op.cookieParse.name": "Cookie 解析",
   "op.httpBasicAuth.name": "HTTP Basic 认证",
   "op.dataUriParse.name": "Data URI 解析",
+
+  "op.mimeMultipart.name": "MIME multipart 解析",
   "op.magnetParse.name": "Magnet 链接解析",
  // stego · confusables
   "op.confusablesSkeleton.name": "同形字骨架归一化",
@@ -847,6 +875,10 @@ export default {
   "op.emojiAes.name": "emoji-aes 加密",
   "op.moyue.name": "魔曰",
   "op.prngAttack.name": "PRNG 破解（LCG / MT19937）",
+
+  "op.randu.name": "RANDU 弱 LCG",
+
+  "op.truncLcgRecover.name": "截断 LCG 种子恢复",
   "op.hashLengthExtension.name": "哈希长度扩展攻击（MD5）",
   "op.flagExtract.name": "flag 自动提取器",
   "op.xorAnalyze.name": "xortool 一体化（重复密钥 XOR 分析）",
@@ -857,12 +889,23 @@ export default {
   "op.shamir.name": "Shamir 秘密共享",
   "op.knapsack.name": "背包加密（Merkle-Hellman）",
   "op.a51.name": "A5/1 流密码",
+  "op.a52.name": "A5/2 流密码",
+  "op.mickey.name": "MICKEY-128 2.0 流密码",
+  "op.e0.name": "E0 流密码",
+  "op.hc128.name": "HC-128 流密码",
+  "op.hc256.name": "HC-256 流密码",
+  "op.sosemanuk.name": "Sosemanuk 流密码",
+  "op.spritz.name": "Spritz 流密码",
+  "op.vmpc.name": "VMPC 流密码",
   "op.ecdsaReuseK.name": "ECDSA nonce 重用攻击",
   "op.rabin.name": "Rabin 密码",
   "op.x25519.name": "X25519 密钥交换",
   "op.ed25519.name": "Ed25519 签名 / 验签",
   "op.siphash.name": "SipHash 消息认证码",
   "op.scrypt.name": "scrypt 密钥派生",
+  "op.balloon.name": "Balloon 密钥派生",
+  "op.lyra2.name": "Lyra2 密钥派生",
+  "op.yescrypt.name": "yescrypt 密钥派生",
   "op.blake3.name": "BLAKE3 哈希",
   "op.paillier.name": "Paillier 同态加密",
   "op.schnorr.name": "Schnorr 签名 / 验签 / 攻击",
@@ -875,6 +918,12 @@ export default {
   "op.md4.name": "MD4 哈希",
   "op.pearson.name": "Pearson 哈希",
   "op.whirlpool.name": "Whirlpool 哈希",
+
+  "op.skein.name": "Skein",
+
+  "op.grostl.name": "Grøstl",
+
+  "op.jh.name": "JH",
   "op.streebog.name": "Streebog（GOST R 34.11-2012）",
   "op.threefish.name": "Threefish 可调分组密码",
   "op.skipjack.name": "Skipjack 分组密码",
@@ -885,12 +934,19 @@ export default {
   "op.yenc.name": "yEnc 编 / 解码",
   "op.binhex.name": "BinHex 4.0 编 / 解码",
   "op.dsa.name": "DSA 签名 / 验签 / 攻击",
+
+  "op.des2Mitm.name": "2DES 中间相遇",
   "op.bmpPalette.name": "BMP 调色板隐写分析",
   "op.stegosaurus.name": "Stegosaurus pyc 隐写检测",
   "op.pcapRepair.name": "pcap 文件修复",
   "op.spectrogram.name": "音频频谱图（STFT）",
   "op.lfsrRecover.name": "LFSR 序列恢复",
   "op.geffe.name": "Geffe 生成器 / 相关攻击",
+  "op.bfSwap.name": "Brainfuck·交换重跑",
+  "op.roar.name": "兽音译者（嗷呜啊~）",
+  "op.crc32Reverse.name": "CRC32 反向碰撞",
+  "op.jsEscape.name": "JS escape 编码",
+  "op.bubblebabble.name": "BubbleBabble 编码",
   "op.rc4Visualize.name": "RC4 KSA/PRGA 可视化",
   "op.f5stego.name": "F5 JPEG 隐写提取",
   "op.lllAttack.name": "格基归约 LLL 攻击",

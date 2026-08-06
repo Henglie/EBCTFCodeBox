@@ -134,4 +134,45 @@ export default {
     tips: ["ICC 段异常大 → 可能藏了数据，剥离前先 dump 出来查。此外剥 ICC 还能修某些「颜色显示不对」的题图。"],
     aka: ["icc剥离", "icc strip", "iccp", "色彩配置剥离", "ICC profile剥离", "iCCP块", "色彩配置文件", "icc profile strip", "去除icc", "icc色彩剥离"],
   },
+
+  arnoldCatBrute: {
+    what: "Arnold 猫脸暴破：当你不知道猫脸变换的参数（a/b/迭代次数）时，穷举全部组合逐个反向还原，把候选结果拼成一张网格图，肉眼扫一遍就能找到复原图。",
+    principle:
+      "参数化 Arnold 矩阵为 $\\begin{pmatrix}1&a\\\\b&ab+1\\end{pmatrix}\\bmod N$（行列式为 1，可逆）。正向 $\\begin{pmatrix}x'\\\\y'\\end{pmatrix}=M\\begin{pmatrix}x\\\\y\\end{pmatrix}$，反向用逆矩阵 $M^{-1}=\\begin{pmatrix}ab+1&-a\\\\-b&1\\end{pmatrix}$。暴力破解对 a、b、次数三个维度做嵌套遍历，每组参数把图逆变换并缩略排列到网格。",
+    usage: "上传正方形图，设定 a/b/次数的起止范围（默认 a:1-3、b:1-3、次数:1-5 共 45 组合），输出候选网格图。组合数上限 2000，别贪大。",
+    examples: [
+      { in: "置乱图", param: "a:1-3 b:1-3 次数:1-5", out: "45 格候选网格图", desc: "复原图在网格中的某格" },
+    ],
+    formulas: [
+      { tex: "M=\\begin{pmatrix}1&a\\\\b&ab+1\\end{pmatrix},\\ M^{-1}=\\begin{pmatrix}ab+1&-a\\\\-b&1\\end{pmatrix}\\pmod N", caption: "参数化 Arnold 矩阵与逆矩阵" },
+    ],
+    tips: ["题只给图没给参数 → 先默认范围扫一遍；出现边缘溢出/网格破碎的就是候选。a=b=1 是标准猫脸（退化情形）。图必须正方形。"],
+    aka: ["arnold暴破", "猫脸暴破", "arnold brute force", "猫脸破解", "arnold参数破解", "猫脸暴力破解", "arnold穷举", "猫脸穷举", "arnold crack", "猫脸还原"],
+  },
+
+  stegpy: {
+    what: "stegpy 隐写（stegv3）：stegpy 工具使用的隐写格式——把消息字节按位平面交错写进像素低位（1/2/4 位），帧头带 stegv3 魔数与长度，可选 PBKDF2+Fernet 密码加密。CTF 里 stegpy 藏过的图用它直接提。",
+    principle:
+      "宿主取图像 RGB 字节流（去 alpha，行序扁平）。位平面交错：设 divisor=8/bits，消息第 k 字节的每 bits 位组写入 host[k*divisor+i] 的低位（i=0..divisor-1），即字节流按 bits 位拆分后相隔 divisor 分布。首字节 bit4-5 存 bits 标记（1→0、2→16、4→32）。帧格式：`stegv3`(6B) + 消息长度(4B 大端) + 文件名长度(1B) + [文件名] + 消息。密码模式：PBKDF2-HMAC-SHA256 10 万次派生 32 字节密钥 → Fernet（AES-128-CBC+HMAC-SHA256）加密，salt 前置 16 字节。",
+    usage: "编码：上传载体图，填要藏的文本与位数（1/2/4），可选密码。解码：上传 stegpy 藏过的图，填密码（若有）即提消息；带文件名时提示文件名。",
+    examples: [
+      { in: "载体 PNG + 文本", param: "bits=2", out: "藏密 PNG", desc: "肉眼不可见的低位扰动" },
+      { in: "藏密 PNG", param: "密码（若有）", out: "隐藏消息/文件名", desc: "无密码提取报 stegv3 魔数缺失" },
+    ],
+    tips: ["stegpy 工具或教程题的图 → 直接本 op 提取，比通用 LSB 扫描靠谱。载体是 RGBA 时只取 RGB 三通道（与 stegpy 工具一致）。密码错会报 Fernet 校验失败。"],
+    aka: ["stegpy", "stegv3", "stegpy隐写", "stegpy提取", "stegv3隐写", "stegpy解密", "stegpy steganography", "stegpy解码", "stegpy工具", "fern隐写"],
+  },
+
+  stereogramSolver: {
+    what: "立体图求解：Autostereogram（单幅随机点立体图 SIRDS）把隐藏的深度信息编码在图案的水平重复周期里。把图像与自身做水平循环位移相减，正确 offset 下重复图案对齐处变暗、文字/形状的深度条纹显形。",
+    principle:
+      "对每个 offset：$\\text{diff}(x,y)=\\text{clip}(\\text{img}(x,y)-\\text{img}((x-\\text{offset})\\bmod w,\\ y),\\ 0,\\ 255)$（numpy.roll 语义的水平位移）。深度条纹 = 位移量与重复周期匹配的区域差为 0。offset 取 [-w/2, w/2]，自动扫描模式把各 offset 结果缩略拼成网格，肉眼找最清晰一张。",
+    usage: "上传立体图。知道偏移就填 offset 单值精确解；不知道就留空自动扫描（默认 -32..32 步进 2），在网格图里找对比最强烈、文字最清楚的那格。",
+    examples: [
+      { in: "SIRDS 随机点图", param: "offset=周期值", out: "显形条纹图", desc: "暗条纹处即隐藏内容" },
+      { in: "SIRDS 随机点图", param: "留空自动扫描", out: "网格候选图", desc: "最清晰格子的 offset 即周期" },
+    ],
+    tips: ["立体图题目基本都这个原理：图与自身平移相减。扫不到就调大扫描范围（步进可改 1）。无轮廓的随机点图也能出结果。"],
+    aka: ["立体图", "autostereogram", "sirds", "立体图求解", "stereogram", "随机点立体图", "立体图隐写", "stereogram solver", "3d立体图", "魔眼图"],
+  },
 };

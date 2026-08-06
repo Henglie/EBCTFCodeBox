@@ -124,6 +124,22 @@ export default {
   "op.md4.name": "MD4",
   "op.sha1.name": "SHA-1",
   "op.sha256.name": "SHA-256",
+
+  "op.shaLengthExtend.name": "SHA 길이 확장",
+
+  "op.birthdayCollision.name": "생일 충돌 데모",
+
+  "op.babaiCvp.name": "Babai Nearest Plane (CVP)",
+
+  "op.hnpRecover.name": "HNP Hidden Number Problem",
+
+  "op.spnAnalysis.name": "SPN Differential/Linear Analysis",
+
+  "op.md5CollisionShow.name": "MD5 Truncated Collision Demo",
+
+  "op.lweToy.name": "LWE Toy Encryption",
+
+  "op.ntruToy.name": "NTRU Toy Encryption",
   "op.sha384.name": "SHA-384",
   "op.sha3.name": "SHA-3",
   "op.fnv1a.name": "FNV-1a",
@@ -145,6 +161,8 @@ export default {
   "op.aes.name": "AES",
   "op.des.name": "DES",
   "op.des3.name": "3DES / TripleDES",
+
+  "op.cast128.name": "CAST-128",
   "op.rc4.name": "RC4",
   "op.xor.name": "XOR",
   "op.fernet.name": "Fernet",
@@ -499,6 +517,14 @@ export default {
   "op.lsbImage.name": "LSB 이미지 스테가노그래피",
   "op.pixelJihad.name": "PixelJihad",
   "op.arnoldCat.name": "아놀드 고양이 사상",
+
+  "op.arnoldCatBrute.name": "아놀드 고양이 지도 무차별 대입",
+
+  "op.stegpy.name": "stegpy 스테가노그래피 (stegv3)",
+
+  "op.stereogramSolver.name": "입체도 해독",
+
+  "op.ppencode.name": "ppencode",
   "op.imageBasic.name": "이미지 기본 작업",
 
  // ---- op names: radix/hash/stego new ops ----
@@ -658,6 +684,8 @@ export default {
   "op.cookieParse.name": "쿠키 파싱",
   "op.httpBasicAuth.name": "HTTP Basic 인증",
   "op.dataUriParse.name": "Data URI 파싱",
+
+  "op.mimeMultipart.name": "MIME 멀티파트 파서",
   "op.magnetParse.name": "마그넷 링크 파싱",
  // stego · confusables
   "op.confusablesSkeleton.name": "혼동 문자 골격",
@@ -808,6 +836,10 @@ export default {
   "op.emojiAes.name": "emoji-aes 암호화",
   "op.moyue.name": "마왈(魔曰, 수리수리 CN)",
   "op.prngAttack.name": "PRNG 크래커 (LCG / MT19937)",
+
+  "op.randu.name": "RANDU 약한 LCG",
+
+  "op.truncLcgRecover.name": "절단 LCG 시드 복구",
   "op.hashLengthExtension.name": "해시 길이 확장 (MD5)",
   "op.flagExtract.name": "flag 자동 추출기",
   "op.xorAnalyze.name": "xortool 올인원 (반복 키 XOR)",
@@ -820,6 +852,11 @@ export default {
   "op.spectrogram.name": "오디오 스펙트로그램 (STFT)",
   "op.lfsrRecover.name": "LFSR 수열 복원",
   "op.geffe.name": "Geffe 생성기 / 상관 공격",
+  "op.bfSwap.name": "Brainfuck·스왑 재실행",
+  "op.roar.name": "포효 번역기 (4문자 코덱)",
+  "op.crc32Reverse.name": "CRC32 역충돌",
+  "op.jsEscape.name": "JS escape 인코딩",
+  "op.bubblebabble.name": "BubbleBabble 인코딩",
   "op.rc4Visualize.name": "RC4 KSA/PRGA 시각화",
   "op.f5stego.name": "F5 JPEG 스테가노그래피 추출",
   "op.lllAttack.name": "LLL 격자 축소 공격",
@@ -837,6 +874,9 @@ export default {
   "op.ed25519.name": "Ed25519 서명 / 검증",
   "op.siphash.name": "SipHash 메시지 인증 코드",
   "op.scrypt.name": "scrypt 키 파생",
+  "op.balloon.name": "Balloon 키 파생",
+  "op.lyra2.name": "Lyra2 키 파생",
+  "op.yescrypt.name": "yescrypt 키 파생",
   "op.blake3.name": "BLAKE3 해시",
   "op.paillier.name": "Paillier 동형 암호",
   "op.schnorr.name": "Schnorr 서명 / 검증 / 공격",
@@ -849,6 +889,12 @@ export default {
   "op.md4.name": "MD4 해시",
   "op.pearson.name": "Pearson 해시",
   "op.whirlpool.name": "Whirlpool 해시",
+
+  "op.skein.name": "Skein",
+
+  "op.grostl.name": "Grøstl",
+
+  "op.jh.name": "JH",
   "op.streebog.name": "Streebog (GOST R 34.11-2012)",
   "op.threefish.name": "Threefish 조정가능 블록 암호",
   "op.skipjack.name": "Skipjack 블록 암호",
@@ -856,11 +902,21 @@ export default {
   "op.xxhash.name": "xxHash32 / xxHash64",
   "op.cityhash.name": "CityHash 비암호학적 해시",
   "op.a51.name": "A5/1 스트림 암호",
+  "op.a52.name": "A5/2 스트림 암호",
+  "op.mickey.name": "MICKEY-128 2.0 스트림 암호",
+  "op.e0.name": "E0 스트림 암호",
+  "op.hc128.name": "HC-128 스트림 암호",
+  "op.hc256.name": "HC-256 스트림 암호",
+  "op.sosemanuk.name": "Sosemanuk 스트림 암호",
+  "op.spritz.name": "Spritz 스트림 암호",
+  "op.vmpc.name": "VMPC 스트림 암호",
   "op.binhex.name": "BinHex 4.0 디코딩",
   "op.yenc.name": "yEnc 인코딩 / 디코딩",
   "op.xorshiftRecover.name": "xorshift 상태 복원",
   "op.shamir.name": "샤미르 비밀 분산 (Shamir)",
   "op.dsa.name": "DSA 서명 / 검증 / 공격",
+
+  "op.des2Mitm.name": "2DES 중간일치 공격",
   "op.mcLevelDat.name": "Minecraft level.dat 파서",
   "op.mcTextExtract.name": "Minecraft 텍스트 정보 추출기",
   "op.mcMapRender.name": "Minecraft 지도 렌더러",

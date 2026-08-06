@@ -147,9 +147,74 @@ function foyuDecode(text) {
 }
 
 // ============ 注册 ============
+// ---- 六十甲子编号映射版（era 模式，兼容参考实现：值 1-60 → chr(v+60)） ----
+// 标准 60 甲子表：idx 0-59 = 甲子..癸亥，序号 = idx+1
+const ERA_MAP = {};
+for (let i = 0; i < 60; i++) ERA_MAP[STEM_BRANCH[i]] = i + 1;
+// 参考实现字典的错别字兼容（值对字错）：王辰/王戌（壬的错字）、Z酉(22=乙酉)/Z巳(42=乙巳)、单字午(55)
+ERA_MAP["王辰"] = 29; ERA_MAP["王戌"] = 59; ERA_MAP["Z酉"] = 22; ERA_MAP["Z巳"] = 42; ERA_MAP["午"] = 55;
+
+// 中文（60 甲子，含错别字兼容）→ ASCII（'='~'x'，序号+60）
+function stemBranchEraEncode(text) {
+  const clean = String(text || "").replace(/[\s，。,.]/g, "");
+  if (!clean) return "";
+  if (clean.length % 2 !== 0) throw new Error("天干地支输入长度须为偶数");
+  let out = "";
+  for (let i = 0; i < clean.length; i += 2) {
+    const tk = clean.slice(i, i + 2);
+    const v = ERA_MAP[tk];
+    if (v === undefined) throw new Error("非法天干地支 token: " + tk);
+    out += String.fromCharCode(v + 60);
+  }
+  return out;
+}
+// ASCII → 中文（60 甲子）
+function stemBranchEraDecode(text) {
+  let out = "";
+  for (const ch of String(text || "")) {
+    const v = ch.charCodeAt(0) - 60;
+    if (v < 1 || v > 60) throw new Error("非法字符（需 ASCII '='~'x'）: " + ch);
+    out += STEM_BRANCH[v - 1];
+  }
+  return out;
+}
+
+function stemBranchOpEncode(text, p) {
+  const mode = (p && p.mode) || "auto";
+  if (mode === "era") return stemBranchEraEncode(text);
+  return stemBranchEncode(text); // auto/base60 同默认大整数版
+}
+
+function stemBranchOpDecode(text, p) {
+  const mode = (p && p.mode) || "auto";
+  const clean = String(text || "").replace(/[\s，。,.]/g, "");
+  if (!clean) return "";
+  const isAsciiEra = /^[\x3d-\x78]+$/.test(clean); // '='~'x'（era 密文字符集）
+  if (mode === "era") {
+    return isAsciiEra ? stemBranchEraDecode(clean) : stemBranchEraEncode(clean);
+  }
+  // auto：ASCII → era 逆；中文先 base60（默认），失败（含错别字）→ era 兼容表
+  if (isAsciiEra) return stemBranchEraDecode(clean);
+  try {
+    return stemBranchDecode(text);
+  } catch (e) {
+    try { return stemBranchEraEncode(clean); }
+    catch (e2) { throw e; }
+  }
+}
+
 register({
-  id: "stemBranch", cat: "cn", name: "天干地支", desc: "六十甲子 base60（STEM_BRANCH 表，UTF-8 大整数）",
-  encode: stemBranchEncode, decode: stemBranchDecode,
+  id: "stemBranch", cat: "cn", name: "天干地支",
+  desc: "六十甲子编码（mode 切 base60 大整数 / era 编号映射；era 兼容参考实现错别字字典并自动检测）",
+  params: [
+    { key: "mode", label: "模式", type: "select", default: "auto",
+      options: [
+        { value: "auto", label: "auto（解码自动检测：ASCII=era 逆，中文先 base60，错别字自动回落 era）" },
+        { value: "base60", label: "base60（UTF-8 大整数）" },
+        { value: "era", label: "era（60 甲子编号映射 + 错别字兼容）" },
+      ] },
+  ],
+  encode: stemBranchOpEncode, decode: stemBranchOpDecode,
   detect: (t) => {
     const clean = t.replace(/\s/g, "");
     if (!clean || clean.length % 2 !== 0 || clean.length < 4) return 0;

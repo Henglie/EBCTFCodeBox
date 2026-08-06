@@ -17,6 +17,7 @@
 // 注意：为兼容 registry 的 (text, p) 签名，图像类 op 的 text 参数实际是 base64 dataURL
 // UI 层在 app.js 里特殊处理（文件上传 → dataURL → canvas → imageData → 调 op → 输出 dataURL）。
 import { register } from "./registry.js";
+import { dataURLToBytes, decodePNG, rgbaToDataURL } from "./stegoPixels.js";
 
 // ============ lsbImage：通用 LSB 像素隐写 ============
 // 每 channel 最低位藏 1 bit，前 32 bit 存消息字节长度（big-endian）
@@ -253,24 +254,25 @@ function arnoldCatTransform(imageData, p = {}) {
   }
   const iterations = Math.max(1, Number(p.iterations) || 1);
   const decode = !!p.decode;
+  const a = Number(p.a) || 1;
+  const b = Number(p.b) || 1;
   const data = imageData.data;
  // 复制源数据
   const src = new Uint8ClampedArray(data);
- // Arnold 变换是周期性的，decode = 正向 (period - iterations) 次
- // 但算 period 较复杂，此处用反向变换：(x,y) → (2x-y mod N, -x+y mod N)
+ // 通用 Arnold 矩阵 [[1,a],[b,ab+1]]（det=1 可逆）。a=b=1 时退化为标准版。
+ // 正向：新坐标 = M·(x,y)；反向 = M⁻¹·(x,y)。
+ // 与参考实现（参数化猫脸变换）一致：正向 nx=(x+a*y)%N、ny=(b*x+(ab+1)*y)%N，
+ // 反向 nx=((ab+1)*x-a*y)%N、ny=(y-b*x)%N。像素写入方向 dst[(ny,nx)] = src[(y,x)]。
   for (let it = 0; it < iterations; it++) {
     for (let y = 0; y < n; y++) {
       for (let x = 0; x < n; x++) {
         let nx, ny;
         if (decode) {
- // 反向：(x,y) ← (2x-y, -x+y) mod N，即原 (nx,ny) → (x,y) 是正向
- // 所以反向是把 (x,y) 处的源数据放到 (2x-y mod N, -x+y mod N)
-          nx = ((2 * x - y) % n + n) % n;
-          ny = ((-x + y) % n + n) % n;
+          nx = (((a * b + 1) * x - a * y) % n + n) % n;
+          ny = ((y - b * x) % n + n) % n;
         } else {
- // 正向：(x,y) → (x+y, x+2y) mod N
-          nx = (x + y) % n;
-          ny = (x + 2 * y) % n;
+          nx = ((x + a * y) % n + n) % n;
+          ny = ((b * x + (a * b + 1) * y) % n + n) % n;
         }
         const srcIdx = (y * n + x) * 4;
         const dstIdx = (ny * n + nx) * 4;
@@ -562,12 +564,103 @@ register({
 
 register({
   id: "arnoldCat", cat: "stego", name: "Arnold 猫脸变换",
-  desc: "Arnold 猫脸变换置乱（正方形图像，N×N 周期性置换）",
+  desc: "Arnold 猫脸变换置乱（正方形图像，参数化矩阵 [[1,a],[b,ab+1]]，a=b=1 为标准版）",
   params: [
     { key: "iterations", label: "迭代次数", type: "number", default: 1, placeholder: "1-100" },
+    { key: "a", label: "参数 a", type: "number", default: 1, placeholder: "矩阵 [[1,a],[b,ab+1]]" },
+    { key: "b", label: "参数 b", type: "number", default: 1, placeholder: "矩阵 [[1,a],[b,ab+1]]" },
     { key: "decode", label: "反向还原", type: "bool", default: false },
   ],
   run: arnoldCatOp, // 单向（decode 用 decode:true 参数）
+  acceptsBytes: true,
+});
+
+// ---- Arnold 全参数暴力破解（a/b/次数三维遍历 → 候选网格拼图） ----
+function arnoldCatBruteOp(text, p = {}) {
+  const aStart = Math.max(1, Number(p.aStart) || 1);
+  const aEnd = Math.max(aStart, Number(p.aEnd) || 3);
+  const bStart = Math.max(1, Number(p.bStart) || 1);
+  const bEnd = Math.max(bStart, Number(p.bEnd) || 3);
+  const tStart = Math.max(1, Number(p.tStart) || 1);
+  const tEnd = Math.max(tStart, Number(p.tEnd) || 5);
+  const total = (aEnd - aStart + 1) * (bEnd - bStart + 1) * (tEnd - tStart + 1);
+  if (total > 2000) {
+    throw new Error("候选组合 " + total + " 超过上限 2000，请缩小范围（暴破结果全生成拼图，太多会卡）");
+  }
+  // 纯 JS 像素管线（node 可测）：dataURL → PNG 解码 → 逐组合逆变换 → 缩略拼图 → PNG 输出
+  let imageData;
+  try {
+    imageData = decodePNG(dataURLToBytes(text));
+  } catch (e) {
+    throw new Error("图像解码失败（暴破走纯 JS PNG 管线）：" + e.message);
+  }
+  const src = new Uint8ClampedArray(imageData.data);
+  const n = imageData.width;
+  if (n !== imageData.height) throw new Error("Arnold 暴破需要正方形图像");
+    // 候选缩略图（最近邻，固定高 96px）
+    const THUMB_H = 96;
+    const thScale = THUMB_H / n;
+    const tw = Math.max(1, Math.round(n * thScale));
+    const thumbs = [];
+    for (let a = aStart; a <= aEnd; a++) {
+      for (let b = bStart; b <= bEnd; b++) {
+        for (let t = tStart; t <= tEnd; t++) {
+          const cand = arnoldCatTransform(
+            { width: n, height: n, data: new Uint8ClampedArray(src) },
+            { iterations: t, a, b, decode: true }
+          );
+          // 缩略
+          const th = new Uint8ClampedArray(tw * THUMB_H * 4);
+          for (let y = 0; y < THUMB_H; y++) {
+            const sy = Math.min(n - 1, Math.floor(y / thScale));
+            for (let x = 0; x < tw; x++) {
+              const sx = Math.min(n - 1, Math.floor(x / thScale));
+              const si = (sy * n + sx) * 4;
+              const di = (y * tw + x) * 4;
+              th[di] = cand.data[si]; th[di + 1] = cand.data[si + 1];
+              th[di + 2] = cand.data[si + 2]; th[di + 3] = cand.data[si + 3];
+            }
+          }
+          thumbs.push(th);
+        }
+      }
+    }
+    // 网格拼图：每行 10 张，行间 6px 白缝，列间 6px 缝
+    const perRow = Math.min(10, thumbs.length);
+    const gap = 6;
+    const gridW = perRow * tw + (perRow + 1) * gap;
+    const rows = Math.ceil(thumbs.length / perRow);
+    const gridH = rows * THUMB_H + (rows + 1) * gap;
+    const grid = new Uint8ClampedArray(gridW * gridH * 4);
+    for (let i = 0; i < grid.length; i += 4) { grid[i] = 255; grid[i + 1] = 255; grid[i + 2] = 255; grid[i + 3] = 255; }
+    thumbs.forEach((th, idx) => {
+      const row = Math.floor(idx / perRow);
+      const col = idx % perRow;
+      const ox = gap + col * (tw + gap);
+      const oy = gap + row * (THUMB_H + gap);
+      for (let y = 0; y < THUMB_H; y++) {
+        for (let x = 0; x < tw; x++) {
+          const si = (y * tw + x) * 4;
+          const di = ((oy + y) * gridW + (ox + x)) * 4;
+          grid[di] = th[si]; grid[di + 1] = th[si + 1]; grid[di + 2] = th[si + 2]; grid[di + 3] = th[si + 3];
+        }
+      }
+    });
+  return rgbaToDataURL(grid, gridW, gridH);
+}
+
+register({
+  id: "arnoldCatBrute", cat: "stego", name: "Arnold 猫脸暴破",
+  desc: "全参数暴力破解：a/b/迭代次数三维范围遍历反向还原，候选缩略图网格拼图输出（随参数范围增大耗时线性增长）",
+  params: [
+    { key: "aStart", label: "a 起始", type: "number", default: 1 },
+    { key: "aEnd", label: "a 结束", type: "number", default: 3 },
+    { key: "bStart", label: "b 起始", type: "number", default: 1 },
+    { key: "bEnd", label: "b 结束", type: "number", default: 3 },
+    { key: "tStart", label: "次数起始", type: "number", default: 1 },
+    { key: "tEnd", label: "次数结束", type: "number", default: 5 },
+  ],
+  run: arnoldCatBruteOp,
   acceptsBytes: true,
 });
 
@@ -1076,7 +1169,7 @@ register({
 export {
   lsbImageEncode, lsbImageDecode,
   pixelJihadEncode, pixelJihadDecode,
-  arnoldCatTransform,
+  arnoldCatTransform, arnoldCatBruteOp,
   imageBasicTransform,
   dataURLToImageData, imageDataToDataURL,
   PJ_MAX_MESSAGE_SIZE,

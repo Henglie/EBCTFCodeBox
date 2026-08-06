@@ -764,6 +764,89 @@ function pcapIcmpPayloadRun(text, p = {}) {
 }
 
 // ============================================================
+// 文件拖入自动分析：analyzePcapBytes(bytes) → sections[]
+// 拖入 pcap/pcapng 时由 fileAnalysis.js 调用，一键跑完 4 项协议级分析
+// （TCP 重组 / HTTP 提取 / DNS 隧道 / ICMP 载荷），免去用户手动逐个 op 跑。
+// 复用 run 函数的完整格式化逻辑（列表模式），纯函数零 UI 依赖。
+// ============================================================
+const FLAG_RE = /(flag|ctf|key)\{[^}]+\}/i;
+
+export function analyzePcapBytes(bytes) {
+  const u8a = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const sections = [];
+
+  // 概览：解析一次统计协议分布 + 时间跨度
+  const res = decodePcap("", "auto", { rawBytes: u8a });
+  if (res.error) {
+    sections.push({
+      id: "pcap-error", title: "PCAP 解析失败",
+      level: "warn", icon: "warning",
+      body: res.error,
+    });
+    return sections;
+  }
+  const { container, dissected } = res;
+
+  const protoCount = {};
+  let tsMin = Infinity, tsMax = -Infinity;
+  for (const d of dissected) {
+    const l3 = d.layers && d.layers.l3;
+    const l4 = d.layers && d.layers.l4;
+    const proto = l4 ? l4.type : (l3 ? l3.type : "other");
+    protoCount[proto] = (protoCount[proto] || 0) + 1;
+    if (d.tsSec != null) {
+      if (d.tsSec < tsMin) tsMin = d.tsSec;
+      if (d.tsSec > tsMax) tsMax = d.tsSec;
+    }
+  }
+  const protoLine = Object.entries(protoCount)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `${k}(${v})`)
+    .join(" / ");
+  const overviewLines = [];
+  overviewLines.push("容器: " + (container.format || "pcap/pcapng"));
+  overviewLines.push("链路类型: " + (container.linkType != null ? container.linkType : "—"));
+  overviewLines.push("总包数: " + dissected.length);
+  if (protoLine) overviewLines.push("协议分布: " + protoLine);
+  if (tsMin !== Infinity && tsMax > tsMin) {
+    overviewLines.push("时间跨度: " + (tsMax - tsMin) + " 秒");
+  }
+  sections.push({
+    id: "pcap-overview", title: "流量概览",
+    level: "info", icon: "analytics",
+    body: overviewLines.join("\n"),
+  });
+
+  // 4 项协议级分析：复用 run 函数（列表模式，不传 flowIndex/dumpIndex → 摘要不爆量）
+  const analyses = [
+    { id: "pcap-tcp", title: "TCP 流重组", icon: "swap_horiz", fn: pcapTcpReassembleRun, skipKw: ["未发现 TCP 段"] },
+    { id: "pcap-http", title: "HTTP 对象提取", icon: "language", fn: pcapHttpExtractRun, skipKw: ["未发现 TCP", "未解析出 HTTP"] },
+    { id: "pcap-dns", title: "DNS 隧道检测", icon: "dns", fn: pcapDnsTunnelRun, skipKw: ["未发现 DNS", "无 DNS"] },
+    { id: "pcap-icmp", title: "ICMP 载荷提取", icon: "sensors", fn: pcapIcmpPayloadRun, skipKw: ["未发现 ICMP", "无 ICMP"] },
+  ];
+  for (const a of analyses) {
+    let text;
+    try {
+      text = a.fn("", { rawBytes: u8a });
+    } catch (e) {
+      text = "分析异常: " + (e && e.message ? e.message : String(e));
+    }
+    if (typeof text !== "string" || !text.trim()) continue;
+    // 无数据结果跳过（短文本才跳，长文本可能有诊断价值保留）
+    if (a.skipKw.some((kw) => text.includes(kw)) && text.length < 80) continue;
+    const hasFlag = FLAG_RE.test(text);
+    sections.push({
+      id: a.id, title: a.title,
+      level: hasFlag ? "alert" : "info",
+      icon: hasFlag ? "flag" : a.icon,
+      body: text,
+    });
+  }
+
+  return sections;
+}
+
+// ============================================================
 // 注册
 // ============================================================
 register({

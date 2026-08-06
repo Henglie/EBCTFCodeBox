@@ -349,4 +349,17 @@ export default {
     ],
     aka: ["pollard p-1", "p减1分解", "pollard p minus 1", "p-1算法", "光滑数分解", "b-smooth", "pollard p-1 factorization", "费马小定理分解", "p-1光滑", "smooth factoring", "波拉德p-1", "rsa p-1攻击", "p-1 method"],
   },
+
+  des2Mitm: {
+    what: "2DES meet-in-the-middle attack: C = DES_k2(DES_k1(P)) looks like 112-bit security, but MITM reduces it to ~2^56 × 2 (with b-bit halves: 2^b × 2). CTF 2DES challenges usually constrain the keys to a small space; this op brute-recovers (k1, k2).",
+    principle:
+      "MITM: build a forward table { DES_k1(P) → k1 } over all k1 (2^b entries), then for each k2 compute DES_k2⁻¹(C) and look it up; hits are candidates. Verify each candidate with the full chain C'=DES_k2(DES_k1(P)) to filter table collisions. Complexity drops from 2^(2b) to 2^b × 2.\n\n" +
+      "Key encoding: k1/k2 each occupy keyBits bits (default 16), big-endian into 8 bytes for DES. Note DES ignores the parity bit (bit 0) of each byte — the recovered key may be an equivalent (e.g. 0x619F ≈ 0x609E).",
+    usage: "Input format: plaintext-hex space ciphertext-hex (8 bytes each). keyBits controls each half's key space (default 16, ≤20). Outputs the matching key pairs + timing.",
+    examples: [
+      { in: "0123456789abcdef ciphertext-hex", param: "keyBits=16", out: "hit: k1=... k2=...", desc: "recovers both keys (parity-bit tolerance)" },
+    ],
+    tips: ["Never use 2DES — MITM makes it barely stronger than single DES; CTF setters often shrink the key space to brute-forceable size. Try keyBits from small to large until it solves.", "Multiple hits are normal (DES parity bits + table collisions); the full-chain check filters false positives."],
+    aka: ["2des攻击", "中间相遇", "meet in the middle", "2des破解", "双重des", "2des mitm", "中间相遇攻击", "双des攻击", "2des破解工具", "des2攻击", "meet-in-the-middle", "2des密码分析", "2des密钥恢复", "双重加密攻击", "2des爆破"],
+  },
 };

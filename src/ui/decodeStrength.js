@@ -29,7 +29,7 @@ import {
   deleteProfile,
   exportProfiles,
   importProfiles,
-  listBruteOps,
+  bruteOpGroup,
   isBruteOp,
 } from "../core/decodeProfile.js";
 import { icon as iconSvg } from "./icons.js";
@@ -238,51 +238,6 @@ export function openDecodeStrength(opt = {}) {
       depthRow,
     ));
 
-    // ---- 暴力爆破算法（独立池，勾选后单独归组跑，不进主排序）----
-    const bruteList = listBruteOps();
-    if (bruteList.length) {
-      const bruteGrid = el("div", { class: "ds-brute-grid" });
-      const bruteCount = el("span", { class: "ds-brute-count" });
-      const syncBruteCount = () => {
-        bruteCount.textContent = t("ui.ds.bruteCount", work.bruteIds.size, bruteList.length);
-      };
-      for (const b of bruteList) {
-        const cb = el("input", { type: "checkbox", class: "ds-cb", "data-brute-id": b.id });
-        cb.checked = work.bruteIds.has(b.id);
-        cb.addEventListener("change", () => {
-          if (cb.checked) work.bruteIds.add(b.id); else work.bruteIds.delete(b.id);
-          syncBruteCount();
-        });
-        bruteGrid.append(el("label", { class: "ds-op-row ds-brute-row" },
-          cb,
-          el("span", { class: "ds-op-name" }, b.name),
-          el("span", { class: "ds-op-id" }, b.id),
-        ));
-      }
-      const bruteAll = el("button", { class: "ds-mini", type: "button" }, t("ui.ds.selectAll"));
-      const bruteNone = el("button", { class: "ds-mini", type: "button" }, t("ui.ds.selectNone"));
-      bruteAll.addEventListener("click", () => {
-        for (const b of bruteList) work.bruteIds.add(b.id);
-        for (const cb of bruteGrid.querySelectorAll(".ds-cb")) cb.checked = true;
-        syncBruteCount();
-      });
-      bruteNone.addEventListener("click", () => {
-        work.bruteIds.clear();
-        for (const cb of bruteGrid.querySelectorAll(".ds-cb")) cb.checked = false;
-        syncBruteCount();
-      });
-      syncBruteCount();
-      body.append(el("div", { class: "ds-sec ds-sec-brute" },
-        el("div", { class: "ds-sec-head" },
-          el("div", { class: "ds-sec-title" }, msym("bolt"), t("ui.ds.brute.title")),
-          bruteCount,
-        ),
-        el("div", { class: "ds-sec-note" }, t("ui.ds.brute.note")),
-        el("div", { class: "ds-mini-row" }, bruteAll, bruteNone),
-        bruteGrid,
-      ));
-    }
-
     // ---- 搜索 + 批量 ----
     const search = el("input", { type: "text", class: "ds-search", placeholder: t("ui.ds.search"), spellcheck: "false" });
     const allBtn = el("button", { class: "ds-mini", type: "button" }, t("ui.ds.selectAll"));
@@ -294,22 +249,32 @@ export function openDecodeStrength(opt = {}) {
     ));
 
     // ---- op 列表（分类折叠 + 按需渲染 + 独立滚动条）----
+    // 把「暴力爆破（独立通道）」作为虚拟分类 prepend 到列表最前，
+    // 与普通 op 共用同一折叠/搜索/勾选 UI（用户期望 brute 不再独立成块）。
+    // 该分组的勾选状态走 work.bruteIds（与 work.ids 分开存，runOneKey 仍按独立通道跑）。
+    const bruteGroup = bruteOpGroup();
+    const poolWithBrute = bruteGroup.ops.length ? [bruteGroup, ...pool] : pool;
     const list = el("div", { class: "ds-list" });
     body.append(list);
 
-    // catId → { rowsHost, built, opsShown }
+    // catId → { rowsHost, built, opsShown, idSet }
+    // idSet 指向 work.ids（普通分类）或 work.bruteIds（brute 虚拟分类），分组内增删互不串味。
     const groups = new Map();
 
+    const syncCountLine = () => {
+      const n = work.ids.size + work.bruteIds.size;
+      countLine.textContent = t("ui.ds.opsCount", n, total + bruteGroup.ops.length);
+    };
     const markCustom = () => {
       if (work.level !== "custom") {
         work.level = "custom";
         slider.value = String(STRENGTH_LEVELS.length);
         syncLevelText();
       }
-      countLine.textContent = t("ui.ds.opsCount", work.ids.size, total);
+      syncCountLine();
     };
 
-    function buildRows(g, host, filter) {
+    function buildRows(g, host, filter, idSet) {
       host.innerHTML = "";
       const q = (filter || "").trim().toLowerCase();
       const ops = q
@@ -317,27 +282,31 @@ export function openDecodeStrength(opt = {}) {
         : g.ops;
       for (const o of ops) {
         const cb = el("input", { type: "checkbox", class: "ds-cb" });
-        cb.checked = work.ids.has(o.id);
+        cb.checked = idSet.has(o.id);
         cb.dataset.opId = o.id;
+        cb.dataset.brute = g.cat === "_brute" ? "1" : "0";
         cb.addEventListener("change", () => {
-          if (cb.checked) work.ids.add(o.id); else work.ids.delete(o.id);
-          markCustom();
+          if (cb.checked) idSet.add(o.id); else idSet.delete(o.id);
+          // brute 通道勾选不触发 markCustom（brute 不归档，level 含义不变），仅同步计数。
+          if (g.cat === "_brute") syncCountLine(); else markCustom();
         });
         host.append(el("label", { class: "ds-op-row" },
           cb,
           el("span", { class: "ds-op-name" }, o.name || o.id),
           el("span", { class: "ds-op-id" }, o.id),
-          el("span", { class: "ds-op-tier", title: t("ui.ds.tier") }, "T" + o.tier),
+          el("span", { class: "ds-op-tier", title: t("ui.ds.tier") }, g.cat === "_brute" ? "爆" : "T" + o.tier),
         ));
       }
       if (!ops.length) host.append(el("div", { class: "ds-empty" }, "—"));
     }
 
-    for (const g of pool) {
+    for (const g of poolWithBrute) {
+      const isBrute = g.cat === "_brute";
+      const idSet = isBrute ? work.bruteIds : work.ids;
       const rowsHost = el("div", { class: "ds-cat-rows" });
       const countBadge = el("span", { class: "ds-cat-count" });
       const syncBadge = () => {
-        const on = g.ops.filter((o) => work.ids.has(o.id)).length;
+        const on = g.ops.filter((o) => idSet.has(o.id)).length;
         countBadge.textContent = on + "/" + g.ops.length;
         countBadge.classList.toggle("partial", on > 0 && on < g.ops.length);
         countBadge.classList.toggle("full", on === g.ops.length && on > 0);
@@ -345,29 +314,30 @@ export function openDecodeStrength(opt = {}) {
       syncBadge();
 
       const catCb = el("input", { type: "checkbox", class: "ds-cb ds-cat-cb" });
-      catCb.checked = g.ops.every((o) => work.ids.has(o.id));
+      catCb.checked = g.ops.every((o) => idSet.has(o.id));
       catCb.addEventListener("click", (e) => e.stopPropagation());
       catCb.addEventListener("change", () => {
-        for (const o of g.ops) { if (catCb.checked) work.ids.add(o.id); else work.ids.delete(o.id); }
+        for (const o of g.ops) { if (catCb.checked) idSet.add(o.id); else idSet.delete(o.id); }
         // 已展开的行同步 checked
         for (const cb of rowsHost.querySelectorAll(".ds-cb")) cb.checked = catCb.checked;
         syncBadge();
-        markCustom();
+        if (isBrute) syncCountLine(); else markCustom();
       });
 
       const caret = msym("chevron_right", "ds-caret");
-      const head = el("button", { class: "ds-cat-head", type: "button", "aria-expanded": "false" },
+      const head = el("button", { class: "ds-cat-head" + (isBrute ? " ds-cat-head-brute" : ""), type: "button", "aria-expanded": "false" },
         caret,
+        isBrute ? msym("bolt", "ds-cat-brute-icon") : null,
         el("span", { class: "ds-cat-name" }, catLabel(g.cat, g.catName)),
         countBadge,
       );
-      const wrap = el("div", { class: "ds-cat" }, el("div", { class: "ds-cat-headrow" }, catCb, head), rowsHost);
-      const state = { built: false, open: false, rowsHost, syncBadge, catCb, g, head, wrap };
+      const wrap = el("div", { class: "ds-cat" + (isBrute ? " ds-cat-brute" : "") }, el("div", { class: "ds-cat-headrow" }, catCb, head), rowsHost);
+      const state = { built: false, open: false, rowsHost, syncBadge, catCb, g, head, wrap, idSet, isBrute };
       head.addEventListener("click", () => {
         state.open = !state.open;
         wrap.classList.toggle("open", state.open);
         head.setAttribute("aria-expanded", state.open ? "true" : "false");
-        if (state.open && !state.built) { buildRows(g, rowsHost, search.value); state.built = true; }
+        if (state.open && !state.built) { buildRows(g, rowsHost, search.value, idSet); state.built = true; }
       });
       groups.set(g.cat, state);
       list.append(wrap);
@@ -375,25 +345,30 @@ export function openDecodeStrength(opt = {}) {
 
     function refreshAllChecks() {
       for (const st2 of groups.values()) {
-        st2.catCb.checked = st2.g.ops.every((o) => work.ids.has(o.id));
+        st2.catCb.checked = st2.g.ops.every((o) => st2.idSet.has(o.id));
         st2.syncBadge();
         if (st2.built) {
           for (const cb of st2.rowsHost.querySelectorAll(".ds-cb")) {
-            cb.checked = work.ids.has(cb.dataset.opId);
+            cb.checked = st2.idSet.has(cb.dataset.opId);
           }
         }
       }
-      countLine.textContent = t("ui.ds.opsCount", work.ids.size, total);
+      syncCountLine();
     }
 
     allBtn.addEventListener("click", () => {
-      for (const g of pool) for (const o of g.ops) work.ids.add(o.id);
+      // 全选 = 普通分类全进 work.ids + brute 分类全进 work.bruteIds
+      for (const g of poolWithBrute) {
+        const idSet = g.cat === "_brute" ? work.bruteIds : work.ids;
+        for (const o of g.ops) idSet.add(o.id);
+      }
       refreshAllChecks(); markCustom();
     });
     noneBtn.addEventListener("click", () => {
-      work.ids.clear(); refreshAllChecks(); markCustom();
+      work.ids.clear(); work.bruteIds.clear(); refreshAllChecks(); markCustom();
     });
     resetBtn.addEventListener("click", () => {
+      // 按档重置只影响普通 op（work.ids），brute 通道保留用户勾选（不归档）
       const lv = work.level === "custom" ? "normal" : work.level;
       work.ids = opsForLevel(lv, "text");
       work.level = lv;

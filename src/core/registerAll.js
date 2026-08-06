@@ -51,6 +51,7 @@ import "./hashCrack.js"; // 哈希爆破/彩虹表组（哈希类型识别 + 字
 import "./cryptanalysis.js"; // 密码分析工具组（频率分析/IC/Kasiski/卡方/单表替换求解/凯撒求位移）
 import "./cryptanalysis2.js"; // 密码分析扩展（维吉尼亚全自动/Hill已知明文/Playfair爬山）
 import "./cryptoTryAll.js"; // 密钥+密文一键尝试（枚举 AES/DES/3DES/RC4/XOR/Fernet × 模式 × 编码试解）
+import "./webshell.js"; // webshell 流量解密预设（哥斯拉 PHP_XOR_BASE64 / 冰蝎 AES-ECB，固定 key 封装）
 import "./qrcode.js"; // 二维码/条码组（QR 生成/结构解析 + Aztec/DataMatrix 识别 + 条码判定）
 import "./qrdecode.js"; // QR 真解码组（矩阵→原文：finder/格式信息/之字形取数/掩码还原/RS 纠错/模式解码）
 import "./keyboardExt.js"; // 键盘/布局编码补全组（QWERTY↔Dvorak↔Colemak + T9 + 多击 + 行列坐标 + Steno + 方向键）
@@ -157,9 +158,8 @@ import "./moyue.js"; // 魔曰 moyue（cn, 双向, vendored abracadabra-cn v3.7.
 import "./mcSave.js"; // Minecraft 存档分析地基 mcLevelDat（analysis, run, 自写大端序 NBT 解析器 + level.dat 摘要, 无 detect）
 import "./mcText.js"; // Minecraft 文本情报提取 mcTextExtract（analysis, run, Anvil MCA + 复用 mcSave NBT 解析器, 抽告示牌/书/命令/CustomName/物品名, flag 高亮, 无 detect）
 import "./mcMap.js"; // Minecraft 地图物品渲染 mcMapRender（analysis, run, map_#.dat gzip NBT → data.colors 128×128 → MC 调色板 → 手写 PNG dataURL, 无 detect）
-import "./webshell.js"; // webshell 流量解密预设（哥斯拉 PHP_XOR_BASE64 / 冰蝎 AES-ECB，固定 key 封装，无 detect）
 import "./bin2img.js"; // 二进制转图片 bin2img（stego, run, 0/1 位流 → 黑白点阵 PNG dataURL, 复用 mcMap encodePNG, 无 detect）
-import "./imgFft.js"; // 图像 2D FFT 幅度谱 imgFft（stego, run, acceptsBytes, PNG/BMP 灰度重采样 2 幂 + 行列 FFT + fftshift + log 幅度谱 → PNG dataURL, 复用 lsbExtract/mcMap, 无 detect）
+import "./imgFft.js"; // 图像 2D FFT 幅度谱 imgFft（stego, run, acceptsBytes, PNG/BMP → 灰度 → 行列 FFT → log 幅度谱 fftshift → PNG dataURL, 复用 lsbExtract/mcMap, 无 detect）
 import "./mcNbt.js"; // Minecraft 通用 NBT 树查看器 mcNbtView（analysis, run, 复用 mcSave 解析器 + pcapParse inputToBytes, 折叠树/路径过滤/BigInt 不丢精度, 无 detect）
 import "./formatSniff.js"; // 格式嗅探 formatSniff（analysis, run, 剪贴板内容识别：JWT/URL/PEM/hash/base系/Python/时间戳/坐标/助记词/ETH/BTC 特征识别, 无 detect）
 import "./bcrypt.js"; // Bcrypt 口令哈希/校验 bcrypt（hash, run, 自带 π 常量 EksBlowfish + Radix-64, 不碰 modernExt2）
@@ -174,39 +174,70 @@ import "./simonSpeck.js"; // NSA Simon/Speck 轻量分组密码 simonSpeck（mod
 import "./knapsack.js"; // 背包加密 Merkle-Hellman knapsack（modern, 双向, BigInt 超递增背包, 无 detect）
 import "./dsa.js"; // DSA 签名/验签/重用k攻击 dsa（crypto, run, FIPS 186 + 内置纯 JS SHA-1, 无 detect）
 import "./shamir.js"; // Shamir 秘密共享 shamir（crypto, 双向, GF(2^8) 拉格朗日插值, split→combine 往返验证, 无 detect）
-import "./a51.js"; // GSM A5/1 流密码 a51（modern, 双向自反, 三 LFSR 19/22/23 多数表决钟控, Briceno/Goldberg/Wagner 官方向量验证, 无 detect）
-import "./ecdsaReuseK.js"; // ECDSA nonce 重用攻击 ecdsaReuseK（crypto, run, 纯数论恢复 k+私钥 d + 内置 secp256k1/P-256 EC 点乘公钥校验消歧, 自造签名验证, 无 detect）
-import "./rabin.js"; // Rabin 密码 rabin（crypto, 双向, p,q≡3mod4 平方根 4 解, 往返验证, 无 detect）
-import "./x25519.js"; // X25519 密钥交换 x25519（crypto, run, RFC 7748 Montgomery ladder, 官方向量验证, 无 detect）
-import "./ed25519.js"; // Ed25519 签名/验签 ed25519（crypto, run, RFC 8032 EdDSA, Node 原生对拍验证, 无 detect）
-import "./siphash.js"; // SipHash-2-4 MAC siphash（hash, run, 官方 vectors_sip64 8 向量验证, 无 detect）
-import "./scrypt.js"; // scrypt 口令 KDF scrypt（crypto, run async, RFC 7914 + Node scryptSync 对拍 5 向量验证, 无 detect）
-import "./blake3.js"; // BLAKE3 哈希 blake3（hash, run, 官方 10 向量含多 chunk 树边界 1024/1025/2048/3072 验证, 无 detect）
-import "./paillier.js"; // Paillier 加法同态加密 paillier（crypto, run, decrypt(encrypt)=m + 同态性质 E(m1)·E(m2)=E(m1+m2) 验证, 无 detect）
-import "./schnorr.js"; // Schnorr 签名 schnorr（crypto, run, secp256k1 + 内嵌 SHA-256, sign/verify + nonce 重用恢复 d/k 验证, 无 detect）
-import "./magma.js"; // GOST Magma 分组密码 magma（modern, 双向, GOST R 34.12-2015 32轮 Feistel, 官方 §A.2 向量验证, 无 detect）
-import "./present.js"; // PRESENT 轻量分组密码 present（modern, 双向, PRESENT-80 31轮 SPN, 官方论文 4 向量验证, 无 detect）
-import "./serpent.js"; // Serpent 分组密码 serpent（modern, 双向, AES 竞赛亚军 32轮 SPN, 128/192/256位密钥, NESSIE 514 向量全过, 无 detect）
-import "./aria.js"; // ARIA 分组密码 aria（modern, 双向, 韩国标准 KS X 1213/RFC 5794, 128位分组 128/192/256位密钥, RFC 5794 附录A 三向量验证, 无 detect）
-import "./seed.js"; // SEED 分组密码 seed（modern, 双向, 韩国 KISA 标准 RFC 4269, 128位分组 128位密钥 16轮 Feistel, RFC 4269 附录B 两向量+中间轮密钥验证, 无 detect）
-import "./camellia.js"; // Camellia 分组密码 camellia（modern, 双向, NTT/三菱 RFC 3713, 128位分组 128/192/256位密钥 18/24轮, RFC 3713 附录C 三向量+参考实现逐段对拍, 无 detect）
-import "./pearson.js"; // Pearson 哈希 pearson（hash, run, 8-bit 逐字节查表, 表为 0-255 合法排列 + 确定性自检, 无 detect）
-import "./whirlpool.js"; // Whirlpool 哈希 whirlpool（hash, run, ISO/IEC 10118-3 512-bit Miyaguchi-Preneel, 官方 8 向量验证, 无 detect）
-import "./streebog.js"; // Streebog 哈希 streebog（hash, run, 俄罗斯国标 GOST R 34.11-2012/RFC 6986, 512/256 位, RFC §10 三向量验证, 无 detect）
-import "./threefish.js"; // Threefish 可调分组密码 threefish（modern, 双向, Skein v1.3 内建 256/512/1024 位分组, 72/80轮, Crypto++ threefish.txt 官方向量验证, 无 detect）
-import "./skipjack.js"; // Skipjack 分组密码 skipjack（modern, 双向, NSA 1998 解密 64位分组 80位密钥 32轮, NIST SP800-17 Table 6 官方向量验证, 无 detect）
-import "./mars.js"; // MARS 分组密码 mars（modern, 双向, IBM 1998 AES决赛圈 128位分组 128/192/256位密钥 32轮, Crypto++ marsval.dat 官方向量验证, 无 detect）
-import "./cityhash.js"; // CityHash 非加密哈希 cityhash（hash, run, Google CityHash32/64, city-test.cc 官方 299 向量全过, 无 detect）
-import "./xxhash.js"; // xxHash 极速哈希 xxhash（hash, run, xxHash32/64 官方向量自检, 非加密, 无 detect）
 import "./bmpPalette.js"; // BMP 调色板隐写分析 bmpPalette（stego, run, 1/4/8-bit 索引 BMP 调色板 LSB/索引序/未用索引, 无 detect）
 import "./stegosaurus.js"; // Stegosaurus pyc 隐写检测 stegosaurus（forensic, run, marshal code object 静态解析 + lnotab LSB, 无 detect）
-import "./geffe.js"; // Geffe 生成器/相关攻击 geffe（analysis, run, 子代理交付, 无 detect）
+import "./bubblebabble.js"; // BubbleBabble 编码 bubblebabble（text, 双向, Antti Huima 2000 防误读编码, bubblepy 官方向量验证, 无 detect）
+import "./jsEscape.js"; // JS escape 编码 jsEscape（text, 双向, 旧版 escape()/unescape(), 与原生对照验证, 无 detect）
+import "./ppencode.js"; // Perl 关键字编码 ppencode（text, 双向, 256 词表 + 768 候选反向表, 参考交叉验证, 无 detect）
+import "./stegpy.js"; // stegpy stegv3 隐写 stegpy（stego, 双向, bit 平面交错 + PBKDF2-Fernet, 参考交叉验证, 无 detect）
+import "./stereogram.js"; // 立体图求解 stereogramSolver（stego, run, roll+diff 偏移解码, numpy 参考逐像素对拍, 无 detect）
+import "./cast128.js"; // CAST-128 分组密码 cast128（modern, 双向, RFC 2144 三向量 + pycryptodome 对拍, 无 detect）
+import "./des2Mitm.js"; // 2DES 中间相遇 des2Mitm（analysis, run, forward 表+反向查表, 本地往返验证, 无 detect）
+import "./mimeMultipart.js"; // MIME multipart 解析 mimeMultipart（text, 双向, boundary 分 part + base64/QP 解码, 无 detect）
+import "./lcgMore.js"; // RANDU/截断LCG randu+truncLcgRecover（analysis, run, 教学演示, 无 detect）
+import "./shaExt.js"; // SHA 长度扩展/生日 shaLengthExtend+birthdayCollision（analysis, run, 纯 JS SHA-1/256, 无 detect）
+import "./latticeMore.js"; // Babai CVP + HNP babaiCvp+hnpRecover（analysis, run, BigInt 格, 无 detect）
+import "./spnAnalysis.js"; // SPN 差分线性 spnAnalysis（analysis, run, DDT/LAT 教学, 无 detect）
+import "./collisionShow.js"; // MD5 截断碰撞 md5CollisionShow（analysis, run, 生日法教学, 无 detect）
+import "./pqcLite.js"; // LWE/NTRU 玩具 lweToy+ntruToy（crypto, run, 教学级小参数, 无 detect）
+import "./crc32Reverse.js"; // CRC32 反向碰撞 crc32Reverse（analysis, run, 表驱动反推4字节补丁, 参考交叉验证, 无 detect）
+import "./roar.js"; // 兽音译者 roar 4字符codec变体（fancy, 双向, hex偏移+codec映射, 反编参考交叉验证, 无 detect）
+import "./bfSwap.js"; // BF 交换重跑变体 bfSwap（fancy, 双向, 逗号空操作+失败7字符对称交换重跑, 无 detect）
+import "./geffe.js"; // Geffe 生成器/相关攻击 geffe（analysis, run, 3 LFSR 组合 + 相关攻击, 子代理交付, 无 detect）
 import "./pcapRepair.js"; // pcap 文件修复 pcapRepair（analysis, run, magic/字节序/全局头/incl_len 诊断修复, 无 detect）
 import "./spectrogram.js"; // 音频频谱图 spectrogram（stego, run, STFT + radix-2 FFT + Hann 窗 + magma 色阶 → PNG dataURL, 复用 audiostego/mcMap, 无 detect）
 import "./lfsrRecover.js"; // LFSR 序列恢复 lfsrRecover（analysis, run, Berlekamp-Massey 求最短 LFSR + 反馈多项式 + 外推预测, 无 detect）
 import "./xorshiftRecover.js"; // xorshift 状态恢复 xorshiftRecover（analysis, run, Marsaglia xorshift32/64/128 逆位运算恢复种子+预测, 无 detect）
 import "./yenc.js"; // yEnc 编解码 yenc（text, 双向, +42 mod 256 + '=' 转义关键字节, UTF-8 字节, 往返验证, 无 detect）
 import "./binhex.js"; // BinHex 4.0 编解码 binhex（text, 双向, 6-bit 码表 + RLE90 + crc_hqx CRC 校验, Python binhex 参考, 往返验证, 无 detect）
+import "./a51.js"; // GSM A5/1 流密码 a51（modern, 双向自反, 三 LFSR 19/22/23 多数表决钟控, Briceno/Goldberg/Wagner 官方向量验证, 无 detect）
+import "./a52.js"; // GSM A5/2 流密码 a52（modern, 双向自反, R4 择多钟控 + 掩码位延迟输出, Briceno 官方实现 + C oracle 交叉验证, 无 detect）
+import "./e0.js"; // 蓝牙 E0 流密码 e0（modern, 双向自反, 4 LFSR 求和组合器 + 2bit 记忆, Bluetooth Core Spec + Python 参考交叉验证, 无 detect）
+import "./hc128.js"; // HC-128 流密码 hc128（modern, 双向自反, 512×32bit P/Q 表, Crypto++ 官方向量验证, 无 detect）
+import "./hc256.js"; // HC-256 流密码 hc256（modern, 双向自反, 1024×32bit P/Q 表, Crypto++ 官方向量验证, 无 detect）
+import "./sosemanuk.js"; // Sosemanuk 流密码 sosemanuk（modern, 双向自反, LFSR+FSM+Serpent S2, eSTREAM 官方向量 + C oracle 对拍, 无 detect）
+import "./spritz.js"; // Spritz 流密码 spritz（modern, 双向自反, 论文 2014-10-27 版 a 计数吸收, 权威向量验证, 无 detect）
+import "./vmpc.js"; // VMPC 流密码 vmpc（modern, 双向自反, 作者官方实现 BASIC/FULL 模式, 官方向量验证, 无 detect）
+import "./mickey.js"; // MICKEY-128 2.0 流密码 mickey（modern, 双向自反, 160 位双寄存器不规则钟控, eSTREAM 官方源码逐行移植, 官方向量验证, 无 detect）
+import "./ecdsaReuseK.js"; // ECDSA nonce 重用攻击 ecdsaReuseK（crypto, run, 纯数论恢复 k+私钥 d + 内置 secp256k1/P-256 EC 点乘公钥校验消歧, 自造签名验证, 无 detect）
+import "./rabin.js"; // Rabin 密码 rabin（crypto, 双向, x²≡c mod n 平方根解密四根, RFC 无但经典教学, 往返验证, 无 detect）
+import "./x25519.js"; // X25519 密钥交换 x25519（crypto, run, Curve25519 Montgomery ladder, RFC 7748 §5.2 官方向量验证, 无 detect）
+import "./ed25519.js"; // Ed25519 签名/验签 ed25519（crypto, run, RFC 8032 EdDSA, Node 原生预言机多种子交叉验证, 无 detect）
+import "./siphash.js"; // SipHash-2-4 MAC siphash（hash, run, 官方 vectors_sip64 8 向量验证, 无 detect）
+import "./scrypt.js"; // scrypt 口令密钥派生 scrypt（crypto, run async, RFC 7914, Node crypto.scryptSync 对拍 5 向量验证, 无 detect）
+import "./balloon.js"; // Balloon 密钥派生 balloon（crypto, run, Boneh 2016 原版 SHA-256 实例 + 盐参与访问模式, 5 组权威向量验证, 无 detect）
+import "./lyra2.js"; // Lyra2 密钥派生 lyra2（crypto, run, PHC 官方 Lyra2.c/Sponge.c 移植, 官方向量验证, 无 detect）
+import "./yescrypt.js"; // yescrypt 密钥派生 yescrypt（crypto, run, openwall 官方三模式 scrypt/WORM/RW pwxform, 官方 7 组向量验证, 无 detect）
+import "./blake3.js"; // BLAKE3 哈希 blake3（hash, run, 官方 test_vectors.json 10 向量验证含多 chunk 树边界, 无 detect）
+import "./paillier.js"; // Paillier 加法同态加密 paillier（crypto, run, decrypt(encrypt)=m + E(m1)·E(m2)=E(m1+m2) 同态性质验证, 无 detect）
+import "./schnorr.js"; // Schnorr 签名 schnorr（crypto, run, secp256k1 + 内嵌 SHA-256, sign/verify + nonce 重用恢复 d/k, Node SHA 对拍验证, 无 detect）
+import "./magma.js"; // GOST Magma 分组密码 magma（modern, 双向, GOST R 34.12-2015 32轮 Feistel, 官方 §A.2 向量验证, 无 detect）
+import "./present.js"; // PRESENT 轻量分组密码 present（modern, 双向, PRESENT-80 31轮 SPN, 官方论文 4 向量验证, 无 detect）
+import "./serpent.js"; // Serpent 分组密码 serpent（modern, 双向, AES 竞赛亚军 32轮 SPN, 128/192/256位密钥, NESSIE 514 向量全过, 无 detect）
+import "./aria.js"; // ARIA 分组密码 aria（modern, 双向, 韩国标准 KS X 1213/RFC 5794, 128位分组 128/192/256位密钥, RFC 5794 附录A 三向量验证, 无 detect）
+import "./seed.js"; // SEED 分组密码 seed（modern, 双向, 韩国 KISA 标准 RFC 4269, 128位分组 128位密钥 16轮 Feistel, RFC 4269 附录B 两向量+中间轮密钥验证, 无 detect）
+import "./camellia.js"; // Camellia 分组密码 camellia（modern, 双向, NTT/三菱 RFC 3713, 128位分组 128/192/256位密钥 18/24轮, RFC 3713 附录C 三向量+参考实现逐段对拍, 无 detect）
+import "./pearson.js"; // Pearson 哈希 pearson（hash, run, 8-bit 逐字节查表, 表为 0-255 合法排列自检 + 确定性验证, 无 detect）
+import "./whirlpool.js"; // Whirlpool 哈希 whirlpool（hash, run, ISO/IEC 10118-3 512-bit Miyaguchi-Preneel, 官方 8 向量验证, 无 detect）
+import "./skein.js"; // Skein 哈希 skein（hash, run, NIST SHA-3 决赛候选, Threefish Miyaguchi-Preneel 压缩, 256/512/1024 状态 × 224~1024 输出, C 参考 oracle 126 交叉验证, 无 detect）
+import "./grostl.js"; // Grøstl 哈希 grostl（hash, run, NIST SHA-3 决赛候选, 宽管道 P/Q 双置换, 256/512 位, C oracle 36 交叉验证, 无 detect）
+import "./jh.js"; // JH 哈希 jh（hash, run, NIST SHA-3 决赛候选, Hongjun Wu 1024 位 bitslice 42 轮, 224/256/384/512 输出, C oracle 72 交叉验证, 无 detect）
+import "./streebog.js"; // Streebog 哈希 streebog（hash, run, 俄罗斯国标 GOST R 34.11-2012/RFC 6986, 512/256 位, RFC §10 三向量验证, 无 detect）
+import "./threefish.js"; // Threefish 可调分组密码 threefish（modern, 双向, Skein v1.3 内建 256/512/1024 位分组, 72/80轮无密钥调度器+128位tweak, Crypto++ threefish.txt 官方向量验证, 无 detect）
+import "./skipjack.js"; // Skipjack 分组密码 skipjack（modern, 双向, NSA 1998 解密 64位分组 80位密钥 32轮, NIST SP800-17 Table 6 官方向量验证, 无 detect）
+import "./mars.js"; // MARS 分组密码 mars（modern, 双向, IBM 1998 AES决赛圈 128位分组 128/192/256位密钥 32轮, Crypto++ marsval.dat 官方向量验证, 无 detect）
+import "./xxhash.js"; // xxHash 极速哈希 xxhash（hash, run, xxHash32/64 官方向量自检, 非加密, 无 detect）
+import "./cityhash.js"; // CityHash 非加密哈希 cityhash（hash, run, Google CityHash32/64, city-test.cc 官方 299 组向量全过, 无 detect）
 import "./rc4Visualize.js"; // RC4 KSA/PRGA 可视化 rc4Visualize（analysis, run, 逐步展示 KSA 打乱 + PRGA 密钥流, 无 detect）
 import "./f5stego.js"; // F5 JPEG 隐写提取 f5stego（stego, run, acceptsBytes, 熵解码+密钥置换+(1,2^k-1,k)矩阵编码, 仅提取, 无 detect）
 import "./lllAttack.js"; // 格基归约 LLL + 背包低密度攻击 CJLOSS（crypto, run, BigInt 精确有理 GSO, 无 detect）

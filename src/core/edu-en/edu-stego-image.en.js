@@ -134,4 +134,45 @@ export default {
     tips: ["An abnormally large ICC segment → may hide data; dump it out and check before stripping. Stripping ICC can also fix challenge images with 'wrong color display' issues."],
     aka: ["icc剥离", "icc strip", "iccp", "色彩配置剥离", "ICC profile剥离", "iCCP块", "色彩配置文件", "icc profile strip", "去除icc", "icc色彩剥离"],
   },
+
+  arnoldCatBrute: {
+    what: "Arnold Cat Map brute-force: when you don't know the Arnold parameters (a/b/iterations), exhaustively try every combination in reverse and tile the candidates into a grid image — scan the grid and spot the restored image.",
+    principle:
+      "The parameterized Arnold matrix is $\\begin{pmatrix}1&a\\\\b&ab+1\\end{pmatrix}\\bmod N$ (determinant 1, hence invertible). Forward: $\\begin{pmatrix}x'\\\\y'\\end{pmatrix}=M\\begin{pmatrix}x\\\\y\\end{pmatrix}$; inverse uses $M^{-1}=\\begin{pmatrix}ab+1&-a\\\\-b&1\\end{pmatrix}$. Brute force nests loops over a, b and iteration count, inverts the image for each combination and tiles thumbnails into a grid.",
+    usage: "Upload a square image, set start/end ranges for a/b/iterations (default a:1-3, b:1-3, times:1-5 = 45 combos), output the candidate grid. Cap is 2000 combos.",
+    examples: [
+      { in: "scrambled image", param: "a:1-3 b:1-3 times:1-5", out: "45-cell candidate grid", desc: "the restored image is one cell" },
+    ],
+    formulas: [
+      { tex: "M=\\begin{pmatrix}1&a\\\\b&ab+1\\end{pmatrix},\\ M^{-1}=\\begin{pmatrix}ab+1&-a\\\\-b&1\\end{pmatrix}\\pmod N", caption: "parameterized Arnold matrix and inverse" },
+    ],
+    tips: ["Challenge gives only the image → scan the default range first; cells with clean straight edges are candidates. a=b=1 is the classic cat map (degenerate case). Image must be square."],
+    aka: ["arnold暴破", "猫脸暴破", "arnold brute force", "猫脸破解", "arnold参数破解", "猫脸暴力破解", "arnold穷举", "猫脸穷举", "arnold crack", "猫脸还原"],
+  },
+
+  stegpy: {
+    what: "stegpy steganography (stegv3): the format used by the stegpy tool — message bytes are interleaved into pixel low bits by bit planes (1/2/4 bits), with a frame header carrying the stegv3 magic and length, optionally encrypted with PBKDF2+Fernet. Directly extracts data hidden by stegpy.",
+    principle:
+      "The host is the image's RGB byte stream (alpha removed, row-major flattened). Bit-plane interleaving: with divisor=8/bits, the bits groups of message byte k are written into the low bits of host[k*divisor+i] (i=0..divisor-1) — the byte stream is split into bits-sized groups spread divisor apart. The first byte's bits 4-5 store the bits marker (1→0, 2→16, 4→32). Frame format: `stegv3`(6B) + message length(4B big-endian) + filename length(1B) + [filename] + message. Password mode: PBKDF2-HMAC-SHA256 with 100k iterations derives a 32-byte key → Fernet (AES-128-CBC + HMAC-SHA256), 16-byte salt prefixed.",
+    usage: "Encode: upload a carrier image, enter the text and bit count (1/2/4), optional password. Decode: upload a stegpy image, enter the password (if any) to extract the message; a filename is reported when present.",
+    examples: [
+      { in: "carrier PNG + text", param: "bits=2", out: "stego PNG", desc: "low-bit disturbance invisible to the eye" },
+      { in: "stego PNG", param: "password (if any)", out: "hidden message/filename", desc: "no password → stegv3 magic missing error" },
+    ],
+    tips: ["Images from the stegpy tool or tutorials → extract with this op, more reliable than generic LSB scans. For RGBA carriers only the RGB channels are used (matching the stegpy tool). Wrong password reports a Fernet MAC failure."],
+    aka: ["stegpy", "stegv3", "stegpy隐写", "stegpy提取", "stegv3隐写", "stegpy解密", "stegpy steganography", "stegpy解码", "stegpy工具", "fern隐写"],
+  },
+
+  stereogramSolver: {
+    what: "Stereogram solver: an autostereogram (SIRDS) encodes hidden depth in the horizontal repetition period of its pattern. Subtract the image from a horizontally rolled copy of itself — where the repeating pattern aligns (correct offset) it darkens and the hidden text/shapes emerge as depth stripes.",
+    principle:
+      "For each offset: $\\text{diff}(x,y)=\\text{clip}(\\text{img}(x,y)-\\text{img}((x-\\text{offset})\\bmod w,\\ y),\\ 0,\\ 255)$ (numpy.roll-style horizontal shift). Depth stripes are the regions where shift matches the repetition period → difference 0. Offset ranges over [-w/2, w/2]; auto-scan mode tiles all offsets as thumbnails — pick the sharpest cell.",
+    usage: "Upload the stereogram. If you know the period, set a single offset for an exact solve; otherwise leave it blank for auto-scan (default -32..32 step 2) and find the cell with the strongest contrast / clearest text.",
+    examples: [
+      { in: "SIRDS random-dot image", param: "offset=period", out: "revealed stripe image", desc: "dark stripes are the hidden content" },
+      { in: "SIRDS random-dot image", param: "blank auto-scan", out: "candidate grid", desc: "the sharpest cell's offset is the period" },
+    ],
+    tips: ["Stereogram challenges nearly all work this way: subtract the image from its own shifted copy. Not found → widen the scan range (step can go to 1). Works even on fully random dot fields."],
+    aka: ["立体图", "autostereogram", "sirds", "立体图求解", "stereogram", "随机点立体图", "立体图隐写", "stereogram solver", "3d立体图", "魔眼图"],
+  },
 };

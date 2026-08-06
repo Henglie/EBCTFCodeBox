@@ -600,6 +600,49 @@ export default {
       'BLAKE2 successor',
     ],
   },
+  // ============ hash: Skein SHA-3 finalist hash ============
+  skein: {
+    what: 'Skein — one of the five NIST SHA-3 finalists (Ferguson, Lucks, Schneier, et al., 2010). Built on its own Threefish tweakable block cipher in a Miyaguchi-Preneel construction, famed as the fastest finalist. Supports Skein-256/512/1024 states (32/64/128-byte blocks) with 224–1024-bit outputs.',
+    principle:
+      "Skein's compression function IS Threefish: the chaining value X (e.g. 8 64-bit words) acts as the key, the message block M_i as the plaintext, and a tweak ([T0,T1] = byte counter + block type / first / final flags) as the tweak value; encrypt, then XOR the plaintext back (Miyaguchi-Preneel):\n\n" +
+      '$$X_i = \\mathrm{Threefish}_{X_{i-1},\\,T_0,T_1}(M_i) \\oplus M_i$$\n\n' +
+      'The block-type field (MSG/OUT/CFG) and FINAL/FIRST flags live in the high bits of the tweak. The output stage reuses the same compression in counter mode to produce the digest block by block.',
+    usage: 'Pick a variant (state-output bits, e.g. Skein-512-512) and inputMode text/hex. Enter the message, get the hex digest. In CTFs, a long hash that is neither MD5-family nor SHA-family may be Skein.',
+    examples: [
+      { in: '', param: 'variant=512-512, inputMode=text', out: 'bc5b4c50925519c290cc634277ae3d6257212395cba733bbad37a4af0fa06af41fca7903d06564fea7a2d3730dbdb80c1f85562dfcc070334ea4d1d9e72cba7a', desc: 'Skein-512-512 of empty string, official NIST vector' },
+      { in: 'abc', param: 'variant=512-512, inputMode=text', out: '8f5dd9ec798152668e35129496b029a960c9a9b88662f7f9482f110b31f9f93893ecfb25c009baad9e46737197d5630379816a886aa05526d3a70df272d96e75', desc: 'Skein-512-512 of abc, matches C reference oracle' },
+    ],
+    formulas: [
+      { tex: 'X_i = \\mathrm{Threefish}_{X_{i-1},T_0,T_1}(M_i) \\oplus M_i', caption: 'Skein Miyaguchi-Preneel compression (Threefish as the block cipher)' },
+    ],
+    tips: [
+      'Skein and Threefish share one core: Threefish is the block cipher, Skein is the Merkle-Damgard shell plus counter-mode output.',
+      'Of the SHA-3 finalists (Keccak/Blake/Skein/Grøstl/JH), Skein was fastest; Keccak ultimately won.',
+      'The tweak block-type field is Skein\'s signature: CFG/KEY/MSG/OUT phases, enabling tree hashing and MAC natively.',
+      'Same Miyaguchi-Preneel family as Whirlpool, but Whirlpool uses an AES-style cipher and Skein uses Threefish — not interchangeable.',
+    ],
+    aka: [
+      'skein',
+      'Skein',
+      'SHA-3 finalist',
+      'Threefish',
+      'Miyaguchi-Preneel',
+      'Skein-512',
+      'Skein-256',
+      'Skein-1024',
+      'NIST SHA-3',
+      'Skein hash',
+      'Ferguson',
+      'Lucks',
+      'Schneier',
+      'skein512',
+      'skein256',
+      'skein1024',
+      'SHA3 candidate',
+      'Threefish hash',
+      'tweakable block cipher hash',
+    ],
+  },
   // ============ hash: Whirlpool 512-bit hash ============
   whirlpool: {
     what: 'Whirlpool — a 512-bit cryptographic hash function by Barreto & Rijmen, standardized in ISO/IEC 10118-3:2004. Uses a Miyaguchi-Preneel construction with a dedicated 512-bit block cipher W on an 8x8 byte state over 10 rounds.',
@@ -802,6 +845,90 @@ export default {
       'Threefish algorithm',
       'SHA-3 finalist',
       'adjustable block cipher',
+    ],
+  },
+  // ============ hash: Grøstl SHA-3 finalist hash ============
+  grostl: {
+    what: 'Grøstl — one of the five NIST SHA-3 finalists (Thomsen & Matusiewicz, 2010). A wide-pipe hash with two parallel permutations P/Q; the state is twice the digest length. Named after an Austrian potato dish (author language pun).',
+    principle:
+      "Wide-pipe: the state is twice the digest size (Grøstl-256 uses a 512-bit state, Grøstl-512 a 1024-bit state). The compression is two parallel permutations:\n\n" +
+      '$$H_i = P(H_{i-1} \\oplus M_i) \\oplus Q(M_i) \\oplus H_{i-1}$$\n\n' +
+      'P and Q are iterated permutations over an 8x8 byte matrix (P uses 0x00..0x70 round constants, Q the 0xff..0x8f complements); each round = AES-like SubBytes + row shifts + column mixing (MDS matrix, via precomputed T-table lookups).\n\n' +
+      'Padding: 0x80 + zeros to a 64-byte block boundary, then the last 8 bytes = block counter (big-endian). Output = trailing digest-length bytes of the compressed chaining value.',
+    usage: 'Pick a variant (Grøstl-256 / Grøstl-512) and inputMode text/hex. Enter the message, get the hex digest. In CTFs, a long hash that is neither MD5-family nor SHA-family may be Grøstl.',
+    examples: [
+      { in: '', param: 'variant=512, inputMode=text', out: '6d3ad29d279110eef3adbd66de2a0345a77baede1557f5d099fce0c03d6dc2ba8e6d4a6633dfbd66053c20faa87d1a11f39a7fbe4a6c2f009801370308fc4ad8', desc: 'Grøstl-512 of empty string, official NIST vector' },
+      { in: 'abc', param: 'variant=512, inputMode=text', out: '70e1c68c60df3b655339d67dc291cc3f1dde4ef343f11b23fdd44957693815a75a8339c682fc28322513fd1f283c18e53cff2b264e06bf83a2f0ac8c1f6fbff6', desc: 'Grøstl-512 of abc, matches C oracle' },
+    ],
+    formulas: [
+      { tex: 'H_i = P(H_{i-1} \\oplus M_i) \\oplus Q(M_i) \\oplus H_{i-1}', caption: 'Grøstl wide-pipe dual-permutation compression' },
+    ],
+    tips: [
+      'Grøstl-256 uses a 512-bit state, Grøstl-512 a 1024-bit one — the state is always twice the digest, hence "wide-pipe".',
+      'Of the SHA-3 finalists (Keccak/Blake/Skein/Grøstl/JH), Grøstl ranks high on hashing speed; Keccak ultimately won.',
+      'The P/Q round constants are bitwise complements, maximizing the difference between the two permutations.',
+      'The output transformation runs P(h) XOR h once more (truncated output) — Grøstl\'s defense against length extension.',
+    ],
+    aka: [
+      'grostl',
+      'Grøstl',
+      'Groestl',
+      'wide-pipe hash',
+      'SHA-3 finalist',
+      'dual permutation',
+      'NIST SHA-3',
+      'Thomsen',
+      'Matusiewicz',
+      'groestl hash',
+      'Grøstl-512',
+      'Grøstl-256',
+      'SHA3 candidate',
+      'MDS matrix',
+      'grostl512',
+      'grostl256',
+      'Groestl algorithm',
+    ],
+  },
+  // ============ hash: JH SHA-3 finalist hash ============
+  jh: {
+    what: 'JH — one of the five NIST SHA-3 finalists (Hongjun Wu, 2010). A 1024-bit state iterated by a 42-round bitslice permutation E8, with JH-224/256/384/512 outputs. The bitslice design (bitwise logic gates) makes it extremely fast on Intel SIMD platforms.',
+    principle:
+      "State = 1024 bits (8 rows x 2 64-bit words), message block = 512 bits. Compression F8: XOR the message into the first half of the state, apply the bijection E8 (42 rounds), then XOR the message into the second half (wide-pipe style).\n\n" +
+      'E8 groups rounds in 7s = 6 rounds of "S-box (bitslice logic) + MDS linear diffusion + bit swaps SWAP{1,2,4,8,16,32}" + 1 round of "S-box + MDS + row swap". The S-box is two 4-bit S-boxes S0/S1 bitsliced, with round constants injected into the S-box selection bits.\n\n' +
+      'Padding: append a 1 bit then zeros; if the message length is an exact multiple of 512 bits, pad with a single 0x80...len block, otherwise two blocks (the second holds the 64-bit length). Output = truncated chaining value (JH-512 takes all 64 bytes, JH-224 the trailing 28).',
+    usage: 'Pick a variant (JH-224/256/384/512) and inputMode text/hex. Enter the message, get the hex digest. In CTFs, a long hash that is neither MD5-family nor SHA-family may be JH.',
+    examples: [
+      { in: '', param: 'variant=512, inputMode=text', out: '90ecf2f76f9d2c8017d979ad5ab96b87d58fc8fc4b83060f3f900774faa2c8fabe69c5f4ff1ec2b61d6b316941cedee117fb04b1f4c5bc1b919ae841c50eec4f', desc: 'JH-512 of empty string, official NIST vector' },
+      { in: 'abc', param: 'variant=512, inputMode=text', out: 'a05eab9c641cb901107d9880bcdf0eedb19b0073188896365921bd200225d9176cf136e7af90d67bdb05dfa3037e48b757d23a905b2270db67255b9eca982973', desc: 'JH-512 of abc, matches C oracle' },
+    ],
+    formulas: [
+      { tex: "H' = H \\oplus \\mathrm{E8}(H \\oplus M)", caption: 'JH compression: XOR message into first half, then apply E8 bijection' },
+    ],
+    tips: [
+      'JH is from the same generation as Keccak: one of the five SHA-3 finalists (Keccak/Blake/Skein/Grøstl/JH); Keccak ultimately won.',
+      'Bitslice is JH\'s signature: the S-box is expressed as bitwise logic gates, SIMD-friendly, with very fast Intel implementations.',
+      'E8 round constants also drive the S-box selection bits (cc0/cc1) — the constants are part of the "key".',
+      'JH-224 outputs only 28 bytes — 4 bytes fewer than SHA-224, aimed at low-resource environments.',
+    ],
+    aka: [
+      'jh',
+      'JH',
+      'SHA-3 finalist',
+      'bitslice',
+      'Hongjun Wu',
+      'NIST SHA-3',
+      'JH-512',
+      'JH-256',
+      'JH-384',
+      'JH-224',
+      'SHA3 candidate',
+      'bitslice hash',
+      'E8 bijection',
+      'jh512',
+      'jh256',
+      'JH algorithm',
+      'wide-pipe',
+      'MDS diffusion',
     ],
   },
   // ============ hash: Pearson fast hash ============
@@ -1156,5 +1283,19 @@ export default {
       'Serpent加密',
       'ABK cipher',
     ],
+  },
+
+  cast128: {
+    what: "CAST-128 (CAST5) — block cipher defined in RFC 2144: 64-bit block, 40-128 bit keys. 16-round Feistel with three alternating round function types (Type1 add / Type2 XOR / Type3 subtract combined with the subkey, then rotated left), eight 256-entry S-boxes. Occasional CTF appearance; recognizable by 5-16 byte keys and 8-byte blocks.",
+    principle:
+      "Key schedule: the 128-bit key x iterates through 4 intermediate z words (S5-S8 involved) to derive 32 subkeys K1..K32; K1..K16 are masking keys Kmi, the low 5 bits of K17..K32 are rotation keys Kri. Keys ≤ 80 bits (10 bytes) use only 12 rounds, otherwise 16.\n\n" +
+      "Round function: round i uses type (i mod 3)+1 — Type1: I=(Kmi+D)<<<Kri, f=((S1[Ia]^S2[Ib])-S3[Ic])+S4[Id]; Type2: I=(Kmi^D)<<<Kri, f=((S1-S2)+S3)^S4; Type3: I=(Kmi-D)<<<Kri, f=((S1+S2)^S3)-S4. Ia..Id are the four bytes of I. Feistel: Li=Ri-1, Ri=Li-1^f(Ri-1), output (R16, L16).",
+    usage: "Enter a hex key (10-32 hex digits = 5-16 bytes) and hex ciphertext (multiple of 8 bytes); encode encrypts / decode decrypts. Keys ≤ 10 bytes automatically use 12 rounds.",
+    examples: [
+      { in: "0123456789abcdef", param: "key=0123456712345678234567893456789a", out: "238b4fe5847e44b2", desc: "RFC 2144 Appendix B.1 official vector" },
+      { in: "238b4fe5847e44b2", param: "key=0123456712345678234567893456789a", out: "0123456789abcdef", desc: "decryption restores" },
+    ],
+    tips: ["RFC 2144 Appendix B.1 has three vectors (128/80/40-bit keys) for correctness checks. Keys shorter than 16 bytes are zero-padded on the right. Distinct from CAST-256 (CAST6, 128-bit block) — don't mix.", "Cross-check with openssl legacy provider's cast5 or pycryptodome's CAST."],
+    aka: ["cast128", "cast5", "CAST-128", "CAST5", "RFC 2144", "cast-128加密", "cast128分组密码", "cast5加密", "cast128解密", "cast5ecb", "cast128 算法", "cast密码", "cast5分组", "cast128密钥", "cast128向量"],
   },
 };

@@ -128,13 +128,63 @@ function rot8000(text) {
   return out;
 }
 
+// ================= 兼容模式：偏移 31753（全字符平移，空格除外） =================
+// 另类实现：所有非空格字符 ±31753（encode +，decode −），非自反。
+// 越界（负值）字符原样透传，比参考实现更鲁棒（参考对 ord < 31753 直接崩）。
+function rot31753(text, isEncode) {
+  const delta = isEncode ? 31753 : -31753;
+  let out = "";
+  for (const ch of text) {
+    if (ch === " ") { out += ch; continue; }
+    const cp = ch.codePointAt(0) + delta;
+    out += cp >= 0 ? String.fromCodePoint(cp) : ch;
+  }
+  return out;
+}
+
+// 可读性评分：可打印 ASCII / 中文 / 常见标点计分，用于 auto 模式选择解码分支
+function rotReadability(s) {
+  let good = 0, total = 0;
+  for (const ch of s) {
+    const c = ch.codePointAt(0);
+    total++;
+    if ((c >= 0x20 && c <= 0x7e) || c === 0x0a || c === 0x0d) good++;
+    else if ((c >= 0x4e00 && c <= 0x9fff) || c === 0x3001 || c === 0x3002) good++;
+  }
+  return total ? good / total : 0;
+}
+
+function rot8000Encode(text, p = {}) {
+  const offset = String(p?.offset ?? "auto");
+  if (offset === "31753") return rot31753(text, true);
+  return rot8000(text);
+}
+
+function rot8000Decode(text, p = {}) {
+  const offset = String(p?.offset ?? "auto");
+  if (offset === "31753") return rot31753(text, false);
+  if (offset === "8000") return rot8000(text);
+  // auto：两个分支都解，取可读性高者（标准 8000 密文解出中文；31753 密文解回 ASCII）
+  const a = rot8000(text);
+  const b = rot31753(text, false);
+  return rotReadability(b) > rotReadability(a) ? b : a;
+}
+
 register({
   id: "rot8000",
   cat: "fancy",
   name: "ROT8000",
-  desc: "Unicode 版 ROT13：BMP 有效码位表旋转半程（自反）",
-  encode: rot8000,
-  decode: rot8000,
+  desc: "Unicode 版 ROT13：BMP 有效码位表旋转半程（自反）；offset 参数可切 31753 全字符平移兼容版（仅空格除外），auto 自动检测",
+  params: [
+    { key: "offset", label: "偏移模式", type: "select", default: "auto",
+      options: [
+        { value: "auto", label: "auto（解码自动检测两种）" },
+        { value: "8000", label: "8000（标准 rottytooth 表旋转）" },
+        { value: "31753", label: "31753（全字符平移兼容版）" },
+      ] },
+  ],
+  encode: rot8000Encode,
+  decode: rot8000Decode,
   detect: (t) => {
     const s = (t || "").trim();
     if (s.length < 2) return 0;

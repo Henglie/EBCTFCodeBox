@@ -27,7 +27,7 @@ import { decodePngPixels, decodeBmpPixels, lsbReport } from "./lsbExtract.js";
 import { pngChunkCrcReport } from "./pngChunks.js";
 import { extractExif, extractXmp } from "./imgMeta.js";
 import { MAGIC_TABLE, identifyMagic } from "./trailerCarve.js";
-import { inflateRaw } from "./pcapDeep.js";
+import { inflateRaw, analyzePcapBytes } from "./pcapDeep.js";
 // 复用（单向 import，绝不改这些模块）：
 // invisibles.js — scan/strip/countByType（不可见字符结构化 API）
 // stegoText.js — zwScan（零宽扫描完整报告，供 view 详情）
@@ -1092,6 +1092,14 @@ export function analyzeFile(bytes, name = "") {
   let detected = detectMagic(u8a);
  // zip 容器细分：apk/docx/xlsx/pptx/jar/epub/odt 识别成具体类型，而非笼统 zip
   detected = refineZipType(u8a, detected);
+ // 本地 MAGIC 表不含 pcap/pcapng，用 trailerCarve 的 identifyMagic 补充识别
+ // （拖入 pcap 后走协议级分析路径，不做无意义的尾部检测）
+  if (!detected) {
+    const idM = identifyMagic(u8a, 0);
+    if (idM && MAGIC_EXT_MAP[idM.name]) {
+      detected = { ...MAGIC_EXT_MAP[idM.name], desc: idM.desc };
+    }
+  }
   const fileExt = getExt(name);
   const mime = detected ? detected.mime : "application/octet-stream";
   const extConsist = checkExtConsistency(detected, fileExt);
@@ -1122,6 +1130,12 @@ export function analyzeFile(bytes, name = "") {
       level: infoLevel, icon: infoIcon,
       body: infoLines.join("\n"),
     });
+  }
+
+ // 2. pcap/pcapng 协议级分析（拖入即跑 TCP 重组/HTTP 提取/DNS 隧道/ICMP 载荷，免去手动逐个 op）
+  if (detected && (detected.ext === "pcap" || detected.ext === "pcapng")) {
+    const pcapSections = analyzePcapBytes(u8a);
+    for (const s of pcapSections) sections.push(s);
   }
 
  // 3. 文件尾附加数据（附带 actions：文本 + 二进制双份存盘）

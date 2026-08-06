@@ -122,6 +122,22 @@ export default {
   "op.md4.name": "MD4",
   "op.sha1.name": "SHA-1",
   "op.sha256.name": "SHA-256",
+
+  "op.shaLengthExtend.name": "Расширение длины SHA",
+
+  "op.birthdayCollision.name": "Демо дня рождения",
+
+  "op.babaiCvp.name": "Babai Nearest Plane (CVP)",
+
+  "op.hnpRecover.name": "HNP Hidden Number Problem",
+
+  "op.spnAnalysis.name": "SPN Differential/Linear Analysis",
+
+  "op.md5CollisionShow.name": "MD5 Truncated Collision Demo",
+
+  "op.lweToy.name": "LWE Toy Encryption",
+
+  "op.ntruToy.name": "NTRU Toy Encryption",
   "op.sha384.name": "SHA-384",
   "op.sha3.name": "SHA-3",
   "op.fnv1a.name": "FNV-1a",
@@ -143,6 +159,8 @@ export default {
   "op.aes.name": "AES",
   "op.des.name": "DES",
   "op.des3.name": "3DES / TripleDES",
+
+  "op.cast128.name": "CAST-128",
   "op.rc4.name": "RC4",
   "op.xor.name": "XOR",
   "op.fernet.name": "Fernet",
@@ -497,6 +515,14 @@ export default {
   "op.lsbImage.name": "LSB-стеганография в изображении",
   "op.pixelJihad.name": "PixelJihad",
   "op.arnoldCat.name": "Отображение «кот Арнольда»",
+
+  "op.arnoldCatBrute.name": "Брутфорс Arnold Cat Map",
+
+  "op.stegpy.name": "Стеганография stegpy (stegv3)",
+
+  "op.stereogramSolver.name": "Решатель стереограмм",
+
+  "op.ppencode.name": "ppencode",
   "op.imageBasic.name": "Базовые операции с изображением",
 
  // ---- op names: radix/hash/stego new ops ----
@@ -656,6 +682,8 @@ export default {
   "op.cookieParse.name": "Разбор Cookie",
   "op.httpBasicAuth.name": "HTTP Basic Auth",
   "op.dataUriParse.name": "Разбор Data URI",
+
+  "op.mimeMultipart.name": "Парсер MIME multipart",
   "op.magnetParse.name": "Разбор magnet-ссылки",
  // stego · confusables
   "op.confusablesSkeleton.name": "Скелет омоглифов",
@@ -806,6 +834,10 @@ export default {
   "op.emojiAes.name": "emoji-aes шифрование",
   "op.moyue.name": "Мо юэ (магические слова, CN)",
   "op.prngAttack.name": "Взломщик ГПСЧ (LCG / MT19937)",
+
+  "op.randu.name": "RANDU слабый LCG",
+
+  "op.truncLcgRecover.name": "Восстановление усечённого LCG-семени",
   "op.hashLengthExtension.name": "Атака расширения длины хеша (MD5)",
   "op.flagExtract.name": "Автоэкстрактор флага",
   "op.xorAnalyze.name": "xortool всё-в-одном (XOR повторяющимся ключом)",
@@ -818,6 +850,11 @@ export default {
   "op.spectrogram.name": "Аудиоспектрограмма (STFT)",
   "op.lfsrRecover.name": "Восстановление последовательности LFSR",
   "op.geffe.name": "Генератор Геффе / корреляционная атака",
+  "op.bfSwap.name": "Brainfuck·повторный запуск с обменом",
+  "op.roar.name": "Переводчик рёва (кодек из 4 символов)",
+  "op.crc32Reverse.name": "Обратная коллизия CRC32",
+  "op.jsEscape.name": "Кодировка escape JS",
+  "op.bubblebabble.name": "Кодировка BubbleBabble",
   "op.rc4Visualize.name": "Визуализатор RC4 KSA/PRGA",
   "op.f5stego.name": "Извлечение F5 JPEG-стеганографии",
   "op.lllAttack.name": "Атака редукцией решётки LLL",
@@ -835,6 +872,9 @@ export default {
   "op.ed25519.name": "Ed25519 Sign / Verify",
   "op.siphash.name": "SipHash MAC",
   "op.scrypt.name": "scrypt KDF",
+  "op.balloon.name": "Balloon KDF",
+  "op.lyra2.name": "Lyra2 KDF",
+  "op.yescrypt.name": "yescrypt KDF",
   "op.blake3.name": "BLAKE3 Hash",
   "op.paillier.name": "Paillier Homomorphic Encryption",
   "op.schnorr.name": "Schnorr Sign / Verify / Attack",
@@ -847,6 +887,12 @@ export default {
   "op.md4.name": "MD4 Hash",
   "op.pearson.name": "Pearson Hash",
   "op.whirlpool.name": "Whirlpool",
+
+  "op.skein.name": "Skein",
+
+  "op.grostl.name": "Grøstl",
+
+  "op.jh.name": "JH",
   "op.streebog.name": "Streebog (GOST R 34.11-2012)",
   "op.threefish.name": "Threefish настраиваемый блочный шифр",
   "op.skipjack.name": "Skipjack блочный шифр",
@@ -854,11 +900,21 @@ export default {
   "op.xxhash.name": "xxHash32 / xxHash64",
   "op.cityhash.name": "CityHash некриптографический хеш",
   "op.a51.name": "A5/1 Stream Cipher",
+  "op.a52.name": "A5/2 Stream Cipher",
+  "op.mickey.name": "undefined",
+  "op.e0.name": "E0 Stream Cipher",
+  "op.hc128.name": "HC-128 Stream Cipher",
+  "op.hc256.name": "HC-256 Stream Cipher",
+  "op.sosemanuk.name": "Sosemanuk Stream Cipher",
+  "op.spritz.name": "Spritz Stream Cipher",
+  "op.vmpc.name": "VMPC Stream Cipher",
   "op.binhex.name": "BinHex 4.0 Decode",
   "op.yenc.name": "yEnc Encode / Decode",
   "op.xorshiftRecover.name": "xorshift State Recovery",
   "op.shamir.name": "Разделение секрета Шамира",
   "op.dsa.name": "DSA: подпись / проверка / атака",
+
+  "op.des2Mitm.name": "2DES Встреча посередине",
   "op.mcLevelDat.name": "Разбор Minecraft level.dat",
   "op.mcTextExtract.name": "Извлечение текстовой информации Minecraft",
   "op.mcMapRender.name": "Рендер карты Minecraft",

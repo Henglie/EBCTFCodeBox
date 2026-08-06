@@ -130,6 +130,16 @@ export function listBruteOps() {
   }).filter(Boolean);
 }
 
+/**
+ * 把爆破池包成「虚拟分类」供 decodeStrength 弹窗的 op 多选列表复用渲染。
+ * cat 用 _brute 占位（不与真实分类撞），catName 走 i18n（ui.ds.brute.title）。
+ * 该分类不参与 opPool / opsForLevel / tier 计算（仍只走 work.bruteIds 通道）。
+ */
+export function bruteOpGroup() {
+  const ops = listBruteOps().map((b) => ({ id: b.id, cat: "_brute", name: b.name, tier: 0, primary: true }));
+  return { cat: "_brute", catName: "暴力爆破（独立通道）", ops };
+}
+
 // ============================================================
 // op 可自动参与的基础判定（与 magic.js 的排除口径保持一致）
 // ============================================================

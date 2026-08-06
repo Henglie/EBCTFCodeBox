@@ -570,7 +570,18 @@ export function rc4(data, key) {
 export function xorCrypt(data, key) {
   if (!key || key.length === 0) throw new Error("XOR 密钥不能为空");
   const out = new Uint8Array(data.length);
-  for (let i = 0; i < data.length; i++) out[i] = data[i] ^ key[i % key.length];
+  const klen = key.length;
+  // 单字节 key 特判（CTF 最常见），免取模；多字节用自增 j 替代 i % klen
+  if (klen === 1) {
+    const k = key[0];
+    for (let i = 0; i < data.length; i++) out[i] = data[i] ^ k;
+    return out;
+  }
+  let j = 0;
+  for (let i = 0; i < data.length; i++) {
+    out[i] = data[i] ^ key[j];
+    if (++j === klen) j = 0;
+  }
   return out;
 }
 

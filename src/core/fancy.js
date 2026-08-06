@@ -26,6 +26,8 @@ const MORSE = {
   "-..-.": "/", "-.--.": "(", "-.--.-": ")", ".-...": "&", "---...": ":",
   "-.-.-.": ";", "-...-": "=", ".-.-.": "+", "-....-": "-", "..--.-": "_",
   ".-..-.": '"', "...-..-": "$", ".--.-.": "@",
+ // 扩展标点（扩展字符集：{ } * # %）
+  "----.--": "{", "-----.-": "}", "-..-..-": "*", "......": "#", "...-.-": "%",
 };
 const MORSE_REV = {};
 for (const [k, v] of Object.entries(MORSE)) {
@@ -38,8 +40,27 @@ function morseEncode(text) {
   ).join(" / ");
 }
 function morseDecode(text) {
-  return text.trim().split(/\s*\/\s*/).map((word) =>
-    word.trim().split(/\s+/).filter(Boolean).map((c) => MORSE[c] || "?").join("")
+  let s = String(text || "").trim();
+  if (!s) return "";
+ // 兼容层（参考实现同款增强，自动检测）：
+ // ① BA 替代：A/a→'.'，B/b→'-'（中文风格记忆法；输入含 AB 且不含标准 .- 时启用）
+  if (!/[.\-]/.test(s) && /[abAB]/.test(s)) {
+    s = [...s].map((c) => (c === "A" || c === "a") ? "." : (c === "B" || c === "b") ? "-" : c).join("");
+  }
+ // ② 0/1 数字形式摩斯：全 0/1（无 .-）→ 0→'.' 1→'-'（等价参考 MORSE_UNCODE2）
+  if (!/[.\-]/.test(s) && /[01]/.test(s)) {
+    s = [...s].map((c) => (c === "0") ? "." : (c === "1") ? "-" : c).join("");
+  }
+ // ③ 分隔符归一：/ | x 都当词分隔
+  s = s.replace(/[|x]/g, " / ");
+  return s.split(/\s*\/\s*/).map((word) =>
+    word.trim().split(/\s+/).filter(Boolean).map((c) => {
+      if (MORSE[c]) return MORSE[c];
+   // ④ 未知码回退：'.'→0 '-'→1 → 16 位二进制 → hex → chr（参考实现行为）
+      const bin = [...c].map((ch) => (ch === "." ? "0" : "1")).join("").padStart(16, "0");
+      const v = parseInt(bin, 2);
+      return v > 0 && v <= 0xffff ? String.fromCharCode(v) : "?";
+    }).join("")
   ).join(" ");
 }
 
@@ -136,6 +157,30 @@ function caesarShift(text, shift) {
   });
 }
 // encode +shift，decode -shift（互逆）
+// 递增/递减凯撒：第 x 字符位移 shift±x（参考实现 mode3/mode4 的字母版；非字母原样）
+function caesarProgressive(text, shift, isEncode, isDec) {
+  const s = ((shift % 26) + 26) % 26;
+  let out = "";
+  for (let x = 0; x < text.length; x++) {
+    const delta = isDec ? s - x : s + x;
+    out += caesarShift(text[x], isEncode ? delta : -delta);
+  }
+  return out;
+}
+function caesarEncode(t, p) {
+  const shift = Number((p && p.shift) || 3);
+  const mode = (p && p.mode) || "standard";
+  if (mode === "progInc") return caesarProgressive(t, shift, true, false);
+  if (mode === "progDec") return caesarProgressive(t, shift, true, true);
+  return caesarShift(t, shift);
+}
+function caesarDecode(t, p) {
+  const shift = Number((p && p.shift) || 3);
+  const mode = (p && p.mode) || "standard";
+  if (mode === "progInc") return caesarProgressive(t, shift, false, false);
+  if (mode === "progDec") return caesarProgressive(t, shift, false, true);
+  return caesarShift(t, -shift);
+}
 
 // ============ ROT 系列 ============
 function rot13(text) {
@@ -289,12 +334,18 @@ register({
 });
 
 register({
-  id: "caesar", cat: "fancy", name: "凯撒密码", desc: "指定位移量（encode +shift，decode -shift）",
+  id: "caesar", cat: "fancy", name: "凯撒密码", desc: "指定位移量（encode +shift，decode -shift）；mode 可切递增/递减凯撒（第 x 字符位移 shift±x）",
   params: [
     { key: "shift", label: "位移量", type: "number", default: 3, placeholder: "1-25" },
+    { key: "mode", label: "模式", type: "select", default: "standard",
+      options: [
+        { value: "standard", label: "标准（固定位移）" },
+        { value: "progInc", label: "递增凯撒（第 x 字符位移 shift+x）" },
+        { value: "progDec", label: "递减凯撒（第 x 字符位移 shift-x）" },
+      ] },
   ],
-  encode: (t, p) => caesarShift(t, Number((p && p.shift) || 3)),
-  decode: (t, p) => caesarShift(t, -Number((p && p.shift) || 3)),
+  encode: (t, p) => caesarEncode(t, p),
+  decode: (t, p) => caesarDecode(t, p),
 });
 
 register({

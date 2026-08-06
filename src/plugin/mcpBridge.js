@@ -17,8 +17,10 @@
  */
 import { OPS, getOp, defaultParams, CATEGORIES, opsByCat } from "../core/registry.js";
 import { magicDecode } from "../core/magic/magic.js";
+import { APP_VERSION } from "../core/version.js";
 
-const SERVER_VERSION = "0.1.1";
+// MCP server 版本与项目主版本统一（全局变量，避免割裂）。
+const SERVER_VERSION = APP_VERSION;
 
 // 虚拟/不宜对外单独暴露的 op（cryptoTryAll 是 UI 聚合入口，非独立算法）。统一口径，各处复用。
 const HIDDEN_OP_IDS = new Set(["cryptoTryAll"]);

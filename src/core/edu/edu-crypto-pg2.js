@@ -139,6 +139,79 @@ export default {
 		aka: ["Whirlpool", "ISO 10118", "NESSIE", "512位哈希", "Barreto", "Rijmen", "Miyaguchi-Preneel", "漩涡哈希", "whirlpool哈希", "ISO标准哈希", "Whirlpool算法", "ISO/IEC 10118-3", "512位摘要", "whirlpool hash", "AES风格哈希", "漩涡算法", "Paulo Barreto", "Vincent Rijmen", "NEW欧洲签名", "单程压缩哈希"],
 	},
 
+	// ============ hash: Skein SHA-3 决赛候选哈希 ============
+	skein: {
+		what: "Skein——NIST SHA-3 决赛五强之一（Ferguson 等七人设计，2010 提交）。基于自家的 Threefish 可调分组密码，以 Miyaguchi-Preneel 模式构建，SHA-3 决赛圈里以极快速度著称。支持 Skein-256/512/1024 三种状态（32/64/128 字节块）与 224~1024 位多种输出。",
+		principle:
+			"Skein 的压缩函数就是 Threefish：把当前链值 X（如 8 个 64 位字）当密钥、消息块 M_i 当明文、tweak（[T0,T1] = 长度计数器 + 块类型/首末标志）当调节值，加密后与明文异或回馈（Miyaguchi-Preneel）：\n\n" +
+			"$$X_{i} = \\mathrm{Threefish}_{X_{i-1},\\ T_0,T_1}(M_i) \\oplus M_i$$\n\n" +
+			"块类型字段（MSG/OUT/CFG）和 FINAL/FIRST 标志嵌在 tweak 高位，输出阶段用同一压缩跑 counter 模式逐块产出摘要。",
+		usage: "选 variant（状态-输出位，如 Skein-512-512），inputMode 选 text/hex。输入消息输出摘要 hex。CTF 里见到既非 MD5 系也非 SHA 系的长哈希，可试 Skein。",
+		examples: [
+			{ in: "", param: "variant=512-512, inputMode=text", out: "bc5b4c50925519c290cc634277ae3d6257212395cba733bbad37a4af0fa06af41fca7903d06564fea7a2d3730dbdb80c1f85562dfcc070334ea4d1d9e72cba7a", desc: "Skein-512-512 空串官方向量" },
+			{ in: "abc", param: "variant=512-512, inputMode=text", out: "8f5dd9ec798152668e35129496b029a960c9a9b88662f7f9482f110b31f9f93893ecfb25c009baad9e46737197d5630379816a886aa05526d3a70df272d96e75", desc: "Skein-512-512 对 abc，C 参考 oracle 输出" },
+		],
+		formulas: [
+			{ tex: "X_i = \\mathrm{Threefish}_{X_{i-1},T_0,T_1}(M_i) \\oplus M_i", caption: "Skein 的 Miyaguchi-Preneel 压缩（Threefish 做分组密码）" },
+		],
+		tips: [
+			"Skein 与 Threefish 同核：Threefish 做压缩、Skein 只是套 Merkle-Damgard 外壳 + counter 输出。",
+			"SHA-3 决赛五强（Keccak/Blake/Skein/Grøstl/JH）里 Skein 速度最快，但最终 Keccak 胜出。",
+			"tweak 里的块类型是 Skein 特色：CFG/KEY/MSG/OUT 分阶段，天然支持 tree hashing 与 MAC。",
+			"与 Whirlpool 同是 Miyaguchi-Preneel 结构，但 Whirlpool 用 AES 风分组密码、Skein 用 Threefish，二者不可互换。",
+		],
+		aka: ["Skein", "threefish哈希", "SHA-3决赛", "Threefish", "Miyaguchi-Preneel", "Skein-512", "Skein-256", "Skein-1024", "NIST SHA-3", "Skein哈希", "Ferguson", "Lucks", "Schneier", "Skein算法", "threefish压缩", "skein512", "skein256", "skein1024", "SHA3候选", "可调分组密码哈希"],
+	},
+
+	// ============ hash: Grøstl SHA-3 决赛候选哈希 ============
+	grostl: {
+		what: "Grøstl——NIST SHA-3 决赛五强之一（Thomsen/Matusiewicz，2010 提交）。宽管道（wide-pipe）设计的双置换哈希：两个独立置换 P/Q 并行压缩，输出状态两倍于摘要长度。名字是奥地利菜名，作者母语梗。",
+		principle:
+			"宽管道：状态 = 摘要长度的 2 倍（Grøstl-256 用 512 位状态、Grøstl-512 用 1024 位状态）。压缩函数是双置换并行：\n\n" +
+			"$$H_i = P(H_{i-1} \\oplus M_i) \\oplus Q(M_i) \\oplus H_{i-1}$$\n\n" +
+			"P/Q 都是 8×8 字节矩阵上的迭代置换（P 用 0x00..0x70 系轮常数、Q 用 0xff..0x8f 系），每轮 = 非线性层（AES 风 S 盒）+ 行移位 + 列混合（MDS 矩阵，经预计算 T 表查表）。\n\n" +
+			"填充：补 0x80 + 0 到 64 字节块边界，末 8 字节 = 块计数（大端）。输出 = 压缩后链值的末摘要长度字节。",
+		usage: "选 variant（Grøstl-256 / Grøstl-512），inputMode 选 text/hex。输入消息输出摘要 hex。CTF 里见到既非 MD5 系也非 SHA 系的长哈希可试 Grøstl。",
+		examples: [
+			{ in: "", param: "variant=512, inputMode=text", out: "6d3ad29d279110eef3adbd66de2a0345a77baede1557f5d099fce0c03d6dc2ba8e6d4a6633dfbd66053c20faa87d1a11f39a7fbe4a6c2f009801370308fc4ad8", desc: "Grøstl-512 空串官方向量" },
+			{ in: "abc", param: "variant=512, inputMode=text", out: "70e1c68c60df3b655339d67dc291cc3f1dde4ef343f11b23fdd44957693815a75a8339c682fc28322513fd1f283c18e53cff2b264e06bf83a2f0ac8c1f6fbff6", desc: "Grøstl-512 对 abc，C oracle 输出" },
+		],
+		formulas: [
+			{ tex: "H_i = P(H_{i-1} \\oplus M_i) \\oplus Q(M_i) \\oplus H_{i-1}", caption: "Grøstl 的宽管道双置换压缩" },
+		],
+		tips: [
+			"Grøstl-256 用 512 位状态、Grøstl-512 用 1024 位状态——状态恒为摘要两倍，这就是「宽管道」。",
+			"SHA-3 决赛五强（Keccak/Blake/Skein/Grøstl/JH）里 Grøstl 在哈希速度上排名靠前，最终 Keccak 胜出。",
+			"P/Q 轮常数互为补码（P 用 0x00..、Q 用 0xff.. 系），保证两置换差异最大。",
+			"输出变换再做一次 P(h)⊕h（截尾输出），是 Grøstl 防长度扩展的特征设计。",
+		],
+		aka: ["Grøstl", "grostl", "Groestl", "宽管道哈希", "wide-pipe", "SHA-3决赛", "双置换", "NIST SHA-3", "Thomsen", "Matusiewicz", "groestl哈希", "Grøstl-512", "Grøstl-256", "SHA3候选", "MDS矩阵", "宽管哈希", "grostl512", "grostl256", "Groestl算法", "双管道哈希"],
+	},
+
+	// ============ hash: JH SHA-3 决赛候选哈希 ============
+	jh: {
+		what: "JH——NIST SHA-3 决赛五强之一（Hongjun Wu 吴鸿君，清华/新加坡南洋理工，2010 提交）。1024 位状态上做 42 轮 bitslice 置换，JH-224/256/384/512 四种输出。bitslice 设计（逐位逻辑门并行）在 Intel 平台上实现极快。",
+		principle:
+			"状态 = 1024 位（8 行 × 2 个 64 位字），消息块 512 位。压缩函数 F8：消息异或进前一半状态 → E8 双射（42 轮）→ 再异或进后一半状态（宽管道风格）。\n\n" +
+			"E8 每 7 轮一组 = 6 轮「S 盒（bitslice 逻辑门）+ MDS 线性扩散 + 位交换 SWAP{1,2,4,8,16,32}」+ 1 轮「S 盒 + MDS + 行间交换」。S 盒由 S0/S1 两个 4 位 S 盒 bitslice 而成，轮常数注入 S 盒选择位。\n\n" +
+			"填充：补 1 位 + 0；消息长恰为 512 的倍数时单块 0x80...len，否则两块（第二块放 64 位长度）。输出 = 截尾链值（JH512 取全部 64 字节、JH224 取最后 28 字节）。",
+		usage: "选 variant（JH-224/256/384/512），inputMode 选 text/hex。输入消息输出摘要 hex。CTF 里见到既非 MD5 系也非 SHA 系的长哈希可试 JH。",
+		examples: [
+			{ in: "", param: "variant=512, inputMode=text", out: "90ecf2f76f9d2c8017d979ad5ab96b87d58fc8fc4b83060f3f900774faa2c8fabe69c5f4ff1ec2b61d6b316941cedee117fb04b1f4c5bc1b919ae841c50eec4f", desc: "JH-512 空串官方向量" },
+			{ in: "abc", param: "variant=512, inputMode=text", out: "a05eab9c641cb901107d9880bcdf0eedb19b0073188896365921bd200225d9176cf136e7af90d67bdb05dfa3037e48b757d23a905b2270db67255b9eca982973", desc: "JH-512 对 abc，C oracle 输出" },
+		],
+		formulas: [
+			{ tex: "H' = H \\oplus \\mathrm{E8}(H \\oplus M)", caption: "JH 压缩：消息异或进前一半状态后做 E8 双射" },
+		],
+		tips: [
+			"JH 与 Keccak 同代：SHA-3 决赛五强（Keccak/Blake/Skein/Grøstl/JH）之一，最终 Keccak 胜出。",
+			"bitslice 是 JH 的标志：S 盒用逐位逻辑门表达，SIMD 友好，在 Intel 平台有极速实现。",
+			"E8 的轮常数同时注入 S 盒选择位（cc0/cc1），常数本身即「密钥」的一部分。",
+			"JH-224 输出只有 28 字节——比 SHA-224 还少 4 字节，是给低资源环境的变体。",
+		],
+		aka: ["JH", "jh哈希", "SHA-3决赛", "bitslice", "Hongjun Wu", "吴鸿君", "NIST SHA-3", "JH-512", "JH-256", "JH-384", "JH-224", "SHA3候选", "bitslice哈希", "E8双射", "jh512", "jh256", "JH算法", "宽管道", "MDS扩散"],
+	},
+
 	// ============ hash: Pearson 快速非加密哈希 ============
 	pearson: {
 		what: "Pearson 哈希——Peter K. Pearson 1990 年在 CACM 发表的极简快速非加密哈希。逐字节查 256 排列表 T[h^c] 累积，输出 1~32 字节。",
@@ -341,5 +414,19 @@ export default {
 			"压缩函数用 512 位分组密码 + Miyaguchi-Preneel 式构造，与 Whirlpool 结构相近。",
 		],
 		aka: ["streebog", "Streebog", "GOST R 34.11-2012", "RFC 6986", "俄罗斯哈希", "俄标哈希", "512位哈希", "Streebog512", "Streebog256", "GOST哈希", "俄罗斯国标", "Magma同族", "信创哈希", "Streebog hash", "俄系密码"],
+	},
+
+	cast128: {
+		what: "CAST-128（CAST5）——RFC 2144 定义的分组密码，64 位分组、密钥 40~128 位。16 轮 Feistel，轮函数三种类型交替（Type1 加/Type2 异或/Type3 减 与子密钥组合后循环左移），八张 256 项 S 盒。CTF 里偶见，识别特征：密钥 5-16 字节、输出 8 字节块。",
+		principle:
+			"密钥扩展：128 位密钥 x 经 4 组 z 中间字迭代（S5-S8 参与），生成 32 个子密钥 K1..K32；K1..K16 作掩码 Kmi，K17..K32 低 5 位作旋转量 Kri。密钥 ≤ 80 位（10 字节）时只跑 12 轮，否则 16 轮。\n\n" +
+			"轮函数：第 i 轮用 Type（i mod 3）+1——Type1: I=(Kmi+D)<<<Kri，f=((S1[Ia]^S2[Ib])-S3[Ic])+S4[Id]；Type2: I=(Kmi^D)<<<Kri，f=((S1-S2)+S3)^S4；Type3: I=(Kmi-D)<<<Kri，f=((S1+S2)^S3)-S4。Ia..Id 是 I 的四个字节。Feistel：Li=Ri-1，Ri=Li-1^f(Ri-1)，最后输出 (R16, L16)。",
+		usage: "输入 hex 密钥（10-32 位，即 5-16 字节）和 hex 密文（8 字节倍数），encode 加密 / decode 解密。密钥 ≤ 10 字节自动走 12 轮。",
+		examples: [
+			{ in: "0123456789abcdef", param: "key=0123456712345678234567893456789a", out: "238b4fe5847e44b2", desc: "RFC 2144 附录 B.1 官方向量" },
+			{ in: "238b4fe5847e44b2", param: "key=0123456712345678234567893456789a", out: "0123456789abcdef", desc: "解密还原" },
+		],
+		tips: ["RFC 2144 附录 B.1 三组向量（128/80/40 位密钥）可作正确性检验。密钥短于 16 字节右补零。与 CAST-256（CAST6，128 位分组）区分，别混。", "openssl legacy provider 的 cast5、pycryptodome 的 CAST 均可交叉验证。"],
+		aka: ["cast128", "cast5", "CAST-128", "CAST5", "RFC 2144", "cast-128加密", "cast128分组密码", "cast5加密", "cast128解密", "cast5ecb", "cast128 算法", "cast密码", "cast5分组", "cast128密钥", "cast128向量"],
 	},
 };

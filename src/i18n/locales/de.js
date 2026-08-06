@@ -119,6 +119,22 @@ export default {
   "op.md4.name": "MD4",
   "op.sha1.name": "SHA-1",
   "op.sha256.name": "SHA-256",
+
+  "op.shaLengthExtend.name": "SHA-Längen-Erweiterung",
+
+  "op.birthdayCollision.name": "Geburtstagskollision Demo",
+
+  "op.babaiCvp.name": "Babai Nearest Plane (CVP)",
+
+  "op.hnpRecover.name": "HNP Hidden Number Problem",
+
+  "op.spnAnalysis.name": "SPN Differential/Linear Analysis",
+
+  "op.md5CollisionShow.name": "MD5 Truncated Collision Demo",
+
+  "op.lweToy.name": "LWE Toy Encryption",
+
+  "op.ntruToy.name": "NTRU Toy Encryption",
   "op.sha384.name": "SHA-384",
   "op.sha3.name": "SHA-3",
   "op.fnv1a.name": "FNV-1a",
@@ -140,6 +156,8 @@ export default {
   "op.aes.name": "AES",
   "op.des.name": "DES",
   "op.des3.name": "3DES / TripleDES",
+
+  "op.cast128.name": "CAST-128",
   "op.rc4.name": "RC4",
   "op.xor.name": "XOR",
   "op.fernet.name": "Fernet",
@@ -494,6 +512,14 @@ export default {
   "op.lsbImage.name": "LSB-Bild-Steganografie",
   "op.pixelJihad.name": "PixelJihad",
   "op.arnoldCat.name": "Arnold-Cat-Map",
+
+  "op.arnoldCatBrute.name": "Arnold-Katzenabbildung Brute-Force",
+
+  "op.stegpy.name": "stegpy-Steganografie (stegv3)",
+
+  "op.stereogramSolver.name": "Stereogramm-Löser",
+
+  "op.ppencode.name": "ppencode",
   "op.imageBasic.name": "Bild-Grundoperationen",
 
  // ---- op names: radix/hash/stego new ops ----
@@ -653,6 +679,8 @@ export default {
   "op.cookieParse.name": "Cookie-Parsing",
   "op.httpBasicAuth.name": "HTTP Basic Auth",
   "op.dataUriParse.name": "Data-URI-Parsing",
+
+  "op.mimeMultipart.name": "MIME-Multipart-Parser",
   "op.magnetParse.name": "Magnet-Link-Parsing",
  // stego · confusables
   "op.confusablesSkeleton.name": "Confusables-Skelett",
@@ -803,6 +831,10 @@ export default {
   "op.emojiAes.name": "emoji-aes Verschlüsselung",
   "op.moyue.name": "Moyue (Abracadabra CN)",
   "op.prngAttack.name": "PRNG-Cracker (LCG / MT19937)",
+
+  "op.randu.name": "RANDU schwacher LCG",
+
+  "op.truncLcgRecover.name": "Wiederherstellung abgeschnittener LCG-Seeds",
   "op.hashLengthExtension.name": "Hash-Length-Extension (MD5)",
   "op.flagExtract.name": "Flag Auto-Extraktor",
   "op.xorAnalyze.name": "xortool All-in-One (Wiederholt-Schlüssel-XOR)",
@@ -815,6 +847,11 @@ export default {
   "op.spectrogram.name": "Audio-Spektrogramm (STFT)",
   "op.lfsrRecover.name": "LFSR-Folgen-Wiederherstellung",
   "op.geffe.name": "Geffe-Generator / Korrelationsangriff",
+  "op.bfSwap.name": "Brainfuck·Tausch-Neuausführung",
+  "op.roar.name": "Brüll-Übersetzer (4-Zeichen-Codec)",
+  "op.crc32Reverse.name": "CRC32-Reverse-Kollision",
+  "op.jsEscape.name": "JS-escape-Kodierung",
+  "op.bubblebabble.name": "BubbleBabble-Kodierung",
   "op.rc4Visualize.name": "RC4 KSA/PRGA-Visualisierer",
   "op.f5stego.name": "F5 JPEG-Steganografie-Extraktion",
   "op.lllAttack.name": "LLL-Gitterreduktions-Angriff",
@@ -832,6 +869,9 @@ export default {
   "op.ed25519.name": "Ed25519 Sign / Verify",
   "op.siphash.name": "SipHash MAC",
   "op.scrypt.name": "scrypt KDF",
+  "op.balloon.name": "Balloon KDF",
+  "op.lyra2.name": "Lyra2 KDF",
+  "op.yescrypt.name": "yescrypt KDF",
   "op.blake3.name": "BLAKE3 Hash",
   "op.paillier.name": "Paillier Homomorphic Encryption",
   "op.schnorr.name": "Schnorr Sign / Verify / Attack",
@@ -844,6 +884,12 @@ export default {
   "op.md4.name": "MD4 Hash",
   "op.pearson.name": "Pearson Hash",
   "op.whirlpool.name": "Whirlpool",
+
+  "op.skein.name": "Skein",
+
+  "op.grostl.name": "Grøstl",
+
+  "op.jh.name": "JH",
   "op.streebog.name": "Streebog",
   "op.threefish.name": "Threefish",
   "op.skipjack.name": "Skipjack",
@@ -851,11 +897,21 @@ export default {
   "op.xxhash.name": "xxHash32 / xxHash64",
   "op.cityhash.name": "CityHash Nicht-kryptografischer Hash",
   "op.a51.name": "A5/1 Stream Cipher",
+  "op.a52.name": "A5/2-Stromchiffre",
+  "op.mickey.name": "MICKEY-128 2.0-Stromchiffre",
+  "op.e0.name": "E0-Stromchiffre",
+  "op.hc128.name": "HC-128-Stromchiffre",
+  "op.hc256.name": "HC-256-Stromchiffre",
+  "op.sosemanuk.name": "Sosemanuk-Stromchiffre",
+  "op.spritz.name": "Spritz-Stromchiffre",
+  "op.vmpc.name": "VMPC-Stromchiffre",
   "op.binhex.name": "BinHex 4.0 Decode",
   "op.yenc.name": "yEnc Encode / Decode",
   "op.xorshiftRecover.name": "xorshift State Recovery",
   "op.shamir.name": "Shamir Secret Sharing",
   "op.dsa.name": "DSA Signieren / Verifizieren / Angriff",
+
+  "op.des2Mitm.name": "2DES Meet-in-the-Middle",
   "op.mcLevelDat.name": "Minecraft level.dat-Parser",
   "op.mcTextExtract.name": "Minecraft Textintel-Extraktor",
   "op.mcMapRender.name": "Minecraft Karten-Renderer",

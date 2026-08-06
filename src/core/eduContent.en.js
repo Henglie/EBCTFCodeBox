@@ -19,9 +19,14 @@ import { registerEduEn } from "./eduContent.js";
 import EDU_EN_BASE1 from "./edu-en/edu-base1.en.js";
 import EDU_EN_BASE2 from "./edu-en/edu-base2.en.js";
 import EDU_EN_CRYPTO_PG from "./edu-en/edu-crypto-pg.en.js"; // 18 个密码学扩充 op 英文科普卡
+import EDU_EN_CRYPTO_B from "./edu-en/edu-crypto-b.en.js"; // a52/e0/hc128/hc256/sosemanuk/spritz/vmpc/balloon/lyra2/yescrypt 10
 import EDU_EN_HASH_XXHASH from "./edu-en/edu-hash-xxhash.en.js"; // xxhash 1
 import EDU_EN_HASH_CITYHASH from "./edu-en/edu-hash-cityhash.en.js"; // cityhash 1
 import E_EN_EDU_ANA_CRYPTO_NEW from "./edu-en/edu-ana-crypto-new.en.js";
+import EDU_EN_TEXT_BUBBLE from "./edu-en/edu-text-bubblebabble.en.js"; // bubblebabble 1
+import EDU_EN_TEXT_JSESCAPE from "./edu-en/edu-text-jsescape.en.js"; // jsEscape 1
+import EDU_EN_TEXT_PPENCODE from "./edu-en/edu-text-ppencode.en.js"; // ppencode 1
+import EDU_EN_ANA_CRC32REV from "./edu-en/edu-analysis-crc32rev.en.js"; // crc32Reverse 1
 import EDU_EN_ANA_GEFTE from "./edu-en/edu-ana-geffe.en.js";  // geffe 1
 import E_EN_EDU_ANA_FREQ from "./edu-en/edu-ana-freq.en.js";
 import E_EN_EDU_ANA_NEW from "./edu-en/edu-ana-new.en.js";
@@ -31,6 +36,7 @@ import E_EN_EDU_ANA_RSA2 from "./edu-en/edu-ana-rsa2.en.js";
 import E_EN_EDU_ANA_SERIAL from "./edu-en/edu-ana-serial.en.js";
 import E_EN_EDU_ANA_TOOLS from "./edu-en/edu-ana-tools.en.js";
 import E_EN_EDU_ANA_TOOLS2 from "./edu-en/edu-ana-tools2.en.js";
+import E_EN_EDU_ANA_MORE from "./edu-en/edu-ana-more.en.js";
 import E_EN_EDU_BATCH_NEW from "./edu-en/edu-batch-new.en.js";
 import E_EN_EDU_BATCH5_MODERN from "./edu-en/edu-batch5-modern.en.js";
 import E_EN_EDU_BATCH5_NEW from "./edu-en/edu-batch5-new.en.js";
@@ -45,6 +51,8 @@ import E_EN_EDU_CRYPTO_PG from "./edu-en/edu-crypto-pg.en.js";
 import E_EN_EDU_EXE from "./edu-en/edu-exe.en.js";
 import E_EN_EDU_FANCY_CN from "./edu-en/edu-fancy-cn.en.js";
 import E_EN_EDU_FANCY_MODERN_NEW from "./edu-en/edu-fancy-modern-new.en.js";
+import EDU_EN_FANCY_ROAR from "./edu-en/edu-fancy-roar.en.js"; // roar 1
+import EDU_EN_FANCY_BFSWAP from "./edu-en/edu-fancy-bfswap.en.js"; // bfSwap 1
 import E_EN_EDU_FANCY_NEW from "./edu-en/edu-fancy-new.en.js";
 import E_EN_EDU_FANCY_REST from "./edu-en/edu-fancy-rest.en.js";
 import E_EN_EDU_FORENSIC_NEW from "./edu-en/edu-forensic-new.en.js";
@@ -76,6 +84,10 @@ import E_EN_EDU_UNIFIED_MISC from "./edu-en/edu-unified-misc.en.js";
 const EDU_EN = Object.assign(
   {},
   E_EN_EDU_ANA_CRYPTO_NEW,
+  EDU_EN_TEXT_BUBBLE,
+  EDU_EN_TEXT_JSESCAPE,
+  EDU_EN_TEXT_PPENCODE,
+  EDU_EN_ANA_CRC32REV,
   EDU_EN_ANA_GEFTE,
   E_EN_EDU_ANA_FREQ,
   E_EN_EDU_ANA_NEW,
@@ -85,6 +97,7 @@ const EDU_EN = Object.assign(
   E_EN_EDU_ANA_SERIAL,
   E_EN_EDU_ANA_TOOLS,
   E_EN_EDU_ANA_TOOLS2,
+  E_EN_EDU_ANA_MORE,
   EDU_EN_BASE1,
   EDU_EN_BASE2,
   E_EN_EDU_BATCH_NEW,
@@ -98,9 +111,12 @@ const EDU_EN = Object.assign(
   E_EN_EDU_CLASSIC1,
   E_EN_EDU_CLASSIC2,
   EDU_EN_CRYPTO_PG,
+  EDU_EN_CRYPTO_B,
   E_EN_EDU_EXE,
   E_EN_EDU_FANCY_CN,
   E_EN_EDU_FANCY_MODERN_NEW,
+  EDU_EN_FANCY_ROAR,
+  EDU_EN_FANCY_BFSWAP,
   E_EN_EDU_FANCY_NEW,
   E_EN_EDU_FANCY_REST,
   E_EN_EDU_FORENSIC_NEW,

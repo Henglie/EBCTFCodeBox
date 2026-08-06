@@ -22,6 +22,7 @@
  *   - 缓存版本号 CACHE_VER 变更即触发全量刷新，避免旧壳卡死。
  */
 
+// 缓存版本号：SW 独立环境无法 import 项目模块，升版本时与 src/core/version.js 的 APP_VERSION 同步修改。
 const CACHE_VER = "ebctf-shell-0.1.2";
 
 const CORE_SHELL = [

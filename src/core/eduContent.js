@@ -80,6 +80,7 @@ import EDU_BATCH5_NEW from "./edu/edu-batch5-new.js";        // enigma/m209/baze
 import EDU_BATCH5_MODERN from "./edu/edu-batch5-modern.js";  // ror13Hash/byteArith/bwt/lzstring/cast5/twofish/hotp/totp/zuc/sm2/sm9 11
 import EDU_CLASSIC_REST from "./edu/edu-classic-rest.js";    // otp/keywordcipher/simplesub/runingkey 4
 import EDU_ANA_TOOLS2 from "./edu/edu-ana-tools2.js";        // pngSizeRecover/trailerCarve 2（jpegSizeRead/gifSizeRead 已并入 imageStructUnified）
+import EDU_ANA_MORE from "./edu/edu-ana-more.js";             // mimeMultipart/randu/truncLcgRecover/shaLengthExtend/birthdayCollision 5
 import EDU_BATCH5_STEGO from "./edu/edu-batch5-stego.js";    // dtmfWav/exeBridge 2
 import EDU_MODERN_REST from "./edu/edu-modern-rest.js";      // cast5/twofish 2
 import EDU_FANCY_REST from "./edu/edu-fancy-rest.js";        // fracmorse 1
@@ -94,13 +95,20 @@ import EDU_CRYPTO_PG from "./edu/edu-crypto-pg.js";          // shamir/schnorr/e
 import EDU_UNIFIED_MISC from "./edu/edu-unified-misc.js";    // archiveUnified/cryptoAddrUnified/imageStructUnified/numToPinyin/hanziToPinyin 5
 // ---- 发布前补全：91 个原无科普 op 的科普卡（按分类分片，各代理独占文件）----
 import EDU_FORENSIC_NEW from "./edu/edu-forensic-new.js";        // john 系/pcap 系/mc 系/取证 19
-import EDU_ANA_CRYPTO_NEW from "./edu/edu-ana-crypto-new.js";    // analysis 工具 + crypto 攻击 17
+import EDU_ANA_CRYPTO_NEW from "./edu/edu-ana-crypto-new.js";
+import EDU_TEXT_BUBBLE from "./edu/edu-text-bubblebabble.js"; // bubblebabble 1
+import EDU_TEXT_JSESCAPE from "./edu/edu-text-jsescape.js"; // jsEscape 1
+import EDU_TEXT_PPENCODE from "./edu/edu-text-ppencode.js"; // ppencode 1
+import EDU_ANA_CRC32REV from "./edu/edu-analysis-crc32rev.js"; // crc32Reverse 1    // analysis 工具 + crypto 攻击 17
 import EDU_ANA_GEFTE from "./edu/edu-ana-geffe.js";  // geffe 1
-import EDU_FANCY_MODERN_NEW from "./edu/edu-fancy-modern-new.js";// fancy 深奥语言 + modern 轻量密码 16
+import EDU_FANCY_MODERN_NEW from "./edu/edu-fancy-modern-new.js";
+import EDU_FANCY_ROAR from "./edu/edu-fancy-roar.js"; // roar 1
+import EDU_FANCY_BFSWAP from "./edu/edu-fancy-bfswap.js"; // bfSwap 1// fancy 深奥语言 + modern 轻量密码 16
 import EDU_MISC2_NEW from "./edu/edu-misc2-new.js";              // cn/stego/hash/base/radix/classic 24
 import EDU_BRIDGE_NEW from "./edu/edu-bridge-new.js";            // 本地桥 exe 15
 import EDU_BATCH_NEW from "./edu/edu-batch-new.js";              // 本轮新增 9：txtmoji/webshell/二进制图像/取证/爆破
 import EDU_CRYPTO_PG2 from "./edu/edu-crypto-pg2.js";       // present/siphash/scrypt/blake3/whirlpool/pearson/xorshiftRecover/yenc/binhex 9
+import EDU_CRYPTO_B from "./edu/edu-crypto-b.js";           // a52/e0/hc128/hc256/sosemanuk/spritz/vmpc/balloon/lyra2/yescrypt 10
 import EDU_HASH_XXHASH from "./edu/edu-hash-xxhash.js";    // xxhash 1
 import EDU_HASH_CITYHASH from "./edu/edu-hash-cityhash.js";  // cityhash 1
 
@@ -147,6 +155,7 @@ const EDU = Object.assign(
   EDU_BATCH5_MODERN,
   EDU_CLASSIC_REST,
   EDU_ANA_TOOLS2,
+  EDU_ANA_MORE,
   EDU_BATCH5_STEGO,
   EDU_MODERN_REST,
   EDU_FANCY_REST,
@@ -160,12 +169,19 @@ const EDU = Object.assign(
   EDU_UNIFIED_MISC,
   EDU_FORENSIC_NEW,
   EDU_ANA_CRYPTO_NEW,
+  EDU_TEXT_BUBBLE,
+  EDU_TEXT_JSESCAPE,
+  EDU_TEXT_PPENCODE,
+  EDU_ANA_CRC32REV,
   EDU_FANCY_MODERN_NEW,
+  EDU_FANCY_ROAR,
+  EDU_FANCY_BFSWAP,
   EDU_MISC2_NEW,
   EDU_BRIDGE_NEW,
   EDU_ANA_GEFTE,
   EDU_BATCH_NEW,
   EDU_CRYPTO_PG2,
+  EDU_CRYPTO_B,
   EDU_HASH_XXHASH,
   EDU_HASH_CITYHASH,
 );

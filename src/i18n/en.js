@@ -124,6 +124,22 @@ export default {
   "op.md4.name": "MD4",
   "op.sha1.name": "SHA-1",
   "op.sha256.name": "SHA-256",
+
+  "op.shaLengthExtend.name": "SHA Length Extension",
+
+  "op.birthdayCollision.name": "Birthday Collision Demo",
+
+  "op.babaiCvp.name": "Babai Nearest Plane (CVP)",
+
+  "op.hnpRecover.name": "HNP Hidden Number Problem",
+
+  "op.spnAnalysis.name": "SPN Differential/Linear Analysis",
+
+  "op.md5CollisionShow.name": "MD5 Truncated Collision Demo",
+
+  "op.lweToy.name": "LWE Toy Encryption",
+
+  "op.ntruToy.name": "NTRU Toy Encryption",
   "op.sha384.name": "SHA-384",
   "op.sha3.name": "SHA-3",
   "op.fnv1a.name": "FNV-1a",
@@ -145,6 +161,8 @@ export default {
   "op.aes.name": "AES",
   "op.des.name": "DES",
   "op.des3.name": "3DES / TripleDES",
+
+  "op.cast128.name": "CAST-128",
   "op.rc4.name": "RC4",
   "op.xor.name": "XOR",
   "op.fernet.name": "Fernet",
@@ -523,6 +541,14 @@ export default {
   "op.lsbImage.name": "LSB Image Steganography",
   "op.pixelJihad.name": "PixelJihad",
   "op.arnoldCat.name": "Arnold Cat Map",
+
+  "op.arnoldCatBrute.name": "Arnold Cat Map Brute-Force",
+
+  "op.stegpy.name": "stegpy Steganography (stegv3)",
+
+  "op.stereogramSolver.name": "Stereogram Solver",
+
+  "op.ppencode.name": "ppencode",
   "op.imageBasic.name": "Image Basic Ops",
 
  // ---- op names: radix/hash/stego new ops ----
@@ -682,6 +708,8 @@ export default {
   "op.cookieParse.name": "Cookie Parse",
   "op.httpBasicAuth.name": "HTTP Basic Auth",
   "op.dataUriParse.name": "Data URI Parse",
+
+  "op.mimeMultipart.name": "MIME Multipart Parser",
   "op.magnetParse.name": "Magnet Link Parse",
  // stego · confusables
   "op.confusablesSkeleton.name": "Confusables Skeleton",
@@ -832,6 +860,10 @@ export default {
   "op.emojiAes.name": "emoji-aes Encrypt",
   "op.moyue.name": "Moyue (Abracadabra CN)",
   "op.prngAttack.name": "PRNG Cracker (LCG / MT19937)",
+
+  "op.randu.name": "RANDU Weak LCG",
+
+  "op.truncLcgRecover.name": "Truncated LCG Seed Recovery",
   "op.hashLengthExtension.name": "Hash Length Extension (MD5)",
   "op.flagExtract.name": "Flag Auto-Extractor",
   "op.xorAnalyze.name": "xortool All-in-One (Repeated-Key XOR)",
@@ -844,6 +876,11 @@ export default {
   "op.spectrogram.name": "Audio Spectrogram (STFT)",
   "op.lfsrRecover.name": "LFSR Sequence Recovery",
   "op.geffe.name": "Geffe Generator / Correlation Attack",
+  "op.bfSwap.name": "Brainfuck·Swap Rerun",
+  "op.roar.name": "Roar Translator (4-char codec)",
+  "op.crc32Reverse.name": "CRC32 Reverse Collision",
+  "op.jsEscape.name": "JS escape Encoding",
+  "op.bubblebabble.name": "BubbleBabble Encoding",
   "op.rc4Visualize.name": "RC4 KSA/PRGA Visualizer",
   "op.f5stego.name": "F5 JPEG Steganography Extract",
   "op.lllAttack.name": "LLL Lattice Reduction Attack",
@@ -857,12 +894,23 @@ export default {
   "op.shamir.name": "Shamir Secret Sharing",
   "op.knapsack.name": "Knapsack Cipher (Merkle-Hellman)",
   "op.a51.name": "A5/1 Stream Cipher",
+  "op.a52.name": "A5/2 Stream Cipher",
+  "op.mickey.name": "MICKEY-128 2.0 Stream Cipher",
+  "op.e0.name": "E0 Stream Cipher",
+  "op.hc128.name": "HC-128 Stream Cipher",
+  "op.hc256.name": "HC-256 Stream Cipher",
+  "op.sosemanuk.name": "Sosemanuk Stream Cipher",
+  "op.spritz.name": "Spritz Stream Cipher",
+  "op.vmpc.name": "VMPC Stream Cipher",
   "op.ecdsaReuseK.name": "ECDSA Nonce Reuse Attack",
   "op.rabin.name": "Rabin Cryptosystem",
   "op.x25519.name": "X25519 Key Exchange",
   "op.ed25519.name": "Ed25519 Sign / Verify",
   "op.siphash.name": "SipHash MAC",
   "op.scrypt.name": "scrypt KDF",
+  "op.balloon.name": "Balloon KDF",
+  "op.lyra2.name": "Lyra2 KDF",
+  "op.yescrypt.name": "yescrypt KDF",
   "op.blake3.name": "BLAKE3 Hash",
   "op.paillier.name": "Paillier Homomorphic Encryption",
   "op.schnorr.name": "Schnorr Sign / Verify / Attack",
@@ -875,6 +923,12 @@ export default {
   "op.md4.name": "MD4 Hash",
   "op.pearson.name": "Pearson Hash",
   "op.whirlpool.name": "Whirlpool Hash",
+
+  "op.skein.name": "Skein",
+
+  "op.grostl.name": "Grøstl",
+
+  "op.jh.name": "JH",
   "op.streebog.name": "Streebog (GOST R 34.11-2012)",
   "op.threefish.name": "Threefish Tweakable Block Cipher",
   "op.skipjack.name": "Skipjack Block Cipher",
@@ -885,6 +939,8 @@ export default {
   "op.yenc.name": "yEnc Encode / Decode",
   "op.binhex.name": "BinHex 4.0 Encode / Decode",
   "op.dsa.name": "DSA Sign / Verify / Attack",
+
+  "op.des2Mitm.name": "2DES Meet-in-the-Middle",
   "op.mcLevelDat.name": "Minecraft level.dat Parser",
   "op.mcTextExtract.name": "Minecraft Text Intel Extractor",
   "op.mcMapRender.name": "Minecraft Map Renderer",

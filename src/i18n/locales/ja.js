@@ -124,6 +124,22 @@ export default {
   "op.md4.name": "MD4",
   "op.sha1.name": "SHA-1",
   "op.sha256.name": "SHA-256",
+
+  "op.shaLengthExtend.name": "SHA 長さ拡張",
+
+  "op.birthdayCollision.name": "誕生日衝突デモ",
+
+  "op.babaiCvp.name": "Babai Nearest Plane (CVP)",
+
+  "op.hnpRecover.name": "HNP Hidden Number Problem",
+
+  "op.spnAnalysis.name": "SPN Differential/Linear Analysis",
+
+  "op.md5CollisionShow.name": "MD5 Truncated Collision Demo",
+
+  "op.lweToy.name": "LWE Toy Encryption",
+
+  "op.ntruToy.name": "NTRU Toy Encryption",
   "op.sha384.name": "SHA-384",
   "op.sha3.name": "SHA-3",
   "op.fnv1a.name": "FNV-1a",
@@ -145,6 +161,8 @@ export default {
   "op.aes.name": "AES",
   "op.des.name": "DES",
   "op.des3.name": "3DES / TripleDES",
+
+  "op.cast128.name": "CAST-128",
   "op.rc4.name": "RC4",
   "op.xor.name": "XOR",
   "op.fernet.name": "Fernet",
@@ -499,6 +517,14 @@ export default {
   "op.lsbImage.name": "LSB 画像ステガノグラフィ",
   "op.pixelJihad.name": "PixelJihad",
   "op.arnoldCat.name": "アーノルドの猫写像",
+
+  "op.arnoldCatBrute.name": "アーノルド猫写像ブルートフォース",
+
+  "op.stegpy.name": "stegpy ステガノグラフィ (stegv3)",
+
+  "op.stereogramSolver.name": "ステレオグラム解読",
+
+  "op.ppencode.name": "ppencode",
   "op.imageBasic.name": "画像基本操作",
 
  // ---- op names: radix/hash/stego new ops ----
@@ -658,6 +684,8 @@ export default {
   "op.cookieParse.name": "Cookie 解析",
   "op.httpBasicAuth.name": "HTTP Basic 認証",
   "op.dataUriParse.name": "Data URI 解析",
+
+  "op.mimeMultipart.name": "MIME multipart 解析",
   "op.magnetParse.name": "Magnet リンク解析",
  // stego · confusables
   "op.confusablesSkeleton.name": "紛らわしい文字の骨格",
@@ -808,6 +836,10 @@ export default {
   "op.emojiAes.name": "emoji-aes 暗号化",
   "op.moyue.name": "魔曰く（アブラカダブラ CN）",
   "op.prngAttack.name": "PRNG クラッカー（LCG / MT19937）",
+
+  "op.randu.name": "RANDU 弱い LCG",
+
+  "op.truncLcgRecover.name": "切り詰め LCG シード復元",
   "op.hashLengthExtension.name": "ハッシュ長拡張攻撃（MD5）",
   "op.flagExtract.name": "flag 自動抽出",
   "op.xorAnalyze.name": "xortool オールインワン（繰り返し鍵 XOR）",
@@ -820,6 +852,11 @@ export default {
   "op.spectrogram.name": "音声スペクトログラム（STFT）",
   "op.lfsrRecover.name": "LFSR 系列復元",
   "op.geffe.name": "Geffe 生成器 / 相関攻撃",
+  "op.bfSwap.name": "Brainfuck·交換再実行",
+  "op.roar.name": "獣語翻訳（4文字コーデック）",
+  "op.crc32Reverse.name": "CRC32 逆衝突",
+  "op.jsEscape.name": "JS escape エンコード",
+  "op.bubblebabble.name": "BubbleBabble エンコード",
   "op.rc4Visualize.name": "RC4 KSA/PRGA ビジュアライザ",
   "op.f5stego.name": "F5 JPEG ステガノ抽出",
   "op.lllAttack.name": "LLL 格子基底縮小攻撃",
@@ -837,6 +874,9 @@ export default {
   "op.ed25519.name": "Ed25519 署名 / 検証",
   "op.siphash.name": "SipHash メッセージ認証コード",
   "op.scrypt.name": "scrypt 鍵導出",
+  "op.balloon.name": "Balloon 鍵導出",
+  "op.lyra2.name": "Lyra2 鍵導出",
+  "op.yescrypt.name": "yescrypt 鍵導出",
   "op.blake3.name": "BLAKE3 ハッシュ",
   "op.paillier.name": "Paillier 準同型暗号",
   "op.schnorr.name": "Schnorr 署名 / 検証 / 攻撃",
@@ -849,6 +889,12 @@ export default {
   "op.md4.name": "MD4 ハッシュ",
   "op.pearson.name": "Pearson ハッシュ",
   "op.whirlpool.name": "Whirlpool ハッシュ",
+
+  "op.skein.name": "Skein",
+
+  "op.grostl.name": "Grøstl",
+
+  "op.jh.name": "JH",
   "op.streebog.name": "Streebog（GOST R 34.11-2012）",
   "op.threefish.name": "Threefish 調整可能ブロック暗号",
   "op.skipjack.name": "Skipjack ブロック暗号",
@@ -856,11 +902,21 @@ export default {
   "op.xxhash.name": "xxHash32 / xxHash64",
   "op.cityhash.name": "CityHash 非暗号学的ハッシュ",
   "op.a51.name": "A5/1 ストリーム暗号",
+  "op.a52.name": "A5/2 ストリーム暗号",
+  "op.mickey.name": "MICKEY-128 2.0 ストリーム暗号",
+  "op.e0.name": "E0 ストリーム暗号",
+  "op.hc128.name": "HC-128 ストリーム暗号",
+  "op.hc256.name": "HC-256 ストリーム暗号",
+  "op.sosemanuk.name": "Sosemanuk ストリーム暗号",
+  "op.spritz.name": "Spritz ストリーム暗号",
+  "op.vmpc.name": "VMPC ストリーム暗号",
   "op.binhex.name": "BinHex 4.0 デコード",
   "op.yenc.name": "yEnc エンコード / デコード",
   "op.xorshiftRecover.name": "xorshift 状態復元",
   "op.shamir.name": "シャミア秘密分散（Shamir）",
   "op.dsa.name": "DSA 署名 / 検証 / 攻撃",
+
+  "op.des2Mitm.name": "2DES 中間一致攻撃",
   "op.mcLevelDat.name": "Minecraft level.dat パーサ",
   "op.mcTextExtract.name": "Minecraft テキスト情報抽出",
   "op.mcMapRender.name": "Minecraft マップレンダラ",

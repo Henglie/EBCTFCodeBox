@@ -124,6 +124,22 @@ export default {
   "op.md4.name": "MD4",
   "op.sha1.name": "SHA-1",
   "op.sha256.name": "SHA-256",
+
+  "op.shaLengthExtend.name": "Ekstensi panjang SHA",
+
+  "op.birthdayCollision.name": "Demo tabrakan ulang tahun",
+
+  "op.babaiCvp.name": "Babai Nearest Plane (CVP)",
+
+  "op.hnpRecover.name": "HNP Hidden Number Problem",
+
+  "op.spnAnalysis.name": "SPN Differential/Linear Analysis",
+
+  "op.md5CollisionShow.name": "MD5 Truncated Collision Demo",
+
+  "op.lweToy.name": "LWE Toy Encryption",
+
+  "op.ntruToy.name": "NTRU Toy Encryption",
   "op.sha384.name": "SHA-384",
   "op.sha3.name": "SHA-3",
   "op.fnv1a.name": "FNV-1a",
@@ -145,6 +161,8 @@ export default {
   "op.aes.name": "AES",
   "op.des.name": "DES",
   "op.des3.name": "3DES / TripleDES",
+
+  "op.cast128.name": "CAST-128",
   "op.rc4.name": "RC4",
   "op.xor.name": "XOR",
   "op.fernet.name": "Fernet",
@@ -523,6 +541,14 @@ export default {
   "op.lsbImage.name": "Steganografi Gambar LSB",
   "op.pixelJihad.name": "PixelJihad",
   "op.arnoldCat.name": "Peta Kucing Arnold",
+
+  "op.arnoldCatBrute.name": "Brute-force Arnold Cat Map",
+
+  "op.stegpy.name": "Steganografi stegpy (stegv3)",
+
+  "op.stereogramSolver.name": "Pemecah stereogram",
+
+  "op.ppencode.name": "ppencode",
   "op.imageBasic.name": "Operasi Dasar Gambar",
 
  // ---- op names: radix/hash/stego new ops ----
@@ -682,6 +708,8 @@ export default {
   "op.cookieParse.name": "Urai Cookie",
   "op.httpBasicAuth.name": "HTTP Basic Auth",
   "op.dataUriParse.name": "Urai Data URI",
+
+  "op.mimeMultipart.name": "Parser MIME multipart",
   "op.magnetParse.name": "Urai Tautan Magnet",
  // stego · confusables
   "op.confusablesSkeleton.name": "Kerangka Confusables",
@@ -832,6 +860,10 @@ export default {
   "op.emojiAes.name": "Enkripsi emoji-aes",
   "op.moyue.name": "Moyue (Abracadabra CN)",
   "op.prngAttack.name": "Pemecah PRNG (LCG / MT19937)",
+
+  "op.randu.name": "RANDU LCG lemah",
+
+  "op.truncLcgRecover.name": "Pemulihan seed LCG terpotong",
   "op.hashLengthExtension.name": "Ekstensi Panjang Hash (MD5)",
   "op.flagExtract.name": "Pengekstrak Flag Otomatis",
   "op.xorAnalyze.name": "xortool Serba-ada (XOR Kunci-Berulang)",
@@ -844,6 +876,11 @@ export default {
   "op.spectrogram.name": "Spektrogram Audio (STFT)",
   "op.lfsrRecover.name": "Pemulihan Urutan LFSR",
   "op.geffe.name": "Generator Geffe / Serangan Korelasi",
+  "op.bfSwap.name": "Brainfuck·Jalankan Ulang Swap",
+  "op.roar.name": "Penerjemah Roar (codec 4 karakter)",
+  "op.crc32Reverse.name": "Tabrakan Balik CRC32",
+  "op.jsEscape.name": "Enkode escape JS",
+  "op.bubblebabble.name": "Enkode BubbleBabble",
   "op.rc4Visualize.name": "Visualisator KSA/PRGA RC4",
   "op.f5stego.name": "Ekstrak Steganografi F5 JPEG",
   "op.lllAttack.name": "Serangan Reduksi Lattice LLL",
@@ -861,6 +898,9 @@ export default {
   "op.ed25519.name": "Ed25519 Sign / Verify",
   "op.siphash.name": "SipHash MAC",
   "op.scrypt.name": "scrypt KDF",
+  "op.balloon.name": "Balloon KDF",
+  "op.lyra2.name": "Lyra2 KDF",
+  "op.yescrypt.name": "yescrypt KDF",
   "op.blake3.name": "BLAKE3 Hash",
   "op.paillier.name": "Paillier Homomorphic Encryption",
   "op.schnorr.name": "Schnorr Sign / Verify / Attack",
@@ -873,6 +913,12 @@ export default {
   "op.md4.name": "MD4 Hash",
   "op.pearson.name": "Pearson Hash",
   "op.whirlpool.name": "Whirlpool",
+
+  "op.skein.name": "Skein",
+
+  "op.grostl.name": "Grøstl",
+
+  "op.jh.name": "JH",
   "op.streebog.name": "Streebog",
   "op.threefish.name": "Threefish",
   "op.skipjack.name": "Skipjack",
@@ -880,11 +926,21 @@ export default {
   "op.xxhash.name": "xxHash32 / xxHash64",
   "op.cityhash.name": "CityHash Hash Non-Kriptografis",
   "op.a51.name": "A5/1 Stream Cipher",
+  "op.a52.name": "Sandi Aliran A5/2",
+  "op.mickey.name": "Sandi Aliran MICKEY-128 2.0",
+  "op.e0.name": "Sandi Aliran E0",
+  "op.hc128.name": "Sandi Aliran HC-128",
+  "op.hc256.name": "Sandi Aliran HC-256",
+  "op.sosemanuk.name": "Sandi Aliran Sosemanuk",
+  "op.spritz.name": "Sandi Aliran Spritz",
+  "op.vmpc.name": "Sandi Aliran VMPC",
   "op.binhex.name": "BinHex 4.0 Decode",
   "op.yenc.name": "yEnc Encode / Decode",
   "op.xorshiftRecover.name": "xorshift State Recovery",
   "op.shamir.name": "Berbagi Rahasia Shamir",
   "op.dsa.name": "DSA Tanda Tangan / Verifikasi / Serangan",
+
+  "op.des2Mitm.name": "2DES Meet-in-the-Middle",
   "op.mcLevelDat.name": "Pengurai level.dat Minecraft",
   "op.mcTextExtract.name": "Pengekstrak Intel Teks Minecraft",
   "op.mcMapRender.name": "Perender Peta Minecraft",

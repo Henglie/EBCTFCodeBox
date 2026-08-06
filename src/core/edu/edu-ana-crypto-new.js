@@ -349,4 +349,17 @@ export default {
     ],
     aka: ["pollard p-1", "p减1分解", "pollard p minus 1", "p-1算法", "光滑数分解", "b-smooth", "pollard p-1 factorization", "费马小定理分解", "p-1光滑", "smooth factoring", "波拉德p-1", "rsa p-1攻击", "p-1 method"],
   },
+
+  des2Mitm: {
+    what: "2DES 中间相遇攻击（MITM）：C = DES_k2(DES_k1(P)) 双重加密看起来是 112 位密钥，但用「中间相遇」可把复杂度降到 2^56×2 级别（每半密钥空间 b 位时 2^b×2）。CTF 里 2DES 题密钥常被限制在小空间，本 op 穷举恢复 (k1, k2)。",
+    principle:
+      "中间相遇：先穷举 k1 建 forward 表 { DES_k1(P) → k1 }（2^b 条），再对每个 k2 计算 DES_k2⁻¹(C)，若命中表内值则 (k1, k2) 是候选。命中后用完整链路 C'=DES_k2(DES_k1(P)) 验证防表冲突。密钥空间 2^(2b) 降到 2^b × 2。\n\n" +
+      "密钥编码：k1/k2 各占 keyBits 位（默认 16），大端拼 8 字节喂 DES。注意 DES 每字节最低位是校验位（被忽略），恢复出的可能是等价密钥（如 0x619F 与 0x609E 等价）。",
+    usage: "输入格式：明文hex 空格 密文hex（各 8 字节）。keyBits 控制每半密钥空间（默认 16，≤20）。输出命中密钥对列表 + 耗时。",
+    examples: [
+      { in: "0123456789abcdef 密文hex", param: "keyBits=16", out: "命中：k1=... k2=...", desc: "恢复双密钥（校验位等价容差）" },
+    ],
+    tips: ["2DES 永远别用——MITM 使其强度只比单 DES 高一点点；CTF 出题常把密钥空间压缩到可穷举。用 keyBits 从小到大试，找到能解的范围。", "多重命中是正常现象（DES 校验位 + 表冲突），全链路验证已过滤假命中。"],
+    aka: ["2des攻击", "中间相遇", "meet in the middle", "2des破解", "双重des", "2des mitm", "中间相遇攻击", "双des攻击", "2des破解工具", "des2攻击", "meet-in-the-middle", "2des密码分析", "2des密钥恢复", "双重加密攻击", "2des爆破"],
+  },
 };

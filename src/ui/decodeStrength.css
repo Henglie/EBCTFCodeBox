@@ -68,7 +68,8 @@
 .ds-close:hover { background: var(--surface-hi); color: var(--on-surface); }
 .ds-close:active { transform: scale(.92); }
 
-/* ---- 主体（双列布局：左=滑块+列表 右=方案）---- */
+/* ---- 主体（双列布局：左=滑块+解析层数+列表 右=方案）---- */
+/* 显式 4 行：level(1) / depth(2) / tools(3) / list(4)，避免 auto-flow 把 depth 挤乱 */
 .ds-body {
   flex: 1;
   min-height: 0;
@@ -76,14 +77,15 @@
   padding: var(--sp-3) var(--sp-4);
   display: grid;
   grid-template-columns: 1fr 260px;
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto auto auto 1fr;
   gap: var(--sp-3) var(--sp-4);
 }
 .ds-body > .ds-sec-level { grid-column: 1; grid-row: 1; }
-.ds-body > .ds-sec-tools { grid-column: 1; grid-row: 2; }
-.ds-body > .ds-list { grid-column: 1; grid-row: 3; }
+.ds-body > .ds-sec-depth { grid-column: 1; grid-row: 2; }
+.ds-body > .ds-sec-tools { grid-column: 1; grid-row: 3; }
+.ds-body > .ds-list { grid-column: 1; grid-row: 4; }
 .ds-body > .ds-sec-prof {
-  grid-column: 2; grid-row: 1 / 4;
+  grid-column: 2; grid-row: 1 / 5;
   overflow-y: auto;
   max-height: 100%;
   border-left: 1px solid var(--outline-var);
@@ -131,6 +133,28 @@
   color: var(--on-surface-var);
   font-variant-numeric: tabular-nums;
   flex: none;
+}
+
+/* ---- 解析层数（1~3 层链式按钮组，与滑块段同 ds-sec 容器风格）---- */
+.ds-sec-note { font-size: var(--fs-xs); color: var(--on-surface-var); line-height: 1.4; }
+.ds-depth-row { display: flex; gap: var(--sp-2); }
+.ds-depth-btn {
+  flex: 1;
+  padding: var(--sp-2) var(--sp-3);
+  font-family: inherit; font-size: var(--fs-sm); font-weight: 500;
+  color: var(--on-surface-var);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-md);
+  transition: all var(--dur-short) var(--ease);
+}
+.ds-depth-btn:hover { background: var(--surface-hi); color: var(--on-surface); }
+.ds-depth-btn:active { transform: scale(.96); }
+.ds-depth-btn.on {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  border-color: var(--primary);
+  font-weight: 600;
 }
 
 /* ---- 搜索 + 快捷操作 ---- */
@@ -266,6 +290,7 @@
     grid-template-rows: auto;
   }
   .ds-body > .ds-sec-level,
+  .ds-body > .ds-sec-depth,
   .ds-body > .ds-sec-tools,
   .ds-body > .ds-list,
   .ds-body > .ds-sec-prof {
