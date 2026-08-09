@@ -13,7 +13,7 @@
  * 纯前端零外发。
  *
  * 契约：register({id, cat:"classic", name, desc, params, encode, decode})。
- * params: [{id:"key", label:"字母密钥", type:"text"}]
+ * params: [{key:"key", label:"字母密钥", type:"text", default:"KEY"}]
  * encode(text, {key}) → 二进制串
  * decode(text, {key}) → 明文字符串
  */
@@ -108,7 +108,7 @@ register({
   cat: "classic",
   name: "Fenham 密码",
   desc: "A-Z 字母转 7 位 ASCII 二进制，与密钥逐位 XOR（二进制输出）",
-  params: [{ id: "key", label: "字母密钥", type: "text" }],
+  params: [{ key: "key", label: "字母密钥", type: "text", default: "KEY", placeholder: "仅 A-Z，如 KEY" }],
   encode: fenhamEncrypt,
   decode: fenhamDecrypt,
 });

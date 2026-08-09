@@ -777,6 +777,16 @@ export default {
   "op.albam.name": "Cifrado Albam",
   "op.blub.name": "Blub!",
   "op.cow.name": "COW / MOO",
+
+  "op.twinHex.name": "Codificación Twin-Hex",
+
+  "op.trollScript.name": "TrollScript",
+
+  "op.asciiSum.name": "Suma de prefijos ASCII",
+
+  "op.caesarBox.name": "Transposición de caja de César",
+
+  "op.curveCipher.name": "Cifrado de ruta curva",
   "op.exeBridge.name": "Puente local · CLI genérica",
   "op.steghideBridge.name": "steghide · Esteganografía",
   "op.foremostBridge.name": "foremost · Recuperación de archivos",
@@ -1027,6 +1037,8 @@ export default {
   "ui.about.contribHuoya": "Probador beta · Optimización del cambio día/noche",
   "ui.about.contrib0x0off": "Probador beta · Sugerencias de algoritmos para retos reales",
   "ui.about.contribLyy": "Probador beta · encontró detección fancy demasiado estricta, llevó al modo indulgente",
+
+  "ui.about.contribYahufanpemg": "V0.1.2 corrección de algunos errores de codificación y escape",
   "ui.about.contribFzxx": "Probador beta · propuso varios algoritmos cripto modernos",
 
   // ---- 解码强度弹窗（一键解码强度档 + 参与算法多选 + 命名方案）----

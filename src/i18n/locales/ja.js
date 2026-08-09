@@ -782,6 +782,16 @@ export default {
   "op.albam.name": "Albam 暗号",
   "op.blub.name": "Blub!",
   "op.cow.name": "COW / MOO",
+
+  "op.twinHex.name": "Twin-Hex 2文字エンコード",
+
+  "op.trollScript.name": "TrollScript",
+
+  "op.asciiSum.name": "ASCII 累積和",
+
+  "op.caesarBox.name": "カエサル箱転置",
+
+  "op.curveCipher.name": "曲路（蛇行）暗号",
   "op.exeBridge.name": "ローカルブリッジ · 汎用 CLI",
   "op.steghideBridge.name": "steghide · ステガノ",
   "op.foremostBridge.name": "foremost · ファイルカービング",
@@ -1032,6 +1042,8 @@ export default {
   "ui.about.contribHuoya": "ベータテスター · 昼夜切り替えの最適化",
   "ui.about.contrib0x0off": "ベータテスター · 実問題アルゴリズムの追加提案",
   "ui.about.contribLyy": "ベータテスター · fancy系判定が厳しすぎることを発見、緩和モードに繋がった",
+
+  "ui.about.contribYahufanpemg": "V0.1.2 一部のエンコード・エスケープ誤りの修正",
   "ui.about.contribFzxx": "ベータテスター · 新たな現代暗号アルゴリズム多数を提案",
 
   // ---- 解码强度弹窗（一键解码强度档 + 参与算法多选 + 命名方案）----

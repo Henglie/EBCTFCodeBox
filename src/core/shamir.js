@@ -202,8 +202,8 @@ register({
   name: "Shamir 秘密共享",
   desc: "Shamir's Secret Sharing（GF(2^8)）：encode 把秘密拆成 n 份分片（阈值 k），decode 用任意 ≥k 份还原。少于 k 份无法得到秘密任何信息（信息论安全）。分片格式：每行 x:hex。",
   params: [
-    { key: "n", type: "number", label: "分片总数 n", def: 5, placeholder: "生成的分片份数（2..255）" },
-    { key: "k", type: "number", label: "阈值 k", def: 3, placeholder: "还原所需最少份数（≥2 且 ≤n）" },
+    { key: "n", type: "number", label: "分片总数 n", default: 5, placeholder: "生成的分片份数（2..255）" },
+    { key: "k", type: "number", label: "阈值 k", default: 3, placeholder: "还原所需最少份数（≥2 且 ≤n）" },
   ],
   encode: shamirSplit,
   decode: shamirCombine,

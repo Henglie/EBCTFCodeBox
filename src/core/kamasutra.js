@@ -16,7 +16,7 @@
  * 特点: 自反——kamasutra_code(kamasutra_code(text, dic), dic) == text（对 dic 内字符）
  *
  * 契约：register({id, cat:"classic", name, desc, params, encode, decode})。
- * params: [{id:"key", label:"配对表", type:"text"}]
+ * params: [{key:"key", label:"配对表", type:"text", default:"AN BO CP ... MZ"}]
  * encode/decode 都调 kamasutraCode（自反）
  */
 import { register } from "./registry.js";
@@ -83,7 +83,11 @@ register({
   cat: "classic",
   name: "Kamasutra 爱经密码",
   desc: "配对表替换（自反：A↔B, C↔D...，加密=解密）",
-  params: [{ id: "key", label: "配对表", type: "text", placeholder: "如 AM BN CO ... 或 AMBNCO 或 AM,BN,CO" }],
+  params: [{
+    key: "key", label: "配对表", type: "text",
+    default: "AN BO CP DQ ER FS GT HU IV JW KX LY MZ",
+    placeholder: "如 AM BN CO ... 或 AMBNCO 或 AM,BN,CO",
+  }],
   encode: kamasutraCode,
   decode: kamasutraCode,
 });

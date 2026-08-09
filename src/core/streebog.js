@@ -166,7 +166,12 @@ function addBytes(u8, blk) {
 // 主哈希
 // ============================================================
 function streebog(input, outputBits = 512) {
-  const msg = typeof input === "string" ? new TextEncoder().encode(input) : new Uint8Array(input);
+  const raw = typeof input === "string" ? new TextEncoder().encode(input) : new Uint8Array(input);
+ // 本实现内部把 512 位块当「低位在后」的大整数处理，与标准的字节序相反：
+ // 消息须整体字节反转后送入，摘要再整体字节反转输出，才与 GOST R 34.11-2012 一致。
+ // 注意：全同字节的测试数据（"000…0"）反转后不变，无法暴露此错位——
+ // 必须用非均匀向量（RFC 6986 §10 的 M1）校验。
+  const msg = new Uint8Array(raw).reverse();
   const IV = new Uint8Array(64);
   if (outputBits === 256) for (let i = 0; i < 64; i++) IV[i] = 1;
   let h = IV.slice();
@@ -195,8 +200,7 @@ function streebog(input, outputBits = 512) {
   h = gN(h, N, zN);
   h = gN(h, EPS, zE);
   const nbytes = outputBits / 8;
-  const out = new Uint8Array(nbytes);
-  out.set(h.slice(0, nbytes));
+  const out = new Uint8Array(h.slice(0, nbytes)).reverse(); // 见上：输出同样需反转
   return Array.from(out).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 

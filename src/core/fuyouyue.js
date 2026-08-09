@@ -232,6 +232,7 @@ function tianshuDecode(text, params = {}) {
 
 register({
   id: "fuyouyue", cat: "cn", name: "佛又曰", desc: "与佛论禅V2（AES-256-CBC + 心经字符映射，完整版）",
+  params: [{ key: "key", label: "箴言", type: "text", default: "takuron.top", placeholder: "留空用默认箴言 takuron.top" }],
   encode: fuyouyueEncode, decode: fuyouyueDecode,
   detect: (t) => {
     const s = t.trim();
@@ -241,6 +242,7 @@ register({
 
 register({
   id: "tianshu", cat: "cn", name: "天书", desc: "天书曰（AES-256-CBC + 道经字符映射，佛又曰变体）",
+  params: [{ key: "key", label: "箴言", type: "text", default: "BlackCat184", placeholder: "留空用默认箴言 BlackCat184" }],
   encode: tianshuEncode, decode: tianshuDecode,
   detect: (t) => {
     const s = t.trim();

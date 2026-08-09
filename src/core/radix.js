@@ -90,6 +90,9 @@ function asciiEncode(text, base, opts) {
       return s;
     }
     const s = bigIntToRadix(BigInt(b), base);
+ // compat=true 时不补前导零（外部工具多输出 32 而非 032）；二进制仍定宽，
+ // 因为二进制无空格串要靠定宽切分，去掉补零会让解码产生歧义
+    if (opts && opts.compat) return s;
     return w ? s.padStart(w, "0") : s;
   }).join(" ");
 }
@@ -219,23 +222,34 @@ function ieee754Decode(text, precision) {
 
 // ============ 5. BCD 码（十进制 ↔ BCD 十六进制串） ============
 // 每位十进制数字 → 4 位二进制 → 1 个 hex 字符（0-9）
-function bcdEncode(text) {
+function bcdEncode(text, p) {
   const s = text.trim().replace(/[^0-9]/g, "");
   if (!s) throw new Error("BCD 输入须为十进制数字串");
-  let bin = "";
+  const nibbles = [];
   for (const ch of s) {
-    const d = Number(ch);
-    bin += d.toString(2).padStart(4, "0");
+    nibbles.push(Number(ch).toString(2).padStart(4, "0"));
   }
- // 转 hex 串（每 4 位 → 1 hex 字符）
-  let hex = "";
-  for (let i = 0; i < bin.length; i += 4) {
-    hex += parseInt(bin.slice(i, i + 4), 2).toString(16).toUpperCase();
-  }
-  return hex;
+ // compat=true 输出 4 位一组的二进制半字节（空格分隔），与多数外部工具一致；
+ // 默认输出紧凑 hex 串（每半字节 1 个 hex 字符），两者半字节内容相同
+  if (p && p.compat) return nibbles.join(" ");
+  return nibbles.map((n) => parseInt(n, 2).toString(16).toUpperCase()).join("");
 }
 
-function bcdDecode(text) {
+function bcdDecode(text, p) {
+ // compat 与 encode 对称：开则按二进制半字节读，关则按 hex 半字节读。
+ // 不做自动识别——"0100" 既是 hex 半字节 0,1,0,0 也是二进制半字节 4，靠参数钉死语义
+  if (p && p.compat) {
+    const bin = text.trim().replace(/[^01]/g, "");
+    if (!bin) throw new Error("BCD 兼容模式输入须为二进制半字节串");
+    if (bin.length % 4 !== 0) throw new Error("BCD 兼容模式位数须为 4 的倍数");
+    let out = "";
+    for (let i = 0; i < bin.length; i += 4) {
+      const v = parseInt(bin.slice(i, i + 4), 2);
+      if (v > 9) throw new Error("BCD 非法半字节 " + bin.slice(i, i + 4) + "（>9）");
+      out += v;
+    }
+    return out;
+  }
   const hex = text.trim().replace(/[^0-9a-fA-F]/g, "");
   if (!hex) throw new Error("BCD 输入须为十六进制串");
   let out = "";
@@ -290,6 +304,7 @@ register({
     ] },
     { key: "invert", label: "0-1 取反（二进制）", type: "bool", default: false },
     { key: "bitReverse", label: "逐字节位反转（二进制）", type: "bool", default: false },
+    { key: "compat", label: "兼容模式（十/八/十六进制不补前导零）", type: "bool", default: false },
   ],
   encode: (t, p) => asciiEncode(t, Number((p && p.base) || 16), p),
   decode: (t, p) => asciiDecode(t, Number((p && p.base) || 16), p),
@@ -310,8 +325,11 @@ register({
 
 register({
   id: "bcd", cat: "radix", name: "BCD 码", desc: "十进制数字串↔BCD 十六进制串",
-  encode: (t) => bcdEncode(t),
-  decode: (t) => bcdDecode(t),
+  params: [
+    { key: "compat", label: "兼容模式（二进制半字节，空格分隔）", type: "bool", default: false },
+  ],
+  encode: (t, p) => bcdEncode(t, p),
+  decode: (t, p) => bcdDecode(t, p),
 });
 
 register({

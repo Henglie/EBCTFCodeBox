@@ -241,14 +241,28 @@ function dnaEncode(text) {
  // 用空格分隔每个密码子，便于 dnaDecode 按 split 还原（双向契约）
   return [...text].map((ch) => DNA_REV[ch] || "").join(" ");
 }
+// 解码需同时吃下两种排版：分组（"ACT ACA"）与整段连写（"ACTACA…"）。
+// 外部工具普遍输出连写形式，若只按分隔符切段会把整串当成一个密码子而查表落空。
 function dnaDecode(text) {
-  return text.split(/[^01AGCTagct]+/).filter(Boolean).map((seg) => {
-    let codon = seg;
+  const segs = text.split(/[^01AGCTagct]+/).filter(Boolean);
+  let out = "";
+  for (const seg of segs) {
     if (/[01]/.test(seg)) {
-      codon = (seg.match(/.{2}/g) || []).map((b) => DNA_BIN[b] || "").join("");
+      // 二进制形态：2 位 1 个碱基，6 位 1 个密码子
+      for (let i = 0; i + 6 <= seg.length; i += 6) {
+        const codon = (seg.slice(i, i + 6).match(/.{2}/g) || [])
+          .map((b) => DNA_BIN[b] || "").join("");
+        out += DNA_MAP[codon] || "";
+      }
+    } else {
+      // 碱基形态：每 3 个碱基切一个密码子，长度不足的尾巴丢弃
+      const s = seg.toUpperCase();
+      for (let i = 0; i + 3 <= s.length; i += 3) {
+        out += DNA_MAP[s.slice(i, i + 3)] || "";
+      }
     }
-    return DNA_MAP[codon.toUpperCase()] || "";
-  }).join("");
+  }
+  return out;
 }
 
 // ============ 键盘坐标（C7-P14 合并：吸收 kbdFullCoord）============

@@ -259,10 +259,24 @@ function jsHexDecode(text) {
 }
 
 // ============ mixHexOctBin（0x/0b/0o 混排解码）============
+// 连写串拆分：0x68 0o145 直接相接时，末位 0 归属有歧义（0b11011000x6c 既可读成
+// 0b1101100+0x6c 也可读成 0b110110+00x6c）。用惰性量词 + 前瞻「下一段必须是新前缀
+// 或串尾」把归属钉死，得到唯一正确切分。
+const MIX_PACKED_RE = /0x[0-9a-f]+?(?=0[xbod]|$)|0b[01]+?(?=0[xbod]|$)|0o[0-7]+?(?=0[xbod]|$)|0d[0-9]+?(?=0[xbod]|$)/gi;
+
+function mixSplitPacked(tok) {
+ // 仅当 token 内嵌了多个前缀才尝试拆分，单个 token 保持原样交由后续报错
+  if (!/^0[xbod]/i.test(tok)) return [tok];
+  if ((tok.match(/0[xbod]/gi) || []).length < 2) return [tok];
+  const parts = tok.match(MIX_PACKED_RE);
+ // 拆分必须无损覆盖原串，否则视为拆不动，原样返回
+  return parts && parts.join("").length === tok.length ? parts : [tok];
+}
+
 function mixHexOctBinRun(text) {
   const s = text.trim();
- // 按空白 / 逗号 / 分号分割
-  const tokens = s.split(/[\s,;]+/).filter(Boolean);
+ // 按空白 / 逗号 / 分号分割，再对连写 token 二次拆分
+  const tokens = s.split(/[\s,;]+/).filter(Boolean).flatMap(mixSplitPacked);
   if (tokens.length === 0) return "（空输入）";
   const out = [];
   const errors = [];

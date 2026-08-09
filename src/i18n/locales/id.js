@@ -508,6 +508,8 @@ export default {
   "ui.about.contribHuoya": "Penguji beta · Optimasi peralihan siang/malam",
   "ui.about.contrib0x0off": "Penguji beta · Saran algoritma untuk soal nyata",
   "ui.about.contribLyy": "Penguji beta · mendapati deteksi fancy terlalu ketat, memicu mode longgar",
+
+  "ui.about.contribYahufanpemg": "V0.1.2 koreksi sebagian kesalahan enkoding dan escape",
   "ui.about.contribFzxx": "Penguji beta · mengusulkan banyak algoritma kripto modern",
   "ui.about.fontNoticeTitle": "Pemberitahuan Lisensi & Modifikasi Font",
   "ui.about.fontOrigAuthor": "Font konten adalah Cheonhyeong (全字堂) oleh Shen Tianheng (沈天珩, cheonhyeong.com), font Unicode-penuh yang mengintegrasikan beberapa typeface berlisensi bebas.",
@@ -806,6 +808,16 @@ export default {
   "op.albam.name": "Sandi Albam",
   "op.blub.name": "Blub!",
   "op.cow.name": "COW / MOO",
+
+  "op.twinHex.name": "Penyandian Twin-Hex",
+
+  "op.trollScript.name": "TrollScript",
+
+  "op.asciiSum.name": "Jumlah prefiks ASCII",
+
+  "op.caesarBox.name": "Transposisi Caesar Box",
+
+  "op.curveCipher.name": "Sandi jalur berkelok",
   "op.exeBridge.name": "Bridge Lokal · CLI Generik",
   "op.steghideBridge.name": "steghide · Stego",
   "op.foremostBridge.name": "foremost · Carving Berkas",

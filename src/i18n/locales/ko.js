@@ -782,6 +782,16 @@ export default {
   "op.albam.name": "Albam 암호",
   "op.blub.name": "Blub!",
   "op.cow.name": "COW / MOO",
+
+  "op.twinHex.name": "Twin-Hex 2자 인코딩",
+
+  "op.trollScript.name": "TrollScript",
+
+  "op.asciiSum.name": "ASCII 누적합",
+
+  "op.caesarBox.name": "카이사르 박스 전치",
+
+  "op.curveCipher.name": "곡로(뱀형) 암호",
   "op.exeBridge.name": "로컬 브리지 · 범용 CLI",
   "op.steghideBridge.name": "steghide · 스테가노",
   "op.foremostBridge.name": "foremost · 파일 카빙",
@@ -1032,6 +1042,8 @@ export default {
   "ui.about.contribHuoya": "베타 테스터 · 주야간 전환 최적화",
   "ui.about.contrib0x0off": "베타 테스터 · 실전 문제 알고리즘 보완 제안",
   "ui.about.contribLyy": "베타 테스터 · fancy 계열 판정이 너무 엄격함을 발견, 완화 모드로 이어짐",
+
+  "ui.about.contribYahufanpemg": "V0.1.2 일부 인코딩·이스케이프 오류 수정",
   "ui.about.contribFzxx": "베타 테스터 · 다양한 현대 암호 알고리즘 제안",
 
   // ---- 解码强度弹窗（一键解码强度档 + 参与算法多选 + 命名方案）----

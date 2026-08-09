@@ -307,14 +307,15 @@ class RabbitCipher {
     const s5 = ((x[4] >>> 16) & 0xFFFF) ^ (x[7] & 0xFFFF);          // S[95..80]
     const s6 = (x[6] & 0xFFFF) ^ ((x[3] >>> 16) & 0xFFFF);          // S[111..96]
     const s7 = ((x[6] >>> 16) & 0xFFFF) ^ (x[1] & 0xFFFF);          // S[127..112]
- // 写 16 字节：S[127..0] big-endian（最高字节在前，照 RFC 4503 §A 测试向量 I2OSP 约定）
- // words[0]=S[15..0]（最低），words[7]=S[127..112]（最高）→ 反向输出 + 每字 big-endian
+ // 写 16 字节：按 RFC 4503 §3 向量约定，先出 S[15..0] 且每字小端 —— 即 LE(s0)…LE(s7)。
+ // 注意：往返测试查不出此处字节序错误（两个方向用同一密钥流，反序也能解回），
+ // 必须拿 RFC 官方密钥流向量逐字节比对。
     const out = new Uint8Array(16);
     const words = [s0, s1, s2, s3, s4, s5, s6, s7];
     for (let i = 0; i < 8; i++) {
-      const w = words[7 - i];
-      out[2 * i] = (w >>> 8) & 0xff;
-      out[2 * i + 1] = w & 0xff;
+      const w = words[i];
+      out[2 * i] = w & 0xff;
+      out[2 * i + 1] = (w >>> 8) & 0xff;
     }
     return out;
   }

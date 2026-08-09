@@ -508,6 +508,8 @@ export default {
   "ui.about.contribHuoya": "בודק בטא · אופטימיזציה של מעבר יום/לילה",
   "ui.about.contrib0x0off": "בודק בטא · הצעות אלגוריתמים לאתגרים אמיתיים",
   "ui.about.contribLyy": "בודק בטא · מצא שזיהוי fancy מחמיר מדי, הוביל למצב מקל",
+
+  "ui.about.contribYahufanpemg": "V0.1.2 תיקון חלק משגיאות הקידוד וה-escape",
   "ui.about.contribFzxx": "בודק בטא · הציע אלגוריתמים קריפטוגרפיים מודרניים רבים",
   "ui.about.fontNoticeTitle": "הודעת רישיון גופן ושינויים",
   "ui.about.fontOrigAuthor": "גופן התוכן הוא Cheonhyeong (全字堂) מאת Shen Tianheng (沈天珩, cheonhyeong.com), גופן בכיסוי Unicode מלא המשולב ממספר גופנים ברישיון חופשי.",
@@ -806,6 +808,16 @@ export default {
   "op.albam.name": "Albam Cipher",
   "op.blub.name": "Blub!",
   "op.cow.name": "COW / MOO",
+
+  "op.twinHex.name": "קידוד Twin-Hex זוגי",
+
+  "op.trollScript.name": "TrollScript",
+
+  "op.asciiSum.name": "סכום מצטבר ASCII",
+
+  "op.caesarBox.name": "טרנספוזיציית תיבת קיסר",
+
+  "op.curveCipher.name": "צופן מסלול נחש",
   "op.exeBridge.name": "Local Bridge · Generic CLI",
   "op.steghideBridge.name": "steghide · Stego",
   "op.foremostBridge.name": "foremost · File Carving",

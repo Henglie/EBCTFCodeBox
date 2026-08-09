@@ -162,9 +162,12 @@ function qpDecode(text) {
 // ============ UUencode ============
 // 6-bit 值映射到 32-95（space 到 _）；行首字符 = 字节数 + 32。
 // 照抄 WhatsInYourClipboard codec.js 的 decode；encode 按 RFC 补齐。
-function uuEncode(text) {
+// compat=true 只输出数据行，且用反引号（0x60）代替空格表示 0 值 6-bit 组——
+// 空格补位会被尾空格裁剪破坏，故多数外部工具改用反引号。decode 侧两者都认。
+function uuEncode(text, p) {
   const bytes = te(text);
-  let out = "begin 644 -\n";
+  const bare = !!(p && p.compat);
+  let out = bare ? "" : "begin 644 -\n";
   for (let i = 0; i < bytes.length; i += 45) {
     const chunk = bytes.slice(i, i + 45);
     out += String.fromCharCode(chunk.length + 32);
@@ -177,6 +180,7 @@ function uuEncode(text) {
     }
     out += "\n";
   }
+  if (bare) return out.replace(/\n$/, "").replace(/ /g, "`");
   out += "`\nend\n";
   return out;
 }
@@ -204,9 +208,12 @@ function uuDecode(text) {
 // ============ XXencode ============
 // 码表：+ - 0-9 A-Z a-z（64 字符）；照抄 WhatsInYourClipboard codec.js 的 decode + 码表。
 const XX = "+-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-function xxEncode(text) {
+// compat=true 只输出数据行（含长度首字符），省去 begin/end 信封与 + 终止行——
+// 外部工具多只给数据行。decode 侧一直跳过 begin/end，故仅 encode 需要该开关。
+function xxEncode(text, p) {
   const bytes = te(text);
-  let out = "begin 644 -\n";
+  const bare = !!(p && p.compat);
+  let out = bare ? "" : "begin 644 -\n";
   for (let i = 0; i < bytes.length; i += 45) {
     const chunk = bytes.slice(i, i + 45);
     out += XX[chunk.length];
@@ -219,6 +226,7 @@ function xxEncode(text) {
     }
     out += "\n";
   }
+  if (bare) return out.replace(/\n$/, "");
   out += "+\nend\n"; // XX[0]='+' 作终止行（decode 跳过 count<=0）
   return out;
 }
@@ -312,12 +320,18 @@ register({
 
 register({
   id: "uuencode", cat: "text", name: "UUencode", desc: "Unix-to-Unix（行首字节数+32，6-bit 映射 32-95）",
+  params: [
+    { key: "compat", label: "兼容模式（仅数据行，0 值用反引号）", type: "bool", default: false },
+  ],
   encode: uuEncode, decode: uuDecode,
   detect: (t) => (/^begin\s+\d+\s+\S+/m.test(t) ? 0.7 : 0),
 });
 
 register({
   id: "xxencode", cat: "text", name: "XXencode", desc: "XX 编码（码表 +-0-9A-Za-z，结构同 UU）",
+  params: [
+    { key: "compat", label: "兼容模式（仅数据行，无 begin/end 信封）", type: "bool", default: false },
+  ],
   encode: xxEncode, decode: xxDecode,
   detect: (t) => (/^begin\s+\d+\s+\S+/m.test(t) && /^[+-0-9A-Za-z]/m.test(t) ? 0.5 : 0),
 });

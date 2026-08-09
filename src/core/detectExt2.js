@@ -214,8 +214,9 @@ const DETECTORS2 = {
   },
   tapCode: (t) => {
     const s = trim(t);
- // 敲击码：数字对（1-5），空格分隔
-    return /^[1-5][1-5](\s[1-5][1-5])*$/.test(s) ? 0.3 : 0;
+ // 敲击码：数字对（1-5），空格分隔；外部工具常输出连写，故一并认（decode 亦已容忍）
+    if (/^[1-5][1-5](\s[1-5][1-5])*$/.test(s)) return 0.3;
+    return /^[1-5]{4,}$/.test(s) && s.length % 2 === 0 ? 0.3 : 0;
   },
   semaphore: (t) => {
     const s = trim(t).toUpperCase();

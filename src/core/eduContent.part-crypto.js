@@ -204,7 +204,10 @@ export default {
     principle:
       "$\\text{HMAC}(K,m) = H\\big((K\\oplus opad)\\,\\|\\,H((K\\oplus ipad)\\,\\|\\,m)\\big)$。把密钥揉进两层哈希，没密钥算不出正确值。",
     usage: "填密钥、选底层哈希算法（SHA-1/256/…），输入消息，输出 HMAC 值。",
-    examples: [{ in: "hello", param: "key=secret, SHA-256", out: "HMAC 值" }],
+    examples: [
+      { in: "hello", param: "key=secret, algo=SHA-256", out: "88aab3ede8d3adf94d26ab90d3bafd4a2083070c3bcce9c014ee04a443847c0b" },
+      { in: "what do ya want for nothing?", param: "key=Jefe, algo=MD5", out: "750c783e6ab0b503eaa86e310a5db738", desc: "RFC 2202 case 2 官方向量（密钥是可见字符串，可直接照填复现）" },
+    ],
     formulas: [{ tex: "\\text{HMAC}(K,m)=H\\big((K\\oplus opad)\\|H((K\\oplus ipad)\\|m)\\big)", caption: "HMAC 双层结构" }],
     tips: ["JWT 弱密钥题：拿签名和 header.payload 用 hmacKeyBrute 爆破 key。"],
     aka: ["hash mac", "消息认证码", "hmac-sha256", "hmac", "带密钥哈希", "keyed hash", "hash-based mac", "hmac-sha1", "消息鉴别码", "散列消息认证码", "hmac算法", "jwt签名"],

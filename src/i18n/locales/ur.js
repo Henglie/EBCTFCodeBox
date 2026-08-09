@@ -508,6 +508,8 @@ export default {
   "ui.about.contribHuoya": "بیٹا ٹیسٹر · ڈے/نائٹ ٹوگل کی اصلاح",
   "ui.about.contrib0x0off": "بیٹا ٹیسٹر · حقیقی سوالات کے الگورتھم کی تجاویز",
   "ui.about.contribLyy": "بیٹا ٹیسٹر · fancy کی جانچ بہت سخت پائی، نرم موڈ کا باعث بنی",
+
+  "ui.about.contribYahufanpemg": "V0.1.2 کچھ انکوڈنگ ایسکیپ غلطیوں کی درستی",
   "ui.about.contribFzxx": "بیٹا ٹیسٹر · کئی جدید کریپٹو الگورتھم تجویز کیے",
   "ui.about.fontNoticeTitle": "فونٹ لائسنس اور ترمیم نوٹس",
   "ui.about.fontOrigAuthor": "مواد فونٹ Cheonhyeong (全字堂) ہے، از Shen Tianheng (沈天珩, cheonhyeong.com)، ایک مکمل-Unicode فونٹ جو کئی آزاد لائسنس والے ٹائپ فیسز سے مربوط ہے۔",
@@ -806,6 +808,16 @@ export default {
   "op.albam.name": "Albam Cipher",
   "op.blub.name": "Blub!",
   "op.cow.name": "COW / MOO",
+
+  "op.twinHex.name": "Twin-Hex دو حرفی انکوڈنگ",
+
+  "op.trollScript.name": "TrollScript",
+
+  "op.asciiSum.name": "ASCII پریفکس مجموعہ",
+
+  "op.caesarBox.name": "سیزر باکس ٹرانسپوزیشن",
+
+  "op.curveCipher.name": "کرو (سانپ نما) سائفر",
   "op.exeBridge.name": "Local Bridge · Generic CLI",
   "op.steghideBridge.name": "steghide · Stego",
   "op.foremostBridge.name": "foremost · File Carving",

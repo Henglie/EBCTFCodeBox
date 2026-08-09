@@ -180,7 +180,30 @@ async function sha(algo, text) {
 }
 
 // ============ HMAC（WebCrypto，异步） ============
+// HMAC-MD5 走纯 JS：WebCrypto 只认 SHA 系列，不支持 MD5。
+// 标准构造 H((K'^opad) ‖ H((K'^ipad) ‖ m))，MD5 分组 64 字节（RFC 2104）。
+function hmacMd5(key, text) {
+  const BLOCK = 64;
+  let k = te(key);
+  if (k.length > BLOCK) k = md5Bytes(k);       // 超长密钥先摘要
+  const k0 = new Uint8Array(BLOCK);            // 不足则右补 0
+  k0.set(k);
+  const ipad = new Uint8Array(BLOCK), opad = new Uint8Array(BLOCK);
+  for (let i = 0; i < BLOCK; i++) {
+    ipad[i] = k0[i] ^ 0x36;
+    opad[i] = k0[i] ^ 0x5c;
+  }
+  const msg = te(text);
+  const inner = new Uint8Array(BLOCK + msg.length);
+  inner.set(ipad); inner.set(msg, BLOCK);
+  const innerHash = md5Bytes(inner);
+  const outer = new Uint8Array(BLOCK + innerHash.length);
+  outer.set(opad); outer.set(innerHash, BLOCK);
+  return toHex(md5Bytes(outer));
+}
+
 async function hmac(algo, key, text) {
+  if (algo === "MD5") return hmacMd5(key, text);
   if (!globalThis.crypto?.subtle) throw new Error("当前环境不支持 WebCrypto");
   const keyData = await crypto.subtle.importKey(
     "raw", te(key), { name: "HMAC", hash: algo }, false, ["sign"]
@@ -225,6 +248,7 @@ register({
   params: [
     { key: "key", label: "密钥", type: "text", default: "", placeholder: "HMAC 密钥" },
     { key: "algo", label: "算法", type: "select", default: "SHA-256", options: [
+      { value: "MD5", label: "MD5" },
       { value: "SHA-1", label: "SHA-1" },
       { value: "SHA-256", label: "SHA-256" },
       { value: "SHA-384", label: "SHA-384" },

@@ -522,6 +522,7 @@ export default {
   "ui.about.contrib0x0off": "内测员 · 真题算法补充建议",
   "ui.about.contribLyy": "内测员 · 发现 fancy 系列算法判定过于严谨，促成宽松判定模式",
   "ui.about.contribFzxx": "内测员 · 新增多种现代加密算法提议",
+  "ui.about.contribYahufanpemg": "V0.1.2 部分编码转义错误纠正",
 
  // ---- 科普卡 ----
   "ui.edu.title": "科普与示例",
@@ -815,6 +816,11 @@ export default {
   "op.albam.name": "Albam 码",
   "op.blub.name": "Blub!",
   "op.cow.name": "COW / MOO",
+  "op.twinHex.name": "Twin-Hex 双字符编码",
+  "op.trollScript.name": "TrollScript",
+  "op.asciiSum.name": "ASCII 前缀累加和",
+  "op.caesarBox.name": "凯撒箱换位 Caesar Box",
+  "op.curveCipher.name": "曲路密码 Curve Cipher",
   "op.exeBridge.name": "本地桥·通用命令行",
   "op.steghideBridge.name": "steghide · 隐写",
   "op.foremostBridge.name": "foremost · 文件雕复",

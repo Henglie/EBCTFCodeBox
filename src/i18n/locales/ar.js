@@ -508,6 +508,8 @@ export default {
   "ui.about.contribHuoya": "مختبِر بيتا · تحسين تبديل الوضع النهاري/الليلي",
   "ui.about.contrib0x0off": "مختبِر بيتا · اقتراحات إضافة خوارزميات لمسائل حقيقية",
   "ui.about.contribLyy": "مختبِر بيتا · وجد فحص عائلة fancy صارمًا جدًا، قاد لوضع متساهل",
+
+  "ui.about.contribYahufanpemg": "V0.1.2 تصحيح بعض أخطاء الترميز والهروب",
   "ui.about.contribFzxx": "مختبِر بيتا · اقترح خوارزميات تشفير حديثة متعددة",
   "ui.about.fontNoticeTitle": "إشعار ترخيص الخط والتعديل",
   "ui.about.fontOrigAuthor": "خط المحتوى هو Cheonhyeong (全字堂) من تأليف Shen Tianheng (沈天珩، cheonhyeong.com)، وهو خط كامل لليونيكود مدمج من عدة خطوط حرة الترخيص.",
@@ -806,6 +808,16 @@ export default {
   "op.albam.name": "Albam Cipher",
   "op.blub.name": "Blub!",
   "op.cow.name": "COW / MOO",
+
+  "op.twinHex.name": "ترميز Twin-Hex المزدوج",
+
+  "op.trollScript.name": "TrollScript",
+
+  "op.asciiSum.name": "مجموع بادئة ASCII",
+
+  "op.caesarBox.name": "تبديل صندوق قيصر",
+
+  "op.curveCipher.name": "شيفرة المسار المنحني",
   "op.exeBridge.name": "Local Bridge · Generic CLI",
   "op.steghideBridge.name": "steghide · Stego",
   "op.foremostBridge.name": "foremost · File Carving",

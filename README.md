@@ -42,25 +42,22 @@
 | 百度网盘 | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
 | 夸克网盘 | https://pan.quark.cn/s/3b7e573b19c0 | 无 |
 
-当前版本 **v0.1.2**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
+当前版本 **v0.1.3**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
 
 ## 更新日志
 
-### v0.1.2
+### v0.1.3
 
-- **新增 12 个密码学算法**（585 op，全部官方向量验证）：B 组流密码 8 项（A5/2 / Spritz / VMPC / E0 / HC-128 / HC-256 / Sosemanuk / MICKEY-128 2.0）、哈希 3 项（Skein / Grøstl / JH）、KDF 3 项（Balloon / Lyra2 / yescrypt）、CAST-128（RFC 2144）、CityHash、Threefish、Skipjack、MARS。
-- **解码强度四件套**：强度档位 + 自定义算法池 + 暴力爆破独立通道（XOR/凯撒/字典/彩虹表/HMAC/PBE/Playfair/ZIP/CRC32/bkcrack，结果单独归组展示不污染主排序）+ 解析层数 1~3 选择。
-- **宽松判定模式**：增强 / 极强 / 最强 / 自定义档只按字符种类数放行算法，变体编码题（「喵呜」表 0/1、emoji 表二进制）也能参与解码；默认 / 快速档保持严格定义域识别。
-- **随波逐流四点对齐**：ROT8000 加 offset 参数、Morse 兼容 BA 替代 + 0/1 数字形式、Caesar 加 mode 参数、天干地支加 mode 参数含错别字兼容字典。
-- **拖入 pcap / pcapng 流量包自动跑协议级分析**：一键输出流量概览 + TCP 流重组 + HTTP 对象提取 + DNS 隧道检测 + ICMP 载荷提取四项协议级报告，含 flag 正则检测自动提级告警。
-- **修复一键解码「解码强度」弹窗参与算法选择消失**：CSS grid 布局未给「解析层数」段分配行位导致选项不可见，已显式定位 4 行布局并补全按钮组样式。
-- **暴力爆破算法移入左侧算法列表**：作为虚拟分类与普通算法共用同一折叠 / 搜索 / 勾选 UI，右侧栏仅保留「我的方案」管理。
-- **纯 JS 快路径优化**：base64 encode 12× 提速、hexEncode / byteReverse / xorCrypt 大文件性能优化。
-- **BrainFuck 括号宽容**：孤儿 `]` / 多余 `[` 不再报错，按 NOP 处理。
-- **本地桥 CORS 拦截修复**：白名单从写死 `localhost:8180` 改为按 Origin 反射，127.0.0.1 打开页面时桥不再失效。
-- **左侧导航 UI 收紧**：多分类同时展开、二级菜单整块深色填充、字体与间距收紧。
-- **版本号全局变量化**：统一由 `src/core/version.js` 导出，main.js / mcpBridge.js / index.html 共用同一来源，消除版本号割裂。
-- i18n 16 语言全 979 key 同构。
+- **新增 5 个算法（590 op）**：Twin-Hex 双字符编码、TrollScript（BrainFuck 三字符 token 方言）、ASCII 前缀累加和、凯撒箱换位、曲路（蛇形）换位。密文与通行工具逐字节一致。
+- **修复 2 处摘要 / 密钥流算错**：Streebog（GOST R 34.11-2012）摘要字节序反了，RFC 6986 官方向量下 512/256 位都不符；Rabbit 流密码密钥流字节序反了，恰为 RFC 4503 官方向量的整体逆序。两者往返测试都查不出来（同一密钥流正反都能解回、全同字节数据反转后不变），只能靠官方向量比对。现均逐字节一致。
+- **补齐 Fletcher-8 / Fletcher-64**（原仅 16/32 位）与 **HMAC-MD5**（WebCrypto 不支持 MD5，改纯 JS 实现）。
+- **7 个 op 新增「兼容模式」勾选框**（默认关，原行为不变）：`base85` / `bcd` / `asciiRadix` / `xxencode` / `uuencode` / `ipv4Int` / `tapCode`，用于与通行工具的输出格式对齐。
+- **全量三组兼容性验证 · 双权威源**：对 CyberChef 与 ToolsFx 建 287 条可执行配对跑四组实验，**我方自洽往返硬伤 0 例**；另用 41 条公开向量（RFC / FIPS / NESSIE / GB-T / GOST）做独立基准，全过。
+- **aaencode/aadecode 头部对齐修复**：标准头部两处反斜杠写法纠正 + 头部剥离前统一去反斜杠匹配，彻底消除前缀剥离失败导致的 `ଜ` 类乱码，对标准密文鲁棒、自身往返无损。
+- **全量兼容性交叉验证（对照参考实现，61 个重叠算法全覆盖）**：构建三组测试台（参考→我方、我方→参考、我方往返），严格甄别后**我方自洽往返真缺陷 0 例**；修复 `dnaDecode` 连写碱基流返回空串、`braille` 默认乱序字典不互通（改 auto 自适应）、`fuyouyue`/`tianshu` 未暴露密钥 params（补 params 声明）。剩余 5 例互通差异均溯源为参考侧自身 bug / 变体差异，非我方缺陷。
+- **贡献者追加**：yahufanpemg（V0.1.2 部分编码转义错误纠正）。
+
+> 历史版本更新记录见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 项目简介
 

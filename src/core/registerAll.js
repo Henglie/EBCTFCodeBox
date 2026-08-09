@@ -244,5 +244,6 @@ import "./lllAttack.js"; // 格基归约 LLL + 背包低密度攻击 CJLOSS（cr
 import "./xiangyue.js"; // 想曰 XiangYue 完整版解密 xiangyue（cn, run async, 中/日/韩/Emoji/零宽/象形映射 → Argon2id/PBKDF2 + ChaCha20-Poly1305 + AES-CTR + zlib, 纯JS原语自验, 无 detect）
 import "./lightweightStream.js"; // eSTREAM/NIST 轻量级流密码 trivium/grainV1/grain128aead（modern, 双向, 官方向量验证）
 import "./fengCodec.js"; // 风之暇想 uid=243467 编码 dxBase64（base, 双向, deflate+salt XOR+CRC16）/ yueChang 曰唱（cn, 双向, PBKDF2+AES-GCM+拟声字映射, 源码逐行核验）
+import "./ctfCipherExt.js"; // 冷门编码/换位补齐 twinHex/trollScript/asciiSum（fancy, 双向, 有 detect）+ caesarBox/curveCipher（classic, 双向, 无 detect）
 import "./detectExt3.js"; // EASY 30 op detect 补齐（须在所有 op 注册后）
 import "./detectSupplement.js"; // 编码类 detect 覆盖补齐（须在所有 op 注册后）

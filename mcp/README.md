@@ -2,7 +2,7 @@
 
 把恒烈CTF编码工具箱的能力（列分类 / 列 op / 查参数 / 智能识别 / 跑 op / 一键智能解码）暴露成 MCP 工具，供支持 MCP 的 AI 客户端（Claude Desktop、Cline 等）调用。全程本地进程，零外发。
 
-server 版本 `0.1.2`，对外可见 op 510 个（排除 cryptoTryAll 虚拟聚合 op）。`ebctf_list_categories` 列出 16 个功能分类（注册表 `CATEGORIES` 共 17 项，含 `home` 首页；首页不计入功能分类）。
+server 版本 `0.1.3`，对外可见 op 510 个（排除 cryptoTryAll 虚拟聚合 op）。`ebctf_list_categories` 列出 16 个功能分类（注册表 `CATEGORIES` 共 17 项，含 `home` 首页；首页不计入功能分类）。
 
 ## 文件
 

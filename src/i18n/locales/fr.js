@@ -788,6 +788,16 @@ export default {
   "op.albam.name": "Chiffre Albam",
   "op.blub.name": "Blub!",
   "op.cow.name": "COW / MOO",
+
+  "op.twinHex.name": "Codage Twin-Hex",
+
+  "op.trollScript.name": "TrollScript",
+
+  "op.asciiSum.name": "Somme préfixe ASCII",
+
+  "op.caesarBox.name": "Transposition boîte de César",
+
+  "op.curveCipher.name": "Chiffre à parcours serpentin",
   "op.exeBridge.name": "Pont Local · CLI Générique",
   "op.steghideBridge.name": "steghide · Stégano",
   "op.foremostBridge.name": "foremost · Carving de Fichiers",
@@ -1038,6 +1048,8 @@ export default {
   "ui.about.contribHuoya": "Testeur bêta · Optimisation du basculement jour/nuit",
   "ui.about.contrib0x0off": "Testeur bêta · Suggestions dalgorithmes pour défis réels",
   "ui.about.contribLyy": "Testeur bêta · a trouvé la détection fancy trop stricte, a mené au mode indulgent",
+
+  "ui.about.contribYahufanpemg": "V0.1.2 correction de certaines erreurs d'encodage et d'échappement",
   "ui.about.contribFzxx": "Testeur bêta · a proposé de nombreux algorithmes crypto modernes",
 
   // ---- 解码强度弹窗（一键解码强度档 + 参与算法多选 + 命名方案）----

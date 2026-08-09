@@ -111,6 +111,7 @@ import EDU_CRYPTO_PG2 from "./edu/edu-crypto-pg2.js";       // present/siphash/s
 import EDU_CRYPTO_B from "./edu/edu-crypto-b.js";           // a52/e0/hc128/hc256/sosemanuk/spritz/vmpc/balloon/lyra2/yescrypt 10
 import EDU_HASH_XXHASH from "./edu/edu-hash-xxhash.js";    // xxhash 1
 import EDU_HASH_CITYHASH from "./edu/edu-hash-cityhash.js";  // cityhash 1
+import EDU_CTF_CIPHER_EXT from "./edu/edu-ctf-cipher-ext.js"; // twinHex/trollScript/asciiSum/caesarBox/curveCipher 5
 
 // 合并所有分片。后者不覆盖前者（分区不重叠）；重叠时以后者为准，构建期应避免。
 const EDU = Object.assign(
@@ -184,6 +185,7 @@ const EDU = Object.assign(
   EDU_CRYPTO_B,
   EDU_HASH_XXHASH,
   EDU_HASH_CITYHASH,
+  EDU_CTF_CIPHER_EXT,
 );
 
 /** 取某 op 的科普内容，无则返回 null。

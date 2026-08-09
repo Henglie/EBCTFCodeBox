@@ -46,6 +46,21 @@ function parseUintStrAuto(s) {
   return parseBigRadixBody(t, 10);
 }
 
+// 按声明基数解析裸串（无 0x/0o/0b 前缀、无点分）。format 已明示基数，
+// 故不再要求前缀；其余情形交回 parseUintStrAuto 自动识别。
+const FORMAT_BASE = { hex: 16, oct: 8, bin: 2 };
+
+function ipv4ToIntWithFormat(str, format) {
+  const s = String(str).trim();
+  const base = FORMAT_BASE[format];
+  if (base && s && !s.includes(".") && !/^0[xob]/i.test(s)) {
+    const n = parseBigRadixBody(s.toLowerCase(), base);
+    if (n > 0xFFFFFFFFn) throw new Error("IPv4 整数超出 32 位: " + s);
+    return n;
+  }
+  return ipv4ToInt(s);
+}
+
 // ============ 1. IPv4 ↔ 整数/hex ============
 // 解析支持：标准点分十进制 / 每段 0x 或八进制变体 / 单整数 / inet_aton 压缩形式 (a / a.b / a.b.c)
 function ipv4ToInt(str) {
@@ -89,11 +104,21 @@ function intToIpv4(n) {
   return a + "." + b + "." + c + "." + d;
 }
 
-function intToFormat(n, fmt) {
+// bare=true 省去 0x/0b/前导 0 标记（外部工具多输出裸串 c0a80101）
+function intToFormat(n, fmt, bare) {
   if (fmt === "dec") return n.toString(10);
-  if (fmt === "hex") return "0x" + n.toString(16).toUpperCase().padStart(8, "0");
-  if (fmt === "oct") return "0" + n.toString(8).padStart(11, "0"); // 32 位 → 11 位八进制
-  if (fmt === "bin") return "0b" + n.toString(2).padStart(32, "0");
+  if (fmt === "hex") {
+    const h = n.toString(16).toUpperCase().padStart(8, "0");
+    return bare ? h.toLowerCase() : "0x" + h;
+  }
+  if (fmt === "oct") {
+    const o = n.toString(8).padStart(11, "0"); // 32 位 → 11 位八进制
+    return bare ? o : "0" + o;
+  }
+  if (fmt === "bin") {
+    const b = n.toString(2).padStart(32, "0");
+    return bare ? b : "0b" + b;
+  }
   throw new Error("未知格式: " + fmt);
 }
 
@@ -341,9 +366,12 @@ register({
       { value: "oct", label: "八进制 (前导 0)" },
       { value: "bin", label: "二进制 (0b)" },
     ] },
+    { key: "compat", label: "兼容模式（输出不带 0x/0b/前导 0 标记）", type: "bool", default: false },
   ],
-  encode: (t, p) => { const n = ipv4ToInt(t); return intToFormat(n, (p && p.format) || "dec"); },
-  decode: (t) => intToIpv4(ipv4ToInt(t)),
+  encode: (t, p) => { const n = ipv4ToInt(t); return intToFormat(n, (p && p.format) || "dec", p && p.compat); },
+ // decode 尊重 format：无前缀裸串按所选基数解（外部工具常输出不带 0x 的 c0a80101）；
+ // 带前缀或点分形式仍走自动识别
+  decode: (t, p) => intToIpv4(ipv4ToIntWithFormat(t, (p && p.format) || "dec")),
 });
 
 register({

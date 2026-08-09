@@ -508,6 +508,8 @@ export default {
   "ui.about.contribHuoya": "बीटा परीक्षक · डे/नाइट टॉगल अनुकूलन",
   "ui.about.contrib0x0off": "बीटा परीक्षक · वास्तविक चुनौती एल्गोरिदम सुझाव",
   "ui.about.contribLyy": "बीटा परीक्षक · fancy जांच बहुत सख्त पाई, ढीला मोड बना",
+
+  "ui.about.contribYahufanpemg": "V0.1.2 कुछ एनकोडिंग एस्केप त्रुटियों का सुधार",
   "ui.about.contribFzxx": "बीटा परीक्षक · कई आधुनिक क्रिप्टो एल्गोरिदम सुझाए",
   "ui.about.fontNoticeTitle": "फ़ॉन्ट लाइसेंस और संशोधन सूचना",
   "ui.about.fontOrigAuthor": "सामग्री फ़ॉन्ट Cheonhyeong (全字堂) है, जिसे Shen Tianheng (沈天珩, cheonhyeong.com) ने बनाया, कई मुफ्त-लाइसेंस टाइपफेस से एकीकृत एक पूर्ण-Unicode फ़ॉन्ट।",
@@ -806,6 +808,16 @@ export default {
   "op.albam.name": "Albam Cipher",
   "op.blub.name": "Blub!",
   "op.cow.name": "COW / MOO",
+
+  "op.twinHex.name": "Twin-Hex द्वि-वर्ण एनकोडिंग",
+
+  "op.trollScript.name": "TrollScript",
+
+  "op.asciiSum.name": "ASCII प्रीफिक्स योग",
+
+  "op.caesarBox.name": "सीज़र बॉक्स ट्रांसपोज़िशन",
+
+  "op.curveCipher.name": "कर्व (सर्पीला) साइफर",
   "op.exeBridge.name": "Local Bridge · Generic CLI",
   "op.steghideBridge.name": "steghide · Stego",
   "op.foremostBridge.name": "foremost · File Carving",

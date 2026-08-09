@@ -250,7 +250,9 @@ function base64Decode(text, p) {
 }
 
 // ============ Base85 / Ascii85（Adobe <~ ~>，z 压缩零组） ============
-function ascii85Encode(text) {
+// compat=true 时省略 <~ ~> 包裹（Adobe 框记在 Ascii85 里本就可选，多数外部工具输出裸串）。
+// decode 侧一直容忍有无包裹，故仅 encode 需要该开关。
+function ascii85Encode(text, p) {
   const bytes = te(text);
   let out = "";
   for (let i = 0; i < bytes.length; i += 4) {
@@ -264,7 +266,7 @@ function ascii85Encode(text) {
     for (let k = 0; k < 5; k++) { enc.unshift(String.fromCharCode((n % 85) + 33)); n = Math.floor(n / 85); }
     out += enc.slice(0, size + 1).join("");
   }
-  return "<~" + out + "~>";
+  return (p && p.compat) ? out : "<~" + out + "~>";
 }
 function ascii85Decode(text) {
   let s = text.replace(/^<~/, "").replace(/~>$/, "").replace(/\s/g, "");
@@ -504,6 +506,9 @@ register({
 });
 register({
   id: "base85", cat: "base", name: "Base85 / Ascii85", desc: "Adobe Ascii85（<~ ~> 包裹，z 压缩零组）",
+  params: [
+    { key: "compat", label: "兼容模式（输出不带 <~ ~> 包裹）", type: "bool", default: false },
+  ],
   encode: ascii85Encode, decode: ascii85Decode,
   detect: (t) => (/^<~.*~>$/s.test(t.trim()) ? 0.8 : 0),
 });

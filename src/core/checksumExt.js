@@ -112,6 +112,40 @@ function fletcher16(bytes) {
   return ((sum2 << 8) | sum1) & 0xFFFF;
 }
 
+// ============ Fletcher-8（按字节模 15，两个 4 位和拼成 8 位） ============
+function fletcher8(bytes) {
+  let sum1 = 0, sum2 = 0;
+  for (const b of bytes) {
+    sum1 = (sum1 + b) % 0xF;
+    sum2 = (sum2 + sum1) % 0xF;
+  }
+  return ((sum2 << 4) | sum1) & 0xFF;
+}
+
+// ============ Fletcher-64（32 位字小端，模 2^32-1） ============
+// 用 BigInt 累加：32 位字相加会超出 Number 的安全位运算范围。
+function fletcher64(bytes) {
+  const MOD = 0xFFFFFFFFn;
+  let sum1 = 0n, sum2 = 0n;
+  const n = bytes.length;
+  let i = 0;
+  for (; i + 3 < n; i += 4) {
+    const word = BigInt(bytes[i] | (bytes[i + 1] << 8) | (bytes[i + 2] << 16) | (bytes[i + 3] << 24)) & 0xFFFFFFFFn;
+    sum1 = (sum1 + word) % MOD;
+    sum2 = (sum2 + sum1) % MOD;
+  }
+ // 尾部不足 4 字节：按大端拼余下字节（与权威源一致）
+  if (i < n) {
+    let last = 0n;
+    for (let k = 0; k < n - i; k++) {
+      last = (last << 8n) | BigInt(bytes[n - 1 - k]);
+    }
+    sum1 = (sum1 + last) % MOD;
+    sum2 = (sum2 + sum1) % MOD;
+  }
+  return (sum2 << 32n) | sum1;
+}
+
 // ============ Fletcher-32（16 位字小端） ============
 function fletcher32(bytes) {
   let sum1 = 0, sum2 = 0;
@@ -266,20 +300,31 @@ register({
 // 6. fletcher（16/32 合并）
 register({
   id: "fletcher", cat: "hash", name: "Fletcher",
-  desc: "Fletcher 校验和（位宽可选 16/32；16 位按字节流模 255，32 位按 16 位字小端模 65535）",
+  desc: "Fletcher 校验和（位宽可选 8/16/32/64；8 位模 15，16 位按字节流模 255，32 位按 16 位字小端模 65535，64 位按 32 位字小端模 2^32-1）",
   params: [
     { key: "bits", label: "输出位数", type: "select", default: 16, options: [
+      { value: 8, label: "8" },
       { value: 16, label: "16" },
       { value: 32, label: "32" },
+      { value: 64, label: "64" },
     ] },
   ],
   run: function (t, p) {
     const bits = Number((p && p.bits != null) ? p.bits : 16);
+    const bytes = strToBytes(t);
+    if (bits === 8) {
+      const v = fletcher8(bytes);
+      return toHex(v, 8) + "  // " + v;
+    }
     if (bits === 32) {
-      const v = fletcher32(strToBytes(t));
+      const v = fletcher32(bytes);
       return toHex(v, 32) + "  // " + v;
     }
-    const v = fletcher16(strToBytes(t));
+    if (bits === 64) {
+      const v = fletcher64(bytes);
+      return v.toString(16).padStart(16, "0").toUpperCase() + "  // " + v.toString();
+    }
+    const v = fletcher16(bytes);
     return toHex(v, 16) + "  // " + v;
   },
 });

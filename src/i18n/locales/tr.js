@@ -508,6 +508,8 @@ export default {
   "ui.about.contribHuoya": "Beta test kullanıcısı · Gündüz/gece geçişi optimizasyonu",
   "ui.about.contrib0x0off": "Beta test kullanıcısı · Gerçek soru algoritma önerileri",
   "ui.about.contribLyy": "Beta testçisi · fancy algılamayı fazla katı buldu, gevşek moda yol açtı",
+
+  "ui.about.contribYahufanpemg": "V0.1.2 bazı kodlama ve kaçış hatalarının düzeltilmesi",
   "ui.about.contribFzxx": "Beta testçisi · birçok yeni modern kripto algoritması önerdi",
   "ui.about.fontNoticeTitle": "Yazı Tipi Lisansı ve Değişiklik Bildirimi",
   "ui.about.fontOrigAuthor": "İçerik yazı tipi, birkaç serbest lisanslı yazı tipinden entegre edilmiş tam-Unicode bir yazı tipi olan Shen Tianheng (沈天珩, cheonhyeong.com) tarafından yapılan Cheonhyeong'dur (全字堂).",
@@ -806,6 +808,16 @@ export default {
   "op.albam.name": "Albam Cipher",
   "op.blub.name": "Blub!",
   "op.cow.name": "COW / MOO",
+
+  "op.twinHex.name": "Twin-Hex çift karakter kodlama",
+
+  "op.trollScript.name": "TrollScript",
+
+  "op.asciiSum.name": "ASCII önek toplamı",
+
+  "op.caesarBox.name": "Sezar kutusu yer değiştirme",
+
+  "op.curveCipher.name": "Yılankavi yol şifresi",
   "op.exeBridge.name": "Local Bridge · Generic CLI",
   "op.steghideBridge.name": "steghide · Stego",
   "op.foremostBridge.name": "foremost · File Carving",

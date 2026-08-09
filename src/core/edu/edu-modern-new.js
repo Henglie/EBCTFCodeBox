@@ -23,7 +23,7 @@ export default {
       "加解密同形：密文 = 明文 ⊕ 密钥流，解密用同样的 key/IV 再异或一次即还原。",
     usage: "输入框填文本，参数 key 填 32 位 hex（16 字节），iv 填 16 位 hex（8 字节）。编码输出 hex 密文；解码填同样的 key/iv 即可还原文本。",
     examples: [
-      { in: "Hello", param: "key=00000000000000000000000000000000, iv=0000000000000000", out: "(hex 密文)", desc: "全 0 key/IV 的 RFC 4503 §3 测试向量场景，编解码对称可逆" },
+      { in: "Hello", param: "key=00000000000000000000000000000000, iv=0000000000000000", out: "A5D2690B58", desc: "全 0 key/IV：密钥流取 RFC 4503 §3.2 的 S[0]=edb70567… 前 5 字节与 Hello 异或" },
     ],
     formulas: [
       { tex: "g(u) = \\text{lo}_{32}(u^2) \\oplus \\text{hi}_{32}(u^2)", caption: "Rabbit 的 g 函数：平方后高低 32 位异或" },

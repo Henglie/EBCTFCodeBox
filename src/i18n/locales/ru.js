@@ -780,6 +780,16 @@ export default {
   "op.albam.name": "Шифр Albam",
   "op.blub.name": "Blub!",
   "op.cow.name": "COW / MOO",
+
+  "op.twinHex.name": "Кодирование Twin-Hex",
+
+  "op.trollScript.name": "TrollScript",
+
+  "op.asciiSum.name": "Префиксная сумма ASCII",
+
+  "op.caesarBox.name": "Перестановка «ящик Цезаря»",
+
+  "op.curveCipher.name": "Змеевидный шифр (curve)",
   "op.exeBridge.name": "Локальный мост · универсальный CLI",
   "op.steghideBridge.name": "steghide · стего",
   "op.foremostBridge.name": "foremost · вырезание файлов",
@@ -1030,6 +1040,8 @@ export default {
   "ui.about.contribHuoya": "Бета-тестер · Оптимизация переключения день/ночь",
   "ui.about.contrib0x0off": "Бета-тестер · Предложения по алгоритмам для реальных задач",
   "ui.about.contribLyy": "Бета-тестер · счёл детекцию fancy слишком строгой, привёл к режиму ослабления",
+
+  "ui.about.contribYahufanpemg": "V0.1.2 исправление ряда ошибок кодирования и escape-последовательностей",
   "ui.about.contribFzxx": "Бета-тестер · предложил много новых современных криптоалгоритмов",
 
   // ---- 解码强度弹窗（一键解码强度档 + 参与算法多选 + 命名方案）----

@@ -117,11 +117,16 @@ function tapEncode(text, p) {
   const { rev } = tapSelect(p);
   const up = String(text).toUpperCase().replace(/[^A-Z]/g, "");
   if (!up) throw new Error("tap code: 输入须含字母");
-  return [...up].map((ch) => rev[ch] || "?").join(" ");
+ // compat=true 输出连写坐标串（外部工具常见形式）；默认每组空格分隔便于阅读
+  return [...up].map((ch) => rev[ch] || "?").join((p && p.compat) ? "" : " ");
 }
 function tapDecode(text, p) {
   const { grid } = tapSelect(p);
-  const pairs = String(text).trim().split(/[\s,]+/).filter(Boolean);
+  const pairs = String(text).trim().split(/[\s,]+/).filter(Boolean)
+ // 坐标恒为 2 位数字，故连写串可无歧义拆分（外部工具常输出无分隔的 2315313134…）
+    .flatMap((s) => (/^\d+$/.test(s) && s.length > 2 && s.length % 2 === 0
+      ? s.match(/\d{2}/g)
+      : [s]));
   let out = "";
   for (const s of pairs) {
     const m = s.match(/^(\d)\s*(\d)$/);
@@ -256,6 +261,7 @@ register({
         { value: "kc", label: "K→C 合并（含 J）" },
       ],
     },
+    { key: "compat", label: "兼容模式（坐标连写，不加空格）", type: "bool", default: false },
   ],
   encode: (t, p) => tapEncode(t, p),
   decode: (t, p) => tapDecode(t, p),

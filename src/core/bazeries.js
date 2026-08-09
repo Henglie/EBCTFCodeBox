@@ -18,7 +18,7 @@
  * 本实现每次调用都从 key 重新提取 digitos，加解密对称。
  *
  * 契约：register({id, cat:"classic", name, desc, params, encode, decode})。
- * params: [{id:"key", label:"数字密钥", type:"text"}]
+ * params: [{key:"key", label:"数字密钥", type:"text", default:"81257"}]
  * encode(text, {key}) → 密文字符串
  * decode(text, {key}) → 明文字符串
  */
@@ -245,7 +245,7 @@ register({
   cat: "classic",
   name: "Bazeries 密码",
   desc: "5×5 方阵替换 + 数字 key 分组反转（key 转英文单词构造密钥矩阵，I/J 合并，古典密码）",
-  params: [{ id: "key", label: "数字密钥", type: "text" }],
+  params: [{ key: "key", label: "数字密钥", type: "text", default: "81257", placeholder: "纯数字，如 81257" }],
   encode: bazeriesEncrypt,
   decode: bazeriesDecrypt,
 });

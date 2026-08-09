@@ -777,6 +777,16 @@ export default {
   "op.albam.name": "Albam-Chiffre",
   "op.blub.name": "Blub!",
   "op.cow.name": "COW / MOO",
+
+  "op.twinHex.name": "Twin-Hex-Doppelzeichenkodierung",
+
+  "op.trollScript.name": "TrollScript",
+
+  "op.asciiSum.name": "ASCII-Präfixsumme",
+
+  "op.caesarBox.name": "Caesar-Box-Transposition",
+
+  "op.curveCipher.name": "Kurven-Chiffre (Schlangenweg)",
   "op.exeBridge.name": "Lokale Bridge · Generisches CLI",
   "op.steghideBridge.name": "steghide · Stego",
   "op.foremostBridge.name": "foremost · File Carving",
@@ -1027,6 +1037,8 @@ export default {
   "ui.about.contribHuoya": "Betatester · Optimierung des Tag-/Nachtmodus",
   "ui.about.contrib0x0off": "Betatester · Vorschläge zu Algorithmen für echte CTF-Aufgaben",
   "ui.about.contribLyy": "Beta-Tester · fand fancy-Erkennung zu streng, führte zu Lenient-Modus",
+
+  "ui.about.contribYahufanpemg": "V0.1.2 Korrektur einiger Kodierungs- und Escape-Fehler",
   "ui.about.contribFzxx": "Beta-Tester · schlug viele neue moderne Krypto-Algorithmen vor",
 
   // ---- 解码强度弹窗（一键解码强度档 + 参与算法多选 + 命名方案）----

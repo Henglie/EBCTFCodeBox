@@ -84,13 +84,15 @@ export default {
   },
 
   fletcher: {
-    what: "Fletcher 校验和，靠两个累加器实现，算得比 CRC 快、检错能力接近。它是校验和不是哈希。位宽可选 16/32（默认 16），32 位检错强于 16 位。",
+    what: "Fletcher 校验和，靠两个累加器实现，算得比 CRC 快、检错能力接近。它是校验和不是哈希。位宽可选 8/16/32/64（默认 16），位宽越大检错越强。",
     principle:
       "双累加器 sum1、sum2：每读一个单元，sum1 加该单元、sum2 再加 sum1，位置敏感（换顺序结果就变）。16 位：按字节流、两个 8 位累加器对 `255` 取模，输出 `sum2<<8 | sum1`。32 位：按 16 位字（小端），两个 16 位累加器对 `65535` 取模，奇数尾字节补 0，输出 `sum2<<16 | sum1`。分组粒度和模数两档都不同。",
     usage: "输入数据，选位宽，输出 Fletcher 校验值（十六进制，单向 run）。",
     examples: [
-      { in: "abcde (16)", out: "0xC8F0", desc: "维基 Fletcher-16 经典示例" },
-      { in: "abcde (32)", out: "0xF04FC729", desc: "维基 Fletcher-32 经典示例" },
+      { in: "abcde", param: "bits=16", out: "C8F0", desc: "维基 Fletcher-16 经典示例（输出另附十进制 51440）" },
+      { in: "abcde", param: "bits=32", out: "F04FC729", desc: "维基 Fletcher-32 经典示例" },
+      { in: "abcde", param: "bits=8", out: "50", desc: "Fletcher-8：两个 4 位累加器模 15" },
+      { in: "abcde", param: "bits=64", out: "C8C6C527646362C6", desc: "Fletcher-64：按 32 位字模 2^32-1" },
     ],
     formulas: [
       { tex: "\\text{sum1} \\mathrel{+}= d_i,\\quad \\text{sum2} \\mathrel{+}= \\text{sum1}\\ (\\bmod\\ M)", caption: "Fletcher 双累加器（16 位 M=255，32 位 M=65535）" },

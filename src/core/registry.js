@@ -64,6 +64,21 @@ export function register(op) {
     throw new Error(`op ${op.id} 必须至少有 encode / decode / run 之一`);
   }
   op.params = op.params || [];
+ // params 契约校验：漏写 key（例如误写成 id）会让界面输入永远传不进算法——静默失效，必须拦住。
+  const _seenKeys = new Set();
+  for (const d of op.params) {
+    if (!d || typeof d.key !== "string" || !d.key) {
+      throw new Error(
+        `op ${op.id} 的参数声明缺少 key 字段（拿到 ${JSON.stringify(d)}）——` +
+        `参数必须写成 { key, label, type, default }，写成 id 会导致用户输入无法传入算法`
+      );
+    }
+    if (_seenKeys.has(d.key)) throw new Error(`op ${op.id} 的参数 key 重复: ${d.key}`);
+    _seenKeys.add(d.key);
+    if ("def" in d && !("default" in d)) {
+      throw new Error(`op ${op.id} 的参数 ${d.key} 误写了 def，应为 default`);
+    }
+  }
   _byId.set(op.id, op);
   OPS.push(op);
   return op;

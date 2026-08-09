@@ -195,6 +195,7 @@ import "./core/pietExec.js"; // Piet 执行（fancy，有 detect）
 import "./core/carbonaro.js"; // Carbonaro 密码（classic）
 import "./core/albam.js"; // Al Bhed / Albam 替换（classic）
 import "./core/bfDialects.js"; // BF 方言 Blub/COW（fancy，有 detect）
+import "./core/ctfCipherExt.js"; // 冷门编码/换位补齐 twinHex/trollScript/asciiSum（fancy，有 detect）+ caesarBox/curveCipher（classic）
 import "./core/zipCrack.js"; // ZIP 弱口令爆破（analysis, run 型, 单向）
 import "./core/chaocipher.js"; // 混沌密码 chaocipher（classic, 双向）
 import "./core/john_zip.js"; // ZIP哈希提取 zip2john（analysis, run）
@@ -2785,6 +2786,7 @@ function renderAbout(host) {
     { name: "0x0off", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contrib0x0off" },
     { name: "懒羊羊大王", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribLyy" },
     { name: "风之遐想", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribFzxx" },
+    { name: "yahufanpemg", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribYahufanpemg" },
   ];
   for (const c of OTHER_CONTRIBUTORS) {
     const cap = el("span", { class: c.avatar ? "about-capsule about-capsule-founder" : "about-capsule" });

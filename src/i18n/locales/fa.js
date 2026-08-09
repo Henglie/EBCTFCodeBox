@@ -508,6 +508,8 @@ export default {
   "ui.about.contribHuoya": "آزمایش‌کننده بتا · بهینه‌سازی تعویض روز/شب",
   "ui.about.contrib0x0off": "آزمایش‌کننده بتا · پیشنهاد افزودن الگوریتم برای مسائل واقعی",
   "ui.about.contribLyy": "تستر بتا · تشخیص fancy را بیش‌ازحد سخت‌گیر یافت، منجر به حالت تساهل شد",
+
+  "ui.about.contribYahufanpemg": "V0.1.2 اصلاح برخی خطاهای کدگذاری و گریز",
   "ui.about.contribFzxx": "تستر بتا · الگوریتم‌های رمزنگاری مدرن متعددی پیشنهاد داد",
   "ui.about.fontNoticeTitle": "Font License & Modification Notice",
   "ui.about.fontOrigAuthor": "The content font is Cheonhyeong (全字堂) by Shen Tianheng (沈天珩, cheonhyeong.com), a full-Unicode font integrated from several free-licensed typefaces.",
@@ -806,6 +808,16 @@ export default {
   "op.albam.name": "Albam Cipher",
   "op.blub.name": "Blub!",
   "op.cow.name": "COW / MOO",
+
+  "op.twinHex.name": "کدگذاری دوکاراکتری Twin-Hex",
+
+  "op.trollScript.name": "TrollScript",
+
+  "op.asciiSum.name": "مجموع پیشوندی ASCII",
+
+  "op.caesarBox.name": "جایگشت جعبه سزار",
+
+  "op.curveCipher.name": "رمز مسیر مارپیچ",
   "op.exeBridge.name": "Local Bridge · Generic CLI",
   "op.steghideBridge.name": "steghide · Stego",
   "op.foremostBridge.name": "foremost · File Carving",
