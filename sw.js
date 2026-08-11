@@ -23,7 +23,7 @@
  */
 
 // 缓存版本号：SW 独立环境无法 import 项目模块，升版本时与 src/core/version.js 的 APP_VERSION 同步修改。
-const CACHE_VER = "ebctf-shell-0.1.3";
+const CACHE_VER = "ebctf-shell-0.1.4";
 
 const CORE_SHELL = [
   "./",

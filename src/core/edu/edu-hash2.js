@@ -1,12 +1,12 @@
 // 科普内容分片：hash 段 12-22（sm3/ripemd160/blake2b/blake2s/adler32/crc8/crc8_maxim/crc64/crc32c/fnv1a_32/fnv1a_64）。纯数据，无 import 无副作用。
 export default {
   sm3: {
-    what: "国密哈希算法（GM/T 0004），中国自研的密码学摘要，输出 256 位（64 个十六进制字符）。国内 CTF 里出现频率很高，是 SHA-256 的国产对位物。",
+    what: "国密哈希算法（GB/T 32905-2016，前身 GM/T 0004-2012），中国自研的密码学摘要，输出 256 位（64 个十六进制字符）。国内 CTF 里出现频率很高，是 SHA-256 的国产对位物。",
     principle:
       "结构上像 SHA-256 的近亲：把数据按 512 位分块，用 64 步压缩函数搅拌一个 256 位内部状态，最后输出 256 位摘要。用了两个布尔函数和一组常量做非线性扩散。单向不可逆。",
     usage: "输入任意文本，输出 SM3 摘要（单向 run）。想反查原文走字典爆破。",
     examples: [
-      { in: "abc", out: "66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0", desc: "GM/T 0004 标准测试向量" },
+      { in: "abc", out: "66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0", desc: "GB/T 32905-2016 标准测试向量" },
     ],
     tips: [
       "64 位十六进制里，SM3 和 SHA-256、SHA3-256、Keccak-256 肉眼分不出，靠题面「国密 / 商密 / GM」判断。",

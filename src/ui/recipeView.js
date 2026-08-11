@@ -39,7 +39,8 @@ const RECIPE_FALLBACK = {
   "ui.recipe.dir.encode": "编码",
   "ui.recipe.dir.decode": "解码",
   "ui.recipe.dir.run": "运行",
-  "ui.recipe.addOp": "＋ 添加操作…",
+  "ui.recipe.addOp": "＋ 搜索添加操作…",
+  "ui.recipe.addEmpty": "无匹配操作",
   "ui.recipe.unknownOp": "未知 op: ",
   "ui.recipe.moveUp": "上移",
   "ui.recipe.moveDown": "下移",
@@ -56,7 +57,8 @@ const RECIPE_FALLBACK = {
   "ui.recipe.empty": "链为空。从上方「添加操作」选一个，或载入预设配方。",
   "ui.recipe.outputLabel": "输出",
   "ui.recipe.outputPh": "链的最终输出…",
-  "ui.recipe.dragHint": "从左侧菜单拖动操作到此处，或拖动节点重排",
+  "ui.recipe.dragHint": "桌面可从左侧菜单/顶部搜索结果拖入；触摸设备长按后拖入；也可上方搜索添加",
+  "ui.recipe.dragSearchHint": "拖到配方链添加（触摸设备长按后拖动）",
   "ui.recipe.bake": "执行！（Bake！）",
   "ui.recipe.bakeHint": "输入较大，已暂停自动转换。改完点「执行！（Bake！）」跑全链。",
   "ui.recipe.exportRecipe": "导出配方",
@@ -289,28 +291,101 @@ function topoOrder(g) {
   return order.length === g.nodes.length ? order : g.nodes.map((n) => n.id);
 }
 
-// ---- op 选择器（分类分组的下拉）----
-function buildOpPicker(onPick) {
-  const sel = el("select", { class: "recipe-op-picker" });
-  sel.append(el("option", { value: "" }, tt("ui.recipe.addOp")));
+// ---- op 选择器（可搜索 combobox，替代原分类下拉）----
+// 非拖动添加入口：输入即过滤，上下键/Enter/点击直接添加。桌面/触摸通用。
+function buildOpSearchPicker(onPick) {
+  const wrap = el("div", { class: "recipe-op-search" });
+  const input = el("input", { type: "text", class: "recipe-op-search-input", placeholder: tt("ui.recipe.addOp"), autocomplete: "off", spellcheck: "false" });
+  const list = el("div", { class: "recipe-op-search-list" });
+
+  // 数据源：chainable op（同旧下拉的过滤：exe 桥 op 不进链）+ 名称排序
+  const chainable = [];
   for (const cat of CATEGORIES) {
     if (cat.id === "home") continue;
-    const ops = opsByCat(cat.id);
-    if (!ops.length) continue;
- // 配方链是自动链式转换，exe 类 op（requiresBridge，手动启动外部程序）不该出现在链里——
- // 否则每次即时重跑都会触发外部程序启动。从选择器列表源头剔除。
-    const chainable = ops.filter((op) => !op.requiresBridge);
-    if (!chainable.length) continue;
-    const grp = el("optgroup", { label: cat.name });
-    for (const op of chainable.slice().sort((a, b) => opDisplayName(a).localeCompare(opDisplayName(b), "zh"))) {
-      grp.append(el("option", { value: op.id }, opDisplayName(op)));
+    for (const op of opsByCat(cat.id)) {
+      if (op.requiresBridge) continue;
+      chainable.push(op);
     }
-    sel.append(grp);
   }
-  sel.addEventListener("change", () => {
-    if (sel.value) { onPick(sel.value); sel.value = ""; }
+  chainable.sort((a, b) => opDisplayName(a).localeCompare(opDisplayName(b), "zh"));
+
+  // 轻量过滤 + 评分（名称开头 > 名称包含 > id 包含），不依赖 main.js（低耦合）
+  const filter = (q) => {
+    const terms = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!terms.length) return chainable.slice(0, 12);
+    const out = [];
+    for (const op of chainable) {
+      const nm = opDisplayName(op).toLowerCase();
+      let ok = true, score = 0;
+      for (const t of terms) {
+        const pos = nm.indexOf(t);
+        if (pos < 0 && !op.id.includes(t)) { ok = false; break; }
+        if (pos === 0) score += 100;
+        else if (pos > 0) score += 40;
+        else score += 10; // 命中 id
+      }
+      if (ok) out.push({ op, score });
+    }
+    out.sort((a, b) => b.score - a.score);
+    return out.slice(0, 12).map((x) => x.op);
+  };
+
+  const renderList = (ops) => {
+    list.innerHTML = "";
+    if (!ops.length) {
+      list.append(el("div", { class: "recipe-op-search-empty" }, tt("ui.recipe.addEmpty")));
+      list.classList.add("open");
+      return;
+    }
+    ops.forEach((op, i) => {
+      const item = el("div", { class: "recipe-op-search-item", "data-idx": String(i), "data-op-id": op.id },
+        el("span", { class: "recipe-op-search-item-name" }, opDisplayName(op)),
+      );
+      item.addEventListener("mousedown", (e) => { e.preventDefault(); pick(op.id); });
+      item.addEventListener("touchstart", (e) => { e.preventDefault(); pick(op.id); }, { passive: false });
+      list.append(item);
+    });
+    list.classList.add("open");
+  };
+  const closeList = () => { list.classList.remove("open"); list.innerHTML = ""; };
+  const pick = (opId) => {
+    input.value = "";
+    closeList();
+    onPick(opId);
+    input.focus();
+  };
+
+  input.addEventListener("input", () => renderList(filter(input.value)));
+  input.addEventListener("focus", () => { if (input.value.trim()) renderList(filter(input.value)); });
+  input.addEventListener("keydown", (e) => {
+    const items = Array.from(list.querySelectorAll(".recipe-op-search-item"));
+    const active = list.querySelector(".recipe-op-search-item.active");
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const i = active ? Number(active.dataset.idx) + 1 : 0;
+      items.forEach((n) => n.classList.remove("active"));
+      if (items[i % items.length]) items[i % items.length].classList.add("active");
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const i = active ? Number(active.dataset.idx) - 1 : items.length - 1;
+      items.forEach((n) => n.classList.remove("active"));
+      if (items[((i % items.length) + items.length) % items.length]) items[((i % items.length) + items.length) % items.length].classList.add("active");
+    } else if (e.key === "Enter") {
+      const it = list.querySelector(".recipe-op-search-item.active");
+      if (it) pick(it.dataset.opId);
+      else if (items.length === 1) pick(items[0].dataset.opId);
+      else if (items.length) pick(items[0].dataset.opId);
+    } else if (e.key === "Escape") {
+      closeList();
+    }
   });
-  return sel;
+  // 焦点离开整个搜索添加器时关闭；不挂 document 全局监听，避免每次 renderRecipe 重建累积监听。
+  wrap.addEventListener("focusout", () => {
+    setTimeout(() => { if (!wrap.contains(document.activeElement)) closeList(); }, 0);
+  });
+
+  wrap.append(input, list);
+  return wrap;
 }
 
 // ---- 单节点卡 ----
@@ -540,7 +615,7 @@ export function renderRecipe(container) {
   for (const p of PRESETS) presetSel.append(el("option", { value: p.id, title: p.desc || "" }, p.name));
   presetSel.addEventListener("change", () => { if (presetSel.value) { loadPreset(presetSel.value); presetSel.value = ""; } });
   bar.append(presetSel);
-  bar.append(buildOpPicker(addNode));
+  bar.append(buildOpSearchPicker(addNode));
   const stepChk = el("input", { type: "checkbox", id: "recipeStepToggle" });
   stepChk.checked = rState.showSteps;
   stepChk.addEventListener("change", () => { rState.showSteps = stepChk.checked; maybeRunChain(); });
@@ -626,6 +701,15 @@ export function renderRecipe(container) {
   host.append(wrap);
   reflectPending();   // 重建后同步 Bake 高亮/挂起提示（大输入下切视图回来仍显挂起）
   maybeRunChain();    // 小输入即时跑；大输入只标记挂起等 Bake，避免重建即卡
+}
+
+// 供 main.js 触摸拖拽落点：命中配方链画布即添加（按 Y 定位插入，dropIndexFromY 返回 null 则追加末尾）
+export function addRecipeOpAt(opId, clientX, clientY) {
+  const chain = document.getElementById("recipeChain");
+  if (!chain) return false;
+  const idx = dropIndexFromY(chain, clientY);
+  addNode(opId, idx);
+  return true;
 }
 
 export { rState };

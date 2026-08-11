@@ -1,12 +1,12 @@
 // English edu shard: hash segment 12-22 (sm3/ripemd160/blake2b/blake2s/adler32/crc8/crc8_maxim/crc64/crc32c/fnv1a). Pure data, no import, no side effects.
 export default {
   sm3: {
-    what: "The Chinese national cryptographic hash algorithm (GM/T 0004), China's self-developed digest, output 256 bits (64 hex characters). Very common in domestic Chinese CTFs, it's the domestic counterpart to SHA-256.",
+    what: "The Chinese national cryptographic hash algorithm (GB/T 32905-2016, formerly GM/T 0004-2012), China's self-developed digest, output 256 bits (64 hex characters). Very common in domestic Chinese CTFs, it's the domestic counterpart to SHA-256.",
     principle:
       "Structurally a close relative of SHA-256: split data into 512-bit blocks, stir a 256-bit internal state with a 64-step compression function, and finally output a 256-bit digest. It uses two boolean functions and a set of constants for nonlinear diffusion. One-way, irreversible.",
     usage: "Enter any text, output the SM3 digest (one-way run). To reverse to the original, use dictionary brute-force.",
     examples: [
-      { in: "abc", out: "66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0", desc: "GM/T 0004 standard test vector" },
+      { in: "abc", out: "66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0", desc: "GB/T 32905-2016 standard test vector" },
     ],
     tips: [
       "In 64 hex characters, SM3 is visually indistinguishable from SHA-256, SHA3-256, and Keccak-256 — decide from the challenge wording ('national crypto / commercial crypto / GM').",

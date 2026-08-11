@@ -42,9 +42,16 @@
 | 百度网盘 | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
 | 夸克网盘 | https://pan.quark.cn/s/3b7e573b19c0 | 无 |
 
-当前版本 **v0.1.3**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
+当前版本 **v0.1.4**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
 
 ## 更新日志
+
+### v0.1.4
+
+- **SM4 全工作模式**：从 ECB/CBC 扩到 **ECB/CBC/CFB/OFB/CTR + GCM 认证加密**（GB/T 17964-2021 工作模式标准 + SP 800-38D GCM 构造）。GCM 为纯 JS 实现（WebCrypto 无 SM4），支持 AAD。官方附录 A 向量（单块 + 1,000,000 次迭代）+ Python cryptography oracle 六模式逐字节交叉验证全过。
+- **SM2 完整运算**：从「仅结构识别」升级为**签名/验签 + 加密/解密 + 密钥交换**（GB/T 32918.2/.3/.4-2016）。曲线 sm2p256v1，SM3 哈希。支持密文双序（C1||C3||C2 旧序 / C1||C2||C3 新序 GM/T 0009-2023）。官方示例向量逐字节对拍（含加载自检）。
+- **国密标准引用现代化**：SM4/SM3/SM2/ZUC/SM9 全部更新为现行 **GB/T 国标号**（前身 GM/T 2012 标注转化关系）；SM2 密文顺序规范更正为 GM/T 0009-2023。
+- **配方链交互升级**：移动设备可从左侧菜单或顶部搜索结果长按拖入；桌面顶部搜索结果支持直接拖入；非拖动添加入口升级为可搜索添加器，支持点击、触摸与键盘 Enter。
 
 ### v0.1.3
 
@@ -777,7 +784,7 @@ public/
 
 工具箱的能力面可暴露给支持 MCP 的 AI 客户端或 Agent，全程本地进程、零外发。能力面单一事实源在 `src/plugin/mcpBridge.js`，对外提供 6 个 MCP 工具：列分类、列 op、查 op 参数 schema、智能识别编码、跑指定 op、一键智能解码。浏览器内 AI 面板、Node stdio server、CLI Skill 三端复用同一份定义。
 
-- MCP server（Claude Desktop 等接入，server 版本 0.1.1）：[`mcp/README.md`](./mcp/README.md)
+- MCP server（Claude Desktop 等接入，server 版本 0.1.4）：[`mcp/README.md`](./mcp/README.md)
 - Skill（Claude Code / CLI Agent）：[`skills/ebctf-decode/`](./skills/ebctf-decode/)
 
 AI 的联网出口只有可选的 `aiClient`，且必须用户自备 endpoint + key，直连用户站点，主项目不中转、不记录。默认关闭。

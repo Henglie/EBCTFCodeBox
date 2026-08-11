@@ -18,8 +18,7 @@
   border: 1px solid var(--outline-var);
   border-radius: var(--r-lg);
 }
-.recipe-preset-picker,
-.recipe-op-picker {
+.recipe-preset-picker {
   flex: 1 1 180px;
   min-width: 160px;
   padding: var(--sp-2) var(--sp-3);  /* select 左右 padding 令牌化 */
@@ -32,14 +31,61 @@
 }
 /* 输入/select 统一 focus 态（2px primary outline，对齐 app.css 统一化规范） */
 .recipe-preset-picker:focus,
-.recipe-op-picker:focus,
 .recipe-param input[type="text"]:focus,
 .recipe-param input[type="number"]:focus,
 .recipe-param select:focus {
   outline: 2px solid var(--primary);
   outline-offset: -1px;
 }
-.recipe-op-picker { font-weight: 600; }
+
+/* 可搜索 op 添加器（combobox，替代旧分类下拉；桌面/触摸通用，非拖动入口） */
+.recipe-op-search {
+  position: relative;
+  flex: 2 1 260px;
+  min-width: 200px;
+}
+.recipe-op-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--on-surface);
+  background: var(--field-bg);
+  border: 1px solid var(--outline);
+  border-radius: var(--r-md);
+}
+.recipe-op-search-input:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
+}
+.recipe-op-search-list {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-md);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+.recipe-op-search-list.open { display: block; }
+.recipe-op-search-item {
+  padding: var(--sp-2) var(--sp-3);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+}
+.recipe-op-search-item:hover,
+.recipe-op-search-item.active { background: var(--surface-hi); }
+.recipe-op-search-empty {
+  padding: var(--sp-3);
+  color: var(--on-surface-variant);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
 .recipe-step-toggle {
   display: inline-flex;
   align-items: center;
@@ -108,6 +154,29 @@
 }
 .recipe-io { min-height: 140px; resize: vertical; }
 .recipe-io.error { color: var(--error); }
+
+/* 触摸拖拽视觉：源项半透明 + 跟随手指的轻量标签（pointer-events:none 不挡落点判定） */
+.nav-subitem.touch-dragging,
+.op-search-item.touch-dragging { opacity: .55; }
+.recipe-touch-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 9999;
+  max-width: 220px;
+  padding: var(--sp-2) var(--sp-3);
+  color: var(--on-primary-container);
+  background: var(--primary-container);
+  border: 1px solid var(--primary);
+  border-radius: var(--r-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .25);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* A4②：拖拽操作提示（常驻，弱化提示语气） */
 .recipe-drag-hint {

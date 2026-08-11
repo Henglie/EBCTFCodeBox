@@ -61,7 +61,7 @@ export default {
   },
 
   sm4: {
-    what: "The national commercial cipher block cipher (GM/T 0002), China's self-developed symmetric encryption standard. It appears often in domestic CTFs and compliance systems, the domestic counterpart to AES.",
+    what: "The national commercial cipher block cipher (GB/T 32907-2016, formerly GM/T 0002-2012), China's self-developed symmetric encryption standard. It appears often in domestic CTFs and compliance systems, the domestic counterpart to AES.",
     principle:
       "Block length 128 bits, key 128 bits, 32 rounds of nonlinear iteration. Each round performs a composite transform T of 'S-box nonlinear substitution + linear diffusion', and the key expansion generates 32 round keys with a similar structure. Decryption reuses the encryption flow, just with the round keys in reverse order.",
     usage: "Enter a 16-byte key, select the mode of operation (ECB/CBC etc., CBC needs an IV), input the ciphertext to decrypt; the encode direction encrypts.",

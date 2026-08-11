@@ -6,7 +6,8 @@
  *
  * 红线：
  * - TEA/XTEA/XXTEA 走标准算法（Wheeler 1994 / Needham 1997），用权威测试向量验证。
- * - SM4 走国密标准 GM/T 0002-2012，S 盒 / CK / FK 常数照抄标准不许编造。
+ * - SM4 走国密标准 GB/T 32907-2016（前身 GM/T 0002-2012），S 盒 / CK / FK 常数照抄标准不许编造。
+ *   工作模式照 GB/T 17964-2021《分组密码算法的工作模式》（ECB/CBC/CFB/OFB/CTR）+ SP 800-38D（GCM）。
  * - 零外发：全部本地纯 JS 计算。
  * - 契约：核心算法层纯函数（字节进字节出），register 层负责编码（hex/base64/utf8）解析与拼装。
  *
@@ -14,8 +15,8 @@
  * [TEA 内核] teaEncryptBlock / teaDecryptBlock — 8 字节块级变换（64位块，128位密钥，32轮 Feistel）
  * [XTEA 内核] xteaEncryptBlock / xteaDecryptBlock — 8 字节块级变换（改进密钥调度）
  * [XXTEA 内核] xxteaEncryptBytes / xxteaDecryptBytes — 可变长度块（n×32位，n≥2），整个数据一次性加密
- * [SM4 内核] sm4EncryptBlock / sm4DecryptBlock — 16 字节块级变换（国密，32轮非线性迭代）
- * [分组模式] ecb/cbc（自写，避免依赖 modern.js）
+ * [SM4 内核] sm4EncryptBlock / sm4DecryptBlock — 16 字节块级变换（GB/T 32907-2016，32轮非线性迭代）
+ * [分组模式] ecb/cbc/cfb/ofb/ctr（自写，避免依赖 modern.js）+ GCM（SP 800-38D 构造）
  * [填充] pkcs7 pad/unpad（自写）
  * [高层 API] teaEncrypt/teaDecrypt / xteaEncrypt/xteaDecrypt / xxteaEncrypt/xxteaDecrypt / sm4Encrypt/sm4Decrypt
  * [register] 编码解析（key/iv/data 的 hex|base64|utf8|latin1）+ 双向注册
@@ -629,23 +630,229 @@ export function xxteaDecrypt(data, key) {
   return pkcs7Unpad(decrypted, 8);
 }
 
-export function sm4Encrypt(data, key, { mode = "ECB", iv, pad = true } = {}) {
+const SM4_MODES = new Set(["ECB", "CBC", "CFB", "OFB", "CTR", "GCM"]);
+
+export function sm4Encrypt(data, key, { mode = "ECB", iv, aad, pad = true } = {}) {
   mode = mode.toUpperCase();
-  if (!BLOCK_MODES.has(mode)) throw new Error(`不支持的 SM4 模式: ${mode}`);
   if (key.length !== 16) throw new Error("SM4 密钥需 16 字节");
+  if (mode === "GCM") {
+    if (!iv || iv.length === 0) throw new Error("SM4-GCM 需提供非空 nonce（IV）");
+    return sm4GcmEncrypt(data, key, iv, aad);
+  }
+  if (!SM4_MODES.has(mode)) throw new Error(`不支持的 SM4 模式: ${mode}`);
+  if (mode !== "ECB" && (!iv || iv.length !== 16)) throw new Error(`SM4-${mode} IV 需 16 字节`);
   const encBlock = (b) => sm4EncryptBlock(b, key);
   const ivv = iv || new Uint8Array(16);
-  if (mode === "ECB") return ecbEncrypt(data, encBlock, 16, pad);
-  return cbcEncrypt(data, encBlock, 16, ivv, pad);
+  switch (mode) {
+    case "ECB": return ecbEncrypt(data, encBlock, 16, pad);
+    case "CBC": return cbcEncrypt(data, encBlock, 16, ivv, pad);
+    case "CFB": return cfbEncrypt(data, encBlock, 16, ivv); // 流模式，无填充
+    case "OFB": return ofbCrypt(data, encBlock, 16, ivv);
+    case "CTR": return ctrCrypt(data, encBlock, 16, ivv);
+    default: throw new Error(`不支持的 SM4 模式: ${mode}`);
+  }
 }
-export function sm4Decrypt(data, key, { mode = "ECB", iv, pad = true } = {}) {
+export function sm4Decrypt(data, key, { mode = "ECB", iv, aad, pad = true } = {}) {
   mode = mode.toUpperCase();
-  if (!BLOCK_MODES.has(mode)) throw new Error(`不支持的 SM4 模式: ${mode}`);
   if (key.length !== 16) throw new Error("SM4 密钥需 16 字节");
-  const decBlock = (b) => sm4DecryptBlock(b, key);
+  if (mode === "GCM") {
+    if (!iv || iv.length === 0) throw new Error("SM4-GCM 需提供非空 nonce（IV）");
+    return sm4GcmDecrypt(data, key, iv, aad);
+  }
+  if (!SM4_MODES.has(mode)) throw new Error(`不支持的 SM4 模式: ${mode}`);
+  if (mode !== "ECB" && (!iv || iv.length !== 16)) throw new Error(`SM4-${mode} IV 需 16 字节`);
+  const encBlock = (b) => sm4EncryptBlock(b, key);
   const ivv = iv || new Uint8Array(16);
-  if (mode === "ECB") return ecbDecrypt(data, decBlock, 16, pad);
-  return cbcDecrypt(data, decBlock, 16, ivv, pad);
+  switch (mode) {
+    case "ECB": return ecbDecrypt(data, (b) => sm4DecryptBlock(b, key), 16, pad);
+    case "CBC": return cbcDecrypt(data, (b) => sm4DecryptBlock(b, key), 16, ivv, pad);
+    case "CFB": return cfbDecrypt(data, encBlock, 16, ivv); // CFB 解密也用加密函数（反馈 XOR）
+    case "OFB": return ofbCrypt(data, encBlock, 16, ivv);
+    case "CTR": return ctrCrypt(data, encBlock, 16, ivv);
+    default: throw new Error(`不支持的 SM4 模式: ${mode}`);
+  }
+}
+
+// ============================================================
+// SM4 全工作模式（GB/T 17964-2021《分组密码算法的工作模式》）
+// CFB / OFB / CTR 为流模式（无填充），自写避免依赖 modern.js。
+// ============================================================
+// CFB（密文反馈，128 位分段）：Ci = Pi ⊕ E_K(feedback)，反馈恒为密文块（初值 IV）。
+// 加密：反馈 = 本轮密文输出；解密：反馈 = 本轮输入密文（非解出明文）。
+function cfbEncrypt(data, encBlock, bs, iv) {
+  const out = new Uint8Array(data.length);
+  let fb = iv.subarray(0, bs);
+  for (let i = 0; i < data.length; i += bs) {
+    const ks = encBlock(fb);
+    const n = Math.min(bs, data.length - i);
+    const c = new Uint8Array(bs);
+    for (let j = 0; j < n; j++) c[j] = data[i + j] ^ ks[j];
+    out.set(c.subarray(0, n), i);
+    fb = c;
+  }
+  return out;
+}
+function cfbDecrypt(data, encBlock, bs, iv) {
+  const out = new Uint8Array(data.length);
+  let fb = iv.subarray(0, bs);
+  for (let i = 0; i < data.length; i += bs) {
+    const ks = encBlock(fb);
+    const n = Math.min(bs, data.length - i);
+    const c = new Uint8Array(bs);
+    for (let j = 0; j < n; j++) { c[j] = data[i + j]; out[i + j] = data[i + j] ^ ks[j]; }
+    fb = c;
+  }
+  return out;
+}
+// OFB（输出反馈）：O_{i+1} = E_K(O_i)，Pi ⊕ O。
+function ofbCrypt(data, encBlock, bs, iv) {
+  const out = new Uint8Array(data.length);
+  let fb = iv.subarray(0, bs);
+  for (let i = 0; i < data.length; i += bs) {
+    fb = encBlock(fb);
+    const n = Math.min(bs, data.length - i);
+    for (let j = 0; j < n; j++) out[i + j] = data[i + j] ^ fb[j];
+  }
+  return out;
+}
+// CTR（计数器）：Ci = Pi ⊕ E_K(counter++)，counter 为 128 位大端递增（SP 800-38A）。
+function ctrCrypt(data, encBlock, bs, iv) {
+  const out = new Uint8Array(data.length);
+  const ctr = iv.subarray(0, bs).slice(); // 拷贝，避免 incCounter 污染调用者 IV
+  for (let i = 0; i < data.length; i += bs) {
+    const ks = encBlock(ctr);
+    const n = Math.min(bs, data.length - i);
+    for (let j = 0; j < n; j++) out[i + j] = data[i + j] ^ ks[j];
+    incCounter(ctr);
+  }
+  return out;
+}
+function incCounter(ctr) {
+  for (let i = ctr.length - 1; i >= 0; i--) {
+    ctr[i] = (ctr[i] + 1) & 0xff;
+    if (ctr[i] !== 0) break;
+  }
+  return ctr;
+}
+
+// ============================================================
+// SM4-GCM（认证加密，纯 JS —— WebCrypto 无 SM4，AES-GCM 那套不可用）
+// 构造照 NIST SP 800-38D：H = E_K(0^128)，J0 = IV‖0^31‖1（IV=12B）或 GHASH_H(IV)，
+// GCTR 加密，GHASH 认证。输出 = ciphertext ‖ tag(16B)。
+// ============================================================
+
+// GF(2^128) 乘法（SP 800-38D §6.3 Algorithm 2，MSB-first 位序，reduction 多项式 0xE10000…0）
+// 注意：MSB-first 表示下「乘 x」= 右移（a128 移出，MSB 补 0），不能用左移。
+function gcmMul(x, y) {
+  let X = 0n, Y = 0n;
+  for (let i = 0; i < 16; i++) { X = (X << 8n) | BigInt(x[i]); Y = (Y << 8n) | BigInt(y[i]); }
+  const R = 0xe1000000000000000000000000000000n;
+  let Z = 0n, V = X;
+  for (let i = 0; i < 128; i++) {
+    if ((Y >> BigInt(127 - i)) & 1n) Z ^= V; // 从 Y 的 MSB 逐位检查
+    if (V & 1n) V = (V >> 1n) ^ R; else V >>= 1n;
+  }
+  const out = new Uint8Array(16);
+  for (let i = 15; i >= 0; i--) { out[i] = Number(Z & 0xffn); Z >>= 8n; }
+  return out;
+}
+// 按 16 字节块累加 GHASH：Y_i = (Y_{i-1} ⊕ X_i) · H，最后补 len(A)‖len(C)（各 64 位）。
+function gcmGhash(h, aad, c) {
+  const y = new Uint8Array(16);
+  let acc = y;
+  const blocks = [];
+  for (let i = 0; i < aad.length; i += 16) blocks.push(aad.subarray(i, i + 16));
+  for (let i = 0; i < c.length; i += 16) blocks.push(c.subarray(i, i + 16));
+  const full = new Uint8Array(16);
+  for (const b of blocks) {
+    full.fill(0);
+    full.set(b);
+    acc = gcmMul(xorBytes(acc, full), h);
+  }
+  // len(A)‖len(C)，各 64 位大端（输入以字节计，×8 转位；< 2^53 安全）
+  const lenBlock = new Uint8Array(16);
+  const la = BigInt(aad.length * 8), lc = BigInt(c.length * 8);
+  lenBlock[0] = Number((la >> 56n) & 0xffn); lenBlock[1] = Number((la >> 48n) & 0xffn);
+  lenBlock[2] = Number((la >> 40n) & 0xffn); lenBlock[3] = Number((la >> 32n) & 0xffn);
+  lenBlock[4] = Number((la >> 24n) & 0xffn); lenBlock[5] = Number((la >> 16n) & 0xffn);
+  lenBlock[6] = Number((la >> 8n) & 0xffn);  lenBlock[7] = Number(la & 0xffn);
+  lenBlock[8]  = Number((lc >> 56n) & 0xffn); lenBlock[9]  = Number((lc >> 48n) & 0xffn);
+  lenBlock[10] = Number((lc >> 40n) & 0xffn); lenBlock[11] = Number((lc >> 32n) & 0xffn);
+  lenBlock[12] = Number((lc >> 24n) & 0xffn); lenBlock[13] = Number((lc >> 16n) & 0xffn);
+  lenBlock[14] = Number((lc >> 8n) & 0xffn);  lenBlock[15] = Number(lc & 0xffn);
+  return gcmMul(xorBytes(acc, lenBlock), h);
+}
+// 计数器低位 +1（32 位递增，照 SP 800-38D inc32）
+function inc32(cb) {
+  const o = cb.slice();
+  for (let i = 15; i >= 12; i--) { o[i] = (o[i] + 1) & 0xff; if (o[i] !== 0) break; }
+  return o;
+}
+// GCTR：C = P ⊕ E_K(ICB++）
+function gcmGctr(encBlock, icb, data) {
+  const out = new Uint8Array(data.length);
+  let cb = icb.slice();
+  for (let i = 0; i < data.length; i += 16) {
+    const ks = encBlock(cb);
+    const n = Math.min(16, data.length - i);
+    for (let j = 0; j < n; j++) out[i + j] = data[i + j] ^ ks[j];
+    cb = inc32(cb);
+  }
+  return out;
+}
+// J0：IV=12 字节 → IV‖0^31‖1；否则 J0 = GHASH_H(IV‖0^(s+64)‖[len(IV)]_64)
+// 注：整串作为 GHASH 数据（不追加 AAD/C 长度块），长度字段内嵌在串末尾。
+function gcmJ0(encBlock, iv) {
+  if (iv.length === 12) {
+    const j0 = new Uint8Array(16);
+    j0.set(iv);
+    j0[15] = 1;
+    return j0;
+  }
+  const h = encBlock(new Uint8Array(16));
+  const s = (16 - (iv.length % 16)) % 16; // 补到块边界的零字节数
+  const buf = new Uint8Array(iv.length + s + 16);
+  buf.set(iv, 0);
+  const bitLen = BigInt(iv.length * 8);
+  const off = iv.length + s + 8; // 0^(s+64) 后 8 字节放 len(IV)
+  for (let i = 0; i < 8; i++) buf[off + i] = Number((bitLen >> BigInt(56 - 8 * i)) & 0xffn);
+  const full = new Uint8Array(16);
+  let acc = new Uint8Array(16);
+  for (let i = 0; i < buf.length; i += 16) {
+    full.fill(0);
+    full.set(buf.subarray(i, i + 16));
+    acc = gcmMul(xorBytes(acc, full), h);
+  }
+  return acc;
+}
+// SM4-GCM 加密：返回 ciphertext ‖ tag（16 字节，常量 tag 长）
+export function sm4GcmEncrypt(data, key, iv, aad) {
+  const encBlock = (b) => sm4EncryptBlock(b, key);
+  const h = encBlock(new Uint8Array(16));
+  const j0 = gcmJ0(encBlock, iv);
+  const c = gcmGctr(encBlock, inc32(j0), data);
+  const s = gcmGhash(h, aad || new Uint8Array(0), c);
+  const t = gcmGctr(encBlock, j0, s);
+  const out = new Uint8Array(c.length + 16);
+  out.set(c, 0);
+  out.set(t, c.length);
+  return out;
+}
+// SM4-GCM 解密：输入 ciphertext ‖ tag，tag 校验失败抛错
+export function sm4GcmDecrypt(data, key, iv, aad, tagLen = 16) {
+  if (![4, 8, 12, 13, 14, 15, 16].includes(tagLen)) throw new Error("SM4-GCM tag 长度仅支持 4/8/12/13/14/15/16 字节");
+  if (data.length < tagLen) throw new Error("SM4-GCM 密文过短（需含 tag）");
+  const c = data.subarray(0, data.length - tagLen);
+  const tag = data.subarray(data.length - tagLen);
+  const encBlock = (b) => sm4EncryptBlock(b, key);
+  const h = encBlock(new Uint8Array(16));
+  const j0 = gcmJ0(encBlock, iv);
+  const s = gcmGhash(h, aad || new Uint8Array(0), c);
+  const t = gcmGctr(encBlock, j0, s).subarray(0, tagLen);
+  let diff = 0;
+  for (let i = 0; i < tagLen; i++) diff |= tag[i] ^ t[i];
+  if (diff !== 0) throw new Error("SM4-GCM tag 校验失败（密钥/IV/密文可能错误）");
+  return gcmGctr(encBlock, inc32(j0), c);
 }
 
 // ============================================================
@@ -659,14 +866,18 @@ const ENC_OPTS = [
 ];
 
 function blockParams(modes, keyHint) {
-  return [
+  const params = [
     { key: "key", label: "密钥", type: "text", default: "", placeholder: keyHint },
     { key: "keyEnc", label: "密钥编码", type: "select", default: "utf8", options: ENC_OPTS },
     { key: "mode", label: "模式", type: "select", default: "ECB", options: modes.map((m) => ({ value: m, label: m })) },
-    { key: "iv", label: "IV", type: "text", default: "", placeholder: "CBC 模式需填" },
+    { key: "iv", label: "IV / Nonce", type: "text", default: "", placeholder: "hex（CBC/CFB/OFB/CTR 需 IV，GCM 为 12 字节 nonce）" },
     { key: "ivEnc", label: "IV 编码", type: "select", default: "hex", options: ENC_OPTS },
-    { key: "outEnc", label: "密文编码", type: "select", default: "base64", options: ENC_OPTS },
   ];
+  if (modes.includes("GCM")) {
+    params.push({ key: "aad", label: "AAD（仅 GCM）", type: "text", default: "", placeholder: "认证附加数据（GCM 模式用）" });
+  }
+  params.push({ key: "outEnc", label: "密文编码", type: "select", default: "base64", options: ENC_OPTS });
+  return params;
 }
 
 function makeBlockOp(encFn, decFn) {
@@ -674,14 +885,16 @@ function makeBlockOp(encFn, decFn) {
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
     const mode = (p.mode || "ECB").toUpperCase();
     const iv = p.iv ? decodeInput(p.iv, p.ivEnc || "hex") : undefined;
-    return encodeOutput(encFn(te(text), key, { mode, iv }), p.outEnc || "base64");
+    const aad = p.aad ? te(p.aad) : undefined;
+    return encodeOutput(encFn(te(text), key, { mode, iv, aad }), p.outEnc || "base64");
   };
   const decode = (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
     const mode = (p.mode || "ECB").toUpperCase();
     const iv = p.iv ? decodeInput(p.iv, p.ivEnc || "hex") : undefined;
+    const aad = p.aad ? te(p.aad) : undefined;
     const data = decodeInput(text.trim(), p.outEnc || "base64");
-    return td(decFn(data, key, { mode, iv }));
+    return td(decFn(data, key, { mode, iv, aad }));
   };
   return { encode, decode };
 }
@@ -725,12 +938,14 @@ function makeBlockOp(encFn, decFn) {
     encode, decode,
   });
 }
-// SM4（国密）
+// SM4（国密，GB/T 32907-2016 / 前身 GM/T 0002-2012）
+// 全工作模式照 GB/T 17964-2021《分组密码算法的工作模式》：ECB/CBC/CFB/OFB/CTR 纯 JS + GCM（SP 800-38D 构造，块加密换 SM4）。
 {
   const { encode, decode } = makeBlockOp(sm4Encrypt, sm4Decrypt);
   register({
-    id: "sm4", cat: "modern", name: "SM4", desc: "国密分组密码（GM/T 0002-2012，128位块，128位密钥，32轮非线性迭代）",
-    params: blockParams(["ECB", "CBC"], "16 字节密钥"),
+    id: "sm4", cat: "modern", name: "SM4",
+    desc: "国密分组密码（GB/T 32907-2016，前身 GM/T 0002-2012；128位块，128位密钥，32轮非线性迭代。模式：ECB/CBC/CFB/OFB/CTR + GCM 认证加密）",
+    params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR", "GCM"], "16 字节密钥（hex 32 字符）"),
     encode, decode,
   });
 }
@@ -800,4 +1015,4 @@ function makeStreamCipherOp(fn, keyHint, nonceHint) {
   });
 }
 
-export { teaEncryptBlock, teaDecryptBlock, xteaEncryptBlock, xteaDecryptBlock, xxteaEncryptBytes, xxteaDecryptBytes, sm4EncryptBlock, sm4DecryptBlock, sm4KeyExpansion, salsa20Block, chacha20Block };
+export { teaEncryptBlock, teaDecryptBlock, xteaEncryptBlock, xteaDecryptBlock, xxteaEncryptBytes, xxteaDecryptBytes, sm4EncryptBlock, sm4DecryptBlock, sm4KeyExpansion, salsa20Block, chacha20Block, cfbEncrypt, cfbDecrypt, ofbCrypt, ctrCrypt };

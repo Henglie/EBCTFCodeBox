@@ -6,5 +6,5 @@
  *
  * 零外发红线：本适配只在本地进程内 import + dispatch，无任何网络出口。
  */
-import "../src/core/registerAll.js"; // 副作用注册：注册表活跃 op 519（对外可见 510，扣除 cryptoTryAll 虚拟 op）
+import "../src/core/registerAll.js"; // 副作用注册：Worker/Node 共用注册表，当前 581 op
 export { callMcpTool, MCP_TOOLS, exportManifest, listMcpResources, readMcpResourceContents } from "../src/plugin/mcpBridge.js";

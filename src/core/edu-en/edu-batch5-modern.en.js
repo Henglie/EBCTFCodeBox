@@ -153,43 +153,44 @@ export default {
   },
 
   zuc: {
-    what: "The ZUC stream cipher — a Chinese national cryptography standard (GM/T 0001-2012), a domestic scheme for 3GPP LTE communication encryption, on par with Snow and AES-CTR.",
+    what: "The ZUC stream cipher — a Chinese national cryptography standard (GB/T 33133.1-2016, formerly GM/T 0001-2012), a domestic scheme for 3GPP LTE communication encryption, on par with Snow and AES-CTR.",
     principle:
       "A 128-bit key + 128-bit IV initialize a 16-stage LFSR (linear feedback over the finite field $\\mathrm{GF}(2^{31}-1)$). Each tick first does \"bit reorganization\" to extract four 32-bit words W0-W3 from the LFSR state, then passes through a nonlinear function F (containing two S-boxes S0/S1 and two linear transforms L1/L2) to output a 32-bit key word.\n\n" +
       "Stream cipher, self-inverse: XOR the keystream byte-by-byte with plaintext to get ciphertext, XOR the same keystream again to restore plaintext. This tool's encode/decode share the same encryption function, differing only in input/output encoding.",
     usage: "Fill the key (16-byte hex) and IV (16-byte hex), select data encoding and output encoding. encode: XOR plaintext into ciphertext (default hex output); decode: XOR ciphertext to restore plaintext (default utf8 output). Self-inverse, same params for encode/decode.",
     examples: [
-      { in: "00000000", param: "key=00*16, iv=00*16, dataEnc=hex, outEnc=hex", out: "27BEDE74", desc: "GM/T 0001-2012 standard vector: first 4 bytes of keystream for all-0 key/iv" },
+      { in: "00000000", param: "key=00*16, iv=00*16, dataEnc=hex, outEnc=hex", out: "27BEDE74", desc: "GB/T 33133.1-2016 standard vector: first 4 bytes of keystream for all-0 key/iv" },
       { in: "Hello", param: "key=0123456789abcdef0123456789abcdef, iv=same as key", out: "7149B6DBD1 (hex)", desc: "decode with same params after encode restores Hello" },
     ],
     tips: [
       "Stream cipher — ciphertext and plaintext are equal length (no padding, no block structure), unlike the SM4/AES block ciphers.",
-      "Recognizing the Chinese-crypto scenario: 3GPP/mobile communication encryption, GM/T 0001 standard references, likely ZUC.",
+      "Recognizing the Chinese-crypto scenario: 3GPP/mobile communication encryption, GB/T 33133 standard references, likely ZUC.",
       "Both key and IV must be exactly 16 bytes of hex (32 chars); one digit short errors.",
     ],
     aka: ["zuc", "祖冲之", "gm/t 0001", "3gpp 流密码", "祖冲之密码", "祖冲之序列密码", "zuc算法", "国密流密码", "128-eea3", "128-eia3", "商密流密码", "zuc stream cipher"],
   },
 
   sm2: {
-    what: "SM2 — the Chinese national elliptic-curve public-key cryptography (GM/T 0003-2012), the domestic counterpart to RSA/ECC. This tool only does ciphertext-structure recognition, no encrypt/decrypt computation.",
+    what: "SM2 — the Chinese national elliptic-curve public-key cryptography (GB/T 32918-2016, formerly GM/T 0003-2012), the domestic counterpart to RSA/ECC. This tool supports full sign/verify and encrypt/decrypt computation.",
     principle:
-      "Based on point operations on a 256-bit prime-field elliptic curve (recommended curve sm2p256v1). The encrypted ciphertext uses `C1||C3||C2` assembly: C1 is a 65-byte elliptic curve point (uncompressed format starting with `0x04`), C3 is a 32-byte SM3 hash (for verification), C2 is the ciphertext.\n\n" +
-      "This tool's recognition logic is naive: after decoding the input as hex/base64, if the length is ≥97 bytes and the first byte is `0x04`, it's judged as suspected SM2 (confidence 0.7/0.6). Real encrypt/decrypt requires a full ECC point-multiplication implementation, not currently supported — in CTF, first recognize the structure, use a dedicated library for computation.",
-    usage: "Fill the input box with suspected SM2 ciphertext (hex or base64), click run to output the recognition result and confidence. No params, no encrypt/decrypt, no decode.",
+      "Based on point operations on a 256-bit prime-field elliptic curve (recommended curve sm2p256v1). The encrypted ciphertext uses `C1||C3||C2` assembly: C1 is a 65-byte elliptic curve point (uncompressed format starting with `0x04`), C3 is a 32-byte SM3 hash (for verification), C2 is the ciphertext. Signing derives the hash value e via SM3; ZA is computed from the identifier ID_A and the public key (GB/T 32918.2).\n\n" +
+      "This tool implements full operations: sign/verify (GB/T 32918.2-2016) and encrypt/decrypt (GB/T 32918.4-2016), verified byte-for-byte against official examples (load-time self-check). Pick the operation via the mode param; fill private key / public key / identifier accordingly.",
+    usage: "Pick mode encrypt/decrypt/sign/verify: encrypt fills pubX/pubY, decrypt fills private key, sign fills private key (public key optional), verify fills public key + r + s. Identifier ID_A defaults to the official sample 1234567812345678.",
     examples: [
-      { in: "04 + 00 repeated 96 times (194 hex chars)", param: "(no params)", out: "Recognized as SM2 ciphertext (confidence 0.7): format C1||C3||C2…", desc: "First byte 04 and length ≥97 bytes triggers recognition" },
-      { in: "hello world", param: "(no params)", out: "Not recognized as SM2 ciphertext", desc: "Ordinary text doesn't match" },
+      { in: "encryption standard", param: "mode=encrypt, pubX/pubY=official sample public key", out: "04 + C1(65B) + C3(32B) + C2 hex ciphertext", desc: "Official sample encryption" },
+      { in: "message digest", param: "mode=sign, privKey=official sample private key", out: "r(32B) + s(32B) hex signature", desc: "Official sample signing" },
+      { in: "hello world", param: "mode=verify, mismatched public key + r + s", out: "✗ signature invalid", desc: "Verify-fail path" },
     ],
     tips: [
-      "Recognition trait: a hex string starting with `04` and length ≥194 chars (97 bytes), or the same condition after base64 decoding — structurally like SM2.",
-      "C1||C3||C2 is the old standard order; the new standard (GM/T 0009) sometimes uses C1||C2||C3, so check the challenge notes.",
-      "To actually decrypt, use a library with full ECC (e.g. Python gmssl / GmSSL); this tool only recognizes the shell.",
+      "Recognition trait: a hex string starting with `04` and length ≥194 chars (97 bytes), or the same condition after base64 decoding — structurally like SM2 ciphertext.",
+      "C1||C3||C2 is the GB/T 32918.4 order; the newer spec (GM/T 0009-2023 SM2 Application Specification) sometimes uses C1||C2||C3, so check the challenge notes.",
+      "Private key and public key must be on the same curve (sm2p256v1); if verification fails, first check whether pubX/pubY are correct.",
     ],
     aka: ["sm2", "国密椭圆曲线", "gm/t 0003", "国密公钥密码", "sm2算法", "国密ecc", "商密椭圆曲线", "sm2p256v1", "国密非对称加密", "sm2椭圆曲线密码", "商用密码sm2", "国密公钥算法"],
   },
 
   sm9: {
-    what: "SM9 — the Chinese national identity-based cryptography (GM/T 0044-2016), signature feature being \"use email/phone number as the public key\" bilinear-pairing cryptography. This tool only does keyword recognition, no computation.",
+    what: "SM9 — the Chinese national identity-based cryptography (GB/T 38635.1-2020, formerly GM/T 0044-2016), signature feature being \"use email/phone number as the public key\" bilinear-pairing cryptography. This tool only does keyword recognition, no computation.",
     principle:
       "An identity-based cryptography system based on bilinear pairing: the user's public key is generated directly from an identity (e.g. `alice@example.com`) hash-mapped to a point on the elliptic curve, and the private key is issued by a Key Generation Center (KGC) using a master key. Signing/key-encapsulation both use the properties of the bilinear pairing.\n\n" +
       "Because bilinear-pairing operations are complex and have no fixed short prefix, this tool's recognition is crude: only judges as suspected when the input text contains the `sm9` keyword (low confidence 0.5). Real computation requires a full pairing implementation, not currently supported.",

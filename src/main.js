@@ -140,7 +140,7 @@ import "./core/difftool.js"; // diff 对比工具（两文本/两 hex 逐字节 
 import "./core/classicExt3.js"; // 古典补全组3（otp/multiplicative/keywordcipher/simplesub/runningkey）
 import "./core/fracmorse.js"; // 分数摩斯 Fractionated Morse
 import "./core/hamming.js"; // 海明码纠错编解码
-import { renderRecipe, rState as recipeState } from "./ui/recipeView.js"; // 配方链 UI
+import { renderRecipe, rState as recipeState, addRecipeOpAt } from "./ui/recipeView.js"; // 配方链 UI
 import { renderExhaustive } from "./ui/exhaustiveView.js"; // 穷举全解视图（一键全解码器穷举）
 import { renderUniversalViewer } from "./ui/universalViewer.js"; // 字符显示器（Hex/Unicode逐字符/不可见字符）
 import { renderCodeImageViewer } from "./ui/codeImageViewer.js"; // 224编码图查询器（图形编码对照图）
@@ -174,7 +174,8 @@ import "./core/crc32collision.js"; // CRC32 碰撞爆破（analysis, run 型）
 import "./core/rotspecial.js"; // Rot 任意位移 + ROT8000（classic/fancy）
 import "./core/pickle.js"; // Pickle 反汇编（analysis, run 型, 危险 opcode 告警）
 import "./core/jjencode.js"; // JJEncode（JS 符号混淆编码, fancy）
-import "./core/sm.js"; // 国密 ZUC/SM2/SM9（modern，ZUC 完整流密码，SM2/SM9 结构识别）
+import "./core/sm2.js"; // 国密 SM2 完整运算（GB/T 32918-2016：签名/验签+加密/解密）
+import "./core/sm.js"; // 国密 ZUC/SM9（modern，ZUC 完整流密码，SM9 结构识别）
 import "./core/archiveUnified.js"; // 压缩/归档归一（analysis, run 型, 复用 compress+sevenzip 纯函数）
 import "./core/spoon.js"; // Spoon 语言（BF 前缀码变体, fancy）
 import "./core/ssti.js"; // SSTI 关键字识别（analysis, run 型, 只识别不执行）
@@ -600,6 +601,7 @@ function renderNav() {
           el("span", { class: "nav-subitem-label" }, opName(op)),
         );
         sub.append(a);
+        attachTouchDragToRecipe(a, () => op.id);
       }
       $nav.append(sub);
       if (!state._animatedCats.includes(cat.id)) state._animatedCats.push(cat.id); // 记录已放过动画的分类
@@ -2530,7 +2532,78 @@ function toggleFontPanel(anchor) {
   }, 0);
 }
 
-// ---- 顶栏搜索：名称/别名/描述/id 实时过滤，下拉候选，点选跳转 ----
+// ---- 触摸拖拽 → 配方链（HTML5 DnD 在触摸设备不触发，touch 模拟）----
+// 长按 320ms 进入拖拽；长按前移动视为正常滚动，避免左侧抽屉无法上下滑。
+function attachTouchDragToRecipe(node, getOpId) {
+  let timer = null, active = false, tracking = false;
+  let sx = 0, sy = 0, ghost = null;
+
+  const chainAt = (x, y) => {
+    const chain = document.getElementById("recipeChain");
+    if (!chain) return null;
+    const r = chain.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom ? chain : null;
+  };
+  const cleanup = () => {
+    clearTimeout(timer); timer = null;
+    tracking = false; active = false;
+    node.classList.remove("touch-dragging");
+    document.getElementById("recipeChain")?.classList.remove("recipe-drop-active");
+    if (ghost) ghost.remove();
+    ghost = null;
+  };
+  const moveGhost = (t) => {
+    if (!ghost) return;
+    ghost.style.transform = `translate3d(${t.clientX + 14}px,${t.clientY + 14}px,0)`;
+  };
+
+  node.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    sx = t.clientX; sy = t.clientY; tracking = true; active = false;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (!tracking) return;
+      active = true;
+      node.classList.add("touch-dragging");
+      ghost = document.createElement("div");
+      ghost.className = "recipe-touch-ghost";
+      ghost.textContent = node.querySelector(".nav-subitem-label, .op-search-item-name")?.textContent || node.textContent.trim();
+      document.body.append(ghost);
+      moveGhost(t);
+    }, 320);
+  }, { passive: true });
+
+  node.addEventListener("touchmove", (e) => {
+    if (!tracking) return;
+    const t = e.touches[0];
+    if (!active) {
+      if (Math.hypot(t.clientX - sx, t.clientY - sy) > 10) {
+        clearTimeout(timer); timer = null; // 普通滑动：不抢滚动
+        tracking = false;
+      }
+      return;
+    }
+    e.preventDefault();
+    moveGhost(t);
+    const chain = chainAt(t.clientX, t.clientY);
+    document.getElementById("recipeChain")?.classList.toggle("recipe-drop-active", !!chain);
+  }, { passive: false });
+
+  node.addEventListener("touchend", (e) => {
+    clearTimeout(timer); timer = null;
+    if (!tracking || !active) { cleanup(); return; }
+    const t = e.changedTouches[0];
+    e.preventDefault();
+    const opId = getOpId();
+    if (opId && chainAt(t.clientX, t.clientY)) addRecipeOpAt(opId, t.clientX, t.clientY);
+    cleanup();
+  }, { passive: false });
+  node.addEventListener("touchcancel", cleanup, { passive: true });
+  node.addEventListener("contextmenu", (e) => { if (active) e.preventDefault(); });
+}
+
+// ---- 顶栏搜索：名称/别名/描述/id 实时过滤，下拉候选，点选跳转；候选可拖入配方链 ----
 // 索引在首次用时构建；语言切换后清空重建（opName/opDesc 随语言变）。
 let _searchIndex = null;
 function buildSearchIndex() {
@@ -2601,15 +2674,24 @@ function initOpSearch() {
       return;
     }
     results.forEach((r, i) => {
-      const item = el("div", { class: "op-search-item", "data-idx": String(i) },
+      const item = el("div", { class: "op-search-item", "data-idx": String(i), "data-opid": r.id, draggable: "true", title: t("ui.recipe.dragSearchHint") },
         el("div", { class: "op-search-item-main" },
           el("span", { class: "op-search-item-name" }, r.name),
           el("span", { class: "op-search-item-cat" }, catNameById(r.cat)),
         ),
         r.desc ? el("div", { class: "op-search-item-desc" }, r.desc) : null,
       );
-      item.addEventListener("mousedown", (e) => { e.preventDefault(); pick(r.id); });
+      // 桌面：HTML5 DnD → 配方链；mousedown 仍点选跳转。
+      item.addEventListener("dragstart", (e) => {
+        if (!e.dataTransfer) return;
+        e.dataTransfer.effectAllowed = "copy";
+        try { e.dataTransfer.setData("application/x-ebctf-op", r.id); } catch { /* ignore */ }
+        try { e.dataTransfer.setData("text/plain", r.name); } catch { /* ignore */ }
+      });
+      item.addEventListener("click", (e) => { e.preventDefault(); pick(r.id); });
       item.addEventListener("mouseenter", () => { setActive(i); });
+      // 触摸：长按 320ms 后拖到配方链；轻触仍选中跳转。
+      attachTouchDragToRecipe(item, () => r.id);
       panel.append(item);
     });
     panel.classList.add("open");
@@ -2642,9 +2724,9 @@ function initOpSearch() {
     } else if (e.key === "Enter") {
       const all2 = items();
       if (_searchActiveIdx >= 0 && all2[_searchActiveIdx]) {
-        all2[_searchActiveIdx].dispatchEvent(new MouseEvent("mousedown"));
+        all2[_searchActiveIdx].click();
       } else if (all2.length === 1) {
-        all2[0].dispatchEvent(new MouseEvent("mousedown"));
+        all2[0].click();
       }
     } else if (e.key === "Escape") {
       input.value = "";

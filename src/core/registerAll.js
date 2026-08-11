@@ -103,7 +103,8 @@ import "./crc32collision.js"; // CRC32 碰撞爆破（analysis, run 型）
 import "./rotspecial.js"; // Rot 任意位移 + ROT8000（classic/fancy）
 import "./pickle.js"; // Pickle 反汇编（analysis, run 型, 危险 opcode 告警）
 import "./jjencode.js"; // JJEncode（JS 符号混淆编码, fancy）
-import "./sm.js"; // 国密 ZUC/SM2/SM9（modern，ZUC 完整流密码，SM2/SM9 结构识别）
+import "./sm2.js"; // 国密 SM2 完整运算（GB/T 32918-2016：签名/验签+加密/解密）
+import "./sm.js"; // 国密 ZUC/SM9（modern，ZUC 完整流密码，SM9 结构识别）
 import "./archiveUnified.js"; // 压缩/归档归一（analysis, run 型, 复用 compress+sevenzip 纯函数）
 import "./spoon.js"; // Spoon 语言（BF 前缀码变体, fancy）
 import "./ssti.js"; // SSTI 关键字识别（analysis, run 型, 只识别不执行）
@@ -123,6 +124,7 @@ import "./pietExec.js"; // Piet 执行（fancy，有 detect）
 import "./carbonaro.js"; // Carbonaro 密码（classic）
 import "./albam.js"; // Al Bhed / Albam 替换（classic）
 import "./bfDialects.js"; // BF 方言 Blub/COW（fancy，有 detect）
+import "./ctfCipherExt.js"; // 冷门编码/换位补齐 twinHex/trollScript/asciiSum（fancy，有 detect）+ caesarBox/curveCipher（classic）
 import "./zipCrack.js"; // ZIP 弱口令爆破（analysis, run 型, 单向）
 import "./chaocipher.js"; // 混沌密码 chaocipher（classic, 双向）
 import "./john_zip.js"; // ZIP哈希提取 zip2john（analysis, run）
@@ -244,6 +246,5 @@ import "./lllAttack.js"; // 格基归约 LLL + 背包低密度攻击 CJLOSS（cr
 import "./xiangyue.js"; // 想曰 XiangYue 完整版解密 xiangyue（cn, run async, 中/日/韩/Emoji/零宽/象形映射 → Argon2id/PBKDF2 + ChaCha20-Poly1305 + AES-CTR + zlib, 纯JS原语自验, 无 detect）
 import "./lightweightStream.js"; // eSTREAM/NIST 轻量级流密码 trivium/grainV1/grain128aead（modern, 双向, 官方向量验证）
 import "./fengCodec.js"; // 风之暇想 uid=243467 编码 dxBase64（base, 双向, deflate+salt XOR+CRC16）/ yueChang 曰唱（cn, 双向, PBKDF2+AES-GCM+拟声字映射, 源码逐行核验）
-import "./ctfCipherExt.js"; // 冷门编码/换位补齐 twinHex/trollScript/asciiSum（fancy, 双向, 有 detect）+ caesarBox/curveCipher（classic, 双向, 无 detect）
 import "./detectExt3.js"; // EASY 30 op detect 补齐（须在所有 op 注册后）
 import "./detectSupplement.js"; // 编码类 detect 覆盖补齐（须在所有 op 注册后）

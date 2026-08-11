@@ -2,18 +2,18 @@
  * sm.js — 国密补全组（T69）。
  *
  * 覆盖：
- * - ZUC 祖冲之流密码（GM/T 0001-2012，128 位密钥 + 128 位 IV，完整实现）
- * - SM2 加密/签名结构识别（detect，运算需完整 ECC 实现暂不支持）
+ * - ZUC 祖冲之流密码（GB/T 33133.1-2016，前身 GM/T 0001-2012，128 位密钥 + 128 位 IV，完整实现）
  * - SM9 标识识别（detect）
+ * - SM2 完整运算（签名/验签+加密/解密）已独立到 sm2.js，本模块不重复
  *
  * 算法来源：
- * - ZUC 规格照抄 GM/T 0001-2012 标准，参考 Rust 实现（CSDN anonymous_qsh）
+ * - ZUC 规格照抄 GB/T 33133.1-2016（前身 GM/T 0001-2012）标准，参考 Rust 实现（CSDN anonymous_qsh）
  * 逐行对照移植：S0/S1 盒、D 常量、L1/L2 线性变换、比特重组、非线性函数 F
  * LFSR 初始化/工作模式。S 盒照抄不许编造（见红线）。
  * - SM3 已在 hashExt.js、SM4 已在 modernExt.js，本模块不重复。
  *
  * 红线：
- * - ZUC 标准测试向量必对（GM/T 0001-2012 附录 A 三组向量）。
+ * - ZUC 标准测试向量必对（GB/T 33133.1-2016 附录 A 三组向量）。
  * - 零外发：全部本地纯 JS 计算。
  * - 机制四合规：仅新建本文件 + 件内自注册，不碰 main.js import 清单和 i18n 主表。
  */
@@ -23,7 +23,7 @@ const te = (s) => new TextEncoder().encode(s);
 const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(b));
 
 // ============================================================
-// ZUC 祖冲之序列密码（GM/T 0001-2012）
+// ZUC 祖冲之序列密码（GB/T 33133.1-2016，前身 GM/T 0001-2012）
 // ============================================================
 
 // S 盒 S0（照抄标准，不许编造）
@@ -248,31 +248,8 @@ function bytesToB64(b) {
 }
 
 // ============================================================
-// SM2 / SM9 结构识别（detect）
+// SM9 结构识别（detect）
 // ============================================================
-
-/**
- * SM2 密文结构识别。
- * SM2 密文格式：C1 || C3 || C2（旧序）或 C1 || C2 || C3（新序 GMT 0009）
- * C1 = 椭圆曲线点（04 || X(32B) || Y(32B)，65 字节，或非压缩前缀 04）
- * C3 = SM3 哈希（32 字节）
- * C2 = 密文（与明文等长）
- * 识别：hex 解码后长度 >= 97（65+32），且以 04 开头（非压缩点前缀）。
- */
-function detectSm2(text) {
-  const t = text.trim();
- // 尝试 hex
-  const hexClean = t.replace(/[^0-9a-fA-F]/g, "");
-  if (hexClean.length >= 194) { // 97 字节 = 194 hex 字符
-    if (hexClean.substr(0, 2).toLowerCase() === "04") return 0.7;
-  }
- // 尝试 base64
-  try {
-    const bytes = b64ToBytes(t);
-    if (bytes.length >= 97 && bytes[0] === 0x04) return 0.6;
-  } catch (e) { /* ignore */ }
-  return 0;
-}
 
 /**
  * SM9 识别（粗略）。
@@ -325,7 +302,7 @@ register({
   id: "zuc",
   cat: "modern",
   name: "ZUC 祖冲之",
-  desc: "国密流密码（GM/T 0001-2012，128 位密钥+128 位 IV，3GPP LTE 加密标准）",
+  desc: "国密流密码（GB/T 33133.1-2016，前身 GM/T 0001-2012，128 位密钥+128 位 IV，3GPP LTE 加密标准）",
   params: [
     { key: "key", label: "密钥（hex）", type: "text", default: "00000000000000000000000000000000", placeholder: "16 字节 hex（32 字符）" },
     { key: "iv", label: "IV（hex）", type: "text", default: "00000000000000000000000000000000", placeholder: "16 字节 hex（32 字符）" },
@@ -350,29 +327,15 @@ register({
   },
 });
 
-// SM2 op（结构识别，运算需完整 ECC 实现暂不支持）
-register({
-  id: "sm2",
-  cat: "modern",
-  name: "SM2",
-  desc: "国密椭圆曲线公钥密码（GM/T 0003-2012）。结构识别（C1||C3||C2 格式），加解密运算需完整 ECC 实现暂不支持",
-  params: [],
-  run: (text) => {
-    const score = detectSm2(text);
-    if (score > 0) {
-      return `识别为 SM2 密文（置信度 ${score}）：格式 C1||C3||C2，C1=椭圆曲线点(65B)，C3=SM3(32B)，C2=密文。加解密运算暂不支持。`;
-    }
-    return "未识别为 SM2 密文（需 hex/base64 格式，长度≥97 字节且以 04 开头）";
-  },
-  detect: detectSm2,
-});
+// SM2 op：完整运算已移至 src/core/sm2.js（GB/T 32918-2016 签名/验签+加密/解密），此处不再重复注册。
+// 旧 detect-only 版已删除（避免与 sm2.js 的 register id 冲突）。
 
 // SM9 op（标识识别）
 register({
   id: "sm9",
   cat: "modern",
   name: "SM9",
-  desc: "国密标识密码（GM/T 0044-2016）。基于双线性对的标识密码，结构识别仅，运算暂不支持",
+  desc: "国密标识密码（GB/T 38635.1-2020，前身 GM/T 0044-2016）。基于双线性对的标识密码，结构识别仅，运算暂不支持",
   params: [],
   run: (text) => {
     const score = detectSm9(text);

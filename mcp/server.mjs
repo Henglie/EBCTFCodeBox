@@ -18,6 +18,7 @@ const realStdoutWrite = process.stdout.write.bind(process.stdout);
 process.stdout.write = (chunk, ...rest) => process.stderr.write(chunk, ...rest);
 
 const { callMcpTool, MCP_TOOLS, listMcpResources, readMcpResourceContents } = await import("./ebctf-core-adapter.mjs");
+const { APP_VERSION } = await import("../src/core/version.js");
 
 // core 加载完毕，恢复真实 stdout，之后只走 send() 写 JSON-RPC。
 process.stdout.write = realStdoutWrite;
@@ -39,7 +40,7 @@ rl.on("line", async (line) => {
       return ok({
         protocolVersion: "2024-11-05",
         capabilities: { tools: {}, resources: {} },
-        serverInfo: { name: "ebctf-codebox", version: "0.1.1" },
+        serverInfo: { name: "ebctf-codebox", version: APP_VERSION },
       });
     }
     if (method === "notifications/initialized") return; // 通知无需回应
