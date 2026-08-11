@@ -28,12 +28,6 @@ function spawnWorker() {
   try {
  // import.meta.url 相对定位 magicWorker.js —— 打包器/原生 ESM 均可解析（本项目零构建，原生 ESM）。
     _worker = new Worker(new URL("./magicWorker.js", import.meta.url), { type: "module" });
-    _worker.onerror = () => {
- // Worker 顶层加载/运行致命错误 → 标记不可用，当前及后续走主线程降级。
-      _workerBroken = true;
-      try { _worker.terminate(); } catch { /* ignore */ }
-      _worker = null;
-    };
   } catch {
     _workerBroken = true;
     _worker = null;
@@ -94,6 +88,45 @@ export function runMagic(input, opts = {}) {
   return new Promise((resolve, reject) => {
     _activeReject = reject;
     const strip = (o) => { const { onPartial: _op, ...rest } = o; return rest; };  // onPartial 是函数，不可结构化克隆，剥离
+    let settled = false;
+    const cleanup = () => {
+      worker.removeEventListener("message", handler);
+      worker.removeEventListener("error", failover);
+      worker.removeEventListener("messageerror", failover);
+    };
+    const fallback = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      const ac = new AbortController();
+      _activeReject = (reason) => { ac.abort(); reject(reason); };
+      magicDecode(input, {
+        ...strip(opts),
+        signal: ac.signal,
+        onPartial: onPartial ? (parts) => { if (runId === _runSeq) onPartial(parts); } : null,
+      }).then(
+        (cands) => {
+          if (runId === _runSeq) {
+            _activeReject = null;
+            resolve(cands);
+          }
+        },
+        (err) => {
+          if (runId === _runSeq) {
+            _activeReject = null;
+            reject(err);
+          }
+        },
+      );
+    };
+    const failover = () => {
+      _workerBroken = true;
+      if (_worker === worker) {
+        try { worker.terminate(); } catch { /* ignore */ }
+        _worker = null;
+      }
+      fallback();
+    };
     const handler = (e) => {
       const m = e.data || {};
       if (m.runId !== runId) return;      // 过期结果（terminate 前漏网）丢弃
@@ -101,16 +134,23 @@ export function runMagic(input, opts = {}) {
         if (onPartial && runId === _runSeq) onPartial(m.cands);
         return;                            // partial 不结束 Promise，等 final
       }
-      worker.removeEventListener("message", handler);
-      if (m.type === "final") { _activeReject = null; resolve(m.cands); }
-      else if (m.type === "error") {
- // Worker 内解码异常 → 降级主线程重跑一次（保证出结果）
+      if (m.type === "final") {
+        settled = true;
+        cleanup();
         _activeReject = null;
-        magicDecode(input, strip(opts)).then(resolve, reject);
+        resolve(m.cands);
+      } else if (m.type === "error") {
+        fallback();
       }
     };
     worker.addEventListener("message", handler);
-    worker.postMessage({ type: "run", runId, input, opts: strip(opts) });
+    worker.addEventListener("error", failover, { once: true });
+    worker.addEventListener("messageerror", failover, { once: true });
+    try {
+      worker.postMessage({ type: "run", runId, input, opts: strip(opts) });
+    } catch {
+      failover();
+    }
   });
 }
 

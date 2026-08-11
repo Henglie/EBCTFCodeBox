@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>恒烈 CTF 编码工具箱</title>
   <meta name="description" content="全平台 · 纯前端 · 零外发的 CTF 编解码工具箱" />
+  <meta name="theme-color" content="#8f3d33" />
+  <link rel="manifest" href="manifest.json" />
   <link rel="icon" type="image/png" sizes="32x32" href="public/icons/app-icon-32.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="public/icons/app-icon-192.png" />
   <link rel="apple-touch-icon" href="public/icons/app-icon-180.png" />
@@ -19,6 +21,7 @@
   <link rel="stylesheet" href="src/ui/codeImageViewer.css" />
   <link rel="stylesheet" href="src/ui/pluginPanel.css" />
   <link rel="stylesheet" href="src/ui/decodeStrength.css" />
+  <script type="module" src="src/main.js"></script>
 </head>
 <body>
   <!-- ============ 顶栏 ============ -->
@@ -27,7 +30,7 @@
       <img class="brand-icon" src="public/icons/app-icon-192.png" alt="" width="28" height="28" />
       <div class="brand-text">
         <span class="brand-title" id="brandTitle">恒烈 CTF 编码工具箱</span>
-        <span class="brand-ver" id="appVer">v0.1.2</span>
+        <span class="brand-ver" id="appVer">v0.1.4</span>
       </div>
     </div>
     <!-- 居中搜索框（问题6：搜功能，含别名） -->
@@ -77,7 +80,5 @@
     <!-- ============ 中心工作区 ============ -->
     <main class="workspace" id="workspace"><!-- 由 main.js 按当前视图渲染 --></main>
   </div>
-
-  <script type="module" src="src/main.js"></script>
 </body>
 </html>

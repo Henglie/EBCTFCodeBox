@@ -226,7 +226,10 @@ export default {
   "ui.topbar.repo": "GitHub",
   "ui.topbar.theme": "Toggle Theme",
   "ui.topbar.lang": "Language",
-  "ui.topbar.updateToast": "You're on the latest version (update check coming soon).",
+  "ui.topbar.updateToast": "You're on the latest version.",
+  "ui.topbar.updateReady": "A new version is ready offline. Reload the app now?",
+  "ui.topbar.updateUnsupported": "This browser does not support offline updates.",
+  "ui.topbar.updateFailed": "Update check failed. Please try again later.",
 
  // ---- UI: home ----
   "ui.expand.title": "Expand editor",

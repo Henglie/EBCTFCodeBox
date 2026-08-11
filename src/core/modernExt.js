@@ -578,44 +578,60 @@ export function xorExtend(a, b) {
 // ============================================================
 // 高层 API（给 register 层 + 后续扩展复用）
 // ============================================================
-const BLOCK_MODES = new Set(["ECB", "CBC"]);
+const BLOCK_MODES = new Set(["ECB", "CBC", "CFB", "OFB", "CTR"]);
+
+function validateBlockIv(iv, bs, mode) {
+  if (mode === "ECB") return new Uint8Array(bs);
+  if (!iv || iv.length !== bs) throw new Error(`${mode} 模式 IV 需 ${bs} 字节`);
+  return iv;
+}
+
+function encryptBlockMode(data, encBlock, bs, mode, iv, pad) {
+  const ivv = validateBlockIv(iv, bs, mode);
+  switch (mode) {
+    case "ECB": return ecbEncrypt(data, encBlock, bs, pad);
+    case "CBC": return cbcEncrypt(data, encBlock, bs, ivv, pad);
+    case "CFB": return cfbEncrypt(data, encBlock, bs, ivv);
+    case "OFB": return ofbCrypt(data, encBlock, bs, ivv);
+    case "CTR": return ctrCrypt(data, encBlock, bs, ivv);
+  }
+}
+
+function decryptBlockMode(data, encBlock, decBlock, bs, mode, iv, pad) {
+  const ivv = validateBlockIv(iv, bs, mode);
+  switch (mode) {
+    case "ECB": return ecbDecrypt(data, decBlock, bs, pad);
+    case "CBC": return cbcDecrypt(data, decBlock, bs, ivv, pad);
+    case "CFB": return cfbDecrypt(data, encBlock, bs, ivv);
+    case "OFB": return ofbCrypt(data, encBlock, bs, ivv);
+    case "CTR": return ctrCrypt(data, encBlock, bs, ivv);
+  }
+}
 
 export function teaEncrypt(data, key, { mode = "ECB", iv, pad = true } = {}) {
   mode = mode.toUpperCase();
   if (!BLOCK_MODES.has(mode)) throw new Error(`不支持的 TEA 模式: ${mode}`);
   if (key.length !== 16) throw new Error("TEA 密钥需 16 字节");
-  const encBlock = (b) => teaEncryptBlock(b, key);
-  const ivv = iv || new Uint8Array(8);
-  if (mode === "ECB") return ecbEncrypt(data, encBlock, 8, pad);
-  return cbcEncrypt(data, encBlock, 8, ivv, pad);
+  return encryptBlockMode(data, (b) => teaEncryptBlock(b, key), 8, mode, iv, pad);
 }
 export function teaDecrypt(data, key, { mode = "ECB", iv, pad = true } = {}) {
   mode = mode.toUpperCase();
   if (!BLOCK_MODES.has(mode)) throw new Error(`不支持的 TEA 模式: ${mode}`);
   if (key.length !== 16) throw new Error("TEA 密钥需 16 字节");
-  const decBlock = (b) => teaDecryptBlock(b, key);
-  const ivv = iv || new Uint8Array(8);
-  if (mode === "ECB") return ecbDecrypt(data, decBlock, 8, pad);
-  return cbcDecrypt(data, decBlock, 8, ivv, pad);
+  return decryptBlockMode(data, (b) => teaEncryptBlock(b, key), (b) => teaDecryptBlock(b, key), 8, mode, iv, pad);
 }
 
 export function xteaEncrypt(data, key, { mode = "ECB", iv, pad = true } = {}) {
   mode = mode.toUpperCase();
   if (!BLOCK_MODES.has(mode)) throw new Error(`不支持的 XTEA 模式: ${mode}`);
   if (key.length !== 16) throw new Error("XTEA 密钥需 16 字节");
-  const encBlock = (b) => xteaEncryptBlock(b, key);
-  const ivv = iv || new Uint8Array(8);
-  if (mode === "ECB") return ecbEncrypt(data, encBlock, 8, pad);
-  return cbcEncrypt(data, encBlock, 8, ivv, pad);
+  return encryptBlockMode(data, (b) => xteaEncryptBlock(b, key), 8, mode, iv, pad);
 }
 export function xteaDecrypt(data, key, { mode = "ECB", iv, pad = true } = {}) {
   mode = mode.toUpperCase();
   if (!BLOCK_MODES.has(mode)) throw new Error(`不支持的 XTEA 模式: ${mode}`);
   if (key.length !== 16) throw new Error("XTEA 密钥需 16 字节");
-  const decBlock = (b) => xteaDecryptBlock(b, key);
-  const ivv = iv || new Uint8Array(8);
-  if (mode === "ECB") return ecbDecrypt(data, decBlock, 8, pad);
-  return cbcDecrypt(data, decBlock, 8, ivv, pad);
+  return decryptBlockMode(data, (b) => xteaEncryptBlock(b, key), (b) => xteaDecryptBlock(b, key), 8, mode, iv, pad);
 }
 
 export function xxteaEncrypt(data, key) {
@@ -903,8 +919,8 @@ function makeBlockOp(encFn, decFn) {
 {
   const { encode, decode } = makeBlockOp(teaEncrypt, teaDecrypt);
   register({
-    id: "tea", cat: "modern", name: "TEA", desc: "Tiny Encryption Algorithm（64位块，128位密钥，32轮 Feistel，Wheeler 1994）",
-    params: blockParams(["ECB", "CBC"], "16 字节密钥"),
+    id: "tea", cat: "modern", name: "TEA", desc: "Tiny Encryption Algorithm（64位块，128位密钥，32轮 Feistel，Wheeler 1994；支持 ECB/CBC/CFB/OFB/CTR）",
+    params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "16 字节密钥"),
     encode, decode,
   });
 }
@@ -912,8 +928,8 @@ function makeBlockOp(encFn, decFn) {
 {
   const { encode, decode } = makeBlockOp(xteaEncrypt, xteaDecrypt);
   register({
-    id: "xtea", cat: "modern", name: "XTEA", desc: "扩展 TEA（改进密钥调度，64位块，128位密钥，32轮，Needham 1997）",
-    params: blockParams(["ECB", "CBC"], "16 字节密钥"),
+    id: "xtea", cat: "modern", name: "XTEA", desc: "扩展 TEA（改进密钥调度，64位块，128位密钥，32轮，Needham 1997；支持 ECB/CBC/CFB/OFB/CTR）",
+    params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "16 字节密钥"),
     encode, decode,
   });
 }

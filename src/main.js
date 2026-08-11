@@ -2441,6 +2441,51 @@ try {
   else if (mq.addListener) mq.addListener(onSysChange); // 老内核兜底
 } catch { /* matchMedia 不可用忽略 */ }
 
+let _pwaRefreshPending = false;
+
+function initPwa() {
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!_pwaRefreshPending) return;
+    _pwaRefreshPending = false;
+    location.reload();
+  });
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js", { scope: "./", updateViaCache: "none" }).catch(() => {});
+  }, { once: true });
+}
+
+function waitForWorkerInstall(worker) {
+  if (!worker) return Promise.resolve(null);
+  if (worker.state === "installed" || worker.state === "redundant") return Promise.resolve(worker.state);
+  return new Promise((resolve) => worker.addEventListener("statechange", () => {
+    if (worker.state === "installed" || worker.state === "redundant") resolve(worker.state);
+  }));
+}
+
+async function checkForUpdate() {
+  if (!("serviceWorker" in navigator)) {
+    toast(t("ui.topbar.updateUnsupported"));
+    return;
+  }
+  try {
+    const registration = await navigator.serviceWorker.getRegistration("./") ||
+      await navigator.serviceWorker.register("sw.js", { scope: "./", updateViaCache: "none" });
+    await registration.update();
+    const installState = await waitForWorkerInstall(registration.installing);
+    if (installState === "redundant") throw new Error("Service Worker install failed");
+    const waiting = registration.waiting;
+    if (waiting && confirm(t("ui.topbar.updateReady"))) {
+      _pwaRefreshPending = true;
+      waiting.postMessage("SKIP_WAITING");
+    } else {
+      toast(t("ui.topbar.updateToast"));
+    }
+  } catch {
+    toast(t("ui.topbar.updateFailed"));
+  }
+}
+
 // ============ 顶栏交互 ============
 function initTopbar() {
  // 顶栏版本号由全局 APP_VERSION 注入（index.html 的占位会被覆盖，避免版本号割裂）。
@@ -2448,7 +2493,7 @@ function initTopbar() {
   if (appVerEl) appVerEl.textContent = "v" + APP_VERSION;
 
   document.getElementById("btnTheme").addEventListener("click", () => { cycleTheme(); });
-  document.getElementById("btnUpdate").addEventListener("click", () => toast(t("ui.topbar.updateToast")));
+  document.getElementById("btnUpdate").addEventListener("click", checkForUpdate);
 
  // 语言切换：点开下拉菜单选 16 语言（各显自称名）。选中 setLocale 按需加载 + 全量重渲染。
   const btnLang = document.getElementById("btnLang");
@@ -3060,6 +3105,7 @@ function initNavResizer() {
 }
 
 // ============ 启动 ============
+initPwa();
 // 加载屏遮白屏。模块顶层 import 已完成才执行到这，故进度从「初始化界面」起步。
 setLoadingProgress(60, "ui.loading.ui");
 applyStaticI18n();

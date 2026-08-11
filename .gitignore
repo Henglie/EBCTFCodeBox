@@ -17,6 +17,7 @@ Thumbs.db
 desktop.ini
 __pycache__/
 *.pyc
+.claude/
 
 # ── 开发工具区（工具/）（红线：全部本地留存，不上传公开仓库）──
 工具/

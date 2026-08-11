@@ -155,6 +155,76 @@ function cbcDecrypt(data, decBlock, bs, iv, pad = true) {
   }
   return pad ? pkcs7Unpad(out, bs) : out;
 }
+function cfbEncrypt(data, encBlock, bs, iv) {
+  const out = new Uint8Array(data.length);
+  let feedback = iv.subarray(0, bs);
+  for (let i = 0; i < data.length; i += bs) {
+    const stream = encBlock(feedback);
+    const n = Math.min(bs, data.length - i);
+    const cipherBlock = new Uint8Array(bs);
+    for (let j = 0; j < n; j++) cipherBlock[j] = data[i + j] ^ stream[j];
+    out.set(cipherBlock.subarray(0, n), i);
+    feedback = cipherBlock;
+  }
+  return out;
+}
+function cfbDecrypt(data, encBlock, bs, iv) {
+  const out = new Uint8Array(data.length);
+  let feedback = iv.subarray(0, bs);
+  for (let i = 0; i < data.length; i += bs) {
+    const stream = encBlock(feedback);
+    const n = Math.min(bs, data.length - i);
+    const cipherBlock = new Uint8Array(bs);
+    for (let j = 0; j < n; j++) {
+      cipherBlock[j] = data[i + j];
+      out[i + j] = data[i + j] ^ stream[j];
+    }
+    feedback = cipherBlock;
+  }
+  return out;
+}
+function ofbCrypt(data, encBlock, bs, iv) {
+  const out = new Uint8Array(data.length);
+  let feedback = iv.subarray(0, bs);
+  for (let i = 0; i < data.length; i += bs) {
+    feedback = encBlock(feedback);
+    const n = Math.min(bs, data.length - i);
+    for (let j = 0; j < n; j++) out[i + j] = data[i + j] ^ feedback[j];
+  }
+  return out;
+}
+function ctrCrypt(data, encBlock, bs, iv) {
+  const out = new Uint8Array(data.length);
+  const counter = iv.subarray(0, bs).slice();
+  for (let i = 0; i < data.length; i += bs) {
+    const stream = encBlock(counter);
+    const n = Math.min(bs, data.length - i);
+    for (let j = 0; j < n; j++) out[i + j] = data[i + j] ^ stream[j];
+    for (let j = counter.length - 1; j >= 0; j--) {
+      counter[j] = (counter[j] + 1) & 0xff;
+      if (counter[j] !== 0) break;
+    }
+  }
+  return out;
+}
+function blockModeEncrypt(data, encBlock, bs, mode, iv) {
+  if (mode === "ECB") return ecbEncrypt(data, encBlock, bs);
+  if (!iv || iv.length !== bs) throw new Error(`${mode} 模式 IV 需 ${bs} 字节`);
+  if (mode === "CBC") return cbcEncrypt(data, encBlock, bs, iv);
+  if (mode === "CFB") return cfbEncrypt(data, encBlock, bs, iv);
+  if (mode === "OFB") return ofbCrypt(data, encBlock, bs, iv);
+  if (mode === "CTR") return ctrCrypt(data, encBlock, bs, iv);
+  throw new Error(`不支持模式: ${mode}`);
+}
+function blockModeDecrypt(data, encBlock, decBlock, bs, mode, iv) {
+  if (mode === "ECB") return ecbDecrypt(data, decBlock, bs);
+  if (!iv || iv.length !== bs) throw new Error(`${mode} 模式 IV 需 ${bs} 字节`);
+  if (mode === "CBC") return cbcDecrypt(data, decBlock, bs, iv);
+  if (mode === "CFB") return cfbDecrypt(data, encBlock, bs, iv);
+  if (mode === "OFB") return ofbCrypt(data, encBlock, bs, iv);
+  if (mode === "CTR") return ctrCrypt(data, encBlock, bs, iv);
+  throw new Error(`不支持模式: ${mode}`);
+}
 
 // ============================================================
 // RC5-32/12/16（RFC 2040）
@@ -227,28 +297,14 @@ function rc5DecryptBlock(block, S) {
 
 export function rc5Encrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
-  const iv = opts.iv;
-  const S = rc5KeySchedule(key);
-  const enc = (blk) => rc5EncryptBlock(blk, S);
-  if (mode === "ECB") return ecbEncrypt(data, enc, RC5_BLOCK_SIZE);
-  if (mode === "CBC") {
-    if (!iv) throw new Error("CBC 模式需提供 IV");
-    return cbcEncrypt(data, enc, RC5_BLOCK_SIZE, iv);
-  }
-  throw new Error(`RC5 不支持模式: ${mode}`);
+  const ctx = rc5KeySchedule(key);
+  return blockModeEncrypt(data, (blk) => rc5EncryptBlock(blk, ctx), RC5_BLOCK_SIZE, mode, opts.iv);
 }
 
 export function rc5Decrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
-  const iv = opts.iv;
-  const S = rc5KeySchedule(key);
-  const dec = (blk) => rc5DecryptBlock(blk, S);
-  if (mode === "ECB") return ecbDecrypt(data, dec, RC5_BLOCK_SIZE);
-  if (mode === "CBC") {
-    if (!iv) throw new Error("CBC 模式需提供 IV");
-    return cbcDecrypt(data, dec, RC5_BLOCK_SIZE, iv);
-  }
-  throw new Error(`RC5 不支持模式: ${mode}`);
+  const ctx = rc5KeySchedule(key);
+  return blockModeDecrypt(data, (blk) => rc5EncryptBlock(blk, ctx), (blk) => rc5DecryptBlock(blk, ctx), RC5_BLOCK_SIZE, mode, opts.iv);
 }
 
 // ============================================================
@@ -673,30 +729,16 @@ function blowfishDecryptBlock(block, ctx) {
 
 export function blowfishEncrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
-  const iv = opts.iv;
   if (key.length < 4 || key.length > 56) throw new Error("Blowfish 密钥长度需 4-56 字节");
   const ctx = blowfishKeySchedule(key);
-  const enc = (blk) => blowfishEncryptBlock(blk, ctx);
-  if (mode === "ECB") return ecbEncrypt(data, enc, 8);
-  if (mode === "CBC") {
-    if (!iv) throw new Error("CBC 模式需提供 IV");
-    return cbcEncrypt(data, enc, 8, iv);
-  }
-  throw new Error(`Blowfish 不支持模式: ${mode}`);
+  return blockModeEncrypt(data, (blk) => blowfishEncryptBlock(blk, ctx), 8, mode, opts.iv);
 }
 
 export function blowfishDecrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
-  const iv = opts.iv;
   if (key.length < 4 || key.length > 56) throw new Error("Blowfish 密钥长度需 4-56 字节");
   const ctx = blowfishKeySchedule(key);
-  const dec = (blk) => blowfishDecryptBlock(blk, ctx);
-  if (mode === "ECB") return ecbDecrypt(data, dec, 8);
-  if (mode === "CBC") {
-    if (!iv) throw new Error("CBC 模式需提供 IV");
-    return cbcDecrypt(data, dec, 8, iv);
-  }
-  throw new Error(`Blowfish 不支持模式: ${mode}`);
+  return blockModeDecrypt(data, (blk) => blowfishEncryptBlock(blk, ctx), (blk) => blowfishDecryptBlock(blk, ctx), 8, mode, opts.iv);
 }
 
 // ============================================================
@@ -795,28 +837,14 @@ function rc6DecryptBlock(block, S) {
 
 export function rc6Encrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
-  const iv = opts.iv;
   const ctx = rc6KeySchedule(key);
-  const enc = (blk) => rc6EncryptBlock(blk, ctx);
-  if (mode === "ECB") return ecbEncrypt(data, enc, RC6_BLOCK_SIZE);
-  if (mode === "CBC") {
-    if (!iv) throw new Error("CBC 模式需提供 IV");
-    return cbcEncrypt(data, enc, RC6_BLOCK_SIZE, iv);
-  }
-  throw new Error(`RC6 不支持模式: ${mode}`);
+  return blockModeEncrypt(data, (blk) => rc6EncryptBlock(blk, ctx), RC6_BLOCK_SIZE, mode, opts.iv);
 }
 
 export function rc6Decrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
-  const iv = opts.iv;
   const ctx = rc6KeySchedule(key);
-  const dec = (blk) => rc6DecryptBlock(blk, ctx);
-  if (mode === "ECB") return ecbDecrypt(data, dec, RC6_BLOCK_SIZE);
-  if (mode === "CBC") {
-    if (!iv) throw new Error("CBC 模式需提供 IV");
-    return cbcDecrypt(data, dec, RC6_BLOCK_SIZE, iv);
-  }
-  throw new Error(`RC6 不支持模式: ${mode}`);
+  return blockModeDecrypt(data, (blk) => rc6EncryptBlock(blk, ctx), (blk) => rc6DecryptBlock(blk, ctx), RC6_BLOCK_SIZE, mode, opts.iv);
 }
 
 
@@ -1246,28 +1274,14 @@ function cast5DecryptBlock(block, ctx) {
 
 export function cast5Encrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
-  const iv = opts.iv;
   const ctx = cast5KeySchedule(key);
-  const enc = (blk) => cast5EncryptBlock(blk, ctx);
-  if (mode === "ECB") return ecbEncrypt(data, enc, CAST5_BLOCK_SIZE);
-  if (mode === "CBC") {
-    if (!iv) throw new Error("CBC 模式需提供 IV");
-    return cbcEncrypt(data, enc, CAST5_BLOCK_SIZE, iv);
-  }
-  throw new Error(`CAST-128 不支持模式: ${mode}`);
+  return blockModeEncrypt(data, (blk) => cast5EncryptBlock(blk, ctx), CAST5_BLOCK_SIZE, mode, opts.iv);
 }
 
 export function cast5Decrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
-  const iv = opts.iv;
   const ctx = cast5KeySchedule(key);
-  const dec = (blk) => cast5DecryptBlock(blk, ctx);
-  if (mode === "ECB") return ecbDecrypt(data, dec, CAST5_BLOCK_SIZE);
-  if (mode === "CBC") {
-    if (!iv) throw new Error("CBC 模式需提供 IV");
-    return cbcDecrypt(data, dec, CAST5_BLOCK_SIZE, iv);
-  }
-  throw new Error(`CAST-128 不支持模式: ${mode}`);
+  return blockModeDecrypt(data, (blk) => cast5EncryptBlock(blk, ctx), (blk) => cast5DecryptBlock(blk, ctx), CAST5_BLOCK_SIZE, mode, opts.iv);
 }
 
 
@@ -1569,28 +1583,14 @@ function twofishDecryptBlock(block, ctx) {
 
 export function twofishEncrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
-  const iv = opts.iv;
   const ctx = twofishKeySchedule(key);
-  const enc = (blk) => twofishEncryptBlock(blk, ctx);
-  if (mode === "ECB") return ecbEncrypt(data, enc, TWOFISH_BLOCK_SIZE);
-  if (mode === "CBC") {
-    if (!iv) throw new Error("CBC 模式需提供 IV");
-    return cbcEncrypt(data, enc, TWOFISH_BLOCK_SIZE, iv);
-  }
-  throw new Error(`Twofish 不支持模式: ${mode}`);
+  return blockModeEncrypt(data, (blk) => twofishEncryptBlock(blk, ctx), TWOFISH_BLOCK_SIZE, mode, opts.iv);
 }
 
 export function twofishDecrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
-  const iv = opts.iv;
   const ctx = twofishKeySchedule(key);
-  const dec = (blk) => twofishDecryptBlock(blk, ctx);
-  if (mode === "ECB") return ecbDecrypt(data, dec, TWOFISH_BLOCK_SIZE);
-  if (mode === "CBC") {
-    if (!iv) throw new Error("CBC 模式需提供 IV");
-    return cbcDecrypt(data, dec, TWOFISH_BLOCK_SIZE, iv);
-  }
-  throw new Error(`Twofish 不支持模式: ${mode}`);
+  return blockModeDecrypt(data, (blk) => twofishEncryptBlock(blk, ctx), (blk) => twofishDecryptBlock(blk, ctx), TWOFISH_BLOCK_SIZE, mode, opts.iv);
 }
 
 // ============================================================
@@ -1606,13 +1606,13 @@ const OUT_OPTS = [
   { value: "base64", label: "Base64" },
   { value: "hex", label: "Hex" },
 ];
-function blockParams(modes, keyPh) {
+function blockParams(modes, keyPh, blockSize = 8) {
   return [
     { key: "key", label: "密钥", type: "text", default: "", placeholder: keyPh },
     { key: "keyEnc", label: "密钥编码", type: "select", default: "utf8", options: ENC_OPTS },
     { key: "mode", label: "模式", type: "select", default: "CBC",
       options: modes.map((m) => ({ value: m, label: m })) },
-    { key: "iv", label: "IV / Nonce", type: "text", default: "", placeholder: "hex（8 字节 IV）" },
+    { key: "iv", label: "IV / Nonce", type: "text", default: "", placeholder: `hex（${blockSize} 字节 IV）` },
     { key: "ivEnc", label: "IV 编码", type: "select", default: "hex", options: ENC_OPTS },
     { key: "outEnc", label: "密文编码", type: "select", default: "base64", options: OUT_OPTS },
   ];
@@ -1640,8 +1640,8 @@ function makeBlockDecode(decFn) {
 export { rc5KeySchedule, rc5EncryptBlock, rc5DecryptBlock, ideaKeySchedule, ideaEncryptBlock, ideaDecryptKeySchedule, blowfishKeySchedule, blowfishEncryptBlock, blowfishDecryptBlock, rc6KeySchedule, rc6EncryptBlock, rc6DecryptBlock, cast5KeySchedule, cast5EncryptBlock, cast5DecryptBlock, twofishKeySchedule, twofishEncryptBlock, twofishDecryptBlock };
 
 register({
-  id: "rc5", cat: "modern", name: "RC5", desc: "RC5-32/12/16 分组密码（RFC 2040，64位块，12轮，可变密钥，加法+XOR+循环移位）",
-  params: blockParams(["ECB", "CBC"], "1-255 字节密钥（默认 16 字节）"),
+  id: "rc5", cat: "modern", name: "RC5", desc: "RC5-32/12/16 分组密码（RFC 2040，64位块，12轮，可变密钥；支持 ECB/CBC/CFB/OFB/CTR）",
+  params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "1-255 字节密钥（默认 16 字节）"),
   encode: makeBlockEncode(rc5Encrypt),
   decode: makeBlockDecode(rc5Decrypt),
 });
@@ -1652,26 +1652,26 @@ register({
   decode: makeBlockDecode(ideaDecrypt),
 });
 register({
-  id: "blowfish", cat: "modern", name: "Blowfish", desc: "Blowfish 分组密码（Schneier 1993，64位块，可变密钥4-56字节，16轮Feistel，P-array+S-boxes）",
-  params: blockParams(["ECB", "CBC"], "4-56 字节密钥"),
+  id: "blowfish", cat: "modern", name: "Blowfish", desc: "Blowfish 分组密码（Schneier 1993，64位块，可变密钥4-56字节，16轮Feistel；支持 ECB/CBC/CFB/OFB/CTR）",
+  params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "4-56 字节密钥"),
   encode: makeBlockEncode(blowfishEncrypt),
   decode: makeBlockDecode(blowfishDecrypt),
 });
 register({
-  id: "rc6", cat: "modern", name: "RC6", desc: "RC6 分组密码（RFC 2276，128位块，可变密钥1-255字节默认16，20轮，乘法+循环移位，RC5继任者）",
-  params: blockParams(["ECB", "CBC"], "1-255 字节密钥（默认 16）"),
+  id: "rc6", cat: "modern", name: "RC6", desc: "RC6 分组密码（RFC 2276，128位块，可变密钥1-255字节，20轮；支持 ECB/CBC/CFB/OFB/CTR）",
+  params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "1-255 字节密钥（默认 16）", 16),
   encode: makeBlockEncode(rc6Encrypt),
   decode: makeBlockDecode(rc6Decrypt),
 });
 register({
-  id: "cast5", cat: "modern", name: "CAST-128", desc: "CAST-128/CAST5 分组密码（RFC 2144，64位块，可变密钥5-16字节，key≤80位12轮否则16轮，Feistel+三种轮函数+8个S-box）",
-  params: blockParams(["ECB", "CBC"], "5-16 字节密钥"),
+  id: "cast5", cat: "modern", name: "CAST-128", desc: "CAST-128/CAST5 分组密码（RFC 2144，64位块，可变密钥5-16字节，12/16轮；支持 ECB/CBC/CFB/OFB/CTR）",
+  params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "5-16 字节密钥"),
   encode: makeBlockEncode(cast5Encrypt),
   decode: makeBlockDecode(cast5Decrypt),
 });
 register({
-  id: "twofish", cat: "modern", name: "Twofish", desc: "Twofish 分组密码（Schneier 1998 AES 提案，128位块，16轮Feistel，密钥128/192/256位，key-dependent S-boxes+MDS+RS 矩阵）",
-  params: blockParams(["ECB", "CBC"], "16/24/32 字节密钥"),
+  id: "twofish", cat: "modern", name: "Twofish", desc: "Twofish 分组密码（Schneier 1998 AES 提案，128位块，16轮，密钥128/192/256位；支持 ECB/CBC/CFB/OFB/CTR）",
+  params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "16/24/32 字节密钥", 16),
   encode: makeBlockEncode(twofishEncrypt),
   decode: makeBlockDecode(twofishDecrypt),
 });

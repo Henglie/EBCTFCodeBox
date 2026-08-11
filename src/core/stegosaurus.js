@@ -8,7 +8,7 @@
  * 增量对的低位 bit 里嵌信息，或直接把 flag 塞进常量池字符串。
  *
  * 本 op 做什么（纯静态、尽力而为解析，绝不执行 pyc）：
- * 1. 解析 pyc 头：magic(4) → Python 版本（magic→version 表，覆盖 2.x / 3.0-3.13）。
+ * 1. 解析 pyc 头：magic(4) → Python 版本（magic→version 表，覆盖 2.x / 3.0-3.14）。
  * 头格式随版本变化：
  * - 3.7+：magic(4) + bitfield(4) + [timestamp|hash](4) + [size|hash](4) → 16 字节
  * - 3.3-3.6：magic(4) + timestamp(4) + source_size(4) → 12 字节
@@ -101,6 +101,7 @@ const MAGIC_TABLE = [
   { m: 3495,  v: "3.11" },
   { m: 3531,  v: "3.12" },
   { m: 3571,  v: "3.13" },
+  { m: 3627,  v: "3.14" },
 ];
 
 function lookupVersion(magicInt) {

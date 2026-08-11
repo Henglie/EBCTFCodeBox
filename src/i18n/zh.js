@@ -232,7 +232,10 @@ export default {
   "ui.topbar.repo": "GitHub",
   "ui.topbar.theme": "切换主题",
   "ui.topbar.lang": "语言 / Language",
-  "ui.topbar.updateToast": "已是最新版（更新检查即将开放）",
+  "ui.topbar.updateToast": "已是最新版。",
+  "ui.topbar.updateReady": "发现新版本，离线资源已下载完成。立即刷新应用？",
+  "ui.topbar.updateUnsupported": "当前浏览器不支持离线更新。",
+  "ui.topbar.updateFailed": "更新检查失败，请稍后重试。",
 
  // ---- UI：首页一把梭 ----
   "ui.expand.title": "展开编辑",
