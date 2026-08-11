@@ -16,8 +16,6 @@
 - **桌面拖拽**：顶部搜索结果支持直接拖入配方链，与左侧菜单拖入行为一致。
 - **搜索添加器**：非拖动入口由下拉框升级为可搜索 combobox，支持点击、触摸与键盘 Enter 添加。
 
-### 发布后维护（2026-08-12）
-
 - **七种分组密码模式补齐**：TEA/XTEA/RC5/RC6/CAST-128/Blowfish/Twofish 从 ECB/CBC 扩到 ECB/CBC/CFB/OFB/CTR；五模式多长度与非法 IV 共 189/189 通过，CAST5/Blowfish CFB/OFB 与 Python cryptography oracle 逐字节一致。
 - **PWA 完整接线**：manifest、Service Worker、更新检查全部生效；生成式资源清单预缓存 839 项约 51.6 MiB，安装失败不替换旧缓存，只清理 `ebctf-shell-*` 自家缓存。真浏览器在线安装→断网重开，配方链与插件页 0 pageerror。
 - **修复首屏版本闪烁**：静态 HTML 不再先显示 `v0.1.2`；首帧与运行态均为 `v0.1.4`。
