@@ -1,5 +1,5 @@
 /*
- * john_ssh.js — SSH 私钥 → John hash 串提取（T292，cat:'analysis'，单向 run）。
+ * john_ssh.js — SSH 私钥 → John hash 串提取（T292，cat:'forensic'，单向 run）。
  *
  * 用途：CTF 取证里拿到加密 SSH 私钥，想用 John the Ripper 离线爆破密码。
  * 本 op 只提取 hash 串（不爆破），输出可直接喂给 john 的 $sshng$ 格式。

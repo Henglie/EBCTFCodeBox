@@ -47,10 +47,12 @@ const EXCLUDE_RULES = [
   [/^src\/i18n\/locales\//, "i18n 语言包（切语言才动态 import）"],
   // 英文科普层：main.js:3168 动态 import("./core/eduContent.en.js")，edu-en/ 63 分片全挂其下
   [/^src\/core\/(eduContent\.en\.js|edu-en\/)$|^src\/core\/edu-en\//, "英文 EDU 科普层（切英文才动态 import）"],
-  // 关于页素材：logo.webp / contributors 头像均为 loading:"lazy" 的 <img>；logo.png 与
-  // public/icons/logo.png 全仓零引用；favicon.ico 无 link 引用（index.html 只引 app-icon-*）
-  [/^public\/logo\.(png|webp)$/, "关于页 logo（lazy img；png 零引用）"],
-  [/^public\/icons\/logo\.png$/, "icons/logo.png（零引用）"],
+  // 关于页素材：logo.webp / contributors 头像均为 loading:"lazy" 的 <img>；
+  // icons/logo.png 供 README/介绍文章 头图（仅文档引用，运行时不请求；
+  // 2026-08-27 双副本合并：public/logo.png 已删，只留 icons/ 份）；
+  // favicon.ico 无 link 引用（index.html 只引 app-icon-*，浏览器自动请求兜底）
+  [/^public\/logo\.webp$/, "关于页 logo.webp（lazy img）"],
+  [/^public\/icons\/logo\.png$/, "icons/logo.png（README 头图，运行时不请求）"],
   [/^public\/favicon\.ico$/, "favicon.ico（无 link 引用）"],
   [/^public\/contributors\//, "贡献者头像（关于页 lazy img）"],
   // magic 字节统计 CNN 权重：一键解码触发时才 fetch（byteStatCnn.js loadByteStatWeights），

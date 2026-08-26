@@ -1,5 +1,5 @@
 /*
- * john_pdf.js — PDF /Encrypt 字典 → John/hashcat hash 串提取（T290，cat:'analysis'，单向 run）。
+ * john_pdf.js — PDF /Encrypt 字典 → John/hashcat hash 串提取（T290，cat:'forensic'，单向 run）。
  *
  * 用途：CTF 取证里拿到加密 PDF，想用 John the Ripper / hashcat 离线爆破口令。
  * 本 op 只提取 hash 串（不爆破），输出可直接喂给 john/hashcat 的 $pdf$ 格式。

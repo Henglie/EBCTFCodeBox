@@ -75,7 +75,7 @@ const DIR_EXCLUDE = (rel) =>
   rel.split("/").includes("__pycache__") || rel.endsWith(".pyc") ||
   // tools/ 在发行包里只带 exe/（bridge.py 的 EXE_BASE，运行时必需）。
   // 构建期脚本（subset_fonts.py 字体切分 / build_bkcrack.* / gen_*.mjs /
-  // modulepreload_list.txt / pack_release.mjs 本体）只留 git 仓库供复现构建，
+  // pack_release.mjs 本体）只留 git 仓库供复现构建，
   // 不进成品包（2026-08-26 恒烈指出：字体切分等构建脚本不该混进发行包）。
   // 注意 rel !== "tools" —— 目录本身必须放行，否则 exe/ 整个被丢掉。
   (rel.startsWith("tools/") && rel !== "tools" && !rel.startsWith("tools/exe"));

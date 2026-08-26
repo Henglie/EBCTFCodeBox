@@ -42,10 +42,18 @@ a[href],
 select:disabled,
 input:disabled,
 [aria-disabled="true"] { cursor: not-allowed; }
-/* 自定义开关/复选的可点容器（label 包裹的 checkbox 图案） */
-label:has(> input[type="checkbox"]),
-label:has(> input[type="radio"]) { cursor: pointer; }
-
+/* 自定义开关/复选的可点容器（label 包裹的 checkbox 图案）。
+ * 原写法 label:has(> input[type="checkbox"])：:has() 需 Chromium 105+，信创 Chromium 95
+ * 下整条选择器失效。改为枚举当前直接包 input 的 label（已 grep 全 src 核对）：
+ * .switch = 参数开关（main.js / recipeView / customImplEditor）；.cm-search label =
+ * CodeMirror 搜索面板；.uv-uni-mode-label / .uv-cp-toggle / .uv-export-opt =
+ * universalViewer。radio 版无消费方（全仓无 type:"radio" 创建），不枚举。
+ * 新增「label 直接包 checkbox」的 UI 时补进这里（uv 显示空格开关已内联 cursor）。 */
+label.switch,
+.cm-search label,
+.uv-uni-mode-label,
+.uv-cp-toggle,
+.uv-export-opt { cursor: pointer; }
 /* 滚动条：细 + 半透明悬浮，低调不挡内容。thumb 默认半透明，hover 才明显 */
 * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--n-30) 45%, transparent) transparent; }
 ::-webkit-scrollbar { width: 7px; height: 7px; }
@@ -1680,8 +1688,11 @@ a.about-ref-name:hover { text-decoration: underline; }
   .op-params { flex-direction: column; gap: var(--sp-2); }
   .param { flex-wrap: wrap; }
   .param > label:not(.switch) { white-space: normal; flex: 1 1 100%; }
-  /* 布尔开关 param（含 .switch）保持行内：开关+文字同排，不压 100% 宽 */
-  .param:has(> .switch) > label:not(.switch) { flex: 0 1 auto; white-space: nowrap; }
+  /* 布尔开关 param（含 .switch）保持行内：开关+文字同排，不压 100% 宽。
+   * 原写法 .param:has(> .switch) > label:not(.switch)，:has() 信创 C95 失效；
+   * 参数行标记固定「switch 在前、文字 label 在后」（main.js:2308 append 顺序），
+   * 相邻兄弟选择器等效，特异性同为 3 类、仍压过上面 .param > label:not(.switch)。 */
+  .param > .switch + label:not(.switch) { flex: 0 1 auto; white-space: nowrap; }
   .param input[type="text"], .param input[type="number"], .param select { flex: 1 1 100%; }
   .stepper { flex: 1 1 100%; }
   .io-area { height: 160px; min-height: 80px; }

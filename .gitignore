@@ -26,7 +26,6 @@ __pycache__/
 /_*.mjs
 /_*.json
 /b45g.json
-/HenglieICO.png
 
 # ── 项目内部文档（恒烈红线：进度/多 agent 协作文档保留本地，不上交）──
 PROGRESS.md

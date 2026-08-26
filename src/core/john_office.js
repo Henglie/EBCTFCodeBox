@@ -1,5 +1,5 @@
 /*
- * john_office.js — Office 加密文件 → John/hashcat hash 串提取（T291，cat:'analysis'，单向 run）。
+ * john_office.js — Office 加密文件 → John/hashcat hash 串提取（T291，cat:'forensic'，单向 run）。
  *
  * 用途：CTF 取证里拿到加密 Office 文档（.doc/.docx/.xls/.xlsx/.ppt/.pptx）
  * 想用 John the Ripper / hashcat 离线爆破密码。本 op 只提取 hash 串（不爆破）

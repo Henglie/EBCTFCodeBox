@@ -24,7 +24,6 @@ const RUNTIME_CACHE_FIRST = [
   "/src/i18n/locales/",      // 非 zh/en 语言包（动态 import）
   "/src/core/eduContent.en.js", // 英文 EDU 科普层入口（动态 import）
   "/src/core/edu-en/",       // 英文 EDU 科普层分片
-  "/public/logo.png",
   "/public/logo.webp",
   "/public/icons/logo.png",
   "/public/favicon.ico",
