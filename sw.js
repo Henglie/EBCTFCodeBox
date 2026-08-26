@@ -101,10 +101,15 @@ self.addEventListener("fetch", (event) => {
   // cache-first：预缓存资产与按需资产运行时回填条目统一「命中缓存直接返回、
   // 不网络验证」（按需资产见 RUNTIME_CACHE_FIRST，内容不变，省每次访问的再验证 RTT）；
   // 未命中走「网络 → 回填缓存」，回填后即进入命中分支。
+  // 门槛比较用「站点相对路径」：本地/RAR 根路径部署 scope='/'，GitHub Pages 挂在
+  // 子路径 scope='/EBCTFCodeBox/'——拿绝对 pathname 直接比对会全体失配，按需回填
+  // 整链断（在线用过≠离线可用，含语言包/字库/WASM）。剥掉 scope 目录前缀后两种部署同判。
+  const SCOPE_DIR = new URL(self.registration.scope).pathname.replace(/\/+$/, "");
+  const siteRel = url.pathname.startsWith(SCOPE_DIR + "/") ? url.pathname.slice(SCOPE_DIR.length) : url.pathname;
   event.respondWith((async () => {
     const cached = await caches.match(request);
     if (cached) return cached;
-    const fillable = ASSET_SET.has(`.${url.pathname}`) || isRuntimeCacheFirst(url.pathname);
+    const fillable = ASSET_SET.has(`.${siteRel}`) || isRuntimeCacheFirst(siteRel);
     try {
       const response = await fetch(request);
       if (response.ok && fillable) {
