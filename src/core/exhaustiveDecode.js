@@ -291,7 +291,10 @@ export async function exhaustiveDecode(input, opts = {}) {
  // 混进穷举会触发 bridge 调用，破坏一键解码的自动化。
  // noAuto 的 op 排除：单次运行代价过高（如 Argon2id 64MiB 派生约 8-10 秒）或必须由用户
  // 显式提供口令/参数，自动穷举既无意义又会阻塞进度。仅在用户主动选择该 op 时运行。
-  const targets = OPS.filter((op) => (typeof op.decode === "function" || typeof op.run === "function") && !op.requiresBridge && !op.noAuto);
+ // excludeOps（MT72）：用户启用自定义实现的 op 也不进穷举（同 magic.js 口径）。
+  const _excludeSet = opts.excludeOps == null ? null : (opts.excludeOps instanceof Set ? opts.excludeOps : new Set(opts.excludeOps));
+  const excluded = (opId) => _excludeSet !== null && _excludeSet.has(opId);
+  const targets = OPS.filter((op) => (typeof op.decode === "function" || typeof op.run === "function") && !op.requiresBridge && !op.noAuto && !excluded(op.id));
 
  // 预筛选（按输入特征选候选，不再全集穷举）：
  // - 有 detect 的 op：复用 detect(text) 作准入门槛，<=0 排除（对齐 magic.js）。

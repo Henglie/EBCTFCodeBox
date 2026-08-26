@@ -30,7 +30,7 @@
 import { register } from "./registry.js";
 import {
   detectArchiveMagic, inputToBytes, bytesToOutput,
-  parseZipStructure, streamDecompress, hasStreams,
+  parseZipStructure, streamDecompress,
 } from "./compress.js";
 import {
   is7z, parse7zHeader, run7zWasm, sevenZipWasmAvailable,
@@ -218,11 +218,9 @@ function renderTarStructure(bytes) {
   return lines;
 }
 
-/** 尝试解压 gzip/zlib/deflate-raw（按 magic 选 format），返回 {ok, out, format, error}。 */
+/** 尝试解压 gzip/zlib/deflate-raw（按 magic 选 format），返回 {ok, out, format, error}。
+ *  v0.1.5：streamDecompress 内建超时 + 纯 JS inflate 兜底，无环境预检。 */
 async function tryStreamDecompress(bytes, magicName) {
-  if (!hasStreams()) {
-    return { ok: false, error: "当前环境无 DecompressionStream（浏览器实测；node 18+ 实验性可用）" };
-  }
   let format;
   if (magicName === "gzip") format = "gzip";
   else if (magicName === "zlib") format = "deflate";
@@ -275,19 +273,17 @@ async function archiveUnifiedReport(text, p) {
       const btype = (b0 >> 1) & 3;
       lines.push("启发: 首字节 0x" + b0.toString(16).padStart(2, "0") +
         "（BFINAL=" + bfinal + ", BTYPE=" + btype + "）符合 raw DEFLATE 块头特征");
- // 尝试 deflate-raw 解压
-      if (hasStreams()) {
-        lines.push("");
-        lines.push("--- 尝试 raw deflate 解压 ---");
-        const r = await tryStreamDecompress(bytes, "deflate-raw");
-        if (r.ok) {
-          lines.push("✓ 解压成功: " + r.out.length + " 字节");
-          const rr = bytesToOutput(r.out);
-          const preview = rr.text.length > 500 ? rr.text.slice(0, 500) + " …(截断)" : rr.text;
-          lines.push("内容(" + rr.mode + "): " + preview.replace(/\n/g, "\n  "));
-        } else {
-          lines.push("✗ 解压失败: " + r.error);
-        }
+ // 尝试 deflate-raw 解压（v0.1.5：无环境预检，安全流自带纯 JS 兜底）
+      lines.push("");
+      lines.push("--- 尝试 raw deflate 解压 ---");
+      const r = await tryStreamDecompress(bytes, "deflate-raw");
+      if (r.ok) {
+        lines.push("✓ 解压成功: " + r.out.length + " 字节");
+        const rr = bytesToOutput(r.out);
+        const preview = rr.text.length > 500 ? rr.text.slice(0, 500) + " …(截断)" : rr.text;
+        lines.push("内容(" + rr.mode + "): " + preview.replace(/\n/g, "\n  "));
+      } else {
+        lines.push("✗ 解压失败: " + r.error);
       }
     }
     return lines.join("\n");

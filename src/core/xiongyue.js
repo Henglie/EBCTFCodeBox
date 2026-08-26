@@ -17,6 +17,7 @@
  * 单向依赖：import registry.js 的 register，底层不反向 import 上层。
  */
 import { register } from "./registry.js";
+import { streamCompress, streamDecompress } from "./compress.js"; // v0.1.5：安全流（超时+纯JS兜底）
 
 const te = (s) => new TextEncoder().encode(s);
 const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(b);
@@ -81,46 +82,10 @@ function base91DecodeValues(vals) {
   return new Uint8Array(out);
 }
 
-// ============ raw deflate 压缩/解压（CompressionStream，异步） ============
-async function deflateRawCompress(bytes) {
-  const cs = new CompressionStream("deflate-raw");
-  const writer = cs.writable.getWriter();
-  writer.write(bytes);
-  writer.close();
-  const reader = cs.readable.getReader();
-  const chunks = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    total += value.length;
-  }
-  const out = new Uint8Array(total);
-  let off = 0;
-  for (const c of chunks) { out.set(c, off); off += c.length; }
-  return out;
-}
-
-async function deflateRawDecompress(bytes) {
-  const ds = new DecompressionStream("deflate-raw");
-  const writer = ds.writable.getWriter();
-  writer.write(bytes);
-  writer.close();
-  const reader = ds.readable.getReader();
-  const chunks = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    total += value.length;
-  }
-  const out = new Uint8Array(total);
-  let off = 0;
-  for (const c of chunks) { out.set(c, off); off += c.length; }
-  return out;
-}
+// ============ raw deflate 压缩/解压（代理 compress.js 安全流，异步） ============
+// v0.1.5：DecompressionStream 超时 + 纯 JS inflate 兜底（Chromium 原生流挂死修复）
+const deflateRawCompress = (bytes) => streamCompress("deflate-raw", bytes);
+const deflateRawDecompress = (bytes) => streamDecompress("deflate-raw", bytes);
 
 // ============ 熊曰 encode/decode ============
 async function xiongyueEncode(text) {

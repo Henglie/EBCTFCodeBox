@@ -7,4 +7,4 @@
  * SW（sw.js）因独立运行环境无法 import 项目模块，CACHE_VER 保持独立常量，
  * 升版本时同步修改此处与 sw.js 即可。
  */
-export const APP_VERSION = "0.1.4";
+export const APP_VERSION = "0.1.5";

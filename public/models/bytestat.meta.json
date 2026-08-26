@@ -1,0 +1,137 @@
+{
+  "format": "f32-le",
+  "tensors": {
+    "classifier.0.bias": {
+      "offset": 0,
+      "shape": [
+        128
+      ],
+      "dtype": "f32",
+      "count": 128
+    },
+    "classifier.0.weight": {
+      "offset": 512,
+      "shape": [
+        128,
+        240
+      ],
+      "dtype": "f32",
+      "count": 30720
+    },
+    "classifier.3.bias": {
+      "offset": 123392,
+      "shape": [
+        11
+      ],
+      "dtype": "f32",
+      "count": 11
+    },
+    "classifier.3.weight": {
+      "offset": 123436,
+      "shape": [
+        11,
+        128
+      ],
+      "dtype": "f32",
+      "count": 1408
+    },
+    "convs.0.bias": {
+      "offset": 129068,
+      "shape": [
+        64
+      ],
+      "dtype": "f32",
+      "count": 64
+    },
+    "convs.0.weight": {
+      "offset": 129324,
+      "shape": [
+        64,
+        48,
+        3
+      ],
+      "dtype": "f32",
+      "count": 9216
+    },
+    "convs.1.bias": {
+      "offset": 166188,
+      "shape": [
+        64
+      ],
+      "dtype": "f32",
+      "count": 64
+    },
+    "convs.1.weight": {
+      "offset": 166444,
+      "shape": [
+        64,
+        48,
+        5
+      ],
+      "dtype": "f32",
+      "count": 15360
+    },
+    "convs.2.bias": {
+      "offset": 227884,
+      "shape": [
+        64
+      ],
+      "dtype": "f32",
+      "count": 64
+    },
+    "convs.2.weight": {
+      "offset": 228140,
+      "shape": [
+        64,
+        48,
+        7
+      ],
+      "dtype": "f32",
+      "count": 21504
+    },
+    "embedding.weight": {
+      "offset": 314156,
+      "shape": [
+        257,
+        48
+      ],
+      "dtype": "f32",
+      "count": 12336
+    },
+    "stats_net.0.bias": {
+      "offset": 363500,
+      "shape": [
+        48
+      ],
+      "dtype": "f32",
+      "count": 48
+    },
+    "stats_net.0.weight": {
+      "offset": 363692,
+      "shape": [
+        48,
+        18
+      ],
+      "dtype": "f32",
+      "count": 864
+    },
+    "stats_net.2.bias": {
+      "offset": 367148,
+      "shape": [
+        48
+      ],
+      "dtype": "f32",
+      "count": 48
+    },
+    "stats_net.2.weight": {
+      "offset": 367340,
+      "shape": [
+        48
+      ],
+      "dtype": "f32",
+      "count": 48
+    }
+  },
+  "totalBytes": 367532,
+  "parameterCount": 91883
+}

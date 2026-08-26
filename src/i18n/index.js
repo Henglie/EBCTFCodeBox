@@ -1,14 +1,16 @@
 /*
- * i18n/index.js — 国际化核心（16 语言，自动识别 + 手动切换）。
+ * i18n/index.js — 国际化核心（20 语言，自动识别 + 手动切换）。
  *
  * 职责：
  * 1. 启动读 navigator.language 匹配支持的语言前缀，命中则用，否则英文。
  * 2. localStorage['ebctf_locale'] 优先于自动判断（用户手动切过就记住）。
  * 3. t(key, ...args) 取文案，缺 key 回退 zh 再回退 key 本身（不白屏）；{0}{1} 占位符替换。
  * 4. setLocale/getLocale/onLocaleChange 供 UI 切换 + 订阅重渲染。
- * 5. <html lang> 与 <html dir> 随语言同步；RTL 语言（ar/he/fa/ur）自动切右到左布局。
+ * 5. <html lang> 与 <html dir> 随语言同步；RTL 语言（ar/he/fa/ur/ug）自动切右到左布局。
+ * 6. 中国境内四门民族语言（bo/ug/za-Latn/mn-Mong）以中文为基底：英文占位自动换成中文，
+ *    见 CN_BASE_LOCALES / applyCnBase。
  *
- * 加载策略：zh/en 静态打进主 bundle（默认双语零延迟）；其余 14 语言按需 dynamic import
+ * 加载策略：zh/en 静态打进主 bundle（默认双语零延迟）；其余 18 语言按需 dynamic import
  * （不进主 bundle，切到才拉对应 locales/<code>.js，减小首屏体积）。
  *
  * 红线：core 算法层绝不 import 本模块（纯函数）。i18n 只在 ui / main 层用。
@@ -35,6 +37,11 @@ export const LOCALE_META = {
   he: { name: "עברית", dir: "rtl" },
   fa: { name: "فارسی", dir: "rtl" },
   ur: { name: "اردو", dir: "rtl" },
+  // ---- MT76③ 新增民族语言（2026-08-24 落地）----
+  bo: { name: "藏语 བོད་ཡིག", dir: "ltr" },              // 藏文
+  ug: { name: "维吾尔语 ئۇيغۇرچە", dir: "rtl" },           // 维吾尔文（阿拉伯字母，右到左）
+  "za-Latn": { name: "壮语 Vahcuengh", dir: "ltr" },      // 壮文·拉丁版
+  "mn-Mong": { name: "蒙古语 ᠮᠣᠩᠭᠣᠯ ᠪᠢᠴᠢᠭ", dir: "ltr" },  // 传统蒙文（人民币式横排）
 };
 
 // 已加载字典：zh/en 静态在册，其余切到时按需 import 填入。
@@ -70,6 +77,36 @@ function syncHtmlLangDir() {
 }
 syncHtmlLangDir();
 
+/*
+ * ---- 中国境内民族语言：以中文为基底（恒烈明令，MT86）----
+ *
+ * 这四门语言的现代科技术语，借词来源是**汉语**而不是英语。未翻译的条目回退英文会造成
+ * 「藏文界面里冒出一串英文」的割裂感；回退中文则符合这些语言的实际使用习惯（本族语法框架 +
+ * 汉语术语），也是这些地区用户真实的阅读预期。
+ *
+ * 触发条件：该语言的值与 en 表逐字相同 = 补翻时留的英文占位（不是真译文）→ 换成 zh 表的值。
+ * 排除 op.*.name：算法名全语言保留英文，是项目既定规则（Base64 就该叫 Base64）。
+ * 排除 zh 与 en 本就相同的 key：纯技术专名（JSON / Worker / Markdown），换不换一个样。
+ *
+ * 放在运行时而不是改 locales/*.js 静态文件的理由：将来新增 key 时占位自动生效，
+ * 不必每次补翻都记得回来同步这四个文件。补翻真译文后本逻辑自动让路（值 ≠ en 即跳过）。
+ */
+export const CN_BASE_LOCALES = new Set(["bo", "ug", "za-Latn", "mn-Mong"]);
+
+function applyCnBase(dict) {
+  if (!dict) return 0;
+  let n = 0;
+  for (const k of Object.keys(en)) {
+    if (k.startsWith("op.") && k.endsWith(".name")) continue; // 算法名保留英文
+    if (dict[k] !== en[k]) continue;                          // 已有真译文
+    const z = zh[k];
+    if (z == null || z === en[k]) continue;                   // 中文表也是同一串
+    dict[k] = z;
+    n++;
+  }
+  return n;
+}
+
 /**
  * 确保某语言字典已加载。zh/en 立即返回；其余 dynamic import locales/<code>.js。
  * 拉取失败（文件缺失/网络错）返回 null，调用方回退英文，绝不白屏。
@@ -80,7 +117,12 @@ export async function ensureLoaded(loc) {
   if (!LOCALE_META[loc]) return null;
   if (_loading[loc]) return _loading[loc];
   _loading[loc] = import(`./locales/${loc}.js`)
-    .then((m) => { DICTS[loc] = m.default || {}; return DICTS[loc]; })
+    .then((m) => {
+      const dict = m.default || {};
+      if (CN_BASE_LOCALES.has(loc)) applyCnBase(dict);
+      DICTS[loc] = dict;
+      return dict;
+    })
     .catch((err) => { console.warn(`语言包 ${loc} 加载失败，回退 en`, err); return null; });
   return _loading[loc];
 }
@@ -102,7 +144,7 @@ export function getLocale() {
   return _locale;
 }
 
-/** 支持的语言码列表（全部 16 个，含未加载的懒加载语言）。 */
+/** 支持的语言码列表（全部 20 个，含未加载的懒加载语言）。 */
 export function locales() {
   return Object.keys(LOCALE_META);
 }

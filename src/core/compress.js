@@ -14,6 +14,8 @@
  * - 只新建 compress.js，不碰任何现有 core/*.js。
  * - DecompressionStream/CompressionStream 浏览器（Chrome 103+/Firefox 113+）可用；
  * node 端 18+ 实验性支持 globalThis.DecompressionStream，旧 node 无 → 抛清晰错误标注「浏览器实测」。
+ * - ⚠ Chromium 的 DecompressionStream 对部分合法 deflate 流会无限挂死（v0.1.5 修复）：
+ *   原生流加超时竞速，超时/失败 fallback 到 pcapDeep.js 的纯 JS inflateRaw（RFC 1951）。
  * - zip 只读结构不解压加密项（加密项仅列出元信息 + 标记）。
  * - 零外发：全部本地计算。
  *
@@ -25,6 +27,7 @@
  * PKZIP APPNOTE 6.3.x（ZIP 结构）；POSIX tar (ustar)。
  */
 import { register } from "./registry.js";
+import { inflateRaw } from "./pcapDeep.js"; // 纯 JS inflate（RFC 1951），DecompressionStream 挂死时的兜底
 
 const te = (s) => new TextEncoder().encode(s);
 const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(b));
@@ -144,16 +147,43 @@ function bytesToOutput(bytes) {
 // ============================================================
 // 流式压缩 / 解压（CompressionStream / DecompressionStream）
 // format: 'gzip' | 'deflate' | 'deflate-raw'
+//
+// ⚠ Chromium 的 DecompressionStream 对部分合法 deflate 流会无限挂死
+// （v0.1.5 实锤：headless/真实浏览器均复现，node 正常）。故原生流走
+// 超时竞速（TIMEOUT_MS），超时或报错 → fallback 到 pcapDeep.js 的纯 JS
+// inflateRaw（RFC 1951）。gzip/zlib 先剥外层头尾再喂 inflateRaw。
+// 超时取 2s：原生流要么瞬好要么永久挂，无中间态；超时后立刻走纯 JS，
+// 纯 JS 同步执行毫秒级完成，总耗时 ≈ 2s，远快于挂死。
 // ============================================================
+const TIMEOUT_MS = 2000;
+
 function hasStreams() {
   return typeof globalThis.CompressionStream === "function" &&
     typeof globalThis.DecompressionStream === "function";
 }
 
-async function streamCompress(format, bytes) {
-  if (!hasStreams()) {
-    throw new Error("当前环境无 CompressionStream（浏览器实测；node 18+ 实验性可用，旧 node 跳过）");
+/** 原生 DecompressionStream 解压（不带兜底，挂死风险点在 reader.read）。 */
+async function nativeDecompress(format, bytes) {
+  const ds = new globalThis.DecompressionStream(format);
+  const writer = ds.writable.getWriter();
+  try { await writer.write(bytes); await writer.close(); }
+  catch (e) { throw new Error(format + " 解压失败: " + (e && e.message ? e.message : String(e))); }
+  const reader = ds.readable.getReader();
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value); total += value.length;
   }
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) { out.set(c, off); off += c.length; }
+  return out;
+}
+
+/** 原生 CompressionStream 压缩。 */
+async function nativeCompress(format, bytes) {
   const cs = new globalThis.CompressionStream(format);
   const writer = cs.writable.getWriter();
   try { await writer.write(bytes); await writer.close(); }
@@ -172,26 +202,79 @@ async function streamCompress(format, bytes) {
   return out;
 }
 
+/**
+ * 超时竞速：promise 若在 timeoutMs 内未完成则抛 TimeoutError。
+ * 竞速失败后原生流的 reader 未消费，遗留挂起任务会被 GC 处理（无法强制
+ * 中止 DecompressionStream 内部，但结果已被丢弃，不影响 UI）。
+ */
+function withTimeout(promise, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("STREAM_TIMEOUT")), timeoutMs);
+    promise.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); }
+    );
+  });
+}
+
+/** 剥 gzip 头（可变长）+ 8 字节尾（CRC32+ISIZE）→ 纯 JS inflate。 */
+function inflateGzipFallback(bytes) {
+  if (bytes.length < 18 || bytes[0] !== 0x1F || bytes[1] !== 0x8B) {
+    throw new Error("gzip 头无效（缺 1F 8B magic）");
+  }
+  if (bytes[2] !== 8) throw new Error("gzip 非 deflate 方法");
+  const flg = bytes[3];
+  let off = 10;
+  if (flg & 0x04) { const xlen = bytes[off] | (bytes[off + 1] << 8); off += 2 + xlen; } // FEXTRA
+  if (flg & 0x08) { while (off < bytes.length && bytes[off] !== 0) off++; off++; }        // FNAME
+  if (flg & 0x10) { while (off < bytes.length && bytes[off] !== 0) off++; off++; }        // FCOMMENT
+  if (flg & 0x02) off += 2;                                                                // FHCRC
+  return inflateRaw(bytes.subarray(off, bytes.length - 8));
+}
+
+/** 剥 zlib 2 字节头 + 4 字节 adler32 尾 → 纯 JS inflate。 */
+function inflateZlibFallback(bytes) {
+  if (bytes.length < 6) throw new Error("zlib 数据过短");
+  if ((bytes[0] & 0x0F) !== 8) throw new Error("zlib 头 CM!=8（非 deflate 方法）");
+  return inflateRaw(bytes.subarray(2, bytes.length - 4));
+}
+
+/** 纯 JS 解压兜底：format ∈ gzip | deflate(zlib) | deflate-raw。 */
+function jsInflateFallback(format, bytes) {
+  if (format === "gzip") return inflateGzipFallback(bytes);
+  if (format === "deflate") return inflateZlibFallback(bytes);
+  if (format === "deflate-raw") return inflateRaw(bytes);
+  throw new Error("不支持的解压格式: " + format);
+}
+
+/** 解压：原生流 + 超时竞速，超时/失败 → 纯 JS 兜底。同步返回 Uint8Array（Promise 包装）。 */
 async function streamDecompress(format, bytes) {
+  if (!hasStreams()) return jsInflateFallback(format, bytes);
+  try {
+    return await withTimeout(nativeDecompress(format, bytes), TIMEOUT_MS);
+  } catch (e) {
+    if (e && e.message === "STREAM_TIMEOUT") {
+      // Chromium DecompressionStream 挂死 → 纯 JS 兜底
+      return jsInflateFallback(format, bytes);
+    }
+    // 原生解压真失败（非法流）→ 再试纯 JS（非法时同样抛错，给统一错误形态）
+    return jsInflateFallback(format, bytes);
+  }
+}
+
+/** 压缩：原生流 + 超时（无纯 JS deflate 实现，超时直接报错）。 */
+async function streamCompress(format, bytes) {
   if (!hasStreams()) {
-    throw new Error("当前环境无 DecompressionStream（浏览器实测；node 18+ 实验性可用，旧 node 跳过）");
+    throw new Error("当前环境无 CompressionStream（浏览器实测；node 18+ 实验性可用，旧 node 跳过）");
   }
-  const ds = new globalThis.DecompressionStream(format);
-  const writer = ds.writable.getWriter();
-  try { await writer.write(bytes); await writer.close(); }
-  catch (e) { throw new Error(format + " 解压失败: " + (e && e.message ? e.message : String(e))); }
-  const reader = ds.readable.getReader();
-  const chunks = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value); total += value.length;
+  try {
+    return await withTimeout(nativeCompress(format, bytes), TIMEOUT_MS);
+  } catch (e) {
+    if (e && e.message === "STREAM_TIMEOUT") {
+      throw new Error(format + " 压缩超时（浏览器 CompressionStream 挂死；本工具暂未内置纯 JS deflate）");
+    }
+    throw e;
   }
-  const out = new Uint8Array(total);
-  let off = 0;
-  for (const c of chunks) { out.set(c, off); off += c.length; }
-  return out;
 }
 
 function bytesToB64(bytes) {

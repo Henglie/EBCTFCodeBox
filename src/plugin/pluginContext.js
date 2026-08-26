@@ -11,6 +11,7 @@
  */
 import { register, unregister, addCategory as registryAddCategory, getOp, OPS } from "../core/registry.js";
 import { mergeDict, unmergeDict, getLocale, onLocaleChange } from "../i18n/index.js";
+import { addCustomPreset, removeCustomPreset } from "../core/customImpl.js";
 
 /**
  * 为一个插件构造受控上下文。所有注册动作都记进 record，供 pluginHost 卸载时精确回收。
@@ -88,6 +89,32 @@ export function makeContext(manifest, record) {
       const p = { ...provider, __plugin: pid };
       record.aiProviders.push(p);
       return p;
+    },
+
+ /**
+ * 注册一个「自定义实现」预设（MT72 §5：让插件也能塞 CTF 魔改模板）。
+ * 用户在某 op 的「高级 · 自定义实现」编辑器里，预设下拉就会多出这一条，点选即填入代码。
+ * @param {?string} opId 只对该 op 可见；传 null / 省略 = 对所有 op 可见
+ * @param {{id:string, name:string, code:string}} preset code 是用户可编辑的 JS 源码文本
+ *        （形参 input / rawBytes / params / dir / H，约定见 core/customImpl.js 文件头）
+ * @returns {object} 登记后的预设对象
+ */
+    registerCustomImpl(opId, preset) {
+      // 允许 registerCustomImpl(preset) 单参写法（预设自带 opId 或全局可见）
+      const p = preset == null && opId && typeof opId === "object" ? opId : preset;
+      const target = preset == null && opId && typeof opId === "object" ? (opId.opId || null) : opId;
+      if (!p || typeof p !== "object") throw new Error(`registerCustomImpl 需要 (opId, {id,name,code})`);
+      const rec = addCustomPreset({
+        id: `${pid}/${p.id || "preset"}`,   // 带插件命名空间，防和内置预设/别的插件撞 id
+        name: p.name || p.id || pid,
+        code: p.code,
+        opId: target || null,
+        source: pid,
+      });
+      record.disposers.push(() => removeCustomPreset(rec)); // 卸载插件时自动摘掉
+      if (!record.customPresets) record.customPresets = [];
+      record.customPresets.push(rec.id);
+      return rec;
     },
 
  /** 只读访问主项目当前 op 列表（插件想基于现有 op 组合时用），返回浅拷贝。 */

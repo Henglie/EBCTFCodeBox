@@ -112,6 +112,8 @@ import EDU_CRYPTO_B from "./edu/edu-crypto-b.js";           // a52/e0/hc128/hc25
 import EDU_HASH_XXHASH from "./edu/edu-hash-xxhash.js";    // xxhash 1
 import EDU_HASH_CITYHASH from "./edu/edu-hash-cityhash.js";  // cityhash 1
 import EDU_CTF_CIPHER_EXT from "./edu/edu-ctf-cipher-ext.js"; // twinHex/trollScript/asciiSum/caesarBox/curveCipher 5
+import EDU_TOOLS_RADIX from "./edu/edu-tools-radix.js";   // radixAll/progCalc/unitConv 3（T337-T339 工具类）
+import EDU_MT82 from "./edu/edu-mt82.js";                 // MT82 新增 15 op（gifTiming/jpgSizeRecover/zipRepair/zipPseudoEncrypt/stringsExtract/jwtCrack/zstegScan/pdfObjects/ooxmlMeta/apkManifest/elfInfo/peInfo/lsbEmbed/zipCreate/deepsoundExtract）
 
 // 合并所有分片。后者不覆盖前者（分区不重叠）；重叠时以后者为准，构建期应避免。
 const EDU = Object.assign(
@@ -186,6 +188,8 @@ const EDU = Object.assign(
   EDU_HASH_XXHASH,
   EDU_HASH_CITYHASH,
   EDU_CTF_CIPHER_EXT,
+  EDU_TOOLS_RADIX,
+  EDU_MT82,
 );
 
 /** 取某 op 的科普内容，无则返回 null。

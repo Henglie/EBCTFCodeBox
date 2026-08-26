@@ -36,6 +36,10 @@ import { openDecodeStrength } from "./ui/decodeStrength.js"; // 「解码强度�
 import { applyAccent, enableHctEngine, DEFAULT_ACCENT } from "./ui/dynamicColor.js"; // M3 动态取色（HSL 近似 + HCT 精确引擎）
 import { attachEditorToolbar } from "./ui/editorToolbar.js"; // 通用编辑框工具条（记事本化，全站复用）
 import { attachTextContextMenu } from "./ui/textContextMenu.js"; // 编辑框右键文本处理菜单
+// MT72：自定义算法（魔改）——UI 开关/编辑器 + Worker 沙箱执行（magic/穷举侧排除）
+import { renderCustomToggle } from "./ui/customImplEditor.js";
+import { getCustomImpl, listEnabledOpIds } from "./core/customImplStore.js";
+import { runCustomWithTimeout } from "./core/customImplClient.js";
 
 // ---------- i18n 包装 ----------
 // t 缺 key 时回退到 key 本身；这里再包一层：查不到就回退 registry 里的中文字面量
@@ -142,8 +146,9 @@ import "./core/fracmorse.js"; // 分数摩斯 Fractionated Morse
 import "./core/hamming.js"; // 海明码纠错编解码
 import { renderRecipe, rState as recipeState, addRecipeOpAt } from "./ui/recipeView.js"; // 配方链 UI
 import { renderExhaustive } from "./ui/exhaustiveView.js"; // 穷举全解视图（一键全解码器穷举）
-import { renderUniversalViewer } from "./ui/universalViewer.js"; // 字符显示器（Hex/Unicode逐字符/不可见字符）
+import { renderUniversalViewer, disposeUniversalViewer } from "./ui/universalViewer.js"; // 字符显示器（Hex/Unicode逐字符/不可见字符）
 import { renderCodeImageViewer } from "./ui/codeImageViewer.js"; // 224编码图查询器（图形编码对照图）
+import { renderQuickConv } from "./ui/quickConv.js"; // 快速换算（程序员进制联动 + 分类单位换算，MT81）
 import { exhaustiveDecode } from "./core/exhaustiveDecode.js"; // 穷举全解并入首页智能解码（末尾追加可折叠区）
 import { expandableInput, ensureExpStyles } from "./ui/expandableInput.js"; // 密钥/IV/crib 可展开输入框 + 弹层样式注入
 import "./core/snow.js"; // Snow 行尾空白隐写（Space/Tab 编码比特）
@@ -318,6 +323,23 @@ import "./core/lllAttack.js"; // 格基归约 LLL + 背包低密度攻击 CJLOSS
 import "./core/xiangyue.js"; // 想曰 XiangYue 完整版解密 xiangyue（cn, run async, 中/日/韩/Emoji/零宽/象形映射 → Argon2id/PBKDF2 + ChaCha20-Poly1305 + AES-CTR + zlib, 纯JS原语自验, 无 detect）
 import "./core/lightweightStream.js"; // eSTREAM/NIST 轻量级流密码 trivium/grainV1/grain128aead（modern, 双向, 官方向量验证）
 import "./core/fengCodec.js"; // 风之暇想 uid=243467 编码 dxBase64（base, 双向, deflate+salt XOR+CRC16）/ yueChang 曰唱（cn, 双向, PBKDF2+AES-GCM+拟声字映射, 源码逐行核验）
+import "./core/radixAll.js"; // 一键多进制转换 radixAll（radix, run, 自动嗅探 + 2/8/10/16/32/36/62 进制对照 + Base64 + 字节/码位视图 + 负数补码, BigInt, 无 detect）
+import "./core/progCalc.js"; // 程序员计算器 progCalc（radix, run, 手写递归下降解析器无 eval, & | ^ ~ << >> >>> rotl/rotr, 8/16/32/64 位字宽 BigInt 回绕, 无 detect）
+import "./core/unitConv.js"; // 单位换算 unitConv（data, run, 数据量 SI/IEC 两制并列 + 速率 + 时间 + 时间戳纪元 + 频率 + 角度, BigInt 有理数, 无 detect）
+import "./core/gifTiming.js"; // GIF 帧时序隐写 gifTiming（stego, run, GCE Delay 厘秒→数字/ASCII/二进制阈值三模式, 无 detect）
+import "./core/jpgSizeRecover.js"; // JPEG 宽高修复 jpgSizeRecover（forensic, run, SOF+霍夫曼熵解码数 MCU 反推真实高度, 无 detect）
+import "./core/zipRepair.js"; // ZIP 伪加密修复/置位 zipRepair+zipPseudoEncrypt（forensic, run, EOCD→CD→LFH 清/置通用位标志 bit0, 无 detect）
+import "./core/stringsExtract.js"; // 字符串提取 stringsExtract（forensic, run, ASCII/UTF-16LE 双模式可打印串扫描, 无 detect）
+import "./core/jwtCrack.js"; // JWT 密钥爆破 jwtCrack（modern, run async, HS256/384/512 弱密钥字典爆破, 无 detect）
+import "./core/zstegScan.js"; // LSB 全组合扫描 zstegScan（stego, run, 位平面×通道×位序×行列组合+可读性打分, 无 detect）
+import "./core/pdfObjects.js"; // PDF 对象解析 pdfObjects（forensic, run, 对象表+FlateDecode 流解压预览, 无 detect）
+import "./core/ooxmlMeta.js"; // OOXML 元数据提取 ooxmlMeta（forensic, run, docx/xlsx/pptx 的 docProps XML 键值, 无 detect）
+import "./core/apkManifest.js"; // APK Manifest 解析 apkManifest（forensic, run, 二进制 AXML/明文 XML 双形态, 无 detect）
+import "./core/elfInfo.js"; // ELF 可执行信息 elfInfo（forensic, run, 头/程序头/动态节依赖库, 无 detect）
+import "./core/peInfo.js"; // PE 可执行信息 peInfo（forensic, run, COFF+可选头 EXE/DLL/子系统, 无 detect）
+import "./core/lsbEmbed.js"; // LSB 嵌入（出题）lsbEmbed（stego, run, 封面像素低位写载荷→PNG, 无 detect）
+import "./core/zipCreate.js"; // ZIP 创建（出题）zipCreate（forensic, run, 单文件 Stored/Deflated ZIP 生成, 无 detect）
+import "./core/deepsoundExtract.js"; // DeepSound 提取 deepsoundExtract（forensic, run async, WAV 采样低位 DSC2/DSCF, 无 detect）
 import "./core/detectExt3.js"; // EASY 30 op detect 补齐（须在所有 op 注册后）
 import "./core/detectSupplement.js"; // 编码类 detect 覆盖补齐（须在所有 op 注册后）
 
@@ -498,18 +520,25 @@ function toast(msg) {
 // 结构：顶部折叠开关（rail toggle）+ 分类列表。
 // 每个分类是可展开的手风琴：点分类头 → 展开二级菜单（该分类全部 op），再点某 op → selectOp。
 // 折叠态（rail）：只留图标，hover 出 tooltip；点分类图标直接跳该分类首个 op（无处摆二级）。
+// 窄屏（≤860px）CSS 强制 rail（topbar-responsive.css），JS 侧必须同步此态，否则二级菜单在 60px 宽的
+// rail 里渲染成横向溢出（穿模）。navRail() = 用户手动折叠 或 视口窄到断点。断点值与 topbar-responsive.css
+// / customImplEditor 一致（860px）。
+const NAV_RAIL_BP = 860;
+function navRail() {
+  return state.navCollapsed || window.innerWidth <= NAV_RAIL_BP;
+}
 function renderNav() {
   $nav.innerHTML = "";
-  $nav.classList.toggle("collapsed", state.navCollapsed);
+  $nav.classList.toggle("collapsed", navRail());
  // 收起态清空动画追踪：下次展开任意分类都重新播入场动画
   if (!state.expandedCats.length) state._animatedCats = [];
 
  // 折叠/展开开关（顶部）
   const toggle = el("div",
-    { class: "nav-toggle", title: state.navCollapsed ? t("ui.nav.expand") : t("ui.nav.collapse"),
-      "aria-label": state.navCollapsed ? t("ui.nav.expand") : t("ui.nav.collapse"),
+    { class: "nav-toggle", title: navRail() ? t("ui.nav.expand") : t("ui.nav.collapse"),
+      "aria-label": navRail() ? t("ui.nav.expand") : t("ui.nav.collapse"),
       onclick: toggleNav, ...keyBtn(toggleNav) },
-    msym(state.navCollapsed ? "chevron_right" : "chevron_left"),
+    msym(navRail() ? "chevron_right" : "chevron_left"),
   );
   $nav.append(toggle);
 
@@ -518,16 +547,16 @@ function renderNav() {
     const count = isHome ? 0 : opsByCat(cat.id).length;
     const curCat = state.view === "op" ? getOp(state.opId)?.cat : (state.view === "home" ? "home" : null);
     const active = curCat === cat.id;
-    const expanded = state.expandedCats.includes(cat.id) && !state.navCollapsed && !isHome;
+    const expanded = state.expandedCats.includes(cat.id) && !navRail() && !isHome;
 
     const item = el("div",
       { class: "nav-item" + (active ? " on" : "") + (cat.pinned ? " pinned" : "") + (expanded ? " expanded" : "") + (cat.id.startsWith("bridge") ? " bridge" : ""),
-        title: state.navCollapsed ? catName(cat) : "",
+        title: navRail() ? catName(cat) : "",
         onclick: () => onNavClick(cat), ...keyBtn(() => onNavClick(cat)) },
       msym(cat.icon),
       el("span", { class: "nav-label" }, catName(cat)),
       count ? el("span", { class: "nav-count" }, String(count)) : null,
-      isHome || state.navCollapsed ? null : msym(expanded ? "expand_more" : "chevron_right", "nav-caret"),
+      isHome || navRail() ? null : msym(expanded ? "expand_more" : "chevron_right", "nav-caret"),
     );
     $nav.append(item);
 
@@ -537,7 +566,7 @@ function renderNav() {
       const recipeActive = state.view === "recipe";
       const recipeItem = el("div",
         { class: "nav-item nav-recipe" + (recipeActive ? " on" : ""),
-          title: state.navCollapsed ? t("ui.nav.recipe") : "",
+          title: navRail() ? t("ui.nav.recipe") : "",
           onclick: () => goRecipe(), ...keyBtn(() => goRecipe()) },
         msym("account_tree"),
         el("span", { class: "nav-label" }, t("ui.nav.recipe")),
@@ -548,7 +577,7 @@ function renderNav() {
       const inspectActive = state.view === "inspect";
       const inspectItem = el("div",
         { class: "nav-item nav-inspect" + (inspectActive ? " on" : ""),
-          title: state.navCollapsed ? t("ui.nav.inspect") : "",
+          title: navRail() ? t("ui.nav.inspect") : "",
           onclick: () => goInspect(), ...keyBtn(() => goInspect()) },
         msym("visibility"),
         el("span", { class: "nav-label" }, t("ui.nav.inspect")),
@@ -559,12 +588,23 @@ function renderNav() {
       const codeimgActive = state.view === "codeimg";
       const codeimgItem = el("div",
         { class: "nav-item nav-codeimg" + (codeimgActive ? " on" : ""),
-          title: state.navCollapsed ? t("ui.nav.codeimg") : "",
+          title: navRail() ? t("ui.nav.codeimg") : "",
           onclick: () => goCodeImg(), ...keyBtn(() => goCodeImg()) },
         msym("menu_book"),
         el("span", { class: "nav-label" }, t("ui.nav.codeimg")),
       );
       $nav.append(codeimgItem);
+
+ // 快速换算导航置顶项（程序员进制联动 + 分类单位换算，MT81）。
+      const quickconvActive = state.view === "quickconv";
+      const quickconvItem = el("div",
+        { class: "nav-item nav-quickconv" + (quickconvActive ? " on" : ""),
+          title: navRail() ? t("ui.nav.quickconv") : "",
+          onclick: () => goQuickConv(), ...keyBtn(() => goQuickConv()) },
+        msym("calculate"),
+        el("span", { class: "nav-label" }, t("ui.nav.quickconv")),
+      );
+      $nav.append(quickconvItem);
     }
 
  // 二级菜单：展开态且非折叠时，列出该分类全部 op
@@ -626,8 +666,8 @@ function onNavClick(cat) {
   const ops = opsByCat(cat.id);
   if (!ops.length) { toast(t("ui.op.emptyCat", catName(cat))); return; }
 
- // 折叠态：没地方摆二级菜单，直接跳该分类首个 op
-  if (state.navCollapsed) { selectOp(ops[0].id); return; }
+ // 折叠态（含窄屏 rail）：没地方摆二级菜单，直接跳该分类首个 op
+  if (navRail()) { selectOp(ops[0].id); return; }
 
  // 展开态：点已展开的分类头 → 收起；否则展开。支持多个分类同时展开（非手风琴）。
   state.expandedCats = state.expandedCats.includes(cat.id)
@@ -700,6 +740,12 @@ function applyRoute() {
     state.expandedCats = [];
     renderNav();
     renderWorkspace();
+  } else if (h === "#/quickconv") {
+    state.view = "quickconv";
+    state.opId = null;
+    state.expandedCats = [];
+    renderNav();
+    renderWorkspace();
   } else if (h === "#/about") {
     state.view = "about";
     state.opId = null;
@@ -742,12 +788,16 @@ window.addEventListener("hashchange", () => {
 
 // ============ 工作区渲染 ============
 function renderWorkspace() {
+  // 离开字符显示器视图：释放 _rerender 闭包对旧视图 DOM 的引用（性能审计 H3，
+  // hex 满载可达 13.9 万节点，不释放则逛其他视图的整段时间不可回收）
+  if (state.view !== "inspect") disposeUniversalViewer();
   $ws.innerHTML = "";
   if (state.view === "home") return renderHome();
   if (state.view === "recipe") return renderRecipe($ws);
   if (state.view === "exhaust") return renderExhaustive($ws);
   if (state.view === "inspect") return renderUniversalViewer($ws);
   if (state.view === "codeimg") return renderCodeImageViewer($ws);
+  if (state.view === "quickconv") return renderQuickConv($ws);
   if (state.view === "about") return renderAbout($ws);
   if (state.view === "plugins") return renderPluginsView($ws);
   return renderOp();
@@ -779,6 +829,16 @@ function goCodeImg() {
   state.opId = null;
   state.expandedCats = [];
   writeHash("#/codeimg");
+  renderNav();
+  renderWorkspace();
+}
+
+// 进入快速换算视图（程序员进制联动 + 分类单位换算，MT81）
+function goQuickConv() {
+  state.view = "quickconv";
+  state.opId = null;
+  state.expandedCats = [];
+  writeHash("#/quickconv");
   renderNav();
   renderWorkspace();
 }
@@ -962,6 +1022,12 @@ function renderHome() {
 // 看门狗软死线（毫秒）：到点先渲染已得结果 + 倒计时读到此值，之后 Worker 后台继续。
 const SOFT_DEADLINE_MS = 5000;
 
+// MT72：收集「启用了自定义实现」的 opId 集合（magic / 穷举排除用）。
+// 直接问 store 要（一次读取），不逐个 op 查 localStorage——608 个 op 那样查会拖慢每次一键解码。
+function activeCustomImplIds() {
+  return listEnabledOpIds();
+}
+
 // strengthCfg = { level, customIds }（来自「解码强度」弹窗）。resolveDecodeConfig 解析成
 // allowOps 白名单 + 层数/暴力/参数网格/时间预算，替代原先的 intensive/multiLayer 两个布尔。
 async function runOneKey(text, outWrap, crib, strengthCfg, force = false, topBanner = null, key = "", runBtn = null) {
@@ -1030,6 +1096,9 @@ async function runOneKey(text, outWrap, crib, strengthCfg, force = false, topBan
   opts.softDeadlineMs = softMs;
   if (crib) opts.crib = crib;
   if (key) opts.key = key;
+ // MT72：用户启用了自定义实现的 op 不进一键解码（原版结果误导 + 不跑用户代码）
+  const _ciIds = activeCustomImplIds();
+  if (_ciIds.length) opts.excludeOps = _ciIds;
   opts.onPartial = (parts) => {
     if (token !== runOneKey._token) return;  // 已被新输入接管，弃
     renderMagicCands(outWrap, q, parts, crib);
@@ -1357,7 +1426,8 @@ async function appendExhaustSection(outWrap, q, crib, token) {
   };
 
   let r;
-  try { r = await exhaustiveDecode(q, { crib: crib || undefined, onlyChanged: true, onProgress }); }
+  const _exIds = activeCustomImplIds();
+  try { r = await exhaustiveDecode(q, { crib: crib || undefined, onlyChanged: true, onProgress, ...(_exIds.length ? { excludeOps: _exIds } : {}) }); }
   catch { box.remove(); return; }
   prog.remove();                               // 跑完移除进度条，让位结果区
   if (token !== runOneKey._token) { box.remove(); return; }  // 输入已变，弃过期穷举区
@@ -1753,6 +1823,25 @@ function renderOp() {
     const bar = el("div", { class: "op-params" });
     for (const d of op.params) bar.append(renderParam(op, d));
     $ws.append(bar);
+  }
+
+ // MT72：高级 · 自定义实现（默认关；勾上 = 用用户 JS 替换本 op 的 encode/decode）。
+ // 自定义实现不参与 magic / 穷举（见 runOneKey 的 excludeOps），Worker 沙箱 + 超时执行。
+ // op / dir 一并传进去：编辑器要拿它抽内置实现源码当编辑起点（MT86）。
+  if (!op.requiresBridge && op.id !== "cryptoTryAll") {
+    const ciRow = el("div", { class: "ci-anchor" });
+    renderCustomToggle(ciRow, op.id, {
+      op,
+      dir: state.dir,
+      onToggle: () => convert(),
+      onTest: (code, cb) => {
+        const inEl = document.getElementById("ioIn");
+        const text = inEl ? inEl.value : "";
+        const rb = inEl && inEl._rawBytes ? inEl._rawBytes : null;
+        runCustomWithTimeout({ code, dir: state.dir, input: text, params: state.params, rawBytes: rb }).then(cb);
+      },
+    });
+    $ws.append(ciRow);
   }
 
  // 纵向 IO：输入/输出上下堆叠，等宽撑满内容区。
@@ -2306,7 +2395,18 @@ async function convert() {
     text = inArea.value;
     if (text === "") { outArea.value = ""; renderOutMedia(document.getElementById("ioOutMedia"), ""); return; }
   }
-  const fn = op.run || (state.dir === "encode" ? op.encode : op.decode);
+ // MT72：用户勾选了「高级 · 自定义实现」且有代码 → 用用户代码替换本 op 实现。
+ // 执行走 Worker 沙箱 + 超时硬杀；结果形态 {ok,out|error} 在此归一为字符串或抛错。
+  const ci = getCustomImpl(state.opId);
+  const useCi = ci && ci.enabled && ci.code && ci.code.trim();
+  const fn = useCi
+    ? (text, p) => runCustomWithTimeout({
+        code: ci.code, dir: state.dir, input: text, params: p, rawBytes: p.rawBytes || null,
+      }).then((r) => {
+        if (!r.ok) throw new Error(r.error + (r.line ? `（第 ${r.line} 行）` : ""));
+        return r.out;
+      })
+    : (op.run || (state.dir === "encode" ? op.encode : op.decode));
   const seq = ++_convSeq;
  // 原始字节透传：op 声明 acceptsBytes 且输入框有拖入的真字节时
  // 通过 params.rawBytes 传给执行层（如 PNG 等需要真字节而非 hex 文本的 op）。
@@ -2316,6 +2416,11 @@ async function convert() {
     callParams = { ...state.params, rawBytes: inArea._rawBytes, rawFileName: inArea._rawFileName };
   }
   try {
+    // 异步操作前设占位，防用户误判卡死（v0.1.5：压缩/解压可能走 2s 超时 → 纯 JS 兜底）
+    outArea.value = t("ui.crypto.loading");
+    outArea.style.color = "";
+    outArea.classList.remove("error");
+    renderOutMedia(document.getElementById("ioOutMedia"), "");
     const out = await fn(text, callParams);
     if (seq !== _convSeq) return; // 有更新的一次转换，丢弃本次
     outArea.value = out;
@@ -2331,7 +2436,7 @@ async function convert() {
   }
 }
 
-// 语言下拉菜单：列全 16 语言（各显自称名），当前语言高亮。选中即 setLocale
+// 语言下拉菜单：列全 20 语言（各显自称名），当前语言高亮。选中即 setLocale
 // （懒加载语言 await 拉字典 → onLocaleChange 全量重渲染）。点菜单外/再点按钮关闭。
 let _langMenu = null;
 function closeLangMenu() {
@@ -2495,7 +2600,7 @@ function initTopbar() {
   document.getElementById("btnTheme").addEventListener("click", () => { cycleTheme(); });
   document.getElementById("btnUpdate").addEventListener("click", checkForUpdate);
 
- // 语言切换：点开下拉菜单选 16 语言（各显自称名）。选中 setLocale 按需加载 + 全量重渲染。
+ // 语言切换：点开下拉菜单选 20 语言（各显自称名）。选中 setLocale 按需加载 + 全量重渲染。
   const btnLang = document.getElementById("btnLang");
   if (btnLang) {
     btnLang.addEventListener("click", (e) => { e.stopPropagation(); toggleLangMenu(btnLang); });
@@ -2877,7 +2982,17 @@ function renderAbout(host) {
   page.append(section("ui.about.refs", refWrap));
 
  // 依赖与致谢
+ // 新增条目的 note 走本地中文兜底（i18n 冻结期不进主表，解冻后回收为正式 key）。
+ // ⚠ 许可红线（恒烈）：只列 MIT/BSD/Apache 等宽松许可；GPL/LGPL 等传染性协议不在此列
+ //   （如快速换算的 WASM 汇编引擎 Keystone 为 GPL-2.0，按规不展示，许可信息仅存 PROGRESS.md）。
+  const _DEP_ZH = {
+    "ui.about.depCm": "自定义实现编辑器内核（行号 / 语法高亮 / 查找 / 撤销 / 括号配对），以 MIT 许可内嵌打包，零运行时外发。",
+    "ui.about.depCapstone": "机器码反汇编引擎（WASM 编译版），多架构指令级解析，BSD-3-Clause 许可。",
+  };
+  const depT = (k) => { const v = t(k); return v === k && _DEP_ZH[k] ? _DEP_ZH[k] : v; };
   const deps = [
+    { name: "CodeMirror 6", note: depT("ui.about.depCm"), lic: "MIT" },
+    { name: "Capstone", note: depT("ui.about.depCapstone"), lic: "BSD-3-Clause" },
     { name: "KaTeX", note: t("ui.about.depKatex"), lic: "MIT" },
     { name: t("ui.about.depTianheng"), note: t("ui.about.depTianhengNote"), lic: t("ui.about.depTianhengLic") },
     { name: "Material Symbols", note: t("ui.about.depMsym"), lic: "Apache-2.0" },
@@ -2913,7 +3028,7 @@ function renderAbout(host) {
     { name: "0x0off", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contrib0x0off" },
     { name: "懒羊羊大王", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribLyy" },
     { name: "风之遐想", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribFzxx" },
-    { name: "yahufanpemg", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribYahufanpemg" },
+    { name: "jluvb", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribJluvb" },
   ];
   for (const c of OTHER_CONTRIBUTORS) {
     const cap = el("span", { class: c.avatar ? "about-capsule about-capsule-founder" : "about-capsule" });
@@ -3089,7 +3204,7 @@ function initNavResizer() {
     document.removeEventListener("mouseup", stop);
   };
   const start = (e) => {
-    if (state.navCollapsed) return; // 折叠态不拖
+    if (navRail()) return; // 折叠态 / 窄屏 rail 不拖
     dragging = true;
     document.body.classList.add("nav-resizing");
     document.addEventListener("mousemove", onMove);
@@ -3111,6 +3226,16 @@ setLoadingProgress(60, "ui.loading.ui");
 applyStaticI18n();
 initTopbar();
 initNavResizer();
+// 窄屏边界交叉时重渲导航：rail 态随视口宽度切换（navRail()），否则已展开的二级菜单
+// 在 resize 后仍残留 260px 宽渲染、rail 60px 里横向溢出（穿模）。
+let _lastNavRail = null;
+function trackNavRail() {
+  const r = navRail();
+  if (_lastNavRail !== null && r !== _lastNavRail) renderNav();
+  _lastNavRail = r;
+}
+window.addEventListener("resize", trackNavRail);
+trackNavRail();
 // 启动时恢复用户上次选的强调色（localStorage），随当前 data-theme 明暗重算 tonal。
 applySavedAccent();
 // 后台启用 B 路线 HCT 精确引擎（Google material-color-utilities，本地 vendor 懒加载）。

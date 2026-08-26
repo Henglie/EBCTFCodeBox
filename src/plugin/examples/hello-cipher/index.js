@@ -10,6 +10,8 @@
  * 3. addMessages —— 补 zh/en/ja 三语文案（含新语言 ja，验证 i18n 可扩语言）。
  * 4. registerDecoder—— 声明一个一键解码贡献（因 op 带 detect 已自动进 magic，这里做显式登记）。
  * 5. registerAiProvider —— 声明一个 AI 提供方形状（OpenAI 兼容，key/endpoint 用户填）。
+ * 6. registerCustomImpl —— 给「高级·自定义实现」预设下拉塞魔改模板：一条绑定 base64 op、
+ *    一条传 null 对所有 op 可见（MT72 能力面）。
  *
  * 插件契约：export const manifest + export default setup(ctx)。
  */
@@ -87,5 +89,29 @@ export default function setup(ctx) {
  // 真正的 chat 由 aiClient 用用户填的 key 发起；这里仅声明默认模型/端点。
   });
 
-  ctx.log("hello-cipher 已激活：op / 分类 / 三语 / 解码贡献 / AI 提供方 全部登记");
+ // 6) 自定义实现预设（MT72）：opId 传 "base64" 只对该 op 可见；传 null 对所有 op 可见。
+ //    预设 code 是用户可编辑的 JS 源码，运行时以 (input, rawBytes, params, dir, H) 为形参在沙箱执行。
+  ctx.registerCustomImpl("base64", {
+    id: "b64-rev-table",
+    name: "Base64 码表逆序",
+    code: '// Base64 码表逆序：标准表整体反转（CTF 常见换表变体）。\n'
+        + 'const STD = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";\n'
+        + 'const T = STD.split("").reverse().join("");\n'
+        + 'if (dir === "decode") return H.utf8Decode(H.b64Decode(input, T));\n'
+        + 'return H.b64Encode(rawBytes || H.utf8Encode(input), T);',
+  });
+  ctx.registerCustomImpl(null, {
+    id: "rot47-global",
+    name: "ROT47 全可见 ASCII",
+    code: '// ROT47：ASCII 33~126 整段循环位移 47 位（CTF 高频，对任意 op 输入都适用）。\n'
+        + 'let out = "";\n'
+        + 'for (const ch of input) {\n'
+        + '  const c = ch.charCodeAt(0);\n'
+        + '  if (c >= 33 && c <= 126) out += String.fromCharCode(33 + ((c - 33 + (dir === "decode" ? -47 : 47) + 94) % 94));\n'
+        + '  else out += ch;\n'
+        + '}\n'
+        + 'return out;',
+  });
+
+  ctx.log("hello-cipher 已激活：op / 分类 / 三语 / 解码贡献 / AI 提供方 / 自定义预设 全部登记");
 }

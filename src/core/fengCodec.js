@@ -19,36 +19,19 @@
  * 曰唱 github.com/fzxx/YueChang js/main.js
  */
 import { register } from "./registry.js";
+import { streamCompress, streamDecompress } from "./compress.js"; // v0.1.5：安全流（超时+纯JS兜底）
 
 const te = (s) => new TextEncoder().encode(s);
 const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(b));
 
 // ============================================================
 // 通用：流式 deflate / inflate（deflate / deflate-raw）
+// v0.1.5：代理 compress.js 安全流（DecompressionStream 超时竞速 + 纯 JS inflate 兜底，
+// Chromium 原生流对部分合法 deflate 会无限挂死）。
 // ============================================================
 async function streamThrough(mode, format, bytes) {
-  const Ctor = mode === "compress" ? globalThis.CompressionStream : globalThis.DecompressionStream;
-  if (typeof Ctor !== "function") {
-    throw new Error("当前环境无 " + (mode === "compress" ? "CompressionStream" : "DecompressionStream") +
-      "（浏览器实测；node 18+ 实验性可用）");
-  }
-  const s = new Ctor(format);
-  const w = s.writable.getWriter();
-  w.write(bytes);
-  w.close();
-  const chunks = [];
-  const r = s.readable.getReader();
-  for (;;) {
-    const { done, value } = await r.read();
-    if (done) break;
-    chunks.push(value);
-  }
-  let total = 0;
-  for (const c of chunks) total += c.length;
-  const out = new Uint8Array(total);
-  let o = 0;
-  for (const c of chunks) { out.set(c, o); o += c.length; }
-  return out;
+  if (mode === "compress") return streamCompress(format, bytes);
+  return streamDecompress(format, bytes);
 }
 
 // 字节 ↔ 标准 Base64（与源码 btoa/atob 等价）

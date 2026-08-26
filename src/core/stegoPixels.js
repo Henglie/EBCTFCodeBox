@@ -8,7 +8,8 @@
  * 提供：
  * - decodePNG(bytes) → {width, height, data: Uint8ClampedArray(RGBA)}
  *   支持 colorType 0/2/3/4/6 × bitDepth 8（16 取高字节、1/2/4 解位深打包），
- *   调色板 PLTE + tRNS 透明，非隔行。
+ *   调色板 PLTE + tRNS 透明，非隔行；越界调色板索引钳位到末项（同浏览器容忍语义，
+ *   CTF 载体常被隐写工具二次加工出越界索引，不因此抛错）。
  * - encodePNG / rgbaToDataURL —— 转发 mcMap.js 的零依赖 PNG 编码器（zlib stored 块）。
  * - rollHorizontal(rgba, w, h, offset) —— numpy.roll(axis=1) 语义：整行水平循环位移。
  * - dataURLToBytes —— dataURL/裸 base64 → Uint8Array。
@@ -66,6 +67,7 @@ export function decodePNG(bytes) {
     throw new Error("PNG bitDepth " + bitDepth + " 不支持");
   }
   if (bitDepth === 16 && colorType === 3) throw new Error("PNG 调色板不支持 16 位");
+  if (colorType === 3 && !palette) throw new Error("PNG 调色板缺失 PLTE 块");
 
   // IDAT 拼接 → zlib 去头(2)/去尾(4 adler) → raw inflate
   let idatLen = 0;
@@ -76,9 +78,12 @@ export function decodePNG(bytes) {
   if (idat.length < 6) throw new Error("PNG IDAT 缺失");
   const raw = inflateRaw(idat.subarray(2, idat.length - 4));
 
-  // 扫描线：每行前导 1 字节 filter。bpp = 每像素字节数（16bit 时翻倍）
+  // 扫描线：每行前导 1 字节 filter。bpp = filter 回推字节距（<8bit 恒 1，规范如此）
   const bpp = Math.ceil((channels * bitDepth) / 8);
-  const stride = width * bpp;
+  // 行字节长按规范 = ceil(width × channels × bitDepth / 8)。旧式 width × bpp 在 bitDepth < 8 时
+  // 多算行宽（4bit/2 宽图真实行 1 字节却算成 2）→ 行起点错位 + 「数据不完整」误抛，
+  // 1/2/4bit 调色板与灰度图全部崩。8/16bit 下与原式等值，零行为变化。
+  const stride = Math.ceil((width * channels * bitDepth) / 8);
   const expect = height * (stride + 1);
   if (raw.length < expect) throw new Error("PNG 数据不完整（期望 " + expect + " 字节，实际 " + raw.length + "）");
   const filtered = raw.subarray(0, expect);
@@ -149,8 +154,12 @@ export function decodePNG(bytes) {
       case 4: R = G = B = samples[r]; A = samples[a]; break; // 灰度+alpha
       case 6: R = samples[r]; G = samples[g]; B = samples[b4]; A = samples[a]; break; // RGBA
       case 3: { // 调色板
-        const idx = samples[i];
-        if (idx < 0 || idx * 3 + 2 >= palette.length) throw new Error("PNG 调色板索引越界");
+        // 越界索引钳位到最后一项而非抛错：CTF 载体常被隐写/二次加工工具改出越界索引
+        //（Arnold 猫脸暴破的实际崩点），浏览器解码同款容忍（截到调色板边界），抛错会把
+        // 本可解的图整张打崩。idx 取自字节恒 >=0；PLTE 残缺（无完整 RGB 项）时黑底兜底。
+        const palCount = Math.floor(palette.length / 3);
+        const idx = Math.min(samples[i], palCount - 1);
+        if (idx < 0) { R = G = B = 0; break; }
         R = palette[idx * 3]; G = palette[idx * 3 + 1]; B = palette[idx * 3 + 2];
         if (trns && idx < trns.length) A = trns[idx];
         break;

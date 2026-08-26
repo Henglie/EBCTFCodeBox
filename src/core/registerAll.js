@@ -246,5 +246,22 @@ import "./lllAttack.js"; // 格基归约 LLL + 背包低密度攻击 CJLOSS（cr
 import "./xiangyue.js"; // 想曰 XiangYue 完整版解密 xiangyue（cn, run async, 中/日/韩/Emoji/零宽/象形映射 → Argon2id/PBKDF2 + ChaCha20-Poly1305 + AES-CTR + zlib, 纯JS原语自验, 无 detect）
 import "./lightweightStream.js"; // eSTREAM/NIST 轻量级流密码 trivium/grainV1/grain128aead（modern, 双向, 官方向量验证）
 import "./fengCodec.js"; // 风之暇想 uid=243467 编码 dxBase64（base, 双向, deflate+salt XOR+CRC16）/ yueChang 曰唱（cn, 双向, PBKDF2+AES-GCM+拟声字映射, 源码逐行核验）
+import "./radixAll.js"; // 一键多进制转换 radixAll（radix, run, 自动嗅探 + 2/8/10/16/32/36/62 进制对照 + Base64 + 字节/码位视图 + 负数补码, BigInt, 无 detect）
+import "./progCalc.js"; // 程序员计算器 progCalc（radix, run, 手写递归下降解析器无 eval, & | ^ ~ << >> >>> rotl/rotr, 8/16/32/64 位字宽 BigInt 回绕, 无 detect）
+import "./unitConv.js"; // 单位换算 unitConv（data, run, 数据量 SI/IEC 两制并列 + 速率 + 时间 + 时间戳纪元 + 频率 + 角度, BigInt 有理数, 无 detect）
+import "./gifTiming.js"; // GIF 帧时序隐写 gifTiming（stego, run, GCE Delay 厘秒→数字/ASCII/二进制阈值三模式, 无 detect）
+import "./jpgSizeRecover.js"; // JPEG 宽高修复 jpgSizeRecover（forensic, run, SOF+霍夫曼熵解码数 MCU 反推真实高度, 无 detect）
+import "./zipRepair.js"; // ZIP 伪加密修复/置位 zipRepair+zipPseudoEncrypt（forensic, run, EOCD→CD→LFH 清/置通用位标志 bit0, 无 detect）
+import "./stringsExtract.js"; // 字符串提取 stringsExtract（forensic, run, ASCII/UTF-16LE 双模式可打印串扫描, 无 detect）
+import "./jwtCrack.js"; // JWT 密钥爆破 jwtCrack（modern, run async, HS256/384/512 弱密钥字典爆破, 无 detect）
+import "./zstegScan.js"; // LSB 全组合扫描 zstegScan（stego, run, 位平面×通道×位序×行列组合+可读性打分, 无 detect）
+import "./pdfObjects.js"; // PDF 对象解析 pdfObjects（forensic, run, 对象表+FlateDecode 流解压预览, 无 detect）
+import "./ooxmlMeta.js"; // OOXML 元数据提取 ooxmlMeta（forensic, run, docx/xlsx/pptx 的 docProps XML 键值, 无 detect）
+import "./apkManifest.js"; // APK Manifest 解析 apkManifest（forensic, run, 二进制 AXML/明文 XML 双形态, 无 detect）
+import "./elfInfo.js"; // ELF 可执行信息 elfInfo（forensic, run, 头/程序头/动态节依赖库, 无 detect）
+import "./peInfo.js"; // PE 可执行信息 peInfo（forensic, run, COFF+可选头 EXE/DLL/子系统, 无 detect）
+import "./lsbEmbed.js"; // LSB 嵌入（出题）lsbEmbed（stego, run, 封面像素低位写载荷→PNG, 无 detect）
+import "./zipCreate.js"; // ZIP 创建（出题）zipCreate（forensic, run, 单文件 Stored/Deflated ZIP 生成, 无 detect）
+import "./deepsoundExtract.js"; // DeepSound 提取 deepsoundExtract（forensic, run async, WAV 采样低位 DSC2/DSCF, 无 detect）
 import "./detectExt3.js"; // EASY 30 op detect 补齐（须在所有 op 注册后）
 import "./detectSupplement.js"; // 编码类 detect 覆盖补齐（须在所有 op 注册后）

@@ -37,7 +37,7 @@ PROGRESS.md
 license.bin
 
 # 一次性草稿 / 本地脚本，不入库
-启动无限制克劳德.cmd
+启动无限制克劳德.*
 
 # ── C oracle 调试产物（本地验证用，不入库）──
 mickey_oracle.obj

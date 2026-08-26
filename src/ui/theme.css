@@ -57,8 +57,12 @@
   --sp-5: 24px;
   --sp-6: 32px;
 
- /* ---- 字体 ---- */
-  --font: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+ /* ---- 字体 ----
+  * --font 追加民族文字字体（MT76③ 落地）：系统自带的蒙文/维文字体优先，天珩全字库兜底
+  * （天珩 p0 覆盖蒙古文区 90%、藏文区 82%、阿拉伯区 100%，后台随包加载）。
+  * 浏览器对缺失字形自动回退，绝不会豆腐块（缺的冷僻码位由系统字体顶上）。 */
+  --font: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Mongolian Baiti",
+          "Microsoft Uyghur", "Cheonhyeong", system-ui, sans-serif;
   --mono: "Cascadia Code", "Consolas", "SF Mono", "Roboto Mono", ui-monospace, monospace;
 
  /* ---- 字号令牌（整体上调一档，标题永远高正文一档，层级比例不压平） ---- */

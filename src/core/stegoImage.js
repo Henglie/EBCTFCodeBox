@@ -576,7 +576,58 @@ register({
 });
 
 // ---- Arnold 全参数暴力破解（a/b/次数三维遍历 → 候选网格拼图） ----
-function arnoldCatBruteOp(text, p = {}) {
+// 图片字节魔数 → MIME（rawBytes 包 data:URL 用；认不出按 PNG 兜底，交给 Canvas 嗅探）。
+function _sniffImageMime(b) {
+  if (!b || !b.length) return "image/png";
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47) return "image/png";
+  if (b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) return "image/jpeg";
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return "image/gif";
+  if (b[0] === 0x42 && b[1] === 0x4D) return "image/bmp";
+  if (b.length >= 12 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "image/webp";
+  return "image/png";
+}
+
+// 3×5 点阵字模（只需 0-9 + a/b/t）：暴破拼图每格缩略图下方的参数标签（如 a2b3t4）。
+const _BRUTE_GLYPHS = {
+  "0": ["111", "101", "101", "101", "111"],
+  "1": ["010", "110", "010", "010", "111"],
+  "2": ["111", "001", "111", "100", "111"],
+  "3": ["111", "001", "111", "001", "111"],
+  "4": ["101", "101", "111", "001", "001"],
+  "5": ["111", "100", "111", "001", "111"],
+  "6": ["111", "100", "111", "101", "111"],
+  "7": ["111", "001", "010", "010", "010"],
+  "8": ["111", "101", "111", "101", "111"],
+  "9": ["111", "101", "111", "001", "111"],
+  a: ["111", "101", "111", "101", "101"],
+  b: ["110", "101", "110", "101", "110"],
+  t: ["111", "010", "010", "010", "010"],
+};
+
+// 把 label（a2b3t4 式）画进 grid 的标签条：深灰点阵 on 白底，水平居中于所在格。
+function _drawBruteLabel(grid, gridW, ox, oy, cellW, labelH, label) {
+  const s = cellW >= 52 ? 2 : 1; // 6 字符 ×2 倍字模宽 46px，格宽不够缩回 1 倍
+  const totalW = (4 * label.length - 1) * s; // 每字符宽 3s + 字距 s
+  const startX = ox + Math.max(0, Math.floor((cellW - totalW) / 2));
+  const startY = oy + Math.max(0, Math.floor((labelH - 5 * s) / 2));
+  for (let ci = 0; ci < label.length; ci++) {
+    const g = _BRUTE_GLYPHS[label[ci]];
+    if (!g) continue;
+    for (let r = 0; r < 5; r++) {
+      for (let c = 0; c < 3; c++) {
+        if (g[r][c] !== "1") continue;
+        for (let dy = 0; dy < s; dy++) {
+          for (let dx = 0; dx < s; dx++) {
+            const di = ((startY + r * s + dy) * gridW + startX + ci * 4 * s + c * s + dx) * 4;
+            grid[di] = 51; grid[di + 1] = 51; grid[di + 2] = 51; grid[di + 3] = 255;
+          }
+        }
+      }
+    }
+  }
+}
+
+async function arnoldCatBruteOp(text, p = {}) {
   const aStart = Math.max(1, Number(p.aStart) || 1);
   const aEnd = Math.max(aStart, Number(p.aEnd) || 3);
   const bStart = Math.max(1, Number(p.bStart) || 1);
@@ -587,65 +638,97 @@ function arnoldCatBruteOp(text, p = {}) {
   if (total > 2000) {
     throw new Error("候选组合 " + total + " 超过上限 2000，请缩小范围（暴破结果全生成拼图，太多会卡）");
   }
-  // 纯 JS 像素管线（node 可测）：dataURL → PNG 解码 → 逐组合逆变换 → 缩略拼图 → PNG 输出
-  let imageData;
-  try {
-    imageData = decodePNG(dataURLToBytes(text));
-  } catch (e) {
-    throw new Error("图像解码失败（暴破走纯 JS PNG 管线）：" + e.message);
+  // 输入解码分流（修复「用户图进不去就崩」）：
+  // ① 浏览器优先 Canvas（dataURLToImageData，通吃 JPEG/BMP/隔行 PNG/调色板 PNG）。
+  //    拖入文件时 text 只是占位提示，真字节在 p.rawBytes（acceptsBytes 约定），
+  //    先按魔数包成 data:URL 再喂 <img>。
+  // ② Canvas 失败或非浏览器 → 纯 JS decodePNG（node 可测，仅支持非隔行 PNG）。
+  // ③ 两层都失败 → 把两层原因一起报出（先 Canvas 后纯 JS）。
+  const rawBytes = (p && p.rawBytes && p.rawBytes.length)
+    ? (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes))
+    : null;
+  let imageData = null;
+  let canvasReason = null;
+  let pngReason = null;
+  if (typeof document !== "undefined") {
+    try {
+      const srcStr = rawBytes
+        ? "data:" + _sniffImageMime(rawBytes) + ";base64," + _bytesToB64(rawBytes)
+        : String(text == null ? "" : text);
+      imageData = await dataURLToImageData(srcStr);
+    } catch (e) {
+      canvasReason = (e && e.message) ? e.message : String(e);
+    }
+  } else {
+    canvasReason = "非浏览器环境（无 document/canvas），未尝试";
+  }
+  if (!imageData) {
+    try {
+      imageData = decodePNG(rawBytes ? rawBytes : dataURLToBytes(text));
+    } catch (e) {
+      pngReason = (e && e.message) ? e.message : String(e);
+    }
+  }
+  if (!imageData) {
+    throw new Error("Arnold 暴破图像解码失败：[Canvas] " + canvasReason + "；[纯JS PNG] " + pngReason);
   }
   const src = new Uint8ClampedArray(imageData.data);
   const n = imageData.width;
   if (n !== imageData.height) throw new Error("Arnold 暴破需要正方形图像");
-    // 候选缩略图（最近邻，固定高 96px）
-    const THUMB_H = 96;
-    const thScale = THUMB_H / n;
-    const tw = Math.max(1, Math.round(n * thScale));
-    const thumbs = [];
-    for (let a = aStart; a <= aEnd; a++) {
-      for (let b = bStart; b <= bEnd; b++) {
-        for (let t = tStart; t <= tEnd; t++) {
-          const cand = arnoldCatTransform(
-            { width: n, height: n, data: new Uint8ClampedArray(src) },
-            { iterations: t, a, b, decode: true }
-          );
-          // 缩略
-          const th = new Uint8ClampedArray(tw * THUMB_H * 4);
-          for (let y = 0; y < THUMB_H; y++) {
-            const sy = Math.min(n - 1, Math.floor(y / thScale));
-            for (let x = 0; x < tw; x++) {
-              const sx = Math.min(n - 1, Math.floor(x / thScale));
-              const si = (sy * n + sx) * 4;
-              const di = (y * tw + x) * 4;
-              th[di] = cand.data[si]; th[di + 1] = cand.data[si + 1];
-              th[di + 2] = cand.data[si + 2]; th[di + 3] = cand.data[si + 3];
-            }
+  // 候选缩略图（最近邻，固定高 96px）+ 每格下方参数标签条
+  const THUMB_H = 96;
+  const LABEL_H = 14;
+  const thScale = THUMB_H / n;
+  const tw = Math.max(1, Math.round(n * thScale));
+  const thumbs = [];
+  const labels = [];
+  for (let a = aStart; a <= aEnd; a++) {
+    for (let b = bStart; b <= bEnd; b++) {
+      for (let t = tStart; t <= tEnd; t++) {
+        const cand = arnoldCatTransform(
+          { width: n, height: n, data: new Uint8ClampedArray(src) },
+          { iterations: t, a, b, decode: true }
+        );
+        // 缩略
+        const th = new Uint8ClampedArray(tw * THUMB_H * 4);
+        for (let y = 0; y < THUMB_H; y++) {
+          const sy = Math.min(n - 1, Math.floor(y / thScale));
+          for (let x = 0; x < tw; x++) {
+            const sx = Math.min(n - 1, Math.floor(x / thScale));
+            const si = (sy * n + sx) * 4;
+            const di = (y * tw + x) * 4;
+            th[di] = cand.data[si]; th[di + 1] = cand.data[si + 1];
+            th[di + 2] = cand.data[si + 2]; th[di + 3] = cand.data[si + 3];
           }
-          thumbs.push(th);
         }
+        thumbs.push(th);
+        labels.push("a" + a + "b" + b + "t" + t);
       }
     }
-    // 网格拼图：每行 10 张，行间 6px 白缝，列间 6px 缝
-    const perRow = Math.min(10, thumbs.length);
-    const gap = 6;
-    const gridW = perRow * tw + (perRow + 1) * gap;
-    const rows = Math.ceil(thumbs.length / perRow);
-    const gridH = rows * THUMB_H + (rows + 1) * gap;
-    const grid = new Uint8ClampedArray(gridW * gridH * 4);
-    for (let i = 0; i < grid.length; i += 4) { grid[i] = 255; grid[i + 1] = 255; grid[i + 2] = 255; grid[i + 3] = 255; }
-    thumbs.forEach((th, idx) => {
-      const row = Math.floor(idx / perRow);
-      const col = idx % perRow;
-      const ox = gap + col * (tw + gap);
-      const oy = gap + row * (THUMB_H + gap);
-      for (let y = 0; y < THUMB_H; y++) {
-        for (let x = 0; x < tw; x++) {
-          const si = (y * tw + x) * 4;
-          const di = ((oy + y) * gridW + (ox + x)) * 4;
-          grid[di] = th[si]; grid[di + 1] = th[si + 1]; grid[di + 2] = th[si + 2]; grid[di + 3] = th[si + 3];
-        }
+  }
+  // 网格拼图：每行 10 张，行/列间 6px 白缝；格高 = 缩略图 96 + 标签条 14
+  const perRow = Math.min(10, thumbs.length);
+  const gap = 6;
+  const cellH = THUMB_H + LABEL_H;
+  const gridW = perRow * tw + (perRow + 1) * gap;
+  const rows = Math.ceil(thumbs.length / perRow);
+  const gridH = rows * cellH + (rows + 1) * gap;
+  const grid = new Uint8ClampedArray(gridW * gridH * 4);
+  for (let i = 0; i < grid.length; i += 4) { grid[i] = 255; grid[i + 1] = 255; grid[i + 2] = 255; grid[i + 3] = 255; }
+  thumbs.forEach((th, idx) => {
+    const row = Math.floor(idx / perRow);
+    const col = idx % perRow;
+    const ox = gap + col * (tw + gap);
+    const oy = gap + row * (cellH + gap);
+    for (let y = 0; y < THUMB_H; y++) {
+      for (let x = 0; x < tw; x++) {
+        const si = (y * tw + x) * 4;
+        const di = ((oy + y) * gridW + (ox + x)) * 4;
+        grid[di] = th[si]; grid[di + 1] = th[si + 1]; grid[di + 2] = th[si + 2]; grid[di + 3] = th[si + 3];
       }
-    });
+    }
+    _drawBruteLabel(grid, gridW, ox, oy + THUMB_H, tw, LABEL_H, labels[idx]);
+  });
   return rgbaToDataURL(grid, gridW, gridH);
 }
 

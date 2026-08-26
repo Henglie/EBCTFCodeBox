@@ -48,6 +48,21 @@ const _byId = new Map();
 // 合法分类 id 集合（cat 校验用）。CATEGORIES 是单一真相源。
 const _catIds = new Set(CATEGORIES.map((c) => c.id));
 
+/** 取第一个非 registry/registerAll 的调用方模块 URL（文件不带 :行:列）。失败返回 null。 */
+function callerModuleUrl() {
+  try {
+    const stack = new Error().stack || "";
+    for (const line of stack.split("\n").slice(1)) {
+      const m = line.match(/(?:https?|file):\/\/[^)\s]+/);
+      if (!m) continue;
+      const url = m[0].replace(/:\d+(?::\d+)?$/, ""); // 去掉尾部 :行:列
+      if (url.includes("/registry.js") || url.includes("/registerAll.js")) continue;
+      return url;
+    }
+  } catch { /* 忽略 */ }
+  return null;
+}
+
 /** 注册一个 op（重复 id 抛错，防覆盖）。 */
 export function register(op) {
   if (!op || typeof op.id !== "string" || !op.id) {
@@ -64,6 +79,11 @@ export function register(op) {
     throw new Error(`op ${op.id} 必须至少有 encode / decode / run 之一`);
   }
   op.params = op.params || [];
+ // 记录 op 注册所在模块的源文件 URL（编辑器「权威实现」面板 fetch 用）。
+ // 用调用栈定位调用方模块；找不到置 null（插件/异常环境不崩）。
+  if (!("sourceFile" in op)) {
+    op.sourceFile = callerModuleUrl();
+  }
  // params 契约校验：漏写 key（例如误写成 id）会让界面输入永远传不进算法——静默失效，必须拦住。
   const _seenKeys = new Set();
   for (const d of op.params) {

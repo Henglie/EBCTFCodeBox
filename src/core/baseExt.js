@@ -7,12 +7,14 @@
  * （码表由 _gen_bigbase.mjs 从 Kotlin 源提取，勿手改）
  * - z85 / base85ipv6 / base69：WhatsInYourClipboard src/core/codec.js
  * - base64steg / base64dict / multilineBase64 / base64decompress：base64 补位隐写与
- * 多行/字典变体（base64decompress 用 DecompressionStream/CompressionStream 'deflate' = zlib）
+ * 多行/字典变体（base64decompress 用 DecompressionStream/CompressionStream 'deflate' = zlib，
+ * 走 compress.js 的安全流：超时 + 纯 JS inflate 兜底，见 v0.1.5 修复）
  *
  * 每项双向（能双向的）+ 往返/向量测试。
  * 注册进 registry，cat:'base'。
  */
 import { register } from "./registry.js";
+import { streamDecompress, streamCompress } from "./compress.js"; // v0.1.5：安全流（超时+纯JS兜底）
 
 const te = (s) => new TextEncoder().encode(s);
 const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(b));
@@ -607,44 +609,11 @@ function multilineBase64Decode(text) {
 }
 
 // ============ base64decompress（zlib + base64）============
-// 浏览器用 DecompressionStream/CompressionStream 'deflate'（zlib 格式，含 2 字节头 + adler32 尾）
+// 走 compress.js 的安全流（DecompressionStream 超时竞速 + 纯 JS inflate 兜底，
+// v0.1.5：Chromium 原生流对部分合法 deflate 会无限挂死）。
 // 异步（Promise），async op。
-async function _inflate(bytes) {
-  const ds = new DecompressionStream("deflate");
-  const writer = ds.writable.getWriter();
-  writer.write(bytes);
-  writer.close();
-  const reader = ds.readable.getReader();
-  const chunks = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value); total += value.length;
-  }
-  const out = new Uint8Array(total);
-  let off = 0;
-  for (const c of chunks) { out.set(c, off); off += c.length; }
-  return out;
-}
-async function _deflate(bytes) {
-  const cs = new CompressionStream("deflate");
-  const writer = cs.writable.getWriter();
-  writer.write(bytes);
-  writer.close();
-  const reader = cs.readable.getReader();
-  const chunks = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value); total += value.length;
-  }
-  const out = new Uint8Array(total);
-  let off = 0;
-  for (const c of chunks) { out.set(c, off); off += c.length; }
-  return out;
-}
+const _inflate = (bytes) => streamDecompress("deflate", bytes);
+const _deflate = (bytes) => streamCompress("deflate", bytes);
 function _bytesToB64(bytes) {
   let out = "";
   for (let i = 0; i < bytes.length; i += 3) {

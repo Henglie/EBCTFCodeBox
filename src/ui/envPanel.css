@@ -257,3 +257,72 @@
 @media (max-width: 480px) {
   .env-panel { width: calc(100vw - 16px); inset-inline-end: 8px !important; }
 }
+
+/* ============ 低高窗口（<640px 高）：面板占满可视高，内容内部滚 ============ */
+@media (max-height: 640px) {
+  .env-panel { max-height: 94vh; }
+}
+
+/* ============ 一键重置区（危险操作，醒目红 + M3 二次确认弹窗；恒烈 2026-08-26 需求） ============ */
+.env-reset-box { border-top: 1px solid var(--outline-var); }
+.env-reset-note { font-size: var(--fs-xs); color: var(--on-surface-var); margin-bottom: var(--sp-2); line-height: 1.5; }
+.env-reset-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1);
+  width: 100%; height: 40px; box-sizing: border-box;
+  border: 1px solid var(--error); border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--error) 14%, transparent);
+  color: var(--error); font-size: var(--fs-sm); font-weight: 700; cursor: pointer;
+  transition: background var(--dur-short) var(--ease), color var(--dur-short) var(--ease), transform var(--dur-short) var(--ease);
+}
+.env-reset-btn:hover { background: var(--error); color: #fff; }
+.env-reset-btn:active { transform: scale(.97); }
+.env-reset-btn .msym { font-size: 18px; flex: none; }
+
+/* M3 确认弹窗（遮罩 + 圆角卡片 + 居中危险图标 + 右下操作行） */
+.env-reset-mask {
+  position: fixed; inset: 0; z-index: 1300;
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--sp-4); background: rgba(0, 0, 0, .5);
+  animation: env-reset-fade var(--dur-medium) var(--ease-out);
+}
+@keyframes env-reset-fade { from { opacity: 0; } to { opacity: 1; } }
+.env-reset-dialog {
+  display: flex; flex-direction: column; align-items: center; gap: var(--sp-2);
+  max-width: 380px; width: 100%; box-sizing: border-box;
+  padding: var(--sp-4);
+  background: var(--surface-2); border: 1px solid var(--outline-var);
+  border-radius: var(--r-xl);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, .18), 0 1px 4px rgba(0, 0, 0, .08);
+  text-align: center;
+  animation: env-reset-pop var(--dur-medium) var(--ease-out);
+}
+@keyframes env-reset-pop { from { opacity: 0; transform: scale(.94) translateY(8px); } to { opacity: 1; transform: none; } }
+.env-reset-dialog-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px; border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--error) 15%, transparent); color: var(--error);
+}
+.env-reset-dialog-icon .msym { font-size: 26px; }
+.env-reset-dialog-title { font-size: var(--fs-md); font-weight: 700; color: var(--on-surface); }
+.env-reset-dialog-body { font-size: var(--fs-sm); color: var(--on-surface-var); line-height: 1.6; }
+.env-reset-dialog-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); width: 100%; margin-top: var(--sp-2); }
+.env-reset-btn-cancel {
+  height: 40px; padding: 0 var(--sp-4);
+  border: 1px solid var(--outline); border-radius: var(--r-full);
+  background: transparent; color: var(--on-surface-var);
+  font-size: var(--fs-sm); font-weight: 600; cursor: pointer;
+}
+.env-reset-btn-cancel:hover { background: var(--surface-hi); }
+.env-reset-btn-ok {
+  display: inline-flex; align-items: center; gap: var(--sp-1);
+  height: 40px; padding: 0 var(--sp-4);
+  border: 0; border-radius: var(--r-full);
+  background: var(--error); color: #fff;
+  font-size: var(--fs-sm); font-weight: 700; cursor: pointer;
+}
+.env-reset-btn-ok:hover { filter: brightness(1.1); }
+.env-reset-btn-ok .msym { font-size: 18px; }
+/* 触屏热区 */
+@media (hover: none) {
+  .env-reset-btn, .env-reset-btn-cancel, .env-reset-btn-ok { min-height: 44px; }
+}

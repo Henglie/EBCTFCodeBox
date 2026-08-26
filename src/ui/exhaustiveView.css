@@ -141,3 +141,14 @@
   color: var(--on-surface-var);
   font-size: var(--fs-base);
 }
+
+/* ============ 窄屏（<860px 与全站断点对齐）：op 名收窄，结果值多让位 ============ */
+@media (max-width: 860px) {
+  .exhaust-op { min-width: 0; max-width: 140px; }
+  .exhaust-row { padding: 6px var(--sp-2); }
+}
+
+/* ============ 低高窗口（<640px 高）：行距压缩 ============ */
+@media (max-height: 640px) {
+  .exhaust-row { padding: 4px var(--sp-2); }
+}

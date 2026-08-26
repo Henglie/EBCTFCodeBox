@@ -90,6 +90,15 @@ const _ZH = {
   "ui.env.syncAccentTip": "读取 Windows 系统强调色并应用（仅本地版）",
   "ui.env.syncAccentOk": "已同步系统强调色",
   "ui.env.syncAccentFail": "系统强调色不可用",
+ // ---- 一键重置（恒烈 2026-08-26 需求；i18n 冻结期走本地兜底）----
+  "ui.env.resetTitle": "重置",
+  "ui.env.resetNote": "清除本站全部本地数据（自定义实现、配方、方案、设置、离线缓存），程序回到首次使用的状态。",
+  "ui.env.resetBtn": "一键重置程序",
+  "ui.env.resetTip": "一键清理cookie和缓存，浏览器会强制刷新该程序。",
+  "ui.env.resetConfirmTitle": "一键重置程序？",
+  "ui.env.resetConfirmBody": "将清除 Cookie、缓存与全部本地数据（自定义实现 / 方案 / 设置都会消失），随后强制刷新。此操作不可撤销。",
+  "ui.env.resetConfirmOk": "确认重置",
+  "ui.env.resetCancel": "取消",
 };
 function t(key, ...a) {
   try {
@@ -150,6 +159,7 @@ async function detectEnvironment() {
 let _panel = null;
 let _offFont = null;       // fontLoader 订阅取消函数
 let _detecting = false;
+let _offDocClick = null;   // 点外关闭监听（性能审计 M3：所有关闭路径统一自摘，防随开合次数累积）
 
 /** 顶栏按钮触发：打开/切换下拉面板。anchor = 触发按钮元素（用于定位）。 */
 export function openEnvPanel(anchor) {
@@ -177,9 +187,10 @@ export function openEnvPanel(anchor) {
       if (ev.target instanceof Node && !ev.target.isConnected) return;
       if (!_panel.contains(ev.target) && ev.target !== anchor && !anchor.contains(ev.target)) {
         closeEnvPanel();
-        document.removeEventListener("click", onDoc);
       }
     };
+    if (_offDocClick) document.removeEventListener("click", _offDocClick);
+    _offDocClick = onDoc;
     document.addEventListener("click", onDoc);
   }, 0);
 }
@@ -187,6 +198,7 @@ export function openEnvPanel(anchor) {
 /** 关闭面板。 */
 export function closeEnvPanel() {
   if (_offFont) { _offFont(); _offFont = null; }
+  if (_offDocClick) { document.removeEventListener("click", _offDocClick); _offDocClick = null; }
   if (_panel) { _panel.remove(); _panel = null; }
   _detecting = false;
 }
@@ -196,6 +208,7 @@ export function renderEnvPanel(container) {
   const host = container || document.getElementById("envHost");
   if (!host) return null;
   host.innerHTML = "";
+  if (_offFont) { _offFont(); _offFont = null; } // 重复渲染先退订旧订阅（性能审计 L5），防 fontLoader Set 里堆积死回调
   const root = el("div", { class: "env-panel env-panel-inline" });
   root.append(renderPanelContent({ mode: "detecting" }));
   host.append(root);
@@ -253,7 +266,78 @@ function renderPanelContent(state) {
   wrap.append(renderThemeSection());
  // 强调色区（动态取色）
   wrap.append(renderAccentSection());
+ // 一键重置区（危险操作，面板底部，恒烈 2026-08-26 需求）
+  wrap.append(renderResetSection());
   return wrap;
+}
+
+// ---- 一键重置（危险区）：醒目红按钮 + M3 二次确认弹窗 → 清数据 + 强刷 ----
+function renderResetSection() {
+  const sec = el("div", { class: "env-section env-reset-box" });
+  sec.append(el("div", { class: "env-section-title" }, msym("restart_alt"), t("ui.env.resetTitle")));
+  sec.append(el("div", { class: "env-reset-note" }, t("ui.env.resetNote")));
+  const btn = el("button", {
+    class: "env-reset-btn",
+    title: t("ui.env.resetTip"),
+    "aria-label": t("ui.env.resetBtn"),
+  }, msym("restart_alt"), t("ui.env.resetBtn"));
+  btn.addEventListener("click", confirmHardReset);
+  sec.append(btn);
+  return sec;
+}
+
+// M3 风格二次确认（遮罩 + 圆角卡片 + 右下操作行；Esc / 点遮罩 = 取消）
+function confirmHardReset() {
+  const mask = el("div", { class: "env-reset-mask", onclick: (e) => { if (e.target === mask) close(); } });
+  const cancelBtn = el("button", { class: "env-reset-btn-cancel", type: "button" }, t("ui.env.resetCancel"));
+  cancelBtn.addEventListener("click", () => close());
+  const okBtn = el("button", { class: "env-reset-btn-ok", type: "button" }, msym("restart_alt"), t("ui.env.resetConfirmOk"));
+  okBtn.addEventListener("click", () => { close(); hardResetApp(); });
+  const card = el("div", { class: "env-reset-dialog", role: "alertdialog", "aria-modal": "true" },
+    el("div", { class: "env-reset-dialog-icon" }, msym("restart_alt")),
+    el("div", { class: "env-reset-dialog-title" }, t("ui.env.resetConfirmTitle")),
+    el("div", { class: "env-reset-dialog-body" }, t("ui.env.resetConfirmBody")),
+    el("div", { class: "env-reset-dialog-actions" }, cancelBtn, okBtn),
+  );
+  function close() {
+    mask.remove();
+    document.removeEventListener("keydown", onKey);
+  }
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  document.addEventListener("keydown", onKey);
+  mask.append(card);
+  document.body.append(mask);
+}
+
+// 执行重置：localStorage / sessionStorage / Cookie / Cache Storage / Service Worker 全清，
+// 再注销 SW（防旧 SW 立刻重建缓存），最后强制刷新。清完的数据不可恢复，入口已做二次确认。
+async function hardResetApp() {
+  try { localStorage.clear(); } catch { /* 隐私模式 */ }
+  try { sessionStorage.clear(); } catch { /* ignore */ }
+ // Cookie：逐名删除（HttpOnly 的删不掉，本项目不设 HttpOnly cookie；path 逐级试）
+  try {
+    for (const c of document.cookie.split(";")) {
+      const name = c.split("=")[0].trim();
+      if (!name) continue;
+      for (const p of ["/", location.pathname]) {
+        document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=" + p;
+      }
+    }
+  } catch { /* ignore */ }
+ // Cache Storage（PWA 预缓存）+ Service Worker 注销
+  try {
+    if (window.caches) {
+      const ks = await caches.keys();
+      await Promise.all(ks.map((k) => caches.delete(k)));
+    }
+  } catch { /* ignore */ }
+  try {
+    if (navigator.serviceWorker) {
+      const rs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(rs.map((r) => r.unregister()));
+    }
+  } catch { /* ignore */ }
+  location.reload();
 }
 
 // 检测区内容（系统/浏览器/本机工具）

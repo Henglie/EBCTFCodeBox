@@ -30,6 +30,7 @@ import { register } from "./registry.js";
 import { argon2id } from "./argon2id.js";
 import { chacha20Poly1305Decrypt } from "./poly1305.js";
 import { aesDecrypt } from "./modern.js";
+import { streamDecompress } from "./compress.js"; // v0.1.5：安全流解压（超时+纯JS inflate 兜底）
 import {
   combinedCharMap, combinedCharMap2, combinedCharMap4,
   combinedCharMap5, combinedCharMap6, ReverseCharSets3,
@@ -180,24 +181,8 @@ async function pbkdf2(pwd, salt, iterations, hash, len) {
 }
 
 // ============ zlib inflate（-15 raw → 标准 zlib → 原样） ============
-async function inflateOne(bytes, fmt) {
-  const ds = new DecompressionStream(fmt);
-  const w = ds.writable.getWriter();
-  w.write(bytes); w.close();
-  const chunks = [];
-  const r = ds.readable.getReader();
-  for (;;) {
-    const { done, value } = await r.read();
-    if (done) break;
-    chunks.push(value);
-  }
-  let total = 0;
-  for (const c of chunks) total += c.length;
-  const out = new Uint8Array(total);
-  let o = 0;
-  for (const c of chunks) { out.set(c, o); o += c.length; }
-  return out;
-}
+// v0.1.5：代理 compress.js 安全流（DecompressionStream 超时 + 纯 JS inflate 兜底）
+const inflateOne = (bytes, fmt) => streamDecompress(fmt, bytes);
 async function inflateThenUtf8(bytes) {
   for (const fmt of ["deflate-raw", "deflate"]) {
     try { return td(await inflateOne(bytes, fmt)); } catch (_) { /* 试下一个 */ }

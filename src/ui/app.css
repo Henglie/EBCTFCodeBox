@@ -87,9 +87,9 @@ label:has(> input[type="radio"]) { cursor: pointer; }
 .icon-btn:hover:not(:disabled) { background: var(--surface-hi); color: var(--on-surface); }
 .icon-btn:active:not(:disabled) { transform: scale(.96); }
 .icon-btn-label { font-size: 14px; }
-@media (max-width: 720px) { .icon-btn-label { display: none; } }
+/* 窄屏隐藏按钮文字 → topbar-responsive.css（后加载，断点 860 与 rail 对齐）统一处理 */
 
-/* ---- 语言下拉菜单（16 语言，各显自称名） ---- */
+/* ---- 语言下拉菜单（20 语言，各显自称名） ---- */
 .lang-menu {
   z-index: 200;
   min-width: 160px;
@@ -203,6 +203,11 @@ label:has(> input[type="radio"]) { cursor: pointer; }
 .nav-recipe .msym { color: var(--primary); }
 /* 字符显示器置顶项：补底边距，令其与下方编码图鉴项间距与前几项一致 */
 .nav-inspect { margin-bottom: 7px; }
+/* 编码图鉴置顶项：同上，与新增的快速换算项拉开间距 */
+.nav-codeimg { margin-bottom: 7px; }
+/* 快速换算置顶项（MT81）：置顶组最后一项，与下方分类列表分组 */
+.nav-quickconv { margin-bottom: 7px; }
+.nav-quickconv .msym { color: var(--primary); }
 .nav-sep { height: 1px; background: var(--outline-var); margin: 7px 11px; }
 .nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .nav-count { font-size: 11px; color: var(--on-surface-var); opacity: .7; flex: none; }
@@ -305,13 +310,14 @@ label:has(> input[type="radio"]) { cursor: pointer; }
 }
 .stepper-btn:hover { background: var(--surface-3); color: var(--on-surface); }
 .stepper-btn:active { transform: scale(.92); }
-/* M3 switch */
-.switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+/* M3 switch（2026-08-25 改：40×22→46×26 更饱满圆润；knob 恒定 14px 不跳变，轨道内严格垂直居中） */
+.switch { position: relative; display: inline-block; width: 46px; height: 26px; flex: none; vertical-align: middle; }
 .switch input { opacity: 0; width: 0; height: 0; }
-.switch .track { position: absolute; inset: 0; background: var(--surface-4); border: 2px solid var(--outline); border-radius: var(--r-full); transition: all var(--dur-short) var(--ease); }
-.switch .knob { position: absolute; top: 5px; inset-inline-start: 5px; width: 12px; height: 12px; background: var(--outline); border-radius: var(--r-full); transition: all var(--dur-short) var(--ease); }
+.switch .track { position: absolute; inset: 0; background: var(--surface-4); border: 2px solid var(--outline); border-radius: var(--r-full); transition: background var(--dur-short) var(--ease), border-color var(--dur-short) var(--ease); }
+/* knob 垂直居中：轨道内容区高 = 26-2×2(border) = 22，knob 14 → top = 2 + (22-14)/2 = 6px */
+.switch .knob { position: absolute; top: 6px; inset-inline-start: 6px; width: 14px; height: 14px; background: var(--outline); border-radius: var(--r-full); transition: inset-inline-start var(--dur-short) var(--ease), background var(--dur-short) var(--ease); }
 .switch input:checked + .track { background: var(--primary); border-color: var(--primary); }
-.switch input:checked + .track + .knob, .switch input:checked ~ .knob { inset-inline-start: 22px; width: 16px; top: 3px; background: var(--on-primary); }
+.switch input:checked + .track + .knob, .switch input:checked ~ .knob { inset-inline-start: 26px; background: var(--on-primary); }
 /* 键盘焦点可见：input 为 0 尺寸不可见，焦点环画在 track 上（可访问性）。 */
 .switch input:focus-visible + .track { outline: 2px solid var(--primary); outline-offset: 2px; }
 
@@ -609,7 +615,6 @@ label:has(> input[type="radio"]) { cursor: pointer; }
 
 /* 瞬移修复：.toast 靠 translateX(-50%) 居中，动画帧必须全程带上，否则结束瞬间 transform 被 translateY 覆盖 → X 居中丢失右移半身位 */
 @keyframes fadeUp { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
-@media (max-width: 720px) { .home-hero .op-title, .io .msym { } }
 
 /* 文件拖放区 + 报告卡片 */
 .file-dropzone {
@@ -1469,4 +1474,286 @@ a.about-ref-name:hover { text-decoration: underline; }
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ============ 快速换算视图（MT81，类名前缀 qc-）============ */
+/* 样式并入 app.css 而非新建 quickConv.css：index.html 属版本冻结文件（MT80），
+   本轮不得改动，无法新增 <link>。发布解冻后可拆分为独立文件。 */
+.qc-view { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-2) 0; }
+.qc-view .mono { font-family: var(--mono, ui-monospace, monospace); }
+
+.qc-head { display: flex; flex-direction: column; gap: var(--sp-1); }
+.qc-title { display: flex; align-items: center; gap: var(--sp-2); margin: 0; font-size: var(--fs-xl); }
+.qc-title .msym { font-size: 1.1em; color: var(--primary); }
+.qc-desc { color: var(--on-surface-var); font-size: var(--fs-sm); }
+
+/* Tab 栏（与 uv-tabs 同范式） */
+.qc-tabs { display: flex; flex-wrap: wrap; gap: var(--sp-2); border-bottom: 1px solid var(--outline-var); padding-bottom: var(--sp-2); }
+.qc-tab { display: inline-flex; align-items: center; gap: var(--sp-1); padding: var(--sp-1) var(--sp-3);
+  border: 1px solid var(--outline-var); border-radius: var(--r-full); background: var(--surface-1);
+  color: var(--on-surface-var); font-size: var(--fs-sm); cursor: pointer;
+  transition: background var(--dur-short) var(--ease), color var(--dur-short) var(--ease); }
+.qc-tab:hover { background: var(--surface-hi); }
+.qc-tab.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.qc-tab .msym { font-size: var(--fs-base); }
+
+.qc-panel { display: flex; flex-direction: column; gap: var(--sp-3); }
+
+/* 工具条 + chip */
+.qc-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.qc-bar-label { font-size: var(--fs-sm); color: var(--on-surface-var); }
+.qc-bar-sep { width: 1px; align-self: stretch; background: var(--outline-var); margin: 0 var(--sp-1); }
+.qc-chip { display: inline-flex; align-items: center; gap: var(--sp-1); padding: 4px var(--sp-2);
+  border: 1px solid var(--outline-var); border-radius: var(--r-full); background: var(--surface-1);
+  color: var(--on-surface-var); font-size: var(--fs-sm); cursor: pointer;
+  transition: background var(--dur-short) var(--ease), color var(--dur-short) var(--ease); }
+.qc-chip:hover { background: var(--surface-hi); }
+.qc-chip.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.qc-chip .msym { font-size: var(--fs-base); }
+.qc-chip-ghost { margin-inline-start: auto; }
+/* 货币二级 chip 行（币种选择）：比一级略缩进、无图标 */
+.qc-subbar { padding-inline-start: var(--sp-3); }
+.qc-subbar .qc-chip { font-size: var(--fs-xs); }
+.qc-cur-note { border-inline-start: 2px solid var(--outline-var); padding-inline-start: var(--sp-2); }
+.qc-custom { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-sm); color: var(--on-surface-var); }
+/* 自定义字宽走全局 .stepper（[−][框][＋]）范式。默认 .stepper{flex:1} 会把工具条撑满，这里收成内容宽。 */
+.qc-custom .stepper { flex: none; }
+.qc-custom .stepper-inp { flex: none; width: 4.5em; min-width: 0; }
+/* 进制面板工具条：控件统一 40px 高（M3 触控目标），与相邻 stepper 齐平 */
+.qc-toolbar { gap: var(--sp-2); }
+.qc-toolbar .qc-chip { min-height: 40px; padding: 0 var(--sp-3); }
+/* 字宽按钮做成正圆（恒烈 2026-08-23 指定；VIS 规范里 icon 型按钮即圆形） */
+.qc-toolbar .qc-chip-round { width: 40px; height: 40px; padding: 0; justify-content: center;
+  border-radius: 50%; font-family: var(--mono, monospace); font-variant-numeric: tabular-nums; }
+.qc-toolbar .qc-chip-round:active { transform: scale(.92); }
+
+/* 换算行网格：标签 + 输入 */
+.qc-grid { display: flex; flex-direction: column; gap: var(--sp-2); }
+.qc-row { display: grid; grid-template-columns: minmax(9em, 15em) 1fr; align-items: center; gap: var(--sp-2); }
+.qc-rowlabel { display: flex; align-items: baseline; gap: var(--sp-1); padding: 2px var(--sp-1);
+  border: 0; background: none; color: var(--on-surface-var); font-size: var(--fs-sm);
+  text-align: start; cursor: pointer; border-radius: var(--r-sm); }
+.qc-rowlabel:hover { background: var(--surface-hi); color: var(--on-surface); }
+.qc-pfx { font-family: var(--mono, monospace); font-size: var(--fs-xs); opacity: .7; }
+.qc-input { width: 100%; box-sizing: border-box; padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--outline-var); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--on-surface); font-size: var(--fs-base); }
+.qc-input:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: var(--primary); }
+.qc-bytes { padding: var(--sp-1) var(--sp-2); border: 1px dashed var(--outline-var);
+  border-radius: var(--r-sm); color: var(--on-surface-var); font-size: var(--fs-sm);
+  word-break: break-all; min-height: 1.6em; }
+
+.qc-notice { font-size: var(--fs-sm); color: var(--on-surface-var); min-height: 1.2em; }
+.qc-notice.qc-warn { color: var(--warning-text, var(--warning)); }
+.qc-err { color: var(--error); }
+.qc-hint { font-size: var(--fs-xs); color: var(--on-surface-var); line-height: 1.6; }
+
+/* --- 面板 ③ 机器码&汇编 互转（MT73④）--- */
+.qc-asm-in {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 88px;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  padding: var(--sp-2);
+  border-radius: var(--r-md, 8px);
+  border: 1px solid var(--outline-var);
+  background: var(--surface-1);
+  color: var(--on-surface);
+  resize: vertical;
+}
+.qc-asm-in:focus { outline: 2px solid var(--primary, #8f3d33); outline-offset: -1px; }
+.qc-asm-out {
+  width: 100%;
+  min-height: 120px;
+  max-height: 320px;
+  overflow: auto;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  white-space: pre;
+  padding: var(--sp-2);
+  border-radius: var(--r-md, 8px);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  color: var(--on-surface);
+}
+.qc-base-inp {
+  width: 110px;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-sm);
+  padding: 6px 10px;
+  border-radius: var(--r-md, 8px);
+  border: 1px solid var(--outline-var);
+  background: var(--surface-1);
+  color: var(--on-surface);
+}
+
+/* UI 统一化（2026-08-24 恒烈指示）：机器码&汇编 面板工具条控件与 qc-chip 对齐
+   （40px 触控目标、同圆角/边框/背景，与程序员进制/单位换算面板一致） */
+.qc-toolbar select,
+.qc-toolbar .qc-base-inp {
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 6px 12px;
+  border-radius: var(--r-md, 10px);
+  border: 1px solid var(--outline-var);
+  background: var(--surface-1);
+  color: var(--on-surface);
+  font-size: var(--fs-sm);
+}
+.qc-toolbar select:focus,
+.qc-toolbar .qc-base-inp:focus { outline: 2px solid var(--primary, #8f3d33); outline-offset: -1px; }
+.qc-toolbar select:hover,
+.qc-toolbar .qc-base-inp:hover { border-color: var(--primary, #8f3d33); }
+
+/* 位视图：一位 = 一个 qc-bitcell（格子在上、位号在下，同一个盒子里，永不错位）；
+   八位一组，换行以「组」为单位，64 位时整字节整字节地折行。 */
+.qc-bits-wrap { display: flex; flex-direction: column; gap: 4px; }
+.qc-bits { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-2); }
+.qc-bit-group { display: flex; gap: 2px; }
+.qc-bitcell { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.qc-bit { box-sizing: border-box; width: 1.9em; height: 1.9em; padding: 0;
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-xs); background: var(--surface-1); color: var(--on-surface-var);
+  font-family: var(--mono, monospace); font-size: var(--fs-sm); cursor: pointer;
+  transition: background var(--dur-short) var(--ease); }
+.qc-bit:hover { background: var(--surface-hi); }
+.qc-bit.on { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.qc-bit-tick { width: 1.9em; text-align: center; font-size: 10px; line-height: 1.2;
+  color: var(--on-surface-var); opacity: .6; font-family: var(--mono, monospace); }
+/* 字节边界（bit 0/8/16/…）标醒目些，数位时好定位 */
+.qc-bit-tick.major { opacity: 1; color: var(--on-surface); font-weight: 600; }
+
+/* 表达式 */
+.qc-expr { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.qc-expr-input { flex: 1 1 20em; }
+.qc-btn { display: inline-flex; align-items: center; gap: var(--sp-1); padding: var(--sp-1) var(--sp-3);
+  border: 1px solid var(--primary); border-radius: var(--r-full); background: var(--primary);
+  color: var(--on-primary); font-size: var(--fs-sm); cursor: pointer; }
+.qc-btn:hover { filter: brightness(1.08); }
+
+/* 基址 + RVA = VA */
+.qc-rva { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3);
+  border: 1px solid var(--outline-var); border-radius: var(--r-md); background: var(--surface-1); }
+.qc-rva-title { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-base); color: var(--on-surface); }
+.qc-rva-title .msym { color: var(--primary); }
+.qc-rva-line { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-2); }
+.qc-rva-field { flex: 1 1 12em; display: flex; flex-direction: column; gap: 2px; min-width: 10em; }
+.qc-rva-label { font-size: var(--fs-xs); color: var(--on-surface-var); }
+.qc-rva-dec { font-size: var(--fs-xs); color: var(--on-surface-var); min-height: 1.2em; word-break: break-all; }
+.qc-rva-op { padding-bottom: 1.4em; font-size: var(--fs-lg); color: var(--on-surface-var); }
+
+/* 单位换算 */
+.qc-catbar { gap: var(--sp-1) var(--sp-2); }
+.qc-unit-grid { max-height: none; }
+.qc-unit-label { flex-wrap: wrap; }
+.qc-unit-sym { font-family: var(--mono, monospace); color: var(--on-surface); }
+.qc-unit-alt { font-size: var(--fs-xs); opacity: .75; }
+.qc-approx { font-size: var(--fs-xs); color: var(--warning-text, var(--warning)); cursor: help; }
+
+/* 窄屏：标签压到输入框上方一行（与 MT79 二级界面交互模型对齐） */
+@media (max-width: 640px) {
+ .qc-row { grid-template-columns: 1fr; gap: 2px; }
+ .qc-rva-op { display: none; }
+ .qc-bit { width: 1.7em; height: 1.7em; }
+ .qc-bit-tick { width: 1.7em; font-size: 9px; }
+ /* 工具条换行后分隔竖线会孤立地吊在行尾，窄屏直接收起 */
+ .qc-toolbar .qc-bar-sep { display: none; }
+}
+
+/* ============ 多字段 IO（fields[] op）基础布局 ============ */
+.io-fields { display: flex; gap: var(--sp-3); }
+.io-field { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+.io-field-label {
+  font-size: var(--fs-sm); font-weight: 600; color: var(--on-surface-var);
+  letter-spacing: .3px; padding-inline-start: 2px;
+}
+
+/* ============ T365 窄屏适配（<860px 与全站断点对齐）：工作区收窄 / 参数竖排 / 双栏→单栏 ============ */
+/* 放文件尾部：本块改写的选择器（.about-*/.file-*/.edu-*/.magic-*/.onekey-brute-*/.crypto-*）基类
+ * 都在本文件前部定义，置于尾部才能保证同特异性下覆盖基类（CSS 级联后者胜）。 */
+@media (max-width: 860px) {
+  .workspace { padding: var(--sp-4); }
+  .home-hero { max-width: none; }
+  .op-params { flex-direction: column; gap: var(--sp-2); }
+  .param { flex-wrap: wrap; }
+  .param > label:not(.switch) { white-space: normal; flex: 1 1 100%; }
+  /* 布尔开关 param（含 .switch）保持行内：开关+文字同排，不压 100% 宽 */
+  .param:has(> .switch) > label:not(.switch) { flex: 0 1 auto; white-space: nowrap; }
+  .param input[type="text"], .param input[type="number"], .param select { flex: 1 1 100%; }
+  .stepper { flex: 1 1 100%; }
+  .io-area { height: 160px; min-height: 80px; }
+  .dir-seg { flex-wrap: wrap; }
+  /* IO 面板头：工具按钮过多时换行，避免 320px 宽下 7 个按钮挤出视口 */
+  .io-pane-head { flex-wrap: wrap; height: auto; row-gap: 4px; }
+  .io-pane-tools { flex-wrap: wrap; }
+  /* 可展开输入框（exp-wrap）在窄屏下防溢出：flex 子项补 min-width:0；exp-btn 保持 34px */
+  .param .exp-wrap { min-width: 0; max-width: 100%; }
+  .param .exp-input { min-width: 60px; }
+  /* 自定义实现开关行（.ci-anchor）在窄屏防溢出：group 换行，seg 收窄不脱框 */
+  .ci-anchor .ci-group { flex-wrap: wrap; max-width: 100%; }
+  .ci-anchor .ci-seg { overflow: hidden; white-space: nowrap; }
+  .magic-row { flex-direction: column; align-items: stretch; }
+  .magic-crib-label { min-width: 0; }
+  .magic-crib { width: 100%; }
+  .magic-row-actions { justify-content: stretch; }
+  .magic-row-actions .magic-run { margin-inline-start: 0; width: 100%; }
+  .magic-countdown { margin-inline-start: 0; }
+  .about-page { max-width: none; padding: 0 var(--sp-2); }
+  .about-intro { max-width: none; }
+  .about-row { flex-wrap: wrap; }
+  .about-row-label { min-width: 4em; }
+  .about-dep-note, .about-ref-note { min-width: 0; }
+  .crypto-form { gap: var(--sp-2); }
+  .edu-card { padding: var(--sp-3); }
+  .edu-ex-io { flex-wrap: wrap; }
+  .edu-ex-tag { min-width: 2.5em; }
+  .file-report-header { flex-wrap: wrap; }
+  .file-section { padding: var(--sp-2) var(--sp-3); }
+  .file-verdict { font-size: var(--fs-lg); }
+  .onekey-brute-head { padding: var(--sp-2) var(--sp-3); }
+  .onekey-brute-branch { padding: var(--sp-2) var(--sp-3); }
+}
+
+/* ============ T365 低高窗口（<640px 高）：弹窗缩高 + 内部滚动，防 max-height 叠加溢出 ============ */
+@media (max-height: 640px) {
+  /* IO 框默认高再降一档，低窗口下少滚 */
+  .io-area { height: 120px; min-height: 56px; }
+  .io-area.io-field-area { min-height: 48px; }
+  /* 语言菜单 / 搜索下拉：低窗更高占比，内部滚 */
+  .lang-menu { max-height: 92vh; }
+  .op-search-panel { max-height: 88vh; }
+  /* 图片灯箱：低窗下大图内收，避免顶满 */
+  .img-lightbox { padding: var(--sp-3); }
+  .img-lightbox-img { max-height: 84vh; }
+  /* 一把梭结果区：压缩 */
+  .onekey-brute-out { max-height: 160px; }
+  /* 穷举展开视图 / 文件查看区：低窗下自身滚动 */
+  .exp-view { max-height: 80vh; }
+}
+
+/* ============ T365 触屏热区（粗指针设备）≥44px ============ */
+@media (pointer: coarse) {
+  /* IO 面板头 32px 固定高放不下 44px 按钮：改为自适应行高 */
+  .io-pane-head { height: auto; min-height: 44px; }
+  /* IO 工具栏小按钮 30→44（44 亦合 M3 触控目标下限） */
+  .tool-btn, .et-btn, .ds-close, .env-refresh-btn { width: 44px; height: 44px; }
+  /* 配方链迷你按钮 28→44 */
+  .recipe-mini-btn { width: 44px; height: 44px; }
+  /* 环境面板小按钮补高 */
+  .env-font-btn, .env-accent-reset, .env-theme-btn { min-height: 44px; }
+  /* 导航二级项行高补到 44（触控可点区） */
+  .nav-subitem { min-height: 44px; }
+  /* 折叠开关 35→44 */
+  .nav-toggle { height: 44px; }
+  /* 图鉴/字符表单元格：保证复选框/可点区够大 */
+  .ds-cb { width: 20px; height: 20px; }
+  /* 配方链参数输入框补高 */
+  .recipe-param input[type="text"], .recipe-param input[type="number"], .recipe-param select { min-height: 44px; }
+  /* op 详情参数输入补高 */
+  .param input[type="text"], .param input[type="number"], .param select,
+  .stepper .stepper-inp { min-height: 44px; }
+  .stepper-btn { width: 44px; height: 44px; }
 }

@@ -38,9 +38,17 @@
  * - core 层零 UI / i18n / main 依赖：只 import registry + ctfPresets（均为纯数据/纯函数）。
  * - 纯本地：方案存 localStorage，绝不外发。隐私模式 localStorage 抛错时静默降级为内存态。
  * - 不改 magic 排序逻辑：本模块只产出「允许哪些 op 参与」+ 预算参数，排序仍归 magic/scorer。
+ *
+ * ============ 循环解码（T350 增强） ============
+ * 同一解码（Base64/Hex/URL）反复施加，直到三条件之一：无法继续（解码失败或结果
+ * 不再变化）/ 命中正则提前停 / 达轮数上限。输出每轮中间值 + 最终结果。
+ * 多层套娃编码（Base64 × N 层）一把解开。纯执行原语（零状态零 UI），
+ * UI 入口由 main 侧接线（本模块只出 loopDecode / formatLoopReport）。
  */
 import { OPS, CATEGORIES, getOp } from "./registry.js";
 import { CTF_HOT_META } from "./ctfPresets.js";
+// 字节统计模型标签（纯常量，零副作用）——供模型提名报告格式化用。
+import { LABELS as BYTESTAT_LABELS } from "./magic/byteStatCnn.js";
 
 // ============================================================
 // 常量
@@ -427,3 +435,241 @@ export function importProfiles(json) {
   writeStore(store);
   return n;
 }
+
+// ============================================================
+// 循环解码（T350）：同一解码反复施加，直到不再变化 / 命中正则 / 达上限
+// ============================================================
+
+/** 循环解码支持的编码（三件最常用）。Base64/Hex 解码前先去空白，URL 走 %XX 解码。 */
+export const LOOP_CODECS = [
+  { id: "base64", label: "Base64" },
+  { id: "hex", label: "Hex" },
+  { id: "url", label: "URL" },
+];
+
+const tdLossy = (bytes) => new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+
+/**
+ * 单步解码（纯函数）：成功返回解码后字符串，失败返回 null。
+ * - base64：去空白后须为 4 的倍数且字符集合法（= 只允许尾部 0-2 个），atob 严格抛错即失败
+ * - hex：去空白后须为偶长纯 hex
+ * - url：decodeURIComponent（%XX 解码，孤立 % 或非法 UTF-8 序列抛错即失败）
+ */
+export function loopDecodeStep(codec, s) {
+  const input = String(s ?? "");
+  if (codec === "base64") {
+    const cleaned = input.replace(/\s+/g, "");
+    if (!cleaned || cleaned.length % 4 !== 0) return null;
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(cleaned)) return null;
+    try {
+      const bin = atob(cleaned);
+      return tdLossy(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+    } catch {
+      return null;
+    }
+  }
+  if (codec === "hex") {
+    const cleaned = input.replace(/\s+/g, "");
+    if (!cleaned || cleaned.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(cleaned)) return null;
+    const out = new Uint8Array(cleaned.length >> 1);
+    for (let i = 0; i < out.length; i++) out[i] = parseInt(cleaned.slice(i * 2, i * 2 + 2), 16);
+    return tdLossy(out);
+  }
+  if (codec === "url") {
+    try {
+      return decodeURIComponent(input);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * 循环解码主循环（纯函数，不碰 localStorage）。
+ * 顺序对齐语义：每轮先查正则（regex 模式）再施加一步解码；解码失败或结果与输入
+ * 相同（不动点）即停；跑满 max 轮即停。循环退出后再补一次正则终查（覆盖最后一轮
+ * 解码后恰好命中的情况）。
+ * @param {string} text 输入密文
+ * @param {object} opts { codec:"base64"|"hex"|"url", until:"stuck"|"regex",
+ *   pattern:"flag\\{[^}]*\\}", max:1..100(默认16) }
+ * @returns {{codec, until, iterations, rounds:[{round, before, after}], final, hit, stopReason, max}}
+ *   stopReason: "stuck"=无法继续/不再变化 | "regex"=命中正则 | "max"=达轮数上限
+ */
+export function loopDecode(text, opts = {}) {
+  const codec = LOOP_CODECS.some((c) => c.id === opts.codec) ? opts.codec : "base64";
+  const until = opts.until === "regex" ? "regex" : "stuck";
+  const pattern = String(opts.pattern != null && opts.pattern !== "" ? opts.pattern : "flag\\{[^}]*\\}");
+  const max = Math.min(100, Math.max(1, Math.floor(Number(opts.max) || 16)));
+  let re = null;
+  if (until === "regex") {
+    try { re = new RegExp(pattern); } catch { re = null; }
+  }
+  let current = String(text ?? "");
+  const rounds = [];
+  let hit = false;
+  let stopReason = "stuck";
+  for (let i = 0; i < max; i++) {
+    if (until === "regex" && re && re.test(current)) {
+      hit = true; stopReason = "regex"; break;
+    }
+    const next = loopDecodeStep(codec, current);
+    if (next == null || next === current) { stopReason = "stuck"; break; }
+    rounds.push({ round: rounds.length + 1, before: current, after: next });
+    current = next;
+    stopReason = "max"; // 若下一轮因 i==max-1 退出即达上限；被 stuck/regex 覆盖则改写
+  }
+  if (until === "regex" && re && !hit && re.test(current)) {
+    hit = true; stopReason = "regex";
+  }
+  return { codec, until, iterations: rounds.length, rounds, final: current, hit, stopReason, max };
+}
+
+/** 单轮中间值的展示截断长度（防多层超长密文刷爆报告）。 */
+const LOOP_STEP_SHOW = 300;
+
+/**
+ * 循环解码结果 → 多行报告：头部摘要 + 每轮中间值 + 最终结果。
+ * @param {object} result loopDecode 的返回值
+ * @returns {string} 多行文本
+ */
+export function formatLoopReport(result) {
+  const show = (s) => {
+    const t = String(s);
+    if (!t) return "(空)";
+    return t.length > LOOP_STEP_SHOW ? t.slice(0, LOOP_STEP_SHOW) + `…（截断，共 ${t.length} 字符）` : t;
+  };
+  const reasonText = {
+    stuck: "无法继续解码（解码失败或结果不再变化）",
+    regex: "命中正则提前停止",
+    max: "达到轮数上限",
+  }[result.stopReason] || result.stopReason;
+  const lines = [];
+  lines.push(`循环解码（${String(result.codec).toUpperCase()} × ${result.iterations} 轮，停止原因：${reasonText}）`);
+  lines.push(`输入: ${show(result.rounds.length ? result.rounds[0].before : result.final)}`);
+  for (const r of result.rounds) {
+    lines.push(`── 第 ${r.round} 轮 ──`);
+    lines.push(show(r.after));
+  }
+  if (!result.rounds.length) lines.push("第 1 轮即无法解码，原样返回。");
+  const hitNote = result.until === "regex" ? (result.hit ? " · 命中 ✓" : " · 未命中 ✗") : "";
+  lines.push("");
+  lines.push(`最终结果（${result.iterations} 轮${hitNote}）:`);
+  lines.push(show(result.final));
+  return lines.join("\n");
+}
+
+// ============================================================
+// 字节统计模型提名报告（MT83 T351）
+// ============================================================
+
+/** 18 维统计特征的短名（与 inputProfile.statisticalFeatures 的顺序一一对应）。 */
+const BYTESTAT_FEATURE_NAMES = [
+  "长度(归一)", "len%4", "大写占比", "小写占比", "数字占比", "空白占比",
+  "可打印占比", "非ASCII占比", "Base64标准表", "Base64URL表", "Hex字母表",
+  "'='占比", "'%'占比", "'\\'占比", "'&'占比", "'.'占比", "':'占比", "香农熵/8",
+];
+
+/**
+ * 把字节统计模型的提名结果格式化成多行文本报告（供调试/可解释性展示）。
+ * @param {object} probe byteStatPredict 的返回值：{ predicted, top5, probs, features }
+ * @returns {string} 多行报告：预测标签 + 11 类概率 + 18 维统计特征
+ */
+export function formatByteStatReport(probe) {
+  if (!probe || !Array.isArray(probe.probs) || !probe.features) return "(无模型提名数据)";
+  const lines = [];
+  const top = probe.top5 && probe.top5[0] ? probe.top5[0] : { label: "?", probability: 0 };
+  lines.push(`字节统计模型提名: ${top.label}（置信 ${(top.probability * 100).toFixed(1)}%）`);
+  lines.push("分类概率（11 类，降序 top5 标 *）:");
+  const ranked = probe.top5 || [];
+  for (let i = 0; i < BYTESTAT_LABELS.length; i++) {
+    const mark = ranked.some((r) => r.label === BYTESTAT_LABELS[i]) ? " *" : "  ";
+    lines.push(`  ${(probe.probs[i] * 100).toFixed(2).padStart(6)}%${mark} ${BYTESTAT_LABELS[i]}`);
+  }
+  lines.push("统计特征（18 维）:");
+  for (let i = 0; i < probe.features.length; i++) {
+    const name = BYTESTAT_FEATURE_NAMES[i] || String(i);
+    lines.push(`  [${String(i).padStart(2)}] ${name.padEnd(12)} = ${probe.features[i].toFixed(4)}`);
+  }
+  return lines.join("\n");
+}
+
+// ============================================================
+// 加载期自检（T350，import 即跑，失败即抛）
+// ============================================================
+(function loopSelfTest() {
+  const assert = (cond, msg) => { if (!cond) throw new Error("decodeProfile 自检失败: " + msg); };
+  const b64e = (s) => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+  // 测试明文长度取非 4 的倍数，避免明文恰好可被 base64 再解一次的歧义
+  const PLAIN = "flag{loop_decode_x}";
+  const nest = (s, n, enc) => { let t = s; for (let i = 0; i < n; i++) t = enc(t); return t; };
+
+  // ① 单步解码权威向量
+  assert(loopDecodeStep("base64", "SGVsbG8=") === "Hello", "b64 向量错");
+  assert(loopDecodeStep("hex", "48656c6c6f") === "Hello", "hex 向量错");
+  assert(loopDecodeStep("url", "%48%65%6c%6c%6f") === "Hello", "url 向量错");
+  // ② 单步严格性：bad padding / 奇数 hex / 孤立 % 全拒
+  assert(loopDecodeStep("base64", "A=A=") === null && loopDecodeStep("base64", "abc") === null, "b64 宽松了");
+  assert(loopDecodeStep("hex", "123") === null && loopDecodeStep("hex", "zz") === null, "hex 宽松了");
+  assert(loopDecodeStep("url", "100%") === null, "url 宽松了");
+  // ③ Base64 5 层套娃 → 5 轮解开，stuck 停
+  {
+    const r = loopDecode(nest(PLAIN, 5, b64e), { codec: "base64" });
+    assert(r.iterations === 5 && r.final === PLAIN && r.stopReason === "stuck", `b64 套娃 5 轮失败: ${r.iterations}/${r.stopReason}`);
+    assert(r.rounds.length === 5 && r.rounds[0].round === 1 && r.rounds[4].after === PLAIN, "轮次中间值错");
+  }
+  // ④ regex 提前停：第 5 轮解出原文后命中 flag 正则（下一轮迭代开头检查）
+  {
+    const r = loopDecode(nest(PLAIN, 5, b64e), { codec: "base64", until: "regex" });
+    assert(r.iterations === 5 && r.hit === true && r.stopReason === "regex", "regex 提前停失败");
+  }
+  // ⑤ max 上限：5 层但 max=3 → 3 轮停
+  {
+    const r = loopDecode(nest(PLAIN, 5, b64e), { codec: "base64", max: 3 });
+    assert(r.iterations === 3 && r.stopReason === "max" && r.final !== PLAIN, "max 上限失败");
+  }
+  // ⑥ Hex 3 层套娃
+  {
+    const r = loopDecode(nest(PLAIN, 3, (s) => Array.from(new TextEncoder().encode(s), (b) => b.toString(16).padStart(2, "0")).join("")), { codec: "hex" });
+    assert(r.iterations === 3 && r.final === PLAIN, "hex 套娃失败");
+  }
+  // ⑦ URL 单层 + 不动点停
+  {
+    const r = loopDecode("%66%6c%61%67%7b%75%7d", { codec: "url" });
+    assert(r.iterations === 1 && r.final === "flag{u}" && r.stopReason === "stuck", "url 单层失败");
+  }
+  // ⑧ 首轮即不可解：iterations=0 原样返回
+  {
+    const r = loopDecode("hello world", { codec: "base64" });
+    assert(r.iterations === 0 && r.final === "hello world" && r.stopReason === "stuck", "首轮不可解失败");
+  }
+  // ⑨ 非法参数回退：codec → base64；until → stuck；非法正则不炸（re=null 恒不命中）
+  {
+    const r = loopDecode(PLAIN, { codec: "rot13", until: "whatever", pattern: "([" });
+    assert(r.codec === "base64" && r.until === "stuck" && r.hit === false, "参数回退失败");
+  }
+  // ⑩ 报告含输入/每轮/最终结果
+  {
+    const r = loopDecode(nest(PLAIN, 2, b64e), { codec: "base64" });
+    const report = formatLoopReport(r);
+    assert(report.includes("输入:") && report.includes("── 第 1 轮 ──") && report.includes("── 第 2 轮 ──") && report.includes("最终结果"), "报告结构错");
+  }
+  // ⑪ 超长截断：10 层套娃输入 448 字符 > 300 时标注截断
+  {
+    const r = loopDecode(nest(PLAIN, 10, b64e), { codec: "base64" });
+    const report = formatLoopReport(r);
+    assert(report.includes("（截断，共"), "截断标注缺失");
+  }
+  // ⑫ 模型提名报告（MT83）：含预测标签 + 11 类概率 + 18 维特征
+  {
+    const fake = {
+      predicted: "base64", top5: [{ label: "base64", probability: 0.9 }, { label: "hex", probability: 0.05 }],
+      probs: Array(11).fill(0).map((_, i) => i === 2 ? 0.9 : 0.01),
+      features: Array(18).fill(0.25),
+    };
+    const report = formatByteStatReport(fake);
+    assert(report.includes("base64") && report.includes("分类概率") && report.includes("统计特征"), "模型报告结构错");
+    assert((report.match(/=/g) || []).length >= 18, "模型报告特征数不足");
+    assert(formatByteStatReport(null) === "(无模型提名数据)", "模型报告空值兜底错");
+  }
+})();

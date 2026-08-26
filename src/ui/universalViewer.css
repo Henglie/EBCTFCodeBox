@@ -213,6 +213,38 @@
   color: var(--primary);
   white-space: nowrap;
 }
+
+/* ---- 字素簇切分（MT78）---- */
+/* 切分模式开关行：默认按字素簇，勾选后退回逐码位。 */
+.uv-uni-mode {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-2);
+  font-size: var(--fs-sm);
+}
+.uv-uni-mode-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--on-surface-var);
+  user-select: none;
+}
+.uv-uni-mode-hint {
+  color: var(--warning, var(--on-surface-var));
+  font-size: var(--fs-xs, 0.75rem);
+}
+/* 组合序列行（簇内 >1 码位）：左侧主色条标出，一眼看出这行是多码位合成的。 */
+.uv-cluster-row > td:first-child {
+  box-shadow: inset 2px 0 0 var(--primary);
+}
+/* 组合序列的名称列会串接多个码位名，放开换行避免撑爆表格。 */
+.uv-cluster-row .uv-name-cell {
+  white-space: normal;
+  min-width: 12em;
+}
 .uv-name-cell {
   color: var(--on-surface-var);
   white-space: nowrap;
@@ -232,84 +264,7 @@
   white-space: nowrap;
 }
 
-/* ============================================================
-   视图 ③：编码探测
-   ============================================================ */
-.uv-encoding-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-}
-.uv-encoding-desc {
-  font-size: var(--fs-sm);
-  color: var(--on-surface-var);
-}
-.uv-encoding-bom {
-  padding: var(--sp-2);
-  background: var(--surface-1);
-  border: 1px solid var(--outline-var);
-  border-radius: var(--r-xs);
-  font-size: var(--fs-sm);
-}
-.uv-encoding-bom-line {
-  display: flex;
-  gap: var(--sp-2);
-}
-.uv-encoding-label {
-  font-weight: 600;
-  color: var(--on-surface-var);
-}
-.uv-encoding-tbl {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-sm);
-  background: var(--surface-1);
-  border: 1px solid var(--outline-var);
-  border-radius: var(--r-lg);
-  overflow: hidden;
-}
-.uv-encoding-tbl th {
-  padding: var(--sp-2);
-  text-align: start;
-  font-weight: 600;
-  font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--on-surface-var);
-  border-bottom: 1px solid var(--outline-var);
-  background: var(--surface-2);
-}
-.uv-encoding-tbl td {
-  padding: var(--sp-1) var(--sp-2);
-  border-bottom: 1px solid color-mix(in srgb, var(--outline-var) 50%, transparent);
-  vertical-align: top;
-}
-.uv-encoding-row:hover {
-  background: var(--surface-hi);
-}
-.uv-encoding-row.ok .uv-enc-status-cell {
-  color: var(--success, #4caf50);
-}
-.uv-encoding-row.fail .uv-enc-status-cell {
-  color: var(--error, #f44336);
-}
-.uv-enc-name-cell {
-  font-weight: 600;
-  white-space: nowrap;
-}
-.uv-enc-status-cell {
-  white-space: nowrap;
-}
-.uv-enc-ratio-cell {
-  font-family: var(--mono, ui-monospace, monospace);
-  text-align: end;
-  white-space: nowrap;
-}
-.uv-enc-preview-cell {
-  font-family: var(--mono, ui-monospace, monospace);
-  word-break: break-all;
-  max-width: 400px;
-}
+/* （原 视图③：编码探测 tab 已删除——本块尸体 CSS 一并清理，见 universalViewer.js 注释） */
 
 /* ============================================================
    视图 ④：不可见字符
@@ -458,47 +413,7 @@
   color: var(--on-surface-var);
   white-space: nowrap;
 }
-
-/* ---- 新增：视图③ detect 指纹打分表 ---- */
-.uv-detect-title {
-  margin-top: var(--sp-4);
-  margin-bottom: var(--sp-2);
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--on-surface);
-}
-.uv-detect-none {
-  font-size: var(--fs-sm);
-  color: var(--on-surface-var);
-  padding: var(--sp-2) 0;
-}
-.uv-detect-tbl {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-sm);
-}
-.uv-detect-tbl th,
-.uv-detect-tbl td {
-  padding: var(--sp-1) var(--sp-2);
-  text-align: start;
-  border-bottom: 1px solid color-mix(in srgb, var(--outline-var) 50%, transparent);
-}
-.uv-detect-tbl thead th {
-  background: var(--surface-2);
-  font-weight: 600;
-}
-.uv-detect-tbl tr:hover {
-  background: var(--surface-hi);
-}
-.uv-detect-id {
-  font-family: var(--mono, ui-monospace, monospace);
-  color: var(--on-surface-var);
-}
-.uv-detect-conf {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  color: var(--primary, #d05a5a);
-}
+/* （原 视图③ detect 指纹打分表尸体 CSS 已清理） */
 
 /* ---- 新增：视图④ 同形异义字块 ---- */
 .uv-confus-box {
@@ -551,20 +466,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-4);
-}
-.uv-render-sec {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--sp-3);
-  background: var(--surface-1);
-  border: 1px solid var(--outline-var);
-  border-radius: var(--r-lg);
-}
-.uv-render-sec-title {
-  font-size: var(--fs-sm);
-  font-weight: 700;
-  color: var(--on-surface);
 }
 .uv-render-sec-desc {
   font-size: var(--fs-xs);
@@ -632,27 +533,7 @@
   font-weight: 600;
 }
 
-/* --- 区②：LaTeX 公式体 --- */
-.uv-math-body {
-  line-height: 1.8;
-  color: var(--on-surface);
-  word-break: break-word;
-  white-space: pre-wrap;
-}
-.uv-math-body .katex-fallback {
-  font-family: var(--mono, ui-monospace, monospace);
-  font-size: 0.9em;
-  padding: 0.1em 0.35em;
-  background: var(--surface-2);
-  border-radius: var(--r-xs);
-  color: var(--on-surface-var);
-}
-.uv-math-body .katex-fallback-block {
-  display: block;
-  margin: var(--sp-2) 0;
-  padding: var(--sp-2) var(--sp-3);
-  text-align: center;
-}
+/* （原 区② LaTeX 独立渲染体 .uv-math-body 已并入合并渲染，尸体 CSS 清理） */
 
 /* --- 区③：天珩全字库渲染体（div + OpenType 特性全开，堆叠/连字生效） --- */
 .uv-cheon-body {
@@ -664,27 +545,102 @@
   word-break: break-word;
 }
 
-/* --- 文本输出框（当前 tab 结果的可复制/导出纯文本） --- */
-.uv-out-label-row {
+/* --- 文本输出框已整体取消（恒烈 2026-08-26 拍板），各视图结果本身可选中复制 --- */
+
+/* --- MT77①：Unicode 描述编码渲染开关 + 转换结果标记 --- */
+.uv-cp-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2, 8px);
+  margin-bottom: var(--sp-2, 8px);
+  font-size: var(--fs-sm);
+  color: var(--on-surface-var);
+  cursor: pointer;
+  user-select: none;
+}
+.uv-cp-toggle input[type="checkbox"] {
+  accent-color: var(--primary, #8f3d33);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+/* --- 渲染舞台（显示区独立卡片）：与下方导出按钮行明确分区（恒烈拍板） --- */
+.uv-render-stage {
+  padding: var(--sp-3);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-lg);
+  min-height: 140px;
+  /* 超长行（长公式/长串）不出卡穿模：内容在卡内滚动 */
+  overflow-x: auto;
+  overflow-y: auto;
+  max-width: 100%;
+}
+/* --- T360：渲染结果导出控件行（显示区下方） --- */
+.uv-export-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-2);
-  margin-top: var(--sp-2);
+  flex-wrap: wrap;
+  gap: var(--sp-3, 12px);
+  margin: var(--sp-2, 8px) 0 0;
 }
-.uv-out-label {
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--on-surface-var);
+.uv-export-row .btn {
+  font-size: var(--fs-sm, 13px);
+  padding: 5px 12px;
+  border-radius: var(--r-md, 10px);
+  border: 1px solid var(--outline, #3a2f2b);
+  background: var(--surface-1, #1d1815);
+  color: var(--on-surface, #e8e0dc);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
-.uv-copy-out-btn {
-  flex: none;
+.uv-export-row .btn:hover:not(:disabled) { filter: brightness(1.15); }
+.uv-export-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1, 4px);
+  font-size: var(--fs-xs, 12px);
+  color: var(--on-surface-var, #999);
+  cursor: pointer;
+  user-select: none;
 }
-.uv-out-text {
-  width: 100%;
-  min-height: 160px;
-  font-family: var(--font-mono, monospace);
-  font-size: var(--fs-sm);
-  white-space: pre;
-  overflow: auto;
+.uv-export-opt input[type="checkbox"] {
+  accent-color: var(--primary, #8f3d33);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+.uv-export-scale {
+  background: var(--surface-1, #1d1815);
+  border: 1px solid var(--outline, #3a2f2b);
+  border-radius: var(--r-sm, 8px);
+  color: var(--on-surface, #e8e0dc);
+  padding: 3px 6px;
+  font-size: var(--fs-xs, 12px);
+}
+.uv-cp-ex {
+  background: rgba(143, 61, 51, 0.14);
+  border-radius: 3px;
+  padding: 0 1px;
+  border-bottom: 1px dotted rgba(143, 61, 51, 0.45);
+  cursor: help;
+}
+
+/* ============ 窄屏（<860px 与全站断点对齐）：hex 表收紧 / 统计条换行 ============ */
+@media (max-width: 860px) {
+  .uv-hexview-head, .uv-hexrow { gap: .6rem; }
+  .uv-hexview-off { width: 6ch; }
+  .uv-hexview-head .uv-hexview-hex, .uv-hexview-head .uv-hexview-ascii { flex: 0 0 auto; }
+  .uv-hex-stat { gap: var(--sp-2); }
+  /* 渲染区导出行允许换行 */
+  .uv-export-row { flex-wrap: wrap; }
+}
+
+/* ============ 低高窗口（<640px 高）：编辑框降高（覆盖 JS 内联 min-height） ============ */
+@media (max-height: 640px) {
+  .uv-input { min-height: 110px !important; }
+  .uv-invisible-viz { max-height: 200px; }
+  .uv-clean-pre { max-height: 140px; }
 }

@@ -281,8 +281,8 @@
   flex: none;
 }
 
-/* ---- 窄屏：回退单列 ---- */
-@media (max-width: 640px) {
+/* ---- 窄屏（<860px 与全站断点对齐）：回退单列 ---- */
+@media (max-width: 860px) {
   .ds-overlay { padding: var(--sp-2); }
   .ds-dialog { max-height: 94vh; max-width: 100%; }
   .ds-body {
@@ -300,6 +300,13 @@
   }
   .ds-list { max-height: 240px; }
   .ds-op-id { display: none; }
+}
+
+/* ---- 低高窗口（<640px 高）：弹窗占比拉高 + 内部滚动，防固定高叠加溢出 ---- */
+@media (max-height: 640px) {
+  .ds-dialog { max-height: 96vh; }
+  .ds-list { max-height: 160px; }
+  .ds-prof-dump { min-height: 56px; }
 }
 
 /* 减弱动态效果：尊重系统无障碍设置（与 app.css 同口径） */

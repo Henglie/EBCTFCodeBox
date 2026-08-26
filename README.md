@@ -5,7 +5,7 @@
   <span>恒烈 CTF 编码工具箱 · EBCTFCodeBox</span>
 </h1>
 <p align="center">
-  <span align="center">纯前端、零外发的 CTF 编解码 / 加解密 / 隐写分析工具箱：590 个注册操作，其中 574 个纯前端操作在浏览器本地运行，另有 16 个可选本地桥操作。</span>
+  <span align="center">纯前端、零外发的 CTF 编解码 / 加解密 / 隐写分析工具箱：608 个注册操作，其中 592 个纯前端操作在浏览器本地运行，另有 16 个可选本地桥操作。</span>
 </p>
 
 ![GitHub Repo stars](https://img.shields.io/github/stars/Henglie/EBCTFCodeBox?style=flat-square) ![GitHub License](https://img.shields.io/github/license/Henglie/EBCTFCodeBox?style=flat-square) ![GitHub Release](https://img.shields.io/github/v/release/Henglie/EBCTFCodeBox?style=flat-square)
@@ -27,7 +27,7 @@
 - [平台兼容性](#平台兼容性)
 - [性能要求](#性能要求)
 - [目录结构](#目录结构)
-- [编解码全清单](#编解码全清单590-ops--16-分类)
+- [编解码全清单](#编解码全清单608-ops--16-分类)
 - [插件与 AI 接入](#插件与-ai-接入)
 - [开源协议](#开源协议)
 - [第三方资源与许可](#第三方资源与许可)
@@ -42,19 +42,51 @@
 | 百度网盘 | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
 | 夸克网盘 | https://pan.quark.cn/s/3b7e573b19c0 | 无 |
 
-当前版本 **v0.1.4**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
+当前版本 **v0.1.5**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
 
 ## 更新日志
 
-### v0.1.4
+### v0.1.5
 
-- **SM4 全工作模式**：从 ECB/CBC 扩到 **ECB/CBC/CFB/OFB/CTR + GCM 认证加密**（GB/T 17964-2021 工作模式标准 + SP 800-38D GCM 构造）。GCM 为纯 JS 实现（WebCrypto 无 SM4），支持 AAD。官方附录 A 向量（单块 + 1,000,000 次迭代）+ Python cryptography oracle 六模式逐字节交叉验证全过。
-- **SM2 完整运算**：从「仅结构识别」升级为**签名/验签 + 加密/解密 + 密钥交换**（GB/T 32918.2/.3/.4-2016）。曲线 sm2p256v1，SM3 哈希。支持密文双序（C1||C3||C2 旧序 / C1||C2||C3 新序 GM/T 0009-2023）。官方示例向量逐字节对拍（含加载自检）。
-- **国密标准引用现代化**：SM4/SM3/SM2/ZUC/SM9 全部更新为现行 **GB/T 国标号**（前身 GM/T 2012 标注转化关系）；SM2 密文顺序规范更正为 GM/T 0009-2023。
-- **配方链交互升级**：移动设备可从左侧菜单或顶部搜索结果长按拖入；桌面顶部搜索结果支持直接拖入；非拖动添加入口升级为可搜索添加器，支持点击、触摸与键盘 Enter。
-- **分组密码模式补齐**：TEA/XTEA/RC5/RC6/CAST-128/Blowfish/Twofish 全部支持 ECB/CBC/CFB/OFB/CTR；CFB/OFB/CTR 为无填充流模式，8/16 字节 IV 按算法块长严格校验。
-- **PWA 完整离线**：manifest、Service Worker、真实更新检查全部接线；839 项运行资源完整预缓存，断网下配方链搜索与插件页端到端通过。
-- **稳定性与验证**：清除首屏 `v0.1.2` 版本闪烁；补齐 14 语言配方交互文案；修复 Magic Worker 加载崩溃时当前 Promise 永久悬挂；Stegosaurus 通过 Python 3.11/3.14 真 `.pyc` E2E；bkcrack WASM 浏览器 smoke 通过。
+**新增功能**
+
+【可魔改算法】每个细分算法都增加了可编辑算法的按钮，给你轻松魔改！编辑器换装 CodeMirror 6（行号 / 语法高亮 / 查找替换 / 撤销重做 / 括号匹配），右边还能对照当前算法的实现源码，双栏独立调字号、可拖宽。编辑器按需加载，不拖慢首页。
+
+【快速换算功能】一键换算各类单位！数据量（SI/IEC 双制）、速率、时间、频率、角度、油耗、金额、日期，改任意一格其余即时联动。程序员计算器（手写解析器，不走 eval）。人民币金额大写。日期计算（纯数字自动按纪元秒对照解读）。机器码 ⇄ 汇编互转（Keystone/Capstone WASM 本地运行，不联网）。
+
+【字符显示器全面翻新】新增 Markdown 渲染、数学公式（KaTeX 本地渲染）、天珩字形开关。IDS 表意拆字上线：正查汉字分解树、反查部件拼字、字与 IDS 串双向互转，长结果分页翻阅。
+
+【SVG/PNG 导出所见即所得】导出图内嵌公式排版规则和实际用到的字体，公式不再塌成色块。
+
+【20 种语言全覆盖】新增藏文、维吾尔文、壮文（拉丁）、传统蒙古文四门民族语言；RTL 语言整站镜像布局；全部语言做了一轮语义审校，修复 200+ 处。
+
+【算法扩充至 608 个操作】+18 op（15 个参考实现纯前端化）；DeepSound 音频隐写提取修复上线；ByteStatCNN 编码识别模型本地移植，一键解码打分更准。
+
+【环境面板一键重置】一键清空本地配置、方案、缓存等全部状态，回到刚装好的样子，带二次确认。
+
+**修复 BUG**
+
+【猫脸暴破】修复了拖入图片后暴破必崩的问题（图片字节传进来了但暴破入口没接住，单次猫脸变换接得住）。现在优先走系统图像解码，JPEG / BMP / 调色板 PNG 全支持，另修纯 JS 解码器三处（调色板越界容错 / 缺调色板明确报错 / 1/2/4 位深行宽错位）。拼图每格新增 a2b3t4 式参数标签。
+
+【解压卡死】Chromium 系浏览器对部分合法压缩数据会无限等待，页面一直空白、不报错。所有解压入口统一加了 2 秒保险，超时自动切换内置备用解压器，ZIP / GZIP / Base64 压缩数据 / NBT 存档 / 归档分析全覆盖。
+
+【编码图竖排错乱】窗口宽度 720-860px 区间文字竖排，根子是全局 CSS 泄漏，已作用域化根治。
+
+【后台任务假死】Worker 启动失败会永远显示「进行中」，已加多层降级兜底。
+
+【换算类别互相污染】油耗分组不再污染其他换算页，按标签页隔离记忆。
+
+【编辑器选区越界崩溃】CRLF 源文件恢复内置模板时崩溃，已统一规范化换行。
+
+【超长文本穿出卡片】字符显示器超长文本改为卡片内滚动。
+
+**优化功能**
+
+【体积瘦身】完整离线包从 60MB 精简到 9.6MB，体积下降 84%。大资产改「用到再缓存」，断网后核心界面依然可靠可用。
+
+【性能优化】编辑器主包按需加载（首屏 0 加载）；查看器关闭即释放 DOM 与编辑器实例，事件监听全量退订。
+
+【质量收口】608 op 结构校验全过；20 种语言 × 1263 条文案同构校验全绿；真浏览器回归 10 个套件全部通过。
 
 > 历史版本更新记录见 [CHANGELOG.md](./CHANGELOG.md)。
 
@@ -78,7 +110,7 @@
 
 - **纯前端 · 零外发**：原生 ES module，无框架、无构建步骤。所有编解码在浏览器本地跑，不联网、不上传。「外链」仅生成 URL 供你自己点开，绝不由前端把数据 fetch 出去。
 - **一把梭智能解码**：粘贴或拖入内容，自动识别可能的编码链并给出候选解码结果，支持 crib 目标特征过滤与深度爆破。
-- **590 个注册操作 · 16 分类**：574 个纯前端操作 + 16 个可选 Windows 本地桥操作，覆盖 Base、文本传输、花式 CTF、中文本土、古典密码、现代加密、哈希校验、进制字符集、分析爆破、密码攻击、取证文件、数据结构、隐写图像及 3 个本地桥分类。完整清单由 registry 自动生成。
+- **608 个注册操作 · 16 分类**：592 个纯前端操作 + 16 个可选 Windows 本地桥操作，覆盖 Base、文本传输、花式 CTF、中文本土、古典密码、现代加密、哈希校验、进制字符集、分析爆破、密码攻击、取证文件、数据结构、隐写图像及 3 个本地桥分类。完整清单由 registry 自动生成。
 - **解码强度四件套**（v0.1.2）：强度档位 + 自定义算法池 + **暴力爆破独立通道**（XOR/凯撒/字典/彩虹表/HMAC/PBE/Playfair/ZIP/CRC32/bkcrack，结果单独归组展示不污染主排序）+ **解析层数 1~3 选择**。
 - **宽松判定模式**（v0.1.2）：增强/极强/最强/自定义档只按字符种类数放行算法，变体编码题（「喵呜」表 0/1、emoji 表二进制）也能参与解码；默认/快速档保持严格定义域识别。
 - **密钥+密文一键尝试**：给定密文与密钥，自动枚举 AES/DES/3DES/RC4/XOR/Fernet × 多种模式 × 多种编码组合。
@@ -162,7 +194,7 @@ nginx / Apache / Caddy 等正式 Web 服务器同样可用，需注意两点：
 
    附带的 `点我启动.py` 已默认下发这两个头；自建服务器需自行配置。缺失这两个头时，多线程 WASM op 会优雅降级或提示不可用，纯前端功能不受影响。
 
-PWA 已完整接线（`manifest.json` + `sw.js`）：首次在线访问后预缓存 839 项受控运行资源（约 51.6 MiB，含算法模块、WASM、图鉴与全量字库），支持安装到桌面和完全断网运行；顶栏“检查更新”会下载完整新版本后再询问刷新。
+PWA 已完整接线（`manifest.json` + `sw.js`）：首次在线访问后预缓存 506 项核心运行资源（约 9.6 MiB，含全部算法模块与界面），支持安装到桌面和核心功能完全断网运行；大体积按需资产（天珩字库四平面、WASM、IDS 拼字数据、编码对照图、KaTeX）首次用到后即缓存、之后同样离线可用。顶栏“检查更新”会下载完整新版本后再询问刷新。
 
 ## 平台兼容性
 
@@ -176,7 +208,7 @@ PWA 已完整接线（`manifest.json` + `sw.js`）：首次在线访问后预缓
 
 说明：
 - 「本地桥」指 `bridge.py`（端口 8181，仅 Windows）调起本机白名单 exe 的能力。桥不可用时，574 个纯前端操作全部正常，16 个桥接操作灰置。
-- 移动端 / 鸿蒙经 PWA 安装后可完全离线使用；首次安装需在线下载约 51.6 MiB 离线资源。
+- 移动端 / 鸿蒙经 PWA 安装后可离线使用；核心离线包约 9.6 MiB，字库 / WASM / 图鉴等大资产按需缓存，首次用到时在线加载一次。
 - 桥只监听 `127.0.0.1`，绝不外发，恪守零外发红线。
 
 ### 浏览器要求
@@ -197,7 +229,7 @@ PWA 已完整接线（`manifest.json` + `sw.js`）：首次在线访问后预缓
 | 内存 | 512 MB | 1 GB+ | 天珩全字库按平面懒加载（约 30 MB），WASM 约 2 MB（7zz 1.6 MB + bkcrack 378 KB），大文件分析视文件大小线性增长 |
 | GPU | 不需要 | 启用硬件加速即可 | 无 GPU 计算，浏览器合成层走 GPU 加速可改善滚动 / 动画流畅度 |
 | 磁盘 | 约 100 MB | 同左 | 代码约 50 MB + 字库约 30 MB + WASM 约 2 MB + 图鉴约 20 MB |
-| 网络 | 首次安装约 51.6 MiB | 稳定连接 | 零外发；PWA 完整安装后可完全离线 |
+| 网络 | 核心离线包约 9.6 MiB（大资产按需） | 稳定连接 | 零外发；PWA 安装后可离线 |
 | OS 位数 | 32 位可用 | 64 位 | 64 位浏览器可寻址更大内存，利于大文件分析 |
 | 架构 | x86 / x64 / ARM 均可 | 同左 | 浏览器抽象底层架构，WASM 跨架构运行 |
 
@@ -211,14 +243,14 @@ src/
   main.js           UI 驱动（注册表声明式渲染）
   core/             算法层（纯函数，每个模块自注册进 registry）
   ui/               样式 + 图标 + 字体加载
-  i18n/             中英双语文案
+  i18n/             20 种语言文案（中英静态主表 + 18 动态分片，含 RTL 与四门民族语言）
 public/
   icons/            Material Symbols Rounded 图标（SVG）
   fonts/th/         天珩全字库 4 平面 TTF
 参考/              算法码表核对资料 + 研究成果
 ```
 
-## 编解码全清单（590 ops · 16 分类）
+## 编解码全清单（608 ops · 16 分类）
 
 > 本节由 `node tools/gen_readme_ops.mjs` 从主入口真实 import 闭包生成；opId 即注册表唯一标识。
 
@@ -454,7 +486,7 @@ public/
 | twosquare | Two-square 双方 | 双方密码（double Playfair）：两个 keyword 方阵，横排或纵排双字母替换。自反密码（编=解）。5×5，奇数补 X；纵排同列 / 横排同行时该组原样输出。字母表可选 I/J 合并或省略 Q。 |
 | straddleCheckerboard | 跨界棋盘 | Straddling checkerboard 跨界棋盘：变长编码棋盘。8 个高频字母占单数字、两空列前缀引出双数字行，自定界无需分隔符即可解码。默认照 Wikipedia 经典配置（ATONESIR + 前缀 2/6）。棋盘外字符编码时跳过。 |
 
-### 现代加密（65 ops）
+### 现代加密（66 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -481,6 +513,7 @@ public/
 | flashSwirl | FlashSwirl 闪旋 | 作者「风之暇想」的 ARX 对称流密码（256-bit key + 192-bit nonce，8/20 轮）。encode: 文本→Hex 密文；decode: Hex→文本。对称可逆，官方 stream 测试向量已验证。 |
 | hc128 | HC-128 流密码 | HC-128 流密码（Wu Hongjun FSE 2004，eSTREAM 决赛）：P/Q 各 512×32bit 表 + f1/f2（SHA-256 σ）+ h1/h2 非线性映射。128 位 key + 128 位 IV。自反 XOR：encode 文本→密文 hex，decode 密文 hex→文本。已过 Crypto++ 官方向量（key=IV=0 + key=80..0）。 |
 | hc256 | HC-256 流密码 | HC-256 流密码（Wu Hongjun FSE 2004，eSTREAM 决赛）：P/Q 各 1024×32bit 表 + f1/f2（SHA-256 σ）+ G1/G2（含表查找）+ h1/h2（4 字节索引）。256 位 key + 256 位 IV。自反 XOR：encode 文本→密文 hex，decode 密文 hex→文本。已过 Crypto++ 官方向量（3 组：key=IV=0 / IV=01 / key=55）。 |
+| jwtCrack | JWT 密钥爆破 | HS256/384/512 签名 JWT 的弱密钥字典爆破：内置弱密钥 + 自定义 + 纯数字，重算 HMAC 签名逐个比对。算法自动识别自 header（可强制指定）；RS/ES 等非对称签名拒绝 |
 | knapsack | 背包加密（Merkle-Hellman） | Merkle-Hellman 背包公钥加密：私钥超递增序列 w+模数 q+乘数 r，公钥 β=w·r mod q；加密按 bit 求和，解密用 r⁻¹ 还原后贪心解背包。密文=逗号分隔十进制块。 |
 | trivium | Trivium 流密码 | Trivium（80-bit key + 80-bit IV，288-bit 状态）。encode: 明文→Hex 密文；decode: Hex→明文。对称可逆。兼容 风之暇想 fzxx/Trivium-Grain 在线站（trivium-grain.js.org），密文字节互通。 |
 | grainV1 | Grain v1 流密码 | Grain v1（80-bit key + 64-bit IV，LFSR80+NFSR80+h）。encode: 明文→Hex 密文；decode: Hex→明文。对称可逆。兼容 风之暇想 fzxx/Trivium-Grain 在线站，密文字节互通。 |
@@ -578,7 +611,7 @@ public/
 | whirlpool | Whirlpool | Whirlpool 哈希（Barreto & Rijmen，ISO/IEC 10118-3:2004）：512 位输出，Miyaguchi-Preneel 模式套 AES 风格 512 位分组密码，8x8 字节状态 10 轮。S 盒按规范用 4 位 mini-box 生成，载入时跑官方向量自检。 |
 | xxhash | xxHash 极速哈希 | xxHash32 / xxHash64（Yann Collet）：非加密极速哈希，4 条 lane 并行 striping + 乘旋异或混合。常见于 LZ4/Zstd 校验、数据库索引、文件去重。可选种子（十进制或 0x 十六进制）。载入时跑官方向量自检。 |
 
-### 进制 / 字符集（66 ops）
+### 进制 / 字符集（68 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -610,11 +643,13 @@ public/
 | cidrCalc | CIDR 子网计算 | 网络/广播地址、掩码、反掩码、主机范围、IP 类与私有段判定（单向） |
 | userAgentParse | User-Agent 解析 | 解析 UA 字符串：浏览器/引擎/操作系统/设备类型（单向） |
 | primeGen | 大素数生成 | Miller-Rabin 检验生成指定位数的大素数（确定性版本，crypto CSPRNG） |
+| progCalc | 程序员计算器 | 位运算表达式求值（手写递归下降解析器，无 eval）：& \| ^ ~ << >> >>> + - * / % **、括号、rotl/rotr 循环移位；8/16/32/64 位字宽掩码回绕（全程 BigInt），有/无符号切换；一次输出十进制/十六进制/八进制/二进制（4 位分组）/补码/popcount/前导零/尾随零。 |
 | radixConvert | 进制互转 | 任意进制 2-36 互转（BigInt 防溢出） |
 | asciiRadix | 字符↔进制ASCII | 字符↔各进制 ASCII（UTF-8 字节序列，定宽空格分隔；二进制支持 7/8 位、0-1 取反、位反转） |
 | ieee754 | IEEE754 浮点 | 浮点↔十六进制（半/单/双精度） |
 | bcd | BCD 码 | 十进制数字串↔BCD 十六进制串 |
 | binPad | 二进制补零对齐 | 十进制数字→指定位宽二进制串（补零） |
+| radixAll | 一键多进制转换 | 单输入自动嗅探（0x/0b/0o 前缀 / 十进制 / 分隔符），一次列出 2/8/10/16/32/36/62 进制对照 + Base64 + 数值字节 + UTF-16 码元 + Unicode 码位 + 该码位 UTF-8 + 位宽；负数给 8/16/32/64 位补码；全 01 串歧义时并列多种解读。BigInt 大数无精度损失。 |
 | hybridCode | 混合进制解码 | 前缀 b/x/o/d 分别按 2/16/8/10 进制解析字符 |
 | separationAscii | 数字串分割 ASCII | 长数字串贪婪分割成可打印 ASCII（10/16/8/2 进制尝试） |
 | asciiOffset | ASCII 偏移 | 每个字符 ASCII 码加偏移（offset=0 穷举 -26..26） |
@@ -744,27 +779,33 @@ public/
 | x25519 | X25519 密钥交换 | Curve25519 上的 ECDH（RFC 7748）：生成密钥对 / 双方私钥算共享密钥 / 私钥+对方公钥算共享密钥。Montgomery ladder，纯 BigInt 本地。 |
 | yescrypt | yescrypt 密钥派生 | yescrypt 内存硬口令 KDF（Solar Designer，openwall 官方参考实现）：flags=0 输出与经典 scrypt 完全一致；WORM=最小偏差；RW 默认=prehash + 12KB S-box pwxform + wrap 随机访问 + SCRAM 尾处理。抗 GPU/ASIC。参数 N（2 的幂）/r/p/t/dkLen。 |
 
-### 取证 / 文件（34 ops）
+### 取证 / 文件（45 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
-| gzipCodec | Gzip 解压 / 压缩 | gzip 流双向（浏览器 DecompressionStream；输入 hex/base64/UTF-8 自动识别） |
-| zlibCodec | Zlib 解压 / 压缩 | zlib 流（含 2 字节头 + adler32 尾）双向；浏览器实测 |
-| deflateRawCodec | Raw Deflate 解压 / 压缩 | raw deflate（无 zlib 头）双向；浏览器实测 |
-| b64CompressedProbe | Base64 内嵌压缩流探测 | 扫文本中 base64 段 → 解码 → magic 识别 → 尝试 gzip/zlib/deflate 解压 |
-| sevenZipExtract | 7z 归档解析 / 解压 | 识别 7z 签名 + 解析 SignatureHeader/StartHeader（CRC 校验）；放置 public/wasm/7zz.js 后可真列表/解压（LZMA 等，wasm 缺失自动降级） |
-| archiveUnified | 压缩 / 归档归一分析 | 自动识别 gzip/zlib/bzip2/zip/rar/7z/tar → 列结构 → 能解则解（gzip/zlib 纯 JS；zip 含伪加密检测；7z 走 wasm 降级） |
 | pcapParse | pcap/pcapng 结构解析 | 解析 pcap/pcapng 流量文件：全局头+包记录+Ethernet/IPv4/IPv6/TCP/UDP/ICMP/HTTP/DNS 分帧，输出包摘要表+协议详情+载荷提取。纯前端零依赖 |
-| mcLevelDat | Minecraft level.dat 解析 | 解析 Minecraft Java 版世界存档 level.dat（gzip 压缩的 NBT）：种子/出生点/GameRules/版本/DataVersion，高亮非常规 GameRule 与异常坐标等可疑字段。自写大端序 NBT 解析器，Long 用 BigInt，纯前端零外发 |
-| mcMapRender | Minecraft 地图渲染 | 把 Minecraft Java 版地图物品 map_#.dat（gzip NBT，根下 data.colors 为 128×128 调色板索引）渲染成 PNG：内置 62 个 MapColor 基础色 + 4 档明暗，解码 16384 字节为 RGBA，手写最小 PNG 编码器（零 canvas 依赖）输出 data URL。CTF 常用地图画二维码/像素画/隐藏文字。支持最近邻放大便于看二维码。复用 mcSave 的 NBT 解析器，纯前端零外发 |
-| bkcrackAttack | ZipCrypto 已知明文攻击 (bkcrack) | ZIP 传统 ZipCrypto 加密的杀手锏：给出某条目 ≥12 字节连续已知明文，恢复内部密钥态并解密全档，无视密码长度（非 AES）。放置 public/wasm/bkcrack.js 后启用，wasm 缺失自动降级。⚠ CPU 密集，几分钟~几十分钟、峰值内存 300-500MB，单线程。 |
-| crc32Collision | CRC32 碰撞爆破 | 对目标 CRC32（标准 IEEE/zip CRC）穷举短明文反查原文。CTF misc 里 ZIP 存小文件、只知 CRC 时用。表驱动增量计算 |
-| pycExeDecompile | pyc/exe 反编（本地桥） | 拖入 .pyc 或 PyInstaller 打包 .exe，经本地 bridge.py 自动判 Python 版本并反编为源码（uncompyle6/decompyle3，3.9+ 走 pylingual 实验链路；仅 Windows，需先起 python bridge.py） |
-| trailerCarve | 文件附加数据剥离 | 识别载体正体结束偏移（PNG IEND/JPEG FFD9/GIF 3B/ZIP EOCD/BMP/RIFF/PDF %%EOF），剥出尾部附加字节并识别魔数；或 binwalk 式全文扫描内嵌文件 |
 | pcapTcpReassemble | TCP 流重组 | 按 5 元组聚合 TCP 段，seq 排序去重，还原各方向完整字节流（HTTP 提取的基础）。纯前端零依赖，复用 pcapParse 分帧 |
 | pcapHttpExtract | HTTP 对象提取 | 基于 TCP 重组解析 HTTP 请求/响应，处理 chunked 传输与 gzip/deflate 解压（纯 JS inflate），导出传输的文件/文本 |
 | pcapDnsTunnel | DNS 隧道检测 | 提取 DNS query 子域名数据标签，拼接后尝试 base32/base64/hex 解码，检出 DNS 隧道外泄的隐藏数据。复用 pcapParse DNS 分帧 |
 | pcapIcmpPayload | ICMP 载荷提取 | 提取 ICMP echo 载荷，按 id/seq 排序拼接，还原 ICMP 隐写/隧道外泄的数据。复用 pcapParse ICMP 分帧 |
+| gzipCodec | Gzip 解压 / 压缩 | gzip 流双向（浏览器 DecompressionStream；输入 hex/base64/UTF-8 自动识别） |
+| zlibCodec | Zlib 解压 / 压缩 | zlib 流（含 2 字节头 + adler32 尾）双向；浏览器实测 |
+| deflateRawCodec | Raw Deflate 解压 / 压缩 | raw deflate（无 zlib 头）双向；浏览器实测 |
+| b64CompressedProbe | Base64 内嵌压缩流探测 | 扫文本中 base64 段 → 解码 → magic 识别 → 尝试 gzip/zlib/deflate 解压 |
+| zipRepair | ZIP 伪加密修复 | 清除中央目录与本地文件头通用位标志的加密位（bit0，可连带强加密位 bit6）。走 EOCD→中央目录→本地头精确路径，不误伤压缩数据。伪加密=标志位被置 1 但数据未加密，清位即可正常解压；输出修复后 base64 |
+| zipPseudoEncrypt | ZIP 伪加密（置位） | 把中央目录与本地文件头的加密位（bit0）置 1 而不动数据——制造「需要密码」假象，「ZIP 伪加密修复」的逆操作，可用于出题与演示；输出置位后 base64 |
+| ooxmlMeta | OOXML 元数据提取 | docx/xlsx/pptx 的元数据一键挖出：docProps 下 core.xml（标题/作者/时间）·app.xml（程序/公司）·custom.xml（自定义属性）全部键值对。ZIP 容器直解（stored/deflate），拼接件前缀自动修正，作者名/公司名/隐藏备注常是取证线索 |
+| apkManifest | APK Manifest 解析 | Android 的 AndroidManifest.xml（二进制 AXML 或明文）直接解出：包名 package、权限 uses-permission/uses-permission-sdk-23、四大组件 activity/service/receiver/provider 全列出，附逐元素属性表。AXML 字符串池 UTF-8/UTF-16 双格式，typed 值（字符串/整型/布尔/资源引用/颜色）都还原 |
+| sevenZipExtract | 7z 归档解析 / 解压 | 识别 7z 签名 + 解析 SignatureHeader/StartHeader（CRC 校验）；放置 public/wasm/7zz.js 后可真列表/解压（LZMA 等，wasm 缺失自动降级） |
+| archiveUnified | 压缩 / 归档归一分析 | 自动识别 gzip/zlib/bzip2/zip/rar/7z/tar → 列结构 → 能解则解（gzip/zlib 纯 JS；zip 含伪加密检测；7z 走 wasm 降级） |
+| mcLevelDat | Minecraft level.dat 解析 | 解析 Minecraft Java 版世界存档 level.dat（gzip 压缩的 NBT）：种子/出生点/GameRules/版本/DataVersion，高亮非常规 GameRule 与异常坐标等可疑字段。自写大端序 NBT 解析器，Long 用 BigInt，纯前端零外发 |
+| mcMapRender | Minecraft 地图渲染 | 把 Minecraft Java 版地图物品 map_#.dat（gzip NBT，根下 data.colors 为 128×128 调色板索引）渲染成 PNG：内置 62 个 MapColor 基础色 + 4 档明暗，解码 16384 字节为 RGBA，手写最小 PNG 编码器（零 canvas 依赖）输出 data URL。CTF 常用地图画二维码/像素画/隐藏文字。支持最近邻放大便于看二维码。复用 mcSave 的 NBT 解析器，纯前端零外发 |
+| bkcrackAttack | ZipCrypto 已知明文攻击 (bkcrack) | ZIP 传统 ZipCrypto 加密的杀手锏：给出某条目 ≥12 字节连续已知明文，恢复内部密钥态并解密全档，无视密码长度（非 AES）。放置 public/wasm/bkcrack.js 后启用，wasm 缺失自动降级。⚠ CPU 密集，几分钟~几十分钟、峰值内存 300-500MB，单线程。 |
+| crc32Collision | CRC32 碰撞爆破 | 对目标 CRC32（标准 IEEE/zip CRC）穷举短明文反查原文。CTF misc 里 ZIP 存小文件、只知 CRC 时用。表驱动增量计算 |
+| deepsoundExtract | DeepSound 提取 | 从 PCM WAV 载体的采样低位提取 DeepSound 隐藏文件（DSC2/DSCF · 明文/AES-256） |
+| elfInfo | ELF 可执行信息 | ELF 头信息一览（格式/架构/位数/字节序/类型/入口点），并解出动态链接细节：PT_INTERP 解释器路径、DT_NEEDED 依赖库、是否共享库（ET_DYN≈.so/PIE）。拿到 ELF 先看架构/位数选引擎，再决定是否 PIE |
+| pycExeDecompile | pyc/exe 反编（本地桥） | 拖入 .pyc 或 PyInstaller 打包 .exe，经本地 bridge.py 自动判 Python 版本并反编为源码（uncompyle6/decompyle3，3.9+ 走 pylingual 实验链路；仅 Windows，需先起 python bridge.py） |
+| trailerCarve | 文件附加数据剥离 | 识别载体正体结束偏移（PNG IEND/JPEG FFD9/GIF 3B/ZIP EOCD/BMP/RIFF/PDF %%EOF），剥出尾部附加字节并识别魔数；或 binwalk 式全文扫描内嵌文件 |
 | formatSniff | 格式嗅探 | 识别输入的格式/特征（JWT/URL/PEM/哈希/编码/密钥/坐标/时间戳等），给 CTF 惊喜提示 |
 | pngSizeRecover | PNG 宽高爆破恢复 | 检测 PNG IHDR CRC 篡改 + 爆破恢复真实宽高（CTF 改高度藏图经典；先只爆高度 O(N) 秒出，再爆宽度，最后双爆兜底；输出修复后 base64） |
 | bmpSizeRecover | BMP 宽高修复 | 检测 BMP 宽高与像素数据量不一致 + 反推真实宽高（BMP 无 CRC，用像素字节数整除 rowSize 反推；CTF 改 BMP 宽高藏图；输出修复后 base64） |
@@ -775,15 +816,20 @@ public/
 | rar2john | RAR 哈希提取（rar2john） | 从 RAR3/RAR5 加密文件提取 hash 串（$RAR3$/$rar5$），输出可直接喂给 john/hashcat。只提取不爆破 |
 | sshkey2john | SSH 私钥哈希提取（sshkey2john） | 从 SSH 私钥（OpenSSH 新格式 / PEM 传统 RSA/DSA/EC）提取 John $sshng$ 格式 hash 串（只提取不爆破）。OpenSSH 加密用 bcrypt+AES-256；PEM 用 DEK-Info 指定的 cipher+IV。输出可直接喂 john/hashcat 离线爆破 |
 | zip2john | ZIP 哈希提取（zip2john） | 从加密 ZIP 提取 John/hashcat 格式 hash 串（只提取不爆破）。ZipCrypto→$pkzip2$ 格式(hashcat 17200-17230)；WinZip AES→$zip2$ 格式(hashcat 13600)。输出可直接喂 john/hashcat 离线爆破 |
+| jpgSizeRecover | JPEG 宽高修复 | 基线 JPEG 数 MCU 反推真实高度（SOF 无校验和，熵解码扫描数据数块即得；CTF 改高度藏图的 JPEG 版）+ 手动强制宽高，输出修复后 base64 |
 | mcNbtView | Minecraft NBT 树查看器 | 浏览器版 NBTExplorer：把任意 Minecraft Java 版 NBT（level.dat / *.dat / playerdata / 结构 .nbt 等，gzip/zlib/裸均可）解压后完整转储为缩进折叠的可读文本树。显示每节点 tag 类型名 / key / 值，List 标元素类型与长度，Long/LongArray 用 BigInt 不丢精度，大数组截断显示。支持路径过滤定位子树。复用 mcSave 的 NBT 解析器，纯前端零外发 |
 | mcTextExtract | Minecraft 文本情报提取 | 遍历 Minecraft Java 版存档 region/*.mca（Anvil，chunk 内 zlib NBT）或单个 .dat/.nbt，抽取告示牌 / 成书 / 命令方块 / 实体与方块 CustomName / 物品 Name+Lore，按类型+坐标聚合，并高亮 flag{...} 及常见变体（含 base64 解码再扫）。复用 mcSave 的 NBT 解析器，纯前端零外发 |
+| pdfObjects | PDF 对象解析 | 挖出 PDF 对象表：编号/偏移/长度/Type/Subtype/Filter/流长度逐对象列出，FlateDecode 流自动 zlib 解压并预览（页面内容流/隐藏文本/压缩 flag 藏身处）。词法容错扫描，xref 损坏、前置垃圾拼接、缺 endobj 截断件都能解 |
+| peInfo | PE 可执行信息 | Windows PE（.exe/.dll）头信息一览（架构/位数/类型 EXE\|DLL/子系统/入口 RVA/镜像基址）。拿到 PE 先看架构/位数选引擎，再判断 EXE 还是 DLL、GUI 还是控制台 |
 | stegosaurus | Stegosaurus pyc 隐写检测 | 解析 .pyc 头定 Python 版本 + 递归解 marshal code object，扫描字符串常量藏的 flag、检测 co_lnotab 行号表异常并抽 LSB bit 流：纯前端静态分析，不执行 pyc |
+| stringsExtract | 字符串提取（strings） | 任意字节流里提取连续可打印字符串（经典 strings 工具）：ASCII / UTF-16LE / 双模式合并，最小长度阈值，可选偏移前缀。逆向取证起手动作，图片/文档/内存转储里快速捞 flag、路径、域名 |
 | usbKeyboard | USB 键盘流量解析 | 解析 USB 键盘 leftover capture data（8 字节 HID 报告：Modifier+Reserved+Keycodes 1-6），还原按键输入 |
 | usbMouse | USB 鼠标流量解析 | 解析 USB 鼠标 leftover capture data（按钮+X/Y 位移，boot 协议 4 字节报告），还原鼠标轨迹 |
 | zipBrute | ZIP 弱口令爆破 | ZipCrypto（传统 PKWARE 加密）弱口令爆破：内置字典 + 自定义字典 + 纯数字掩码。仅验证密码，不还原明文。数字位数默认 4，硬上限 6（防浏览器卡死）。不支持 WinZip AES（留待 WASM 版）与 bkcrack 明文攻击。输入 ZIP 的 hex/base64/拖入字节 |
 | zipCrc32Brute | ZIP CRC32 内容爆破 | ZIP 里 Stored 小文件已知 CRC32 反查内容。对长度 ≤6 的所有可能内容穷举 CRC32，命中即输出。表驱动增量计算 |
+| zipCreate | ZIP 创建（出题） | 把一段数据（文本/任意字节）打包成单文件 ZIP，可选内部文件名与压缩方式（Deflated/Stored）；出 misc 题常接 ZIP 伪加密（置位）做伪加密题 |
 
-### 数据结构 / 序列化（17 ops）
+### 数据结构 / 序列化（18 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -796,7 +842,7 @@ public/
 | diffTool | 差异对比 | 两段输入逐字节 / 逐行 diff，定位差异区间（等长快速路径 + 不等长 LCS 对齐，CTF 找隐藏差异） |
 | hexView | 十六进制查看器 | 经典 hexdump（偏移 \| hex 字节 \| ASCII），支持高亮区间标记（hex 列大写） |
 | hexRange | Hex 区间提取 | 提取指定偏移区间的字节，多格式展示（hex/dec/oct/bin/ASCII/UTF-8） |
-| hexStats | 字节分布统计 | 字节值分布（256 桶/3 桶）+ 可打印率 + 香农熵 + top-N 高频字节 |
+| hexStats | 字节分布统计 | 字节值分布（256 桶密度网格/3 桶）+ 可打印率 + 全局/滑窗香农熵（曲线定位加密/压缩区）+ top-N 高频字节 |
 | pickleDisasm | Pickle 反汇编 | Python pickle 字节码反汇编（协议 0-5，pickletools.dis 风格），高亮 GLOBAL/REDUCE 等危险 opcode 与 os.system 等 RCE 符号 |
 | protobufParse | Protobuf Wire 解析 | 无 schema 解析 protobuf wire 格式（varint/64-bit/length-delimited/32-bit，自动尝试嵌套 message 与字符串） |
 | msgpackParse | MessagePack 解析 | 解析 MessagePack 二进制（全类型：nil/bool/int/float/str/bin/array/map/ext） |
@@ -804,8 +850,9 @@ public/
 | bsonParse | BSON 文档解析 | 解析 BSON 文档（bsonspec.org：double/string/document/array/binary/ObjectId/bool/datetime/null/int32/int64 等） |
 | phpSerializeParse | PHP serialize 解析 | 解析 PHP serialize() 字符串（N/b/i/d/s/a/O/C/r/R 全类型，递归嵌套） |
 | javaSerializeIdent | Java 序列化识别 | 识别 Java Object Serialization magic(0xACED) + 扫描顶层 TC_* 标记（TC_STRING/TC_CLASSDESC/TC_BLOCKDATA 等关键信息） |
+| unitConv | 单位换算 | 数据量 B/KB/MB/GB/TB/PB 与 KiB/MiB/GiB/TiB/PiB 两制并列（SI 1000 制 vs IEC 60027-2 1024 制，系数全部可溯源）；速率 bps/Kbps/Mbps/Gbps ↔ B/s/KB/s/MB/s（bit×8）；时间 ns~d；纯数字触发时间戳纪元对照（Unix 秒/毫秒、FILETIME、Cocoa、Chrome μs、DOS 打包，数量级自动嗅探）；频率 Hz~GHz；角度 deg/rad/gon。数据量全程 BigInt 有理数，PB 级零精度损失，精确小数与截断位明确标注。 |
 
-### 隐写 / 图像（51 ops）
+### 隐写 / 图像（54 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -836,11 +883,13 @@ public/
 | whitespaceScan | 空格隐写检测 | 扫描多种空白字符（NBSP / Em Space / Thin Space 等）+ 行尾空白 LSB 解码尝试（Snow 类） |
 | bidiScan | 双向控制符检测 | Trojan Source 攻击检测：U+202E (RLO) / U+202D (LRO) 等 Bidi 控制符 + 风险评级 + 剥离 |
 | charInspect | 字符属性透视 | 逐字符显示码位 / UTF-8 / UTF-16 / 脚本 / Unicode 类别 / Block 名称 |
+| gifTiming | GIF 帧时序隐写 | 读每帧图形控制扩展的 Delay Time（厘秒），映射为数字序列 / ASCII / 阈值二值化位流，解出藏在播放时长里的信息 |
 | qrGen | QR 码生成 | 纯 JS QR 编码（数字/字母/字节模式 + L/M/Q/H 纠错），输出可扫描二维码 PNG（含静默区）+ 0/1 矩阵 JSON。核心移植自 Nayuki (MIT) |
 | qrParse | QR 结构解析 | 解析 QR 矩阵（ASCII art / 0-1 行）：版本/掩码/纠错级识别 + finder/暗模块校验 |
 | barcodeIdentify | 条码类型判定 | 2D（QR/Aztec/DataMatrix 结构识别）+ 1D（EAN/UPC/ISBN/ITF/Code39/Codabar 校验位判定） |
 | qrDecode | QR 码解码 | 从 0/1 矩阵反解 QR 内容：finder 检测 + 格式信息 + 之字形取数 + 掩码还原 + RS 纠错 + 数字/字母/字节模式还原。开「诊断」输出版本/ECL/掩码/RS纠错数/分段模式全流程报告 |
 | imgFft | 图像 2D FFT 幅度谱 | 对 PNG/BMP 做 2D 傅里叶变换，输出 log 幅度谱（低频居中/fftshift）。CTF 频域隐写常在幅度谱里藏 flag 文字/图案（图片肉眼正常，频域现形）。重采样到 2 的幂（≤maxSize）。 |
+| lsbEmbed | LSB 嵌入（出题） | 把载荷文本写进封面图（PNG/BMP）指定位平面的最低有效位，生成隐写图 PNG（通道顺序/位平面/位序与 zstegScan 一一对应，出 misc 题用） |
 | snow | Snow 空白隐写 | 行尾空白隐写（Space=0/Tab=1），明文层（无 ICE 加密）。encode: 消息→行尾空白；decode: 行尾空白→消息 |
 | spectrogram | 音频频谱图（STFT） | WAV → 短时傅里叶变换频谱图 PNG：Hann 窗 + radix-2 FFT，magma 色阶渲染，肉眼读频域藏字（CTF 音频隐写把 flag 画进频谱）。纯前端免装 Audacity |
 | lsbImage | LSB 像素隐写 | 最低有效位像素隐写（前 32 位存长度，支持 R/G/B/A 通道选择，多位深 1-3 位/通道） |
@@ -860,6 +909,7 @@ public/
 | caseBitStego | 大小写位隐写 | 文本隐写：用载体字母大小写承载比特（大写=1，小写=0）。msg→UTF-8→比特→改大小写。前 32 比特为长度前缀 |
 | nthChar | 第 N 字隐写 | 文本隐写：每行/句/词第 N 字拼隐藏消息（藏头=N1，藏第2字=N2）。encode 替换第 N 字，decode 取第 N 字 |
 | wordSpacingBits | 词距位隐写 | 文本隐写：用词间空格数承载比特（1空格=0，2空格=1）。msg→UTF-8→比特→改空格数。前 32 比特为长度前缀 |
+| zstegScan | LSB 全组合扫描 | PNG/BMP 位平面×通道×位序×行列遍历批量提取，按可读性+flag 正则打分排序（默认 bit0 十组合，可开到位 7 / 列优先） |
 
 ### 本地桥·语言执行（2 ops）
 
@@ -907,7 +957,7 @@ public/
 
 工具箱的能力面可暴露给支持 MCP 的 AI 客户端或 Agent，全程本地进程、零外发。能力面单一事实源在 `src/plugin/mcpBridge.js`，对外提供 6 个 MCP 工具：列分类、列 op、查 op 参数 schema、智能识别编码、跑指定 op、一键智能解码。浏览器内 AI 面板、Node stdio server、CLI Skill 三端复用同一份定义。
 
-- MCP server（Claude Desktop 等接入，server 版本 0.1.4）：[`mcp/README.md`](./mcp/README.md)
+- MCP server（Claude Desktop 等接入，server 版本 0.1.5）：[`mcp/README.md`](./mcp/README.md)
 - Skill（Claude Code / CLI Agent）：[`skills/ebctf-decode/`](./skills/ebctf-decode/)
 
 AI 的联网出口只有可选的 `aiClient`，且必须用户自备 endpoint + key，直连用户站点，主项目不中转、不记录。默认关闭。

@@ -31,6 +31,33 @@ import {
   PARAM_SCAN_DEFAULT_LIMIT, formatParamTag,
   inputFeatures, coarseAdmitPlain, sweepApplies,
 } from "../exhaustiveDecode.js";
+// MT83：字节统计编码识别模型（纯 JS 前向推理，提名用；加载失败静默降级纯规则）。
+import { loadByteStatWeights, byteStatPredict } from "./byteStatCnn.js";
+
+// ============ 字节统计模型提名（MT83 T351） ============
+// 模型只做「输入属于哪类编码」的提名，绝不硬过滤——最终判据仍是下方各 op 能否严格
+// decode 成功。三态：
+//   ① max softmax < BYTESTAT_MIN_CONF → ambiguous，不加权也不减权
+//   ② 判为 plain_text / opaque_token（正常文本/令牌）→ 不产生任何加权
+//   ③ 判为某编码类且置信达标 → 给「首层用同族 op 解出的候选」轻微加权（score -= 小值），
+//      量级对齐现有括号配对 -25 / flag 强档 -160 的风格，绝不压垮卡方主项。
+const BYTESTAT_MIN_CONF = 0.6;
+const BYTESTAT_NOMINATE_WEIGHT = 30;
+// 模型标签 → 本项目 op id 集合（候选链首层 op 与之匹配才吃加权）。
+const BYTESTAT_LABEL_OPS = {
+  base64: ["base64"],
+  hex: ["base16"],
+  url_encode: ["url"],
+  unicode_escape: ["unicodeEscape"],
+  html_entity: ["htmlEntity"],
+  base32: ["base32"],
+  base85: ["base85"],
+  binary: ["asciiRadix"],
+  jwt: ["jwt"],
+};
+// 模型加载超时保护：本地 fetch 通常 <50ms，极端环境下（PWA 缓存冷启/慢盘）给 400ms 兜底，
+// 超时即跳过本轮模型提名（后台仍在加载缓存，下一次解码即生效），绝不阻塞解码。
+const BYTESTAT_LOAD_TIMEOUT_MS = 400;
 
 // flag{...} 完整格式（弱奖励）：任意 前缀{内容} 结构，含乱码花括号也命中。
 const FLAG_FORMAT_RE = /[a-z0-9_]{2,}\{[^{}]{1,}\}/i;
@@ -390,6 +417,33 @@ export async function magicDecode(input, opts = {}) {
 
   const f = inputFeatures(input);
 
+ // ---- 字节统计模型提名（MT83）：对输入跑一次 CNN，供候选排序微调 + 可解释性 ----
+ // 只做提名：加载失败/无权重/超时一律静默降级为纯规则打分，绝不抛错阻塞解码。
+ // byteStatHint = { label, conf, opSet } 或 null；byteStatProbe 附到返回候选供调试展示。
+  let byteStatHint = null;
+  let byteStatProbe = null;
+  try {
+    const _w = await Promise.race([
+      loadByteStatWeights(),
+      new Promise((resolve) => setTimeout(() => resolve(null), BYTESTAT_LOAD_TIMEOUT_MS)),
+    ]);
+    if (_w) {
+      const probe = byteStatPredict(input, _w);
+      if (probe) {
+        byteStatProbe = probe;
+        const conf = probe.top5[0].probability;
+        const ops = BYTESTAT_LABEL_OPS[probe.predicted];
+        // 三态：置信不达标（ambiguous）或正常类（plain_text/opaque_token）→ 不产生加权
+        if (conf >= BYTESTAT_MIN_CONF && ops) {
+          byteStatHint = { label: probe.predicted, conf, opSet: new Set(ops) };
+        }
+      }
+    }
+  } catch {
+    byteStatHint = null;
+    byteStatProbe = null;
+  }
+
  // ---- 解码强度白名单（UI「解码强度」预设/自定义）----
  // o.allowOps 为 null 时 allowed() 恒真 = 完全保持旧行为；给了集合则只让集合内 op 参与。
  // 作用于全部四个候选来源：decoders / plainOps / paramScan / keyed，避免「关了却仍在跑」。
@@ -397,6 +451,13 @@ export async function magicDecode(input, opts = {}) {
     ? null
     : (o.allowOps instanceof Set ? o.allowOps : new Set(o.allowOps));
   const allowed = (opId) => _allowSet === null || _allowSet.has(opId);
+
+ // 排除集（MT72：用户启用了自定义实现的 op 不进一键解码——原版结果会误导，且跑用户代码有风险）。
+ // null = 不排除，保持旧行为；给集合则这些 op 完全退出自动解码候选。
+  const _excludeSet = o.excludeOps == null
+    ? null
+    : (o.excludeOps instanceof Set ? o.excludeOps : new Set(o.excludeOps));
+  const excluded = (opId) => _excludeSet !== null && _excludeSet.has(opId);
 
  // 候选 op 分两层（恒烈需求1：所有编解码 op 都安排上，花式算法不遗漏）：
  // ① detectOps：有 detect 的 op —— 强信号，允许参与多层 BFS 链（≤maxDepth）。
@@ -406,6 +467,7 @@ export async function magicDecode(input, opts = {}) {
   const decoders = OPS.filter(
     (op) => typeof op.detect === "function" && typeof op.decode === "function"
       && !op.requiresBridge && !op.noAuto && !NO_MAGIC_OPS.has(op.id)
+      && !excluded(op.id)
       && allowed(op.id)
   );
  // 无 detect 的**纯解码** op（radix/base 变体/花式衍生…），按定义域预筛后单层跑。
@@ -418,6 +480,7 @@ export async function magicDecode(input, opts = {}) {
     (op) => typeof op.detect !== "function"
       && typeof op.decode === "function"
       && !op.requiresBridge && !op.noAuto && !NO_MAGIC_OPS.has(op.id)
+      && !excluded(op.id)
       && !PARAM_SWEEP[op.id]
       && !KEYED_OPS.has(op.id)
       && allowed(op.id)
@@ -533,7 +596,7 @@ export async function magicDecode(input, opts = {}) {
         const text = latin1Decode(xored);
         if (text === cur.text || text.length === 0) continue; // 自打转/空剪枝
         if (!bruteWorth(text)) continue;                      // 乱码门：不像明文即丢弃
-        _record(text, cur, `xor:${key}`, 0.5, results, seen, cribRe, queue);
+        _record(text, cur, `xor:${key}`, 0.5, results, seen, cribRe, queue, byteStatHint);
       }
  // 位旋转 1-7（lib:157-166）
       for (let rot = 1; rot <= 7; rot++) {
@@ -545,7 +608,7 @@ export async function magicDecode(input, opts = {}) {
         const text = latin1Decode(rotated);
         if (text === cur.text || text.length === 0) continue;
         if (!bruteWorth(text)) continue;                      // 乱码门：不像明文即丢弃
-        _record(text, cur, `rot:${rot}`, 0.5, results, seen, cribRe, queue);
+        _record(text, cur, `rot:${rot}`, 0.5, results, seen, cribRe, queue, byteStatHint);
       }
     }
 
@@ -584,7 +647,7 @@ export async function magicDecode(input, opts = {}) {
           if (decoded.length === 0 || decoded === cur.text) continue;
           const tag = formatParamTag(opId, params);
  // queue 传 null：参数扫描候选不参与后续 BFS（防爆炸），靠 compositeScore 排序。
-          _record(decoded, cur, tag, 0.5, results, seen, cribRe, null);
+          _record(decoded, cur, tag, 0.5, results, seen, cribRe, null, byteStatHint);
         }
       }
     }
@@ -610,7 +673,7 @@ export async function magicDecode(input, opts = {}) {
         decoded = String(decoded);
         if (decoded.length === 0 || decoded === cur.text) continue;
  // 花式 op 单层候选不入队（queue null），靠 compositeScore 排序。
-        _record(decoded, cur, op.id, 0.5, results, seen, cribRe, null);
+        _record(decoded, cur, op.id, 0.5, results, seen, cribRe, null, byteStatHint);
       }
     }
 
@@ -641,7 +704,7 @@ export async function magicDecode(input, opts = {}) {
           decoded = String(decoded);
           if (decoded.length === 0 || decoded === cur.text) continue;
  // chain id 形如 aes(CBC,key:utf8,ct:base64)，与参数扫描候选同风格。
-          _record(decoded, cur, `${opId}(${tag})`, 0.5, results, seen, cribRe, null);
+          _record(decoded, cur, `${opId}(${tag})`, 0.5, results, seen, cribRe, null, byteStatHint);
         }
       }
     }
@@ -687,11 +750,33 @@ export async function magicDecode(input, opts = {}) {
  // 可选 outputCheck（op 声明输出正则/熵门控，lib:210-227）
       if (op.outputCheck && !outputCheckPasses(decoded, op.outputCheck)) continue;
 
-      _record(decoded, cur, op.id, score, results, seen, cribRe, queue);
+      _record(decoded, cur, op.id, score, results, seen, cribRe, queue, byteStatHint);
     }
   }
 
-  return finalizeResults(results, o);
+  const cands = finalizeResults(results, o);
+ // MT83 可解释性：把模型预测（11 类 top5 概率 + 18 维特征）附到返回候选——
+ // 用不可枚举属性，不参与 JSON 序列化/结构化克隆/展开，纯调试展示层（UI 后续可读 cands.byteStatProbe）。
+  if (byteStatProbe) {
+    try {
+      Object.defineProperty(cands, "byteStatProbe", {
+        value: byteStatProbe,
+        enumerable: false,
+        configurable: true,
+      });
+      if (o.debug) {
+        console.debug("[magic] 字节统计模型提名", {
+          label: byteStatProbe.predicted,
+          confidence: byteStatProbe.top5[0].probability,
+          top5: byteStatProbe.top5,
+          features: Array.from(byteStatProbe.features),
+        });
+      }
+    } catch {
+      /* 附加失败不影响解码结果 */
+    }
+  }
+  return cands;
 }
 
 // 把累积的候选整理成最终返回数组：Occam 去重 + 排序 + 全列。
@@ -758,7 +843,7 @@ function scoreToConfidence(score) {
  * compositeScore 归一化，不再用它做乘积。
  * @private
  */
-function _record(text, cur, opId, detectScore, results, seen, cribRe, queue) {
+function _record(text, cur, opId, detectScore, results, seen, cribRe, queue, byteStatHint) {
   const newChain = [...cur.chain, opId];
   const matchesCrib = cribRe ? cribRe.test(text) : false;
 
@@ -766,7 +851,13 @@ function _record(text, cur, opId, detectScore, results, seen, cribRe, queue) {
   if (seen.has(key)) return;
   seen.add(key);
 
-  const score = compositeScore(text, newChain.length, matchesCrib, newChain);
+  let score = compositeScore(text, newChain.length, matchesCrib, newChain);
+ // MT83 模型提名微调：输入被判为某编码类且置信达标时，给「首层用同族 op 解出」的候选
+ // 轻微加权（score -= 小值）。模型只是提名，量级远小于 flag -160 / crib -10000，不压垮
+ // 卡方主项；最终判据仍是该 op 能否严格 decode 成功。
+  if (byteStatHint && byteStatHint.opSet && byteStatHint.opSet.has(newChain[0])) {
+    score -= BYTESTAT_NOMINATE_WEIGHT;
+  }
   const confidence = scoreToConfidence(score);
   results.push({ chain: newChain, result: text, confidence, score, matchesCrib });
 

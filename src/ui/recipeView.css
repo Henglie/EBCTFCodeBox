@@ -264,6 +264,10 @@
 }
 .recipe-node-name {
   flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--fs-md);
   font-weight: 600;
   color: var(--on-surface);
@@ -356,4 +360,22 @@
   color: var(--on-surface);
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+/* ============ 窄屏（<860px 与全站断点对齐）：工具条收窄 / 节点头换行 / 参数单列 ============ */
+@media (max-width: 860px) {
+  .recipe-bar { padding: var(--sp-2); gap: var(--sp-1); }
+  .recipe-preset-picker { flex: 1 1 100%; min-width: 0; }
+  .recipe-op-search { flex: 1 1 100%; min-width: 0; }
+  .recipe-node-head { flex-wrap: wrap; row-gap: var(--sp-1); }
+  .recipe-node-name { flex: 1 1 100%; }
+  .recipe-node-ctrl { margin-inline-start: auto; }
+  .recipe-param { flex: 1 1 100%; }
+  .recipe-param label { white-space: normal; }
+  .recipe-io { min-height: 100px; }
+}
+
+/* ============ 低高窗口（<640px 高）：输入区降高 ============ */
+@media (max-height: 640px) {
+  .recipe-io { min-height: 72px; }
 }

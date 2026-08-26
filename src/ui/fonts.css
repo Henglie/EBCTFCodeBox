@@ -51,6 +51,25 @@
   src: url("../../public/fonts/th/th-ctf-subset.woff2") format("woff2");
 }
 
+/* ============ 天珩组合用附加符号（MT78 疑因 B 修复，2026-08-23） ============ */
+/*
+ * 恒烈报的真 bug：`u̲n̲d̲e̲r̲l̲i̲n̲e̲d̲`（每字母后跟 U+0332 COMBINING LOW LINE）下划线断续错位。
+ *
+ * 根因（真浏览器像素实测 + fontTools 双证）：原首屏子集的 cmap 对 U+0300–U+036F 覆盖 **0/112**。
+ * Chromium 按**字素簇整簇**选字体 —— 一个簇的基字与组合符必须由**同一个 face** 覆盖，
+ * 缺一个就整簇（连基字一起）掉到系统回退字体。CDP CSS.getPlatformFontsForNode 实测：
+ *   修复前 `u̲n̲d̲e̲r̲l̲i̲n̲e̲d̲` 20 字形全部 Segoe UI（天珩一个都没用上）→ 下划线断 6 段、缝隙 40 设备像素。
+ *
+ * ⛔ 走过的弯路，别重犯：**另挂一片带 unicode-range 的组合符 face 无效**。
+ * 那样基字在 A 片、组合符在 B 片，仍然没有任何单一 face 覆盖整簇 → 照样全部掉回退字体。
+ *
+ * 已采取的修法：把 320 个组合符**并进首屏子集本体**（工具/_mt78_build_combining.py 从天珩源
+ * TH-Tshyn-P0.ttf 切片，工具/_mt78_merge_subset.py merge 进 th-ctf-subset.woff2）。
+ * 结果：cmap 14710 → 15017（丢失 0），字形 14594 → 14905，1.52 MB → 1.53 MB（+7.8 KB），
+ * GDEF 里 U+0332 类别 3（mark）与 GSUB ccmp 均保住。所以这里**不需要**第二条 @font-face。
+ * 旧档备份在 资料/字库/备份/th-ctf-subset.woff2.bak。回归脚本：工具/rt_browser_uv_grapheme.mjs。
+ */
+
 /*
  * 内容区用这个字体族：先天珩子集（命中即用），子集外的字回退系统 CJK 字体。
  * UI 外壳不用它，保证秒开。

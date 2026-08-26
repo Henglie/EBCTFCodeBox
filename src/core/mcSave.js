@@ -21,36 +21,19 @@
  */
 import { register } from "./registry.js";
 import { inputToBytes } from "./pcapParse.js";
+import { streamDecompress as safeStreamDecompress } from "./compress.js"; // v0.1.5：安全流（超时+纯JS兜底）
 
 // ============================================================
-// 解压：优先原生 DecompressionStream，按魔数判 gzip / zlib(deflate)
+// 解压：代理 compress.js 安全流，按魔数判 gzip / zlib(deflate)
+// v0.1.5：安全流内建超时 + 纯 JS inflate 兜底，无需 hasStreams 预检
 // ============================================================
-function hasStreams() {
-  return typeof globalThis.DecompressionStream === "function";
-}
 
 async function streamDecompress(format, bytes) {
-  const ds = new globalThis.DecompressionStream(format);
-  const writer = ds.writable.getWriter();
-  writer.write(bytes);
-  writer.close();
-  const reader = ds.readable.getReader();
-  const chunks = [];
-  let total = 0;
-  const MAX_INFLATE = 128 * 1024 * 1024; // 解压上限 128MB，防解压炸弹（几 KB 膨胀到 GB）
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    total += value.length;
-    if (total > MAX_INFLATE) {
-      try { await reader.cancel(); } catch { /* 忽略 */ }
-      throw new Error("NBT 解压超过 128MB 上限（疑似解压炸弹），已中止");
-    }
+  // v0.1.5：改用 compress.js 安全流（超时 + 纯 JS inflate 兜底），保留 128MB 防爆上限
+  const out = await safeStreamDecompress(format, bytes);
+  if (out.length > MAX_INFLATE) {
+    throw new Error("NBT 解压超过 128MB 上限（疑似解压炸弹），已中止");
   }
-  const out = new Uint8Array(total);
-  let off = 0;
-  for (const c of chunks) { out.set(c, off); off += c.length; }
   return out;
 }
 
@@ -60,11 +43,9 @@ async function maybeDecompress(bytes) {
   if (!bytes || bytes.length < 2) return { data: bytes, note: "输入过短" };
   const b0 = bytes[0], b1 = bytes[1];
   if (b0 === 0x1f && b1 === 0x8b) {
-    if (!hasStreams()) throw new Error("当前环境无 DecompressionStream（浏览器实测；node 18+ 实验性可用）");
     return { data: await streamDecompress("gzip", bytes), note: "gzip 已解压" };
   }
   if ((b0 & 0x0f) === 8 && (((b0 << 8) | b1) % 31 === 0)) {
-    if (!hasStreams()) throw new Error("当前环境无 DecompressionStream（浏览器实测；node 18+ 实验性可用）");
     return { data: await streamDecompress("deflate", bytes), note: "zlib(deflate) 已解压" };
   }
  // 未压缩：level.dat 极少见，但结构方块 .nbt 也可能裸存。首字节应为合法 tag 0-12。
