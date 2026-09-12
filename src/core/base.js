@@ -469,6 +469,7 @@ register({
 });
 register({
   id: "base58", cat: "base", name: "Base58", desc: "Bitcoin / Flickr / Ripple / 自定义字母表",
+  family: "base58", familyLabel: "base58",
   params: [
     { key: "alphabet", label: "字母表", type: "select", default: "bitcoin",
       options: [
@@ -491,6 +492,7 @@ register({
 });
 register({
   id: "base64", cat: "base", name: "Base64", desc: "标准 / URL-safe（含 base64url，可选 padding）/ 自定义码表",
+  family: "base64", familyLabel: "base64",
   params: [
     { key: "urlsafe", label: "URL-safe（+/ → -_）", type: "bool", default: false },
     { key: "padding", label: "补齐 =（关闭即无 padding，如 JWT）", type: "bool", default: true },
@@ -536,6 +538,7 @@ register({
 });
 register({
   id: "base100", cat: "base", name: "Base100", desc: "emoji 编码（每字节 → U+1F3F7 + b）",
+  family: "unicodebase", familyLabel: "base100",
   encode: base100Encode, decode: base100Decode,
   detect: (t) => {
     const s = t.trim();

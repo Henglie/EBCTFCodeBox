@@ -471,7 +471,7 @@ async function mcTextExtractRun(text, p = {}) {
 // 注册
 // ============================================================
 register({
-  id: "mcTextExtract",
+  id: "mcTextExtract", family: "mc", familyLabel: "textextract",
   cat: "forensic",
   name: "Minecraft 文本情报提取",
   desc: "遍历 Minecraft Java 版存档 region/*.mca（Anvil，chunk 内 zlib NBT）或单个 .dat/.nbt，" +

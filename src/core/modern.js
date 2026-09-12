@@ -760,19 +760,19 @@ function makeBlockDecode(decFn, isAes) {
 }
 
 register({
-  id: "aes", cat: "modern", name: "AES", desc: "高级加密标准（ECB/CBC/CFB/OFB/CTR 纯 JS + GCM WebCrypto，key 16/24/32 字节）",
+  id: "aes", family: "aes", familyLabel: "encdec", cat: "block", name: "AES", desc: "高级加密标准（ECB/CBC/CFB/OFB/CTR 纯 JS + GCM WebCrypto，key 16/24/32 字节）",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR", "GCM"], "16/24/32 字节密钥"),
   encode: makeBlockEncode(aesEncrypt, true),
   decode: makeBlockDecode(aesDecrypt, true),
 });
 register({
-  id: "des", cat: "modern", name: "DES", desc: "数据加密标准（FIPS-46-3，key 8 字节，块 8 字节）",
+  id: "des", family: "des", familyLabel: "des", cat: "block", name: "DES", desc: "数据加密标准（FIPS-46-3，key 8 字节，块 8 字节）",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "8 字节密钥"),
   encode: makeBlockEncode(desEncrypt, false),
   decode: makeBlockDecode(desDecrypt, false),
 });
 register({
-  id: "des3", cat: "modern", name: "3DES / TripleDES", desc: "三重 DES（EDE，key 16 或 24 字节，块 8 字节）",
+  id: "des3", family: "des", familyLabel: "3des", cat: "block", name: "3DES / TripleDES", desc: "三重 DES（EDE，key 16 或 24 字节，块 8 字节）",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "16/24 字节密钥"),
   encode: makeBlockEncode(des3Encrypt, false),
   decode: makeBlockDecode(des3Decrypt, false),
@@ -804,14 +804,14 @@ const XOR_PARAMS = [
 {
   const { enc, dec } = makeStreamOp(rc4);
   register({
-    id: "rc4", cat: "modern", name: "RC4", desc: "RC4 流密码（自反，key 任意长）",
+    id: "rc4", cat: "stream", name: "RC4", desc: "RC4 流密码（自反，key 任意长）",
     params: STREAM_PARAMS, encode: enc, decode: dec,
   });
 }
 {
   const { enc, dec } = makeStreamOp(xorCrypt);
   register({
-    id: "xor", cat: "modern", name: "XOR", desc: "重复密钥异或（自反，CTF 最常用；单字节爆破见分析类 xorBrute）",
+    id: "xor", cat: "stream", name: "XOR", desc: "重复密钥异或（自反，CTF 最常用；单字节爆破见分析类 xorBrute）",
     params: XOR_PARAMS, encode: enc, decode: dec,
   });
 }
@@ -870,7 +870,7 @@ function rsaResolveD(p) {
   throw new Error("缺私钥：请填 d，或同时填 p 和 q（自动推 d=e⁻¹ mod φ）");
 }
 register({
-  id: "rsa", cat: "modern", name: "RSA",
+  id: "rsa", family: "rsa", familyLabel: "encdec", cat: "asym", name: "RSA",
   desc: "RSA 模幂加解密：加密 c=mᵉ mod n，解密 m=cᵈ mod n。支持 hex/base64 密文与明文字节串（解密直出 flag）；填 p,q 自动推 n 和 d。",
   params: [
     { key: "n", label: "模数 n", type: "text", default: "", placeholder: "十进制；留空则用 p·q" },

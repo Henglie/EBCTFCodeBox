@@ -2,8 +2,9 @@
 // 复用 core 算法层：executeRecipeAsync（支持异步 op）+ validateRecipe + PRESETS。
 // 线性链模型：nodes 顺序即执行序，第 i 个输出喂第 i+1 个输入。
 // 独立模块，自带轻量 el/msym，不反向依赖 main.js（低耦合）。
-import { OPS, getOp, opsByCat, defaultParams, CATEGORIES } from "../core/registry.js";
-import { executeRecipeAsync, validateRecipe, PRESETS } from "../core/recipes.js";
+import { OPS, getOp, opsByCat, defaultParams, CATEGORIES, FAMILY_NAMES } from "../core/registry.js";
+import { executeRecipeAsync, validateRecipe, PRESETS, recipeTerminalText, recipeDisplayText, recipeFileEntries } from "../core/recipes.js";
+import { downloadBytes, cloudWarnGate, fmtByteSize } from "./download.js";
 import { icon as iconSvg } from "./icons.js";
 import { attachEditorToolbar } from "./editorToolbar.js";
 import { ioArea } from "./ioArea.js"; // 天珩连字：输入/输出改 contenteditable div（textarea 吞 OpenType 特性）
@@ -104,6 +105,8 @@ function reflectPending() {
 let _dragFrom = null;
 // 左侧菜单拖 op 进画布用的自定义 MIME（避免与文本拖拽混淆）
 const OP_MIME = "application/x-ebctf-op";
+// 族条目（T395）拖入：携带 family id，drop 时弹出选档菜单（旧口径只能拖进族内第一档）
+const FAM_MIME = "application/x-ebctf-family";
 
 // i18n 名回退：优先 window 上主表（若 main.js 暴露），否则用 registry 硬编码
 function opDisplayName(op) {
@@ -247,9 +250,12 @@ function importRecipe() {
   inp.click();
 }
 
-// dataTransfer 是否携带左侧 op 拖拽的自定义 MIME（dragover 阶段 getData 取不到值，只能查 types）
+// dataTransfer 是否携带左侧 op/族拖拽的自定义 MIME（dragover 阶段 getData 取不到值，只能查 types）
 function dtHasOpMime(dt) {
-  try { return Array.prototype.indexOf.call(dt.types || [], OP_MIME) !== -1; } catch { return false; }
+  try {
+    const types = Array.prototype.slice.call(dt.types || []);
+    return types.indexOf(OP_MIME) !== -1 || types.indexOf(FAM_MIME) !== -1;
+  } catch { return false; }
 }
 // 依据 drop 时鼠标 Y 坐标算插入下标：落在哪张节点卡的上半区就插到它前面，否则追加末尾
 function dropIndexFromY(chain, clientY) {
@@ -319,7 +325,7 @@ function buildOpSearchPicker(onPick) {
       let ok = true, score = 0;
       for (const t of terms) {
         const pos = nm.indexOf(t);
-        if (pos < 0 && !op.id.includes(t)) { ok = false; break; }
+        if (pos < 0 && !op.id.toLowerCase().includes(t)) { ok = false; break; }
         if (pos === 0) score += 100;
         else if (pos > 0) score += 40;
         else score += 10; // 命中 id
@@ -538,13 +544,23 @@ let _seq = 0;
 async function runChain() {
   const out = document.getElementById("recipeOut");
   const stepsBox = document.getElementById("recipeSteps");
+  const filesBox = document.getElementById("recipeOutFiles");
+  const seq = ++_seq;
+  if (filesBox) filesBox.replaceChildren();
+  const renderFiles = (result) => {
+    const files = recipeFileEntries(result);
+    if (!filesBox) return;
+    filesBox.replaceChildren(...files.map(f => el("button", {
+      type: "button", class: "file-section-act",
+      onclick: () => cloudWarnGate(() => downloadBytes(f.bytes, f.name, f.mime)),
+    }, msym("download"), `${f.name} (${fmtByteSize(f.bytes.length)})`)));
+  };
   if (!out) return;
   if (!rState.nodes.length) { out.value = ""; if (stepsBox) stepsBox.innerHTML = ""; return; }
   if (rState.input === "") { out.value = ""; if (stepsBox) stepsBox.innerHTML = ""; return; }
 
   const graph = toGraph();
   const v = validateRecipe(graph);
-  const seq = ++_seq;
   if (!v.ok) {
  // 错误显示移到 stepsBox（div）用 msym 渲染图标，textarea.value 不支持 DOM 元素
     out.value = "";
@@ -567,14 +583,16 @@ async function runChain() {
         const op = getOp(rState.nodes[i].opId);
         stepsBox.append(el("div", { class: "recipe-step" },
           el("span", { class: "recipe-step-idx" }, (i + 1) + ". " + opDisplayName(op)),
-          el("code", { class: "recipe-step-out" }, typeof acc === "string" ? acc : JSON.stringify(acc)),
+          el("code", { class: "recipe-step-out" }, recipeDisplayText(acc)),
         ));
       }
-      out.value = typeof acc === "string" ? acc : JSON.stringify(acc, null, 2);
+      out.value = recipeTerminalText(acc);
+      renderFiles(acc);
     } else {
       const result = await executeRecipeAsync(graph, rState.input);
       if (seq !== _seq) return;
-      out.value = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+      out.value = recipeTerminalText(result);
+      renderFiles(result);
       if (stepsBox) stepsBox.innerHTML = "";
     }
     out.classList.remove("error");
@@ -682,6 +700,10 @@ export function renderRecipe(container) {
     if (!e.dataTransfer || !dtHasOpMime(e.dataTransfer)) return;
     e.preventDefault();
     chain.classList.remove("recipe-drop-active");
+    // 族条目（T395）：先弹选档菜单，选定具体算法再入链
+    let famId = "";
+    try { famId = e.dataTransfer.getData(FAM_MIME) || ""; } catch { /* ignore */ }
+    if (famId) { openFamilyPicker(famId, e.clientX, e.clientY, dropIndexFromY(chain, e.clientY)); return; }
     const opId = e.dataTransfer.getData(OP_MIME);
     if (!opId) return;
     addNode(opId, dropIndexFromY(chain, e.clientY));
@@ -697,6 +719,7 @@ export function renderRecipe(container) {
  // 输出框接编辑器工具条（只读：复制/全选/导出/字号）
   wrap.append(attachEditorToolbar(outArea, { readonly: true, exportName: "recipe-output.txt" }));
   wrap.append(outArea);
+  wrap.append(el("div", { class: "io-out-files", id: "recipeOutFiles" }));
 
   host.append(wrap);
   reflectPending();   // 重建后同步 Bake 高亮/挂起提示（大输入下切视图回来仍显挂起）
@@ -710,6 +733,54 @@ export function addRecipeOpAt(opId, clientX, clientY) {
   const idx = dropIndexFromY(chain, clientY);
   addNode(opId, idx);
   return true;
+}
+
+// 供 main.js 触摸拖拽族条目（T395）：命中画布即弹选档菜单
+export function addRecipeFamilyAt(familyId, clientX, clientY) {
+  const chain = document.getElementById("recipeChain");
+  if (!chain) return false;
+  openFamilyPicker(familyId, clientX, clientY, dropIndexFromY(chain, clientY));
+  return true;
+}
+
+// ---- 族选档菜单（T395）：族条目拖入画布时选具体算法 ----
+let _famPickMenu = null;
+function closeFamilyPicker() {
+  if (_famPickMenu) { _famPickMenu.remove(); _famPickMenu = null; }
+  document.removeEventListener("pointerdown", _famPickOutside, true);
+  document.removeEventListener("keydown", _famPickKey, true);
+}
+function _famPickOutside(e) {
+  if (_famPickMenu && !_famPickMenu.contains(e.target)) closeFamilyPicker();
+}
+function _famPickKey(e) { if (e.key === "Escape") closeFamilyPicker(); }
+function openFamilyPicker(familyId, clientX, clientY, idx) {
+  closeFamilyPicker();
+  const famName = FAMILY_NAMES[familyId] || familyId;
+  const members = OPS.filter((o) => o.family === familyId);
+  if (!members.length) return;
+  const menu = el("div", { class: "fam-pick-menu", role: "menu" },
+    el("div", { class: "fam-pick-head" }, `把「${famName}」的哪一步加入配方链？`),
+    ...members.map((m) => el("button", {
+      class: "fam-pick-item",
+      type: "button",
+      onclick: (ev) => { ev.stopPropagation(); closeFamilyPicker(); addNode(m.id, idx); },
+    },
+      el("span", { class: "fam-pick-name" }, opDisplayName(m)),
+      el("span", { class: "fam-pick-cat" }, m.id),
+    )),
+  );
+  document.body.append(menu);
+  // 视口内夹取：防菜单一半在屏幕外
+  const r = menu.getBoundingClientRect();
+  const vw = window.innerWidth, vh = window.innerHeight;
+  menu.style.left = Math.max(8, Math.min(clientX, vw - r.width - 8)) + "px";
+  menu.style.top = Math.max(8, Math.min(clientY, vh - r.height - 8)) + "px";
+  _famPickMenu = menu;
+  setTimeout(() => {
+    document.addEventListener("pointerdown", _famPickOutside, true);
+    document.addEventListener("keydown", _famPickKey, true);
+  }, 0);
 }
 
 export { rState };

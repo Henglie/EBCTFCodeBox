@@ -176,7 +176,7 @@ function decodeMouse(text, p) {
 
 // ============ 注册（只 2 个，绝不重复） ============
 register({
-  id: "usbKeyboard", cat: "forensic", name: "USB 键盘流量解析",
+  id: "usbKeyboard", family: "usb", familyLabel: "keyboard", cat: "forensic", name: "USB 键盘流量解析",
   desc: "解析 USB 键盘 leftover capture data（8 字节 HID 报告：Modifier+Reserved+Keycodes 1-6），还原按键输入",
   params: [
     { key: "backspace", label: "退格生效（删除上一字符，关闭则保留 [BKSP]）", type: "bool", default: true },
@@ -185,7 +185,7 @@ register({
 });
 
 register({
-  id: "usbMouse", cat: "forensic", name: "USB 鼠标流量解析",
+  id: "usbMouse", family: "usb", familyLabel: "mouse", cat: "forensic", name: "USB 鼠标流量解析",
   desc: "解析 USB 鼠标 leftover capture data（按钮+X/Y 位移，boot 协议 4 字节报告），还原鼠标轨迹",
   params: [
     { key: "recordLen", label: "报告长度（字节，boot 协议默认 4）", type: "number", default: 4 },

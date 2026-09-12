@@ -201,7 +201,7 @@ function spritzDecode(text, p = {}) {
 
 register({
   id: "spritz",
-  cat: "modern",
+  cat: "stream",
   name: "Spritz 流密码",
   desc: "Spritz 流密码（Rivest & Schuldt 2014 论文版）：a 计数器吸收 + 五索引状态海绵结构，输出双指针链式混合，抗 RC4 已知偏差。key（+ 可选 IV）文本或 hex 自动识别。自反 XOR：encode 文本→密文 hex，decode 密文 hex→文本。",
   params: [

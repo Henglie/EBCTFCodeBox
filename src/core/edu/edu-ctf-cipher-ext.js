@@ -10,12 +10,12 @@ export default {
       "码表构造：取 ASCII 32~127 共 96 个可见字符，列出全部有序两字符组合，共 $96 \\times 96 = 9216$ 项，第 $i$ 项的索引就是它的编码值。\n\n" +
       "字符对 $(x, y)$ 的索引 = $(x - 32) \\times 96 + (y - 32)$。\n\n" +
       "索引最大 9215，转 base36 恰好三位（9215 = `73z`），所以每两个明文字符固定产出三个密文字符；不足三位的右填空格补齐定长。\n\n" +
-      "明文长度为奇数时，末组用一个空格补成两字符，解码后把这个尾随空格去掉。",
-    usage: "输入框填明文（仅支持 ASCII 32~127 可见字符），编码得 base36 串；解码填密文还原。密文长度恒为 3 的倍数。",
+      "明文长度为奇数时，末组用一个空格补成两字符。解码保留完整字符对，不删除真实尾空格；密文不含原长，因此无法自动区分补位和原文尾空格。",
+    usage: "输入框填明文（ASCII 32~127，其中 127 是 DEL），编码得 base36 串；解码填密文还原完整字符对。密文长度恒为 3 的倍数。",
     examples: [
       { in: "a", out: "4tc", desc: "单字符：补成 `a `(a+空格) → 索引 6240 → base36 `4tc`" },
-      { in: "Hello", out: "30l5os5uo", desc: "5 字符 → 3 组 → 9 个密文字符" },
-      { in: "flag{twin}", out: "58s4vb6t06i15ul", desc: "10 字符 → 5 组 → 15 个密文字符" },
+      { in: "dCode", out: "52b5wk540", desc: "奇数长度补位，解码为 dCode 加一个空格" },
+      { in: "Twin Hex", out: "3x35gu14 56g", desc: "偶数长度，完整保留原文中的空格" },
     ],
     formulas: [
       { tex: "idx(x,y) = (x - 32) \\times 96 + (y - 32)", caption: "字符对 → 码表索引（x、y 为 ASCII 码）" },
@@ -24,6 +24,7 @@ export default {
       "密文长度必为 3 的倍数，且只含 0-9a-z 和空格——这是识别特征。",
       "只吃 ASCII 可见字符，中文和控制字符会报错。",
       "别和十六进制混淆：它虽叫 Twin-Hex，实际用的是 base36 而非 base16。",
+      "a 与 a 加一个空格编码相同；解码会保留该空格。参考 https://www.dcode.fr/twin-hex-cipher 。",
     ],
     aka: ["twin hex", "twinhex", "twin-hex", "双字符编码", "双十六进制", "twin hex cipher", "双字符查表", "96x96码表", "base36编码对", "孪生十六进制", "twinhex cipher", "双字编码"],
   },
@@ -92,7 +93,7 @@ export default {
       "长度不是列宽整数倍时无法完整还原，这是算法本身的限制，遇到这种题先想想列宽是不是猜错了。",
       "列宽未知时就枚举：长度的所有因子都值得试一遍。",
     ],
-    aka: ["caesar box", "caesarbox", "凯撒箱", "箱型密码", "方箱密码", "caesar box cipher", "列换位", "箱式换位", "凯撒方箱", "方阵换位", "caesar box transposition", "箱型换位"],
+    aka: ["凯撒方阵", "caesar box", "caesarbox", "凯撒箱", "箱型密码", "方箱密码", "caesar box cipher", "列换位", "箱式换位", "凯撒方箱", "方阵换位", "caesar box transposition", "箱型换位"],
   },
 
   curveCipher: {

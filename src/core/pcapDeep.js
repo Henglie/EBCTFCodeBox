@@ -850,7 +850,7 @@ export function analyzePcapBytes(bytes) {
 // 注册
 // ============================================================
 register({
-  id: "pcapTcpReassemble",
+  id: "pcapTcpReassemble", family: "pcap", familyLabel: "reassemble",
   cat: "forensic",
   name: "TCP 流重组",
   desc: "按 5 元组聚合 TCP 段，seq 排序去重，还原各方向完整字节流（HTTP 提取的基础）。纯前端零依赖，复用 pcapParse 分帧",
@@ -867,7 +867,7 @@ register({
 });
 
 register({
-  id: "pcapHttpExtract",
+  id: "pcapHttpExtract", family: "pcap", familyLabel: "httpext",
   cat: "forensic",
   name: "HTTP 对象提取",
   desc: "基于 TCP 重组解析 HTTP 请求/响应，处理 chunked 传输与 gzip/deflate 解压（纯 JS inflate），导出传输的文件/文本",
@@ -883,7 +883,7 @@ register({
 });
 
 register({
-  id: "pcapDnsTunnel",
+  id: "pcapDnsTunnel", family: "pcap", familyLabel: "dns",
   cat: "forensic",
   name: "DNS 隧道检测",
   desc: "提取 DNS query 子域名数据标签，拼接后尝试 base32/base64/hex 解码，检出 DNS 隧道外泄的隐藏数据。复用 pcapParse DNS 分帧",
@@ -902,7 +902,7 @@ register({
 });
 
 register({
-  id: "pcapIcmpPayload",
+  id: "pcapIcmpPayload", family: "pcap", familyLabel: "icmp",
   cat: "forensic",
   name: "ICMP 载荷提取",
   desc: "提取 ICMP echo 载荷，按 id/seq 排序拼接，还原 ICMP 隐写/隧道外泄的数据。复用 pcapParse ICMP 分帧",

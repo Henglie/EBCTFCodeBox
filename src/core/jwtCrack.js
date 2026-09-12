@@ -300,7 +300,7 @@ export const jwtCrackSelfTest = (async () => {
 // ============ register ============
 
 register({
-  id: "jwtCrack", cat: "modern", name: "JWT 密钥爆破",
+  id: "jwtCrack", family: "jwt", familyLabel: "crack", cat: "modern", name: "JWT 密钥爆破",
   desc: "HS256/384/512 签名 JWT 的弱密钥字典爆破：内置弱密钥 + 自定义 + 纯数字，重算 HMAC 签名逐个比对。算法自动识别自 header（可强制指定）；RS/ES 等非对称签名拒绝",
   params: [
     {

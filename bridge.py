@@ -43,20 +43,7 @@ EXE_BASE = os.path.join(ROOT, "tools", "exe")
 # 这里只放「有命令行、可无人值守跑（读 args/stdin，回 stdout）」的 CLI exe。
 # 纯 GUI 程序（OurSecret/OpenPuff/Jphswin 等）见下方 LAUNCH_WHITELIST，走 /api/launch。
 WHITELIST = {
-    "dtmf2num": os.path.join(EXE_BASE, "cli", "dtmf2num.exe"),
-    "foremost": os.path.join(EXE_BASE, "cli", "foremost", "foremost.exe"),
-    "steghide": os.path.join(EXE_BASE, "cli", "steghide", "steghide.exe"),
-    "snow":     os.path.join(EXE_BASE, "cli", "snow.exe"),
-    "jsteg":    os.path.join(EXE_BASE, "cli", "jsteg.exe"),
-    "bkcrack":  os.path.join(EXE_BASE, "cli", "bkcrack.exe"),
-    "mp3stego": os.path.join(EXE_BASE, "cli", "mp3stego_Decode.exe"),
     # ---- 新增 CLI 工具（T18 补齐，署名：外部4）----
-    # bftools：Brainfuck 工具集（run/encode/decode/enlarge/reduce），program 或 - 走 stdin
-    "bftools":    os.path.join(EXE_BASE, "cli", "bftools", "bftools.exe"),
-    # npiet：Piet 图像语言解释器，吃图像文件执行，回 stdout
-    "npiet":      os.path.join(EXE_BASE, "cli", "npiet", "npiet.exe"),
-    # stegdetect：JPEG 隐写检测（jsteg/jphide/outguess/…），吃 jpg 文件回检测报告
-    "stegdetect": os.path.join(EXE_BASE, "cli", "stegdetect", "stegdetect.exe"),
 }
 
 # ---- GUI 启动白名单（tool → 绝对路径）。仅「启动 exe 让用户手动操作」，不喂输入不取输出 ----
@@ -68,7 +55,6 @@ LAUNCH_WHITELIST = {
     # JPHS for Windows：JPEG 图像隐写 GUI（jphide/jpseek）
     "jphswin":      os.path.join(EXE_BASE, "gui", "Jphswin.exe"),
     # NTFS 数据流编辑器（ADS 交换数据流查看/编辑）
-    "ntfsstreams":  os.path.join(EXE_BASE, "gui", "ntfsstreamseditor.exe"),
     # OpenPuff：多载体隐写 GUI（图/音/视/PDF/flash 等）
     "openpuff":     os.path.join(EXE_BASE, "gui", "OpenPuff_release", "OpenPuff.exe"),
     # OurSecret：GUI 隐写工具，私有格式无法纯前端复刻，随项目入库
@@ -77,9 +63,7 @@ LAUNCH_WHITELIST = {
 
 TIMEOUT = 60  # 秒
 # 按 tool 给独立超时（秒）。默认 60s，特殊工具在此覆盖。
-# bkcrack 已知明文攻击 CPU 密集，典型耗时几分钟~几十分钟，给 30 分钟（对齐 bkcrack.js wrapper 提示）。
 TOOL_TIMEOUTS = {
-    "bkcrack": 1800,
 }
 MAX_STDIN = 50 * 1024 * 1024  # 50MB
 # 前端页面端口不固定（start.py 8180 起，用户也可能自己起别的端口），且可能用 127.0.0.1 或 localhost 打开。
@@ -148,7 +132,6 @@ def probe_env():
     out["accent"] = read_accent_color() is not None
     return out
 
-
 # ============================================================
 # MT42：读 Windows 系统强调色（注册表 AccentColorMenu\AccentColor）
 # ------------------------------------------------------------
@@ -186,7 +169,6 @@ def read_accent_color():
     except Exception:
         return None
 
-
 # ============================================================
 # MT7：pyc/exe 自动反编译（新增端点，署名：MT7）
 # ------------------------------------------------------------
@@ -223,7 +205,6 @@ DECOMPILE_TOOLS = {
 
 DECOMPILE_TIMEOUT = 120  # 反编较慢，独立超时（秒）
 
-
 def _resolve_tool(key):
     """解析白名单工具首个存在的可执行路径；无则 None。"""
     for c in DECOMPILE_TOOLS.get(key, []):
@@ -235,7 +216,6 @@ def _resolve_tool(key):
             if w:
                 return w
     return None
-
 
 def _resolve_pyinstxtractor():
     """定位 PyInstxtractor：脚本文件优先，其次 pip 模块 pyinstxtractor_ng。
@@ -251,7 +231,6 @@ def _resolve_pyinstxtractor():
     except Exception:
         pass
     return (None, None)
-
 
 def _pyc_version(magic4):
     """由 pyc 头 4 字节 magic 判 Python 版本。返回 (verstr, (major,minor)) 或 (None,None)。
@@ -277,7 +256,6 @@ def _pyc_version(magic4):
         return v, (int(mm.group(1)), int(mm.group(2)))
     return None, None
 
-
 def _pick_decompiler(mm):
     """据 (major,minor) 选反编工具。返回 (toolKey|None, note)。"""
     if not mm:
@@ -290,7 +268,6 @@ def _pick_decompiler(mm):
             return "uncompyle6", None
         return "pylingual", "Python 3.9+ 需 pylingual 大模型反编（实验，需手动安装）"
     return None, "不支持的 Python 版本 %d.%d" % (major, minor)
-
 
 def _run_decompiler(tool_key, pyc_path, workdir):
     """调白名单反编工具于单个 pyc。subprocess 参数数组 shell=False。"""
@@ -325,7 +302,6 @@ def _run_decompiler(tool_key, pyc_path, workdir):
     except Exception as e:
         return {"ok": False, "tool": tool_key, "error": "反编异常: %s" % e}
 
-
 def _decompile_pyc_bytes(data, workdir, label="input.pyc"):
     """反编单个 pyc（字节）。返回含 pyVersion/tool/source 的结果字典。"""
     if len(data) < 8:
@@ -343,7 +319,6 @@ def _decompile_pyc_bytes(data, workdir, label="input.pyc"):
         return result
     result.update(_run_decompiler(tool_key, fp, workdir))
     return result
-
 
 def _decompile_exe_bytes(data, workdir, label="input.exe"):
     """反编 PyInstaller 打包 exe：解包 → 逐 pyc 反编。骨架：pyinstxtractor 未装时占位。"""
@@ -390,7 +365,6 @@ def _decompile_exe_bytes(data, workdir, label="input.exe"):
         "note": "PyInstaller 解包 + 逐 pyc 反编" if files else "未在解包结果中找到 pyc",
     }
 
-
 def _safe_label(name, exts):
     """文件名安全化：basename + 拒路径穿越 + 校验扩展名。非法返回 None。"""
     base = os.path.basename(str(name or ""))
@@ -400,7 +374,6 @@ def _safe_label(name, exts):
     if exts and not any(low.endswith(e) for e in exts):
         return None
     return base
-
 
 def _recycle_dir(path):
     """把临时目录送回收站（PowerShell VisualBasic API），失败回退 shutil.rmtree（禁 rm -rf）。"""
@@ -422,7 +395,6 @@ def _recycle_dir(path):
         except Exception:
             pass
     shutil.rmtree(path, ignore_errors=True)
-
 
 def decompile_env():
     """反编工具链可用性探测（供前端灰置/实验标记）。"""
@@ -446,7 +418,6 @@ def decompile_env():
             "pyinstxtractor": bool(pk),
         },
     }
-
 
 class BridgeHandler(BaseHTTPRequestHandler):
     def _cors(self):
@@ -570,7 +541,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 return
 
         tmpdir = tempfile.mkdtemp(prefix="bridge_")
-        # 按 tool 取独立超时（默认 60s；bkcrack 等长任务在 TOOL_TIMEOUTS 覆盖）。
+        # 按 tool 取独立超时（默认 60s，长任务可在 TOOL_TIMEOUTS 覆盖；现 CLI 白名单已清空）。
         # 提到 try 块前定义，确保 except 块能安全访问。
         tool_timeout = TOOL_TIMEOUTS.get(tool, TIMEOUT)
         try:
@@ -716,7 +687,6 @@ class BridgeHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass  # 静默访问日志
 
-
 def main():
     argv = sys.argv[1:]
     port = 8181
@@ -747,7 +717,6 @@ def main():
     except KeyboardInterrupt:
         print("\n已停止。")
         httpd.server_close()
-
 
 if __name__ == "__main__":
     main()

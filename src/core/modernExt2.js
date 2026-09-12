@@ -1640,37 +1640,37 @@ function makeBlockDecode(decFn) {
 export { rc5KeySchedule, rc5EncryptBlock, rc5DecryptBlock, ideaKeySchedule, ideaEncryptBlock, ideaDecryptKeySchedule, blowfishKeySchedule, blowfishEncryptBlock, blowfishDecryptBlock, rc6KeySchedule, rc6EncryptBlock, rc6DecryptBlock, cast5KeySchedule, cast5EncryptBlock, cast5DecryptBlock, twofishKeySchedule, twofishEncryptBlock, twofishDecryptBlock };
 
 register({
-  id: "rc5", cat: "modern", name: "RC5", desc: "RC5-32/12/16 分组密码（RFC 2040，64位块，12轮，可变密钥；支持 ECB/CBC/CFB/OFB/CTR）",
+  id: "rc5", family: "rc", familyLabel: "rc5", cat: "block", name: "RC5", desc: "RC5-32/12/16 分组密码（RFC 2040，64位块，12轮，可变密钥；支持 ECB/CBC/CFB/OFB/CTR）",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "1-255 字节密钥（默认 16 字节）"),
   encode: makeBlockEncode(rc5Encrypt),
   decode: makeBlockDecode(rc5Decrypt),
 });
 register({
-  id: "idea", cat: "modern", name: "IDEA", desc: "国际数据加密算法（Lai 1991，64位块，128位密钥，8.5轮，mod 2^16+1 乘法 + mod 2^16 加法 + XOR）",
+  id: "idea", cat: "block", name: "IDEA", desc: "国际数据加密算法（Lai 1991，64位块，128位密钥，8.5轮，mod 2^16+1 乘法 + mod 2^16 加法 + XOR）",
   params: blockParams(["ECB", "CBC"], "16 字节密钥（128 位）"),
   encode: makeBlockEncode(ideaEncrypt),
   decode: makeBlockDecode(ideaDecrypt),
 });
 register({
-  id: "blowfish", cat: "modern", name: "Blowfish", desc: "Blowfish 分组密码（Schneier 1993，64位块，可变密钥4-56字节，16轮Feistel；支持 ECB/CBC/CFB/OFB/CTR）",
+  id: "blowfish", cat: "block", name: "Blowfish", desc: "Blowfish 分组密码（Schneier 1993，64位块，可变密钥4-56字节，16轮Feistel；支持 ECB/CBC/CFB/OFB/CTR）",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "4-56 字节密钥"),
   encode: makeBlockEncode(blowfishEncrypt),
   decode: makeBlockDecode(blowfishDecrypt),
 });
 register({
-  id: "rc6", cat: "modern", name: "RC6", desc: "RC6 分组密码（RFC 2276，128位块，可变密钥1-255字节，20轮；支持 ECB/CBC/CFB/OFB/CTR）",
+  id: "rc6", family: "rc", familyLabel: "rc6", cat: "block", name: "RC6", desc: "RC6 分组密码（RFC 2276，128位块，可变密钥1-255字节，20轮；支持 ECB/CBC/CFB/OFB/CTR）",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "1-255 字节密钥（默认 16）", 16),
   encode: makeBlockEncode(rc6Encrypt),
   decode: makeBlockDecode(rc6Decrypt),
 });
 register({
-  id: "cast5", cat: "modern", name: "CAST-128", desc: "CAST-128/CAST5 分组密码（RFC 2144，64位块，可变密钥5-16字节，12/16轮；支持 ECB/CBC/CFB/OFB/CTR）",
+  id: "cast5", family: "cast", familyLabel: "cast128", cat: "block", name: "CAST-128", desc: "CAST-128/CAST5 分组密码（RFC 2144，64位块，可变密钥5-16字节，12/16轮；支持 ECB/CBC/CFB/OFB/CTR）",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "5-16 字节密钥"),
   encode: makeBlockEncode(cast5Encrypt),
   decode: makeBlockDecode(cast5Decrypt),
 });
 register({
-  id: "twofish", cat: "modern", name: "Twofish", desc: "Twofish 分组密码（Schneier 1998 AES 提案，128位块，16轮，密钥128/192/256位；支持 ECB/CBC/CFB/OFB/CTR）",
+  id: "twofish", cat: "block", name: "Twofish", desc: "Twofish 分组密码（Schneier 1998 AES 提案，128位块，16轮，密钥128/192/256位；支持 ECB/CBC/CFB/OFB/CTR）",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "16/24/32 字节密钥", 16),
   encode: makeBlockEncode(twofishEncrypt),
   decode: makeBlockDecode(twofishDecrypt),

@@ -212,7 +212,7 @@ export default {
     what: "把一段文本藏进图片像素的最低有效位生成隐写图——出 misc 题的常见手法。",
     principle:
       "封面解码成 RGBA 像素（PNG 8bit 非隔行 / BMP 24·32bit 未压缩），选一个位平面（默认 0=最低位）与若干通道（R/G/B/A），按行主序把载荷每个 bit 依位序写进样例该位。\n\n" +
-      "图色差肉眼不可辨，但可按同参数提取回；容量需 载荷字节×8 ≤ 像素数×通道数。",
+      "图色差肉眼不可辨，但可按同参数提取回；容量需 载荷字节×8 $\le$ 像素数×通道数。",
     usage: "拖入封面图，填「载荷」文本，设通道/位平面/位序，输出 data URL 直接存做隐写图。",
     examples: [
       { in: "payload=flag{txt} + channels=RGB + bit=0", out: "隐写图（data:image/png;base64,...），zstegScan 以 bit0 rgb msb 解回", desc: "嵌入→可提取闭环" },

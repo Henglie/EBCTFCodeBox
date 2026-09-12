@@ -1,8 +1,11 @@
 /*
  * zipCrack.js — ZIP 弱口令爆破（纯 JS 最小可用版，cat:'analysis'，单向 run）。
  *
- * 覆盖：ZipCrypto（传统 PKWARE 加密，general purpose flag bit0=1 且 method≠99）
- * 的弱口令爆破。两种策略：纯数字掩码 + 内置/自定义字典。
+ * 覆盖两类加密条目的弱口令爆破：
+ * 1. ZipCrypto（传统 PKWARE 加密，general purpose flag bit0=1 且 method≠99）。
+ * 2. WinZip AES（AE-1/AE-2，method 99 + 0x9901 extra field）——用 WebCrypto
+ *    （PBKDF2-HMAC-SHA1 + AES-CTR + HMAC-SHA1），浏览器与 node22 均有 subtle。
+ * 两种策略：纯数字掩码 + 内置/自定义字典。
  *
  * 算法（PKWARE APPNOTE 6.3.x §6.1 传统加密）：
  * 三个 32 位 key：key0=0x12345678, key1=0x23456789, key2=0x34567890。
@@ -24,10 +27,23 @@
  * 防爆：maxDigits 默认 4，硬上限 6（10^6=100 万，同步可扛）。>6 拒跑。
  *
  * 已知边界（本版不做）：
- * - WinZip AES 加密（method 99 / AE-1/AE-2，PBKDF2-HMAC-SHA1 太重）→ 留待 hash-wasm 版。
+ * - WinZip AES 数字掩码逐口令走 PBKDF2（1000 迭代），远慢于 ZipCrypto 的纯 JS
+ *   逐字节快筛——位数上限沿用 6，但 AES 条目强烈建议用字典跑。
  * - bkcrack 已知明文攻击 → 后续独立 WASM 卡。
  * - 大位数 / 复杂字符集掩码 → 需 Worker 池，本版同步实现。
  * - 找到密码后不解压还原明文（只验证密码正确性）。
+ *
+ * WinZip AES 规格（实现依据，WinZip「AES Encryption」附录 + APPNOTE）：
+ * - extra field 0x9901：version(2B, 0x0001=AE-1/0x0002=AE-2)、vendor(2B 'AE')、
+ *   strength(1B, 1/2/3 → AES-128/192/256)、真实压缩方法(2B，LFH method 恒为 99)。
+ * - keySize = (strength+1)*8 字节（1/2/3 → 16/24/32 = AES-128/192/256），
+ *   saltLen = (strength+1)*4 字节（8/12/16）= keySize 的一半。
+ * - 密钥派生：PBKDF2-HMAC-SHA1(password, salt, 1000) 导出 2*keySize+2 字节：
+ *   前 keySize = AES 密钥，次 keySize = HMAC-SHA1 认证密钥，末 2 字节 = 口令验证值 pwdVer。
+ * - 密文布局：salt + pwdVer(2B) + AES-CTR 密文（counter 初值 1，大端 128 位，IV 余 0）
+ *   + 10 字节 HMAC-SHA1 认证码（对密文计算）。
+ * - 爆破口径：pwdVer 两字节快筛（1/65536 漏筛）→ HMAC 全 10 字节比对确认
+ *   （1/2^80 误报，AE-1/AE-2 统一走 HMAC，比解压+CRC 更强且无需 inflate）。
  *
  * 红线：只建本文件，件内自注册，不碰任何现有文件。零外发纯 JS 计算。
  */
@@ -139,6 +155,51 @@ function fullVerify(info, pwBytes) {
 }
 
 // ============================================================
+// WinZip AES（AE-1/AE-2，0x9901）核心——WebCrypto（浏览器 + node22 通用）
+// ============================================================
+
+/** subtle 懒取（有些环境 globalThis.crypto 缺失，用到才报错）。 */
+function subtle() {
+  if (!globalThis.crypto || !globalThis.crypto.subtle) {
+    throw new Error("当前环境不支持 WebCrypto（需要 globalThis.crypto.subtle）");
+  }
+  return globalThis.crypto.subtle;
+}
+
+/**
+ * PBKDF2-HMAC-SHA1 派生 WinZip AES 三件套。
+ * @returns {Promise<{encKey:Uint8Array, authKey:Uint8Array, pwdVer:Uint8Array}>}
+ */
+async function aesDeriveKeys(pwBytes, salt, keySize) {
+  const baseKey = await subtle().importKey("raw", pwBytes, { name: "PBKDF2" }, false, ["deriveBits"]);
+  const bits = await subtle().deriveBits(
+    { name: "PBKDF2", hash: "SHA-1", salt, iterations: 1000 },
+    baseKey,
+    (2 * keySize + 2) * 8
+  );
+  const all = new Uint8Array(bits);
+  return {
+    encKey: all.slice(0, keySize),
+    authKey: all.slice(keySize, 2 * keySize),
+    pwdVer: all.slice(2 * keySize, 2 * keySize + 2),
+  };
+}
+
+/**
+ * HMAC-SHA1 认证码比对（WinZip AES 的认证码是 20 字节摘要的前 10 字节截断）。
+ * 注意：subtle.verify 只认全长标签（10B ≠ 20B 恒 false），必须 sign 后手动比对前 10 字节；
+ * 用异或累差做常量时间比较，避免逐字节提前短路。
+ */
+async function hmacVerify(authKey, dataBytes, mac10) {
+  if (!mac10 || mac10.length !== 10) return false;
+  const key = await subtle().importKey("raw", authKey, { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
+  const tag = new Uint8Array(await subtle().sign("HMAC", key, dataBytes));
+  let diff = 0;
+  for (let i = 0; i < 10; i++) diff |= tag[i] ^ mac10[i];
+  return diff === 0;
+}
+
+// ============================================================
 // ZIP 结构：定位第一个 ZipCrypto 加密条目，取加密头 + 校验字节
 // 只在本文件内自持轻量解析（不 import compress.js，保持低耦合）。
 // ============================================================
@@ -146,8 +207,10 @@ function u16le(b, i) { return (b[i] | (b[i + 1] << 8)) >>> 0; }
 function u32le(b, i) { return ((b[i]) | (b[i + 1] << 8) | (b[i + 2] << 16) | (b[i + 3] * 0x1000000)) >>> 0; }
 
 /**
- * 扫 ZIP，找第一个可爆破的 ZipCrypto 加密条目。
- * 返回 { ok, encHeader(12B), checkByte, name, method, aesDetected, reason }。
+ * 扫 ZIP，找第一个可爆破的加密条目（ZipCrypto 优先于 AES 以文件内出现顺序为准）。
+ * 返回 { ok, type:'zipcrypto'|'aes', ..., aesDetected, reason }。
+ * ZipCrypto：encHeader(12B) + checkByte + 可选全量校验数据。
+ * AES：salt / pwdVerTarget(2B) / encPayload(CTR 密文) / authCode(10B HMAC)。
  */
 function findEncryptedEntry(bytes) {
   let sawAes = false;
@@ -164,8 +227,38 @@ function findEncryptedEntry(bytes) {
     const encrypted = (flag & 1) === 1;
     if (!encrypted) continue;
 
- // AES（method 99）跳过——加密头结构不同，PBKDF2 太重
-    if (method === 99) { sawAes = true; continue; }
+ // ---- WinZip AES（method 99）：解析 0x9901 extra field ----
+    if (method === 99) {
+      sawAes = true;
+      const aesExtra = parseAesExtra(bytes, i + 30 + nameLen, extraLen);
+      if (!aesExtra || aesExtra.strength < 1 || aesExtra.strength > 3) continue; // extra 缺失/损坏 → 找下一个条目
+      const compSize = u32le(bytes, i + 18); // AES 条目 compSize 必须为真实密文总长（bit3 数据描述符条目 compSize=0，无法定位，跳过）
+      const saltLen = (aesExtra.strength + 1) * 4;     // strength 1/2/3 → 8/12/16 字节
+      const keySize = (aesExtra.strength + 1) * 8;     // strength 1/2/3 → 16/24/32 字节（AES-128/192/256）
+      if (compSize < saltLen + 12 || dataStart + compSize > bytes.length) continue; // 至少 salt+2+10，且要有数据本体
+      let name = "";
+      const nameStart = i + 30;
+      for (let k = 0; k < nameLen && nameStart + k < bytes.length; k++) {
+        name += String.fromCharCode(bytes[nameStart + k]);
+      }
+      return {
+        ok: true,
+        type: "aes",
+        name,
+        flag,
+        aesVersion: aesExtra.version,   // 0x0001=AE-1（LFH 带 CRC）／0x0002=AE-2（CRC 置 0）
+        realMethod: aesExtra.realMethod,
+        strength: aesExtra.strength,
+        keySize,
+        saltLen,
+        salt: new Uint8Array(bytes.subarray(dataStart, dataStart + saltLen)),
+        pwdVerTarget: new Uint8Array(bytes.subarray(dataStart + saltLen, dataStart + saltLen + 2)),
+        encPayload: new Uint8Array(bytes.subarray(dataStart + saltLen + 2, dataStart + compSize - 10)),
+        authCode: new Uint8Array(bytes.subarray(dataStart + compSize - 10, dataStart + compSize)),
+        plainCrc: crc,
+        aesDetected: true,
+      };
+    }
 
     if (dataStart + 12 > bytes.length) continue; // 加密头不完整
     let name = "";
@@ -188,6 +281,7 @@ function findEncryptedEntry(bytes) {
     }
     return {
       ok: true,
+      type: "zipcrypto",
       encHeader: new Uint8Array(encHeader),
       checkByte,
       useTime,
@@ -199,7 +293,31 @@ function findEncryptedEntry(bytes) {
       aesDetected: sawAes,
     };
   }
-  return { ok: false, aesDetected: sawAes, reason: sawAes ? "AES 加密（method 99），本版不支持" : "未找到 ZipCrypto 加密条目" };
+  return { ok: false, aesDetected: sawAes, reason: sawAes ? "检测到 AES 加密条目（method 99），但其 0x9901 extra field 缺失/损坏或数据不完整，无法爆破" : "未找到 ZipCrypto 加密条目" };
+}
+
+/**
+ * 解析 extra field 区找 0x9901（WinZip AES）头。
+ * @returns {null|{version:number, vendor:string, strength:number, realMethod:number}}
+ */
+function parseAesExtra(bytes, extraStart, extraLen) {
+  const extraEnd = extraStart + extraLen;
+  for (let p = extraStart; p + 4 <= extraEnd; ) {
+    const headerId = u16le(bytes, p);
+    const dataSize = u16le(bytes, p + 2);
+    const body = p + 4;
+    if (body + dataSize > extraEnd) break; // extra 区越界，结构损坏
+    if (headerId === 0x9901 && dataSize >= 7) {
+      return {
+        version: u16le(bytes, body), // 0x0001=AE-1 / 0x0002=AE-2
+        vendor: String.fromCharCode(bytes[body + 2]) + String.fromCharCode(bytes[body + 3]), // 应为 'AE'
+        strength: bytes[body + 4],   // 1/2/3 → AES-128/192/256
+        realMethod: u16le(bytes, body + 5), // 真实压缩方法（LFH method 恒 99）
+      };
+    }
+    p = body + dataSize;
+  }
+  return null;
 }
 
 // ============================================================
@@ -299,6 +417,84 @@ function crackZipCryptoWeak(zipBytes, opts = {}) {
   return { found: false, tried, entryName: info.name, aesDetected: info.aesDetected };
 }
 
+/**
+ * WinZip AES（AE-1/AE-2）弱口令爆破（异步，WebCrypto；供测试直接调）。
+ * 口径与 crackZipCryptoWeak 一致：字典（内置+自定义）先跑，数字掩码兜底；
+ * 每口令 pwdVer 两字节快筛 → 命中后再 HMAC-SHA1 全 10 字节确认（AE-1/AE-2 统一）。
+ * @param {Uint8Array} zipBytes ZIP 文件字节
+ * @param {object} opts { maxDigits:number, dict:string[]|string }
+ * @returns {{found:boolean, password?:string, tried:number, entryName?:string,
+ * method?:string, aesDetected?:boolean, aes?:object, error?:string}}
+ */
+async function crackWinZipAesWeak(zipBytes, opts = {}) {
+  const info = findEncryptedEntry(zipBytes);
+  if (!info.ok) {
+    return { found: false, tried: 0, aesDetected: info.aesDetected, error: info.reason };
+  }
+  if (info.type !== "aes") {
+    return { found: false, tried: 0, aesDetected: info.aesDetected, error: "非 AES 加密条目（走 ZipCrypto 路径）" };
+  }
+
+ // 组合校验：pwdVer 快筛（1/65536 漏筛）→ HMAC-SHA1 认证码全量比对确认（1/2^80 误报）。
+  async function matches(pwBytes) {
+    const dk = await aesDeriveKeys(pwBytes, info.salt, info.keySize);
+    if (dk.pwdVer[0] !== info.pwdVerTarget[0] || dk.pwdVer[1] !== info.pwdVerTarget[1]) return false;
+    return hmacVerify(dk.authKey, info.encPayload, info.authCode);
+  }
+
+  let tried = 0;
+
+ // 1) 字典优先（含内置 + 自定义）
+  let dictList = [];
+  if (Array.isArray(opts.dict)) dictList = opts.dict;
+  else if (typeof opts.dict === "string" && opts.dict.trim()) {
+    dictList = opts.dict.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  }
+  const fullDict = [...BUILTIN_DICT, ...dictList];
+  const seen = new Set();
+  for (const pw of fullDict) {
+    if (seen.has(pw)) continue;
+    seen.add(pw);
+    tried++;
+    if (await matches(te(pw))) {
+      return {
+        found: true, password: pw, tried,
+        entryName: info.name, method: "字典", aesDetected: true,
+        aes: { strength: info.strength, keySize: info.keySize, aesVersion: info.aesVersion },
+      };
+    }
+  }
+
+ // 2) 纯数字掩码：逐位数递增，含前导零穷举（AES 每口令一次 PBKDF2，位数大时极慢）
+  let maxDigits = parseInt(opts.maxDigits, 10);
+  if (!Number.isFinite(maxDigits) || maxDigits < 1) maxDigits = 4;
+  if (maxDigits > 6) maxDigits = 6; // 硬上限（10^6=100 万）
+
+  for (let len = 1; len <= maxDigits; len++) {
+    const limit = Math.pow(10, len);
+    const buf = new Uint8Array(len);
+    for (let n = 0; n < limit; n++) {
+      let x = n;
+      for (let d = len - 1; d >= 0; d--) {
+        buf[d] = 0x30 + (x % 10);
+        x = (x / 10) | 0;
+      }
+      tried++;
+      if (await matches(buf)) {
+        let s = "";
+        for (let k = 0; k < len; k++) s += String.fromCharCode(buf[k]);
+        return {
+          found: true, password: s, tried,
+          entryName: info.name, method: "数字掩码", aesDetected: true,
+          aes: { strength: info.strength, keySize: info.keySize, aesVersion: info.aesVersion },
+        };
+      }
+    }
+  }
+
+  return { found: false, tried, entryName: info.name, aesDetected: true };
+}
+
 // ============================================================
 // 输入：ZIP 字节（hex / base64 / 原始拖入的二进制字符串自动识别）
 // ============================================================
@@ -336,15 +532,15 @@ function inputToZipBytes(text) {
 // 注册 op
 // ============================================================
 register({
-  id: "zipBrute",
+  id: "zipBrute", family: "zip", familyLabel: "crack",
   cat: "forensic",
   name: "ZIP 弱口令爆破",
-  desc: "ZipCrypto（传统 PKWARE 加密）弱口令爆破：内置字典 + 自定义字典 + 纯数字掩码。仅验证密码，不还原明文。数字位数默认 4，硬上限 6（防浏览器卡死）。不支持 WinZip AES（留待 WASM 版）与 bkcrack 明文攻击。输入 ZIP 的 hex/base64/拖入字节",
+  desc: "ZIP 加密条目弱口令爆破：ZipCrypto（传统 PKWARE）走 12 字节头快筛+CRC 全量校验；WinZip AES（AE-1/AE-2，method 99）走 WebCrypto PBKDF2-HMAC-SHA1 派生 + pwdVer 快筛 + HMAC-SHA1 认证码确认。内置字典 + 自定义字典 + 纯数字掩码。仅验证密码，不还原明文。数字位数默认 4，硬上限 6（AES 条目数字掩码逐口令 PBKDF2 极慢，建议用字典）。输入 ZIP 的 hex/base64/拖入字节",
   params: [
     { key: "maxDigits", label: "数字掩码位数上限（默认 4，硬上限 6）", type: "number", default: 4 },
     { key: "dict", label: "自定义字典（每行一个密码，可空）", type: "text", default: "", placeholder: "flag\nctf2024\n..." },
   ],
-  run: function (text, p) {
+  run: async function (text, p) {
     if ((!text || !String(text).trim()) && !(p && p.rawBytes && p.rawBytes.length)) return "（空输入）请拖入 ZIP 文件或粘贴其 hex/base64。";
     let zipBytes;
     try {
@@ -362,38 +558,57 @@ register({
     let clamped = false;
     if (maxDigits > 6) { maxDigits = 6; clamped = true; }
 
+    const probe = findEncryptedEntry(zipBytes);
+    const isAes = probe.ok && probe.type === "aes";
+
     const t0 = Date.now();
-    const r = crackZipCryptoWeak(zipBytes, { maxDigits, dict: (p && p.dict) || "" });
+    let r;
+    try {
+      r = isAes
+        ? await crackWinZipAesWeak(zipBytes, { maxDigits, dict: (p && p.dict) || "" })
+        : crackZipCryptoWeak(zipBytes, { maxDigits, dict: (p && p.dict) || "" });
+    } catch (e) {
+      return "爆破执行失败：" + (e && e.message ? e.message : String(e));
+    }
     const ms = Date.now() - t0;
 
     const lines = [];
-    lines.push("=== ZIP 弱口令爆破（ZipCrypto）===");
+    lines.push(isAes ? "=== ZIP 弱口令爆破（WinZip AES AE-1/AE-2）===" : "=== ZIP 弱口令爆破（ZipCrypto）===");
     if (r.error) {
       lines.push("结果: " + r.error);
-      if (r.aesDetected) {
+      if (r.aesDetected && !isAes) {
         lines.push("");
-        lines.push("检测到 AES 加密条目（method 99）：本版不支持 WinZip AES 爆破（PBKDF2 太重），留待 hash-wasm 版。");
+        lines.push("检测到 AES 加密条目，但其 0x9901 extra field 无法解析（结构损坏或数据不完整）。");
       }
-      lines.push("提示: 确认输入为含 ZipCrypto 加密条目的 ZIP。伪加密请用「ZIP 结构解析」。");
+      lines.push("提示: 确认输入为含加密条目的 ZIP。伪加密请用「ZIP 结构解析」。");
       return lines.join("\n");
     }
 
     lines.push("目标条目: " + (r.entryName || "(未命名)"));
+    if (isAes && r.aes) {
+      const verName = r.aes.aesVersion === 0x0002 ? "AE-2（无 CRC）" : "AE-1（带 CRC）";
+      lines.push("加密规格: AES-" + (r.aes.keySize * 8) + "（strength " + r.aes.strength + "）  " + verName + "  PBKDF2-HMAC-SHA1 1000 轮");
+    }
     if (clamped) lines.push("注意: maxDigits 已压到硬上限 6。");
     lines.push("尝试次数: " + r.tried.toLocaleString() + "  耗时: " + ms + " ms");
     lines.push("");
     if (r.found) {
       lines.push("命中 ✓  密码: \"" + r.password + "\"  （来源: " + r.method + "）");
-      lines.push("");
-      lines.push("说明: 该密码通过 12 字节加密头校验字节验证（1/256 误报率，多数情况即正确密码）。");
+      if (isAes) {
+        lines.push("");
+        lines.push("说明: 该密码通过 2 字节 pwdVer 快筛 + 10 字节 HMAC-SHA1 认证码全量比对双重确认，结果可靠。");
+      } else {
+        lines.push("");
+        lines.push("说明: 该密码通过 12 字节加密头校验字节验证（1/256 误报率，多数情况即正确密码）。");
+      }
       lines.push("如需还原明文，用此密码在本地解压工具解开即可。");
     } else {
       lines.push("未命中 ✗");
       lines.push("建议: 增大数字位数上限、补充自定义字典，或密码较复杂时改用离线 hashcat/John。");
     }
-    if (r.aesDetected) {
+    if (r.aesDetected && !isAes) {
       lines.push("");
-      lines.push("附注: 归档中另有 AES 加密条目（本版跳过）。");
+      lines.push("附注: 归档中另有 AES 加密条目（本次未覆盖）。");
     }
     return lines.join("\n");
   },
@@ -402,7 +617,8 @@ register({
 
 // 导出纯函数供测试
 export {
-  crackZipCryptoWeak, verifyPassword, keysFromPassword,
+  crackZipCryptoWeak, crackWinZipAesWeak, aesDeriveKeys, hmacVerify, parseAesExtra,
+  verifyPassword, keysFromPassword,
   updateKeys, decryptByte, initKeys, crc32Update,
   findEncryptedEntry, BUILTIN_DICT, inputToZipBytes,
 };

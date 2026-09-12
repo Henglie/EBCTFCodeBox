@@ -171,7 +171,7 @@ function rot8000Decode(text, p = {}) {
 }
 
 register({
-  id: "rot8000",
+  id: "rot8000", family: "rot", familyLabel: "rot8000",
   cat: "fancy",
   name: "ROT8000",
   desc: "Unicode 版 ROT13：BMP 有效码位表旋转半程（自反）；offset 参数可切 31753 全字符平移兼容版（仅空格除外），auto 自动检测",

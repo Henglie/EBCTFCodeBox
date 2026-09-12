@@ -51,12 +51,12 @@ export default {
   },
 
   xiangyue: {
-    what: "XiangYue (想曰, decrypt-only): decrypts XiangYue ciphertext (Chinese / Emoji / zero-width / Japanese / Korean / pictographic characters) back to plaintext; it's a re-encryption scheme.",
+    what: "XiangYue (想曰) decryption: recovers XiangYue ciphertext (Chinese / Emoji / zero-width / Japanese / Korean / pictographic characters) back to plaintext; a re-encryption scheme (see the same-family 「XiangYue Encrypt」 for the encryption direction).",
     principle:
       "The ciphertext first auto-detects which mapping set it uses by character type (Chinese / Emoji / zero-width / Japanese / Korean / pictographic), reverse-maps back to Base64, then auto-detects one of two ciphertext formats:\n\n" +
       "format1: seed(16) + ChaCha20-Poly1305 ciphertext; the master key is derived via $Argon2id$ (t=2, m=64MiB, p=1), then subkeys are derived via HKDF-SHA512 → ChaCha20-Poly1305 → AES-CTR → zlib decompress.\n\n" +
       "format2: salt(16)+nonce(12)+ciphertext; derived via $PBKDF2\\text{-}SHA256$ (500,000 iterations), HKDF-SHA256 → ChaCha20-Poly1305 → AES-CTR → zlib.\n\n" +
-      "Built-in default password `a184f7b849ffed24d266a30298c72ef2f5ad040db73bf37151fac767630728`. The decompiled source contains only the decryption function, so this op is decrypt-only (format1's Argon2id derivation is slow, taking a few seconds).",
+      "Built-in default password `a184f7b849ffed24d266a30298c72ef2f5ad040db73bf37151fac767630728`. The original decompiled source only had decryption; the encryption direction was implemented in this toolbox by strictly reversing the decryption chain (format1's Argon2id derivation is slow, taking a few seconds).",
     usage: "Paste XiangYue ciphertext (any mapping is auto-detected); the password defaults to the built-in one. Tick 「include detection info」 to see the detected mapping type and format. Decrypt only.",
     examples: [
       { in: "(a XiangYue Chinese/Emoji ciphertext string)", param: "default password", out: "recovered plaintext", desc: "Auto-detects mapping and format" },
@@ -65,6 +65,21 @@ export default {
     aka: ["想曰", "xiangyue", "XiangYue", "想曰解密", "zbXiangYue", "xiang yue", "想曰编码",
       "argon2想曰", "chacha想曰", "重加密中文", "想曰密文", "多映射解密", "想曰XiangYue",
       "xiangyue decrypt", "multi-mapping decryption"],
+  },
+
+  xiangyueEnc: {
+    what: "XiangYue encryption: turns plaintext into XiangYue ciphertext with a choice of seven looks — Chinese / Japanese / Korean / pictographic / Emoji / zero-width / Base64 — and the output is auto-detected and recovered by the 「XiangYue」 decrypt op.",
+    principle:
+      "The strict reverse of the decryption chain: plaintext UTF-8 → zlib deflate → AES-CTR → ChaCha20-Poly1305 → packet assembly → Base64 → mapped to the chosen look via the mapping table.\n\n" +
+      "format2: salt(16)+nonce(12)+ciphertext, keys derived via $PBKDF2\\text{-}SHA256$ (500k iterations), ~0.3s; format1: starts with seed(16), $Argon2id$ 64MiB derivation, several seconds per run.\n\n" +
+      "The default password is the same built-in one as the decrypt side; decryption must use the same password.",
+    usage: "Enter plaintext, pick the ciphertext format (default format2) and look (default Chinese), convert to get pure ciphertext. Paste it into 「XiangYue」 decrypt to verify the round-trip (same password).",
+    examples: [
+      { in: "flag{test}", param: "format2, Chinese look", out: "a string of Chinese ciphertext", desc: "Round-trip verifiable by pasting back into decrypt" },
+    ],
+    tips: ["Output is pure ciphertext — copy it straight into the 「XiangYue」 decrypt op for a closed-loop check.", "format1 is slower (Argon2id 64MiB) but has a harder key derivation; choose as needed.", "Zero-width ciphertext is invisible to the eye; inspect it with the zero-width visualizer."],
+    aka: ["想曰加密", "xiangyue encrypt", "想曰编码", "想曰加密器", "XiangYue encrypt", "xiangyue enc",
+      "想曰生成", "想曰制作", "xiangyueEncrypt", "re-encryption generate", "想曰密文生成", "想曰反向", "XiangYue encryption direction"],
   },
 
   xiongyue: {
@@ -281,7 +296,7 @@ export default {
     principle:
       "54 cards: 1-52 regular cards, 53 = big joker (A), 54 = little joker (B). Before each keystream value, the deck evolves in four steps:\n\n" +
       "1. Move the big joker down 1\n2. Move the little joker down 2\n3. Triple cut: swap the top and bottom sections bounded by the two jokers\n4. Count cut: move a number of top cards equal to the bottom card's value to just above the bottom card\n\n" +
-      "Then read the top card value n, take the (n+1)-th card's value as the keystream (jokers are skipped and the step reruns), mapped to 1-26. Encrypt: plaintext letter(1-26) + keystream mod 26; decrypt: subtract. A keyword can pre-arrange the deck.",
+      "Then read the top card value n, take the (n+1)-th card's value as the keystream (jokers are skipped and the step reruns), mapped to 1-26. Encrypt: plaintext letter(1-26) + keystream $\\bmod 26$; decrypt: subtract. A keyword can pre-arrange the deck.",
     usage: "Optionally enter a keyword key (pre-arranges the deck; blank uses the default order). Encode/decode process only letters, ignoring non-letters.",
     examples: [
       { in: "AAAAAAAAAA", param: "keyword blank", out: "EXKYIZSGEH", desc: "Schneier's official vector" },

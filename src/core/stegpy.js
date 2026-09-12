@@ -147,7 +147,7 @@ function rgbToRgba(rgb) {
 
 // ---- op ----
 async function stegpyEncodeOp(text, p = {}) {
-  const img = decodePNG(dataURLToBytes(text));
+  const img = decodePNG(p && p.rawBytes && p.rawBytes.length ? p.rawBytes : dataURLToBytes(text));
   const message = new TextEncoder().encode(String(p.message || ""));
   const bits = [1, 2, 4].includes(Number(p.bits)) ? Number(p.bits) : 2;
   let payload = formatMessage(message, null);
@@ -167,7 +167,7 @@ async function stegpyEncodeOp(text, p = {}) {
 }
 
 async function stegpyDecodeOp(text, p = {}) {
-  const img = decodePNG(dataURLToBytes(text));
+  const img = decodePNG(p && p.rawBytes && p.rawBytes.length ? p.rawBytes : dataURLToBytes(text));
   let payload = stegpyDecodeBits(rgbaToRgb(img.data));
   if (p.password) {
     if (payload.length < 16) throw new Error("数据过短，无法解密");

@@ -919,7 +919,7 @@ function makeBlockOp(encFn, decFn) {
 {
   const { encode, decode } = makeBlockOp(teaEncrypt, teaDecrypt);
   register({
-    id: "tea", cat: "modern", name: "TEA", desc: "Tiny Encryption Algorithm（64位块，128位密钥，32轮 Feistel，Wheeler 1994；支持 ECB/CBC/CFB/OFB/CTR）",
+    id: "tea", family: "tea", familyLabel: "tea", cat: "block", name: "TEA", desc: "Tiny Encryption Algorithm（64位块，128位密钥，32轮 Feistel，Wheeler 1994；支持 ECB/CBC/CFB/OFB/CTR）",
     params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "16 字节密钥"),
     encode, decode,
   });
@@ -928,7 +928,7 @@ function makeBlockOp(encFn, decFn) {
 {
   const { encode, decode } = makeBlockOp(xteaEncrypt, xteaDecrypt);
   register({
-    id: "xtea", cat: "modern", name: "XTEA", desc: "扩展 TEA（改进密钥调度，64位块，128位密钥，32轮，Needham 1997；支持 ECB/CBC/CFB/OFB/CTR）",
+    id: "xtea", family: "tea", familyLabel: "xtea", cat: "block", name: "XTEA", desc: "扩展 TEA（改进密钥调度，64位块，128位密钥，32轮，Needham 1997；支持 ECB/CBC/CFB/OFB/CTR）",
     params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "16 字节密钥"),
     encode, decode,
   });
@@ -945,7 +945,7 @@ function makeBlockOp(encFn, decFn) {
     return td(xxteaDecrypt(data, key));
   };
   register({
-    id: "xxtea", cat: "modern", name: "XXTEA", desc: "可变长度块 TEA（整个数据一次性加密，≥8字节，128位密钥，Wheeler 1998）",
+    id: "xxtea", family: "tea", familyLabel: "xxtea", cat: "block", name: "XXTEA", desc: "可变长度块 TEA（整个数据一次性加密，≥8字节，128位密钥，Wheeler 1998）",
     params: [
       { key: "key", label: "密钥", type: "text", default: "", placeholder: "16 字节密钥" },
       { key: "keyEnc", label: "密钥编码", type: "select", default: "utf8", options: ENC_OPTS },
@@ -959,7 +959,7 @@ function makeBlockOp(encFn, decFn) {
 {
   const { encode, decode } = makeBlockOp(sm4Encrypt, sm4Decrypt);
   register({
-    id: "sm4", cat: "modern", name: "SM4",
+    id: "sm4", family: "sm4", familyLabel: "encdec", cat: "block", name: "SM4",
     desc: "国密分组密码（GB/T 32907-2016，前身 GM/T 0002-2012；128位块，128位密钥，32轮非线性迭代。模式：ECB/CBC/CFB/OFB/CTR + GCM 认证加密）",
     params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR", "GCM"], "16 字节密钥（hex 32 字符）"),
     encode, decode,
@@ -995,14 +995,14 @@ function makeStreamCipherOp(fn, keyHint, nonceHint) {
 {
   const { params, encode, decode } = makeStreamCipherOp(salsa20, "16 或 32 字节密钥", "8 字节 nonce");
   register({
-    id: "salsa20", cat: "modern", name: "Salsa20", desc: "Salsa20/20 流密码（Bernstein，key 16/32 字节，nonce 8 字节，64位块计数器）",
+    id: "salsa20", cat: "stream", name: "Salsa20", desc: "Salsa20/20 流密码（Bernstein，key 16/32 字节，nonce 8 字节，64位块计数器）",
     params, encode, decode,
   });
 }
 {
   const { params, encode, decode } = makeStreamCipherOp(chacha20, "32 字节密钥", "12 字节 nonce");
   register({
-    id: "chacha20", cat: "modern", name: "ChaCha20", desc: "ChaCha20 流密码（RFC 8439，key 32 字节，nonce 12 字节，32位块计数器）",
+    id: "chacha20", cat: "stream", name: "ChaCha20", desc: "ChaCha20 流密码（RFC 8439，key 32 字节，nonce 12 字节，32位块计数器）",
     params, encode, decode,
   });
 }

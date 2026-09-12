@@ -69,7 +69,7 @@ export default {
   },
   rot47: {
     what: "ROT47 — a self-inverse substitution shifting printable ASCII by 47.",
-    principle: "Shifts all 94 printable ASCII characters (33-126) by 47 (mod 94); shifting by 47 again restores the original.",
+    principle: "Shifts all 94 printable ASCII characters (33-126) by 47 ($\\bmod 94$); shifting by 47 again restores the original.",
     usage: "No parameters, self-inverse; covers all printable ASCII.",
     examples: [{ in: "Hello", param: {}, out: "w6==@", desc: "H→w, e→6, l→=, l→=, o→@." }],
     formulas: [{ tex: "E(x) = ((x - 33 + 47) \\bmod 94) + 33", caption: "Shift by 47 within the printable ASCII range." }],
@@ -110,15 +110,15 @@ export default {
     examples: [{ in: "HI", param: {}, out: "26 18", desc: "H = row 2, col 6 = 26; I = row 1, col 8 = 18." }],
     formulas: [{ tex: "E(c) = (\\text{row}, \\text{col})", caption: "The key's row/column position on the keyboard." }],
     tips: ["Based on the standard QWERTY layout.", "Row numbers run 1-3 from top to bottom.", "Coordinates with no separator are written together."],
-    aka: ["键盘坐标", "Keyboard coordinate", "键盘密码", "QWERTY坐标", "键盘行列", "keyboard cipher", "键位坐标", "键盘位置编码", "行列键盘码", "keyboard coord", "三行键盘坐标", "键盘映射"]
+    aka: ["键盘加密", "键盘坐标", "Keyboard coordinate", "键盘密码", "QWERTY坐标", "键盘行列", "keyboard cipher", "键位坐标", "键盘位置编码", "行列键盘码", "keyboard coord", "三行键盘坐标", "键盘映射"]
   },
   brainfuck: {
     what: "Brainfuck — a minimalist imperative programming language.",
     principle: "Just 8 instructions + - > < . , [ ] operate on a one-dimensional byte array and a pointer. + increments the current cell, . outputs it.",
-    usage: "No parameters. Bidirectional encode (generate code) / decode (execute code).",
-    examples: [{ in: "Hi", param: {}, out: "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.+++++++++++++++++++++++++++++++++..", desc: "72 pluses set the cell to 72 (H), . outputs it, then 33 more pluses reach 105 (i), and . outputs again." }],
+    usage: "Encode generates standard code; decode executes it. ReverseFuck dialect compatibility (esolangs.org: -<->+, ><-><, ]<->[, ,<->. — all four pairs mirrored) is enabled by default, including Magic calls without parameters; set swapRerun=false to keep the plain path. An orphan closing bracket triggers the mirrored swap plus bracket-structure validation within one five-million-step budget; verified against real CTF challenges such as NoobCTF 'WhatThe#' (T501, 21/21).",
+    examples: [{ in: "Hi", param: {}, out: "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.+++++++++++++++++++++++++++++++++.", desc: "72 pluses output H; 33 more pluses output i." }],
     formulas: [{ tex: "\\text{cell} += 1\\ (\\text{当} +),\\ \\text{output}(\\text{cell})\\ (\\text{当} .)", caption: "+ increments the cell, . outputs the cell's current value." }],
-    tips: ["8 instructions: + - > < . , [ ]", "Cells are 8-bit bytes (0-255).", "Turing-complete, but extremely hard to read."],
+    tips: ["8 instructions: + - > < . , [ ]", "30,000 wrapping 8-bit cells; output is decoded as UTF-8.", "Compatibility swaps -/+ , >/< , ]/[ and comma/dot. Commas on the swapped path are no-ops. This is not standard Brainfuck and cannot identify every bracket-free substituted program."],
     aka: ["Brainfuck", "BF 语言", "brainfuck", "BF", "脑残语言", "布莱恩福克", "b***fuck", "极简语言", "esoteric language", "深奥编程语言", "图灵完备语言", "八指令语言"]
   },
   ook: {
@@ -146,7 +146,7 @@ export default {
     examples: [{ in: "Hi", param: {}, out: "就这¿就这¿不会吧？...", desc: "The ASCII binary of H/i expressed as a catchphrase sequence." }],
     formulas: [{ tex: "E(b) = \\begin{cases} \\text{不会吧？} & b=1 \\\\ \\text{就这¿} & b=0 \\end{cases}", caption: "Binary bit 1→不会吧？, 0→就这¿." }],
     tips: ["0→就这¿, 1→不会吧？", "An encoding derived from an internet meme.", "Essentially a colloquial wrapper around binary."],
-    aka: ["阴阳怪气语", "yygq", "阴阳怪气", "阴阳怪气编码", "就这不会吧", "yygq编码", "阴阳语", "怪话编码", "网络梗编码", "口头禅二进制", "yin yang", "阴阳怪气密码"]
+    aka: ["嗷呜", "嗷呜啊", "兽语", "beast语", "阴阳怪气语", "yygq", "阴阳怪气", "阴阳怪气编码", "就这不会吧", "yygq编码", "阴阳语", "怪话编码", "网络梗编码", "口头禅二进制", "yin yang", "阴阳怪气密码"]
   },
   braille: {
     what: "Braille encoding — 8-dot braille from the Unicode U+2800 block.",
@@ -167,13 +167,12 @@ export default {
     aka: ["六十四卦", "八卦编码", "64卦", "易经编码", "卦象编码", "周易编码", "六十四卦密码", "hexagram", "八卦密码", "I Ching", "易经卦象", "卦爻编码"]
   },
   whitespace: {
-    what: "Whitespace encoding — represents binary with space/Tab/newline.",
-    principle: "Uses three whitespace characters (space, Tab, newline) to represent binary bits or groups; it looks blank but carries hidden information.",
-    usage: "No parameters (space/tab/newline). Bidirectional encode/decode.",
-    examples: [{ in: "Hi", param: {}, out: "（由空格/Tab/换行组成的不可见序列）", desc: "Hi is encoded as a sequence of only whitespace characters, invisible to the eye." }],
-    formulas: [{ tex: "E(b) \\in \\{\\text{Space}, \\text{Tab}, \\text{LF}\\}", caption: "Binary bits map to three whitespace characters." }],
-    tips: ["Three whitespace characters represent binary.", "On the surface it looks like ordinary blank text.", "Requires a dedicated tool to read."],
-    aka: ["空白编码", "Whitespace", "whitespace", "空白字符编码", "空格隐写", "Whitespace语言", "隐形编码", "不可见字符编码", "空白隐写", "Tab空格换行", "whitespace stego", "空白密码"]
+    what: "Whitespace is a stack-machine programming language whose instruction tokens are spaces, tabs and line feeds. It is not SNOW or binary whitespace steganography.",
+    principle: "Instructions combine a category prefix, opcode, and optional number or label. They cover stack operations, integer arithmetic, heap access, branches, subroutines and I/O. Numbers use sign plus binary digits; the language itself is not a bitwise text codec. Heap retrieval is TTT and termination is NNN (S=space, T=tab, N=line feed). Reference: https://esolangs.org/wiki/Whitespace .",
+    usage: "Encode generates a program that prints the input; decode executes it. The stdin parameter supplies character/numeric input, with EOF represented by -1. Execution is capped at one million steps; integer magnitude is limited to 9007199254740991. Out-of-range integers, invalid instructions, stack underflow and missing termination produce errors.",
+    examples: [{ in: "A", param: {}, out: "   \t     \t\n\t\n  \n\n\n", desc: "Push 65, output A, terminate with NNN. Preserve whitespace exactly." }],
+    tips: ["Trimming or replacing whitespace corrupts programs.", "Includes copy/slide extensions; other interpreters may have different extension and EOF behavior.", "Division rounds toward negative infinity, with paired modulo."],
+    aka: ["Whitespace", "Whitespace language", "Whitespace interpreter", "Whitespace stack machine", "Whitespace execution", "Whitespace stdin", "Whitespace heap", "Whitespace flow control", "space tab LF language", "Whitespace esolang", "Whitespace语言", "空白编程语言"]
   },
   pigpen: {
     what: "Pigpen cipher — grid tokens 1A-3H representing letters.",
@@ -194,12 +193,12 @@ export default {
     aka: ["键盘位移", "Keyboard shift", "键盘漂移", "keyboard shift", "键位平移", "键盘偏移", "键盘滑动密码", "keyboard drift", "键盘左右移", "键位偏移密码", "同行键位移", "keyboard offset"]
   },
   malbolge: {
-    what: "Malbolge detection — detects printable ASCII text.",
-    principle: "Malbolge is a language deliberately designed to be extremely difficult; this op only detects, it does not execute, and outputs recognizable information.",
-    usage: "run one-way (detect only, does not execute).",
-    examples: [{ in: "可打印ASCII文本", param: {}, out: "识别信息", desc: "Runs Malbolge recognizability detection on the input text." }],
+    what: "Malbolge load-form validation: ignore whitespace, then check characters and position-dependent instruction values. No program execution.",
+    principle: "Characters must be ASCII 33-126. At zero-based position i after removing whitespace, (character code+i)%94 must belong to {4,5,23,39,40,62,68,81}. Printable English or Base64 alone is not sufficient. Reference: https://esolangs.org/wiki/Malbolge .",
+    usage: "Run returns a validation report, not program output. Empty input and more than 59049 effective characters are rejected.",
+    examples: [{ in: "b b", param: {}, out: "Malbolge 装载形式校验通过：2 个有效指令字符，已跳过空白。\n仅验证 ASCII 33-126 和 (字符码+位置)%94 的合法指令集合；未执行程序，不能据此保证运行输出。", desc: "A two-character load-form example, not an execution result." }],
     formulas: [{ tex: "\\text{out} = \\text{detect}(\\text{input})", caption: "Detects a Malbolge program only, without executing it." }],
-    tips: ["Detects only, does not execute.", "Malbolge is called the hardest programming language.", "Input must be printable ASCII."],
+    tips: ["Passing validation does not guarantee termination or a flag.", "Spaces, tabs and line feeds do not count toward instruction positions.", "Separate variants such as Malbolge Unshackled are not supported."],
     aka: ["Malbolge 识别", "玛尔波格", "Malbolge", "malbolge", "地狱语言", "最难编程语言", "但丁地狱语言", "深奥语言Malbolge", "Malbolge识别", "玛尔波各", "esolang", "最难esolang"]
   },
   aaencode: {
@@ -245,7 +244,7 @@ export default {
     examples: [{ in: "HELLO", param: { column: 2 }, out: "HLOEL|", desc: "column=2: HLO first, EL after, with | as a trailing placeholder." }],
     formulas: [{ tex: "T = \\text{column}", caption: "The column width sets the transposition period." }],
     tips: ["column sets the rod's circumference.", "Shortfalls are padded with the placeholder |.", "One of the oldest transposition ciphers."],
-    aka: ["密码棒", "Scytale", "scytale", "天书密码棒", "斯巴达密码棒", "斯巴达棒", "绕棒密码", "cane cipher", "密码卷轴", "换位密码棒", "Skytale", "古希腊密码棒"]
+    aka: ["圆柱密码", "斯巴达", "密码棒", "Scytale", "scytale", "天书密码棒", "斯巴达密码棒", "斯巴达棒", "绕棒密码", "cane cipher", "密码卷轴", "换位密码棒", "Skytale", "古希腊密码棒"]
   },
   keyCode: {
     what: "Key code recognition — converts key codes to characters.",
@@ -272,7 +271,7 @@ export default {
     examples: [{ in: "abc", param: {}, out: "T9九宫格模式识别", desc: "Recognizes the T9 keypad input mode corresponding to abc." }],
     formulas: [{ tex: "\\text{out} = \\text{T9}_\\text{mode}(\\text{input})", caption: "Four-mode T9 keypad recognition." }],
     tips: ["Supports four recognition modes.", "2=abc, 3=def, 4=ghi...", "Old-style mobile phone input method."],
-    aka: ["T9 九宫格", "keyword9", "T9九宫格", "九宫格识别", "T9识别", "手机九宫格", "T9 keyboard", "九宫格输入", "老年机输入", "T9 predictive", "九宫格密码", "手机键盘九宫格"]
+    aka: ["九键", "九宫格输入法", "九键输入", "T9 九宫格", "keyword9", "T9九宫格", "九宫格识别", "T9识别", "手机九宫格", "T9 keyboard", "九宫格输入", "老年机输入", "T9 predictive", "九宫格密码", "手机键盘九宫格"]
   },
   keyboardSurround: {
     what: "Keyboard surrounding-key recognition — finds a key's neighbor set.",
@@ -308,7 +307,7 @@ export default {
     examples: [{ in: "ABC", param: {}, out: "212223", desc: "A=21, B=22, C=23 (the 1st/2nd/3rd position on the 2 key)." }],
     formulas: [{ tex: "E(c) = 10 \\cdot \\text{key}(c) + \\text{pos}(c)", caption: "Key number ×10 + press position." }],
     tips: ["a=21 ... z=94.", "2=abc, 3=def, 4=ghi, 5=jkl, 6=mno, 7=pqrs, 8=tuv, 9=wxyz.", "Distinct from multitap."],
-    aka: ["T9 手机码", "t9Phone", "手机九宫格T9", "T9电话编码", "手机键盘编码", "电话九宫格", "phone keypad", "T9 phone", "手机数字键编码", "九宫格数字码", "键号位序编码", "T9手机键盘"]
+    aka: ["九键", "九宫格输入法", "九键输入", "T9 手机码", "t9Phone", "手机九宫格T9", "T9电话编码", "手机键盘编码", "电话九宫格", "phone keypad", "T9 phone", "手机数字键编码", "九宫格数字码", "键号位序编码", "T9手机键盘"]
   },
   multitap: {
     what: "Multitap encoding — number of key presses represents a letter.",

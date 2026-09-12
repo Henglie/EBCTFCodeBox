@@ -563,7 +563,7 @@ register({
 });
 
 register({
-  id: "arnoldCat", cat: "stego", name: "Arnold 猫脸变换",
+  id: "arnoldCat", family: "arnold", familyLabel: "transform", cat: "stego", name: "Arnold 猫脸变换",
   desc: "Arnold 猫脸变换置乱（正方形图像，参数化矩阵 [[1,a],[b,ab+1]]，a=b=1 为标准版）",
   params: [
     { key: "iterations", label: "迭代次数", type: "number", default: 1, placeholder: "1-100" },
@@ -733,7 +733,7 @@ async function arnoldCatBruteOp(text, p = {}) {
 }
 
 register({
-  id: "arnoldCatBrute", cat: "stego", name: "Arnold 猫脸暴破",
+  id: "arnoldCatBrute", family: "arnold", familyLabel: "crack", cat: "stego", name: "Arnold 猫脸暴破",
   desc: "全参数暴力破解：a/b/迭代次数三维范围遍历反向还原，候选缩略图网格拼图输出（随参数范围增大耗时线性增长）",
   params: [
     { key: "aStart", label: "a 起始", type: "number", default: 1 },
@@ -1017,7 +1017,8 @@ function pngTextEncode(text, p = {}) {
   out.set(bytes.subarray(0, insertOff), 0);
   out.set(chunk, insertOff);
   out.set(bytes.subarray(insertOff), insertOff + chunk.length);
-  return _bytesToB64(out);
+  // T363b 产物协议 2026-09-02：写入后的 PNG 字节走 files 下载按钮，text 保留 base64 行（链式/复制兼容）。
+  return { text: _bytesToB64(out), files: [{ name: "out.png", mime: "image/png", bytes: out }] };
 }
 
 // ============ pngHeight：PNG IHDR 高度修改 ============
@@ -1035,7 +1036,8 @@ function pngHeightTransform(text, p = {}) {
   const out = new Uint8Array(bytes);
   _setU32be(out, 20, newH);
   _setU32be(out, 29, _crc32(out, 12, 29)); // 重算 IHDR CRC（type+data = [12,29)）
-  return _bytesToB64(out);
+  // T363b 产物协议 2026-09-02：改高后的 PNG 字节走 files 下载按钮，text 保留 base64 行（链式/复制兼容）。
+  return { text: _bytesToB64(out), files: [{ name: "out.png", mime: "image/png", bytes: out }] };
 }
 
 // ============ exifExtract：JPEG EXIF 提取 ============
@@ -1186,7 +1188,7 @@ function imageDiffTransform(imageData, p = {}) {
 // lsbMultiEncode/Decode 函数保留（lsbImage 现用它们做统一实现），此处注册删除。
 
 register({
-  id: "pngText", cat: "stego", name: "PNG 文本块读写",
+  id: "pngText", family: "png", familyLabel: "text", cat: "stego", name: "PNG 文本块读写",
   desc: "PNG tEXt/zTXt/iTXt chunk 解析与写入（操作文件字节，base64 输入输出，不经 canvas）",
   params: [
     { key: "keyword", label: "关键字", type: "text", default: "Comment", placeholder: "tEXt 关键字（1-79 字节）" },
@@ -1197,7 +1199,7 @@ register({
 });
 
 register({
-  id: "pngHeight", cat: "stego", name: "PNG 高度修改",
+  id: "pngHeight", family: "png", familyLabel: "height", cat: "stego", name: "PNG 高度修改",
   desc: "修改 PNG IHDR 高度（CTF 隐藏图层经典手法；操作文件字节，base64 输入输出）",
   params: [
     { key: "height", label: "新高度", type: "number", default: 0, placeholder: "0=自动 1.5 倍，或指定像素值" },

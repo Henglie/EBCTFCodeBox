@@ -644,7 +644,7 @@ function triviumDecode(hex, p) {
 }
 register({
   id: "trivium",
-  cat: "modern",
+  cat: "stream",
   name: "Trivium 流密码",
   desc: "Trivium（80-bit key + 80-bit IV，288-bit 状态）。encode: 明文→Hex 密文；decode: Hex→明文。对称可逆。兼容 风之暇想 fzxx/Trivium-Grain 在线站（trivium-grain.js.org），密文字节互通。",
   params: [
@@ -670,8 +670,8 @@ function grainV1Decode(hex, p) {
   return encodeOutput(bytes, (p && p.inputEnc) || "utf8");
 }
 register({
-  id: "grainV1",
-  cat: "modern",
+  id: "grainV1", family: "grain", familyLabel: "grainv1",
+  cat: "stream",
   name: "Grain v1 流密码",
   desc: "Grain v1（80-bit key + 64-bit IV，LFSR80+NFSR80+h）。encode: 明文→Hex 密文；decode: Hex→明文。对称可逆。兼容 风之暇想 fzxx/Trivium-Grain 在线站，密文字节互通。",
   params: [
@@ -706,8 +706,8 @@ function grain128Decode(hex, p) {
   return encodeOutput(plaintext, (p && p.inputEnc) || "utf8");
 }
 register({
-  id: "grain128aead",
-  cat: "modern",
+  id: "grain128aead", family: "grain", familyLabel: "grain128aead",
+  cat: "stream",
   name: "Grain-128AEAD 认证加密",
   desc: "Grain-128AEAD（128-bit key + 96-bit nonce，真实 AEAD，64-bit tag）。encode: 明文+AD→Hex 密文(含尾 8 字节 tag)；decode: Hex→明文并验 tag，失败报错。兼容 风之暇想 fzxx/Trivium-Grain 在线站，密文字节互通。",
   params: [

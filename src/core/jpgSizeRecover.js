@@ -318,7 +318,8 @@ function jpgSizeRecoverRun(text, p) {
     lines.push("");
     lines.push("修复后 base64（已写回 SOF）：");
     lines.push(bytesToB64(fixed));
-    return lines.join("\n");
+    // T363b 产物协议 2026-09-02：修复后的 JPEG 字节走 files 下载按钮，text 保留原报告 + base64 行（链式/复制兼容）。
+    return { text: lines.join("\n"), files: [{ name: "out.jpg", mime: "image/jpeg", bytes: fixed }] };
   }
 
   // 自动：仅基线可数 MCU
@@ -344,7 +345,8 @@ function jpgSizeRecoverRun(text, p) {
   lines.push("");
   lines.push("修复后 base64（已写回 SOF 高度）：");
   lines.push(bytesToB64(fixed));
-  return lines.join("\n");
+  // T363b 产物协议 2026-09-02：修复后的 JPEG 字节走 files 下载按钮，text 保留原报告 + base64 行（链式/复制兼容）。
+  return { text: lines.join("\n"), files: [{ name: "out.jpg", mime: "image/jpeg", bytes: fixed }] };
 }
 
 // ============ 自检用手造极小基线 JPEG（手写熵编码，不依赖外部编码器） ============
@@ -391,10 +393,17 @@ function tamperHeight(jpeg, fakeH) {
 // ============ 加载期自检（import 即跑） ============
 
 (() => {
+  // T363b 产物协议 2026-09-02：run 可返回 { text, files }，自检统一取 text；
+  // 产物字节优先从 files[0].bytes 拿（旧字符串路径仅兜底兼容）。
+  const asText = (o) => (typeof o === "string" ? o : o.text);
+  const asBytes = (o) => (o && o.files && o.files[0] && o.files[0].bytes instanceof Uint8Array)
+    ? o.files[0].bytes
+    : (typeof o === "string" ? b64ToBytes(o.split("\n").pop()) : null);
+
   // ① 主路径：8×32（4 MCU）篡改高 32→8，自动数 MCU 恢复 32
   let jpg = makeBaselineJpeg(8, 32, 4);
   let out = jpgSizeRecoverRun("", { rawBytes: tamperHeight(jpg, 8), mode: "auto" });
-  if (!out.includes("真实高度 32") || !out.includes("原记录 8")) throw new Error(`jpgSizeRecover 自检①失败：\n${out}`);
+  if (!asText(out).includes("真实高度 32") || !asText(out).includes("原记录 8")) throw new Error(`jpgSizeRecover 自检①失败：\n${asText(out)}`);
 
   // ② 未篡改：高度与扫描数据一致
   out = jpgSizeRecoverRun("", { rawBytes: makeBaselineJpeg(8, 32, 4), mode: "auto" });
@@ -402,8 +411,7 @@ function tamperHeight(jpeg, fakeH) {
 
   // ③ 手动模式：写高 64（宽 0 不改）
   out = jpgSizeRecoverRun("", { rawBytes: makeBaselineJpeg(8, 32, 4), mode: "manual", width: 0, height: 64 });
-  const b64 = out.split("\n").pop();
-  const redone = b64ToBytes(b64);
+  const redone = asBytes(out);
   const reparsed = jpegParse(redone);
   if (reparsed.sof.height !== 64 || reparsed.sof.width !== 8) throw new Error(`jpgSizeRecover 自检③失败：${reparsed.sof.width}×${reparsed.sof.height}`);
 
@@ -416,7 +424,7 @@ function tamperHeight(jpeg, fakeH) {
   // ⑤ 多 MCU 行：16×16 → mcusPerRow=2，4 MCU → 2 行 → 真高 16；篡改 16→8 应恢复 16
   jpg = makeBaselineJpeg(16, 16, 4); // 每 MCU 行 2 个，2 行共 4 MCU（每字节 4 MCU？——2bit/MCU，4MCU=1 字节）
   out = jpgSizeRecoverRun("", { rawBytes: tamperHeight(jpg, 8), mode: "auto" });
-  if (!out.includes("真实高度 16")) throw new Error(`jpgSizeRecover 自检⑤失败：\n${out}`);
+  if (!asText(out).includes("真实高度 16")) throw new Error(`jpgSizeRecover 自检⑤失败：\n${asText(out)}`);
 
   // ⑥ 采样因子路径：2 分量（0x21 采样 + 0x11），每 MCU 3 块 6bit
   //    W=64 → mcusPerRow = ceil(64/16) = 4，H=8 → 1 行 4 MCU = 24bit = 3 字节
@@ -498,7 +506,7 @@ function tamperHeight(jpeg, fakeH) {
 // ============ register ============
 
 register({
-  id: "jpgSizeRecover", cat: "forensic", name: "JPEG 宽高修复",
+  id: "jpgSizeRecover", family: "jpeg", familyLabel: "sizerecover", cat: "stego", name: "JPEG 宽高修复",
   desc: "基线 JPEG 数 MCU 反推真实高度（SOF 无校验和，熵解码扫描数据数块即得；CTF 改高度藏图的 JPEG 版）+ 手动强制宽高，输出修复后 base64",
   params: [
     { key: "mode", label: "模式", type: "select", default: "auto",

@@ -14,7 +14,7 @@ export default {
       "Short inputs (0-16 bytes) split further. Length 0 returns k2 outright. Lengths 1-3 read only the first, middle, and last bytes, packing them into two 32-bit values before a single ShiftMix. Lengths 4-7 read two overlapping 32-bit words; 8-16 read two overlapping 64-bit words. The overlap trick means no branching on the exact byte count and no padding.\n\n" +
       "Long inputs (65+ bytes) hash the tail first, then carry 56 bytes of state (v, w, x, y, z) through a 64-byte-per-iteration loop. WeakHashLen32WithSeeds mixes each 32-byte half, and z/x swap every round so the two accumulator chains stay entangled.\n\n" +
       "CityHash32 is a different construction — it borrows Murmur3's c1 = 0xcc9e2d51, c2 = 0x1b873593 and fmix finalizer, processes 20 bytes per iteration, and uses PERMUTE3 to rotate the three accumulators f/g/h so no single lane dominates.\n\n" +
-      "All rotations are RIGHT rotations (`(v >> s) | (v << (64-s))`) — a detail that silently breaks ports written from the paper rather than the source. Multiplications wrap modulo 2^64, and byte reads are little-endian.",
+      "All rotations are RIGHT rotations (`(v >> s) | (v << (64-s))`) — a detail that silently breaks ports written from the paper rather than the source. Multiplications wrap modulo $2^{64}$, and byte reads are little-endian.",
     usage: "Enter text in the input box (or switch to hex mode for raw bytes). Pick 64 (16 hex chars) or 32 (8 hex chars) for the output width, then click Run. One-way, non-reversible — no decode.",
     examples: [
       { in: "", param: "bits=64", out: "9ae16a3b2f90404f", desc: "Empty string returns the constant k2 verbatim" },

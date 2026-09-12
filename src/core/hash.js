@@ -214,32 +214,32 @@ async function hmac(algo, key, text) {
 
 // ============ 注册 ============
 register({
-  id: "md5", cat: "hash", name: "MD5", desc: "MD5 消息摘要（128 位，RFC 1321，纯 JS）",
+  id: "md5", cat: "hash", name: "MD5", family: "md", familyLabel: "MD5", desc: "MD5 消息摘要（128 位，RFC 1321，纯 JS）",
   run: (t) => md5(t),
 });
 
 register({
-  id: "md4", cat: "hash", name: "MD4", desc: "MD4 消息摘要（128 位，RFC 1320，纯 JS，NTLM 基础）",
+  id: "md4", cat: "hash", name: "MD4", family: "md", familyLabel: "MD4", desc: "MD4 消息摘要（128 位，RFC 1320，纯 JS，NTLM 基础）",
   run: (t) => md4(t),
 });
 
 register({
-  id: "sha1", cat: "hash", name: "SHA-1", desc: "SHA-1 消息摘要（160 位，WebCrypto）",
+  id: "sha1", cat: "hash", name: "SHA-1", family: "sha", familyLabel: "SHA-1", desc: "SHA-1 消息摘要（160 位，WebCrypto）",
   run: async (t) => sha("SHA-1", t),
 });
 
 register({
-  id: "sha256", cat: "hash", name: "SHA-256", desc: "SHA-256 消息摘要（256 位，WebCrypto）",
+  id: "sha256", cat: "hash", name: "SHA-256", family: "sha", familyLabel: "SHA-256", desc: "SHA-256 消息摘要（256 位，WebCrypto）",
   run: async (t) => sha("SHA-256", t),
 });
 
 register({
-  id: "sha384", cat: "hash", name: "SHA-384", desc: "SHA-384 消息摘要（384 位，WebCrypto）",
+  id: "sha384", cat: "hash", name: "SHA-384", family: "sha", familyLabel: "SHA-384", desc: "SHA-384 消息摘要（384 位，WebCrypto）",
   run: async (t) => sha("SHA-384", t),
 });
 
 register({
-  id: "sha512", cat: "hash", name: "SHA-512", desc: "SHA-512 消息摘要（512 位，WebCrypto）",
+  id: "sha512", cat: "hash", name: "SHA-512", family: "sha", familyLabel: "SHA-512", desc: "SHA-512 消息摘要（512 位，WebCrypto）",
   run: async (t) => sha("SHA-512", t),
 });
 
@@ -259,12 +259,12 @@ register({
 });
 
 register({
-  id: "crc32", cat: "hash", name: "CRC32", desc: "CRC32 校验（IEEE 802.3，查表法）",
+  id: "crc32", cat: "hash", name: "CRC32", family: "crc", familyLabel: "CRC-32/ISO-HDLC", desc: "CRC32 校验（IEEE 802.3，查表法）",
   run: (t) => crc32(t),
 });
 
 register({
-  id: "crc16", cat: "hash", name: "CRC16", desc: "CRC16 校验（CCITT-FALSE，多项式 0x1021）",
+  id: "crc16", cat: "hash", name: "CRC16", family: "crc", familyLabel: "CRC-16/IBM-3740", desc: "CRC16 校验（CCITT-FALSE，多项式 0x1021）",
   run: (t) => crc16(t),
 });
 
@@ -428,7 +428,7 @@ function shake(security, text, outLen) {
 
 // ============ SHA3 / Keccak / SHAKE 注册 ============
 register({
-  id: "sha3", cat: "hash", name: "SHA-3", desc: "SHA-3（FIPS 202，纯 JS Keccak，位宽可选 224/256/384/512）",
+  id: "sha3", cat: "hash", name: "SHA-3", family: "sha", familyLabel: "SHA-3", desc: "SHA-3（FIPS 202，纯 JS Keccak，位宽可选 224/256/384/512）",
   params: [
     { key: "bits", label: "输出位数", type: "select", default: 256, options: [
       { value: 224, label: "224" },
@@ -444,14 +444,14 @@ register({
   run: (t) => keccak256(t),
 });
 register({
-  id: "shake128", cat: "hash", name: "SHAKE128", desc: "SHAKE128 可扩展输出（FIPS 202，参数：输出字节数）",
+  id: "shake128", cat: "hash", name: "SHAKE128", family: "shake", familyLabel: "SHAKE128", desc: "SHAKE128 可扩展输出（FIPS 202，参数：输出字节数）",
   params: [
     { key: "outLen", label: "输出字节数", type: "number", default: 32, placeholder: "输出字节数" },
   ],
   run: (t, p) => shake(128, t, (p && p.outLen != null) ? p.outLen : 32),
 });
 register({
-  id: "shake256", cat: "hash", name: "SHAKE256", desc: "SHAKE256 可扩展输出（FIPS 202，参数：输出字节数）",
+  id: "shake256", cat: "hash", name: "SHAKE256", family: "shake", familyLabel: "SHAKE256", desc: "SHAKE256 可扩展输出（FIPS 202，参数：输出字节数）",
   params: [
     { key: "outLen", label: "输出字节数", type: "number", default: 32, placeholder: "输出字节数" },
   ],

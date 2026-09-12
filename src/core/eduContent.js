@@ -75,13 +75,13 @@ import EDU_STEGO_QR_AUDIO from "./edu/edu-stego-qr-audio.js";// stego QR/音频 
 import EDU_STEGO_TEXT from "./edu/edu-stego-text.js";        // stego 文本 14
 import EDU_BATCH6 from "./edu/edu-batch6.js";                // 补缺：9 新增 op 科普（usbKeyboard/usbMouse/sevenZipExtract/goldbug/acrostic/everyN/caseBitStego/nthChar/wordSpacingBits）
 // ---- 扩展模块交付但从未 import 的孤儿科普分片归并（44 个已注册 op 缺科普）----
-// 跨分片重复：cast5/twofish（batch5-modern×modern-rest）、bwt（batch5-new×batch5-modern），Object.assign 后者覆盖，内容同源无害。
-import EDU_BATCH5_NEW from "./edu/edu-batch5-new.js";        // enigma/m209/bazeries/fenham/pizzini/kamasutra/lolcode/clockCipher/bwt/snow/qqxiuzi*/huoxingwen/jianfan/fuyouyue/tianshu 21
-import EDU_BATCH5_MODERN from "./edu/edu-batch5-modern.js";  // ror13Hash/byteArith/bwt/lzstring/cast5/twofish/hotp/totp/zuc/sm2/sm9 11
+// 跨分片重复已清零（T504 二批摘除 cast5/twofish/bwt 输家块，2026-09-13）。
+import EDU_BATCH5_NEW from "./edu/edu-batch5-new.js";        // enigma/m209/bazeries/fenham/pizzini/kamasutra/lolcode/clockCipher/snow/qqxiuzi*/huoxingwen/jianfan/fuyouyue/tianshu 20
+import EDU_BATCH5_MODERN from "./edu/edu-batch5-modern.js";  // ror13Hash/byteArith/bwt/lzstring/hotp/totp/zuc/sm2/sm9 9
 import EDU_CLASSIC_REST from "./edu/edu-classic-rest.js";    // otp/keywordcipher/simplesub/runingkey 4
 import EDU_ANA_TOOLS2 from "./edu/edu-ana-tools2.js";        // pngSizeRecover/trailerCarve 2（jpegSizeRead/gifSizeRead 已并入 imageStructUnified）
 import EDU_ANA_MORE from "./edu/edu-ana-more.js";             // mimeMultipart/randu/truncLcgRecover/shaLengthExtend/birthdayCollision 5
-import EDU_BATCH5_STEGO from "./edu/edu-batch5-stego.js";    // dtmfWav/exeBridge 2
+import EDU_BATCH5_STEGO from "./edu/edu-batch5-stego.js";    // dtmfWav 1（exeBridge 卡随 CLI 桥退役删除）
 import EDU_MODERN_REST from "./edu/edu-modern-rest.js";      // cast5/twofish 2
 import EDU_FANCY_REST from "./edu/edu-fancy-rest.js";        // fracmorse 1
 import EDU_RADIX_HAMMING from "./edu/edu-radix-hamming.js";  // hammingCode 1
@@ -91,6 +91,20 @@ import EDU_CLASSIC_NEW from "./edu/edu-classic-new.js";      // routeCipher/rotS
 import EDU_EXE from "./edu/edu-exe.js";                      // pycExeDecompile 1
 import EDU_FANCY_NEW from "./edu/edu-fancy-new.js";          // jjencode 1
 import EDU_MODERN_NEW from "./edu/edu-modern-new.js";        // rabbit/pbkdf2/hkdf/md2 4
+import EDU_FOREMOST from "./edu/edu-foremost.js";            // foremostCarve 1（文件雕刻 Foremost JS 版）
+import EDU_HASH_FRONTIER from "./edu/edu-hash-frontier.js";  // T398 批B：argon2/tiger/kupyna 3
+import EDU_T396A from "./edu/edu-t396a-family.js";           // T396-A 拆族 20 卡（paillier/dsa/schnorr/ed25519/x25519 族 + geffe）
+import EDU_SM2_FAMILY from "./edu/edu-sm2-family.js";        // SM2 六档族卡（T394：sm2KeyGen/Encrypt/Decrypt/Sign/Verify/KeyExchange）
+import EDU_SM9_FAMILY from "./edu/edu-sm9-family.js";        // SM9 五档族卡（T397 批1：sm9KeyGen/Sign/Verify/Encrypt/Decrypt，双线性对内核）
+import EDU_BFTOOLS_FAMILY from "./edu/edu-bftools-family.js";   // bftools 图像变体卡（T389：brainloller/braincopter 编解码）
+import EDU_XWING_FAMILY from "./edu/edu-xwing-family.js";      // X-Wing 混合 KEM 卡（T398 批A）
+import EDU_STEGDETECT from "./edu/edu-stegdetect.js";          // stegdetect 检测卡（T391）
+import EDU_JSTEG from "./edu/edu-jsteg.js";                    // jsteg 隐写卡（T390）
+import EDU_XMSS_LMS from "./edu/edu-xmss-lms.js";              // XMSS/LMS 卡（T398 批A）
+import EDU_HQC_FAMILY from "./edu/edu-hqc-family.js";         // HQC 卡（T398 批A）
+import EDU_NTRU_REAL from "./edu/edu-ntru-real.js";           // 真 NTRU 卡（T398 批A）
+import EDU_BLS_FAMILY from "./edu/edu-bls-family.js";         // BLS 卡（T398 批C）
+import EDU_PROTOCOL_C from "./edu/edu-protocol-c.js";         // 批C 协议原语卡（Merkle/Pedersen/Feldman/LSAG）
 import EDU_CRYPTO_PG from "./edu/edu-crypto-pg.js";          // shamir/schnorr/ecdsaReuseK/rabin/x25519/ed25519/paillier/a51/magma 9
 import EDU_UNIFIED_MISC from "./edu/edu-unified-misc.js";    // archiveUnified/cryptoAddrUnified/imageStructUnified/numToPinyin/hanziToPinyin 5
 // ---- 发布前补全：91 个原无科普 op 的科普卡（按分类分片，各代理独占文件）----
@@ -103,7 +117,6 @@ import EDU_ANA_CRC32REV from "./edu/edu-analysis-crc32rev.js"; // crc32Reverse 1
 import EDU_ANA_GEFTE from "./edu/edu-ana-geffe.js";  // geffe 1
 import EDU_FANCY_MODERN_NEW from "./edu/edu-fancy-modern-new.js";
 import EDU_FANCY_ROAR from "./edu/edu-fancy-roar.js"; // roar 1
-import EDU_FANCY_BFSWAP from "./edu/edu-fancy-bfswap.js"; // bfSwap 1// fancy 深奥语言 + modern 轻量密码 16
 import EDU_MISC2_NEW from "./edu/edu-misc2-new.js";              // cn/stego/hash/base/radix/classic 24
 import EDU_BRIDGE_NEW from "./edu/edu-bridge-new.js";            // 本地桥 exe 15
 import EDU_BATCH_NEW from "./edu/edu-batch-new.js";              // 本轮新增 9：txtmoji/webshell/二进制图像/取证/爆破
@@ -114,6 +127,13 @@ import EDU_HASH_CITYHASH from "./edu/edu-hash-cityhash.js";  // cityhash 1
 import EDU_CTF_CIPHER_EXT from "./edu/edu-ctf-cipher-ext.js"; // twinHex/trollScript/asciiSum/caesarBox/curveCipher 5
 import EDU_TOOLS_RADIX from "./edu/edu-tools-radix.js";   // radixAll/progCalc/unitConv 3（T337-T339 工具类）
 import EDU_MT82 from "./edu/edu-mt82.js";                 // MT82 新增 15 op（gifTiming/jpgSizeRecover/zipRepair/zipPseudoEncrypt/stringsExtract/jwtCrack/zstegScan/pdfObjects/ooxmlMeta/apkManifest/elfInfo/peInfo/lsbEmbed/zipCreate/deepsoundExtract）
+import EDU_T359 from "./edu/edu-t359.js";                 // T359 新增 34 op（v0.1.6beta：rsaGen/ecdsa/mlkem/pem-jwk/证书解析/cmac/kmac/ascon/keywrap/jwt/flaskSession）
+import EDU_T356_HASH from "./edu/edu-t356-hash.js";       // T356 落盘 5 op（md6/snefru/sha0/has160/gostHash 历史哈希，aka 顺带批）
+import EDU_T376 from "./edu/edu-t376.js";                 // T376 新增 32 op（v0.1.6beta 全量补齐波收口：noekeon/shacal2/cast6/cmacExt/ls47/Ed448/X448/GOST R 34.10-2012/PGP8/BB84/JWS/JWE/PASETO v4/ML-DSA/SLH-DSA）
+import EDU_T508 from "./edu/edu-t508.js";                 // T508 批一古典 A1-A7（homophonic/doubleTrans/pollux/morbit/bookCipher/turningGrille/kenny）
+import EDU_T508_B4 from "./edu/edu-t508-b4.js";           // T508 批四工程编码（hexdump/modhex/citrixCtx1/scriptDecoder/rison/unixPerms 6）
+import EDU_T508_B2 from "./edu/edu-t508-b2.js";           // T508 批二编码映射（crockford32/alienAlphabet/futhark/countingRods/chuckUnary/wingdings/cardanGrille 7）
+import EDU_T508_B3 from "./edu/edu-t508-b3.js";           // T508 批三压缩校验（rle/lzw/elias/verhoeff/lz4Dec/bzip2Dec 6）
 
 // 合并所有分片。后者不覆盖前者（分区不重叠）；重叠时以后者为准，构建期应避免。
 const EDU = Object.assign(
@@ -168,6 +188,20 @@ const EDU = Object.assign(
   EDU_EXE,
   EDU_FANCY_NEW,
   EDU_MODERN_NEW,
+  EDU_FOREMOST,
+  EDU_HASH_FRONTIER,
+  EDU_T396A,
+  EDU_SM2_FAMILY,
+  EDU_SM9_FAMILY,
+  EDU_BFTOOLS_FAMILY,
+  EDU_XWING_FAMILY,
+  EDU_STEGDETECT,
+  EDU_JSTEG,
+  EDU_XMSS_LMS,
+  EDU_HQC_FAMILY,
+  EDU_NTRU_REAL,
+  EDU_BLS_FAMILY,
+  EDU_PROTOCOL_C,
   EDU_CRYPTO_PG,
   EDU_UNIFIED_MISC,
   EDU_FORENSIC_NEW,
@@ -178,7 +212,6 @@ const EDU = Object.assign(
   EDU_ANA_CRC32REV,
   EDU_FANCY_MODERN_NEW,
   EDU_FANCY_ROAR,
-  EDU_FANCY_BFSWAP,
   EDU_MISC2_NEW,
   EDU_BRIDGE_NEW,
   EDU_ANA_GEFTE,
@@ -190,7 +223,48 @@ const EDU = Object.assign(
   EDU_CTF_CIPHER_EXT,
   EDU_TOOLS_RADIX,
   EDU_MT82,
+  EDU_T359,
+  EDU_T356_HASH,
+  EDU_T376,
+  EDU_T508,
+  EDU_T508_B4,
+  EDU_T508_B2,
+  EDU_T508_B3,
 );
+
+import { ZH as INTEGRATED, HASH_VECTORS, BASE_NOTES, EXTRA_ALIASES, CRC_PARAMS } from "./edu/edu-integrated.js";
+for (const [id, [name, poly, init, reflect, xorout, out]] of Object.entries(CRC_PARAMS)) {
+  EDU[id] = { ...EDU[id], what: `${name}：CRC族中的独立校验参数组，不是密码学哈希。`,
+    principle: `poly=0x${poly}, init=0x${init}, refin=refout=${reflect}, xorout=0x${xorout}。多项式写正常形式，反射实现不改变该标称值。`,
+    usage: "输入UTF-8文本，计算固定参数组的十六进制校验值。要换参数组请切换CRC档位；Adler-32不属于CRC族。",
+    examples: [{ in: "123456789", out }], tips: ["CRC用于检错，不提供抗恶意篡改认证。CRC-64/ECMA-182不等同CRC-64/XZ。", "参考：https://reveng.sourceforge.io/crc-catalogue/all.htm"] };
+}
+for (const id of ["md2", "md4", "md5", "md6"]) if (EDU[id]) {
+  EDU[id] = { ...EDU[id], usage: (EDU[id].usage || "") + "\nMD滑块只组织显示，算法id和原参数不变；MD6的bits及inputType仍可调。", tips: [...(EDU[id].tips || []), "MD2/MD4/MD5不用于新系统的抗碰撞安全用途。MD6是SHA-3候选提案，不是SHA-3标准，也不是MD5的兼容升级。"] };
+}
+for (const [id, [zh, , input, output, dir, aka]] of Object.entries(BASE_NOTES)) {
+  EDU[id] = { ...EDU[id], what: zh, principle: zh, usage: "输入文本，选择对应方向；示例方向：" + dir + "，使用默认参数。",
+    examples: [{ in: input, out: output, param: dir }], tips: ["编码不是加密。字表、方向和复合格式必须一致。"],
+    aka: [...new Set([...(EDU[id]?.aka || []).filter(w => !/解密|加密|encrypt|decrypt/i.test(w)), ...aka])] };
+}
+for (const [id, aka] of Object.entries(EXTRA_ALIASES)) {
+  if (EDU[id]) EDU[id] = { ...EDU[id], aka: [...new Set([...(id.startsWith("sm2") ? [] : EDU[id].aka || []), ...aka])].filter(w => id !== "whitespace" || !/隐写|steganograph/i.test(w)) };
+}
+for (const [id, patch] of Object.entries(INTEGRATED)) {
+  const old = EDU[id] || {};
+  EDU[id] = { ...old, ...patch, aka: [...new Set([...(old.aka || []), ...(patch.aka || [])])] };
+}
+for (const [id, out] of Object.entries(HASH_VECTORS)) {
+  const xof = id.startsWith("shake");
+  EDU[id] = { ...EDU[id],
+    what: `${id.toUpperCase()}：${xof ? "可扩展输出函数，不是固定长度摘要" : `${out.length * 4}位消息摘要${id === "sha3" ? "（默认256位，另有224/384/512）" : ""}`}。滑块只组织显示，各op独立；不包含HMAC/KDF。`,
+    principle: xof ? `FIPS 202海绵结构XOF。n位输出的通用碰撞强度至多min(${id === "shake128" ? 128 : 256}, n/2)，原像强度至多min(${id === "shake128" ? 128 : 256}, n)。输出变短会降低安全性；同输入的短输出是长输出前缀。` : id === "sha3" ? "FIPS 202，Keccak-f[1600]海绵结构与SHA-3域分离；不等同旧Keccak散列。" : id === "sha0" ? "1993 FIPS 180；与SHA-1的消息扩展旋转不同，已被替代。" : "FIPS 180系列分块迭代消息摘要；单向，不是可逆加密。SHA-384使用不同于SHA-512的初始值后截断，不是直接截取SHA-512摘要。",
+    usage: xof ? "输入文本，选择输出字节数；以下例子固定32字节。" : "输入文本运行；SHA-0另支持inputType=hex；SHA-3位宽参数保持可见。",
+    examples: [{ in: "abc", out, ...(xof ? {param: "输出32字节"} : id === "sha3" ? {param: "bits=256"} : {}) }],
+    tips: ["SHA-0/SHA-1不用于新系统的抗碰撞安全用途；普通快速哈希不是口令存储KDF。", "资料：FIPS 180、FIPS 202；不要只凭摘要长度认定算法。"],
+    aka: (EDU[id]?.aka || []).filter(word => !/加密|encrypt|keccak/i.test(word)),
+  };
+}
 
 /** 取某 op 的科普内容，无则返回 null。
  *  locale 可选；传 "en" 时优先返回英文条目（英文层缺该 opId 则回落中文）。

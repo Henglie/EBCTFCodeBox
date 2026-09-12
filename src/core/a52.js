@@ -205,8 +205,8 @@ function a52Decode(text, p = {}) {
 }
 
 register({
-  id: "a52",
-  cat: "modern",
+  id: "a52", family: "a5", familyLabel: "a52",
+  cat: "stream",
   name: "A5/2 流密码",
   desc: "GSM A5/2 语音加密流密码（Briceno/Goldberg/Wagner 参考实现）：四个 LFSR（19/22/23/17 位）R4 择多钟控 + 掩码位非线性输出，输出延迟一拍。64 位会话密钥 Kc + 22 位帧号。自反 XOR：encode 文本→密文 hex，decode 密文 hex→文本。",
   params: [

@@ -146,7 +146,7 @@ const serpentDecode = (t, p) => serpentCrypt(t, p, true);
 
 register({
   id: "serpent",
-  cat: "modern",
+  cat: "block",
   name: "Serpent",
   desc: "Serpent 分组密码（Anderson/Biham/Knudsen）：AES 竞赛亚军，128 位分组，128/192/256 位密钥，32 轮 SPN，8 个 bit-sliced S 盒。ECB 多块，明文/密文/密钥均 hex。encode 加密 / decode 解密。与参考实现逐向量对拍。",
   params: [

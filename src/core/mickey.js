@@ -166,7 +166,7 @@ function mickeyDecode(text, p = {}) {
 
 register({
   id: "mickey",
-  cat: "modern",
+  cat: "stream",
   name: "MICKEY-128 2.0",
   desc: "MICKEY-128 2.0 流密码（Babbage & Dodd，eSTREAM Phase 3 决赛）：R/S 各 160 位双寄存器，不规则钟控（Control_R=S[54]^R[106]、Control_S=S[106]^R[53]）+ Galois 双反馈。128 位密钥 + 0~128 位 IV（MSB-first 装载）。官方 C 实现逐行移植，官方向量自检。自反 XOR：encode 文本→密文 hex，decode 反向。",
   params: [

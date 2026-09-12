@@ -1,7 +1,7 @@
 export default {
   aes: {
     what: "AES 高级加密标准：当今最常用的对称加密算法——密钥长度 128/192/256 位，支持 ECB/CBC/CFB/OFB/CTR/GCM 多种模式。",
-    principle: "AES 是分组密码，把明文按 16 字节（128 位）分块，每块经 10/12/14 轮（对应 128/192/256 位密钥）变换。每轮包含 4 步：SubBytes（S-box 字节替换）、ShiftRows（行移位）、MixColumns（列混淆，GF(2⁸) 矩阵乘法）、AddRoundKey（轮密钥异或）。ECB 模式每块独立加密（相同明文→相同密文，不安全），CBC/CFB/OFB/CTR 用 IV（初始向量）链接块间依赖。GCM 模式走 WebCrypto 原生加速。",
+    principle: "AES 是分组密码，把明文按 16 字节（128 位）分块，每块经 10/12/14 轮（对应 128/192/256 位密钥）变换。每轮包含 4 步：SubBytes（S-box 字节替换）、ShiftRows（行移位）、MixColumns（列混淆，$GF(2^{8})$ 矩阵乘法）、AddRoundKey（轮密钥异或）。ECB 模式每块独立加密（相同明文→相同密文，不安全），CBC/CFB/OFB/CTR 用 IV（初始向量）链接块间依赖。GCM 模式走 WebCrypto 原生加速。",
     formulas: [
       { tex: "\\text{State}' = \\text{AddRoundKey}(\\text{MixColumns}(\\text{ShiftRows}(\\text{SubBytes}(\\text{State}))), K_r)", caption: "AES 每轮四步变换" },
     ],
@@ -19,7 +19,7 @@ export default {
 
   des: {
     what: "DES 数据加密标准：1977 年发布的对称加密——64 位块、56 位有效密钥，已被 AES 取代但 CTF 仍常见。",
-    principle: "DES 是 Feistel 网络：64 位明文经初始置换 IP 后分成左右两半 L₀/R₀，经过 16 轮 Feistel 变换。每轮：Rₙ = Lₙ₋₁ ⊕ F(Rₙ₋₁, Kₙ)，Lₙ = Rₙ₋₁。F 函数包含：扩展置换 E（32→48 位）、与子密钥异或、8 个 S-box 替换（48→32 位）、置换 P。密钥经 PC-1/PC-2 和循环左移生成 16 个 48 位子密钥。56 位密钥已可暴力破解（约几小时）。",
+    principle: "DES 是 Feistel 网络：64 位明文经初始置换 IP 后分成左右两半 $L_0/R_0$，经过 16 轮 Feistel 变换。每轮：$R_n = L_{n-1} \\oplus F(R_{n-1}, K_n)$，$L_n = R_{n-1}$。F 函数包含：扩展置换 E（32→48 位）、与子密钥异或、8 个 S-box 替换（48→32 位）、置换 P。密钥经 PC-1/PC-2 和循环左移生成 16 个 48 位子密钥。56 位密钥已可暴力破解（约几小时）。",
     usage: "输入框填明文或密文。参数选模式（ECB/CBC/CFB/OFB/CTR）、密钥（8 字节）、密钥编码、密文编码。",
     examples: [
       { in: "Hello", param: "mode=ECB, key='12345678'(8字节)", out: "oVmfzWxhH88= (base64)", desc: "DES-ECB，PKCS7 填充" },
@@ -45,7 +45,7 @@ export default {
     tips: [
       "3DES 速度是 DES 的 1/3，且块大小仍 8 字节——已被 AES 取代。",
       "16 字节密钥 = 双密钥模式（K1=K3），24 字节 = 三密钥模式。",
-      "Sweet32 攻击可在 2³² 次加密内破解 3DES——不适合大数据量加密。",
+      "Sweet32 攻击可在 $2^{32}$ 次加密内破解 3DES——不适合大数据量加密。",
     ],
     aka: ["3DES", "TripleDES", "TDEA", "Triple DES", "三重DES", "三重数据加密", "3DES加密", "EDE模式", "DES-EDE", "Triple Data Encryption Algorithm"],
   },

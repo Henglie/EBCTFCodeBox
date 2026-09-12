@@ -367,7 +367,7 @@ function resolveKeyForDecode(p) {
 
 register({
   id: "knapsack",
-  cat: "modern",
+  cat: "asym",
   name: "背包加密（Merkle-Hellman）",
   desc: "Merkle-Hellman 背包公钥加密：私钥超递增序列 w+模数 q+乘数 r，公钥 β=w·r mod q；加密按 bit 求和，解密用 r⁻¹ 还原后贪心解背包。密文=逗号分隔十进制块。",
   params: [
@@ -431,6 +431,20 @@ register({
       lines.push("  ✓ 密度 ≥ 0.9408：低密度格攻击不直接适用（但 Shamir 攻击等仍威胁原始 MH 方案）。");
     }
     lines.push("  ▸ Merkle-Hellman 原始方案已被 Shamir(1984) 攻破，仅作教学/CTF 用途，勿用于真实加密。");
+    // T362 产物协议（2026-09-02）：gen 现场生成时，公钥 β / 私钥 w·q·r / 密文 分开交付下载按钮；
+    // demo/manual 模式（用户自填密钥）仍返回 string，不重复交付。
+    if (key.generated) {
+      lines.push("", "公钥 / 私钥 / 密文已分开生成：私钥 ⚠ 敏感请妥善保管。点击下方按钮下载（文本，可直接回填手动字段）。");
+      return {
+        text: lines.join("\n"),
+        files: [
+          { name: `knapsack_pub_beta_n${n}.txt`, mime: "text/plain", bytes: new TextEncoder().encode(formatBigIntList(beta) + "\n") },
+          { name: `knapsack_priv_wqr_n${n}.txt`, mime: "text/plain",
+            bytes: new TextEncoder().encode(`w = ${formatBigIntList(key.w)}\nq = ${key.q.toString(10)}\nr = ${key.r.toString(10)}\n`) },
+          { name: `knapsack_ct_n${n}.txt`, mime: "text/plain", bytes: new TextEncoder().encode(formatBigIntList(cipher) + "\n") },
+        ],
+      };
+    }
     return lines.join("\n");
   },
 

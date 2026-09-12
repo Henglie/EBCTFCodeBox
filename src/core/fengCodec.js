@@ -180,6 +180,7 @@ async function ycDecode(text, p) {
 register({
   id: "dxBase64", cat: "base", name: "DXBase64",
   desc: "风之暇想 DXBase64：raw deflate + 随机 salt 循环 XOR + CRC16 校验的 Base64 变体（带校验、每次密文不同、无需密钥，防和谐）",
+  family: "base64", familyLabel: "dxBase64",
   encode: dxEncode,
   decode: dxDecode,
 });

@@ -272,7 +272,7 @@ function makeGif(csArr) {
 // ============ register ============
 
 register({
-  id: "gifTiming", cat: "stego", name: "GIF 帧时序隐写",
+  id: "gifTiming", family: "gif", familyLabel: "timing", cat: "stego", name: "GIF 帧时序隐写",
   desc: "读每帧图形控制扩展的 Delay Time（厘秒），映射为数字序列 / ASCII / 阈值二值化位流，解出藏在播放时长里的信息",
   params: [
     { key: "mode", label: "映射模式", type: "select", default: "ascii",

@@ -19,7 +19,7 @@ export default {
   },
 
   isbn: {
-    what: "Book number (ISBN) check digits: ISBN-10 uses mod 11, ISBN-13 uses mod 10. The tool auto-distinguishes by length and can both compute the check digit and verify validity.",
+    what: "Book number (ISBN) check digits: ISBN-10 uses $\\bmod 11$, ISBN-13 uses $\\bmod 10$. The tool auto-distinguishes by length and can both compute the check digit and verify validity.",
     principle:
       "ISBN-10: multiply the first 9 digits by 10,9,…,2 and sum; the check digit makes the total divisible by 11; when the remainder is 10 the check digit is written `X`.\n\n" +
       "ISBN-13: 13 digits, multiply odd positions ×1 and even positions ×3 and sum; the check digit rounds up to a multiple of 10 (same algorithm as EAN-13).",
@@ -28,7 +28,7 @@ export default {
       { in: "030640615", param: "ISBN-10 encode", out: "2", desc: "complete 0306406152" },
       { in: "978030640615", param: "ISBN-13 encode", out: "7", desc: "complete 9780306406157" },
     ],
-    tips: ["An ISBN-10 check digit may be the letter `X` (representing 10) — that's a hallmark of mod 11.", "Since 2007, new books uniformly use ISBN-13, mostly beginning with 978 or 979."],
+    tips: ["An ISBN-10 check digit may be the letter `X` (representing 10) — that's a hallmark of $\\bmod 11$.", "Since 2007, new books uniformly use ISBN-13, mostly beginning with 978 or 979."],
     aka: ["isbn", "书号", "国际标准书号", "isbn10", "isbn13", "ISBN-10", "ISBN-13", "International Standard Book Number", "图书编号", "书号校验", "书号校验位", "国际书号"],
   },
 
@@ -49,7 +49,7 @@ export default {
   cnidCheck: {
     what: "The algorithm for the last check digit of China's 18-digit resident ID number (GB 11643-1999). It only explains/computes the check digit and does NOT generate real numbers.",
     principle:
-      "Multiply the first 17 digits by a fixed set of weights `[7,9,10,5,8,4,2,1,6,3,7,9,10,5,8,4,2]` and sum, take mod 11, then look up a mapping table to get the check digit.\n\n" +
+      "Multiply the first 17 digits by a fixed set of weights `[7,9,10,5,8,4,2,1,6,3,7,9,10,5,8,4,2]` and sum, take $\\bmod 11$, then look up a mapping table to get the check digit.\n\n" +
       "In the mapping table, a remainder of 2 gives a check digit of `X` (Roman numeral 10).",
     usage: "encode takes a 17-digit body and computes the check digit. decode takes an 18-digit complete number and verifies validity.",
     examples: [

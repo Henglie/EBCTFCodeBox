@@ -665,7 +665,7 @@ register({
 });
 
 register({
-  id: "blake2b", cat: "hash", name: "BLAKE2b", desc: "BLAKE2b 哈希（RFC 7693，最多 64 字节输出，默认 512 位）",
+  id: "blake2b", family: "blake", familyLabel: "blake2b", cat: "hash", name: "BLAKE2b", desc: "BLAKE2b 哈希（RFC 7693，最多 64 字节输出，默认 512 位）",
   params: [
     { key: "hashLen", label: "输出字节数", type: "number", default: 64, placeholder: "1-64" },
   ],
@@ -673,7 +673,7 @@ register({
 });
 
 register({
-  id: "blake2s", cat: "hash", name: "BLAKE2s", desc: "BLAKE2s 哈希（RFC 7693，最多 32 字节输出，默认 256 位）",
+  id: "blake2s", family: "blake", familyLabel: "blake2s", cat: "hash", name: "BLAKE2s", desc: "BLAKE2s 哈希（RFC 7693，最多 32 字节输出，默认 256 位）",
   params: [
     { key: "hashLen", label: "输出字节数", type: "number", default: 32, placeholder: "1-32" },
   ],
@@ -688,25 +688,25 @@ register({
 });
 
 register({
-  id: "crc8", cat: "hash", name: "CRC-8",
+  id: "crc8", cat: "hash", name: "CRC-8", family: "crc", familyLabel: "CRC-8/SMBUS",
   desc: "CRC-8/SMBus（poly=0x07，8 位校验）",
   run: (t) => crc8SmbusHex(t),
 });
 
 register({
-  id: "crc8_maxim", cat: "hash", name: "CRC-8/MAXIM",
+  id: "crc8_maxim", cat: "hash", name: "CRC-8/MAXIM", family: "crc", familyLabel: "CRC-8/MAXIM-DOW",
   desc: "CRC-8/MAXIM（Dallas 1-Wire，poly=0x31 反射，8 位校验）",
   run: (t) => crc8MaximHex(t),
 });
 
 register({
-  id: "crc64", cat: "hash", name: "CRC-64",
-  desc: "CRC-64/ECMA-182（poly=0x42F0E1EBA9EA3693，64 位校验，XZ 用）",
+  id: "crc64", cat: "hash", name: "CRC-64", family: "crc", familyLabel: "CRC-64/ECMA-182",
+  desc: "CRC-64/ECMA-182（poly=0x42F0E1EBA9EA3693，64 位校验；与 CRC-64/XZ 参数不同）",
   run: (t) => crc64EcmaHex(t),
 });
 
 register({
-  id: "crc32c", cat: "hash", name: "CRC-32C",
+  id: "crc32c", cat: "hash", name: "CRC-32C", family: "crc", familyLabel: "CRC-32/ISCSI",
   desc: "CRC-32C/Castagnoli（poly=0x1EDC6F41，iSCSI/ext4/SSE4.2，与 IEEE CRC32 不同）",
   run: (t) => crc32cHex(t),
 });

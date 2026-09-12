@@ -446,7 +446,7 @@ async function hmacKeyBruteRun(hmacHash, p) {
 // ============================================================
 register({
   id: "hashTypeIdentify",
-  cat: "crypto",
+  cat: "analysis",
   name: "哈希类型识别",
   desc: "按长度+字符集+前缀识别哈希算法（MD5/SHA1/SHA256/NTLM/bcrypt/MySQL/crypt/Argon2/LDAP 等）",
   params: [],

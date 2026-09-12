@@ -17,7 +17,7 @@
  * 红线：算法照 Rabin 原始论文 / 标准 CRT 开方，纯 BigInt 本地，零外发。
  *       core 层仅 import registry.js。随机数（本算法确定性无需随机）。
  *
- * 契约：register({ id:"rabin", cat:"crypto", encode, decode, params })。
+ * 契约：register({ id:"rabin", cat:"asym", encode, decode, params })。
  */
 
 import { register } from "./registry.js";
@@ -173,7 +173,7 @@ function rabinDecode(text, params) {
 
 register({
   id: "rabin",
-  cat: "crypto",
+  cat: "asym",
   name: "Rabin 密码",
   desc: "Rabin 公钥密码（p≡q≡3 mod4）：加密 c=m² mod n，解密用 CRT 求 4 个平方根 + 尾部魔数消歧。纯 BigInt 本地计算。",
   params: [

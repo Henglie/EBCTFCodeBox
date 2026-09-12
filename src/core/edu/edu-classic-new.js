@@ -32,14 +32,14 @@ export default {
       "snake 是最常见的路由方式，列数 cols 是关键参数，需要枚举试。",
       "单列（cols=1）时读法即原文，无加密效果。",
     ],
-    aka: ["route cipher", "曲路密码", "蛇形密码", "boustrophedon", "路由密码", "route transposition", "路线密码", "矩阵置换", "蛇形读取", "垂直路由", "route cipher decode", "曲路换位"],
+    aka: ["路径密码", "route cipher", "曲路密码", "蛇形密码", "boustrophedon", "路由密码", "route transposition", "路线密码", "矩阵置换", "蛇形读取", "垂直路由", "route cipher decode", "曲路换位"],
   },
 
  // ============ classic: ROT 任意位移 ============
   rotSpecial: {
     what: "ROT 任意位移——ROT13 的泛化版，可指定任意位移量 N，在选定字母表上循环移位。",
     principle:
-      "在长度 n 的循环表内做 (idx + shift) mod n 移位，decode 就是反向 -shift。三种字母表：\n\n" +
+      "在长度 n 的循环表内做 $(\\mathrm{idx} + \\mathrm{shift}) \\bmod n$ 移位，decode 就是反向 -shift。三种字母表：\n\n" +
       "letters（默认）：大写在 A-Z(26) 内移、小写在 a-z(26) 内移，数字和符号原样保留。N=13 就是经典 ROT13。\n\n" +
       "alnum：额外让数字在 0-9(10) 内移（类比 rot18 = rot13 + rot5），字母和数字各自循环。\n\n" +
       "ascii94：全可打印 ASCII 0x21..0x7E(94) 内移（类比 rot47 的任意位移版），其余字符原样。",

@@ -28,7 +28,8 @@
  * - 零外发：纯本地 BigInt。core 层零 UI 依赖（仅 registry）。
  * - SHA-256 自带（不依赖未导出的内部实现）。
  *
- * 契约：register({ id:"schnorr", cat:"crypto", name, desc, params, run })。
+ * 契约：族滑块四档 op（T396-A）：schnorrKeyGen / schnorrSign / schnorrVerify /
+ *        schnorrReuseK，family:"schnorr"。
  */
 import { register } from "./registry.js";
 import { CURVES, ecMul, ecToAffine, mod, modInverse } from "./ecdsaReuseK.js";
@@ -200,33 +201,67 @@ function recoverPrivFromReusedNonce(e1, s1, e2, s2) {
 }
 
 // ============================================================
-// run 入口
+// Schnorr 四档算法族（T396-A，2026-09-04：同族多操作必须族滑块，废除下拉切模式）
+// family:"schnorr" + familyLabel → fam.lbl.*（keygen/sign/verify 已有主表 key；
+// 攻击档用 attack——需主控在 zh/en i18n 主表新增 fam.lbl.attack）。
+// 底层 schnorrSign/schnorrVerify/recoverPrivFromReusedNonce 实现原样复用，
+// 每个 op 只保留本档参数面。
 // ============================================================
-function schnorrRun(text, p = {}) {
-  const mode = (p && p.mode) || "sign";
-  const lines = [];
-  lines.push("=== Schnorr 签名（经典版，secp256k1，挑战 e=H(R.x‖P.x‖m)） ===");
-  lines.push("");
 
-  const msgMode = (p && p.msgMode) || "text";
-  const toMsgBytes = (s) => msgMode === "hex" ? hexToBytes(s) : new TextEncoder().encode(String(s || ""));
-
-  if (mode === "keygen") {
+// ---- 档① 生成密钥对 ----
+register({
+  id: "schnorrKeyGen",
+  cat: "asym",
+  family: "schnorr",
+  familyLabel: "keygen",
+  name: "Schnorr 密钥对生成",
+  desc: "生成 Schnorr 密钥对（secp256k1）：私钥 d ∈ [1,n-1]，公钥 P=d·G。配套「签名/验签/nonce 重用攻击」档使用",
+  params: [],
+  run: () => {
     const d = randScalar();
     const Pt = ecToAffine(ecMul(d, GX, GY, A, P), P);
-    lines.push("生成密钥对：");
-    lines.push("私钥 d  = " + bytesToHex(bigToBytes32(d)));
-    lines.push("公钥 Px = " + bytesToHex(bigToBytes32(Pt[0])));
-    lines.push("公钥 Py = " + bytesToHex(bigToBytes32(Pt[1])));
-    return lines.join("\n");
-  }
+    // T362 产物协议（2026-09-02）：私钥 / 公钥分开交付下载按钮（hex 文本）。
+    return {
+      text: [
+        "生成密钥对：",
+        "私钥 d  = " + bytesToHex(bigToBytes32(d)),
+        "公钥 Px = " + bytesToHex(bigToBytes32(Pt[0])),
+        "公钥 Py = " + bytesToHex(bigToBytes32(Pt[1])),
+        "",
+        "私钥 / 公钥已分开生成：私钥 ⚠ 敏感请妥善保管。点击下方按钮下载。",
+      ].join("\n"),
+      files: [
+        { name: "schnorr_priv.hex", mime: "text/plain", bytes: new TextEncoder().encode(bytesToHex(bigToBytes32(d)) + "\n") },
+        { name: "schnorr_pub.hex", mime: "text/plain", bytes: new TextEncoder().encode(bytesToHex(bigToBytes32(Pt[0])) + bytesToHex(bigToBytes32(Pt[1])) + "\n") },
+      ],
+    };
+  },
+});
 
-  if (mode === "sign") {
+// ---- 档② 签名 ----
+register({
+  id: "schnorrSign",
+  cat: "asym",
+  family: "schnorr",
+  familyLabel: "sign",
+  name: "Schnorr 签名",
+  desc: "经典 Schnorr 签名（secp256k1，挑战 e=H(R.x‖P.x‖m) mod n）：R=k·G，s=(k+e·d) mod n，签名=(e,s)。私钥留空随机。⚠ 两条消息复用同一 nonce k 会泄露私钥（教学可用）",
+  params: [
+    { key: "msgMode", label: "消息形式", type: "select", default: "text", options: [{ value: "text", label: "文本" }, { value: "hex", label: "Hex" }] },
+    { key: "priv", label: "私钥 d (hex)", type: "text", default: "", placeholder: "留空随机" },
+    { key: "nonce", label: "nonce k (hex, 可选)", type: "text", default: "", placeholder: "留空随机；固定值用于演示重用攻击" },
+  ],
+  run: (text, p) => {
+    const msgMode = (p && p.msgMode) || "text";
+    const toMsgBytes = (s) => msgMode === "hex" ? hexToBytes(s) : new TextEncoder().encode(String(s || ""));
     const dRaw = (p && p.priv && String(p.priv).trim());
     const d = dRaw ? parseBig(dRaw, "私钥 d") : randScalar();
     const msg = toMsgBytes(text);
     const kRaw = (p && p.nonce && String(p.nonce).trim());
     const sig = schnorrSign(d, msg, kRaw ? parseBig(kRaw, "nonce k") : null);
+    const lines = [];
+    lines.push("=== Schnorr 签名（经典版，secp256k1，挑战 e=H(R.x‖P.x‖m)） ===");
+    lines.push("");
     lines.push("消息: " + msg.length + " 字节（" + msgMode + "）");
     lines.push("私钥 d  = " + bytesToHex(bigToBytes32(d)));
     lines.push("公钥 Px = " + bytesToHex(bigToBytes32(sig.P[0])));
@@ -237,65 +272,69 @@ function schnorrRun(text, p = {}) {
     lines.push("s = " + bytesToHex(bigToBytes32(sig.s)));
     if (kRaw) lines.push("（⚠ 你指定了固定 nonce k，两条消息复用同一 k 会泄露私钥）");
     return lines.join("\n");
-  }
+  },
+});
 
-  if (mode === "verify") {
+// ---- 档③ 验签 ----
+register({
+  id: "schnorrVerify",
+  cat: "asym",
+  family: "schnorr",
+  familyLabel: "verify",
+  name: "Schnorr 验签",
+  desc: "Schnorr 验签：R' = s·G − e·P，e' = H(R'.x ‖ P.x ‖ m) mod n，e' == e 即有效。输入公钥 (Px,Py)、签名 (e,s) 与消息",
+  params: [
+    { key: "msgMode", label: "消息形式", type: "select", default: "text", options: [{ value: "text", label: "文本" }, { value: "hex", label: "Hex" }] },
+    { key: "pubX", label: "公钥 Px (hex)", type: "text", default: "", placeholder: "verify 用" },
+    { key: "pubY", label: "公钥 Py (hex)", type: "text", default: "", placeholder: "verify 用" },
+    { key: "e", label: "e (hex)", type: "text", default: "", placeholder: "verify 用" },
+    { key: "s", label: "s (hex)", type: "text", default: "", placeholder: "verify 用" },
+  ],
+  run: (text, p) => {
+    const msgMode = (p && p.msgMode) || "text";
+    const toMsgBytes = (s) => msgMode === "hex" ? hexToBytes(s) : new TextEncoder().encode(String(s || ""));
     const Px = parseBig(p && p.pubX, "公钥 Px");
     const Py = parseBig(p && p.pubY, "公钥 Py");
     const e = parseBig(p && p.e, "e");
     const s = parseBig(p && p.s, "s");
     const msg = toMsgBytes(text);
     const ok = schnorrVerify(Px, Py, e, s, msg);
-    lines.push("验签结果: " + (ok ? "✓ 有效签名" : "✗ 无效签名"));
-    return lines.join("\n");
-  }
+    return [
+      "=== Schnorr 验签（经典版，secp256k1） ===",
+      "",
+      "验签结果: " + (ok ? "✓ 有效签名" : "✗ 无效签名"),
+    ].join("\n");
+  },
+});
 
-  if (mode === "attack") {
-    // nonce 重用攻击：两条签名 (e1,s1) (e2,s2) 复用同一 k
+// ---- 档④ nonce 重用攻击 ----
+register({
+  id: "schnorrReuseK",
+  cat: "asym",
+  family: "schnorr",
+  familyLabel: "attack",
+  name: "Schnorr nonce 重用攻击",
+  desc: "Schnorr nonce 重用攻击（ECDSA 重用 k 的姊妹题）：同一私钥、同一 k 签两条不同消息 ⇒ d=(s1−s2)/(e1−e2) mod n，k=s1−e1·d mod n。输入两条签名 (e1,s1)(e2,s2)",
+  params: [
+    { key: "e1", label: "e1", type: "text", default: "", placeholder: "签名1 的挑战 e" },
+    { key: "s1", label: "s1", type: "text", default: "", placeholder: "签名1 的 s" },
+    { key: "e2", label: "e2", type: "text", default: "", placeholder: "签名2 的挑战 e" },
+    { key: "s2", label: "s2", type: "text", default: "", placeholder: "签名2 的 s" },
+  ],
+  run: (_text, p) => {
     const e1 = parseBig(p && p.e1, "e1");
     const s1 = parseBig(p && p.s1, "s1");
     const e2 = parseBig(p && p.e2, "e2");
     const s2 = parseBig(p && p.s2, "s2");
     const r = recoverPrivFromReusedNonce(e1, s1, e2, s2);
-    lines.push("=== Schnorr nonce 重用攻击 ===");
-    lines.push("公式：d = (s1−s2)/(e1−e2) mod n,  k = s1 − e1·d mod n");
-    lines.push("");
-    lines.push("恢复私钥 d = " + bytesToHex(bigToBytes32(r.d)));
-    lines.push("恢复 nonce k = " + bytesToHex(bigToBytes32(r.k)));
-    return lines.join("\n");
-  }
-
-  return "未知模式: " + mode;
-}
-
-register({
-  id: "schnorr",
-  cat: "crypto",
-  name: "Schnorr 签名 / 验签 / 攻击",
-  desc: "经典 Schnorr 签名（secp256k1，挑战 e=H(R.x‖P.x‖m)）：keygen 生成密钥对；sign 签名；verify 验签；attack 用两条重用同一 nonce 的签名恢复私钥 d 与 k（ECDSA 重用 k 的姊妹攻击）。",
-  params: [
-    {
-      key: "mode", label: "模式", type: "select", default: "sign",
-      options: [
-        { value: "keygen", label: "生成密钥对" },
-        { value: "sign", label: "签名" },
-        { value: "verify", label: "验签" },
-        { value: "attack", label: "nonce 重用攻击" },
-      ],
-    },
-    { key: "msgMode", label: "消息形式", type: "select", default: "text", options: [{ value: "text", label: "文本" }, { value: "hex", label: "Hex" }] },
-    { key: "priv", label: "私钥 d (hex, sign)", type: "text", default: "", placeholder: "留空随机" },
-    { key: "nonce", label: "nonce k (hex, sign 可选)", type: "text", default: "", placeholder: "留空随机；固定值用于演示重用攻击" },
-    { key: "pubX", label: "公钥 Px (hex, verify)", type: "text", default: "", placeholder: "verify 用" },
-    { key: "pubY", label: "公钥 Py (hex, verify)", type: "text", default: "", placeholder: "verify 用" },
-    { key: "e", label: "e (hex, verify)", type: "text", default: "", placeholder: "verify 用" },
-    { key: "s", label: "s (hex, verify)", type: "text", default: "", placeholder: "verify 用" },
-    { key: "e1", label: "e1 (attack)", type: "text", default: "", placeholder: "attack 用" },
-    { key: "s1", label: "s1 (attack)", type: "text", default: "", placeholder: "attack 用" },
-    { key: "e2", label: "e2 (attack)", type: "text", default: "", placeholder: "attack 用" },
-    { key: "s2", label: "s2 (attack)", type: "text", default: "", placeholder: "attack 用" },
-  ],
-  run: schnorrRun,
+    return [
+      "=== Schnorr nonce 重用攻击 ===",
+      "公式：d = (s1−s2)/(e1−e2) mod n,  k = s1 − e1·d mod n",
+      "",
+      "恢复私钥 d = " + bytesToHex(bigToBytes32(r.d)),
+      "恢复 nonce k = " + bytesToHex(bigToBytes32(r.k)),
+    ].join("\n");
+  },
 });
 
 export { schnorrSign, schnorrVerify, recoverPrivFromReusedNonce, sha256Bytes };

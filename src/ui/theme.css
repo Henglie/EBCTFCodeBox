@@ -64,6 +64,11 @@
   --font: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Mongolian Baiti",
           "Microsoft Uyghur", "Cheonhyeong", system-ui, sans-serif;
   --mono: "Cascadia Code", "Consolas", "SF Mono", "Roboto Mono", ui-monospace, monospace;
+ /* 编辑框字形栈（恒烈 2026-09-02）：编程等宽在前命中拉丁/数字（Cascadia/Consolas 自带
+     0/O、0/o、1/l/I 区分字形），汉字等 fallthrough 天珩。组合符随基字整簇选字体
+     （Chromium 字素簇规则，MT78 实测 unicode-range 拆分无效）：拉丁+组合符簇随编程字体，
+     汉字+组合符簇仍走天珩拼字。回归脚本：工具/rt_browser_uv_grapheme.mjs。 */
+  --io-font: var(--mono), var(--font-content);
 
  /* ---- 字号令牌（整体上调一档，标题永远高正文一档，层级比例不压平） ---- */
   --fs-xs: 13px;     /* 超小：版本号 / 计数 / 展开按钮（旧 12） */
@@ -82,16 +87,20 @@
  /* ---- 动效（M3 标准时长 ×0.5，仿安卓开发者选项动画缩放 0.5x，更跟手流畅） ---- */
   --ease: cubic-bezier(.2, 0, 0, 1);          /* M3 standard easing */
   --ease-emph: cubic-bezier(.2, 0, 0, 1);     /* emphasized */
-  --ease-out: cubic-bezier(0, 0, 0, 1);       /* decelerate（入场） */
-  --ease-in: cubic-bezier(.3, 0, 1, 1);       /* accelerate（出场） */
-  --dur-1: 50ms;    /* M3 short2 100ms ×0.5 */
-  --dur-2: 100ms;   /* M3 short4 200ms ×0.5 */
-  --dur-3: 125ms;   /* M3 medium1 250ms ×0.5 */
-  --dur-4: 175ms;   /* M3 medium3 350ms ×0.5 */
+  --ease-out: cubic-bezier(.05, .7, .1, 1);     /* T471: M3 emphasized-decelerate（入场），原 M2 legacy (0,0,0,1) 已按规范改 */
+  --ease-in: cubic-bezier(.3, 0, .8, .15);      /* T471: M3 emphasized-accelerate（出场），原 M2 legacy (.3,0,1,1) 已按规范改 */
+  --dur-1: 75ms;    /* T471c：M3 short2 100ms ×0.75（恒烈定档：×0.5 太快看不清、×1.0 太慢，取 ¾） */
+  --dur-2: 150ms;   /* T471c：恰为 M3 short3 标准档 */
+  --dur-3: 200ms;   /* T471c：medium1 250ms ×0.75 */
+  --dur-4: 250ms;   /* T471c：恰为 M3 medium1 标准档 */
   --dur: var(--dur-2);   /* 默认过渡 */
  /* 语义别名（组件按语义引用，不直接用数字档） */
-  --dur-short: var(--dur-2);    /* 小交互：hover/开关/按钮 100ms */
-  --dur-medium: var(--dur-4);   /* 入场/展开 175ms */
+  --dur-short: var(--dur-2);    /* 小交互：hover/开关/按钮 150ms */
+  --dur-medium: var(--dur-4);   /* 入场/展开 250ms */
+ /* T471 M3 动效保真（2026-09-09）：规范 emphasized 曲线别名 + pressed 状态层不透明度 */
+  --ease-emph-dec: cubic-bezier(.05, .7, .1, 1);   /* M3 emphasized-decelerate：入场/展开 */
+  --ease-emph-acc: cubic-bezier(.3, 0, .8, .15);   /* M3 emphasized-accelerate：出场/收起 */
+  --ripple-op: .12;                                /* M3 pressed 状态层不透明度（hover .08 / focus .12 / pressed .12） */
 }
 
 /* ============ 暗色主题（默认） ============ */

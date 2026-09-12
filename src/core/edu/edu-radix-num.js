@@ -32,7 +32,7 @@ export default {
       { tex: "x = (-1)^{s}\\times 1.m \\times 2^{e-127}", caption: "单精度：s 符号，e 指数(偏移127)，m 尾数" },
     ],
     tips: ["看到 `0x40490FDB` 这种像内存 dump 的 hex，试着按 IEEE 754 解，可能藏着 3.14 之类的数。", "0x7F800000 是 +∞，0xFFC00000 是 NaN，遇到这些特殊值别慌。"],
-    aka: ["ieee754", "浮点数编码", "float hex", "浮点位模式", "单精度双精度", "ieee 754", "浮点数转hex", "float to hex", "double hex", "半精度浮点", "尾数指数", "IEEE浮点标准", "浮点二进制表示"],
+    aka: ["浮点数转换", "浮点转换", "ieee754", "浮点数编码", "float hex", "浮点位模式", "单精度双精度", "ieee 754", "浮点数转hex", "float to hex", "double hex", "半精度浮点", "尾数指数", "IEEE浮点标准", "浮点二进制表示"],
   },
 
   bcd: {
@@ -180,7 +180,7 @@ export default {
   },
 
   primeFactor: {
-    what: "把一个整数分解成质因数连乘的形式，比如 360 = 2³ × 3² × 5。用 BigInt 支持大数。",
+    what: "把一个整数分解成质因数连乘的形式，比如 $360 = 2^{3} \\times 3^{2} \\times 5$。用 BigInt 支持大数。",
     principle: "从 2 开始试除，除得尽就记一个质因子并继续除，直到试除数平方超过剩余值；最后剩下的（若 >1）也是一个质因子。相同因子用指数合并。",
     usage: "直接粘一个非负整数，run 输出质因数分解式。",
     examples: [

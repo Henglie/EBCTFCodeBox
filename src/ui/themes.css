@@ -1,0 +1,220 @@
+/* ============ ①曜金 VIP（obsidian-gold，暗）============
+ * 暖黑底 + 哑光香槟金。VIP 感来自「压暗的金 + 暖黑」，不是亮黄；
+ * 金 S≈45%/L≈66%（80 档），土气红线：不上 #ffd700 系荧光金。 */
+html[data-palette="obsidian-gold"] {
+  --primary: #d9ba7c;
+  --on-primary: #3a2a08;
+  --primary-container: #54400f;
+  --on-primary-container: #f6e3b8;
+
+  --bg: #121009;
+  --surface: #121009;
+  --surface-1: #1a1710;
+  --surface-2: #211d14;
+  --surface-3: #2a251a;
+  --surface-4: #332d20;
+  --surface-hi: #3d3627;
+
+  --on-surface: #ece3d0;
+  --on-surface-var: #c4b69b;
+  --outline: #8a7d63;
+  --outline-var: #4a4132;
+
+  --error: #ffb4ab;
+  --on-error: #690005;
+  --success: #7ad39a;
+  --warning: #ffb77c;
+  --on-warning: #4a2500;
+  --warning-text: #ffb77c;
+
+  --field-bg: var(--surface-1);
+  --flag-hit: #ffe082;
+  --flag-format: #ffca28;
+
+ /* 渐变点睛：金→铜金同色系，ΔL≈10%，135° */
+  --grad-primary: linear-gradient(135deg, #e6cb8f 0%, #c9a44f 100%);
+  --grad-brand: linear-gradient(120deg, #f2ddab 0%, #d9ba7c 55%, #b8933f 100%);
+}
+
+/* ============ ②夜青瓷（celadon-night，暗）============
+ * 墨青黑底 + 青瓷碧。现代东方：冷青表面 + 低饱和碧 accent，
+ * 青瓷 S≈40%/L≈74%；渐变 青→碧 同色 ΔL≈9%。 */
+html[data-palette="celadon-night"] {
+  --primary: #9fd8cd;
+  --on-primary: #06332e;
+  --primary-container: #1f4f4a;
+  --on-primary-container: #c8f2ea;
+
+  --bg: #0d1515;
+  --surface: #0d1515;
+  --surface-1: #132020;
+  --surface-2: #192929;
+  --surface-3: #213434;
+  --surface-4: #2a3f3f;
+  --surface-hi: #334b4b;
+
+  --on-surface: #dce8e6;
+  --on-surface-var: #aec4c1;
+  --outline: #6e8a87;
+  --outline-var: #3a4f4d;
+
+  --error: #ffb4ab;
+  --on-error: #690005;
+  --success: #7ad39a;
+  --warning: #ffb77c;
+  --on-warning: #4a2500;
+  --warning-text: #ffb77c;
+
+  --field-bg: var(--surface-1);
+  --flag-hit: #ffe082;
+  --flag-format: #ffca28;
+
+  --grad-primary: linear-gradient(135deg, #b3e4d9 0%, #6fb8ad 100%);
+  --grad-brand: linear-gradient(120deg, #cdf0e8 0%, #9fd8cd 55%, #5fa89d 100%);
+}
+
+/* ============ ③紫檀（imperial-violet，暗）============
+ * 紫黑底 + 兰紫。华贵不艳：紫 S≈38%/L≈78%，容器压深；
+ * 渐变 兰紫→藕荷 同色 ΔL≈10%。 */
+html[data-palette="imperial-violet"] {
+  --primary: #cfbdf2;
+  --on-primary: #34215a;
+  --primary-container: #4b3573;
+  --on-primary-container: #ecdfff;
+
+  --bg: #14101a;
+  --surface: #14101a;
+  --surface-1: #1c1725;
+  --surface-2: #241e2f;
+  --surface-3: #2e2740;
+  --surface-4: #383152;
+  --surface-hi: #443b60;
+
+  --on-surface: #e8dff2;
+  --on-surface-var: #bfb1cd;
+  --outline: #847494;
+  --outline-var: #483d58;
+
+  --error: #ffb4ab;
+  --on-error: #690005;
+  --success: #7ad39a;
+  --warning: #ffb77c;
+  --on-warning: #4a2500;
+  --warning-text: #ffb77c;
+
+  --field-bg: var(--surface-1);
+  --flag-hit: #ffe082;
+  --flag-format: #ffca28;
+
+  --grad-primary: linear-gradient(135deg, #dccbf7 0%, #a98fd6 100%);
+  --grad-brand: linear-gradient(120deg, #eee1fc 0%, #cfbdf2 55%, #9a7ecc 100%);
+}
+
+/* ============ ④松烟（pine-ink，暗）============
+ * 墨绿黑底 + 松绿。文人墨色：绿 S≈32%/L≈74%，表面绿调极淡；
+ * 渐变 松绿→苔绿 同色 ΔL≈9%。 */
+html[data-palette="pine-ink"] {
+  --primary: #a9cfa4;
+  --on-primary: #14331c;
+  --primary-container: #2c4d31;
+  --on-primary-container: #d4f0cd;
+
+  --bg: #0f140f;
+  --surface: #0f140f;
+  --surface-1: #16201a;
+  --surface-2: #1d2a22;
+  --surface-3: #26362c;
+  --surface-4: #304337;
+  --surface-hi: #3a5142;
+
+  --on-surface: #dfe9dc;
+  --on-surface-var: #b3c2b0;
+  --outline: #75897a;
+  --outline-var: #3f4f43;
+
+  --error: #ffb4ab;
+  --on-error: #690005;
+  --success: #7ad39a;
+  --warning: #ffb77c;
+  --on-warning: #4a2500;
+  --warning-text: #ffb77c;
+
+  --field-bg: var(--surface-1);
+  --flag-hit: #ffe082;
+  --flag-format: #ffca28;
+
+  --grad-primary: linear-gradient(135deg, #badbb4 0%, #7fb07f 100%);
+  --grad-brand: linear-gradient(120deg, #d2eccb 0%, #a9cfa4 55%, #6f9f70 100%);
+}
+
+/* ============ ⑤宣纸（rice-paper，亮）============
+ * 米白暖纸底 + 赭石茶褐 + 朱砂点缀。古典亮色：
+ * 纸底 L≈93% 带暖黄（hue≈40），赭石 S≈57%/L≈31%（亮主题 primary 40 档）；
+ * 纸感 = surface-fx 极淡薄雾暖晕（α≤.05，几乎不可见但去「死白」）；
+ * 渐变 赭→茶 同色 ΔL≈8%。 */
+html[data-palette="rice-paper"] {
+  --primary: #7c4a21;
+  --on-primary: #ffffff;
+  --primary-container: #eed8bd;
+  --on-primary-container: #2e1a06;
+
+  --bg: #f7f1e5;
+  --surface: #f7f1e5;
+  --surface-1: #fdf9ef;
+  --surface-2: #f5eedd;
+  --surface-3: #efe6d1;
+  --surface-4: #e8dcc4;
+  --surface-hi: #e0d2b6;
+
+  --on-surface: #2b2318;
+  --on-surface-var: #57493a;
+  --outline: #8a7a66;
+  --outline-var: #d8cbb4;
+
+  --error: #a33b28;
+  --on-error: #ffffff;
+  --success: #256d47;
+  --warning: #ff9800;
+  --on-warning: #ffffff;
+  --warning-text: #a34e00;
+
+  --field-bg: var(--surface-1);
+  --flag-hit: #ffb300;
+  --flag-format: #ffca28;
+
+  --grad-primary: linear-gradient(135deg, #8a5528 0%, #6b3a15 100%);
+  --grad-brand: linear-gradient(120deg, #96602f 0%, #7c4a21 55%, #5c3010 100%);
+ /* 纸感薄雾暖晕：仅 body 背景叠加，α=.045 */
+  --surface-fx: radial-gradient(ellipse 120% 80% at 50% -10%, rgba(122, 74, 33, .045) 0%, transparent 60%);
+}
+
+/* ============ 主题选择器色板（envPanel 注入） ============ */
+.env-variant-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 8px; margin-top: 10px; }
+.env-variant-swatch {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  border: 1px solid var(--outline-var); border-radius: var(--r-md);
+  background: var(--surface-1); color: var(--on-surface);
+  font: inherit; font-size: var(--fs-sm); cursor: pointer;
+  transition: border-color var(--dur-short) var(--ease), background var(--dur-short) var(--ease);
+}
+.env-variant-swatch:hover { background: var(--surface-2); }
+.env-variant-swatch.selected { border-color: var(--primary); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--primary); }
+.env-variant-swatch .swatch-dot {
+  width: 22px; height: 22px; border-radius: var(--r-full); flex: none;
+  border: 1px solid var(--outline-var);
+}
+.env-variant-swatch .swatch-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ============ 首页大标题渐变文字（仅五主题启用；出厂主题无 --grad-brand 不命中选择器） ============ */
+html[data-palette="obsidian-gold"] .home-hero .op-title,
+html[data-palette="celadon-night"] .home-hero .op-title,
+html[data-palette="imperial-violet"] .home-hero .op-title,
+html[data-palette="pine-ink"] .home-hero .op-title,
+html[data-palette="rice-paper"] .home-hero .op-title {
+  background: var(--grad-brand);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+}
+
+/* ============ 宣纸纸感薄雾（仅 rice-paper；body 叠加，不改布局） ============ */
+html[data-palette="rice-paper"] body { background-image: var(--surface-fx); }

@@ -111,16 +111,16 @@ export default {
     examples: [{ in: "HI", param: {}, out: "26 18", desc: "H=第2行第6列=26, I=第1行第8列=18" }],
     formulas: [{ tex: "E(c) = (\\text{row}, \\text{col})", caption: "键在键盘上的行列位置" }],
     tips: ["以 QWERTY 标准布局为准", "行号自上而下 1-3", "坐标无分隔即连写"],
-    aka: ["键盘坐标", "Keyboard coordinate", "键盘密码", "QWERTY坐标", "键盘行列", "keyboard cipher", "键位坐标", "键盘位置编码", "行列键盘码", "keyboard coord", "三行键盘坐标", "键盘映射"]
+    aka: ["键盘加密", "键盘坐标", "Keyboard coordinate", "键盘密码", "QWERTY坐标", "键盘行列", "keyboard cipher", "键位坐标", "键盘位置编码", "行列键盘码", "keyboard coord", "三行键盘坐标", "键盘映射"]
   },
   brainfuck: {
     what: "Brainfuck，极简指令式编程语言",
     principle: "仅 8 个指令 + - > < . , [ ]，操作一维字节数组与指针，+ 增加当前单元值，. 输出",
-    usage: "无参数，双向 encode(生成代码)/decode(执行代码)",
-    examples: [{ in: "Hi", param: {}, out: "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.+++++++++++++++++++++++++++++++++..", desc: "72 个 + 设置单元为 72(H)，. 输出，再加 33 个 + 至 105(i)，. 输出" }],
+    usage: "encode 生成标准代码，decode 执行代码。ReverseFuck 方言兼容（esolangs.org：-↔+、>↔<、]↔[、,↔. 四对八字符全反转）默认开启，Magic 未传参数时同样开启；显式关闭可保留原执行路径。遇孤儿右括号时按 ReverseFuck 镜像交换并验证括号结构后执行，全程最多 500 万步；与 NoobCTF「WhatThe#」等真实题型互通（T501 对拍 21/21）。",
+    examples: [{ in: "Hi", param: {}, out: "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.+++++++++++++++++++++++++++++++++.", desc: "72 个 + 输出 H，再加 33 个 + 输出 i" }],
     formulas: [{ tex: "\\text{cell} += 1\\ (\\text{当} +),\\ \\text{output}(\\text{cell})\\ (\\text{当} .)", caption: "+ 增单元，. 输出单元当前值" }],
-    tips: ["8 指令：+ - > < . , [ ]", "单元为 8 位字节（0-255）", "图灵完备，但极难阅读"],
-    aka: ["Brainfuck", "BF 语言", "brainfuck", "BF", "脑残语言", "布莱恩福克", "b***fuck", "极简语言", "esoteric language", "深奥编程语言", "图灵完备语言", "八指令语言"]
+    tips: ["8 指令：+ - > < . , [ ]", "单元为 8 位字节（0-255），磁带 30000 格，输出按 UTF-8 解码。", "兼容交换为 - 与 +、> 与 <、] 与 [、, 与 .；交换路径的逗号为空操作。不是语言标准，无法自动判断所有无括号换表程序。"],
+    aka: ["reversefuck", "反向brainfuck", "字符交换bf", "Brainfuck", "BF 语言", "brainfuck", "BF", "脑残语言", "布莱恩福克", "b***fuck", "极简语言", "esoteric language", "深奥编程语言", "图灵完备语言", "八指令语言"]
   },
   ook: {
     what: "Ook! 语言，Brainfuck 的变体，三字指令 Ook./Ook?/Ook!",
@@ -147,7 +147,7 @@ export default {
     examples: [{ in: "Hi", param: {}, out: "就这¿就这¿不会吧？...", desc: "H/i 的 ASCII 二进制以口头禅序列表示" }],
     formulas: [{ tex: "E(b) = \\begin{cases} \\text{不会吧？} & b=1 \\\\ \\text{就这¿} & b=0 \\end{cases}", caption: "二进制位 1→不会吧？, 0→就这¿" }],
     tips: ["0→就这¿, 1→不会吧？", "网络梗衍生编码", "本质是二进制的口语化包装"],
-    aka: ["阴阳怪气语", "yygq", "阴阳怪气", "阴阳怪气编码", "就这不会吧", "yygq编码", "阴阳语", "怪话编码", "网络梗编码", "口头禅二进制", "yin yang", "阴阳怪气密码"]
+    aka: ["嗷呜", "嗷呜啊", "兽语", "beast语", "阴阳怪气语", "yygq", "阴阳怪气", "阴阳怪气编码", "就这不会吧", "yygq编码", "阴阳语", "怪话编码", "网络梗编码", "口头禅二进制", "yin yang", "阴阳怪气密码"]
   },
   braille: {
     what: "盲文编码，Unicode U+2800 块 8 点盲文",
@@ -168,13 +168,12 @@ export default {
     aka: ["六十四卦", "八卦编码", "64卦", "易经编码", "卦象编码", "周易编码", "六十四卦密码", "hexagram", "八卦密码", "I Ching", "易经卦象", "卦爻编码"]
   },
   whitespace: {
-    what: "Whitespace 编码，以空格/Tab/换行表示二进制",
-    principle: "用三种空白字符（空格、Tab、换行）表示二进制位或分组，表面看似空白实含信息",
-    usage: "无参数(space/tab/newline)，双向 encode/decode",
-    examples: [{ in: "Hi", param: {}, out: "（由空格/Tab/换行组成的不可见序列）", desc: "Hi 编码为仅含空白字符的序列，肉眼不可见" }],
-    formulas: [{ tex: "E(b) \\in \\{\\text{Space}, \\text{Tab}, \\text{LF}\\}", caption: "二进制位映射为三种空白字符" }],
-    tips: ["三种空白字符表示二进制", "表面与普通空文本无异", "需专门工具读取"],
-    aka: ["空白编码", "Whitespace", "whitespace", "空白字符编码", "空格隐写", "Whitespace语言", "隐形编码", "不可见字符编码", "空白隐写", "Tab空格换行", "whitespace stego", "空白密码"]
+    what: "Whitespace 是以空格、Tab、换行作为指令记号的栈机编程语言，不是 SNOW 或二进制空白隐写。",
+    principle: "指令由类别前缀、操作码及数字或标签组成，包含栈操作、整数算术、堆、条件跳转、子程序调用与输入输出。数字使用符号位和二进制；这不等于把整门语言当成二进制编码。堆读取是 TTT，结束是 NNN（S=空格，T=Tab，N=换行）。参考 https://esolangs.org/wiki/Whitespace 。",
+    usage: "encode 生成打印原文的程序，decode 执行程序；程序输入 stdin 供读字符/读数字指令消费，EOF 为 -1。最多执行 100 万步；整数绝对值上限 9007199254740991，超范围、非法指令、空栈或缺少结束符会明确报错。",
+    examples: [{ in: "A", param: {}, out: "   \t     \t\n\t\n  \n\n\n", desc: "压入 65、输出字符 A、NNN 结束；空白需原样保留" }],
+    tips: ["编辑器去掉 Tab、换行或尾空格会破坏程序。", "包含 copy/slide 栈操作扩展；不是所有解释器都支持同样的扩展和 EOF 约定。", "除法向负无穷取整，余数与之配对。"],
+    aka: ["Whitespace", "Whitespace语言", "空白编程语言", "空白栈机", "Whitespace interpreter", "Whitespace执行", "Whitespace stdin", "Whitespace heap", "Whitespace flow control", "S T LF语言", "Tab空格换行语言", "Whitespace esolang"]
   },
   pigpen: {
     what: "猪圈密码，栅格 token 1A-3H 表示字母",
@@ -195,12 +194,12 @@ export default {
     aka: ["键盘位移", "Keyboard shift", "键盘漂移", "keyboard shift", "键位平移", "键盘偏移", "键盘滑动密码", "keyboard drift", "键盘左右移", "键位偏移密码", "同行键位移", "keyboard offset"]
   },
   malbolge: {
-    what: "Malbolge 识别，检测可打印 ASCII 文本",
-    principle: "Malbolge 为故意设计为极难的语言，此 op 仅识别不执行，输出可识别信息",
-    usage: "run 单向(仅识别不执行)",
-    examples: [{ in: "可打印ASCII文本", param: {}, out: "识别信息", desc: "对输入文本进行 Malbolge 可识别性检测" }],
+    what: "Malbolge 装载形式检查：先忽略空白，再核字符及其所在位置是否满足指令规则；不执行程序。",
+    principle: "有效字符为 ASCII 33-126，位置从去除空白后的 0 开始，(字符码+位置)%94 必须属于 {4,5,23,39,40,62,68,81}。普通英文或 Base64 仅满足可打印并不足以通过。参考 https://esolangs.org/wiki/Malbolge 。",
+    usage: "run 仅输出装载检查报告，不输出程序运行结果；空输入和超过 59049 个有效字符会拒绝。",
+    examples: [{ in: "b b", param: {}, out: "Malbolge 装载形式校验通过：2 个有效指令字符，已跳过空白。\n仅验证 ASCII 33-126 和 (字符码+位置)%94 的合法指令集合；未执行程序，不能据此保证运行输出。", desc: "两字符装载形式示例，不是运行结果" }],
     formulas: [{ tex: "\\text{out} = \\text{detect}(\\text{input})", caption: "仅识别不执行 Malbolge 程序" }],
-    tips: ["仅识别，不执行", "Malbolge 被称为最难编程语言", "输入需为可打印 ASCII"],
+    tips: ["仅识别，不执行；通过不代表能正常运行或输出 flag。", "空格、Tab、换行不参与位置计数。", "不支持 Malbolge Unshackled 等另行定义的变体。"],
     aka: ["Malbolge 识别", "玛尔波格", "Malbolge", "malbolge", "地狱语言", "最难编程语言", "但丁地狱语言", "深奥语言Malbolge", "Malbolge识别", "玛尔波各", "esolang", "最难esolang"]
   },
   aaencode: {
@@ -246,7 +245,7 @@ export default {
     examples: [{ in: "HELLO", param: { column: 2 }, out: "HLOEL|", desc: "column=2：HLO 在前，EL 在后，末尾 | 占位" }],
     formulas: [{ tex: "T = \\text{column}", caption: "列宽 column 决定换位周期" }],
     tips: ["column 决定柱周长", "不足补占位符 |", "最古老的换位密码之一"],
-    aka: ["密码棒", "Scytale", "scytale", "天书密码棒", "斯巴达密码棒", "斯巴达棒", "绕棒密码", "cane cipher", "密码卷轴", "换位密码棒", "Skytale", "古希腊密码棒"]
+    aka: ["圆柱密码", "斯巴达", "密码棒", "Scytale", "scytale", "天书密码棒", "斯巴达密码棒", "斯巴达棒", "绕棒密码", "cane cipher", "密码卷轴", "换位密码棒", "Skytale", "古希腊密码棒"]
   },
   keyCode: {
     what: "键码识别，将键码转字符",
@@ -273,7 +272,7 @@ export default {
     examples: [{ in: "abc", param: {}, out: "T9九宫格模式识别", desc: "识别 abc 对应的 T9 九宫格输入模式" }],
     formulas: [{ tex: "\\text{out} = \\text{T9}_\\text{mode}(\\text{input})", caption: "T9 九宫格四模式识别" }],
     tips: ["支持四种识别模式", "2=abc, 3=def, 4=ghi...", "老式手机输入法"],
-    aka: ["T9 九宫格", "keyword9", "T9九宫格", "九宫格识别", "T9识别", "手机九宫格", "T9 keyboard", "九宫格输入", "老年机输入", "T9 predictive", "九宫格密码", "手机键盘九宫格"]
+    aka: ["九键", "九宫格输入法", "九键输入", "T9 九宫格", "keyword9", "T9九宫格", "九宫格识别", "T9识别", "手机九宫格", "T9 keyboard", "九宫格输入", "老年机输入", "T9 predictive", "九宫格密码", "手机键盘九宫格"]
   },
   keyboardSurround: {
     what: "键盘包围键识别，求键的邻居集合",
@@ -309,7 +308,7 @@ export default {
     examples: [{ in: "ABC", param: {}, out: "212223", desc: "A=21, B=22, C=23（2 键的第 1/2/3 位）" }],
     formulas: [{ tex: "E(c) = 10 \\cdot \\text{key}(c) + \\text{pos}(c)", caption: "键号×10 + 位序" }],
     tips: ["a=21 ... z=94", "2=abc, 3=def, 4=ghi, 5=jkl, 6=mno, 7=pqrs, 8=tuv, 9=wxyz", "区别于 multitap"],
-    aka: ["T9 手机码", "t9Phone", "手机九宫格T9", "T9电话编码", "手机键盘编码", "电话九宫格", "phone keypad", "T9 phone", "手机数字键编码", "九宫格数字码", "键号位序编码", "T9手机键盘"]
+    aka: ["九键", "九宫格输入法", "九键输入", "T9 手机码", "t9Phone", "手机九宫格T9", "T9电话编码", "手机键盘编码", "电话九宫格", "phone keypad", "T9 phone", "手机数字键编码", "九宫格数字码", "键号位序编码", "T9手机键盘"]
   },
   multitap: {
     what: "多击编码，重复按键次数表示字母",

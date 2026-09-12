@@ -253,6 +253,17 @@
   background: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
+.env-motion-setting {
+  display: flex; align-items: center; gap: var(--sp-3); min-height: 48px;
+  padding: var(--sp-2); border-radius: var(--r-sm); background: var(--surface-1);
+  color: var(--on-surface); cursor: pointer;
+}
+.env-motion-setting:hover { background: var(--surface-hi); }
+.env-motion-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; }
+.env-motion-label { font-size: var(--fs-sm); font-weight: 600; line-height: 1.35; }
+.env-motion-note { font-size: var(--fs-xs); color: var(--on-surface-var); line-height: 1.4; }
+.env-motion-setting .switch { margin-inline-start: auto; }
+
 /* ============ 窄屏适配（与 topbar-responsive.css 协同） ============ */
 @media (max-width: 480px) {
   .env-panel { width: calc(100vw - 16px); inset-inline-end: 8px !important; }

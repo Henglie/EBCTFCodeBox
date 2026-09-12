@@ -22,7 +22,7 @@
  * 红线：算法照官方参考，不编造；纯本地零外发；core 层零 UI 依赖（仅 registry）。
  * 自检：node --input-type=module -e "import('./src/core/lyra2.js').then(m=>m.selfCheck())"
  *
- * 契约：register({ id:"lyra2", cat:"crypto", name, desc, params, run })。
+ * 契约：register({ id:"lyra2", cat:"hash", name, desc, params, run })。
  */
 import { register } from "./registry.js";
 
@@ -272,7 +272,7 @@ function lyra2Run(text, p = {}) {
 
 register({
   id: "lyra2",
-  cat: "crypto",
+  cat: "hash",
   name: "Lyra2 密钥派生",
   desc: "Lyra2 内存硬口令 KDF（PHC 2014，Blake2b 海绵位率 768bit）：reduced-round duplex 填充内存矩阵 + 奇偶轮 Wandering 随机访问。抗 GPU/ASIC 暴力。参数 tCost（轮数）/mCost（行数，≥2）/nCols（basil 参数）/kLen。",
   params: [

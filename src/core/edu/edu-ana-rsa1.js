@@ -38,7 +38,7 @@ export default {
   },
 
   rsaModinv: {
-    what: "模逆元：求 a 在模 m 下的乘法逆元，即找 x 使得 a·x ≡ 1 (mod m)。RSA 求私钥 d、共模攻击、很多数论题都要它。",
+    what: "模逆元：求 a 在模 m 下的乘法逆元，即找 x 使得 $a \\cdot x \\equiv 1 \\pmod{m}$。RSA 求私钥 d、共模攻击、很多数论题都要它。",
     principle:
       "逆元存在的充要条件是 $\\gcd(a,m)=1$。用扩展欧几里得算法求出 $ax+my=1$ 里的 x，再取模 m 就是逆元。本工具自反：对逆元再求一次逆元还原回原数。",
     usage: "填 a 和 m，输出 a 模 m 的逆元。encode/decode 互逆（inv(inv(a))=a）。",
@@ -54,7 +54,7 @@ export default {
   },
 
   rsaEgcd: {
-    what: "扩展欧几里得：在求最大公约数 gcd(a,b) 的同时，还给出 Bézout 系数 x、y，使 a·x + b·y = gcd。求模逆、共模攻击的底层零件。",
+    what: "扩展欧几里得：在求最大公约数 $\\gcd(a,b)$ 的同时，还给出 Bézout 系数 x、y，使 $a \\cdot x + b \\cdot y = \\gcd$。求模逆、共模攻击的底层零件。",
     principle:
       "普通欧几里得辗转相除只得 gcd；扩展版把每步的商回代，额外解出系数 x、y。当 $\\gcd(a,b)=1$ 时，x 就是 a 模 b 的逆元。",
     usage: "输入框填 a 和 b，输出 gcd 以及满足 ax+by=g 的整数 x、y。",
@@ -64,15 +64,15 @@ export default {
     formulas: [
       { tex: "a\\,x + b\\,y = \\gcd(a,b)", caption: "Bézout 恒等式" },
     ],
-    tips: ["共模攻击里用它解 a·e1+b·e2=1；求逆元时取 x mod m 即可。"],
+    tips: ["共模攻击里用它解 $a \\cdot e1 + b \\cdot e2 = 1$；求逆元时取 $x \\bmod m$ 即可。"],
     aka: ["扩展欧几里得", "extended euclidean", "egcd", "bezout", "贝祖", "扩展欧几里得算法", "贝祖系数", "bezout coefficients", "extended gcd", "ext euclid", "裴蜀定理", "ax+by=gcd", "扩展辗转相除"],
   },
 
   rsaModpow: {
-    what: "大数快速幂：算 base^exp mod m 这种超大指数的模幂。RSA 加解密（c=m^e mod n、m=c^d mod n）的核心运算，直接算会爆掉，必须用它。",
+    what: "大数快速幂：算 $\\mathrm{base}^{\\mathrm{exp}} \\bmod m$ 这种超大指数的模幂。RSA 加解密（$c = m^{e} \\bmod n$、$m = c^{d} \\bmod n$）的核心运算，直接算会爆掉，必须用它。",
     principle:
       "把指数拆成二进制，用「平方-乘」逐位处理：每一步都对底数平方并取模，遇到指数的 1 位就额外乘一次。这样 e 有几十位也只需几十次乘法，且中间结果始终被 mod 压在范围内。",
-    usage: "输入框填 base、exp、mod（每行一个或逗号分隔），输出 base^exp mod m。",
+    usage: "输入框填 base、exp、mod（每行一个或逗号分隔），输出 $\\mathrm{base}^{\\mathrm{exp}} \\bmod m$。",
     examples: [
       { in: "base=65, exp=17, mod=3233", out: "2790", desc: "RSA 加密：m=65 → c=2790" },
       { in: "base=2790, exp=2753, mod=3233", out: "65", desc: "私钥解密还原 m" },
@@ -80,7 +80,7 @@ export default {
     formulas: [
       { tex: "c = m^e \\bmod n,\\qquad m = c^d \\bmod n", caption: "RSA 加解密即模幂" },
     ],
-    tips: ["拿到 p、q、e 用 rsaParams 求出 d，再用它跑 c^d mod n 就得明文。"],
+    tips: ["拿到 p、q、e 用 rsaParams 求出 d，再用它跑 $c^{d} \\bmod n$ 就得明文。"],
     aka: ["快速幂", "模幂", "modular exponentiation", "modpow", "平方乘", "大数快速幂", "快速幂取模", "模幂运算", "square and multiply", "pow mod", "幂模", "二进制快速幂", "modexp"],
   },
 };

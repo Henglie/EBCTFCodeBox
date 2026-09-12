@@ -66,7 +66,7 @@ function batchGcdRun(text, p) {
 }
 
 register({
-  id: "rsaBatchGcd", cat: "crypto", name: "RSA 公共因子分解（批量 GCD）",
+  id: "rsaBatchGcd", family: "rsaatk", familyLabel: "batchgcd", cat: "crypto", name: "RSA 公共因子分解（批量 GCD）",
   desc: "多个 RSA 模数 N 两两求 GCD，找公共素因子分解",
   params: [],
   run: batchGcdRun,

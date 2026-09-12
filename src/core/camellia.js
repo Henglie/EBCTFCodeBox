@@ -253,7 +253,7 @@ const camelliaDecode = (t, p) => camelliaCrypt(t, p, true);
 
 register({
   id: "camellia",
-  cat: "modern",
+  cat: "block",
   name: "Camellia（RFC 3713）",
   desc: "NTT/三菱 Camellia 分组密码：128 位分组，128/192/256 位密钥（18/24 轮 Feistel），FL/FLINV 每 6 轮插入。NESSIE/CRYPTREC 推荐。ECB 多块，明文/密文/密钥均 hex。encode 加密 / decode 解密。过 RFC 3713 附录 C 三向量。",
   params: [

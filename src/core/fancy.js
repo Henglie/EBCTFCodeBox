@@ -340,7 +340,7 @@ register({
 });
 
 register({
-  id: "railFence", cat: "fancy", name: "栅栏密码", desc: "W 型 zigzag（参数：栏数）",
+  id: "railFence", cat: "classic", name: "栅栏密码", desc: "W 型 zigzag（参数：栏数）",
   params: [
     { key: "rails", label: "栏数", type: "number", default: 2, placeholder: "2-10" },
   ],
@@ -348,7 +348,7 @@ register({
 });
 
 register({
-  id: "caesar", cat: "fancy", name: "凯撒密码", desc: "指定位移量（encode +shift，decode -shift）；mode 可切递增/递减凯撒（第 x 字符位移 shift±x）",
+  id: "caesar", cat: "classic", name: "凯撒密码", desc: "指定位移量（encode +shift，decode -shift）；mode 可切递增/递减凯撒（第 x 字符位移 shift±x）",
   params: [
     { key: "shift", label: "位移量", type: "number", default: 3, placeholder: "1-25" },
     { key: "mode", label: "模式", type: "select", default: "standard",
@@ -363,19 +363,19 @@ register({
 });
 
 register({
-  id: "rot13", cat: "fancy", name: "ROT13", desc: "字母移位 13（自反）",
+  id: "rot13", cat: "fancy", family: "rot", familyLabel: "rot13", name: "ROT13", desc: "字母移位 13（自反）",
   encode: rot13, decode: rot13,
 });
 register({
-  id: "rot5", cat: "fancy", name: "ROT5", desc: "数字移位 5（自反）",
+  id: "rot5", family: "rot", familyLabel: "rot5", cat: "fancy", name: "ROT5", desc: "数字移位 5（自反）",
   encode: rot5, decode: rot5,
 });
 register({
-  id: "rot18", cat: "fancy", name: "ROT18", desc: "ROT13 + ROT5（自反）",
+  id: "rot18", family: "rot", familyLabel: "rot18", cat: "fancy", name: "ROT18", desc: "ROT13 + ROT5（自反）",
   encode: rot18, decode: rot18,
 });
 register({
-  id: "rot47", cat: "fancy", name: "ROT47", desc: "ASCII 33-126 移位 47（自反）",
+  id: "rot47", family: "rot", familyLabel: "rot47", cat: "fancy", name: "ROT47", desc: "ASCII 33-126 移位 47（自反）",
   encode: rot47, decode: rot47,
 });
 

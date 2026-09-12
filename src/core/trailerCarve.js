@@ -302,10 +302,14 @@ function trailerReport(bytes, fmt) {
   const pad = isPadding(bytes, end, bytes.length);
   lines.push(`附加数据: ${tail} 字节${pad ? "（疑似全 0x00/0xFF 填充）" : ""}`);
 
- // 附加数据开头魔数识别
+ // 附加数据开头魔数识别；命中时整段尾挂数据走 files 协议给下载按钮（T507 P1）
   const idMagic = identifyMagic(bytes, end);
+  let carvedFile = null;
   if (idMagic) {
     lines.push(`▸ 附加数据开头识别为: ${idMagic.name}（${idMagic.desc}）— 尾部粘连了一个完整文件`);
+    const EXT = [["ZIP", "zip", "application/zip"], ["PNG", "png", "image/png"], ["GIF", "gif", "image/gif"], ["JPEG|JPG|JFIF", "jpg", "image/jpeg"], ["RAR", "rar", "application/vnd.rar"], ["7Z", "7z", "application/x-7z-compressed"], ["PDF", "pdf", "application/pdf"], ["ELF", "bin", "application/octet-stream"], ["MZ|EXE|PE", "exe", "application/octet-stream"]];
+    const hit = EXT.find(([re]) => new RegExp(re, "i").test(idMagic.name)) || ["", "bin", "application/octet-stream"];
+    carvedFile = { name: `carved_0x${end.toString(16)}.${hit[1]}`, mime: hit[2], bytes: bytes.slice(end) };
   } else {
     lines.push("▸ 附加数据开头未匹配已知魔数");
   }
@@ -335,6 +339,11 @@ function trailerReport(bytes, fmt) {
     lines.push("");
     lines.push("附加数据 base64（可另存 / 二次解码）:");
     lines.push(bytesToB64(slice));
+  }
+  if (carvedFile) {
+    lines.push("");
+    lines.push("▸ 已识别为完整尾部文件，可直接下载（hex/base64 输出保留作配方链兼容）。");
+    return { text: lines.join("\n"), files: [carvedFile] };
   }
   return lines.join("\n");
 }

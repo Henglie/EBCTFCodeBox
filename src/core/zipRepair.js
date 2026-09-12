@@ -207,9 +207,15 @@ function zipRepairRun(text, p) {
   });
   lines.push("注意：若清位后解压仍报密码错或数据乱码，说明是真加密（ZipCrypto/AES）而非伪加密——需口令爆破（ZIP 弱口令爆破）而非清位。");
   lines.push("");
+  // T363a 产物协议（2026-09-02）：修复后 ZIP 字节走 files 下载按钮（真文件交付），
+  // text 保留原报告与 base64（链式兼容）；未改动路径仍返回 string。
+  lines.push("修复后 ZIP 已生成，点击下方按钮直接下载。");
   lines.push("修复后 base64：");
   lines.push(bytesToB64(bytes));
-  return lines.join("\n");
+  return {
+    text: lines.join("\n"),
+    files: [{ name: "out_fixed.zip", mime: "application/zip", bytes }],
+  };
 }
 
 // ============ op 2：ZIP 伪加密置位（伪造） ============
@@ -240,9 +246,15 @@ function zipPseudoEncryptRun(text, p) {
   });
   lines.push("说明：伪加密只改标志位、不动数据——解压软件会误报「需要密码」。逆操作用「ZIP 伪加密修复」。");
   lines.push("");
+  // T363a 产物协议（2026-09-02）：置位后 ZIP 字节走 files 下载按钮（真文件交付），
+  // text 保留原报告与 base64（链式兼容）；未改动路径仍返回 string。
+  lines.push("置位后 ZIP 已生成，点击下方按钮直接下载。");
   lines.push("置位后 base64：");
   lines.push(bytesToB64(bytes));
-  return lines.join("\n");
+  return {
+    text: lines.join("\n"),
+    files: [{ name: "out_pseudo.zip", mime: "application/zip", bytes }],
+  };
 }
 
 // ============ 自检用手搓 Stored 测试 ZIP（LFH/CDH/EOCD + 标准 CRC32） ============
@@ -348,22 +360,31 @@ function allEncrypted(b) {
 // ============ 加载期自检（import 即跑） ============
 
 (() => {
+  // T363a 产物协议（2026-09-02）：改动成功路径返回 {text, files:[{bytes}]}，
+  // 未改动/错误路径仍为 string。取文本与产物字节走兼容取法（旧字符串路径兜底）。
+  const outText = (o) => (typeof o === "string" ? o : o.text);
+  const outBytes = (o) => {
+    if (o && o.files && o.files[0] && o.files[0].bytes instanceof Uint8Array) return o.files[0].bytes;
+    return b64ToBytes(outText(o).split("\n").pop());
+  };
+
   // ① 单条目伪加密 → 修复 → 报告命中 + 逐字节还原为原始 ZIP
   const plain = makeStoredZip([{ name: "flag.txt", data: "flag{fake_encryption}" }]);
   let out = zipRepairRun("", { rawBytes: setFakeEncryption(plain) });
-  if (!out.includes("修复完成") || !out.includes("清除了 1 个加密位")) throw new Error(`zipRepair 自检①失败：\n${out}`);
-  let fixed = b64ToBytes(out.split("\n").pop());
+  if (!outText(out).includes("修复完成") || !outText(out).includes("清除了 1 个加密位")) throw new Error(`zipRepair 自检①失败：\n${outText(out)}`);
+  let fixed = outBytes(out);
   if (!bytesEqual(fixed, plain)) throw new Error("zipRepair 自检①失败：修复后未逐字节还原");
 
-  // ② 干净 ZIP：未发现伪加密位，不输出 base64
+  // ② 干净 ZIP：未发现伪加密位，未改动路径必须仍返回 string（且不输出 base64）
   out = zipRepairRun("", { rawBytes: plain });
+  if (typeof out !== "string") throw new Error("zipRepair 自检②失败：未改动路径应返回 string");
   if (!out.includes("未发现伪加密位") || out.includes("base64")) throw new Error(`zipRepair 自检②失败：\n${out}`);
 
   // ③ 多条目：2 条全清，逐字节还原
   const two = makeStoredZip([{ name: "a.txt", data: "AAA" }, { name: "b.txt", data: "BBBB" }]);
   out = zipRepairRun("", { rawBytes: setFakeEncryption(two) });
-  if (!out.includes("清除了 2 个加密位")) throw new Error(`zipRepair 自检③失败：\n${out}`);
-  if (!bytesEqual(b64ToBytes(out.split("\n").pop()), two)) throw new Error("zipRepair 自检③失败：多条目未还原");
+  if (!outText(out).includes("清除了 2 个加密位")) throw new Error(`zipRepair 自检③失败：\n${outText(out)}`);
+  if (!bytesEqual(outBytes(out), two)) throw new Error("zipRepair 自检③失败：多条目未还原");
 
   // ④ bit6 连带：flag 置 0x41 后，默认只清 bit0（留 0x40），clearStrong 才全清
   const strong = new Uint8Array(plain);
@@ -371,19 +392,19 @@ function allEncrypted(b) {
   setU16le(strong, 6, 0x0041);      // LFH @0 偏移 6（单条目 LFH 必在 0）
   setU16le(strong, cd + 8, 0x0041); // CDH 偏移 8
   out = zipRepairRun("", { rawBytes: strong });
-  if (!out.includes("0x0041→0x0040")) throw new Error(`zipRepair 自检④失败（bit6 应保留）：\n${out}`);
+  if (!outText(out).includes("0x0041→0x0040")) throw new Error(`zipRepair 自检④失败（bit6 应保留）：\n${outText(out)}`);
   out = zipRepairRun("", { rawBytes: strong, clearStrong: true });
-  if (!bytesEqual(b64ToBytes(out.split("\n").pop()), plain)) throw new Error("zipRepair 自检④失败：clearStrong 未全清");
+  if (!bytesEqual(outBytes(out), plain)) throw new Error("zipRepair 自检④失败：clearStrong 未全清");
 
   // ⑤ 置位互逆闭环：置位后全条目 bit0=1，再修复逐字节还原
   out = zipPseudoEncryptRun("", { rawBytes: plain });
-  const encBytes = b64ToBytes(out.split("\n").pop());
+  const encBytes = outBytes(out);
   if (!allEncrypted(encBytes)) throw new Error("zipPseudoEncrypt 自检⑤失败：置位不全");
   out = zipRepairRun("", { rawBytes: encBytes });
-  if (!bytesEqual(b64ToBytes(out.split("\n").pop()), plain)) throw new Error("zipPseudoEncrypt 自检⑤失败：闭环未还原");
-  // 已全置位再置位：报告未改动
+  if (!bytesEqual(outBytes(out), plain)) throw new Error("zipPseudoEncrypt 自检⑤失败：闭环未还原");
+  // 已全置位再置位：报告未改动（string 路径）
   out = zipPseudoEncryptRun("", { rawBytes: encBytes });
-  if (!out.includes("文件未改动")) throw new Error(`zipPseudoEncrypt 自检⑤失败：\n${out}`);
+  if (typeof out !== "string" || !out.includes("文件未改动")) throw new Error(`zipPseudoEncrypt 自检⑤失败：\n${out}`);
 
   // ⑥ RAR 头：明确拒绝
   let threw = false, msg = "";
@@ -406,7 +427,7 @@ function allEncrypted(b) {
 
   // ⑨ base64 文本输入路径（无 rawBytes）
   out = zipRepairRun(bytesToB64(setFakeEncryption(plain)), {});
-  if (!out.includes("清除了 1 个加密位") || !bytesEqual(b64ToBytes(out.split("\n").pop()), plain)) {
+  if (!outText(out).includes("清除了 1 个加密位") || !bytesEqual(outBytes(out), plain)) {
     throw new Error("zipRepair 自检⑨失败：base64 文本输入路径异常");
   }
 
@@ -417,10 +438,10 @@ function allEncrypted(b) {
   glued.set(plain, 16);
   const gluedFaked = setFakeEncryption(glued);
   out = zipRepairRun("", { rawBytes: gluedFaked });
-  if (!out.includes("文件头非 PK") || !out.includes("前缀 16 字节") || out.includes("LFH 未命中")) {
-    throw new Error(`zipRepair 自检⑩失败：\n${out}`);
+  if (!outText(out).includes("文件头非 PK") || !outText(out).includes("前缀 16 字节") || outText(out).includes("LFH 未命中")) {
+    throw new Error(`zipRepair 自检⑩失败：\n${outText(out)}`);
   }
-  if (!bytesEqual(b64ToBytes(out.split("\n").pop()), glued)) {
+  if (!bytesEqual(outBytes(out), glued)) {
     throw new Error("zipRepair 自检⑩失败：拼接件未逐字节还原");
   }
 })();
@@ -428,7 +449,7 @@ function allEncrypted(b) {
 // ============ register ============
 
 register({
-  id: "zipRepair", cat: "forensic", name: "ZIP 伪加密修复",
+  id: "zipRepair", family: "zip", familyLabel: "repair", cat: "forensic", name: "ZIP 伪加密修复",
   desc: "清除中央目录与本地文件头通用位标志的加密位（bit0，可连带强加密位 bit6）。走 EOCD→中央目录→本地头精确路径，不误伤压缩数据。伪加密=标志位被置 1 但数据未加密，清位即可正常解压；输出修复后 base64",
   params: [
     { key: "clearStrong", label: "同时清强加密位(bit6)", type: "bool", default: false },
@@ -438,7 +459,7 @@ register({
 });
 
 register({
-  id: "zipPseudoEncrypt", cat: "forensic", name: "ZIP 伪加密（置位）",
+  id: "zipPseudoEncrypt", family: "zip", familyLabel: "pseudo", cat: "forensic", name: "ZIP 伪加密（置位）",
   desc: "把中央目录与本地文件头的加密位（bit0）置 1 而不动数据——制造「需要密码」假象，「ZIP 伪加密修复」的逆操作，可用于出题与演示；输出置位后 base64",
   params: [],
   run: zipPseudoEncryptRun,

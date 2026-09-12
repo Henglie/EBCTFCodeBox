@@ -9,7 +9,7 @@ export default {
       { in: "-----BEGIN PUBLIC KEY----- ...", out: "类型=RSA公钥, n=..., e=65537" },
     ],
     tips: ["RSA 私钥题常直接给 PEM，解析出 n、e 就能接因子分解；证书题看有效期/CN/SAN 里藏的 flag。"],
-    aka: ["pem", "der", "pem解析", "密钥解析", "证书解析", "privacy enhanced mail", "PEM格式", "DER编码", "x.509证书", "certificate parse", "PEM结构解析", "-----BEGIN-----"],
+    aka: ["证书格式", "pem", "der", "pem解析", "密钥解析", "证书解析", "privacy enhanced mail", "PEM格式", "DER编码", "x.509证书", "certificate parse", "PEM结构解析", "-----BEGIN-----"],
   },
 
   asn1Parse: {

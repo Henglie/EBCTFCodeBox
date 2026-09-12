@@ -302,6 +302,101 @@ function hillDecode(text, key = "GYBNQKURP") {
   return hillApply(text, invertMatrixMod(parseHillKey(key), 26));
 }
 
+// ============ Hill 自定义字母表（T517：模数=表长，密钥同表解析） ============
+// 默认 alphabet 为空时走上方原路径（行为零变化）；自定义表口径对齐
+// yunser hill-cipher 参照页：密钥字符也查表映射、表内字符（含空格/标点，
+// 大小写敏感精确匹配）参与运算、表外字符丢弃、det 与表长互素才可逆。
+
+/* 扩展欧几里得模逆：存在返回 0..m-1，不存在返回 null（O(log m)，任意表长通用） */
+function egcdInv(a, m) {
+  let [old_r, r] = [((a % m) + m) % m, m];
+  let [old_s, s] = [1, 0];
+  while (r !== 0) {
+    const q = Math.floor(old_r / r);
+    [old_r, r] = [r, old_r - q * r];
+    [old_s, s] = [s, old_s - q * s];
+  }
+  if (old_r !== 1) return null;
+  return ((old_s % m) + m) % m;
+}
+
+/* 自定义字母表解析：非空、码点级无重复 */
+function parseAlphabet(s) {
+  const alpha = [...String(s)];
+  if (alpha.length < 2) throw new Error("Hill: 字母表至少 2 个字符");
+  const seen = new Set();
+  for (const ch of alpha) {
+    if (seen.has(ch)) throw new Error("Hill: 字母表含重复字符「" + ch + "」");
+    seen.add(ch);
+  }
+  return alpha;
+}
+
+/* 自定义表矩阵求逆：det 与表长互素才可逆 */
+function invertMatrixModCustom(mat, m) {
+  const n = mat.length;
+  const det = ((determinant(mat) % m) + m) % m;
+  const detInv = egcdInv(det, m);
+  if (detInv === null) throw new Error("Hill: 密钥矩阵在 mod " + m + " 下不可逆（行列式 " + det + " 与模数不互素）");
+  const inv = [];
+  for (let i = 0; i < n; i++) {
+    inv.push([]);
+    for (let j = 0; j < n; j++) {
+      const cof = ((i + j) % 2 === 0 ? 1 : -1) * minor(mat, j, i);
+      inv[i][j] = (((cof * detInv) % m) + m) % m;
+    }
+  }
+  return inv;
+}
+
+function hillCustomApply(text, mat, alpha, padMode) {
+  const n = mat.length;
+  const m = alpha.length;
+  const idxOf = new Map(alpha.map((ch, i) => [ch, i]));
+  const letters = [...String(text)].filter((ch) => idxOf.has(ch)).map((ch) => idxOf.get(ch));
+  if (padMode === "repeat") {
+    const pad = letters.length > 0 ? letters[letters.length - 1] : 0;
+    while (letters.length % n !== 0) letters.push(pad);
+  } else { /* "x"：补表内 'X'，表无 'X' 补表末字符（对齐参照页无 X 表可用） */
+    const pad = idxOf.has("X") ? idxOf.get("X") : m - 1;
+    while (letters.length % n !== 0) letters.push(pad);
+  }
+  let out = "";
+  for (let i = 0; i < letters.length; i += n) {
+    const vec = letters.slice(i, i + n);
+    for (let r = 0; r < n; r++) {
+      let sum = 0;
+      for (let c = 0; c < n; c++) sum += mat[r][c] * vec[c];
+      out += alpha[((sum % m) + m) % m];
+    }
+  }
+  return out;
+}
+
+/* 自定义表密钥解析：逐字符查表（数字/字母/标点一视同仁），表外字符报错 */
+function parseHillKeyCustom(key, alpha) {
+  const idxOf = new Map(alpha.map((ch, i) => [ch, i]));
+  const nums = [...String(key)].map((ch) => {
+    const v = idxOf.get(ch);
+    if (v === undefined) throw new Error("Hill: 密钥字符「" + ch + "」不在字母表内");
+    return v;
+  });
+  const n = Math.round(Math.sqrt(nums.length));
+  if (n * n !== nums.length || n < 2) throw new Error("Hill: 密钥长度须为完全平方数（≥4）");
+  const mat = [];
+  for (let i = 0; i < n; i++) mat.push(nums.slice(i * n, i * n + n));
+  return mat;
+}
+
+function hillEncodeEx(text, key, opts) {
+  const alpha = parseAlphabet(opts.alphabet);
+  return hillCustomApply(text, parseHillKeyCustom(key, alpha), alpha, opts.padMode);
+}
+function hillDecodeEx(text, key, opts) {
+  const alpha = parseAlphabet(opts.alphabet);
+  return hillCustomApply(text, invertMatrixModCustom(parseHillKeyCustom(key, alpha), alpha.length), alpha, opts.padMode);
+}
+
 // ============ 仿射（ciphers.js） ============
 function affineEncode(text, a = 5, b = 8) {
   return text.replace(/[a-z]/gi, (c) => {
@@ -644,10 +739,28 @@ regKey("nihilist", "Nihilist 虚无党", "键控 Polybius", nihilistEncode, nihi
 regKey("columnar", "列移位", "按 key 字母顺序读列", columnarEncode, columnarDecode, "ZEBRA", "密钥（单词）");
 
 register({
-  id: "hill", cat: "classic", name: "Hill 希尔", desc: "矩阵加密（mod 26，密钥须完全平方数）",
-  params: [{ key: "key", label: "密钥（数字或字母）", type: "text", default: "GYBNQKURP" }],
-  encode: (t, p) => hillEncode(t, (p && p.key) || "GYBNQKURP"),
-  decode: (t, p) => hillDecode(t, (p && p.key) || "GYBNQKURP"),
+  id: "hill", cat: "classic", name: "Hill 希尔", desc: "矩阵加密（默认 mod 26；可自定义字母表，模数=表长，密钥同表解析，密钥须完全平方数）",
+  params: [
+    { key: "key", label: "密钥（数字或字母）", type: "text", default: "GYBNQKURP" },
+    { key: "alphabet", label: "字母表（留空=26 大写默认；可自定义含空格/标点，如 abcdefghijklmnopqrstuvwxyz ,.）", type: "text", default: "" },
+    { key: "padding", label: "填充（长度不足时）", type: "select", default: "x", options: [
+      { value: "x", label: "补 X（默认表；自定义表无 X 则补表末字符）" },
+      { value: "repeat", label: "重复明文末字符（yunser 参照页口径）" },
+    ] },
+  ],
+  encode: (t, p) => {
+    const key = (p && p.key) || "GYBNQKURP";
+    /* 不 trim：空格可能是字母表成员 */
+    const alphabet = p && typeof p.alphabet === "string" ? p.alphabet : "";
+    if (!alphabet) return hillEncode(t, key); /* 默认路径：行为零变化 */
+    return hillEncodeEx(t, key, { alphabet, padMode: p && p.padding === "repeat" ? "repeat" : "x" });
+  },
+  decode: (t, p) => {
+    const key = (p && p.key) || "GYBNQKURP";
+    const alphabet = p && typeof p.alphabet === "string" ? p.alphabet : "";
+    if (!alphabet) return hillDecode(t, key); /* 默认路径：行为零变化 */
+    return hillDecodeEx(t, key, { alphabet, padMode: p && p.padding === "repeat" ? "repeat" : "x" });
+  },
 });
 
 register({

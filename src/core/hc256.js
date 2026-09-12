@@ -164,8 +164,8 @@ function hc256Decode(text, p = {}) {
 })();
 
 register({
-  id: "hc256",
-  cat: "modern",
+  id: "hc256", family: "hc", familyLabel: "hc256",
+  cat: "stream",
   name: "HC-256 流密码",
   desc: "HC-256 流密码（Wu Hongjun FSE 2004，eSTREAM 决赛）：P/Q 各 1024×32bit 表 + f1/f2（SHA-256 σ）+ G1/G2（含表查找）+ h1/h2（4 字节索引）。256 位 key + 256 位 IV。自反 XOR：encode 文本→密文 hex，decode 密文 hex→文本。已过 Crypto++ 官方向量（3 组：key=IV=0 / IV=01 / key=55）。",
   params: [

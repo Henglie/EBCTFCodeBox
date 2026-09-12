@@ -28,7 +28,8 @@
  * - 随机 r / 素数用 crypto 随机源（复用 primeGen）。
  * - 零外发；core 层零 UI 依赖（仅 registry + primeGen）。
  *
- * 契约：register({ id:"paillier", cat:"crypto", name, desc, params, run })。
+ * 契约：族滑块四档 op（T396-A）：paillierKeyGen / paillierEncrypt / paillierDecrypt /
+ *        paillierHomAdd，family:"paillier"。
  */
 import { register } from "./registry.js";
 import { generatePrime, modPow } from "./primeGen.js";
@@ -107,102 +108,132 @@ function decrypt(c, n, lambda, mu) {
 }
 
 // ============================================================
-// run
+// Paillier 四档算法族（T396-A，2026-09-04：同族多操作必须族滑块，废除下拉切模式）
+// family:"paillier" + familyLabel → fam.lbl.*（keygen/encrypt/decrypt 已有主表 key；
+// 同态加档用 homAdd——需主控在 zh/en i18n 主表新增 fam.lbl.homAdd）。
+// 底层 keygen/encrypt/decrypt 实现原样复用，每个 op 只保留本档参数面。
+// 原 demo 演示档并入 keygen 档 desc（用四档串起来即完整流程）。
 // ============================================================
-function paillierRun(text, p = {}) {
-  const mode = (p && p.mode) || "demo";
-  const lines = [];
-  lines.push("=== Paillier 加法同态加密 ===");
-  lines.push("");
 
-  if (mode === "keygen") {
+// ---- 档① 生成密钥对 ----
+register({
+  id: "paillierKeyGen",
+  cat: "asym",
+  family: "paillier",
+  familyLabel: "keygen",
+  name: "Paillier 密钥对生成",
+  desc: "生成 Paillier 密钥对（1999 论文口径）：等长素数 p,q → n=p·q，g=n+1，λ=lcm(p-1,q-1)，μ=(L(g^λ mod n²))⁻¹ mod n。公钥 (n,g) 加密，私钥 (λ,μ) 解密。原 demo 演示档已并入：生成密钥后接「加密 → 同态加 → 解密」三档即可跑通 E(m1)·E(m2)=E(m1+m2) 完整流程",
+  params: [
+    { key: "bits", label: "密钥位数 n", type: "number", default: 256, placeholder: "≥16，演示用小值" },
+  ],
+  run: (_text, p) => {
     const bits = Math.max(16, parseInt(p.bits, 10) || 256);
     const k = keygen(bits);
-    lines.push(`公钥 n = ${k.n}`);
-    lines.push(`公钥 g = ${k.g}  (= n+1)`);
-    lines.push(`私钥 λ = ${k.lambda}`);
-    lines.push(`私钥 μ = ${k.mu}`);
-    lines.push(`(p = ${k.p}, q = ${k.q})`);
-    return lines.join("\n");
-  }
+    // T362 产物协议（2026-09-02）：公钥（n/g）/ 私钥（λ/μ）分开交付下载按钮（十进制文本）。
+    return {
+      text: [
+        "=== Paillier 密钥对生成 ===",
+        "",
+        `公钥 n = ${k.n}`,
+        `公钥 g = ${k.g}  (= n+1)`,
+        `私钥 λ = ${k.lambda}`,
+        `私钥 μ = ${k.mu}`,
+        `(p = ${k.p}, q = ${k.q})`,
+        "",
+        "提示：把 n（和 g，留空即 n+1）填入「加密」档；λ/μ 填入「解密」档即可解密。",
+        "",
+        "公钥 / 私钥已分开生成：私钥 ⚠ 敏感请妥善保管。点击下方按钮下载。",
+      ].join("\n"),
+      files: [
+        { name: `paillier_pub_${bits}.txt`, mime: "text/plain",
+          bytes: new TextEncoder().encode(`n = ${k.n}\ng = ${k.g}\n`) },
+        { name: `paillier_priv_${bits}.txt`, mime: "text/plain",
+          bytes: new TextEncoder().encode(`lambda = ${k.lambda}\nmu = ${k.mu}\n`) },
+      ],
+    };
+  },
+});
 
-  if (mode === "encrypt") {
+// ---- 档② 加密 ----
+register({
+  id: "paillierEncrypt",
+  cat: "asym",
+  family: "paillier",
+  familyLabel: "encrypt",
+  name: "Paillier 加密",
+  desc: "Paillier 公钥加密：明文 m ∈ [0,n)，选随机 r∈Z_n*（gcd(r,n)=1），c = g^m·r^n mod n²。g 留空按标准简化选取 n+1",
+  params: [
+    { key: "n", label: "公钥 n", type: "text", default: "", placeholder: "十进制 / 0x hex" },
+    { key: "g", label: "公钥 g（留空=n+1）", type: "text", default: "", placeholder: "标准简化选取即 n+1" },
+  ],
+  run: (text, p) => {
     const n = parseBig(p.n, "n");
     const g = p.g != null && String(p.g).trim() ? parseBig(p.g, "g") : n + 1n;
     const m = parseBig(text, "明文 m");
     if (m < 0n || m >= n) throw new Error("明文 m 须在 [0, n)");
     const c = encrypt(m, n, g);
-    lines.push(`明文 m = ${m}`);
-    lines.push(`密文 c = ${c}`);
-    return lines.join("\n");
-  }
+    return [
+      "=== Paillier 加密 ===",
+      "",
+      `明文 m = ${m}`,
+      `密文 c = ${c}`,
+    ].join("\n");
+  },
+});
 
-  if (mode === "decrypt") {
+// ---- 档③ 解密 ----
+register({
+  id: "paillierDecrypt",
+  cat: "asym",
+  family: "paillier",
+  familyLabel: "decrypt",
+  name: "Paillier 解密",
+  desc: "Paillier 私钥解密：m = L(c^λ mod n²)·μ mod n，其中 L(x)=(x-1)/n。输入密文 c（十进制 / 0x hex）",
+  params: [
+    { key: "n", label: "公钥 n", type: "text", default: "", placeholder: "十进制 / 0x hex" },
+    { key: "lambda", label: "私钥 λ", type: "text", default: "", placeholder: "lcm(p-1, q-1)" },
+    { key: "mu", label: "私钥 μ", type: "text", default: "", placeholder: "(L(g^λ mod n²))⁻¹ mod n" },
+  ],
+  run: (text, p) => {
     const n = parseBig(p.n, "n");
     const lambda = parseBig(p.lambda, "λ");
     const mu = parseBig(p.mu, "μ");
     const c = parseBig(text, "密文 c");
     const m = decrypt(c, n, lambda, mu);
-    lines.push(`密文 c = ${c}`);
-    lines.push(`明文 m = ${m}`);
-    return lines.join("\n");
-  }
+    return [
+      "=== Paillier 解密 ===",
+      "",
+      `密文 c = ${c}`,
+      `明文 m = ${m}`,
+    ].join("\n");
+  },
+});
 
-  if (mode === "add") {
-    // 同态加：输入两个密文（逗号分隔），输出 E(m1+m2)
+// ---- 档④ 同态加 ----
+register({
+  id: "paillierHomAdd",
+  cat: "asym",
+  family: "paillier",
+  familyLabel: "homAdd",
+  name: "Paillier 同态加",
+  desc: "Paillier 加法同态性质：E(m1)·E(m2) mod n² = E(m1+m2)。输入两个密文（逗号/空白分隔），输出可直接用「解密」档解出的和密文。CTF 高频：已知 n 时无需私钥即可对密文做加法篡改",
+  params: [
+    { key: "n", label: "公钥 n", type: "text", default: "", placeholder: "十进制 / 0x hex" },
+  ],
+  run: (text, p) => {
     const n = parseBig(p.n, "n");
     const parts = String(text).split(/[,\s]+/).filter(Boolean);
     if (parts.length !== 2) throw new Error("同态加需要两个密文（逗号分隔）");
     const c1 = parseBig(parts[0], "c1"), c2 = parseBig(parts[1], "c2");
     const c = mod(c1 * c2, n * n);
-    lines.push("同态加：E(m1)·E(m2) mod n² = E(m1+m2)");
-    lines.push(`结果密文 c = ${c}`);
-    lines.push("(解密后 = m1 + m2 mod n)");
-    return lines.join("\n");
-  }
-
-  // demo：完整演示 keygen→encrypt→homomorphic add→decrypt
-  const k = keygen(64);
-  const m1 = 42n, m2 = 100n;
-  const c1 = encrypt(m1, k.n, k.g);
-  const c2 = encrypt(m2, k.n, k.g);
-  const cSum = mod(c1 * c2, k.n2);
-  const dSum = decrypt(cSum, k.n, k.lambda, k.mu);
-  lines.push("【演示】完整流程（64 位密钥）");
-  lines.push(`n = ${k.n}`);
-  lines.push(`m1 = ${m1}, m2 = ${m2}`);
-  lines.push(`E(m1) = ${c1}`);
-  lines.push(`E(m2) = ${c2}`);
-  lines.push(`E(m1)·E(m2) mod n² = ${cSum}`);
-  lines.push(`解密 = ${dSum}  ${dSum === m1 + m2 ? "✓ 等于 m1+m2" : "✗"}`);
-  lines.push("");
-  lines.push("模式说明：keygen 生成密钥 / encrypt 加密 / decrypt 解密 / add 同态加两密文。");
-  return lines.join("\n");
-}
-
-register({
-  id: "paillier",
-  cat: "crypto",
-  name: "Paillier 同态加密",
-  desc: "Paillier 加法同态公钥加密（1999）：加密 c=g^m·r^n mod n²，解密 m=L(c^λ mod n²)·μ mod n。满足 E(m1)·E(m2)=E(m1+m2) 加法同态。模式：demo 演示 / keygen 生成密钥 / encrypt 加密 / decrypt 解密 / add 同态加。",
-  params: [
-    {
-      key: "mode", label: "模式", type: "select", default: "demo",
-      options: [
-        { value: "demo", label: "演示（完整流程）" },
-        { value: "keygen", label: "生成密钥" },
-        { value: "encrypt", label: "加密" },
-        { value: "decrypt", label: "解密" },
-        { value: "add", label: "同态加（两密文）" },
-      ],
-    },
-    { key: "bits", label: "密钥位数 (keygen)", type: "number", default: 256, placeholder: "≥16，演示用小值" },
-    { key: "n", label: "公钥 n", type: "text", default: "", placeholder: "encrypt/decrypt/add 用" },
-    { key: "g", label: "公钥 g (留空=n+1)", type: "text", default: "", placeholder: "encrypt 用" },
-    { key: "lambda", label: "私钥 λ", type: "text", default: "", placeholder: "decrypt 用" },
-    { key: "mu", label: "私钥 μ", type: "text", default: "", placeholder: "decrypt 用" },
-  ],
-  run: paillierRun,
+    return [
+      "=== Paillier 同态加 ===",
+      "",
+      "同态加：E(m1)·E(m2) mod n² = E(m1+m2)",
+      `结果密文 c = ${c}`,
+      "(解密后 = m1 + m2 mod n)",
+    ].join("\n");
+  },
 });
 
 export { keygen, encrypt, decrypt, lcm, modInverse, L };

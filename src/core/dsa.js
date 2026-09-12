@@ -33,12 +33,12 @@
  * - 消息 hash：支持 SHA-1（Web Crypto）或直接输入整数 z（CTF 常直接给 H(m)）。
  * - 模逆 / 快速幂自备（扩展欧几里得 + 快速幂），不 import 其他 core。
  *
- * 契约：register({ id:"dsa", cat:"crypto", name, desc, params, run })。
- * 工具类，模式用 param mode 选（sign / verify / attack_reuse_k）。
- * 输出 === 标题 === 报告风格。
+ * 契约：族滑块四档 op（T396-A）：dsaParamGen / dsaSign / dsaVerify / dsaReuseK，
+ *        family:"dsa"。输出 === 标题 === 报告风格。
  */
 
 import { register } from "./registry.js";
+import { generatePrime, isProbablePrime } from "./primeGen.js"; // keygen 参数组生成复用（Miller-Rabin，FIPS 186-5 一致判据）
 
 // ============================================================
 // 通用数论工具（BigInt，局部实现）
@@ -293,30 +293,124 @@ const DEMO = {
 };
 
 // ============================================================
-// run 入口 —— mode 选功能
+// DSA 四档算法族（T396-A，2026-09-04：同族多操作必须族滑块，废除下拉切模式）
+// family:"dsa" + familyLabel → fam.lbl.*（keygen/sign/verify 已有主表 key；
+// 攻击档用 attack——需主控在 zh/en i18n 主表新增 fam.lbl.attack）。
+// 底层 dsaSign/dsaVerify/attackReuseK/参数组生成实现原样复用，
+// 每个 op 只保留本档参数面。
 // ============================================================
-function dsaRun(text, p) {
-  const mode = (p && p.mode) || "sign";
-  const hashMode = (p && p.hashMode) || "int";
-  const lines = [];
 
-  if (mode === "sign") {
- // ---- 签名 ----
+// ---- 档① 生成密钥对/参数组 ----
+register({
+  id: "dsaParamGen",
+  cat: "asym",
+  family: "dsa",
+  familyLabel: "keygen",
+  name: "DSA 密钥对/参数组生成",
+  desc: "DSA 密钥对与参数组生成（FIPS 186-5 §A.1.1-§A.2.1）：q（N 位素数）→ p=k·q+1（L 位素数）→ g=h^((p-1)/q) mod p（阶 q 生成元）→ 私钥 x ∈ [1,q-1]，公钥 y=g^x mod p。仅认可现行 (L,N)=(2048,224)/(2048,256)/(3072,256)，1024 及以下已废止",
+  params: [
+    {
+      key: "ln", label: "参数组 L/N", type: "select", default: "2048/256",
+      options: [
+        { value: "2048/256", label: "2048 / 256（推荐）" },
+        { value: "2048/224", label: "2048 / 224" },
+        { value: "3072/256", label: "3072 / 256（生成较慢）" },
+      ],
+    },
+  ],
+  run: (_text, p) => {
+    // 现行标准仅认可 (L,N) = (2048,224)/(2048,256)/(3072,256)；(1024,160) 及以下已废止
+    // （NIST SP 800-131A Rev.2 disallow），本工具不提供废止参数生成，历史题请手填参数。
+    const LN = String((p && p.ln) || "2048/256");
+    const [L, N] = LN.split("/").map((x) => Number(x.trim()));
+    if (![ [2048,224],[2048,256],[3072,256] ].some(([a, b]) => a === L && b === N)) {
+      throw new Error("FIPS 186-5 仅认可参数组 2048/224、2048/256、3072/256（1024 及以下已废止，不提供生成）");
+    }
+    const Q = generatePrime(N);
+    // p = k·q + 1，k 自 ceil(2^(L-1)/q) 起向上搜素数（保证 p 恰为 L 位）
+    let k = (1n << BigInt(L - 1)) / Q + 1n;
+    let P = 0n;
+    for (;;) {
+      P = k * Q + 1n;
+      if (P.toString(2).length > L) throw new Error("L 位范围内未搜到素数 p，请重试（概率性，属正常）");
+      if (isProbablePrime(P)) break;
+      k++;
+    }
+    // g = h^((p-1)/q) mod p，h 自 2 起取首个 g>1（FIPS 186-5 §A.2.1）
+    const e = (P - 1n) / Q;
+    let G = 1n;
+    for (let h = 2n; h < P - 1n; h++) {
+      G = powMod(h, e, P);
+      if (G > 1n) break;
+    }
+    if (G <= 1n) throw new Error("未找到阶为 q 的生成元 g（异常）");
+    const X = randomK(Q); // ∈ [1, q-1]
+    const Y = powMod(G, X, P);
+    // T362 产物协议（2026-09-02）：公钥（p/q/g/y）/ 私钥（p/q/x）分开交付下载按钮（十进制文本，
+    // 可直接粘回参数框）。
+    return {
+      text: [
+        `DSA 参数组 + 密钥对（FIPS 186-5，L=${L}, N=${N}）`,
+        `p(${P.toString(2).length} 位素数) = ${P}`,
+        `q(${Q.toString(2).length} 位素数) = ${Q}`,
+        `g（阶 q 的生成元） = ${G}`,
+        `私钥 x = ${X}`,
+        `公钥 y = ${Y}`,
+        "提示：把 p/q/g 填入「签名」档（私钥 x）出题、「验签」档（公钥 y）解题",
+        "注：大素数 p 纯 JS 搜索需数秒到数十秒；1024 位及以下已被 FIPS 186-5 废止，仅支持手填验证",
+        "",
+        "公钥 / 私钥已分开生成：私钥 ⚠ 敏感请妥善保管。点击下方按钮下载。",
+      ].join("\n"),
+      files: [
+        { name: `dsa_pub_${L}_${N}.txt`, mime: "text/plain",
+          bytes: new TextEncoder().encode(`p = ${P}\nq = ${Q}\ng = ${G}\ny = ${Y}\n`) },
+        { name: `dsa_priv_${L}_${N}.txt`, mime: "text/plain",
+          bytes: new TextEncoder().encode(`p = ${P}\nq = ${Q}\nx = ${X}\n`) },
+      ],
+    };
+  },
+});
+
+// ---- 档② 签名 ----
+register({
+  id: "dsaSign",
+  cat: "asym",
+  family: "dsa",
+  familyLabel: "sign",
+  name: "DSA 签名",
+  desc: "DSA 数字签名（FIPS 186-4 §4）：r=(g^k mod p) mod q，s=k⁻¹(z+x·r) mod q，k ∈ [1,q-1] 每消息唯一。hash 支持直接整数 H(m)（CTF 常态）或 SHA-1(消息文本)。输出含自检验签",
+  params: [
+    {
+      key: "hashMode", label: "消息 hash 方式", type: "select", default: "int",
+      options: [
+        { value: "int", label: "直接整数 H(m)（CTF 常态）" },
+        { value: "sha1", label: "SHA-1(消息文本)" },
+      ],
+    },
+    { key: "p", label: "素数 p", type: "text", default: DEMO.p, placeholder: "L 位素数（demo:283）" },
+    { key: "q", label: "素数 q（q|p-1）", type: "text", default: DEMO.q, placeholder: "N 位素数（demo:47）" },
+    { key: "g", label: "生成元 g（阶 q）", type: "text", default: DEMO.g, placeholder: "g=h^((p-1)/q)（demo:60）" },
+    { key: "x", label: "私钥 x", type: "text", default: DEMO.x, placeholder: "x∈[1,q-1]（demo:24）" },
+    { key: "k", label: "指定 k（可选）", type: "text", default: "", placeholder: "留空随机；教学可填如 15" },
+  ],
+  run: (text, p) => {
+    const hashMode = (p && p.hashMode) || "int";
     const P = parseBig((p && p.p) || DEMO.p, "p");
     const Q = parseBig((p && p.q) || DEMO.q, "q");
     const G = parseBig((p && p.g) || DEMO.g, "g");
     const X = parseBig((p && p.x) || DEMO.x, "x（私钥）");
- // 消息：主输入框优先；空则用 demo z
+    // 消息：主输入框优先；空则用 demo z
     const msgRaw = (text && String(text).trim()) ? text : DEMO.z;
     const z = computeZ(msgRaw, Q, hashMode);
- // 可选固定 k
+    // 可选固定 k
     const kRaw = (p && p.k != null && String(p.k).trim()) ? String(p.k).trim() : "";
     const kFixed = kRaw ? parseBig(kRaw, "k") : null;
 
     const { r, s, k } = dsaSign(z, P, Q, G, X, kFixed);
- // 自动算公钥便于随后验签
+    // 自动算公钥便于随后验签
     const y = powMod(G, X, P);
 
+    const lines = [];
     lines.push("=== DSA 签名 ===");
     lines.push(`p = ${P}`);
     lines.push(`q = ${Q}`);
@@ -332,14 +426,38 @@ function dsaRun(text, p) {
     lines.push(`s = ${s}`);
     lines.push("");
     lines.push(`签名串 (r,s) = ${r},${s}`);
- // 自检验签
+    // 自检验签
     const chk = dsaVerify(z, r, s, P, Q, G, y);
     lines.push(`自检验签 v = ${chk.v}，${chk.ok ? "✓ 通过 (v==r)" : "✗ 失败"}`);
     return lines.join("\n");
-  }
+  },
+});
 
-  if (mode === "verify") {
- // ---- 验签 ----
+// ---- 档③ 验签 ----
+register({
+  id: "dsaVerify",
+  cat: "asym",
+  family: "dsa",
+  familyLabel: "verify",
+  name: "DSA 验签",
+  desc: "DSA 验签（FIPS 186-4 §4）：0<r,s<q，w=s⁻¹ mod q，v=((g^u1·y^u2) mod p) mod q，通过 ⟺ v==r。hash 支持直接整数 H(m) 或 SHA-1(消息文本)",
+  params: [
+    {
+      key: "hashMode", label: "消息 hash 方式", type: "select", default: "int",
+      options: [
+        { value: "int", label: "直接整数 H(m)（CTF 常态）" },
+        { value: "sha1", label: "SHA-1(消息文本)" },
+      ],
+    },
+    { key: "p", label: "素数 p", type: "text", default: DEMO.p, placeholder: "L 位素数（demo:283）" },
+    { key: "q", label: "素数 q（q|p-1）", type: "text", default: DEMO.q, placeholder: "N 位素数（demo:47）" },
+    { key: "g", label: "生成元 g（阶 q）", type: "text", default: DEMO.g, placeholder: "g=h^((p-1)/q)（demo:60）" },
+    { key: "y", label: "公钥 y", type: "text", default: "", placeholder: "y=g^x mod p" },
+    { key: "r", label: "r", type: "text", default: "", placeholder: "签名 r" },
+    { key: "s", label: "s", type: "text", default: "", placeholder: "签名 s" },
+  ],
+  run: (text, p) => {
+    const hashMode = (p && p.hashMode) || "int";
     const P = parseBig((p && p.p) || DEMO.p, "p");
     const Q = parseBig((p && p.q) || DEMO.q, "q");
     const G = parseBig((p && p.g) || DEMO.g, "g");
@@ -350,6 +468,7 @@ function dsaRun(text, p) {
     const z = computeZ(msgRaw, Q, hashMode);
 
     const res = dsaVerify(z, R, S, P, Q, G, Y);
+    const lines = [];
     lines.push("=== DSA 验签 ===");
     lines.push(`p = ${P}`);
     lines.push(`q = ${Q}`);
@@ -368,20 +487,48 @@ function dsaRun(text, p) {
       lines.push(res.ok ? "✓ 验签通过 (v == r)" : `✗ 验签失败 (v=${res.v} ≠ r=${R})`);
     }
     return lines.join("\n");
-  }
+  },
+});
 
-  if (mode === "attack_reuse_k") {
- // ---- 重用 k 攻击 ----
+// ---- 档④ 重用 k 攻击 ----
+register({
+  id: "dsaReuseK",
+  cat: "asym",
+  family: "dsa",
+  familyLabel: "attack",
+  name: "DSA 重用 k 攻击",
+  desc: "DSA nonce 重用攻击（CTF 高频）：两条签名用同一 k（表现为 r1==r2）时，k=(z1-z2)(s1-s2)⁻¹ mod q，x=(s1·k-z1)·r⁻¹ mod q。hash 支持直接整数 H(m) 或 SHA-1(消息文本)。可选填 p/g/y 反向校验",
+  params: [
+    {
+      key: "hashMode", label: "消息 hash 方式", type: "select", default: "int",
+      options: [
+        { value: "int", label: "直接整数 H(m)（CTF 常态）" },
+        { value: "sha1", label: "SHA-1(消息文本)" },
+      ],
+    },
+    { key: "q", label: "素数 q", type: "text", default: DEMO.q, placeholder: "N 位素数（demo:47）" },
+    { key: "r", label: "r（两签名公共 r）", type: "text", default: "", placeholder: "签名 r（r1==r2）" },
+    { key: "s1", label: "s1", type: "text", default: "", placeholder: "签名1 的 s" },
+    { key: "s2", label: "s2", type: "text", default: "", placeholder: "签名2 的 s" },
+    { key: "z1", label: "z1 消息1 hash", type: "text", default: "", placeholder: "整数或原文（依 hash 方式）" },
+    { key: "z2", label: "z2 消息2 hash", type: "text", default: "", placeholder: "整数或原文（依 hash 方式）" },
+    { key: "p", label: "素数 p（可选校验）", type: "text", default: "", placeholder: "填 p/g/y 可校验 g^x mod p == y" },
+    { key: "g", label: "生成元 g（可选校验）", type: "text", default: "", placeholder: "同上" },
+    { key: "y", label: "公钥 y（可选校验）", type: "text", default: "", placeholder: "同上" },
+  ],
+  run: (_text, p) => {
+    const hashMode = (p && p.hashMode) || "int";
     const Q = parseBig((p && p.q) || DEMO.q, "q");
     const R = parseBig((p && p.r), "r（两签名公共 r）");
     const S1 = parseBig((p && p.s1), "s1");
     const S2 = parseBig((p && p.s2), "s2");
- // z1/z2：按 hashMode 从 z1/z2 参数取（整数或对文本 sha1）
+    // z1/z2：按 hashMode 从 z1/z2 参数取（整数或对文本 sha1）
     const z1 = computeZ((p && p.z1), Q, hashMode);
     const z2 = computeZ((p && p.z2), Q, hashMode);
 
     const { k, x } = attackReuseK(z1, S1, z2, S2, R, Q);
 
+    const lines = [];
     lines.push("=== DSA 重用 k 攻击（nonce reuse）===");
     lines.push("前提：两条签名使用同一随机数 k（表现为 r1 == r2）");
     lines.push("");
@@ -395,7 +542,7 @@ function dsaRun(text, p) {
     lines.push("");
     lines.push(`✓ 恢复出 nonce k = ${k}`);
     lines.push(`✓ 恢复出私钥 x = ${x}`);
- // 若提供 p/g/y 可反向校验
+    // 若提供 p/g/y 可反向校验
     const pRaw = (p && p.p != null && String(p.p).trim());
     const gRaw = (p && p.g != null && String(p.g).trim());
     const yRaw = (p && p.y != null && String(p.y).trim());
@@ -411,49 +558,7 @@ function dsaRun(text, p) {
       lines.push("提示: 填入 p / g / y 可自动校验 g^x mod p == y。");
     }
     return lines.join("\n");
-  }
-
-  throw new Error(`未知 mode: ${mode}`);
-}
-
-// ============================================================
-// 注册
-// ============================================================
-register({
-  id: "dsa",
-  cat: "crypto",
-  name: "DSA 签名 / 验签 / 攻击",
-  desc: "DSA 数字签名（FIPS 186）：签名 (r,s) / 验签 / 重用 k(nonce) 攻击恢复私钥 x。hash 支持直接整数或 SHA-1。纯 BigInt 本地计算。",
-  params: [
-    {
-      key: "mode", label: "模式", type: "select", default: "sign",
-      options: [
-        { value: "sign", label: "签名（私钥 x → r,s）" },
-        { value: "verify", label: "验签（公钥 y + r,s）" },
-        { value: "attack_reuse_k", label: "重用 k 攻击（同 r 恢复 x）" },
-      ],
-    },
-    {
-      key: "hashMode", label: "消息 hash 方式", type: "select", default: "int",
-      options: [
-        { value: "int", label: "直接整数 H(m)（CTF 常态）" },
-        { value: "sha1", label: "SHA-1(消息文本)" },
-      ],
-    },
-    { key: "p", label: "素数 p", type: "text", default: DEMO.p, placeholder: "L 位素数（demo:283）" },
-    { key: "q", label: "素数 q（q|p-1）", type: "text", default: DEMO.q, placeholder: "N 位素数（demo:47）" },
-    { key: "g", label: "生成元 g（阶 q）", type: "text", default: DEMO.g, placeholder: "g=h^((p-1)/q)（demo:60）" },
-    { key: "x", label: "私钥 x（签名用）", type: "text", default: DEMO.x, placeholder: "x∈[1,q-1]（demo:24）" },
-    { key: "y", label: "公钥 y（验签/攻击校验用）", type: "text", default: "", placeholder: "y=g^x mod p" },
-    { key: "k", label: "指定 k（签名·可选）", type: "text", default: "", placeholder: "留空随机；教学可填如 15" },
-    { key: "r", label: "r（验签/攻击）", type: "text", default: "", placeholder: "签名 r" },
-    { key: "s", label: "s（验签）", type: "text", default: "", placeholder: "签名 s" },
-    { key: "s1", label: "s1（攻击）", type: "text", default: "", placeholder: "签名1 的 s" },
-    { key: "s2", label: "s2（攻击）", type: "text", default: "", placeholder: "签名2 的 s" },
-    { key: "z1", label: "z1 消息1 hash（攻击）", type: "text", default: "", placeholder: "整数或原文（依 hash 方式）" },
-    { key: "z2", label: "z2 消息2 hash（攻击）", type: "text", default: "", placeholder: "整数或原文（依 hash 方式）" },
-  ],
-  run: dsaRun,
+  },
 });
 
 export {
@@ -469,6 +574,5 @@ export {
   dsaSign,
   dsaVerify,
   attackReuseK,
-  dsaRun,
   DEMO,
 };

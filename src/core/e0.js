@@ -272,7 +272,7 @@ function e0Decode(text, p = {}) {
 
 register({
   id: "e0",
-  cat: "modern",
+  cat: "stream",
   name: "E0 流密码",
   desc: "蓝牙 E0 流密码（Bluetooth Core Spec 卷 2 §3）：4 个 LFSR（25/31/33/39 位）+ 求和组合器 T1/T2 + 2 位 blend 记忆。128 位 Kc + 48 位 BD_ADDR + 26 位 CLK。自反 XOR：encode 文本→密文 hex，decode 密文 hex→文本。已与 Python 参考实现交叉验证 5 组向量。",
   params: [

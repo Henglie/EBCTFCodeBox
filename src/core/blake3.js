@@ -199,7 +199,7 @@ function blake3Run(text, p = {}) {
 }
 
 register({
-  id: "blake3",
+  id: "blake3", family: "blake", familyLabel: "blake3",
   cat: "hash",
   name: "BLAKE3",
   desc: "BLAKE3 加密哈希（O'Connor/Aumasson/Neves/Wilcox-O'Hearn 2020）：BLAKE2 G 函数 + Merkle 树 + 无限输出（XOF）。7 轮压缩，chunk=1024 字节。默认 32 字节输出，可扩展。官方 test_vectors 验证。",

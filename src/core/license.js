@@ -7,8 +7,10 @@
  *
  * bin 格式（JWT 式，两段 base64url 以 "." 连接）：
  *   base64url(JSON.stringify(payload)) + "." + base64url(signature)
- * payload = { v, source, licensedTo, issuedAt, note, ext }
+ * payload = { v, source, licensedTo, issuedAt, note, ext, appName }
  *   ext：授权附带的可选展示元数据（对象，缺省无）。仅在 bin 中声明，签名保护，不可篡改。
+ *   appName：可选自定义软件名（2026-09-13 恒烈新需求）——签发时写入，运行期替换顶栏品牌/
+ *   页面标题/关于页应用名；未声明或缺省回退内置名（向后兼容旧 5 份 license）。
  *
  * 私钥只在 授权/ 目录的签发工具里（不上传 git），任何人无私钥都伪造不出通过验签的 bin。
  * 公钥公开无妨——只能验签不能签发。
@@ -20,12 +22,13 @@ const PUBLIC_KEY_B64 =
 
 const LICENSE_URL = "license.bin";
 
-// 无 bin / 验签失败时的默认授权信息。ext 缺省为 null（无附带展示元数据）。
+// 无 bin / 验签失败时的默认授权信息。ext/appName 缺省为 null（无附带元数据/用内置名）。
 export const OPENSOURCE_LICENSE = {
   verified: false,
   source: "opensource",
   licensedTo: null,
   ext: null,
+  appName: null,
 };
 
 function b64ToBytes(b64) {
@@ -85,6 +88,8 @@ export async function loadLicense() {
     const payload = JSON.parse(new TextDecoder().decode(payloadBytes));
     // ext：授权可选展示元数据，原样透传（未声明则为 null）。
     const ext = payload.ext && typeof payload.ext === "object" ? payload.ext : null;
+    // appName：可选自定义软件名（签名保护）；空串/非字符串视为未声明。
+    const appName = typeof payload.appName === "string" && payload.appName.trim() ? payload.appName.trim() : null;
     return {
       verified: true,
       source: payload.source || "authorized",
@@ -92,6 +97,7 @@ export async function loadLicense() {
       issuedAt: payload.issuedAt || null,
       note: payload.note || null,
       ext,
+      appName,
     };
   } catch {
     // fetch 失败（无 bin）、解析失败、Web Crypto 不可用 → 一律回落开源自编译

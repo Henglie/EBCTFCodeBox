@@ -17,7 +17,7 @@ import { register } from "./registry.js";
 // ============ ① Twin-Hex ============
 // 码表：ASCII 32..127 的全部两字符组合，共 96×96 = 9216 项，索引即 base36 三位（最大 9215 = "73z"）。
 // 编码：明文两字符一组 → 查表得索引 → base36（小写）右填空格到 3 位。
-// 解码：三字符一组 → base36 解回索引 → 取回字符对 → 去尾部填充空格。
+// 解码保留完整字符对；密文不携带原长，无法区分补位与真实尾空格。
 // 上游向量："a"→"4tc"，"a1"→"4tt"，"a12"→"4tt1c0"（逐条已核）。
 const TWIN_LO = 32, TWIN_HI = 128, TWIN_SPAN = TWIN_HI - TWIN_LO; // 96
 const B36 = "0123456789abcdefghijklmnopqrstuvwxyz";
@@ -37,7 +37,7 @@ function twinHexEncode(text) {
   const s = String(text);
   let out = "";
   for (let i = 0; i < s.length; i += 2) {
-    // 奇数长度末组按码表约定右填空格（解码时 trim 掉）
+    // 奇数长度末组按码表约定右填空格。
     const pair = s.slice(i, i + 2).padEnd(2, " ");
     const idx = twinIndex(pair);
     if (idx < 0) throw new Error("Twin-Hex: 仅支持 ASCII 32-127，越界字符 " + JSON.stringify(pair));
@@ -59,10 +59,9 @@ function twinHexDecode(src) {
     for (const ch of tok.toLowerCase()) idx = idx * 36 + B36.indexOf(ch);
     const pair = twinPair(idx);
     if (pair === null) throw new Error("Twin-Hex: 索引越界 " + idx);
-    // 末组的填充空格要去掉，中间组的空格是真数据 → 只 trimEnd 最后一组
     out += pair;
   }
-  return out.replace(/ +$/, "");
+  return out;
 }
 
 // ============ ② TrollScript ============

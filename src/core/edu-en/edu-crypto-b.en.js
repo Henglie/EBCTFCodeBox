@@ -10,7 +10,7 @@ export default {
   mickey: {
     what: "MICKEY-128 2.0 — a 128-bit-key stream cipher by Babbage & Dodd (MICKEY = Mutual Irregular Clocking KEYstream), an eSTREAM Phase 3 finalist aimed at resource-constrained hardware. Two 160-bit registers entangle each other through \"irregular clocking\".",
     principle:
-      "Two 160-bit registers R and S. Each cycle outputs bit R[0]^S[0], then two control bits decide how to clock: Control_R = S[54]^R[106] and Control_S = S[106]^R[53] — key bits of each register cross-determine the other's clocking mode, hence \"mutual irregular clocking\".\n\n" +
+      "Two 160-bit registers R and S. Each cycle outputs bit $R[0] \\oplus S[0]$, then two control bits decide how to clock: Control_R = $S[54] \\oplus R[106]$ and Control_S = $S[106] \\oplus R[53]$ — key bits of each register cross-determine the other's clocking mode, hence \"mutual irregular clocking\".\n\n" +
       "CLOCK_R has two modes: Control_R=1 uses Shift-and-XOR (the feedback bit decides whether the R_Mask is applied), Control_R=0 uses Shift-only; CLOCK_S complements bits with COMP0/COMP1 and feeds back through two Galois tap sets FB0/FB1.\n\n" +
       "Initialization: R/S cleared → IV bits loaded one by one (MSB-first, 0~128 bits) → 128 key bits loaded → 160 blank clocks of preclocking. Then every 8 cycles produce one keystream byte; plaintext XOR keystream gives ciphertext.",
     usage: "Enter plaintext (UTF-8) in the input box. key = 128-bit key (32 hex; default is the official vector key). iv = IV (0~128 bits, up to 32 hex, may be empty; default 21436587 is the official vector IV). Encode outputs ciphertext hex; decode reverses. Key + IV must match the encrypting side.",
@@ -50,7 +50,7 @@ export default {
     principle:
       "Four LFSRs of 25/31/33/39 bits with distinct tap polynomials. Output comes from the summing combiner: the four current LFSR bits pass through a T1/T2 pair of 2-bit state machines (with a 2-bit memory ct mixing linearly) and then a nonlinear map F (sum lookup table).\n\n" +
       "Initialization: the 128-bit session key Kc is mixed with the 48-bit device address BD_ADDR and the 26-bit Bluetooth clock CLK into a 208-bit preload shifted bit by bit into the four LFSRs (feedback starts once each reaches its length), then 39 idle cycles stabilize the state; finally 128 output bits Z reload the LFSRs before keystream production begins.\n\n" +
-      "Keystream byte = per-cycle output bit z = x1^x2^x3^x4^(ct&1) concatenated.",
+      "Keystream byte = per-cycle output bit $z = x_1 \\oplus x_2 \\oplus x_3 \\oplus x_4 \\oplus (\\mathrm{ct} \\& 1)$ concatenated.",
     usage: "key = 128-bit session key Kc (32 hex; default all zero). addr = 48-bit Bluetooth device address BD_ADDR (12 hex). clk = 26-bit clock (decimal or 0x). Encode: plaintext → ciphertext hex; decode reverses. Default params run the example directly.",
     examples: [
       { in: "Hello", param: "key=0×16, addr=0×6, clk=0", out: "e67987802e", desc: "Measured ciphertext with all-zero params; decodes back" },
@@ -202,7 +202,7 @@ export default {
     principle:
       "Three modes are selected by flags: flags=0 is standard scrypt (RFC 7914 compatible); flags=1 is WORM (Write Once Read Many); the default RW mode is strongest — it prehashes (HMAC with the fixed 8-byte key \"yescrypt\"), generates a 12KB S-box (pwxform permutation transform), applies S-box random-access transforms during smix (PWXsimple lookup + GATHER collection + ROUNDS mixing), and periodically \"wraps\" to revisit the whole memory.\n\n" +
       "The SCRAM tail is another scrypt hardening: the HMAC-derived key goes through one more SHA-256(HMAC(DK, \"Client Key\"))-style pass to resist cache side-channel attacks.\n\n" +
-      "N is memory blocks (power of 2); memory = 128·N·r bytes. p parallelism only affects the leading/trailing PBKDF2 — the smix core stays serial (that's the point against parallelism).",
+      "N is memory blocks (power of 2); memory = $128 \\cdot N \\cdot r$ bytes. p parallelism only affects the leading/trailing PBKDF2 — the smix core stays serial (that's the point against parallelism).",
     usage: "Input the password in the box. salt = salt value. mode = rw (default) / worm / scrypt-compatible. N = memory blocks (default 2048 ≈ 32MB; use 4~64 for CTF verification). r = block-byte parameter (default 8). p = parallelism (default 1). t = iterations (default 0). dkLen = output bytes. Output is the hex derived key.",
     examples: [
       { in: "password", param: "salt=ctf, mode=rw, N=64, r=8, p=1, t=0, dkLen=32", out: "1f32d805163aa89c27ef47f8d9fd8751ee2abc0600c112a1eb1b6e936c439f34", desc: "RW mode small-N derived key (measured)" },

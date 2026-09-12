@@ -153,7 +153,7 @@ function presentRun(text, p, dir) {
 
 register({
   id: "present",
-  cat: "modern",
+  cat: "block",
   name: "PRESENT 轻量分组密码",
   desc: "PRESENT 轻量级分组密码（Bogdanov 2007 / ISO/IEC 29192-2）：64 位分组，80/128 位密钥，31 轮 SPN（4-bit S 盒 + 比特置换）。明文/密文/密钥均 hex，ECB 多块。encode 加密 / decode 解密。已过官方全零测试向量。",
   params: [

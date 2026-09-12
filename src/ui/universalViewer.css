@@ -202,7 +202,7 @@
 .uv-glyph-cell {
   font-size: var(--fs-lg, 1.25rem);
  /* 天珩全字库渲染冷僻码位（字库变量已在 fonts.css 定义） */
-  font-family: var(--font-content), var(--mono, ui-monospace, monospace);
+  font-family: var(--io-font), var(--mono, ui-monospace, monospace);
   font-feature-settings: var(--font-features);
   text-align: center;
   min-width: 2em;
@@ -454,7 +454,7 @@
   font-weight: 600;
 }
 .uv-confus-ch {
-  font-family: var(--font-content), var(--mono, ui-monospace, monospace);
+  font-family: var(--io-font), var(--mono, ui-monospace, monospace);
   font-weight: 700;
   color: var(--error, #f44336);
 }
@@ -585,6 +585,7 @@
   margin: var(--sp-2, 8px) 0 0;
 }
 .uv-export-row .btn {
+  min-height: 40px;
   font-size: var(--fs-sm, 13px);
   padding: 5px 12px;
   border-radius: var(--r-md, 10px);
@@ -601,24 +602,22 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1, 4px);
-  font-size: var(--fs-xs, 12px);
+  font-size: var(--fs-sm);
   color: var(--on-surface-var, #999);
   cursor: pointer;
   user-select: none;
 }
-.uv-export-opt input[type="checkbox"] {
-  accent-color: var(--primary, #8f3d33);
-  width: 15px;
-  height: 15px;
-  cursor: pointer;
-}
 .uv-export-scale {
+  height: 40px;
   background: var(--surface-1, #1d1815);
   border: 1px solid var(--outline, #3a2f2b);
   border-radius: var(--r-sm, 8px);
   color: var(--on-surface, #e8e0dc);
-  padding: 3px 6px;
-  font-size: var(--fs-xs, 12px);
+  padding: 0 var(--sp-3);
+  font: inherit;
+}
+@media (pointer: coarse), (max-width: 600px) {
+  .uv-export-row .btn, .uv-export-opt, .uv-export-scale { min-height: 44px; }
 }
 .uv-cp-ex {
   background: rgba(143, 61, 51, 0.14);

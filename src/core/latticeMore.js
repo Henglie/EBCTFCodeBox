@@ -87,8 +87,8 @@ export function hnpRecover(sigs, curveN, xBound) {
 
 function babaiOp(text, p = {}) {
   const lines = String(text || "").trim().split("\n").map((l) => l.trim()).filter(Boolean);
-  // 输入：每行格基向量（空格分隔整数），最后一行目标向量
-  if (lines.length < 2) throw new Error("输入：每行一个格基向量（空格分隔整数），最后一行目标向量");
+  // 输入由 fields 拼接：「格基向量」框每行一个基向量（空格分隔整数），「目标向量」框为目标
+  if (lines.length < 2) throw new Error("需在「格基向量」框每行填一个基向量（空格分隔整数），并在「目标向量」框填入目标向量");
   const B = lines.slice(0, -1).map((l) => l.split(/\s+/).map(BigInt));
   const t = lines[lines.length - 1].split(/\s+/).map(BigInt);
   if (B.some((r) => r.length !== t.length)) throw new Error("向量维数不一致");
@@ -118,7 +118,13 @@ function hnpOp(text, p = {}) {
 
 register({
   id: "babaiCvp", cat: "analysis", name: "Babai 最近平面（CVP）",
-  desc: "LLL 归约 + Babai 最近平面：格上最近向量问题 CVP 的近似求解（输入：每行格基向量，末行目标向量）",
+  desc: "LLL 归约 + Babai 最近平面：格上最近向量问题 CVP 的近似求解（「格基向量」框每行一个基向量，「目标向量」框填目标）",
+ // 多输入框（参照 rsaCrt）：格基、目标分两框，UI 层按 fieldsJoin 换行拼回 babaiOp 的「末行为目标」约定。
+  fields: [
+    { key: "basis", label: "格基向量（每行一个，空格分隔整数）", placeholder: "例：\n14 23 5\n7 12 3\n3 8 2", rows: 3 },
+    { key: "target", label: "目标向量", placeholder: "例：10 19 4", rows: 1 },
+  ],
+  fieldsJoin: "\n",
   run: babaiOp,
 });
 

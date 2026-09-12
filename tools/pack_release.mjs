@@ -81,12 +81,12 @@ const DIR_EXCLUDE = (rel) =>
   (rel.startsWith("tools/") && rel !== "tools" && !rel.startsWith("tools/exe"));
 
 // ==================== 渠道表（PROGRESS「🔑 分渠道打包」段） ====================
-// 键 = 授权/成品授权/ 里的文件名后缀（"license.bin <键>"）；值 = payload.source
-// 必须包含的关键字。实测 source（2026-08-23）：
-//   吾爱破解 → "吾爱破解论坛（www.52pojie.cn）"   看雪论坛 → "看雪论坛（bbs.pediy.com）"
-//   L站     → "LinuxDO社区（linux.do）"           CSDN    → "CSDN社区（www.csdn.net/）"
-//   恒烈的小窝 → "恒烈的小窝（eb.xbdqwq.com）"
-const CHANNELS = {
+// 渠道泛化（2026-09-13 恒烈「我要制作更多授权文件了，可能后续不是5个了」）：
+// 渠道 = 授权/成品授权/ 下「license.bin <渠道名>」文件动态扫描，不再写死五渠道——
+// 新增授权文件放进去即可 --channel 打包，无需改本脚本。
+// 旧五渠道保留 payload.source 关键字 hints（防打错渠道的校验沿用）；新渠道无 hint，
+// verify 时只展示 payload 来源/被授权方/自定义软件名供恒烈人工核对。
+const LEGACY_SOURCE_HINTS = {
   "吾爱破解": "吾爱破解",
   "看雪论坛": "看雪",
   "L站": "LinuxDO",
@@ -94,6 +94,14 @@ const CHANNELS = {
   "恒烈的小窝": "恒烈的小窝",
 };
 const LICENSE_DIR = join(ROOT, "授权", "成品授权");
+function listChannels() {
+  try {
+    return readdirSync(LICENSE_DIR)
+      .filter((f) => f.startsWith("license.bin ") && f.length > "license.bin ".length)
+      .map((f) => f.slice("license.bin ".length))
+      .sort();
+  } catch { return []; }
+}
 
 // ==================== 硬编码禁止项（误配置也不能漏出去） ====================
 // 白名单本身不含这些，但按任务卡要求复制前做二次断言：展开后的清单里
@@ -229,7 +237,7 @@ async function readLicense(dir) {
   }
   try {
     const payload = JSON.parse(payloadBytes.toString("utf8"));
-    return { verified: true, source: payload.source || "", licensedTo: payload.licensedTo || null };
+    return { verified: true, source: payload.source || "", licensedTo: payload.licensedTo || null, appName: typeof payload.appName === "string" ? payload.appName : null };
   } catch (e) {
     return { corrupt: true, why: "payload JSON 解析失败" };
   }
@@ -379,11 +387,14 @@ async function cmdVerify(target, channel) {
     } else if (lic.corrupt) {
       failed = true;
       channelStr = `不符（license.bin ${lic.why}）`;
-    } else if (lic.source.includes(CHANNELS[channel])) {
+    } else if (LEGACY_SOURCE_HINTS[channel] && lic.source.includes(LEGACY_SOURCE_HINTS[channel])) {
       channelStr = `${channel}（source="${lic.source}" ✓）`;
-    } else {
+    } else if (LEGACY_SOURCE_HINTS[channel]) {
       failed = true;
-      channelStr = `不符（source="${lic.source}" 不含 "${CHANNELS[channel]}"）`;
+      channelStr = `不符（source="${lic.source}" 不含 "${LEGACY_SOURCE_HINTS[channel]}"）`;
+    } else {
+      // 新渠道无 source 关键字 hint：展示 payload 供人工核对（ECDSA 签名本身防伪）
+      channelStr = `${channel}（新渠道，source="${lic.source}" 授权给="${lic.licensedTo ?? "-"}"${lic.appName ? " 软件名=" + lic.appName : ""}——请人工核对）`;
     }
   } else if (actual.has("license.bin")) {
     // 无渠道模式包里却有 license.bin —— 已在上面按「多余」报过，这里补一句人话
@@ -406,7 +417,7 @@ function usage() {
   node tools/pack_release.mjs verify <目录> [--channel <渠道名>]
   node tools/pack_release.mjs version
 
-渠道名（授权/成品授权/ 现有产物）：${Object.keys(CHANNELS).join(" / ")}`);
+渠道名（授权/成品授权/ 动态扫描）：${listChannels().join(" / ") || "（目录空）"}`);
 }
 
 const argv = process.argv.slice(2);
@@ -422,7 +433,7 @@ for (let i = 1; i < argv.length; i++) {
     }
   } else rest.push(argv[i]);
 }
-if (channel && !Object.hasOwn(CHANNELS, channel)) {
+if (channel && !listChannels().includes(channel)) {
   console.error(`× 未知渠道：${channel}`);
   usage();
   process.exit(2);

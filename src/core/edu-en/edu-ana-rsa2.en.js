@@ -1,7 +1,7 @@
 // English edu shard: analysis RSA attacks, second half (side-channel / leaks / lattice attacks). Pure data, no imports, no side effects.
 export default {
   rsaDpDqLeak: {
-    what: "dp/dq leak attack: once the CRT-acceleration private-key fragment dp (=d mod p−1) leaks, you can dig out p directly without factoring n, and thereby recover the full private key d.",
+    what: "dp/dq leak attack: once the CRT-acceleration private-key fragment dp ($= d \\bmod (p-1)$) leaks, you can dig out p directly without factoring n, and thereby recover the full private key d.",
     principle:
       "Given e, n, dp, where $dp \\equiv d \\pmod{p-1}$, i.e. $e\\cdot dp \\equiv 1 \\pmod{p-1}$. Take any base g (e.g. 2); by Fermat's little theorem $g^{(p-1)} \\equiv 1 \\pmod p$, one can derive that $\\gcd(g^{\\,e\\cdot dp}-g,\\ n)$ is very likely the prime factor p.\n\n" +
       "Once you have p, $q=n/p$, $\\varphi=(p-1)(q-1)$, $d\\equiv e^{-1}\\pmod{\\varphi}$, and the whole private key is recovered. A given dq can cross-verify.",
@@ -66,11 +66,11 @@ export default {
   },
 
   rsaBonehDurfee: {
-    what: "Boneh-Durfee attack: an upgraded version of Wiener's attack, raising the 'small private key is breakable' threshold from d < N^0.25 to d < N^0.292, taking down more small-d challenges.",
+    what: "Boneh-Durfee attack: an upgraded version of Wiener's attack, raising the 'small private key is breakable' threshold from $d < N^{0.25}$ to $d < N^{0.292}$, taking down more small-d challenges.",
     principle:
       "When the private key $d < N^{0.292}$, the problem of finding d can be turned into a bivariate modular equation $f(x,y)\\equiv 0$, solved for a small root via Coppersmith-style lattice reduction (LLL) to get d, without factoring n.\n\n" +
       "This tool checks whether d falls within the attackable threshold and explains the lattice-construction method; the actual solving needs a SageMath lattice-reduction script.",
-    usage: "Fill e, n (and, if known, the bit-length upper bound of d); the tool determines whether d < N^0.292 is satisfied and explains the method.",
+    usage: "Fill e, n (and, if known, the bit-length upper bound of d); the tool determines whether $d < N^{0.292}$ is satisfied and explains the method.",
     examples: [
       { in: "e, n", out: "d < N^0.292 threshold determination + lattice-attack method hint" },
     ],

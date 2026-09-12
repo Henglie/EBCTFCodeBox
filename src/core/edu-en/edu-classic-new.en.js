@@ -27,14 +27,14 @@ export default {
       "snake is the most common route; the column count cols is the key parameter and needs enumeration.",
       "With a single column (cols=1) the read order equals the original, so there's no encryption effect.",
     ],
-    aka: ["route cipher", "曲路密码", "蛇形密码", "boustrophedon", "路由密码", "route transposition", "路线密码", "矩阵置换", "蛇形读取", "垂直路由", "route cipher decode", "曲路换位"],
+    aka: ["路径密码", "route cipher", "曲路密码", "蛇形密码", "boustrophedon", "路由密码", "route transposition", "路线密码", "矩阵置换", "蛇形读取", "垂直路由", "route cipher decode", "曲路换位"],
   },
 
  // ============ classic: ROT arbitrary shift ============
   rotSpecial: {
     what: "ROT arbitrary shift — a generalization of ROT13 that lets you specify any shift amount N and rotate cyclically over a chosen alphabet.",
     principle:
-      "Shift by (idx + shift) mod n within a cyclic table of length n; decode simply reverses with -shift. Three alphabets:\n\n" +
+      "Shift by $(\\mathrm{idx} + \\mathrm{shift}) \\bmod n$ within a cyclic table of length n; decode simply reverses with -shift. Three alphabets:\n\n" +
       "letters (default): uppercase shifts within A-Z(26), lowercase within a-z(26), digits and symbols pass through. N=13 is classic ROT13.\n\n" +
       "alnum: additionally shifts digits within 0-9(10) (analogous to rot18 = rot13 + rot5); letters and digits cycle independently.\n\n" +
       "ascii94: shifts within all printable ASCII 0x21..0x7E(94) (an arbitrary-shift version of rot47); other characters pass through.",

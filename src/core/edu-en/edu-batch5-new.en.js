@@ -31,10 +31,10 @@ export default {
     ],
     tips: [
       "In CTFs, an all-uppercase string where no plaintext letter ever appears at the same position in the ciphertext is almost certainly Enigma.",
-      "Breaking it does not need a brute-force sweep of the whole 26^3×… space — the fact that a letter never maps to itself, plus a known-plaintext crib, prunes the search massively.",
+      "Breaking it does not need a brute-force sweep of the whole $26^{3} \\times \\cdots$ space — the fact that a letter never maps to itself, plus a known-plaintext crib, prunes the search massively.",
       "Get any setting wrong and everything scrambles: rotor order, reflector, ring setting, initial position and plugboard are all required, and challenges usually provide them all.",
     ],
-    aka: ["Enigma", "恩尼格玛", "恩尼格玛机", "德军密码机", "转子机", "Enigma machine", "谜机", "转轮密码机", "德国密码机", "转子密码机", "英格玛", "Enigma密码", "rotor machine"],
+    aka: ["转轮机", "轮式密码机", "Enigma", "恩尼格玛", "恩尼格玛机", "德军密码机", "转子机", "Enigma machine", "谜机", "转轮密码机", "德国密码机", "转子密码机", "英格玛", "Enigma密码", "rotor machine"],
   },
 
   m209: {
@@ -135,16 +135,21 @@ export default {
  // Block transform
  // ============================================================
   bwt: {
-    what: "BWT (Burrows-Wheeler Transform), the core step of bzip2 compression. It does not compress data; it rearranges bytes into a form where 'identical characters are more likely to sit together', paving the way for later compression, and it is fully reversible.",
+    what: "The Burrows-Wheeler Transform — the core preprocessing step of bzip2 compression. Reversible but not encrypting; it rearranges data into a form where \"identical characters clump together\" for easier compression.",
     principle:
-      "Arrange all cyclic rotations of the string into a table, sort them lexicographically, take the last column as the output, and record the row number of the original string in the sorted table (the primary index). The inverse transform uses LF-mapping (last-to-first mapping) to rebuild the original string from the last column plus the primary index.\n\nExample `banana`: sort all rotations, take the last column to get `nnbaaa`; the original string is at row 3, so the output is `nnbaaa|3`.",
-    usage: "encode outputs 'transform string + primary index' (separated by `|`), decode consumes this format and inverse-transforms to restore. Handles edge cases like empty string, single character and repeated characters.",
+      "Construct all cyclic rotations of the input string, sort them lexicographically, take the last column as the BWT output, and record the row number of the original string in the sorted matrix (primary).\n\n" +
+      "After rearrangement, characters with the same context cluster together (e.g. `banana` → `nnbaaa`), aiding subsequent RLE/MTF compression. The inverse uses LF-mapping: starting from primary, iteratively restore by the \"last column → first column\" correspondence. There's also an optional `$` sentinel mode — append a `$` smaller than all characters to the end, so primary is implicitly the position of `$` in the BWT string, and the output needs no index.",
+    usage: "encode: input text → output `BWTstring|primary` (separator configurable); sentinel mode outputs a BWT string containing `$`. decode: input the same format → restore. Note sentinel mode requires the original text not contain `$`.",
     examples: [
-      { in: "banana", out: "nnbaaa|3", desc: "Transform string nnbaaa, primary index 3" },
-      { in: "nnbaaa|3", out: "banana", desc: "LF-mapping inverse transform restores" },
+      { in: "banana", param: "no sentinel (separator |)", out: "nnbaaa|3", desc: "BWT string=nnbaaa, primary=3; decode restores banana" },
+      { in: "banana", param: "sentinel mode (add $)", out: "annb$aa", desc: "The position of $ is the implicit primary; decode drops the trailing $" },
     ],
-    tips: ["BWT itself does not compress, but it clusters runs like `aaa` and `nn`, only achieving compression when combined with MTF+RLE+entropy coding.", "In CTFs, a 'reordered string with an unchanged character set plus an index number' suggests BWT."],
-    aka: ["BWT", "Burrows-Wheeler", "块排序变换", "bzip2 变换", "Burrows-Wheeler Transform", "block-sorting transform"],
+    tips: [
+      "Reversible, not encrypting — in CTF it's often a preprocessing layer for compression or steganography; a \"shuffled string + index\" look like `nnbaaa|number` is it.",
+      "Sentinel-mode input can't contain `$` (it's commandeered as the EOF marker).",
+      "Often chained with MTF (Move-to-Front) and RLE: BWT → MTF → RLE → entropy coding is bzip2's standard pipeline.",
+    ],
+    aka: ["burrows-wheeler", "bwt 变换", "块排序变换", "bzip2 前置", "bwt", "burrows wheeler transform", "块排序压缩变换", "循环移位排序", "bzip2变换", "b-w变换", "bwt编码", "字符重排变换", "BWT", "Burrows-Wheeler", "bzip2 变换", "block-sorting transform"],
   },
 
  // ============================================================
@@ -166,31 +171,31 @@ export default {
  // QQ-Xiuzi character cipher family (qqxiuzi_*)
  // ============================================================
   qqxiuzi_arrow: {
-    what: "QQ-Xiuzi · Arrow cipher XORs the text bytes, turns them into hexadecimal, then substitutes each hex digit with one of 16 arrow symbols (←↑→↓ etc). An optional password is supported.",
+    what: "Qianqian Xiuzi · Arrow cipher (formerly \"QQ-Xiu\"; symbol tables come from the Qianqian Xiuzi website, unrelated to Tencent QQ Show). It XORs the text bytes, turns them into hexadecimal, then substitutes each hex digit with one of 16 arrow symbols (←↑→↓ etc). An optional password is supported.",
     principle:
       "Unified algorithm: each byte becomes `ord ^ 48 ^ keyValue`, where keyValue = the sum of the password characters' ASCII XOR-ed with `48` (0 when there is no password). The result is encoded to hex, and each nibble (0-15) maps to one arrow symbol; a single byte uses 2 symbols + `=` suffix, multiple bytes use 4 symbols + `==` suffix.",
     usage: "encode encrypts, decode decrypts. Optional password (leave empty for no password). Arrow set: `←↑→↓↔↕↖↗↘↙↰↱↲↳↺↻`.",
     examples: [
       { in: "中", out: "↔↺↑↳==", desc: "No password, UTF-8 3 bytes → 4 symbols + == suffix" },
     ],
-    tips: ["The four QQ-Xiuzi families (arrow/flower/IPA/letter) share the same algorithm and differ only in the symbol table; the `=`/`==` suffix tells single- vs multi-byte."],
-    aka: ["QQ秀箭头", "箭头密码", "arrow cipher", "QQ秀·箭头", "qqxiuzi arrow", "QQ秀火星文箭头", "箭头符号密码", "方向箭头密码", "QQ秀加密箭头", "箭头编码", "arrow code", "QQ秀符号密码"],
+    tips: ["The four Qianqian Xiuzi families (formerly \"QQ-Xiu\"; arrow/flower/IPA/letter) share the same algorithm and differ only in the symbol table; the `=`/`==` suffix tells single- vs multi-byte."],
+    aka: ["QQ秀箭头", "箭头密码", "arrow cipher", "QQ秀·箭头", "qqxiuzi arrow", "QQ秀火星文箭头", "箭头符号密码", "方向箭头密码", "QQ秀加密箭头", "箭头编码", "arrow code", "QQ秀符号密码", "Qianqian Xiuzi arrow", "Qianqian Xiuzi · arrow", "Qianqian Xiuzi arrow cipher", "QQ-Xiu Arrow"],
   },
 
   qqxiuzi_flower: {
-    what: "QQ-Xiuzi · Flower cipher uses the same algorithm as the arrow cipher, just mapping each hex digit to one of 16 flower symbols (✻✼✽✾✿❀ etc, consecutive Unicode flower glyphs).",
+    what: "Qianqian Xiuzi · Flower cipher (formerly \"QQ-Xiu Flower\") uses the same algorithm as the arrow cipher, just mapping each hex digit to one of 16 flower symbols (✻✼✽✾✿❀ etc, consecutive Unicode flower glyphs).",
     principle:
       "Exactly the same XOR + hex + symbol-mapping flow as qqxiuzi_arrow, with the symbol table replaced by the 16 consecutive flower characters starting at `chr(10043)`. Single byte 2 symbols + `=`, multiple bytes 4 symbols + `==`.",
     usage: "encode/decode, optional password. Flower table: `✻✼✽✾✿❀❁❂❃❄❅❆❇❈❉❊`.",
     examples: [
       { in: "中", out: "✿❉✼❈==", desc: "No password, 4 flower symbols + == suffix" },
     ],
-    tips: ["A string of consecutive flower-emoji-style symbols ending in `=`/`==` is basically the QQ-Xiuzi flower cipher."],
-    aka: ["QQ秀花", "花密码", "flower cipher", "QQ秀·花", "qqxiuzi flower", "花朵密码", "花朵符号密码", "QQ秀花朵", "花符密码", "flower code", "QQ秀鲜花密码", "花卉密码"],
+    tips: ["A string of consecutive flower-emoji-style symbols ending in `=`/`==` is basically the Qianqian Xiuzi flower cipher (formerly \"QQ-Xiu flower\")."],
+    aka: ["QQ秀花", "花密码", "flower cipher", "QQ秀·花", "qqxiuzi flower", "花朵密码", "花朵符号密码", "QQ秀花朵", "花符密码", "flower code", "QQ秀鲜花密码", "花卉密码", "Qianqian Xiuzi flower", "Qianqian Xiuzi · flower", "Qianqian Xiuzi flower cipher", "QQ-Xiu Flower"],
   },
 
   qqxiuzi_ipa: {
-    what: "QQ-Xiuzi · IPA cipher, same algorithm, with the symbol table replaced by 16 International Phonetic Alphabet (IPA) consonant letters (ɐɑɒɓɔɕ etc).",
+    what: "Qianqian Xiuzi · IPA cipher (formerly \"QQ-Xiu IPA\"), same algorithm, with the symbol table replaced by 16 International Phonetic Alphabet (IPA) consonant letters (ɐɑɒɓɔɕ etc).",
     principle:
       "Same flow as qqxiuzi_arrow, with the symbol table being the IPA consonants `ɐɑɒɓɔɕɖɘəɛɜɟɠɡɢɣ`. Note the 14th, `ɡ`, is U+0261 (the single-story g variant), not ASCII g.",
     usage: "encode/decode, optional password.",
@@ -198,11 +203,11 @@ export default {
       { in: "中", out: "ɔɢɑɡ==", desc: "No password, 4 IPA symbols + == suffix" },
     ],
     tips: ["`ɡ` (U+0261) looks like ordinary g but has a different code point; do not mix them when copying or decoding will misalign."],
-    aka: ["QQ秀IPA", "IPA密码", "音标密码", "QQ秀·IPA", "qqxiuzi ipa", "国际音标密码", "IPA cipher", "音标符号密码", "phonetic cipher", "QQ秀音标", "国际音标编码", "辅音符号密码"],
+    aka: ["QQ秀IPA", "IPA密码", "音标密码", "QQ秀·IPA", "qqxiuzi ipa", "国际音标密码", "IPA cipher", "音标符号密码", "phonetic cipher", "QQ秀音标", "国际音标编码", "辅音符号密码", "Qianqian Xiuzi IPA", "Qianqian Xiuzi · IPA", "Qianqian Xiuzi phonetic cipher", "QQ-Xiu IPA"],
   },
 
   qqxiuzi_letter: {
-    what: "QQ-Xiuzi · Letter cipher, same algorithm, with the symbol table being a scrambled set of Latin letters (TUVWXYZABCNOPQRS).",
+    what: "Qianqian Xiuzi · Letter cipher (formerly \"QQ-Xiu Letter\"), same algorithm, with the symbol table being a scrambled set of Latin letters (TUVWXYZABCNOPQRS).",
     principle:
       "Same flow as qqxiuzi_arrow, with the symbol table being the 16 scrambled letters `TUVWXYZABCNOPQRS`. Because the symbols are ordinary letters, recognition must rely on the trailing `=`/`==` suffix, otherwise it is easily confused with ordinary English.",
     usage: "encode/decode, optional password.",
@@ -210,11 +215,11 @@ export default {
       { in: "中", out: "XRUQ==", desc: "No password, 4 letters + == suffix" },
     ],
     tips: ["The alphabet overlaps with English, so the one-click solver must require a `=`/`==` suffix before flagging it, to avoid mislabeling ordinary English."],
-    aka: ["QQ秀字母", "字母密码", "QQ秀·字母", "qqxiuzi letter", "打乱字母密码", "letter cipher", "拉丁字母密码", "乱序字母密码", "QQ秀拉丁字母", "字母替换密码", "letter code", "QQ秀英文密码"],
+    aka: ["QQ秀字母", "字母密码", "QQ秀·字母", "qqxiuzi letter", "打乱字母密码", "letter cipher", "拉丁字母密码", "乱序字母密码", "QQ秀拉丁字母", "字母替换密码", "letter code", "QQ秀英文密码", "Qianqian Xiuzi letter", "Qianqian Xiuzi · letter", "Qianqian Xiuzi letter cipher", "QQ-Xiu Letter"],
   },
 
   qqxiuzi_braille: {
-    what: "QQ-Xiuzi · Braille cipher maps bytes to braille dot symbols (the U+2800 block). With a password it goes through hex encoding; without one it uses a compact '1 character = 1 byte' form.",
+    what: "Qianqian Xiuzi · Braille cipher (formerly \"QQ-Xiu Braille\") maps bytes to braille dot symbols (the U+2800 block). With a password it goes through hex encoding; without one it uses a compact '1 character = 1 byte' form.",
     principle:
       "With a password: each byte is XOR-ed then mapped to braille by hex; single byte 1 symbol + `=`, two bytes 2 symbols + `==`. Without a password: the byte is directly XOR-ed with 48; if less than 128 it uses 1 braille symbol, otherwise it is split into high/low nibbles (high `|128`) as 2 symbols + `=`.",
     usage: "encode/decode, optional password. Braille base U+2800 (⠀-⣿).",
@@ -222,11 +227,11 @@ export default {
       { in: "A", out: "⡱=", desc: "No password, single byte 1 braille symbol + = suffix" },
     ],
     tips: ["The braille block U+2800-U+28FF is an obvious fingerprint, and a trailing `=`/`==` makes it even more certain."],
-    aka: ["QQ秀盲文", "盲文密码", "braille cipher", "QQ秀·盲文", "qqxiuzi braille", "盲文点字密码", "点字密码", "布莱叶密码", "braille code", "QQ秀点字", "盲文符号密码", "U+2800密码"],
+    aka: ["QQ秀盲文", "盲文密码", "braille cipher", "QQ秀·盲文", "qqxiuzi braille", "盲文点字密码", "点字密码", "布莱叶密码", "braille code", "QQ秀点字", "盲文符号密码", "U+2800密码", "Qianqian Xiuzi braille", "Qianqian Xiuzi · braille", "Qianqian Xiuzi braille cipher", "QQ-Xiu Braille"],
   },
 
   qqxiuzi_chinese: {
-    what: "QQ-Xiuzi · Chinese-character cipher maps bytes to common Chinese characters, using three substitution tables (single-byte/double-byte/triple-byte) to cover different code-point ranges, distinguished by `=`/`==`/`===` suffixes.",
+    what: "Qianqian Xiuzi · Chinese-character cipher (formerly \"QQ-Xiu Chinese\") maps bytes to common Chinese characters, using three substitution tables (single-byte/double-byte/triple-byte) to cover different code-point ranges, distinguished by `=`/`==`/`===` suffixes.",
     principle:
       "Pick the table by the character's code-point size: single byte uses the SB table + `=`, double byte (256-0xFFFF) uses the MB table + `==`, triple byte uses a three-table combination + `===`. The password derives two components kH/kL that participate in the XOR. When a byte is empty in the SB table, it falls back to the FIRST_EX special-case table.",
     usage: "encode/decode, optional password. The number of suffix characters = the byte count of each character.",
@@ -234,11 +239,11 @@ export default {
       { in: "A", out: "霄=", desc: "No password, single byte → 1 Chinese character + = suffix" },
     ],
     tips: ["The ciphertext is 'a string of common Chinese characters plus 1~3 trailing equals signs', and the number of equals signs reveals the byte width of the original character."],
-    aka: ["QQ秀汉字", "汉字密码", "QQ秀·汉字", "qqxiuzi chinese", "中文密码", "常用汉字密码", "chinese cipher", "汉字替换密码", "QQ秀中文", "汉字编码", "chinese code", "QQ秀汉字加密"],
+    aka: ["QQ秀汉字", "汉字密码", "QQ秀·汉字", "qqxiuzi chinese", "中文密码", "常用汉字密码", "chinese cipher", "汉字替换密码", "QQ秀中文", "汉字编码", "chinese code", "QQ秀汉字加密", "Qianqian Xiuzi Chinese", "Qianqian Xiuzi · Chinese", "Qianqian Xiuzi hanzi cipher", "QQ-Xiu Chinese"],
   },
 
   qqxiuzi_music: {
-    what: "QQ-Xiuzi · Music cipher turns bytes into decimal then encodes them with 10 musical symbols (♭♯§∮♪♩♫♬ etc), using three prefix/suffix combinations to distinguish short/standard/wide modes.",
+    what: "Qianqian Xiuzi · Music cipher (formerly \"QQ-Xiu Music\") turns bytes into decimal then encodes them with 10 musical symbols (♭♯§∮♪♩♫♬ etc), using three prefix/suffix combinations to distinguish short/standard/wide modes.",
     principle:
       "Each byte is XOR-ed then turned into decimal, represented by 3 musical symbols (one digit per symbol). The mode is chosen by the numeric magnitude: short mode `♯=` prefix (value < 100), standard `§=`, wide mode `♪==` (value ≥ 10000, compressed into 5 symbols).",
     usage: "encode/decode, optional password. Symbol set `‖♭♯§∮♪♩♫♬¶`.",
@@ -246,7 +251,7 @@ export default {
       { in: "A", out: "♭♭§§=", desc: "No password, short mode" },
     ],
     tips: ["Leading with musical symbols `♭♯♪♫`; look at the `♯=`/`§=`/`♪==` prefix to tell the mode."],
-    aka: ["QQ秀音乐", "音乐密码", "music cipher", "QQ秀·音乐", "qqxiuzi music", "音乐符号密码", "乐谱密码", "音符密码", "music code", "QQ秀音符", "音乐记号密码", "五线谱密码"],
+    aka: ["QQ秀音乐", "音乐密码", "music cipher", "QQ秀·音乐", "qqxiuzi music", "音乐符号密码", "乐谱密码", "音符密码", "music code", "QQ秀音符", "音乐记号密码", "五线谱密码", "Qianqian Xiuzi music", "Qianqian Xiuzi · music", "Qianqian Xiuzi music cipher", "QQ-Xiu Music"],
   },
 
  // ============================================================

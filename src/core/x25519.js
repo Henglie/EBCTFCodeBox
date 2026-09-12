@@ -10,7 +10,8 @@
  * 红线：算法照 RFC 7748，纯 BigInt 本地，零外发。core 仅 import registry。
  *       随机私钥用 crypto.getRandomValues。
  *
- * 契约：register({ id:"x25519", cat:"crypto", run, params })。
+ * 契约：族滑块三档 op（T396-A）：x25519KeyGen / x25519Shared / x25519SharedFromPub，
+ *        family:"x25519"。
  */
 
 import { register } from "./registry.js";
@@ -118,78 +119,105 @@ function need32(bytes, label) {
   return bytes;
 }
 
-function x25519Run(text, p) {
-  const mode = (p && p.mode) || "keygen";
-  const lines = [];
+// ============================================================
+// X25519 三档算法族（T396-A，2026-09-04：同族多操作必须族滑块，废除下拉切模式）
+// family:"x25519"（与已有 x448 族命名区分）+ familyLabel → fam.lbl.*
+// （keygen/shared 已有主表 key；「私钥+对方公钥」档用 sharedPub——需主控在
+// zh/en i18n 主表新增 fam.lbl.sharedPub）。底层 x25519/scalarBase 实现原样复用，
+// 每个 op 只保留本档参数面。
+// ============================================================
 
-  if (mode === "keygen") {
+// ---- 档① 生成密钥对 ----
+register({
+  id: "x25519KeyGen",
+  cat: "asym",
+  family: "x25519",
+  familyLabel: "keygen",
+  name: "X25519 密钥生成",
+  desc: "X25519 密钥生成（RFC 7748）：私钥 32 字节随机（或给定）→ 公钥 = X25519(clamp(私钥), 基点 9)。配套「共享密钥」两档做 ECDH",
+  params: [
+    { key: "priv", label: "私钥 (32B hex)", type: "text", default: "", placeholder: "64 hex 字符，留空随机" },
+  ],
+  run: (_text, p) => {
     // 生成一对（或用给定私钥算公钥）
     const skRaw = (p && p.priv && String(p.priv).trim());
     const sk = skRaw ? need32(hexToBytes(skRaw), "私钥") : randomKey();
     const pk = scalarBase(sk);
-    lines.push("=== X25519 密钥生成 ===");
-    lines.push(`私钥 (32B, hex) = ${bytesToHex(sk)}`);
-    lines.push(`公钥 (32B, hex) = ${bytesToHex(pk)}`);
-    lines.push("");
-    lines.push("说明：公钥 = X25519(clamp(私钥), 基点 9)。私钥留空则随机生成。");
-    return lines.join("\n");
-  }
+    // T362 产物协议（2026-09-02）：私钥 / 公钥分开交付下载按钮（hex 文本）。
+    return {
+      text: [
+        "=== X25519 密钥生成 ===",
+        `私钥 (32B, hex) = ${bytesToHex(sk)}`,
+        `公钥 (32B, hex) = ${bytesToHex(pk)}`,
+        "",
+        "说明：公钥 = X25519(clamp(私钥), 基点 9)。私钥留空则随机生成。",
+        "",
+        "私钥 / 公钥已分开生成：私钥 ⚠ 敏感请妥善保管。点击下方按钮下载。",
+      ].join("\n"),
+      files: [
+        { name: "x25519_priv.hex", mime: "text/plain", bytes: new TextEncoder().encode(bytesToHex(sk) + "\n") },
+        { name: "x25519_pub.hex", mime: "text/plain", bytes: new TextEncoder().encode(bytesToHex(pk) + "\n") },
+      ],
+    };
+  },
+});
 
-  if (mode === "shared_from_privs") {
-    // 双方私钥算共享密钥（教学：本地同时持有 A、B 私钥）
+// ---- 档② 共享密钥（双方私钥，教学本地推演）----
+register({
+  id: "x25519Shared",
+  cat: "asym",
+  family: "x25519",
+  familyLabel: "shared",
+  name: "X25519 共享密钥（双方私钥）",
+  desc: "X25519 ECDH（RFC 7748 §6.2，教学口径：本地同时持有 A/B 双方私钥）：K = X25519(a, B公钥) == X25519(b, A公钥)，输出两侧互验一致",
+  params: [
+    { key: "privA", label: "私钥 A (32B hex)", type: "text", default: "", placeholder: "64 hex 字符" },
+    { key: "privB", label: "私钥 B (32B hex)", type: "text", default: "", placeholder: "64 hex 字符" },
+  ],
+  run: (_text, p) => {
     const a = need32(hexToBytes((p && p.privA) || ""), "私钥 A");
     const b = need32(hexToBytes((p && p.privB) || ""), "私钥 B");
     const pkA = scalarBase(a), pkB = scalarBase(b);
     const s1 = x25519(a, pkB); // A 私钥 · B 公钥
     const s2 = x25519(b, pkA); // B 私钥 · A 公钥
-    lines.push("=== X25519 共享密钥（双方私钥）===");
-    lines.push(`私钥 A = ${bytesToHex(a)}`);
-    lines.push(`私钥 B = ${bytesToHex(b)}`);
-    lines.push(`公钥 A = ${bytesToHex(pkA)}`);
-    lines.push(`公钥 B = ${bytesToHex(pkB)}`);
-    lines.push("");
-    lines.push(`共享 K (A·pkB) = ${bytesToHex(s1)}`);
-    lines.push(`共享 K (B·pkA) = ${bytesToHex(s2)}`);
-    lines.push(bytesToHex(s1) === bytesToHex(s2) ? "✓ 两侧一致（ECDH 成立）" : "✗ 两侧不一致（参数异常）");
-    return lines.join("\n");
-  }
+    return [
+      "=== X25519 共享密钥（双方私钥）===",
+      `私钥 A = ${bytesToHex(a)}`,
+      `私钥 B = ${bytesToHex(b)}`,
+      `公钥 A = ${bytesToHex(pkA)}`,
+      `公钥 B = ${bytesToHex(pkB)}`,
+      "",
+      `共享 K (A·pkB) = ${bytesToHex(s1)}`,
+      `共享 K (B·pkA) = ${bytesToHex(s2)}`,
+      bytesToHex(s1) === bytesToHex(s2) ? "✓ 两侧一致（ECDH 成立）" : "✗ 两侧不一致（参数异常）",
+    ].join("\n");
+  },
+});
 
-  if (mode === "shared_priv_pub") {
-    // 我的私钥 + 对方公钥 算共享密钥
+// ---- 档③ 共享密钥（我私钥 + 对方公钥，实战口径）----
+register({
+  id: "x25519SharedFromPub",
+  cat: "asym",
+  family: "x25519",
+  familyLabel: "sharedPub",
+  name: "X25519 共享密钥（私钥+对方公钥）",
+  desc: "X25519 ECDH（RFC 7748 §6.2，实战口径）：只持己方私钥 + 对方公钥，K = X25519(私钥, 对方公钥)。与「双方私钥」档结果一致",
+  params: [
+    { key: "priv", label: "我的私钥 (32B hex)", type: "text", default: "", placeholder: "64 hex 字符" },
+    { key: "pub", label: "对方公钥 (32B hex)", type: "text", default: "", placeholder: "64 hex 字符" },
+  ],
+  run: (_text, p) => {
     const sk = need32(hexToBytes((p && p.priv) || ""), "我的私钥");
     const pk = need32(hexToBytes((p && p.pub) || ""), "对方公钥");
     const s = x25519(sk, pk);
-    lines.push("=== X25519 共享密钥（私钥 + 对方公钥）===");
-    lines.push(`我的私钥 = ${bytesToHex(sk)}`);
-    lines.push(`对方公钥 = ${bytesToHex(pk)}`);
-    lines.push("");
-    lines.push(`共享密钥 K = X25519(私钥, 对方公钥) = ${bytesToHex(s)}`);
-    return lines.join("\n");
-  }
-
-  throw new Error(`未知 mode: ${mode}`);
-}
-
-register({
-  id: "x25519",
-  cat: "crypto",
-  name: "X25519 密钥交换",
-  desc: "Curve25519 上的 ECDH（RFC 7748）：生成密钥对 / 双方私钥算共享密钥 / 私钥+对方公钥算共享密钥。Montgomery ladder，纯 BigInt 本地。",
-  params: [
-    {
-      key: "mode", label: "模式", type: "select", default: "keygen",
-      options: [
-        { value: "keygen", label: "生成密钥对（私钥→公钥）" },
-        { value: "shared_from_privs", label: "共享密钥（双方私钥）" },
-        { value: "shared_priv_pub", label: "共享密钥（我私钥+对方公钥）" },
-      ],
-    },
-    { key: "priv", label: "私钥 (hex, keygen/私钥+公钥)", type: "text", default: "", placeholder: "32B hex，留空随机" },
-    { key: "pub", label: "对方公钥 (hex)", type: "text", default: "", placeholder: "32B hex" },
-    { key: "privA", label: "私钥 A (hex, 双方模式)", type: "text", default: "", placeholder: "32B hex" },
-    { key: "privB", label: "私钥 B (hex, 双方模式)", type: "text", default: "", placeholder: "32B hex" },
-  ],
-  run: x25519Run,
+    return [
+      "=== X25519 共享密钥（私钥 + 对方公钥）===",
+      `我的私钥 = ${bytesToHex(sk)}`,
+      `对方公钥 = ${bytesToHex(pk)}`,
+      "",
+      `共享密钥 K = X25519(私钥, 对方公钥) = ${bytesToHex(s)}`,
+    ].join("\n");
+  },
 });
 
 export { x25519, scalarBase, hexToBytes, bytesToHex };

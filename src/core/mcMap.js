@@ -248,7 +248,7 @@ function pngChunk(type, data) {
 }
 
 /** RGBA 字节 + 宽高 → PNG 文件字节（Uint8Array）。8-bit 真彩带 alpha（colortype 6）。 */
-export function encodePNG(rgba, width, height) {
+export function encodePNG(rgba, width, height, compressor = zlibStore) {
   const sig = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
   const ihdr = new Uint8Array(13);
   ihdr.set(u32be(width), 0);
@@ -266,13 +266,14 @@ export function encodePNG(rgba, width, height) {
     raw[ro] = 0; // filter type None
     raw.set(rgba.subarray(y * rowLen, (y + 1) * rowLen), ro + 1);
   }
-  const idat = zlibStore(raw);
-  return concat([
+  const idat = compressor(raw);
+  const finish = data => concat([
     sig,
     pngChunk("IHDR", ihdr),
-    pngChunk("IDAT", idat),
+    pngChunk("IDAT", data),
     pngChunk("IEND", new Uint8Array(0)),
   ]);
+  return idat && typeof idat.then === "function" ? idat.then(finish) : finish(idat);
 }
 
 // ============================================================
@@ -293,6 +294,19 @@ function bytesToB64(bytes) {
 /** RGBA + 宽高 → data:image/png;base64,... */
 export function rgbaToDataURL(rgba, width, height) {
   return "data:image/png;base64," + bytesToB64(encodePNG(rgba, width, height));
+}
+
+// Preview only; the original pixels are delivered through files[].bytes.
+export function previewDataURL(rgba, width, height) {
+  const factor = Math.max(1, Math.max(width, height) / 256);
+  const w = Math.max(1, Math.round(width / factor)), h = Math.max(1, Math.round(height / factor));
+  if (factor === 1) return rgbaToDataURL(rgba, width, height);
+  const out = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const src = (Math.floor(y * height / h) * width + Math.floor(x * width / w)) * 4;
+    out.set(rgba.subarray(src, src + 4), (y * w + x) * 4);
+  }
+  return rgbaToDataURL(out, w, h);
 }
 
 // ============================================================
@@ -341,7 +355,8 @@ async function mcMapRenderRun(text, p = {}) {
 
   const dec = decodeColors(colors);
   const scaled = scaleRGBA(dec.rgba, dec.width, dec.height, scale);
-  const dataURL = rgbaToDataURL(scaled.rgba, scaled.width, scaled.height);
+  const pngBytes = encodePNG(scaled.rgba, scaled.width, scaled.height);
+  const dataURL = previewDataURL(scaled.rgba, scaled.width, scaled.height);
 
   const lines = [];
   lines.push("=== Minecraft 地图物品渲染（map_#.dat）===");
@@ -364,22 +379,22 @@ async function mcMapRenderRun(text, p = {}) {
     }
   }
   lines.push("");
-  lines.push("--- PNG（data URL，可直接粘贴进浏览器地址栏 / <img src> 查看）---");
+  lines.push("--- 缩略预览（长边不超过256px）；完整 PNG 请使用文件下载按钮 ---");
   lines.push(dataURL);
 
-  return lines.join("\n");
+  return { text: lines.join("\n"), files: [{ name: `mcmap_${scaled.width}x${scaled.height}.png`, mime: "image/png", bytes: pngBytes }] };
 }
 
 // ============================================================
 // 注册
 // ============================================================
 register({
-  id: "mcMapRender",
+  id: "mcMapRender", family: "mc", familyLabel: "maprender",
   cat: "forensic",
   name: "Minecraft 地图渲染",
   desc: "把 Minecraft Java 版地图物品 map_#.dat（gzip NBT，根下 data.colors 为 128×128 调色板索引）" +
     "渲染成 PNG：内置 62 个 MapColor 基础色 + 4 档明暗，解码 16384 字节为 RGBA，" +
-    "手写最小 PNG 编码器（零 canvas 依赖）输出 data URL。CTF 常用地图画二维码/像素画/隐藏文字。" +
+    "手写最小 PNG 编码器（零 canvas 依赖）提供完整文件下载和缩略预览。CTF 常用地图画二维码/像素画/隐藏文字。" +
     "支持最近邻放大便于看二维码。复用 mcSave 的 NBT 解析器，纯前端零外发",
   params: [
     { key: "inputEnc", label: "输入编码", type: "select", default: "auto", options: [

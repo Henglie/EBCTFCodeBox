@@ -95,8 +95,8 @@ export default {
     what: "Piet 图形语言解释器：Piet 程序是一张彩色抽象画，本工具把色块网格当程序执行并输出结果（对标 npiet）。",
     principle:
       "Piet 用 18 种颜色（6 色相 × 3 明度）加黑、白共 20 种「codel」。程序从左上角出发，一个方向指针 DP（右/下/左/上）和一个 codel 选择器 CC（左/右）控制走位。每次从当前同色块走到下一块，指令由「色相变化步数(0-5) × 明度变化步数(0-2)」查表决定（push/pop/add/sub/…/outnum/outchar 等），push 压入的值是刚离开那个色块的大小。黑块阻挡、白块自由滑行不执行指令。\n\n" +
-      "本工具输入是纯文本网格（避免依赖图像解码）：每个色块写色码 token，色相首字母 R/Y/G/C/B/M + 明度后缀 l(亮)/空(正常)/d(暗)，黑 K、白 W；也接受 6 位 hex 自动量化到最近的 Piet 色。图灵完备语言无逆运算，只执行（单向 run），带步数（100 万）+ 输出上限防死循环。",
-    usage: "输入色块网格文本（每行 token 空格分隔，须矩形）。运行输出程序结果 + 执行摘要（步数、终栈）。仅执行，无逆向。",
+      "支持色块网格和非隔行 PNG。网格 token 用色相首字母 R/Y/G/C/B/M 加明度后缀 l(亮)/空(正常)/d(暗)，黑 K、白 W；也接受 6 位 hex。PNG 支持 8/16 位灰度与 RGB/RGBA，以及 1/2/4/8 位调色板索引和 tRNS 透明；不支持 Adam7。只执行（单向 run），带 100 万步和输出上限。",
+    usage: "输入矩形色块网格，或按图像输入参数传入 PNG。运行输出程序结果和执行摘要。调色板 PNG 的 16 位组合非法，会明确拒绝；不影响 RGB/RGBA 的合法 16 位输入。",
     examples: [
       { in: "Rl R Rd\nR  W  R", out: "(程序输出) + 执行摘要", desc: "token: Rl=亮红 R=红 Rd=暗红 K=黑 W=白" },
     ],
@@ -106,6 +106,24 @@ export default {
     ],
     aka: ["piet", "pietexec", "piet执行", "piet解释器", "piet语言", "npiet", "彩色深奥语言", "图形编程语言",
           "codel", "david morgan-mar", "piet interpreter", "色块语言", "抽象画程序"],
+  },
+
+  malbolgeExec: {
+    what: "Malbolge 解释器：把 Malbolge 源程序真正跑起来得到输出，另附 normalize/assemble 两种规范形转换模式（只识别不执行用「Malbolge 识别」op）。",
+    principle:
+      "Ben Olmstead 1998 年设计的三进制虚机（规范见 esolangs.org/wiki/Malbolge）。内存 59049 字（$3^{10}$，每字 10 个三进制位），寄存器 A（累加器）/C（代码指针）/D（数据指针）。取指：$v=(\\mathrm{mem}[C]+C) \\bmod 94$，查 xlat1 置换表得指令字母——i(jmp)、<(out)、/(in)、*(rot 右旋 1 trit)、j(movd)、p(crazy 逐 trit 运算)、o(nop)、v(halt)。\n\n" +
+      "每步执行完，mem[C] 经 xlat2 表加密，C、D 各加一并 在 59048 处回绕 0。程序之外的内存由 crazy 运算按前两字生成。/ 指令读输入，EOF 记 59048。",
+    usage: "粘贴 Malbolge 源码（可打印 ASCII 33-126，空白忽略），模式选「执行」；程序含 / 读指令时在 stdin 填输入，读尽按 EOF。默认 100 万步上限防死循环（可调）。normalize 把源码转成位置无关规范字母形（oji*p</v），assemble 反向还原为可执行源码。",
+    examples: [
+      { in: "Q", out: "（空输出）", desc: "最小规范程序：单字符 Q 即 halt 指令，立即停机" },
+    ],
+    tips: [
+      "CTF 题面给 Malbolge 源码求输出时用本 op；题面只问装载形式/合法性时用「Malbolge 识别」。",
+      "非停机程序（如无限回显的 cat 变体）会被步数上限截停并明确报错，这是护栏不是故障。",
+      "实现对拍 zb3/malbolge-vm（malbolge-tools 参照页内嵌 VM，MIT）七个官方样例逐字节一致。",
+    ],
+    aka: ["Malbolge 执行", "malbolge 执行器", "malbolge interpreter", "malbolge run", "malbolge 解释器",
+          "malbolge vm", "malbolge exec", "马尔博尔赫", "地狱语言执行", "深奥语言解释器", "esolang 解释器", "Olmstead"],
   },
 
   spoon: {
@@ -140,7 +158,7 @@ export default {
       "点划码但解成拉丁字母不通顺时，试和文摩尔斯（按假名解）。",
       "浊音靠「清音 + 浊点 `..`」两段表示，别当成一个整码。",
     ],
-    aka: ["wabun", "wabun code", "和文摩尔斯", "和文モールス", "和文モールス符号", "日文摩尔斯", "假名摩尔斯",
+    aka: ["日文摩斯", "和文电报", "日文电码", "wabun", "wabun code", "和文摩尔斯", "和文モールス", "和文モールス符号", "日文摩尔斯", "假名摩尔斯",
           "日语摩尔斯电码", "kana morse", "japanese morse", "wabun摩尔斯", "片假名摩尔斯", "和文电码"],
   },
 
@@ -201,7 +219,7 @@ export default {
   knapsack: {
     what: "Merkle-Hellman 背包公钥加密（1978）：最早的公钥方案之一，靠超递增序列的「陷门」，后被 Shamir 攻破。",
     principle:
-      "私钥：超递增序列 $w=(w_1..w_n)$（每项大于前面所有项之和）、模数 $q>\\sum w_i$、乘数 r（gcd(r,q)=1）。公钥：$\\beta_i=(w_i\\cdot r)\\bmod q$，是个看似普通的背包。\n\n" +
+      "私钥：超递增序列 $w=(w_1..w_n)$（每项大于前面所有项之和）、模数 $q>\\sum w_i$、乘数 r（$\\gcd(r,q) = 1$）。公钥：$\\beta_i=(w_i\\cdot r)\\bmod q$，是个看似普通的背包。\n\n" +
       "加密：明文按 bit 取，每 n bit 一块，密文 $c=\\sum m_i\\beta_i$。解密：算 $c'=(c\\cdot r^{-1})\\bmod q$，因为 $c'\\equiv\\sum m_i w_i$ 且这个和 < q 不截断，对超递增序列贪心（从大到小）就能唯一还原每个 bit。\n\n" +
       "安全：密度 $d=n/\\log_2(\\max\\beta_i)$，$d<0.9408$ 时 LLL 格归约几乎必然破解。原始方案已被 Shamir(1984) 攻破，仅教学/CTF 用。",
     usage: "密钥来源选 demo（内置 n=8）/ gen（填项数 n 现场生成）/ manual（手填 w,q,r 或公钥 β）。encode 输出密文块+密钥报告，decode 需回填 w/q/r。密文=逗号分隔十进制块。",

@@ -9,7 +9,7 @@ export default {
   mickey: {
     what: "MICKEY-128 2.0——Babbage & Dodd 设计的 128 位密钥流密码（MICKEY = Mutual Irregular Clocking KEYstream），eSTREAM 项目 Phase 3 决赛算法，主打硬件资源受限环境，两个 160 位寄存器靠「不规则钟控」互相牵制。",
     principle:
-      "两个 160 位寄存器 R 和 S。每拍输出位 = R[0]⊕S[0]，然后两个控制位决定怎么钟控：Control_R = S[54]⊕R[106]、Control_S = S[106]⊕R[53]——S 和 R 各自的关键位交叉决定对方的钟控方式，这就是「互相不规则钟控」的由来。\n\n" +
+      "两个 160 位寄存器 R 和 S。每拍输出位 = $R[0] \\oplus S[0]$，然后两个控制位决定怎么钟控：Control_R = $S[54] \\oplus R[106]$、Control_S = $S[106] \\oplus R[53]$——S 和 R 各自的关键位交叉决定对方的钟控方式，这就是「互相不规则钟控」的由来。\n\n" +
       "CLOCK_R 有两种模式：Control_R=1 走 Shift-and-XOR（反馈位决定是否叠加 R_Mask 掩码），Control_R=0 走 Shift-only；CLOCK_S 用 COMP0/COMP1 做补位与、FB0/FB1 两组 Galois 反馈抽头。\n\n" +
       "初始化：R/S 清零 → 逐位装载 IV（MSB-first，0~128 位）→ 逐位装载 128 位密钥 → 再空转 160 拍预钟控。之后每 8 拍产一个密钥流字节，明文 XOR 密钥流即密文。",
     usage: "输入框填明文（UTF-8 文本），key 填 128 位密钥（32 hex，默认是官方向量密钥），iv 填 IV（0~128 位，最多 32 hex，可留空；默认 21436587 是官方向量 IV）。encode 输出密文 hex，decode 反向，key+iv 必须与加密时一致。",
@@ -49,7 +49,7 @@ export default {
     principle:
       "四个 LFSR 长度 25/31/33/39 位，抽头多项式各不相同。输出由「求和组合器」产生：当前四位寄存器输出经过 T1/T2 两个 2 位状态机（含 2 位记忆 ct 线性混合）再做非线性映射 F（sum 映射表）。\n\n" +
       "初始化：128 位会话密钥 Kc 与 48 位设备地址 BD_ADDR、26 位蓝牙时钟 CLK 混成 208 位 preload 逐位移入四个 LFSR（达到长度后开启反馈），再空转 39 拍稳定状态；最后再用 128 位输出 Z 重新装载 LFSR，之后才开始产密钥流。\n\n" +
-      "密钥流字节 = 每拍输出位 z = x1⊕x2⊕x3⊕x4⊕(ct&1) 拼接。",
+      "密钥流字节 = 每拍输出位 $z = x_1 \\oplus x_2 \\oplus x_3 \\oplus x_4 \\oplus (\\mathrm{ct} \\& 1)$ 拼接。",
     usage: "key 填 128 位会话密钥 Kc（32 hex，默认全 0），addr 填 48 位蓝牙设备地址 BD_ADDR（12 hex），clk 填 26 位时钟（十进制或 0x）。encode 明文→密文 hex，decode 反向。默认参数可直接跑通示例。",
     examples: [
       { in: "Hello", param: "key=00×16, addr=00×6, clk=0", out: "e67987802e", desc: "全 0 参数实测密文，同参可解回" },
@@ -201,7 +201,7 @@ export default {
     principle:
       "三档模式用 flags 选择：flags=0 时就是标准 scrypt（RFC 7914 兼容）；flags=1 是 WORM（Write Once Read Many，只写一次读多次）；默认 RW 模式最强——先做 prehash（HMAC 带固定密钥 yescrypt 8 字节），再生成 12KB S 盒（pwxform 置换变换），smix 过程中用 S 盒做随机访问变换（PWXsimple 查表 + GATHER 收集 + ROUNDS 轮混合），同时周期性「wrap」重访整块内存。\n\n" +
       "尾处理 SCRAM 是 yescrypt 对 scrypt 的另一个强化：HMAC 派生密钥后再过一轮 SHA-256(HMAC(DK, 'Client Key')) 风格收尾，防旁路缓存攻击。\n\n" +
-      "N 是内存块数（2 的幂），内存 = 128·N·r 字节；p 并行度只影响首尾 PBKDF2，smix 主体仍串行（抗并行本质）。",
+      "N 是内存块数（2 的幂），内存 = $128 \\cdot N \\cdot r$ 字节；p 并行度只影响首尾 PBKDF2，smix 主体仍串行（抗并行本质）。",
     usage: "输入框填口令，salt 填盐值，mode 选 rw（默认）/ worm / scrypt 兼容，N 填内存块数（默认 2048 ≈ 32MB，CTF 验证用 4~64），r 填块内字节参数（默认 8），p 填并行度（默认 1），t 填迭代（默认 0），dkLen 填输出字节。输出 hex 派生密钥。",
     examples: [
       { in: "password", param: "salt=ctf, mode=rw, N=64, r=8, p=1, t=0, dkLen=32", out: "1f32d805163aa89c27ef47f8d9fd8751ee2abc0600c112a1eb1b6e936c439f34", desc: "RW 模式小 N 实测派生密钥" },

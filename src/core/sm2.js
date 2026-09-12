@@ -127,8 +127,13 @@ function ptAdd(P, Q) {
   return [X3, Y3, Z3];
 }
 function ptMul(k, P) {
+  // ⚠ 修复（2026-09-05 恒烈指示）：旧版把输入 Z 强制置 1（[P0,P1,1n]），雅可比输入（Z≠1）会算出错误坐标。
+  // 现对 Z≠1 的 3 元输入先转仿射；2 元仿射输入与 Z=1 输入行为不变。负 k 沿用旧语义（返回无穷远）。
+  let A = P;
+  if (P.length > 2 && mod(P[2], p) !== 1n) A = ptAffine(P);
+  if (!A) return [0n, 1n, 0n]; // 无穷远点
   let R = [0n, 1n, 0n];
-  let Q = [mod(P[0], p), mod(P[1], p), 1n];
+  let Q = [mod(A[0], p), mod(A[1], p), 1n];
   let kk = k;
   while (kk > 0n) {
     if (kk & 1n) R = ptAdd(R, Q);
@@ -472,91 +477,191 @@ function parseBigHex(s, label) {
   return BigInt("0x" + t.replace(/[^0-9a-fA-F]/g, ""));
 }
 
+// ============================================================
+// SM2 六档算法族（T394，恒烈 2026-09-04 拍板：同族多操作必须族滑块，废除下拉切模式）
+// family:"sm2" + familyLabel → fam.lbl.*（keygen/encrypt/decrypt/sign/verify/shared 六 key
+// 在 zh/en 主表已存在，i18n 零改动）。底层曲线/签名/加密/交换实现原样复用，
+// 每个 op 只保留本档参数面，消除旧单 op 跨模式参数冗余。
+// ============================================================
+const SM2_DETECT = (text) => {
+  // SM2 密文结构识别（04 前缀 + 长 65B 非压缩点），挂 sm2Decrypt（输入=密文）
+  const t = text.trim();
+  const hexClean = t.replace(/[^0-9a-fA-F]/g, "");
+  if (hexClean.length >= 194 && /^04/i.test(hexClean)) return 0.7;
+  try {
+    const bytes = encDecode(t, "base64");
+    if (bytes.length >= 97 && bytes[0] === 0x04) return 0.6;
+  } catch { /* ignore */ }
+  return 0;
+};
+
+// ---- 档① 生成密钥对 ----
 register({
-  id: "sm2",
-  cat: "modern",
-  name: "SM2",
-  desc: "国密椭圆曲线公钥密码（GB/T 32918-2016，前身 GM/T 0003-2012）。签名/验签 + 加密/解密 + 密钥交换，曲线 sm2p256v1，哈希 SM3",
+  id: "sm2KeyGen",
+  cat: "asym",
+  family: "sm2",
+  familyLabel: "keygen",
+  name: "SM2 密钥对生成",
+  desc: "生成 SM2（sm2p256v1，GB/T 32918.5-2017 附录 A 基点）密钥对：私钥 d ∈ [1,n-1]，公钥 P=dG。私钥/公钥（非压缩与压缩格式）分开下载（T362 产物协议）",
+  params: [],
+  run: () => {
+    const d = randomK();
+    const P = ptAffine(ptMul(d, [Gx, Gy, 1n]));
+    const xB = bigToBytes(P[0]), yB = bigToBytes(P[1]);
+    const prefix = P[1] % 2n === 0n ? "02" : "03";
+    return {
+      text: [
+        "SM2 密钥对（sm2p256v1，GB/T 32918.5-2017 附录 A）",
+        `私钥 d = ${bytesToHex(bigToBytes(d))}`,
+        `公钥 x = ${bytesToHex(xB)}`,
+        `公钥 y = ${bytesToHex(yB)}`,
+        `公钥（非压缩 04||x||y）= 04${bytesToHex(concat(xB, yB))}`,
+        `公钥（压缩 ${prefix}||x）= ${prefix}${bytesToHex(xB)}`,
+        "提示：加密/验签填 x+y，签名/解密填 d；已按 GB/T 32918.5 校验曲线方程",
+        onCurve(P[0], P[1]) ? "曲线方程校验：通过" : "曲线方程校验：失败（异常）",
+        "",
+        "私钥 / 公钥已分开生成：私钥 ⚠ 敏感请妥善保管。点击下方按钮下载（hex 文本，可直接粘回参数框）。",
+      ].join("\n"),
+      files: [
+        { name: "sm2_priv_d.hex", mime: "text/plain", bytes: new TextEncoder().encode(bytesToHex(bigToBytes(d)) + "\n") },
+        { name: "sm2_pub_uncomp.hex", mime: "text/plain", bytes: new TextEncoder().encode("04" + bytesToHex(concat(xB, yB)) + "\n") },
+      ],
+    };
+  },
+});
+
+// ---- 档② 加密 ----
+register({
+  id: "sm2Encrypt",
+  cat: "asym",
+  family: "sm2",
+  familyLabel: "encrypt",
+  name: "SM2 加密",
+  desc: "SM2 公钥加密（GB/T 32918.4-2016）：用对方公钥 (x,y) 加密，输出 C1||C3||C2 或 C1||C2||C3 序密文（hex/base64/utf8 可选）",
   params: [
-    { key: "mode", label: "操作", type: "select", default: "encrypt", options: [
-      { value: "encrypt", label: "加密" },
-      { value: "decrypt", label: "解密" },
-      { value: "sign", label: "签名" },
-      { value: "verify", label: "验签" },
-      { value: "keyExchange", label: "密钥交换" },
-    ] },
-    { key: "privKey", label: "私钥（hex）", type: "text", default: "", placeholder: "32 字节 hex（签名/解密用）" },
-    { key: "privKeyB", label: "对方私钥（hex）", type: "text", default: "", placeholder: "32 字节 hex（密钥交换用）" },
-    { key: "pubX", label: "公钥 X（hex）", type: "text", default: "", placeholder: "32 字节 hex（加密/验签用）" },
+    { key: "pubX", label: "公钥 X（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
     { key: "pubY", label: "公钥 Y（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
-    { key: "ida", label: "标识 ID_A", type: "text", default: "1234567812345678", placeholder: "签名/验签用（默认官方样例 ID）" },
-    { key: "idaB", label: "标识 ID_B", type: "text", default: "ALICE123@YAHOO.COM", placeholder: "密钥交换用 ID_B（默认官方样例）" },
-    { key: "klen", label: "共享密钥长度(bit)", type: "number", default: 128, placeholder: "密钥交换 KDF 输出位长" },
     { key: "format", label: "密文格式", type: "select", default: "c1c3c2", options: [
       { value: "c1c3c2", label: "C1||C3||C2（GB/T 32918.4 序）" },
       { value: "c1c2c3", label: "C1||C2||C3（GM/T 0009-2023 序）" },
     ] },
-    { key: "r", label: "验签 r（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
-    { key: "s", label: "验签 s（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
     { key: "dataEnc", label: "输入编码", type: "select", default: "utf8", options: ENC_OPTS },
     { key: "outEnc", label: "输出编码", type: "select", default: "hex", options: ENC_OPTS },
   ],
   run: (text, p) => {
-    const mode = p.mode || "encrypt";
-    const ida = encDecode(p.ida || "1234567812345678", "utf8");
-    const format = p.format || "c1c3c2";
-    if (mode === "encrypt") {
-      const data = encDecode(text, p.dataEnc || "utf8");
-      const px = parseBigHex(p.pubX, "公钥 X"), py = parseBigHex(p.pubY, "公钥 Y");
-      return encEncode(sm2Encrypt(data, px, py, null, format).cipher, p.outEnc || "hex");
-    }
-    if (mode === "decrypt") {
-      const data = encDecode(text, p.outEnc || "hex");
-      const d = parseBigHex(p.privKey, "私钥");
-      return encEncode(sm2Decrypt(data, d, format), "utf8");
-    }
-    if (mode === "sign") {
-      const data = encDecode(text, p.dataEnc || "utf8");
-      const d = parseBigHex(p.privKey, "私钥");
-      const px = p.pubX ? parseBigHex(p.pubX, "公钥 X") : null;
-      const py = p.pubY ? parseBigHex(p.pubY, "公钥 Y") : null;
-      const { r, s } = sm2Sign(data, d, ida, px, py);
-      return encEncode(concat(bigToBytes(r), bigToBytes(s)), p.outEnc || "hex");
-    }
-    if (mode === "verify") {
-      const data = encDecode(text, p.dataEnc || "utf8");
-      const px = parseBigHex(p.pubX, "公钥 X"), py = parseBigHex(p.pubY, "公钥 Y");
-      const r = parseBigHex(p.r, "r"), s = parseBigHex(p.s, "s");
-      return sm2Verify(data, r, s, px, py, ida) ? "✓ 签名有效（SM2 验签通过）" : "✗ 签名无效";
-    }
-    if (mode === "keyExchange") {
-      const dA = parseBigHex(p.privKey, "本方私钥");
-      const dB = parseBigHex(p.privKeyB, "对方私钥");
-      const klen = Number(p.klen) || 128;
-      if (!Number.isSafeInteger(klen) || klen < 1 || klen > 65536) throw new Error("SM2 共享密钥长度需为 1..65536 bit");
-      const idaB = encDecode(p.idaB || "ALICE123@YAHOO.COM", "utf8");
-      const kex = sm2KeyExchange(dA, dB, randomK(), randomK(), ida, idaB, klen);
-      return [
-        "SM2 密钥交换（GB/T 32918.3-2016，sm2p256v1）",
-        `本方临时点 R_A = 04${bytesToHex(concat(bigToBytes(kex.RA[0]), bigToBytes(kex.RA[1])))}`,
-        `对方临时点 R_B = 04${bytesToHex(concat(bigToBytes(kex.RB[0]), bigToBytes(kex.RB[1])))}`,
-        `共享密钥 K(${klen}bit) = ${bytesToHex(kex.K)}`,
-        `S1 确认值 = ${bytesToHex(kex.S1)}`,
-        `S2 确认值 = ${bytesToHex(kex.S2)}`,
-      ].join("\n");
-    }
-    throw new Error(`未知 SM2 操作: ${mode}`);
+    const data = encDecode(text, p.dataEnc || "utf8");
+    const px = parseBigHex(p.pubX, "公钥 X"), py = parseBigHex(p.pubY, "公钥 Y");
+    return encEncode(sm2Encrypt(data, px, py, null, p.format || "c1c3c2").cipher, p.outEnc || "hex");
   },
-  detect: (text) => {
-    // SM2 密文结构识别（04 前缀 + 长 65B 非压缩点）
-    const t = text.trim();
-    const hexClean = t.replace(/[^0-9a-fA-F]/g, "");
-    if (hexClean.length >= 194 && /^04/i.test(hexClean)) return 0.7;
-    try {
-      const bytes = encDecode(t, "base64");
-      if (bytes.length >= 97 && bytes[0] === 0x04) return 0.6;
-    } catch { /* ignore */ }
-    return 0;
+});
+
+// ---- 档③ 解密 ----
+register({
+  id: "sm2Decrypt",
+  cat: "asym",
+  family: "sm2",
+  familyLabel: "decrypt",
+  name: "SM2 解密",
+  desc: "SM2 私钥解密（GB/T 32918.4-2016）：输入 SM2 密文（04 前缀，hex/base64），用私钥 d 解出明文。自动适配 C1||C3||C2 / C1||C2||C3 序",
+  params: [
+    { key: "privKey", label: "私钥 d（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
+    { key: "format", label: "密文格式", type: "select", default: "c1c3c2", options: [
+      { value: "c1c3c2", label: "C1||C3||C2（GB/T 32918.4 序）" },
+      { value: "c1c2c3", label: "C1||C2||C3（GM/T 0009-2023 序）" },
+    ] },
+    { key: "enc", label: "密文编码", type: "select", default: "hex", options: ENC_OPTS },
+  ],
+  detect: SM2_DETECT,
+  run: (text, p) => {
+    const data = encDecode(text, p.enc || "hex");
+    const d = parseBigHex(p.privKey, "私钥");
+    return encEncode(sm2Decrypt(data, d, p.format || "c1c3c2"), "utf8");
+  },
+});
+
+// ---- 档④ 签名 ----
+register({
+  id: "sm2Sign",
+  cat: "asym",
+  family: "sm2",
+  familyLabel: "sign",
+  name: "SM2 签名",
+  desc: "SM2 数字签名（GB/T 32918.2-2016）：ZA=SM3(ENTL||ID_A||a||b||G||P||d)，e=SM3(ZA||M)，输出 r||s（各 32 字节 hex 拼接）。填公钥 (x,y) 可按标准推导 Za，不填则按旧口径直接对 M 签",
+  params: [
+    { key: "privKey", label: "私钥 d（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
+    { key: "ida", label: "标识 ID_A", type: "text", default: "1234567812345678", placeholder: "签名用（默认官方样例 ID）" },
+    { key: "pubX", label: "公钥 X（hex，可选）", type: "text", default: "", placeholder: "填了按标准 Za 签（推荐）" },
+    { key: "pubY", label: "公钥 Y（hex，可选）", type: "text", default: "", placeholder: "同上" },
+    { key: "dataEnc", label: "输入编码", type: "select", default: "utf8", options: ENC_OPTS },
+    { key: "outEnc", label: "输出编码", type: "select", default: "hex", options: ENC_OPTS },
+  ],
+  run: (text, p) => {
+    const data = encDecode(text, p.dataEnc || "utf8");
+    const d = parseBigHex(p.privKey, "私钥");
+    const ida = encDecode(p.ida || "1234567812345678", "utf8");
+    const px = p.pubX ? parseBigHex(p.pubX, "公钥 X") : null;
+    const py = p.pubY ? parseBigHex(p.pubY, "公钥 Y") : null;
+    const { r, s } = sm2Sign(data, d, ida, px, py);
+    return encEncode(concat(bigToBytes(r), bigToBytes(s)), p.outEnc || "hex");
+  },
+});
+
+// ---- 档⑤ 验签 ----
+register({
+  id: "sm2Verify",
+  cat: "asym",
+  family: "sm2",
+  familyLabel: "verify",
+  name: "SM2 验签",
+  desc: "SM2 验签（GB/T 32918.2-2016）：输入消息 + 签名 r/s（各 32 字节 hex）+ 公钥 (x,y) + ID_A，重算 SM3(ZA||M) 校验 (r,s) 有效性",
+  params: [
+    { key: "pubX", label: "公钥 X（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
+    { key: "pubY", label: "公钥 Y（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
+    { key: "ida", label: "标识 ID_A", type: "text", default: "1234567812345678", placeholder: "默认官方样例 ID" },
+    { key: "r", label: "签名 r（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
+    { key: "s", label: "签名 s（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
+    { key: "dataEnc", label: "输入编码", type: "select", default: "utf8", options: ENC_OPTS },
+  ],
+  run: (text, p) => {
+    const data = encDecode(text, p.dataEnc || "utf8");
+    const px = parseBigHex(p.pubX, "公钥 X"), py = parseBigHex(p.pubY, "公钥 Y");
+    const ida = encDecode(p.ida || "1234567812345678", "utf8");
+    const r = parseBigHex(p.r, "r"), s = parseBigHex(p.s, "s");
+    return sm2Verify(data, r, s, px, py, ida) ? "✓ 签名有效（SM2 验签通过）" : "✗ 签名无效";
+  },
+});
+
+// ---- 档⑥ 密钥交换 ----
+register({
+  id: "sm2KeyExchange",
+  cat: "asym",
+  family: "sm2",
+  familyLabel: "shared",
+  name: "SM2 密钥交换",
+  desc: "SM2 密钥交换协议（GB/T 32918.3-2016）：双方私钥 + ID 推导会话密钥 K（1..65536 bit 可选），输出临时点 R_A/R_B 与 S1/S2 确认值（演示口径：临时随机数内部生成）",
+  params: [
+    { key: "privKey", label: "本方私钥 d_A（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
+    { key: "privKeyB", label: "对方私钥 d_B（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
+    { key: "ida", label: "本方标识 ID_A", type: "text", default: "1234567812345678", placeholder: "默认官方样例 ID" },
+    { key: "idaB", label: "对方标识 ID_B", type: "text", default: "ALICE123@YAHOO.COM", placeholder: "默认官方样例" },
+    { key: "klen", label: "共享密钥长度(bit)", type: "number", default: 128, placeholder: "KDF 输出位长 1..65536" },
+  ],
+  run: (text, p) => {
+    const dA = parseBigHex(p.privKey, "本方私钥");
+    const dB = parseBigHex(p.privKeyB, "对方私钥");
+    const klen = Number(p.klen) || 128;
+    if (!Number.isSafeInteger(klen) || klen < 1 || klen > 65536) throw new Error("SM2 共享密钥长度需为 1..65536 bit");
+    const ida = encDecode(p.ida || "1234567812345678", "utf8");
+    const idaB = encDecode(p.idaB || "ALICE123@YAHOO.COM", "utf8");
+    const kex = sm2KeyExchange(dA, dB, randomK(), randomK(), ida, idaB, klen);
+    return [
+      "SM2 密钥交换（GB/T 32918.3-2016，sm2p256v1）",
+      `本方临时点 R_A = 04${bytesToHex(concat(bigToBytes(kex.RA[0]), bigToBytes(kex.RA[1])))}`,
+      `对方临时点 R_B = 04${bytesToHex(concat(bigToBytes(kex.RB[0]), bigToBytes(kex.RB[1])))}`,
+      `共享密钥 K(${klen}bit) = ${bytesToHex(kex.K)}`,
+      `S1 确认值 = ${bytesToHex(kex.S1)}`,
+      `S2 确认值 = ${bytesToHex(kex.S2)}`,
+    ].join("\n");
   },
 });
 

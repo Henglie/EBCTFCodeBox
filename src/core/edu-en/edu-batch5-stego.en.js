@@ -1,5 +1,5 @@
 // English edu shard: steganography/forensics op fill-ins.
-// Covers 2 ops: dtmfWav (DTMF dial-tone WAV) + exeBridge (local bridge · external exe).
+// Covers dtmfWav (DTMF dial-tone WAV). exeBridge card removed with the CLI bridge retirement (2026-09-13).
 export default {
  // ============================================================
  // DTMF dial-tone WAV
@@ -32,26 +32,5 @@ export default {
  // ============================================================
  // local bridge · external exe
  // ============================================================
-  exeBridge: {
-    what: "The frontend calls a local bridge.py service to run whitelisted external exes (steghide/bkcrack/foremost etc., 7 tools), handing steganography/forensics challenges that pure-frontend can't solve over to local tools. Windows only, zero outbound traffic.",
-    principle:
-      "Pure-frontend JS is limited by the browser sandbox and can't run native exes like steghide/bkcrack. This op calls a local bridge.py (a Python service) via localhost:8181; upon receiving a request the bridge runs the whitelisted exe and returns stdout/stderr to the frontend.\n\n**Flow**: the frontend POSTs `/api/run` → the bridge verifies the tool is on the whitelist → decodes and writes coverFile (base64) to a temp file, replacing the `{cover}` placeholder in args → runs the exe → collects stdout/stderr/exitCode → returns to the frontend.\n\n**7 whitelisted tools**: dtmf2num (DTMF decode) / foremost (file carving) / steghide (image steganography embed/extract) / snow (whitespace steganography) / jsteg (JPEG LSB) / bkcrack (ZIP known-plaintext attack) / mp3stego (MP3 steganography).\n\n**Security**: localhost:8181 only, absolutely no outbound traffic; tool/args are passed through the bridge whitelist check, and the frontend never runs exes itself. If the bridge isn't started or it's not Windows, it returns a friendly notice without throwing.",
-    usage:
-      "Prerequisite: first run `python bridge.py` locally (port 8181). Pick a tool (tool) → fill in parameters (args, space-separated, `{cover}` is the placeholder for coverFile's temp file) → fill in stdin input (parsed per inputEnc) → drop in a file and paste base64 into coverFile. On run, the bridge runs the exe and returns stdout. If the bridge isn't started, it returns a notice.",
-    examples: [
-      { in: "(drop in a JPG with steghide steganography, paste base64 into coverFile)", param: "tool=steghide, args=`extract -sf {cover} -p pass`, inputEnc=utf8", out: "stdout = the hidden text content (requires bridge.py running)", desc: "steghide extracts hidden text from the JPG with the password 'pass'; {cover} is replaced by the bridge with the temp JPG path" },
-      { in: "(drop in a pseudo-encrypted/known-plaintext ZIP, paste base64 into coverFile)", param: "tool=bkcrack, args=`-C {cover} -c entry.txt -p plain.txt`", out: "stdout = bkcrack's cracking progress + three key sets (requires bridge.py)", desc: "bkcrack does a known-plaintext attack on the ZIP; a plaintext file must be provided" },
-      { in: "(drop in a fragmented image)", param: "tool=foremost, args=`-i {cover} -o out`", out: "stdout = foremost carving log, output directory contains carved files (requires bridge.py)", desc: "foremost carves deleted/embedded files by file header and footer" },
-    ],
-    formulas: [],
-    tips: [
-      "You must first start the service with `python bridge.py`, otherwise the op returns a 'bridge not started' notice and won't throw.",
-      "`{cover}` is the key placeholder: coverFile's base64 is decoded and written to a temp file by the bridge, and the `{cover}` in args is replaced with that temp file path — don't fill in a path yourself.",
-      "The 7 whitelisted tools cover common CTF steganography/forensics scenarios: image steganography (steghide/jsteg), audio (dtmf2num/mp3stego), file carving (foremost), ZIP attacks (bkcrack), whitespace steganography (snow).",
-      "Zero outbound traffic: localhost:8181 only, uploads no files to any external server, files are processed only by the local bridge.",
-      "On non-Windows, some exes are unavailable and the bridge returns a platform notice.",
-      "Different from pure-frontend ops: this op is a 'local bridge' mechanism that depends on the external environment; steganography that pure-frontend can do (like LSB/zeroWidth) already has standalone ops that don't go through the bridge.",
-    ],
-    aka: ["本地桥", "bridge.py", "steghide", "bkcrack", "foremost", "jsteg", "mp3stego", "snow", "dtmf2num", "external exe bridge"],
-  },
+
 };

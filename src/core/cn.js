@@ -117,33 +117,49 @@ function elementDecode(text) {
 // ROT8000 已迁至 core/rotspecial.js（逐字复刻 rottytooth/rot8000 权威 transitions 表）
 // 此处旧的硬编码区间近似版本删除，避免重复注册 id 抛错。
 
-// ============ 佛曰（与佛论禅简化版：base64 + 心经字符映射） ============
-// 心经去重取前 64 字，映射 base64 字母表（A-Z a-z 0-9 + /）
-const B64_DICT = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-const FO_CHARS = "观自在菩萨行深般若波罗蜜多时照见五蕴皆空度一切苦厄舍利子色不异是受想识亦复如诸法相生灭垢净增减故中无眼耳鼻舌身意声香味触界乃至明";
-const FO_PREFIX = "佛曰：";
+// keyfc / TudouCode V1: UTF-16LE, fixed AES-256-CBC key/IV, byte alphabet.
+import { aesEncrypt, aesDecrypt } from "./modern.js";
+const FO_KEY = new TextEncoder().encode("XDXDtudou@KeyFansClub^_^Encode!!");
+const FO_IV = new TextEncoder().encode("Potato@Key@_@=_=");
+const FO_CHARS = "滅苦婆娑耶陀跋多漫都殿悉夜爍帝吉利阿無南那怛喝羯勝摩伽謹波者穆僧室藝尼瑟地彌菩提蘇醯盧呼舍佛參沙伊隸麼遮闍度蒙孕薩夷迦他姪豆特逝朋輸楞栗寫數曳諦羅曰咒即密若般故不實真訶切一除能等是上明大神知三藐耨得依諸世槃涅竟究想夢倒顛離遠怖恐有礙心所以亦智道。集盡死老至";
+const FO_MARKS = "冥奢梵呐俱哆怯諳罰侄缽皤";
 
 function foyuEncode(text) {
-  const b64 = b64Enc(te.encode(text)).replace(/=+$/, ""); // 去 padding
-  let out = "";
-  for (const c of b64) {
-    const idx = B64_DICT.indexOf(c);
-    out += idx >= 0 ? FO_CHARS[idx] : c;
+  text = String(text);
+  if (!text.length) return "佛曰：";
+  const bytes = new Uint8Array(text.length * 2);
+  for (let i = 0; i < text.length; i++) {
+    bytes[i * 2] = text.charCodeAt(i) & 255;
+    bytes[i * 2 + 1] = text.charCodeAt(i) >>> 8;
   }
-  return FO_PREFIX + out;
+  const encrypted = aesEncrypt(bytes, FO_KEY, { mode: "CBC", iv: FO_IV, pad: true });
+  const random = new Uint32Array(1);
+  let out = "佛曰：";
+  for (const b of encrypted) {
+    if (b >= 128) { crypto.getRandomValues(random); out += FO_MARKS[random[0] % FO_MARKS.length]; }
+    out += FO_CHARS[b & 127];
+  }
+  return out;
 }
 
 function foyuDecode(text) {
-  let body = text.trim();
-  if (body.startsWith(FO_PREFIX)) body = body.slice(FO_PREFIX.length);
-  else if (body.startsWith("佛曰:")) body = body.slice(3);
-  let b64 = "";
-  for (const c of body) {
-    const idx = FO_CHARS.indexOf(c);
-    b64 += idx >= 0 ? B64_DICT[idx] : c;
+  const body = String(text).trim();
+  if (!/^佛曰[:：]/.test(body)) throw new Error("佛曰密文须以「佛曰：」开头");
+  const chars = [...body.slice(3)], bytes = [];
+  for (let i = 0; i < chars.length; i++) {
+    let high = 0;
+    if (FO_MARKS.includes(chars[i])) { high = 128; i++; }
+    if (i >= chars.length) throw new Error("佛曰高位标记截断");
+    const index = FO_CHARS.indexOf(chars[i]);
+    if (index < 0) throw new Error("佛曰字表外字符：" + chars[i]);
+    bytes.push(index + high);
   }
-  while (b64.length % 4 !== 0) b64 += "="; // 补 padding
-  return td(b64Dec(b64));
+  if (!bytes.length || bytes.length % 16) throw new Error("佛曰密文字节须为非空16字节倍数");
+  const plain = aesDecrypt(Uint8Array.from(bytes), FO_KEY, { mode: "CBC", iv: FO_IV, pad: true });
+  if (plain.length % 2) throw new Error("佛曰 UTF-16LE 字节数异常");
+  let out = "";
+  for (let i = 0; i < plain.length; i += 2) out += String.fromCharCode(plain[i] | plain[i + 1] << 8);
+  return out;
 }
 
 // ============ 注册 ============
@@ -243,7 +259,7 @@ register({
 });
 
 register({
-  id: "foyu", cat: "cn", name: "佛曰", desc: "与佛论禅（base64 + 心经字符映射，简化版）",
+  id: "foyu", cat: "cn", name: "佛曰", desc: "keyfc 与佛论禅 V1：UTF-16LE + 固定密钥 AES-256-CBC + 咒字映射；不支持如是我闻V2及旧自创方言",
   encode: foyuEncode, decode: foyuDecode,
   detect: (t) => (t.trim().startsWith("佛曰：") || t.trim().startsWith("佛曰:") ? 0.7 : 0),
 });

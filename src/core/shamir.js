@@ -29,7 +29,7 @@
  * - 零外发：纯本地计算。
  * - core 层零 UI 依赖（仅 registry）。
  *
- * 契约：register({id, cat:"crypto", name, desc, params, encode, decode})。
+ * 契约：register({id, cat:"modern", name, desc, params, encode, decode})。
  */
 import { register } from "./registry.js";
 
@@ -198,7 +198,7 @@ function shamirCombine(text, p = {}) {
 
 register({
   id: "shamir",
-  cat: "crypto",
+  cat: "modern",
   name: "Shamir 秘密共享",
   desc: "Shamir's Secret Sharing（GF(2^8)）：encode 把秘密拆成 n 份分片（阈值 k），decode 用任意 ≥k 份还原。少于 k 份无法得到秘密任何信息（信息论安全）。分片格式：每行 x:hex。",
   params: [

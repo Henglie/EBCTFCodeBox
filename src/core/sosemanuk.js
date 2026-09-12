@@ -379,7 +379,7 @@ function sosemanukDecode(text, p = {}) {
 
 register({
   id: "sosemanuk",
-  cat: "modern",
+  cat: "stream",
   name: "Sosemanuk",
   desc: "Sosemanuk 流密码（eSTREAM 决赛算法，Berbain 2008）：LFSR（10×32bit 字，α 乘法反馈）+ FSM（r1/r2 + 条件选择）+ Serpent S2 盒扩散。key 128-256 位 + IV 128 位。自反 XOR：encode 文本→密文 hex，decode 密文 hex→文本。照 eSTREAM 官方参考实现逐行移植，官方向量 2 组自检。",
   params: [

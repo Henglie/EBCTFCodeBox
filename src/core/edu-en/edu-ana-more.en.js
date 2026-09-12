@@ -15,8 +15,8 @@ export default {
   },
 
   randu: {
-    what: "RANDU: the classic IBM weak random generator x = 65539·x mod 2^31. Teaching demo of its sequence and period — a textbook cautionary tale.",
-    principle: "Linear congruential x_{n+1} = (a·x_n + c) mod m with a=65539, c=0, m=2^31. The poor choice of multiplier and modulus makes all 3D output points lie on just 15 planes (hyperplane structure), with terrible statistical properties.",
+    what: "RANDU: the classic IBM weak random generator $x = 65539 \\cdot x \\bmod 2^{31}$. Teaching demo of its sequence and period — a textbook cautionary tale.",
+    principle: "Linear congruential $x_{n+1} = (a \\cdot x_n + c) \\bmod m$ with a=65539, c=0, m=$2^{31}$. The poor choice of multiplier and modulus makes all 3D output points lie on just 15 planes (hyperplane structure), with terrible statistical properties.",
     usage: "Set a seed and count; outputs the sequence. Teaching: compare against modern PRNGs to understand LCG weaknesses.",
     examples: [
       { in: "seed 1, 10 terms", out: "65539 393225 1769499 …", desc: "RANDU sequence" },
@@ -26,15 +26,15 @@ export default {
   },
 
   truncLcgRecover: {
-    what: "Truncated LCG seed recovery: with an LCG x=a·x+c mod 2^32 whose outputs only expose the top k bits, enumerate the unknown low bits to recover the seed. Common in CTF (e.g. Python random truncated output).",
+    what: "Truncated LCG seed recovery: with an LCG $x = a \\cdot x + c \\bmod 2^{32}$ whose outputs only expose the top k bits, enumerate the unknown low bits to recover the seed. Common in CTF (e.g. Python random truncated output).",
     principle:
-      "The first full state = first output << (32-k) | low, with 2^(32-k) candidates for low. Each candidate is iterated forward and checked against subsequent outputs; on a hit, step back (x0 = (x1-c)·a⁻¹ mod 2^32) to recover the seed. Unknown low bits ≤ 24 are enumerable.",
+      "The first full state = first output << (32-k) | low, with $2^{32-k}$ candidates for low. Each candidate is iterated forward and checked against subsequent outputs; on a hit, step back ($x_0 = (x_1 - c) \\cdot a^{-1} \\bmod 2^{32}$) to recover the seed. Unknown low bits ≤ 24 are enumerable.",
     usage: "Input: consecutive truncated outputs (space separated). Params: a/c (default 1664525/1013904223, ANSI C), k (known high bits, default 24). Outputs candidate seeds.",
     examples: [
       { in: "1234567 8901234 …", param: "a=1664525 c=1013904223 k=24", out: "candidate seeds", desc: "seeds reproducing the sequence" },
     ],
     tips: ["Multiplier a must be odd to have a modular inverse (needed for the backtrack). More outputs shrink the candidate set. Pairs with prngAttack (unknown a/c recovery)."],
-    aka: ["截断lcg", "truncated lcg", "lcg高位", "lcg种子恢复", "lcg截断", "python random高位", "lcg恢复", "truncated lcg attack", "lcg种子", "lcg爆破"],
+    aka: ["线性同余", "线性同余生成器", "lcg预测", "截断lcg", "truncated lcg", "lcg高位", "lcg种子恢复", "lcg截断", "python random高位", "lcg恢复", "truncated lcg attack", "lcg种子", "lcg爆破"],
   },
 
   shaLengthExtend: {
@@ -50,14 +50,14 @@ export default {
   },
 
   birthdayCollision: {
-    what: "Birthday collision demo: when a hash is truncated to b bits, finding a collision by random inputs takes ≈ 2^(b/2) attempts (birthday paradox). Teaching demo of collision essence and security margins.",
+    what: "Birthday collision demo: when a hash is truncated to b bits, finding a collision by random inputs takes $\\approx 2^{b/2}$ attempts (birthday paradox). Teaching demo of collision essence and security margins.",
     principle:
-      "Birthday paradox: among n random values a repeat occurs with probability ~1/2 when n ≈ 1.18·2^(b/2). The demo keys a Map by the first b bits of truncated SHA-256 over random inputs; a hit is a collision pair.",
-    usage: "Set the truncation bits (default 24); outputs a collision pair and attempt count. Compare with the theoretical 2^(b/2) to understand security parameters.",
+      "Birthday paradox: among n random values a repeat occurs with probability ~$1/2$ when $n \\approx 1.18 \\cdot 2^{b/2}$. The demo keys a Map by the first b bits of truncated SHA-256 over random inputs; a hit is a collision pair.",
+    usage: "Set the truncation bits (default 24); outputs a collision pair and attempt count. Compare with the theoretical $2^{b/2}$ to understand security parameters.",
     examples: [
       { in: "bitLen=24", out: "collision pair + attempts", desc: "≈2^12 attempts" },
     ],
-    tips: ["2^24 truncation falls in ~4000 tries — that's why hashes need 128+ bits. Real MD5/SHA-1 collision construction: see the coll ops."],
+    tips: ["$2^{24}$ truncation falls in ~4000 tries — that's why hashes need 128+ bits. Real MD5/SHA-1 collision construction: see the coll ops."],
     aka: ["生日攻击", "birthday attack", "生日悖论", "碰撞演示", "哈希碰撞", "截断哈希", "生日碰撞", "birthday collision", "碰撞对", "2的b/2"],
   },
 };

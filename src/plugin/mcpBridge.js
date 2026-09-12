@@ -18,6 +18,7 @@
 import { OPS, getOp, defaultParams, CATEGORIES, opsByCat } from "../core/registry.js";
 import { magicDecode } from "../core/magic/magic.js";
 import { APP_VERSION } from "../core/version.js";
+import { productFileEntries, productBytesBase64 } from "../core/productResult.js";
 
 // MCP server 版本与项目主版本统一（全局变量，避免割裂）。
 const SERVER_VERSION = APP_VERSION;
@@ -199,7 +200,14 @@ export async function callMcpTool(name, args = {}) {
       // 默认参数打底，AI 传的 params 覆盖对应 key（未给的保持默认）。
       const p = { ...defaultParams(op), ...(args.params && typeof args.params === "object" ? args.params : {}) };
       const out = await op[dir](String(args.input ?? ""), p);
-      return wrap(String(out));
+      if (out && typeof out === "object" && ("text" in out || "files" in out)) {
+        const text = String(out.text ?? "");
+        const files = productFileEntries(out).map(({ name, mime, bytes }) => ({
+          name, mime, size: bytes.length, base64: productBytesBase64(bytes),
+        }));
+        return files.length ? json({ text, files }) : wrap(text);
+      }
+      return wrap(out == null ? "" : String(out));
     }
 
     if (name === "ebctf_magic_decode") {

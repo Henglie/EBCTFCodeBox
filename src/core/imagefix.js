@@ -200,7 +200,7 @@ function applyBmpSize(buf, width, height) {
   return out;
 }
 function formatBmpRecoverReport(buf) {
-  if (!isBmp(buf)) return "非 BMP 文件（签名非 BM）。";
+  if (!isBmp(buf)) return { text: "非 BMP 文件（签名非 BM）。", fixed: null };
   const cur = readBmpSize(buf);
   const lines = [];
   lines.push(`当前宽高: ${cur.width} × ${cur.height}（位深 ${cur.bpp}）`);
@@ -210,19 +210,19 @@ function formatBmpRecoverReport(buf) {
   lines.push(`像素数据: ${avail} 字节（数据偏移 ${cur.dataOff}）`);
   if (consistent) {
     lines.push("宽高与像素数据量一致，无需修复。");
-    return lines.join("\n");
+    return { text: lines.join("\n"), fixed: null };
   }
   lines.push("宽高与像素数据量不一致（可能被篡改）。\n开始反推真实宽高...");
   const r = recoverBmpSize(buf);
   if (!r) {
     lines.push("反推失败：未找到能整除像素数据量的宽高组合（或位深不支持，仅 8/24/32）。");
-    return lines.join("\n");
+    return { text: lines.join("\n"), fixed: null };
   }
   lines.push(`恢复成功 [模式: ${r.mode}]：真实宽高 = ${r.width} × ${r.height}`);
   const fixed = applyBmpSize(buf, r.width, r.height);
   lines.push(`\n修复后 base64（已写回宽高）：`);
   lines.push(bytesToB64(fixed));
-  return lines.join("\n");
+  return { text: lines.join("\n"), fixed }; // T363b 产物协议 2026-09-02：fixed 字节交 run 包 files
 }
 
 // ============================================================
@@ -326,7 +326,7 @@ function readGifSize(buf) {
 // 文本报告格式化
 // ============================================================
 function formatPngRecoverReport(buf) {
-  if (!isPng(buf)) return "非 PNG 文件（签名不符）。";
+  if (!isPng(buf)) return { text: "非 PNG 文件（签名不符）。", fixed: null };
   const lines = [];
   const cur = readPngSize(buf);
   const tampered = isPngTampered(buf);
@@ -336,19 +336,19 @@ function formatPngRecoverReport(buf) {
   lines.push(`IHDR CRC32: 存=${stored} / 算=${calc} ${tampered ? "（不符，宽高可能被篡改）" : "（校验通过，宽高未被篡改）"}`);
   if (!tampered) {
     lines.push("宽高未被篡改，无需爆破恢复。");
-    return lines.join("\n");
+    return { text: lines.join("\n"), fixed: null };
   }
   lines.push("\n开始爆破恢复真实宽高（先只爆高度，再爆宽度，最后双爆兜底）...");
   const r = recoverPngSize(buf);
   if (!r) {
     lines.push("爆破失败：在 1..8192 范围内未找到匹配 CRC 的宽高组合。");
-    return lines.join("\n");
+    return { text: lines.join("\n"), fixed: null };
   }
   lines.push(`恢复成功 [模式: ${r.mode}]：真实宽高 = ${r.width} × ${r.height}`);
   const fixed = applyPngSize(buf, r.width, r.height);
   lines.push(`\n修复后 base64（已写回真实宽高，CRC 匹配）：`);
   lines.push(bytesToB64(fixed));
-  return lines.join("\n");
+  return { text: lines.join("\n"), fixed }; // T363b 产物协议 2026-09-02：fixed 字节交 run 包 files
 }
 
 function formatJpegSizeReport(buf) {
@@ -385,8 +385,8 @@ function formatGifSizeReport(buf) {
 
 // PNG 宽高爆破恢复
 register({
-  id: "pngSizeRecover",
-  cat: "forensic",
+  id: "pngSizeRecover", family: "png", familyLabel: "sizerecover",
+  cat: "stego",
   name: "PNG 宽高爆破恢复",
   desc: "检测 PNG IHDR CRC 篡改 + 爆破恢复真实宽高（CTF 改高度藏图经典；先只爆高度 O(N) 秒出，再爆宽度，最后双爆兜底；输出修复后 base64）",
   params: [],
@@ -395,15 +395,18 @@ register({
     const buf = (p && p.rawBytes && p.rawBytes.length)
       ? (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes))
       : b64ToBytes(text);
-    return formatPngRecoverReport(buf);
+    const r = formatPngRecoverReport(buf);
+    // T363b 产物协议 2026-09-02：修复成功走 files 下载按钮（真文件交付 out.png），text 保留原报告 + base64 行（链式/复制兼容）；错误/无需修复路径仍返回 string。
+    if (r.fixed) return { text: r.text, files: [{ name: "out.png", mime: "image/png", bytes: r.fixed }] };
+    return r.text;
   },
   acceptsBytes: true,
 });
 
 // BMP 宽高修复（无 CRC，靠像素数据量反推）
 register({
-  id: "bmpSizeRecover",
-  cat: "forensic",
+  id: "bmpSizeRecover", family: "bmp", familyLabel: "sizerecover",
+  cat: "stego",
   name: "BMP 宽高修复",
   desc: "检测 BMP 宽高与像素数据量不一致 + 反推真实宽高（BMP 无 CRC，用像素字节数整除 rowSize 反推；CTF 改 BMP 宽高藏图；输出修复后 base64）",
   params: [],
@@ -411,7 +414,10 @@ register({
     const buf = (p && p.rawBytes && p.rawBytes.length)
       ? (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes))
       : b64ToBytes(text);
-    return formatBmpRecoverReport(buf);
+    const r = formatBmpRecoverReport(buf);
+    // T363b 产物协议 2026-09-02：修复成功走 files 下载按钮（真文件交付 out.bmp），text 保留原报告 + base64 行；错误/无需修复路径仍返回 string。
+    if (r.fixed) return { text: r.text, files: [{ name: "out.bmp", mime: "image/bmp", bytes: r.fixed }] };
+    return r.text;
   },
   acceptsBytes: true,
 });

@@ -65,7 +65,7 @@ export default {
 
   hashDictCrack: {
     what: "用字典爆破 MD5/SHA-1/SHA-256/NTLM 哈希——拿弱口令字典、纯数字、日期组合逐一算哈希比对，命中即得明文。",
-    principle: "字典爆破的核心：预生成候选明文列表（弱口令 top 300 / 0~10^N 数字 / 1970-2030 日期），对每个候选算指定算法的哈希，与目标比对。MD5/NTLM 走纯 JS 同步快速路径；SHA-1/SHA-256 走 WebCrypto 异步。auto 模式按长度自动猜算法（32位→MD5，40位→SHA-1，64位→SHA-256）。SHA 系超 200 万次自动中断防爆。",
+    principle: "字典爆破的核心：预生成候选明文列表（弱口令 top 300 / $0 \\sim 10^{N}$ 数字 / 1970-2030 日期），对每个候选算指定算法的哈希，与目标比对。MD5/NTLM 走纯 JS 同步快速路径；SHA-1/SHA-256 走 WebCrypto 异步。auto 模式按长度自动猜算法（32位→MD5，40位→SHA-1，64位→SHA-256）。SHA 系超 200 万次自动中断防爆。",
     usage: "输入目标哈希，选算法（auto 自动按长度猜）、字典来源（top弱口令/纯数字/日期/全部）、数字最大位数。输出命中状态+明文+尝试次数。",
     examples: [
       { in: "e10adc3949ba59abbe56e057f20f883e", param: "algo=auto, dict=numeric, maxDigits=6", out: "命中 ✓ 算法: md5 明文: 123456 尝试: 123457 次", desc: "这是 123456 的 MD5，纯数字字典第 123457 个命中（含 0）" },

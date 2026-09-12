@@ -47,7 +47,7 @@ export default {
     tips: [
       "CTF 里看到 `1` / `3` / `bc1` 开头的串 + 长度 34 左右，先扔进来验是不是 BTC 地址。",
       "ETH 地址校验靠大小写，全小写/全大写的 ETH 地址无法做 EIP-55 验证（但仍是合法地址）。",
-      "Bech32 和 Bech32m 容易混：witver=0 用 Bech32，witver≥1（Taproot）用 Bech32m，选错校验会挂。",
+      "Bech32 和 Bech32m 容易混：witver=0 用 Bech32，witver $\\ge 1$（Taproot）用 Bech32m，选错校验会挂。",
       "本工具只解析不生成私钥，安全无风险。",
     ],
     aka: ["crypto address", "加密货币地址", "btc地址", "eth地址", "区块链地址", "比特币地址", "以太坊地址", "钱包地址", "bitcoin address", "ethereum address", "地址校验", "Base58Check Bech32"],

@@ -472,10 +472,45 @@ function validateQrSize(matrix, w, h) {
   return (w - 17) / 4;
 }
 
+// 非正方形矩阵最近邻重采样为正方形（QR 本体必方，拉伸只发生在载体：
+// 出题工具常把 QR 横向/纵向不均等放大或加矩形留白）。
+// L 试 max(w,h) 与 min(w,h) 两种目标边长（均能对齐模块节距），配合
+// 后续 finder/格式/纠错校验淘汰错解；两序全败才报原错。
+function resampleSquare(matrix, w, h) {
+  const attempts = [];
+  for (const L of [Math.max(w, h), Math.min(w, h)]) {
+    if (L < 21 || L > 177 || (L - 17) % 4 !== 0) continue;
+    const out = [];
+    for (let y = 0; y < L; y++) {
+      const sy = Math.min(h - 1, Math.floor(y * h / L));
+      const srcRow = matrix[sy];
+      const row = new Array(L);
+      for (let x = 0; x < L; x++) row[x] = srcRow[Math.min(w - 1, Math.floor(x * w / L))];
+      out.push(row);
+    }
+    attempts.push({ L, out });
+  }
+  return attempts;
+}
+
 // ============================================================
 // QR 解码主入口：0/1 矩阵 → { text, version, size, ecl, mask, segments, errorCount, ... }
 // ============================================================
 function qrDecodeMatrix(matrix, w, h) {
+  if (w !== h) {
+ // 非方形载体：最近邻重采样回正方形再解（每种目标边长一投，校验淘汰）
+    const attempts = resampleSquare(matrix, w, h);
+    if (!attempts.length) throw new Error("矩阵非正方形（" + w + "×" + h + "），且无合法正方形重采样目标（须 21+4k，k=0..40）");
+    let lastErr = null;
+    for (const { L, out } of attempts) {
+      try {
+        return qrDecodeMatrix(out, L, L);
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr || new Error("矩阵非正方形（" + w + "×" + h + "），重采样后仍无法解码");
+  }
   const version = validateQrSize(matrix, w, h);
   const size = w;
   const finders = countFinders(matrix, size, size);
@@ -593,7 +628,7 @@ function qrDecodeDispatch(text, p) {
 }
 
 register({
-  id: "qrDecode",
+  id: "qrDecode", family: "qr", familyLabel: "decode",
   cat: "stego",
   name: "QR 码解码",
   desc: "从 0/1 矩阵反解 QR 内容：finder 检测 + 格式信息 + 之字形取数 + 掩码还原 + RS 纠错 + 数字/字母/字节模式还原。开「诊断」输出版本/ECL/掩码/RS纠错数/分段模式全流程报告",

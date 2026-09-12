@@ -18,7 +18,7 @@
  * - 纯本地零外发；core 层零 UI 依赖（仅 registry）。
  * - PBKDF2-HMAC-SHA256 走 WebCrypto（异步）；Salsa20/8 + ROMix 纯 JS。
  *
- * 契约：register({ id:"scrypt", cat:"crypto", name, desc, params, run（async）})。
+ * 契约：register({ id:"scrypt", cat:"hash", name, desc, params, run（async）})。
  */
 import { register } from "./registry.js";
 
@@ -194,7 +194,7 @@ async function scryptRun(text, p = {}) {
 
 register({
   id: "scrypt",
-  cat: "crypto",
+  cat: "hash",
   name: "scrypt 密钥派生",
   desc: "scrypt 内存硬化口令密钥派生（RFC 7914）：Salsa20/8 + BlockMix + ROMix 内存硬化，抗 ASIC/GPU 爆破。用于磁盘加密、加密货币钱包、口令存储。参数 N（2 的幂）/r/p/dkLen。",
   params: [

@@ -112,7 +112,7 @@ export default {
       "RC4 分两阶段（本 op 与真实 RC4 完全一致，只加 trace 记录）：\n\n" +
       "**KSA（密钥调度）**：S 表初始为 identity 排列 0..255，跑 256 步 $j=(j+S[i]+key[i\\bmod keylen])\\bmod 256$，每步交换 $S[i]\\leftrightarrow S[j]$，把密钥「装载」进 S 表。\n\n" +
       "**PRGA（密钥流生成）**：每字节 $i=(i+1)\\bmod 256$、$j=(j+S[i])\\bmod 256$，交换 $S[i]\\leftrightarrow S[j]$，输出 $K=S[(S[i]+S[j])\\bmod 256]$，与明文异或。RC4 自反：加解密同一操作。",
-    usage: "填 RC4 密钥（UTF-8 或 hex）、KSA 展示步数、PRGA 生成字节数。可选填明文查看「明文⊕密钥流=密文」。输出 KSA 明细 + S 表 + PRGA 明细 + 密钥流 hex。",
+    usage: "填 RC4 密钥（UTF-8 或 hex）、KSA 展示步数、PRGA 生成字节数。可选填明文查看「明文 $\\oplus$ 密钥流 $=$ 密文」。输出 KSA 明细 + S 表 + PRGA 明细 + 密钥流 hex。",
     examples: [
       { in: "（可选明文）", param: "key=Key, prgaBytes=16", out: "S 表 + 密钥流 hex + 每步 i/j/swap", desc: "经典 RC4 密钥 Key" },
     ],
@@ -175,7 +175,7 @@ export default {
       { tex: "\\text{keylen} = \\arg\\min_{k}\\ \\frac{1}{k}\\,\\text{Hamming}(\\text{block}_i, \\text{block}_{i+1})", caption: "归一化汉明距离最小的 keylen 最可能" },
     ],
     tips: [
-      "密文越长越准，建议 ≥ 10 × keylen 字节。",
+      "密文越长越准，建议 $\\ge 10 \\times \\mathrm{keylen}$ 字节。",
       "只对英文明文有效（卡方/bigram 是英文频率）。",
       "置信度低时调大 maxKeyLen，或确认输入真是重复密钥 XOR。",
     ],
@@ -351,9 +351,9 @@ export default {
   },
 
   des2Mitm: {
-    what: "2DES 中间相遇攻击（MITM）：C = DES_k2(DES_k1(P)) 双重加密看起来是 112 位密钥，但用「中间相遇」可把复杂度降到 2^56×2 级别（每半密钥空间 b 位时 2^b×2）。CTF 里 2DES 题密钥常被限制在小空间，本 op 穷举恢复 (k1, k2)。",
+    what: "2DES 中间相遇攻击（MITM）：C = DES_k2(DES_k1(P)) 双重加密看起来是 112 位密钥，但用「中间相遇」可把复杂度降到 $2^{56} \\times 2$ 级别（每半密钥空间 b 位时 $2^{b} \\times 2$）。CTF 里 2DES 题密钥常被限制在小空间，本 op 穷举恢复 (k1, k2)。",
     principle:
-      "中间相遇：先穷举 k1 建 forward 表 { DES_k1(P) → k1 }（2^b 条），再对每个 k2 计算 DES_k2⁻¹(C)，若命中表内值则 (k1, k2) 是候选。命中后用完整链路 C'=DES_k2(DES_k1(P)) 验证防表冲突。密钥空间 2^(2b) 降到 2^b × 2。\n\n" +
+      "中间相遇：先穷举 k1 建 forward 表 { DES_k1(P) → k1 }（$2^{b}$ 条），再对每个 k2 计算 $\\mathrm{DES}_{k2}^{-1}(C)$，若命中表内值则 (k1, k2) 是候选。命中后用完整链路 C'=DES_k2(DES_k1(P)) 验证防表冲突。密钥空间 2^(2b) 降到 2^b × 2。\n\n" +
       "密钥编码：k1/k2 各占 keyBits 位（默认 16），大端拼 8 字节喂 DES。注意 DES 每字节最低位是校验位（被忽略），恢复出的可能是等价密钥（如 0x619F 与 0x609E 等价）。",
     usage: "输入格式：明文hex 空格 密文hex（各 8 字节）。keyBits 控制每半密钥空间（默认 16，≤20）。输出命中密钥对列表 + 耗时。",
     examples: [

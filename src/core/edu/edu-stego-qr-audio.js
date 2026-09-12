@@ -21,7 +21,7 @@ export default {
       { in: "0/1 矩阵或 ASCII art", out: "版本=2, 掩码=3, 纠错级=M, finder 正常" },
     ],
     tips: ["解不出内容先用它体检：finder 缺角、暗模块不对，说明矩阵抄错或被裁，先修结构再 qrDecode。"],
-    aka: ["qr解析", "qr结构", "qr parse", "二维码结构", "qr结构分析", "qr code structure", "二维码解析", "qr version掩码", "qr体检", "qr format info", "qr矩阵解析"],
+    aka: ["qr解析", "qr码解析", "qr码结构", "qr码", "qr结构", "qr parse", "二维码结构", "qr结构分析", "qr code structure", "二维码解析", "qr version掩码", "qr体检", "qr format info", "qr矩阵解析"],
   },
 
   barcodeIdentify: {
@@ -110,5 +110,17 @@ export default {
     ],
     tips: ["音频频谱像逐行扫描的图 + 开头有同步音 → SSTV。实际出图用 RX-SSTV/QSSTV 等专门软件解调。"],
     aka: ["sstv", "慢扫描电视", "sstv识别", "vis码", "slow scan television", "sstv模式识别", "sstv mode", "无线电传图", "vis code", "scottie martin robot", "业余无线电图像"],
+  },
+
+  qrFormatBrute: {
+    what: "QR 格式信息爆破：格式信息区（记录纠错级和掩码号的那 15 个小格，一式两份）被涂改、遮挡或印坏，导致普通解码直接报废时，把全部 32 组合法组合逐个试解，把能解出的组合和原文都列出来。能力对齐 QRazyBox 的 format info 枚举（merricx/qrazybox，MIT）。",
+    principle:
+      "格式信息 $=2$ 位纠错指示 $+3$ 位掩码指示，经 $\\mathrm{BCH}(15,5)$（生成多项式 $x^{10}+x^8+x^5+x^4+x^2+x+1$，即 $0x537$）编成 15 位再异或 $0x5412$ 固定掩码——合法组合只有 $2^5=32$ 种。爆破枚举每组 $(\\mathrm{ECL}, \\mathrm{mask})$：按该掩码去掩码、之字形取数、去交织、RS 纠错、分段解码；RS 全块通过且分段可识别的组合即候选解。",
+    usage: "粘 QR 的 0/1 矩阵（qrGen JSON 或 ASCII art），输出全部可解组合（按 RS 纠错数升序，0 错的最可信）及各自原文；格式区其实完好时会提示无需爆破。",
+    examples: [
+      { in: "格式区被涂黑的 QR 矩阵", out: "ECL=M 掩码=5（格式串 101111011111000）RS 0 错 → 原文", desc: "32 组逐试，错组合会被 RS/分段校验淘汰" },
+    ],
+    tips: ["普通解码报「无法识别格式信息」就是它的用武之地。若 32 组全部失败，说明数据区损坏已超出 RS 纠错能力，不只是格式区的问题。"],
+    aka: ["qr格式信息爆破", "format info brute force", "格式区损坏修复", "qr格式修复", "掩码爆破", "纠错级枚举", "ecl mask枚举", "qrazybox", "格式信息恢复", "qr salvage", "二维码格式修复", "损坏二维码修复", "格式信息枚举"],
   },
 };

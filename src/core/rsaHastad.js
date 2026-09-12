@@ -103,7 +103,7 @@ function hastadRun(text, p) {
 }
 
 register({
-  id: "rsaHastad", cat: "crypto", name: "RSA Hastad 广播攻击",
+  id: "rsaHastad", family: "rsaatk", familyLabel: "hastad", cat: "crypto", name: "RSA Hastad 广播攻击",
   desc: "同一明文用相同 e 和多个互质 n 加密，CRT 合并后开 e 次根恢复明文",
   params: [{ key: "e", label: "公钥指数 e", type: "number", default: 3 }],
   run: hastadRun,

@@ -20,7 +20,7 @@
  * 分越低越可能是正确解。
  *
  * 保留 confidence（detect 乘积）用于 UI 显示，score 用于排序。
- * 保留「允许同 op 连用」（M 裁决，base64(base64(x)) 场景）。
+ * 保留「允许同 op 连用」（base64(base64(x)) 场景）。
  */
 import { OPS, defaultParams, getOp } from "../registry.js";
 import { entropy, freqDist, chiSquareScore, isPrintableRatio, asciiPlaintextAdjustment } from "./scorer.js";
@@ -728,7 +728,7 @@ export async function magicDecode(input, opts = {}) {
       // 该分类字符集大小匹配（如「喵呜」2 种字符 ≈ 二进制 2 字符表）→ 给低分兜底参与。
       // 只认「种类数」，不认具体字符——变体题（喵呜/emoji/自定义表）也能被尝试解码。
       if (o.lenient && (!score || score <= 0)) {
-        const lim = { base: 64, radix: 16, classic: 26, modern: 128, text: 256 }[op.cat];
+        const lim = { base: 64, radix: 16, classic: 26, modern: 128, block: 128, stream: 128, asym: 128, text: 256 }[op.cat];
         if (lim !== undefined && f && f.nCharKinds <= lim) score = 0.15;  // f = inputFeatures(input)，381 行
       }
       if (!score || score <= 0) continue;

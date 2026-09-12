@@ -133,6 +133,62 @@ function trimUniformEdges(mat, K) {
   return { mat: out, w, h };
 }
 
+// 任意宽高版裁边（非方形载体：矩形留白时各边独立收缩）。
+// 与 trimUniformEdges 同口径：按轴从四边向内裁均匀行/列。
+function trimUniformEdgesWH(mat, W, H) {
+  let top = 0, bottom = H - 1, left = 0, right = W - 1;
+  const rowUniform = (y) => {
+    const r = mat[y], f = r[0];
+    for (let x = 1; x < W; x++) if (r[x] !== f) return false;
+    return true;
+  };
+  const colUniform = (x) => {
+    const f = mat[0][x];
+    for (let y = 1; y < H; y++) if (mat[y][x] !== f) return false;
+    return true;
+  };
+  while (top < bottom && rowUniform(top)) top++;
+  while (bottom > top && rowUniform(bottom)) bottom--;
+  while (left < right && colUniform(left)) left++;
+  while (right > left && colUniform(right)) right--;
+  const w = right - left + 1, h = bottom - top + 1;
+  if (w <= 0 || h <= 0) return null;
+  if (left === 0 && top === 0 && right === W - 1 && bottom === H - 1) {
+    return { mat, w: W, h: H };
+  }
+  const out = new Array(h);
+  for (let y = 0; y < h; y++) out[y] = mat[top + y].slice(left, left + w);
+  return { mat: out, w, h };
+}
+
+// 最近邻重采样到 L×L（有界候选，配合 finder/格式/纠错校验淘汰错解）。
+// R 为超采样倍数：先重采样到 (L·R)×(L·R) 再 R×R 多数降采样——非整数节距
+// 拉伸下最近邻单采样会踩模块边缘，4x 超采样实测可归零错位（T425）。
+function resampleSquareNN(mat, W, H, L, R = 1) {
+  const N = L * R;
+  const hi = new Array(N);
+  for (let y = 0; y < N; y++) {
+    const sy = Math.min(H - 1, Math.floor(y * H / N));
+    const srcRow = mat[sy];
+    const row = new Array(N);
+    for (let x = 0; x < N; x++) row[x] = srcRow[Math.min(W - 1, Math.floor(x * W / N))];
+    hi[y] = row;
+  }
+  if (R === 1) return hi;
+  const need = (R * R) / 2;
+  const out = new Array(L);
+  for (let y = 0; y < L; y++) {
+    const row = new Array(L);
+    for (let x = 0; x < L; x++) {
+      let s = 0;
+      for (let dy = 0; dy < R; dy++) for (let dx = 0; dx < R; dx++) s += hi[y * R + dy][x * R + dx];
+      row[x] = s >= need ? 1 : 0;
+    }
+    out[y] = row;
+  }
+  return out;
+}
+
 // 枚举候选模块尺寸 M：优先 K 的整除因子中合法的 21+4k；若无，K 本身合法也列入。
 function candidateModules(K) {
   const list = [];
@@ -148,26 +204,44 @@ function candidateModules(K) {
 
 // 多阈值 × 反色 × 候选M 尝试解码，首个成功返回结果；全失败返回 null。
 // 流程：二值化 → 裁均匀边缘(quiet zone) → 候选模块尺寸 → 降采样 → qrDecodeMatrix。
+// 非方形载体：按轴裁边后，对每个合法模块数 M 直接最近邻重采样为 M×M
+//（每模块一投，拉伸把模块节距拉齐；最多 40 投×2 反色×5 阈值，有界），
+// 靠解码端 finder/格式/纠错校验淘汰错解，不额外穷举。
 function tryDecodeQr(decoded) {
-  const K = decoded.width;
-  if (decoded.width !== decoded.height) return null;
+  const W = decoded.width, H = decoded.height;
+  const square = W === H;
+  if (!square && (W < 21 || H < 21)) return null; // 非方且短边不足最小 QR
 
   const thresholds = [128, 64, 96, 160, 192];
   for (const th of thresholds) {
     for (const invert of [false, true]) {
       const pixelMat = binarize(decoded, th, invert);
-      const trimmed = trimUniformEdges(pixelMat, K);
+      const trimmed = square
+        ? trimUniformEdges(pixelMat, W)
+        : trimUniformEdgesWH(pixelMat, W, H);
       if (!trimmed) continue;
-      if (trimmed.w !== trimmed.h) continue; // 裁后须正方形
-      const K2 = trimmed.w;
-      const candidates = candidateModules(K2);
-      for (const M of candidates) {
-        const modMat = downsample(trimmed.mat, K2, M);
-        if (!modMat) continue;
-        try {
-          return qrDecodeMatrix(modMat, M, M);
-        } catch (_) {
+      if (trimmed.w === trimmed.h) {
+        const K2 = trimmed.w;
+        for (const M of candidateModules(K2)) {
+          const modMat = downsample(trimmed.mat, K2, M);
+          if (!modMat) continue;
+          try {
+            return qrDecodeMatrix(modMat, M, M);
+          } catch (_) {
  // 该组合失败，继续尝试下一个
+          }
+        }
+        continue;
+      }
+      if (square) continue; // 裁后失去正方形 → 此阈值/反色组合不适用
+      const { mat: tm, w: TW, h: TH } = trimmed;
+      const bigSide = Math.max(TW, TH);
+      for (let M = QR_MIN_SIZE; M <= QR_MAX_SIZE && M <= bigSide; M += 4) {
+        const sq = resampleSquareNN(tm, TW, TH, M, 4);
+        try {
+          return qrDecodeMatrix(sq, M, M);
+        } catch (_) {
+ // 拉伸候选失败，继续
         }
       }
     }
@@ -199,14 +273,15 @@ function buildQrSections(decoded, name, frame) {
   const suffix = frame ? "-f" + frame.index : "";
   const frameTag = frame ? "（第 " + (frame.index + 1) + "/" + frame.total + " 帧）" : "";
 
-  if (decoded.width === decoded.height) {
+  if (true) {
     const qr = tryDecodeQr(decoded);
     if (qr) {
+      const stretched = decoded.width !== decoded.height;
       const text = qr.text || "";
       const hasFlag = FLAG_RE.test(text);
       const lines = [
         "识别到 QR 码" + frameTag + "（版本 v" + qr.version + " " + qr.ecl + "，掩码 " + qr.mask + "，RS 纠错 " + qr.errorCount + " 处）",
-        "尺寸: " + qr.size + "×" + qr.size + " 模块（源图 " + decoded.width + "×" + decoded.height + " 像素）",
+        "尺寸: " + qr.size + "×" + qr.size + " 模块（源图 " + decoded.width + "×" + decoded.height + " 像素" + (stretched ? "，非方形已拉伸恢复" : "") + "）",
         "内容: " + (text === "" ? "(空)" : text),
         "（双击卡片查看完整内容）",
       ];
@@ -242,18 +317,21 @@ function buildQrSections(decoded, name, frame) {
           body: "识别到 flag" + frameTag + ":\n" + m[0],
         });
       }
-    }
   } else if (!frame) {
- // 非正方形图（仅单帧提示；多帧逐帧提示会刷屏，故 frame 时静默）
+ // 未解出（含非方形）：仅单帧提示；多帧逐帧提示会刷屏，故 frame 时静默
     sections.push({
       id: "img-qr" + suffix,
       title: "二维码识别",
       level: "info",
       icon: "qr_code",
       body:
-        "图片为 " + decoded.width + "×" + decoded.height + "（非正方形）。" +
+        "未识别到 QR 码。图片为 " + decoded.width + "×" + decoded.height +
+        (decoded.width !== decoded.height
+          ? "（非正方形）。已尝试整图拉伸恢复（横/纵两向），仍失败。"
+          : "。") +
         "当前仅支持整图即 QR 的识别；QR 嵌在局部区域需定位校正，暂未实现。",
     });
+  }
   }
   return sections;
 }
@@ -329,19 +407,6 @@ function buildColorFreqSections(decoded, name, frameInfo) {
     body: "共 " + freq.size + " 种颜色 / " + total + " 像素（" + width + "×" + height + "）\n序号 颜色 像素数 占比\n" +
       tableLines.join("\n") + (sorted.length > 20 ? "\n…（还有 " + (sorted.length - 20) + " 种）" : ""),
   }];
-  // 稀有色像素提取：跳过最高频（背景），对第 2..5 名各出点阵图
-  const extractCount = Math.min(4, sorted.length - 1);
-  for (let i = 1; i <= extractCount; i++) {
-    const [k, n] = sorted[i];
-    secs.push({
-      id: "img-colorfreq-" + i,
-      title: prefix + "第 " + (i + 1) + " 高频色像素图 " + _colorKeyToStr(k, channels),
-      level: "info",
-      icon: "grid_on",
-      body: "该颜色 " + n + " 像素（" + (n / total * 100).toFixed(2) + "%）的分布点阵（█=该色）。" +
-        "CTF 中 flag 常由稀有色像素构成图案/文字：\n\n" + _colorPixelMap(decoded, k),
-    });
-  }
   return secs;
 }
 

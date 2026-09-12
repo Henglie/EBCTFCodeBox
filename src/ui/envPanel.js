@@ -22,6 +22,8 @@ import {
 // 动态取色：预设 + 默认 + 回退函数。ui 层平级 import；选色/清除走 window.__ebctfSetAccent / __ebctfClearAccent（main.js 暴露），不反向 import main.js。
 import { ACCENT_PRESETS, DEFAULT_ACCENT, resetAccent } from "./dynamicColor.js";
 import { icon as iconSvg } from "./icons.js";  // .msym 无字体 ligature，须 icon() 注入内联 SVG
+import { THEME_VARIANTS } from "./themePicker.js";
+import { getLocale } from "../i18n/index.js";
 
 const ACCENT_KEY = "ebctf.accent";  // 与 main.js 一致，仅读取判当前选中态
 
@@ -165,6 +167,12 @@ let _offDocClick = null;   // 点外关闭监听（性能审计 M3：所有关�
 export function openEnvPanel(anchor) {
   if (_panel) { closeEnvPanel(); return; }
   _panel = el("div", { class: "env-panel" });
+  _panel.addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    event.preventDefault(); event.stopPropagation();
+    closeEnvPanel();
+    anchor.focus();
+  });
   document.body.append(_panel);
   positionPanel(anchor);
  // 首次渲染：检测中态 + 字库区
@@ -512,16 +520,25 @@ function renderThemeSection() {
   sec.append(el("div", { class: "env-section-title" }, msym("dark_mode"), t("ui.env.theme")));
   const cur = (typeof window.__ebctfGetThemePref === "function") ? window.__ebctfGetThemePref() : "system";
   const group = el("div", { class: "env-theme-toggle" });
+  const choose = pref => {
+    window.__ebctfSetThemePref?.(pref);
+    sec.querySelectorAll("[data-theme-pref]").forEach(button => {
+      const selected = button.dataset.themePref === pref;
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    const accent = document.querySelector(".env-accent-box");
+    if (accent) accent.replaceWith(renderAccentSection());
+  };
   const mk = (pref, iconName, labelKey) => {
     const btn = el("button", {
       class: "env-theme-btn" + (cur === pref ? " selected" : ""),
+      "data-theme-pref": pref, "aria-pressed": String(cur === pref),
       title: t(labelKey),
       "aria-label": t(labelKey),
     }, msym(iconName), el("span", {}, t(labelKey)));
     btn.addEventListener("click", () => {
-      try { window.__ebctfSetThemePref(pref); } catch { /* 钩子缺失忽略 */ }
-      group.querySelectorAll(".env-theme-btn").forEach((b) => b.classList.remove("selected"));
-      btn.classList.add("selected");
+      choose(pref);
     });
     return btn;
   };
@@ -529,30 +546,58 @@ function renderThemeSection() {
   group.append(mk("light", "light_mode", "ui.env.themeLight"));
   group.append(mk("dark", "dark_mode", "ui.env.themeDark"));
   sec.append(group);
+  for (const series of ["m3", "cn"]) {
+    sec.append(el("div", { class: "env-section-title" }, t("ui.env.series." + series)));
+    const grid = el("div", { class: "env-variant-grid" });
+    for (const variant of THEME_VARIANTS.filter(item => item.series === series)) {
+      const name = getLocale() === "en" ? variant.en : variant.zh;
+      grid.append(el("button", {
+        type: "button", class: "env-variant-swatch" + (cur === variant.id ? " selected" : ""),
+        "data-theme-pref": variant.id, "aria-pressed": String(cur === variant.id), title: name,
+        onclick: () => choose(variant.id),
+      }, el("span", { class: "swatch-dot", "aria-hidden": "true",
+        style: `background:linear-gradient(135deg,${variant.swatch.join(",")})` }),
+      el("span", { class: "swatch-name" }, name)));
+    }
+    sec.append(grid);
+  }
+  const reduced = el("input", { type: "checkbox", id: "envReduceMotion", "aria-label": t("ui.env.reduceMotion"), "aria-describedby": "envReduceMotionNote" });
+  reduced.checked = document.documentElement.classList.contains("reduce-motion");
+  reduced.addEventListener("change", () => {
+    document.documentElement.classList.toggle("reduce-motion", reduced.checked);
+    try { localStorage.setItem("ebctf.reduceMotion", reduced.checked ? "1" : "0"); } catch { /* Session preference only. */ }
+  });
+  sec.append(el("label", { class: "env-motion-setting", for: "envReduceMotion" },
+    el("span", { class: "env-motion-copy" },
+      el("span", { class: "env-motion-label" }, t("ui.env.reduceMotion")),
+      el("span", { class: "env-motion-note", id: "envReduceMotionNote" }, t("ui.env.reduceMotionNote"))),
+    el("span", { class: "switch" }, reduced, el("span", { class: "track" }), el("span", { class: "knob" }))));
   return sec;
 }
 
 function renderAccentSection() {
   const sec = el("div", { class: "env-section env-accent-box" });
   sec.append(el("div", { class: "env-section-title" }, msym("palette"), t("ui.env.accent")));
+  const inPalette = document.documentElement.hasAttribute("data-palette");
   sec.append(el("div", { class: "env-accent-note" }, t("ui.env.accentNote")));
 
   const saved = normHex(currentAccentSeed());
   const presetSeeds = ACCENT_PRESETS.map((p) => normHex(p.seed));
  // 存了色但不匹配任何预设 → 视为自定义选中
-  const isCustom = !!saved && !presetSeeds.includes(saved);
+  const isCustom = !inPalette && !!saved && !presetSeeds.includes(saved);
 
  // ① 预设色板按钮组
   const swatches = el("div", { class: "env-accent-swatches" });
   for (const p of ACCENT_PRESETS) {
     const seedNorm = normHex(p.seed);
  // 未设过时高亮默认项（DEFAULT_ACCENT），设过则按 saved 匹配
-    const selected = saved ? seedNorm === saved : p.seed === DEFAULT_ACCENT.seed;
+    const selected = !inPalette && (saved ? seedNorm === saved : p.seed === DEFAULT_ACCENT.seed);
     const btn = el("button", {
       class: "env-accent-swatch" + (selected ? " selected" : ""),
       style: "background:" + p.seed,
       title: p.label,
       "aria-label": p.label,
+      "aria-pressed": String(selected),
     });
     btn.addEventListener("click", () => {
       try { window.__ebctfSetAccent(p.seed); } catch { /* 桥缺失忽略 */ }
@@ -581,13 +626,12 @@ function renderAccentSection() {
  // ③ 恢复默认
   const resetBtn = el("button", { class: "env-accent-reset" }, msym("restart_alt"), t("ui.env.accentReset"));
   resetBtn.addEventListener("click", () => {
-    try { resetAccent(); } catch { /* 忽略 */ }              // 即时清内联覆盖回退 theme.css
-    try { window.__ebctfClearAccent(); } catch { /* 忽略 */ } // 清持久化
+    window.__ebctfResetAccentToOriginal();
  // 选中态回到默认预设
     const btns = swatches.querySelectorAll(".env-accent-swatch");
-    btns.forEach((b) => b.classList.remove("selected"));
+    btns.forEach((b) => { b.classList.remove("selected"); b.setAttribute("aria-pressed", "false"); });
     const defBtn = btns[0];
-    if (defBtn) defBtn.classList.add("selected");
+    if (defBtn) { defBtn.classList.add("selected"); defBtn.setAttribute("aria-pressed", "true"); }
     colorInput.classList.remove("selected");
     colorInput.value = DEFAULT_ACCENT.seed;
   });
@@ -614,6 +658,7 @@ function renderAccentSection() {
       btns.forEach((b, i) => {
         const on = normHex(ACCENT_PRESETS[i] && ACCENT_PRESETS[i].seed) === seedNorm;
         b.classList.toggle("selected", on);
+        b.setAttribute("aria-pressed", String(on));
         if (on) matched = b;
       });
       colorInput.classList.toggle("selected", !matched);
@@ -632,6 +677,7 @@ function renderAccentSection() {
 function markSelected(swatches, selBtn, colorInput, customOn) {
   swatches.querySelectorAll(".env-accent-swatch").forEach((b) => {
     b.classList.toggle("selected", b === selBtn);
+    b.setAttribute("aria-pressed", String(b === selBtn));
   });
   if (colorInput) colorInput.classList.toggle("selected", !!customOn);
 }

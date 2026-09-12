@@ -332,13 +332,20 @@ async function sevenZipRun(text, p) {
   if (mode === "extract") {
     lines.push("");
     lines.push("解出文件: " + res.files.length + " 个" + (res.files.length >= 200 ? "（达 200 上限，截断）" : ""));
-    for (const f of res.files) {
-      const r = bytesToOutput(f.bytes);
-      lines.push("");
-      lines.push("· " + f.name + "  (" + f.bytes.length + " 字节, " + r.mode + ")");
-      const preview = r.text.length > 500 ? r.text.slice(0, 500) + " …(截断)" : r.text;
-      lines.push("  " + preview.replace(/\n/g, "\n  "));
-    }
+    const MIME = { txt: "text/plain", log: "text/plain", json: "application/json", png: "image/png", gif: "image/gif", jpg: "image/jpeg", jpeg: "image/jpeg", zip: "application/zip", pdf: "application/pdf" };
+    const outFiles = [];
+    res.files.forEach((f, i) => {
+      outFiles.push({ name: f.name || `file_${i + 1}`, mime: MIME[String(f.name || "").split(".").pop().toLowerCase()] || "application/octet-stream", bytes: f.bytes });
+      if (i < 3) {
+        const r = bytesToOutput(f.bytes);
+        lines.push("");
+        lines.push("· " + f.name + "  (" + f.bytes.length + " 字节, " + r.mode + ")");
+        const preview = r.text.length > 500 ? r.text.slice(0, 500) + " …(截断)" : r.text;
+        lines.push("  " + preview.replace(/\n/g, "\n  "));
+      }
+    });
+    if (res.files.length > 3) lines.push("\n（其余 " + (res.files.length - 3) + " 个省略预览，全部可在下方下载）");
+    return { text: lines.join("\n"), files: outFiles };
   }
   return lines.join("\n");
 }

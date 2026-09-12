@@ -1,14 +1,29 @@
 // English edu shard: forensics — 19 ops (archive cracking / john hash extraction / traffic analysis / Minecraft saves / pyc stego / CRC brute). Pure data, no imports, no side effects.
 export default {
+  adsTool: {
+    what: "NTFS Alternate Data Stream (ADS) tool: detect / extract / delete / add ADS embedded in ZIP archives. Windows Explorer's built-in compression packs ADS together with an NTFS extra field into the ZIP — the carrier of 「file.txt:secret」-style hidden-stream CTF challenges.",
+    principle:
+      "The ZIP spec (PKWARE APPNOTE) reserves extra field 0x000A (NTFS): it contains Tag 0x0001 with three FILETIME timestamps (modified/accessed/created) plus any number of {stream name (UTF-16), stream size} pairs; the stream data itself rides along as a separate entry named 「host:stream」 (Info-ZIP convention).\n\n" +
+      "This tool walks the central directory and reads that field per entry: detect = list all streams; extract = decode a stream's bytes (stored/deflate both supported); delete = rewrite the ZIP dropping stream entries and cleaning the host's extra-field pairs; add = write a pair plus a new stream entry. Pure JS, replacing the former Windows GUI exe.",
+    usage: "Drop/paste a ZIP (base64) and pick a mode: detect lists everything; extract/delete take 「host:stream」 (delete also accepts * for all); add takes a new stream name plus data in the content box. Delete/add produce a downloadable ZIP — verify with detect mode.",
+    examples: [
+      { in: "a ZIP with embedded ADS", param: "mode=detect", out: "1. file.txt:secret 128B source=NTFS extra field", desc: "Lists stream names/sizes/source/timestamps" },
+      { in: "the same ZIP", param: "mode=extract, stream=file.txt:secret", out: "byte preview + downloadable file", desc: "Recovers the hidden data" },
+    ],
+    tips: ["A browser cannot see real ADS on the host NTFS filesystem (a dropped file only carries its main stream); this tool works on the ZIP carrier — that's how ADS rides in CTF challenges.", "Run detect first on any suspicious ZIP; a colon in the entry name (file.txt:flag) means ADS form.", "Add mode can craft ADS-bearing ZIPs for challenge authoring; delete mode yields a clean archive you can verify with detect."],
+    aka: ["NTFS ADS", "备用数据流", "Alternate Data Stream", "ads", "ntfs ads", "数据流隐写", "ads检测", "ads提取", "ads删除", "ads添加", "ntfs数据流", "zone identifier", "隐藏数据流", "stream steganography", "adsTool"],
+  },
+
   bkcrackAttack: {
     what: "ZipCrypto known-plaintext attack (Biham-Kocher): for a ZIP encrypted with legacy ZipCrypto, ≥12 bytes of contiguous known plaintext from any one entry is enough to recover the internal key state directly and decrypt the whole archive, regardless of password length.",
     principle:
       "Legacy ZipCrypto (not AES) draws its strength from three 32-bit internal registers key0/key1/key2. The Biham-Kocher attack doesn't guess the password; it back-derives these three registers from 「known plaintext XOR ciphertext」. Once ≥12 bytes of contiguous known plaintext match the ciphertext, the key state can be solved, after which every ZipCrypto entry in the ZIP can be decrypted.\n\nKey point: ZipCrypto encrypts the **compressed** bytes. If an entry is `method=0` (stored), the known plaintext is the raw content; if `method=8` (deflate), the known plaintext must be the raw content run through deflate with the same parameters. AES-encrypted ZIPs cannot use this attack.\n\nThe engine is kimci86/bkcrack compiled to wasm via emscripten, lazy-loaded locally; when missing it degrades to a parameter echo. The attack is CPU-intensive, typically taking minutes to tens of minutes.",
-    usage: "Provide the encrypted ZIP (hex/base64 or drop a file), the target entry name (e.g. flag.txt), and ≥12 bytes of known plaintext with its encoding/offset. Choose mode 「recover key state」 to output only key0/key1/key2, or 「recover and decrypt」 to export the target entry directly.",
+    usage: "Four modes: ① known-plaintext attack to recover the key state — provide the encrypted ZIP (hex/base64 or drop a file), the target entry name (e.g. flag.txt), and ≥12 bytes of known plaintext with its encoding/offset; ② recover and decrypt — same as ①, and the target entry is decrypted in place (output is compressed bytes; method=8 needs another inflate op); ③ known-key-state decrypt — no plaintext, no attack: fill the key state as three 8-char hex groups (e.g. e8adb3d5 49151c56 08a55810) plus the target entry name; ④ known-key-state password recovery — no ZIP needed at all: fill the key state, a max password length, and a candidate charset to brute-force the original password.",
     examples: [
       { in: "encrypted ZIP + entry flag.txt + 12+ bytes known plaintext", param: "mode=recover", out: "key0 key1 key2, three 8-char hex internal key states", desc: "The internal state decrypts the whole archive" },
+      { in: "encrypted ZIP + entry flag.txt + key state e8adb3d5 49151c56 08a55810", param: "mode=decryptKeys (no plaintext, no attack)", out: "decrypted target-entry byte preview + downloadable file", desc: "Use this mode when the challenge hands you the three hex key groups; result is instant" },
     ],
-    tips: ["Plaintext sources: known-content files inside the ZIP, file-header magic (PNG 89504E47, PDF %PDF, embedded ZIP 504B0304). After recovering the key state you can also `bkcrack -k` to back out the original password string. AES-encrypted ZIPs can't use this attack; switch to zip2john brute-forcing."],
+    tips: ["Plaintext sources: known-content files inside the ZIP, file-header magic (PNG 89504E47, PDF %PDF, embedded ZIP 504B0304). After recovering the key state, switch straight to the known-key-state password-recovery mode to back out the original password string — fully in-tool, no external CLI. AES-encrypted ZIPs can't use this attack; switch to zip2john brute-forcing."],
     aka: ["bkcrack", "zipcrypto", "已知明文攻击", "known plaintext attack", "biham kocher", "比哈姆科赫", "zip明文攻击", "pkzip stream cipher", "传统zip加密破解", "plaintext attack", "zip密码破解", "known-plaintext", "kimci86", "zip已知明文"],
   },
 
@@ -22,13 +37,13 @@ export default {
       { in: "5d41402abc4b2a76b9719d911017c592", out: "Hash: 32 hex chars = 128 bit, possibly MD5 / MD4 / NTLM / LM" },
     ],
     tips: ["When you get a lump of unknown characters, drop it here first and it will point you in a direction. An alg=none JWT, a private-key PEM, and a Bitcoin mnemonic all get highlighted as sensitive."],
-    aka: ["格式识别", "format sniff", "特征识别", "指纹识别", "format detection", "格式嗅探", "identify format", "magic sniff", "格式检测", "数据类型识别", "format fingerprint", "what is this string", "识别输入", "格式判别"],
+    aka: ["魔数", "magic number", "文件头", "文件签名", "文件类型识别", "格式识别", "format sniff", "特征识别", "指纹识别", "format detection", "格式嗅探", "identify format", "magic sniff", "格式检测", "数据类型识别", "format fingerprint", "what is this string", "识别输入", "格式判别"],
   },
 
   sevenZip2john: {
     what: "7z hash extraction (7z2john): extracts a John/hashcat-usable hash string from an encrypted 7z archive (extract only, no cracking), outputting `$7z$` format, corresponding to hashcat mode 11600.",
     principle:
-      "7z uses AES-256 + SHA-256 KDF encryption. The tool parses the 7z SignatureHeader (magic 37 7A BC AF 27 1C) and NextHeader, finds the AES coder (codecId 06F10701) in the Folder's Coder chain, extracts its Properties (NumCyclesPower = KDF iterations = 2^n), salt, IV, then reads the encrypted data, CRC, and pack/dec lengths, assembling the hash string `$7z$type$NumCyclesPower$saltLen$salt$ivLen$iv$crc$encLen$decLen$encData`. When the header is encrypted (-mhe=on), it extracts from the ENCODED_HEADER.",
+      "7z uses AES-256 + SHA-256 KDF encryption. The tool parses the 7z SignatureHeader (magic 37 7A BC AF 27 1C) and NextHeader, finds the AES coder (codecId 06F10701) in the Folder's Coder chain, extracts its Properties (NumCyclesPower = KDF iterations = $2^{n}$), salt, IV, then reads the encrypted data, CRC, and pack/dec lengths, assembling the hash string `$7z$type$NumCyclesPower$saltLen$salt$ivLen$iv$crc$encLen$decLen$encData`. When the header is encrypted (-mhe=on), it extracts from the ENCODED_HEADER.",
     usage: "Input a 7z file (hex/base64/drop a file), pick the input encoding; maxDataLen caps inlined encrypted data. Outputs a `$7z$` hash string for `hashcat -m 11600` or john.",
     examples: [
       { in: "encrypted 7z file bytes", out: "$7z$0$19$0$$8$<iv>$<crc>$<encLen>$<decLen>$<encData>", desc: "type=0 stored, NumCyclesPower=19 i.e. 2^19 iterations" },
@@ -69,7 +84,7 @@ export default {
     examples: [
       { in: "RAR5 encrypted file bytes", out: "$rar5$16$<salt>$15$<iv>$8$<pswcheck>", desc: "iter_log2=15 i.e. PBKDF2 2^15=32768 iterations" },
     ],
-    tips: ["rar2john extracts only, doesn't crack. RAR3-hp uses hashcat 12500, RAR3-p uses 23700/23800, RAR5 uses 13000. RAR5's iter is a logarithm (15→2^15)."],
+    tips: ["rar2john extracts only, doesn't crack. RAR3-hp uses hashcat 12500, RAR3-p uses 23700/23800, RAR5 uses 13000. RAR5's iter is a logarithm (15 \\to $2^{15}$)."],
     aka: ["rar2john", "rar哈希提取", "rar hash", "$RAR3$", "$rar5$", "rar crack", "rar密码提取", "hashcat 12500", "hashcat 13000", "rar密码破解", "winrar hash", "rar john", "rar5 hash", "rar3 hash"],
   },
 

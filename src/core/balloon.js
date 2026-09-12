@@ -22,7 +22,7 @@
  * 红线：算法照权威参考，不编造；纯本地零外发；core 层零 UI 依赖（仅 registry）。
  * 自检：node --input-type=module -e "import('./src/core/balloon.js').then(m=>m.selfCheck())"
  *
- * 契约：register({ id:"balloon", cat:"crypto", name, desc, params, run })。
+ * 契约：register({ id:"balloon", cat:"hash", name, desc, params, run })。
  */
 import { register } from "./registry.js";
 
@@ -199,7 +199,7 @@ function balloonRun(text, p = {}) {
 
 register({
   id: "balloon",
-  cat: "crypto",
+  cat: "hash",
   name: "Balloon 密钥派生",
   desc: "Balloon 内存硬口令 KDF（Boneh/Corrigan-Gibbs/Schechter 2016，SHA-256 实例）：盐参与伪随机访问模式（原版设计），delta=3 伪随机块混入。抗 GPU/ASIC 暴力。参数 sCost（空间块数）/tCost（轮数）/delta。",
   params: [

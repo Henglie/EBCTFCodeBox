@@ -244,7 +244,7 @@ function pietRun(text) {
 
 // ---- 注册 ----
 register({
-  id: "deadfish", cat: "fancy", name: "Deadfish", desc: "累加器语言（i/d/s/o 四指令，加减平方输出，步数上限保护）",
+  id: "deadfish", cat: "esolang", name: "Deadfish", desc: "累加器语言（i/d/s/o 四指令，加减平方输出，步数上限保护）",
   encode: deadfishEncode, decode: deadfishDecode,
   detect: (t) => {
     const s = String(t).trim();
@@ -254,7 +254,7 @@ register({
 });
 
 register({
-  id: "befunge", cat: "fancy", name: "Befunge-93 执行", desc: "2D 栈式深奥语言执行器（> < ^ v 方向，@ 结束，网格环绕，步数上限 100 万）",
+  id: "befunge", cat: "esolang", name: "Befunge-93 执行", desc: "2D 栈式深奥语言执行器（> < ^ v 方向，@ 结束，网格环绕，步数上限 100 万）",
   run: befungeRun,
   detect: (t) => {
     const s = String(t);
@@ -265,7 +265,7 @@ register({
 });
 
 register({
-  id: "emojicodeIdent", cat: "fancy", name: "Emojicode 识别", desc: "emoji 关键字语言识别（🏁🍇🍉🔤🍮 等特征，仅识别标注）",
+  id: "emojicodeIdent", cat: "esolang", name: "Emojicode 识别", desc: "emoji 关键字语言识别（🏁🍇🍉🔤🍮 等特征，仅识别标注）",
   run: emojicodeRun,
   detect: (t) => {
     const s = String(t);
@@ -276,7 +276,7 @@ register({
 });
 
 register({
-  id: "pietIdent", cat: "fancy", name: "Piet 识别", desc: "图像色块深奥语言识别（需图像本体，仅识别标注说明）",
+  id: "pietIdent", cat: "esolang", name: "Piet 识别", desc: "图像色块深奥语言识别（需图像本体，仅识别标注说明）",
   run: pietRun,
   detect: () => 0,
 });

@@ -51,12 +51,24 @@ const ZW_CHARSETS = {
   default: ZW_CHARS, // radix-4，原码表（U+200C/200D/202C/FEFF），8 字符/charCode
   extended8: ["\u200b", "\u200c", "\u200d", "\u200e", "\u200f", "\u202c", "\u2060", "\ufeff"], // radix-8，6 字符/charCode
   full12: ["\u200b", "\u200c", "\u200d", "\u200e", "\u200f", "\u202a", "\u202c", "\u2060", "\u2061", "\u2062", "\u2063", "\ufeff"], // radix-12，5 字符/charCode
+ // T520 对齐 offdev/zwsp-steg-js 两个预设（与其 MODE_FULL / MODE_ZWSP 兼容）：
+  zwspFull5: ["\u200b", "\u200c", "\u200d", "\u200e", "\u200f"], // radix-5，7 字符/charCode
+  zwsp3: ["\u200b", "\u200c", "\u200d"], // radix-3，11 字符/charCode
 };
 // detect 用全量并集（检测任何已知零宽字符，不限字符集）
 const ZW_ALL_SET = new Set([...ZW_CHARSETS.default, ...ZW_CHARSETS.extended8, ...ZW_CHARSETS.full12]);
 
-function zwGetCharset(key) {
-  return ZW_CHARSETS[key] || ZW_CHARSETS.default;
+function zwGetCharset(p = {}) {
+  if (!p.customChars) return ZW_CHARSETS[p.charset] || ZW_CHARSETS.default;
+  // Match the reference's UTF-16 code-unit alphabet, not supplementary code points.
+  const chars = String(p.customChars).split("");
+  if (chars.length < 2 || chars.length > 36 || new Set(chars).size !== chars.length) throw new Error("自定义字符集须为2..36个不重复的BMP字符");
+  const invisible = /^[\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]$/;
+  for (const c of chars) {
+    if (/[\ud800-\udfff]/.test(c)) throw new Error("自定义字符集不支持代理码元");
+    if (!p.allowNonInvisible && !invisible.test(c)) throw new Error("字符不在本产品默认不可见字符集内；高级用途可显式允许可见字符");
+  }
+  return chars;
 }
 function zwCodelen(chars) {
   return Math.ceil(Math.log(65536) / Math.log(chars.length));
@@ -87,17 +99,62 @@ function zwDecodePayload(zwStr, chars = ZW_CHARS) {
     if (idx !== -1) digits += idx.toString(radix);
   }
   let out = "";
-  for (let i = 0; i + codelen <= digits.length; i += codelen) {
-    out += String.fromCharCode(parseInt(digits.slice(i, i + codelen), radix));
+  if (digits.length % codelen) throw new Error("零宽载荷截断或字符集不匹配");
+  for (let i = 0; i < digits.length; i += codelen) {
+    const value = parseInt(digits.slice(i, i + codelen), radix);
+    if (value > 65535) throw new Error("零宽载荷超出UTF-16码元范围");
+    out += String.fromCharCode(value);
   }
   return out;
 }
 
+// T520 二进制模式（Misawa unicode-steganography.js 的 binary 口径）：
+// 每字节定长 base-N（codelenBin = ceil(log256/log radix)，radix-4 时即 4 字符/字节）
+function zwCodelenBinary(chars) {
+  return Math.ceil(Math.log(256) / Math.log(chars.length));
+}
+function zwEncodeBytes(bytes, chars = ZW_CHARS) {
+  const radix = chars.length;
+  const codelenBin = zwCodelenBinary(chars);
+  let out = "";
+  for (const b of bytes) {
+    let d = b.toString(radix);
+    while (d.length < codelenBin) d = "0" + d;
+    for (const digit of d) out += chars[parseInt(digit, radix)];
+  }
+  return out;
+}
+function zwDecodeBytes(zwStr, chars = ZW_CHARS) {
+  const radix = chars.length;
+  const codelenBin = zwCodelenBinary(chars);
+  let digits = "";
+  for (const ch of zwStr) {
+    const idx = chars.indexOf(ch);
+    if (idx !== -1) digits += idx.toString(radix);
+  }
+  if (digits.length % codelenBin) throw new Error("零宽载荷截断或字符集不匹配（二进制模式 " + codelenBin + " 字符/字节）");
+  const bytes = new Uint8Array(digits.length / codelenBin);
+  for (let i = 0; i < bytes.length; i++) {
+    const v = parseInt(digits.slice(i * codelenBin, (i + 1) * codelenBin), radix);
+    if (v > 255) throw new Error("字节值超界（字符集或模式不匹配？）");
+    bytes[i] = v;
+  }
+  return bytes;
+}
+
 function zeroWidthEncode(text, p = {}) {
   const cover = p.cover || "";
-  const chars = zwGetCharset(p.charset);
-  const codelen = zwCodelen(chars);
-  const payload = zwEncodePayload(text, chars);
+  const chars = zwGetCharset(p);
+  if ([...String(cover)].some(c => chars.includes(c))) throw new Error("载体含所选编码字符，会污染隐藏载荷");
+  const codelen = p.binary ? zwCodelenBinary(chars) : zwCodelen(chars);
+  let payload;
+  if (p.binary) {
+   // 二进制模式：拖入文件走 rawBytes（acceptsBytes 约定），无文件则按文本 UTF-8 字节
+    const bytes = (p.rawBytes && p.rawBytes.length) ? p.rawBytes : new TextEncoder().encode(String(text ?? ""));
+    payload = zwEncodeBytes(bytes, chars);
+  } else {
+    payload = zwEncodePayload(text, chars);
+  }
   if (!cover) return payload;
  // 把 payload 按「每字符 = 一组 codelen 个零宽字符」切组，均匀插到载体各字符之后
  // 使隐写文本外观自然（等价于 Kei Misawa 的 combine，但确定性、无随机 shuffle）。
@@ -115,11 +172,22 @@ function zeroWidthEncode(text, p = {}) {
 }
 
 function zeroWidthDecode(text, p = {}) {
-  const chars = zwGetCharset(p.charset);
+  const chars = zwGetCharset(p);
   const charSet = new Set(chars);
   let zw = "";
   for (const ch of text) if (charSet.has(ch)) zw += ch;
   if (!zw) throw new Error("未检测到零宽字符（字符集：" + (p.charset || "default") + "）");
+  if (p.binary) {
+    const u8 = zwDecodeBytes(zw, chars);
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(u8);
+    } catch {
+      return {
+        text: "(二进制负载，" + u8.length + " 字节，点击下载)",
+        files: [{ name: "zerowidth_payload.bin", mime: "application/octet-stream", bytes: Array.from(u8) }],
+      };
+    }
+  }
   return zwDecodePayload(zw, chars);
 }
 
@@ -526,11 +594,16 @@ register({
   desc: "Kei Misawa MIT：载体文本夹带隐藏消息，radix-N 零宽字符。默认 U+200C/200D/202C/FEFF（radix-4），可切换扩展字符集缩短编码",
   params: [
     { key: "cover", label: "载体文本", type: "text", default: "", placeholder: "编码时的可见外壳文本，可空" },
+    { key: "customChars", label: "自定义字符集（2..36个不重复BMP字符，优先于预设）", type: "text", default: "" },
+    { key: "allowNonInvisible", label: "高级：允许可见字符（改变载体外观）", type: "bool", default: false },
     { key: "charset", label: "字符集", type: "select", default: "default", options: [
       { value: "default", label: "默认（U+200C/200D/202C/FEFF，radix-4，8 字符/字）" },
       { value: "extended8", label: "扩展 8（+U+200B/200E/200F/2060，radix-8，6 字符/字）" },
       { value: "full12", label: "全量 12（+U+202A/2061/2062/2063，radix-12，5 字符/字）" },
+      { value: "zwspFull5", label: "zwsp-steg FULL 5（U+200B/200C/200D/200E/200F，radix-5，7 字符/字）" },
+      { value: "zwsp3", label: "zwsp-steg ZWSP 3（U+200B/200C/200D，radix-3，11 字符/字）" },
     ] },
+    { key: "binary", label: "二进制模式（隐藏文件字节，radix-4 即 4 字符/字节；拖入文件走 rawBytes）", type: "bool", default: false },
   ],
   encode: zeroWidthEncode, decode: zeroWidthDecode,
   detect: (t) => ([...t].some((c) => ZW_ALL_SET.has(c)) ? 0.4 : 0),

@@ -14,6 +14,7 @@ let _worker = null;
 let _workerBroken = false;   // 创建/加载失败后永久走主线程降级，不反复试错
 let _seq = 0;
 const _pending = new Map();  // runId → settle 回调（Worker 被杀时统一收尾，不留悬挂 Promise）
+let _running = false;
 
 /** 死循环看门狗时长。2s（与 compress.js TIMEOUT_MS 同量级；MT72 需求写「700ms 级」是下限参考）。 */
 export const CUSTOM_TIMEOUT_MS = 2000;
@@ -69,6 +70,8 @@ function runOnMainThread(req) {
  * @returns {Promise<{ok:true,out:string,sandbox:string}|{ok:false,error:string,line:?number,timedOut?:boolean,sandbox:string}>}
  */
 export function runCustomWithTimeout(req) {
+  // The shared Worker cannot start a second job until the first settles.
+  if (_running) return Promise.resolve({ ok: false, error: "自定义实现正在执行，请稍后重试", sandbox: "worker", busy: true });
   const { code, dir, input, params, rawBytes } = req;
   const timeoutMs = Number(req.timeoutMs) > 0 ? Number(req.timeoutMs) : CUSTOM_TIMEOUT_MS;
   const plain = { code, dir, input, params: params || {}, rawBytes: rawBytes || null };
@@ -76,12 +79,14 @@ export function runCustomWithTimeout(req) {
   const worker = spawnWorker();
   if (!worker) return Promise.resolve(runOnMainThread(plain));
 
+  _running = true;
   return new Promise((resolve) => {
     const runId = ++_seq;
     let settled = false;
     const finish = (res) => {
       if (settled) return;
       settled = true;
+      _running = false;
       clearTimeout(timer);
       _pending.delete(runId);
       // res === null 表示 Worker 挂了，请求还没跑完 → 主线程补跑一次（真降级，不是只报错）

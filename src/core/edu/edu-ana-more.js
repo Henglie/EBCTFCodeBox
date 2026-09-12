@@ -15,8 +15,8 @@ export default {
   },
 
   randu: {
-    what: "RANDU：IBM 经典弱随机数生成器 x = 65539·x mod 2^31。教学演示它的序列生成与周期，说明为何它是教科书级反面教材。",
-    principle: "线性同余 x_{n+1} = (a·x_n + c) mod m，RANDU 取 a=65539、c=0、m=2^31。因其乘数与模数选择糟糕，三维输出全部落在 15 个平面上（超平面结构），统计性质极差。",
+    what: "RANDU：IBM 经典弱随机数生成器 $x = 65539 \\cdot x \\bmod 2^{31}$。教学演示它的序列生成与周期，说明为何它是教科书级反面教材。",
+    principle: "线性同余 $x_{n+1} = (a \\cdot x_n + c) \\bmod m$，RANDU 取 a=65539、c=0、m=$2^{31}$。因其乘数与模数选择糟糕，三维输出全部落在 15 个平面上（超平面结构），统计性质极差。",
     usage: "填种子与项数，输出序列。教学演示：对比现代 PRNG 理解 LCG 弱点。",
     examples: [
       { in: "种子 1，10 项", out: "65539 393225 1769499 …", desc: "RANDU 序列" },
@@ -26,15 +26,15 @@ export default {
   },
 
   truncLcgRecover: {
-    what: "截断 LCG 种子恢复：mod 2^32 的 LCG（x=a·x+c）只给出输出高位（k 位）时，穷举低未知位恢复种子。CTF 常见（Python random 取高位/截断输出）。",
+    what: "截断 LCG 种子恢复：$\\bmod\\ 2^{32}$ 的 LCG（$x = a \\cdot x + c$）只给出输出高位（k 位）时，穷举低未知位恢复种子。CTF 常见（Python random 取高位/截断输出）。",
     principle:
-      "第一个完整状态 = 首项高位 << (32-k) | low，low 有 2^(32-k) 种可能。对每个候选按 LCG 递推，用后续输出校验高位是否一致；命中后回退一步（x0 = (x1-c)·a⁻¹ mod 2^32）恢复种子。未知低位 ≤24 位可穷举。",
+      "第一个完整状态 = 首项高位 << (32-k) | low，low 有 $2^{32-k}$ 种可能。对每个候选按 LCG 递推，用后续输出校验高位是否一致；命中后回退一步（$x_0 = (x_1 - c) \\cdot a^{-1} \\bmod 2^{32}$）恢复种子。未知低位 ≤24 位可穷举。",
     usage: "输入：连续截断输出（空格分隔）。参数：a/c（默认 1664525/1013904223 即 ANSI C）、k（已知高位位数，默认 24）。输出候选种子。",
     examples: [
       { in: "1234567 8901234 …", param: "a=1664525 c=1013904223 k=24", out: "候选种子列表", desc: "复现序列的种子" },
     ],
     tips: ["乘数 a 必须是奇数才有模逆（回退需要）。输出不足时给更多项减少候选。与 prngAttack（恢复未知 a/c）配合使用。"],
-    aka: ["截断lcg", "truncated lcg", "lcg高位", "lcg种子恢复", "lcg截断", "python random高位", "lcg恢复", "truncated lcg attack", "lcg种子", "lcg爆破"],
+    aka: ["线性同余", "线性同余生成器", "lcg预测", "截断lcg", "truncated lcg", "lcg高位", "lcg种子恢复", "lcg截断", "python random高位", "lcg恢复", "truncated lcg attack", "lcg种子", "lcg爆破"],
   },
 
   shaLengthExtend: {
@@ -50,21 +50,21 @@ export default {
   },
 
   birthdayCollision: {
-    what: "生日碰撞演示：哈希输出截断到 b 位时，随机输入找碰撞的期望尝试数 ≈ 2^(b/2)（生日悖论）。教学演示哈希碰撞的本质与安全余量。",
+    what: "生日碰撞演示：哈希输出截断到 b 位时，随机输入找碰撞的期望尝试数 $\\approx 2^{b/2}$（生日悖论）。教学演示哈希碰撞的本质与安全余量。",
     principle:
-      "生日悖论：n 个随机值中两两相同的概率在 n ≈ 1.18·2^(b/2) 时过半。演示用截断 SHA-256 的前 b 位做键，随机输入查 Map，命中即碰撞对。",
-    usage: "设截断位数（默认 24），输出碰撞对与尝试次数。对比理论 2^(b/2) 理解安全参数。",
+      "生日悖论：n 个随机值中两两相同的概率在 $n \\approx 1.18 \\cdot 2^{b/2}$ 时过半。演示用截断 SHA-256 的前 b 位做键，随机输入查 Map，命中即碰撞对。",
+    usage: "设截断位数（默认 24），输出碰撞对与尝试次数。对比理论 $2^{b/2}$ 理解安全参数。",
     examples: [
       { in: "bitLen=24", out: "碰撞对 + 尝试次数", desc: "尝试 ≈ 2^12" },
     ],
-    tips: ["2^24 截断只需 ~4000 次尝试——这就是为什么哈希必须 128+ 位。真实 MD5/SHA-1 碰撞构造见 coll 类 op。"],
+    tips: ["$2^{24}$ 截断只需 ~4000 次尝试——这就是为什么哈希必须 128+ 位。真实 MD5/SHA-1 碰撞构造见 coll 类 op。"],
     aka: ["生日攻击", "birthday attack", "生日悖论", "碰撞演示", "哈希碰撞", "截断哈希", "生日碰撞", "birthday collision", "碰撞对", "2的b/2"],
   },
 
   babaiCvp: {
-    what: "Babai 最近平面（CVP）：给定格基和目标向量，找格上离目标最近的格点（近似）。LLL 归约后 Babai 算法给出 2^{n/2} 近似因子内的最近点。CVP 是格密码/格攻击的基础原语。",
+    what: "Babai 最近平面（CVP）：给定格基和目标向量，找格上离目标最近的格点（近似）。LLL 归约后 Babai 算法给出 $2^{n/2}$ 近似因子内的最近点。CVP 是格密码/格攻击的基础原语。",
     principle:
-      "先 LLL 归约格基使基向量近正交短；再用 GSO 正交化求目标在正交基下的坐标，逐坐标四舍五入（round），组合回原始基即最近格点 v ≈ Σ round(μ_i)·b_i。输入：每行一个格基向量，最后一行目标向量。",
+      "先 LLL 归约格基使基向量近正交短；再用 GSO 正交化求目标在正交基下的坐标，逐坐标四舍五入（round），组合回原始基即最近格点 $v \\approx \\sum \\mathrm{round}(\\mu_i) \\cdot b_i$。输入：每行一个格基向量，最后一行目标向量。",
     usage: "粘贴格基（每行空格分隔整数）+ 末行目标向量，输出最近格点与残差。",
     examples: [
       { in: "2 0\\n1 1\\n3 1", out: "最近格点 3,1", desc: "目标恰在格上时精确恢复" },
@@ -76,7 +76,7 @@ export default {
   hnpRecover: {
     what: "HNP 隐藏数问题：ECDSA 签名 nonce k = t + x（t 已知、x 是小未知量）时，从 m 个签名恢复私钥 d。CTF 弱 nonce 题（如 k 只取部分随机位）的标准解法。",
     principle:
-      "ECDSA 签名方程 s·k ≡ h + r·d (mod n)。若 k_i = t_i + x（共享小 x），对第一个签名穷举 x（xBound 次），每个 x 解出候选 d，再用其余签名的方程验证（s·k ≡ h + r·d）。大 nonce 空间版本用格（Boneh-Venkatesan）——本 op 为小空间穷举教学版。",
+      "ECDSA 签名方程 $s \\cdot k \\equiv h + r \\cdot d \\pmod{n}$。若 $k_i = t_i + x$（共享小 x），对第一个签名穷举 x（xBound 次），每个 x 解出候选 d，再用其余签名的方程验证（$s \\cdot k \\equiv h + r \\cdot d$）。大 nonce 空间版本用格（Boneh-Venkatesan）——本 op 为小空间穷举教学版。",
     usage: "输入：每行 `h r s t`（≥3 行），参数 xBound = nonce 未知量范围、n = 曲线阶（留空用 secp256k1）。输出候选私钥 d。",
     examples: [
       { in: "h1 r1 s1 t1\\nh2 r2 s2 t2\\nh3 r3 s3 t3", param: "xBound=4096", out: "候选 d（hex）", desc: "用多签名交叉验证" },
@@ -88,7 +88,7 @@ export default {
   spnAnalysis: {
     what: "SPN 差分/线性分析教学：对 4-bit S 盒算差分分布表（DDT）与线性逼近表（LAT），找出最强差分特征与线性特征。CTF 密码题分析 S 盒的标准第一步。",
     principle:
-      "差分分布表 DDT[a][b] = #{x : S(x)⊕S(x⊕a) = b}——输入差分 a 到输出差分 b 的转移计数，计数越大差分攻击越有效；线性逼近表 LAT[α][β] = #{x : α·x ⊕ β·S(x) = 0} - 8——输入/输出掩码相关性偏差，偏差越大线性攻击越有效。",
+      "差分分布表 $\\mathrm{DDT}[a][b] = \\#\\{x : S(x) \\oplus S(x \\oplus a) = b\\}$——输入差分 a 到输出差分 b 的转移计数，计数越大差分攻击越有效；线性逼近表 $\\mathrm{LAT}[\\alpha][\\beta] = \\#\\{x : \\alpha \\cdot x \\oplus \\beta \\cdot S(x) = 0\\} - 8$——输入/输出掩码相关性偏差，偏差越大线性攻击越有效。",
     usage: "输入 16 个 S 盒值（hex 或 dec，须为置换），输出 DDT/LAT 表 + 最强差分/线性特征。留空用 PRESENT S 盒。",
     examples: [
       { in: "留空（PRESENT）", out: "DDT/LAT + 最强特征", desc: "PRESENT 最强差分概率 4/16" },
@@ -98,10 +98,10 @@ export default {
   },
 
   md5CollisionShow: {
-    what: "MD5 截断碰撞演示：对 MD5 输出截断到 b 位，用生日法现场找碰撞对（不同输入同截断哈希），直观展示「碰撞存在性」与 2^(b/2) 尝试的本质。",
+    what: "MD5 截断碰撞演示：对 MD5 输出截断到 b 位，用生日法现场找碰撞对（不同输入同截断哈希），直观展示「碰撞存在性」与 $2^{b/2}$ 尝试的本质。",
     principle:
-      "生日悖论：n 个随机 b 位值中两两相同概率过半需 n ≈ 2^(b/2)。演示对输入 " + '"coll0"、coll1…' + " 逐个算 MD5，取前 b/4 个 hex 字符为键查 Map，重复即碰撞对。",
-    usage: "设截断位数（默认 32），输出碰撞对 + 尝试次数。调大位数观察尝试次数按 2^(b/2) 增长。",
+      "生日悖论：n 个随机 b 位值中两两相同概率过半需 $n \\approx 2^{b/2}$。演示对输入 " + '"coll0"、coll1…' + " 逐个算 MD5，取前 b/4 个 hex 字符为键查 Map，重复即碰撞对。",
+    usage: "设截断位数（默认 32），输出碰撞对 + 尝试次数。调大位数观察尝试次数按 $2^{b/2}$ 增长。",
     examples: [
       { in: "bitLen=32", out: "碰撞对 + 尝试次数", desc: "≈2^16 次" },
     ],
@@ -112,7 +112,7 @@ export default {
   lweToy: {
     what: "LWE 玩具加解密：Regev 学习带错误（Learning With Errors）的最小可运行实现（q=257, n=8），比特级加解密演示——后量子格密码的核心机制。",
     principle:
-      "私钥 s ∈ Z_q^n；公钥 (A, b = A·s + e mod q)，e 是小噪声（±1）。加密比特 m：选随机 r，输出 (u = Aᵀ·r, v = b·r + m·⌊q/2⌋ mod q)。解密：v - u·s = m·⌊q/2⌋ + e·r，小噪声不越阈值，取整还原。安全性来自「无噪声时解线性方程组易、带噪声时难」（LWE 困难假设）。",
+      "私钥 $s \\in \\mathbb{Z}_q^n$；公钥 $(A,\\ b = A \\cdot s + e \\bmod q)$，e 是小噪声（±1）。加密比特 m：选随机 r，输出 $(u = A^{T} \\cdot r,\\ v = b \\cdot r + m \\cdot \\lfloor q/2 \\rfloor \\bmod q)$。解密：$v - u \\cdot s = m \\cdot \\lfloor q/2 \\rfloor + e \\cdot r$，小噪声不越阈值，取整还原。安全性来自「无噪声时解线性方程组易、带噪声时难」（LWE 困难假设）。",
     usage: "填比特串（0/1，最多 8 位），输出每位加密→解密结果与正确率。教学参数保证 100% 正确。",
     examples: [
       { in: "1010", out: "4 位全部 ✓", desc: "教学参数无错误" },
@@ -122,14 +122,14 @@ export default {
   },
 
   ntruToy: {
-    what: "NTRU 玩具加解密：截断多项式环 Z_q[x]/(x^n-1) 的最小可运行实现（n=8, q=257, p=3）——最古老的格密码方案之一的机制演示。",
+    what: "NTRU 玩具加解密：截断多项式环 $\\mathbb{Z}_q[x]/(x^n-1)$ 的最小可运行实现（n=8, q=257, p=3）——最古老的格密码方案之一的机制演示。",
     principle:
-      "私钥 f（本教学用常数 2，与 p 互素）；公钥 h = p·f⁻¹·g mod q。加密：c = p·h·r + m mod q。解密：f·c mod q 后 mod p——p·h·r 项被 p 整除消失，余 f·m mod p，乘 f⁻¹ mod p 还原 m。安全性来自「环上找 f 相当于格上最短向量问题」。",
-    usage: "填消息多项式（8 项 mod 3），输出密文与解密结果。留空用默认 1 0 1 0 0 0 0 0。",
+      "私钥 f（本教学用常数 2，与 p 互素）；公钥 $h = p \\cdot f^{-1} \\cdot g \\bmod q$。加密：$c = p \\cdot h \\cdot r + m \\bmod q$。解密：$f \\cdot c \\bmod q$ 后 $\\bmod\\ p$——$p \\cdot h \\cdot r$ 项被 p 整除消失，余 $f \\cdot m \\bmod p$，乘 $f^{-1} \\bmod p$ 还原 m。安全性来自「环上找 f 相当于格上最短向量问题」。",
+    usage: "填消息多项式（8 项 $\\bmod\\ 3$），输出密文与解密结果。留空用默认 1 0 1 0 0 0 0 0。",
     examples: [
       { in: "1 0 1 0 0 0 0 0", out: "往返一致 ✓", desc: "教学参数" },
     ],
-    tips: ["NTRU 与 LWE 都是格密码：一个环上一个向量问题。f 与 p 必须互素（f mod p ≠ 0），否则解密丢消息。"],
+    tips: ["NTRU 与 LWE 都是格密码：一个环上一个向量问题。f 与 p 必须互素（$f \\bmod p \\ne 0$），否则解密丢消息。"],
     aka: ["ntru", "格密码", "多项式环", "ntru加密", "post-quantum", "后量子", "环格", "ntru玩具", "ntru解密", "格加密"],
   },
 };

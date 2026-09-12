@@ -36,18 +36,6 @@ export default {
     aka: ["hmac爆破", "hmac brute", "hmac密钥爆破", "jwt密钥爆破", "hmac key brute", "hmac密钥破解", "jwt secret brute", "jwt弱密钥", "hmac secret crack", "jwt签名爆破", "hmac字典爆破"],
   },
 
-  hexView: {
-    what: "Hexadecimal viewer: lay out arbitrary data in the classic hexdump format — offset on the left, hex bytes in the middle, printable ASCII on the right. Essential for examining file structure and finding magic headers.",
-    principle:
-      "16 bytes per line: the line starts with an offset address, the middle is the two-digit hex of 16 bytes, and the end displays printable characters as-is with `.` as placeholder for non-printable ones. Cross-referencing the hex and ASCII columns lets you both recognize file signatures and spot readable strings embedded in the binary.",
-    usage: "Paste data (or hex); outputs a hexdump view, with support for highlighting a specified range.",
-    examples: [
-      { in: "PNG file bytes", out: "00000000  89 50 4e 47 0d 0a 1a 0a  ...  .PNG....", desc: "leading 89 50 4E 47 is the PNG magic" },
-    ],
-    tips: ["To recognize a file type, look at the first few bytes: 89504E47=PNG, FFD8FF=JPEG, 504B0304=ZIP, 25504446=PDF. You can often glimpse a hidden flag in the ASCII column."],
-    aka: ["hexdump", "十六进制查看", "hex view", "hex 视图", "hex viewer", "hex查看器", "十六进制查看器", "hex dump", "字节查看器", "十六进制转储", "hexdump视图", "hex显示"],
-  },
-
   hexRange: {
     what: "Hex range extraction: cut out the bytes at a specified offset range from the data, and display them at once in hex/decimal/octal/binary/ASCII/UTF-8.",
     principle:
@@ -56,7 +44,7 @@ export default {
     examples: [
       { in: "file bytes + range [16,20)", out: "hex=00 00 01 F4 / dec=500 / ...", desc: "reading the 4 bytes as an integer yields 500" },
     ],
-    tips: ["Pair with hexView — locate first, then extract: dump to see the structure clearly, pin down the suspect field's offset, then use this to precisely fetch and interpret the value."],
+    tips: ["Use the universal viewer's Hex+ASCII view to see the structure and pin down the suspect field's offset, then use range extraction to precisely fetch and interpret the value."],
     aka: ["hex区间", "hex range", "字节提取", "区间提取", "hex range extract", "字节区间", "hex片段提取", "byte range", "偏移提取", "字节切片", "hex slice", "区段提取"],
   },
 

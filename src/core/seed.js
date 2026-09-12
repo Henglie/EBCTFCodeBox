@@ -166,7 +166,7 @@ const seedDecode = (t, p) => seedCrypt(t, p, true);
 
 register({
   id: "seed",
-  cat: "modern",
+  cat: "block",
   name: "SEED（RFC 4269）",
   desc: "韩国 KISA 标准 SEED 分组密码：128 位分组 / 128 位密钥 / 16 轮 Feistel，两个 8x8 S 盒 + 掩码线性混合（等价 4 个扩展 SS 盒）。ECB 多块，明文/密文/密钥均 hex。encode 加密 / decode 解密。过 RFC 4269 附录 B 两组向量。",
   params: [

@@ -100,8 +100,8 @@ export default {
     what: "A Piet graphical-language interpreter: a Piet program is a colorful abstract painting; this tool treats the color-block grid as a program, executes it, and outputs the result (matching npiet).",
     principle:
       "Piet uses 18 colors (6 hues × 3 lightnesses) plus black and white, for 20 \"codels\" total. The program starts at the top-left; a direction pointer DP (right/down/left/up) and a codel chooser CC (left/right) control movement. On each step it moves from the current same-color block to the next, and the instruction is looked up from \"hue-change steps (0-5) × lightness-change steps (0-2)\" (push/pop/add/sub/…/outnum/outchar, etc.); a push pushes the size of the block just left. Black blocks block movement; white blocks let it slide freely without executing instructions.\n\n" +
-      "This tool's input is a plain-text grid (to avoid depending on image decoding): each block is written as a color-code token — hue initial R/Y/G/C/B/M + lightness suffix l (light) / blank (normal) / d (dark), black K, white W; 6-digit hex is also accepted and auto-quantized to the nearest Piet color. As a Turing-complete language it has no inverse operation, so it only executes (one-way run), with a step cap (1 million) + an output cap to prevent infinite loops.",
-    usage: "Input the color-block grid text (each line is space-separated tokens, must be rectangular). Running outputs the program result + an execution summary (steps, final stack). Execute only, no reverse.",
+      "Accepts color-token grids and non-interlaced PNG images. Grid tokens use R/Y/G/C/B/M with l (light), no suffix (normal), or d (dark); K is black and W is white. Six-digit hex colors are also accepted. PNG supports 8/16-bit grayscale and RGB/RGBA, plus 1/2/4/8-bit palette indices with tRNS transparency. Adam7 is unsupported. Execution has a one-million-step cap and an output limit.",
+    usage: "Enter a rectangular token grid or provide PNG through the image input parameters. Running produces output and an execution summary. Invalid 16-bit palette PNG is rejected; valid 16-bit RGB/RGBA remains supported.",
     examples: [
       { in: "Rl R Rd\nR  W  R", out: "(program output) + execution summary", desc: "tokens: Rl=light red R=red Rd=dark red K=black W=white" },
     ],
@@ -112,6 +112,24 @@ export default {
     aka: ["piet", "pietexec", "piet执行", "piet解释器", "piet语言", "npiet", "彩色深奥语言", "图形编程语言",
           "codel", "david morgan-mar", "piet interpreter", "色块语言", "抽象画程序",
           "piet execution", "color-block language", "graphical programming language"],
+  },
+
+  malbolgeExec: {
+    what: "A Malbolge interpreter: actually run a Malbolge program and get its output, plus normalize/assemble conversion modes (for detection-only use the \"Malbolge Detect\" op).",
+    principle:
+      "Ben Olmstead's 1998 ternary virtual machine (spec: esolangs.org/wiki/Malbolge). Memory holds 59049 words ($3^{10}$, 10 trits each); registers A (accumulator), C (code pointer), D (data pointer). Instruction fetch: $v=(\\mathrm{mem}[C]+C) \\bmod 94$, looked up in the xlat1 permutation table giving the instruction letter — i (jmp), < (out), / (in), * (rotate right 1 trit), j (movd), p (trit-wise crazy operation), o (nop), v (halt).\n\n" +
+      "After each step mem[C] is encrypted through the xlat2 table and both C and D advance by one, wrapping around at 59048. Memory beyond the program is generated from the previous two words by the crazy operation. The / instruction reads input; EOF reads as 59048.",
+    usage: "Paste Malbolge source (printable ASCII 33-126, whitespace ignored) and pick \"run\"; if the program contains / (in) fill in stdin — exhausted input reads as EOF. A 1,000,000-step guard against infinite loops is adjustable. normalize converts source into the position-independent normalized letter form (oji*p</v); assemble converts it back into runnable source.",
+    examples: [
+      { in: "Q", out: "(empty output)", desc: "smallest spec program: the single character Q is halt and stops immediately" },
+    ],
+    tips: [
+      "When a challenge hands you Malbolge source and asks for its output, use this op; for loading-form checks use \"Malbolge Detect\".",
+      "Non-halting programs (like endless-echo cat variants) are stopped by the step guard with an explicit error — that is the guard, not a bug.",
+      "Implementation verified byte-for-byte against zb3/malbolge-vm (the VM embedded in the malbolge-tools reference page, MIT) on all seven official samples.",
+    ],
+    aka: ["Malbolge 执行", "malbolge 执行器", "malbolge interpreter", "malbolge run", "malbolge 解释器",
+          "malbolge vm", "malbolge exec", "马尔博尔赫", "地狱语言执行", "深奥语言解释器", "esolang interpreter", "Olmstead"],
   },
 
   spoon: {
@@ -147,7 +165,7 @@ export default {
       "When a dot-dash code decodes into gibberish as Latin letters, try Wabun (decode by kana).",
       "Voiced sounds are represented in two parts \"base sound + dakuten `..`\" — don't treat it as one whole code.",
     ],
-    aka: ["wabun", "wabun code", "和文摩尔斯", "和文モールス", "和文モールス符号", "日文摩尔斯", "假名摩尔斯",
+    aka: ["日文摩斯", "和文电报", "日文电码", "wabun", "wabun code", "和文摩尔斯", "和文モールス", "和文モールス符号", "日文摩尔斯", "假名摩尔斯",
           "日语摩尔斯电码", "kana morse", "japanese morse", "wabun摩尔斯", "片假名摩尔斯", "和文电码",
           "Japanese Morse", "kana Morse code"],
   },
@@ -212,7 +230,7 @@ export default {
   knapsack: {
     what: "Merkle-Hellman knapsack public-key encryption (1978): one of the earliest public-key schemes, relying on the \"trapdoor\" of a superincreasing sequence, later broken by Shamir.",
     principle:
-      "Private key: a superincreasing sequence $w=(w_1..w_n)$ (each term greater than the sum of all preceding), modulus $q>\\sum w_i$, multiplier r (gcd(r,q)=1). Public key: $\\beta_i=(w_i\\cdot r)\\bmod q$, a seemingly ordinary knapsack.\n\n" +
+      "Private key: a superincreasing sequence $w=(w_1..w_n)$ (each term greater than the sum of all preceding), modulus $q>\\sum w_i$, multiplier r ($\\gcd(r,q) = 1$). Public key: $\\beta_i=(w_i\\cdot r)\\bmod q$, a seemingly ordinary knapsack.\n\n" +
       "Encryption: take plaintext bit-by-bit, n bits per block, ciphertext $c=\\sum m_i\\beta_i$. Decryption: compute $c'=(c\\cdot r^{-1})\\bmod q$; since $c'\\equiv\\sum m_i w_i$ and this sum is < q so isn't truncated, a greedy pass (largest to smallest) over the superincreasing sequence uniquely recovers each bit.\n\n" +
       "Security: density $d=n/\\log_2(\\max\\beta_i)$; when $d<0.9408$ LLL lattice reduction almost certainly breaks it. The original scheme was broken by Shamir (1984), so it's for teaching/CTF only.",
     usage: "Choose key source: demo (built-in n=8) / gen (enter term count n to generate on the spot) / manual (hand-enter w,q,r or public key β). encode outputs ciphertext blocks + key report, decode needs w/q/r filled back in. Ciphertext = comma-separated decimal blocks.",

@@ -3,7 +3,7 @@
  *
  * 覆盖：
  * - ZUC 祖冲之流密码（GB/T 33133.1-2016，前身 GM/T 0001-2012，128 位密钥 + 128 位 IV，完整实现）
- * - SM9 标识识别（detect）
+ * - SM9 完整运算（双线性对内核 + 五档族）已独立到 pairing.js + sm9ops.js，本模块不重复
  * - SM2 完整运算（签名/验签+加密/解密）已独立到 sm2.js，本模块不重复
  *
  * 算法来源：
@@ -248,21 +248,6 @@ function bytesToB64(b) {
 }
 
 // ============================================================
-// SM9 结构识别（detect）
-// ============================================================
-
-/**
- * SM9 识别（粗略）。
- * SM9 基于双线性对，密文/签名结构复杂无固定短前缀。
- * 仅识别含 "sm9" 关键字的输入（低置信度）。
- */
-function detectSm9(text) {
-  const t = text.toLowerCase();
-  if (/\bsm9\b/.test(t)) return 0.5;
-  return 0;
-}
-
-// ============================================================
 // register 注册
 // ============================================================
 
@@ -300,7 +285,7 @@ function encodeOutput(bytes, enc) {
 // ZUC op（流密码，encode=decode 自反）
 register({
   id: "zuc",
-  cat: "modern",
+  cat: "stream",
   name: "ZUC 祖冲之",
   desc: "国密流密码（GB/T 33133.1-2016，前身 GM/T 0001-2012，128 位密钥+128 位 IV，3GPP LTE 加密标准）",
   params: [
@@ -330,19 +315,5 @@ register({
 // SM2 op：完整运算已移至 src/core/sm2.js（GB/T 32918-2016 签名/验签+加密/解密），此处不再重复注册。
 // 旧 detect-only 版已删除（避免与 sm2.js 的 register id 冲突）。
 
-// SM9 op（标识识别）
-register({
-  id: "sm9",
-  cat: "modern",
-  name: "SM9",
-  desc: "国密标识密码（GB/T 38635.1-2020，前身 GM/T 0044-2016）。基于双线性对的标识密码，结构识别仅，运算暂不支持",
-  params: [],
-  run: (text) => {
-    const score = detectSm9(text);
-    if (score > 0) {
-      return `识别为 SM9 相关输入（置信度 ${score}）。SM9 基于双线性对，运算暂不支持。`;
-    }
-    return "未识别为 SM9 输入";
-  },
-  detect: detectSm9,
-});
+// SM9 op：完整运算（双线性对内核 + 五档族）已移至 src/core/pairing.js + src/core/sm9ops.js
+// （GB/T 38635-2020 签名/验签+加密/解密+密钥生成），旧识别-only 版已删除。

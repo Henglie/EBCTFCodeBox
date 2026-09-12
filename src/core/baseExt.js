@@ -646,12 +646,14 @@ async function base64DecompressEncode(text) {
 // 通用自定义码表参数（z85/ipv6/base69/base58check 复用）
 register({
   id: "base58check", cat: "base", name: "Base58Check", desc: "Base58 + 双 SHA-256 4 字节校验（比特币地址校验）",
+  family: "base58", familyLabel: "base58check",
   params: [{ key: "dict", label: "自定义码表", type: "text", default: B58_DICT, placeholder: B58_DICT }],
   encode: base58CheckEncode, decode: base58CheckDecode,
   detect: () => 0,
 });
 register({
   id: "radix64", cat: "base", name: "Radix64 (crypt)", desc: "密码 crypt 表 ./A-Za-z0-9（位打包，无 padding）",
+  family: "base64", familyLabel: "radix64",
   encode: radix64Encode, decode: radix64Decode,
   detect: () => 0,
 });
@@ -675,43 +677,51 @@ register({
 });
 register({
   id: "base2048", cat: "base", name: "Base2048", desc: "qntm 11-bit 编码（Unicode 紧凑表示）",
+  family: "unicodebase", familyLabel: "base2048",
   encode: base2048Encode, decode: base2048Decode,
   detect: () => 0,
 });
 register({
   id: "base65536", cat: "base", name: "Base65536", desc: "每 2 字节 → 1 CJK 字符（Unicode 紧凑表示）",
+  family: "unicodebase", familyLabel: "base65536",
   encode: base65536Encode, decode: base65536Decode,
   detect: () => 0,
 });
 register({
   id: "ecoji", cat: "base", name: "Ecoji", desc: "1024 emoji 表 + padding（5 字节 → 4 emoji）",
+  family: "unicodebase", familyLabel: "ecoji",
   encode: ecojiEncode, decode: ecojiDecode,
   detect: () => 0,
 });
 register({
   id: "base64steg", cat: "base", name: "Base64 隐写", desc: "base64 padding 比特隐写（多行，藏/取隐藏信息）",
+  family: "basesteg", familyLabel: "base64steg", // 64/32 隐写自成一族「Base 隐写」，解决「Base32 隐写在 Base64 族、Base32 本尊却独立」的错位
   encode: base64StegEncode, decode: base64StegDecode,
   detect: () => 0,
 });
 register({
   id: "base32steg", cat: "base", name: "Base32 隐写", desc: "base32 padding 比特隐写（多行，末字符冗余位藏信息，照 base64steg 偏移法复刻）",
+  family: "basesteg", familyLabel: "base32steg", // 同上：与 base64steg 同手法（padding 冗余位藏 offset），归「Base 隐写」族
   encode: base32StegEncode, decode: base32StegDecode,
   detect: () => 0,
 });
 register({
   id: "base64dict", cat: "base", name: "凯撒自定义字典 Base64", desc: "用 64 字符自定义字典替换标准 base64 字符",
+  family: "base64", familyLabel: "base64dict",
   params: [{ key: "key", label: "字典（64 字符）", type: "text", default: B64_STD, placeholder: B64_STD }],
   encode: base64DictEncode, decode: base64DictDecode,
   detect: () => 0,
 });
 register({
   id: "multilineBase64", cat: "base", name: "多行 Base64", desc: "多行 base64 解码 / 按行切分编码",
+  family: "base64", familyLabel: "multilineBase64",
   params: [{ key: "lineLen", label: "编码每行长度", type: "number", default: 76, placeholder: "1-1000" }],
   encode: multilineBase64Encode, decode: multilineBase64Decode,
   detect: () => 0,
 });
 register({
   id: "base64decompress", cat: "base", name: "Base64 + Zlib", desc: "base64 ↔ zlib 压缩（浏览器 DecompressionStream）",
+  family: "base64", familyLabel: "base64decompress",
   encode: base64DecompressEncode, decode: base64DecompressDecode,
   detect: () => 0,
 });

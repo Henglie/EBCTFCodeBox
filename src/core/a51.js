@@ -185,8 +185,8 @@ function a51Decode(text, p = {}) {
 }
 
 register({
-  id: "a51",
-  cat: "modern",
+  id: "a51", family: "a5", familyLabel: "a51",
+  cat: "stream",
   name: "A5/1 流密码",
   desc: "GSM A5/1 语音加密流密码（Briceno/Goldberg/Wagner 参考实现）：三个 LFSR（19/22/23 位）多数表决钟控。64 位会话密钥 Kc + 22 位帧号。自反 XOR：encode 文本→密文 hex，decode 密文 hex→文本。",
   params: [

@@ -66,7 +66,7 @@ export default {
 
   hashDictCrack: {
     what: "Brute-force MD5/SHA-1/SHA-256/NTLM hashes with a dictionary — take a weak-password dictionary, pure digits, or date combinations, compute the hash for each one and compare; a hit gives the plaintext.",
-    principle: "The core of dictionary brute force: pregenerate a candidate plaintext list (top 300 weak passwords / digits 0~10^N / dates 1970-2030), compute the specified algorithm's hash for each candidate, and compare with the target. MD5/NTLM take a pure-JS synchronous fast path; SHA-1/SHA-256 take the WebCrypto async path. auto mode guesses the algorithm by length (32-bit→MD5, 40-bit→SHA-1, 64-bit→SHA-256). SHA-family auto-aborts past 2 million attempts to prevent blowup.",
+    principle: "The core of dictionary brute force: pregenerate a candidate plaintext list (top 300 weak passwords / digits $0 \\sim 10^{N}$ / dates 1970-2030), compute the specified algorithm's hash for each candidate, and compare with the target. MD5/NTLM take a pure-JS synchronous fast path; SHA-1/SHA-256 take the WebCrypto async path. auto mode guesses the algorithm by length (32-bit→MD5, 40-bit→SHA-1, 64-bit→SHA-256). SHA-family auto-aborts past 2 million attempts to prevent blowup.",
     usage: "Enter the target hash, choose the algorithm (auto guesses by length), dictionary source (top weak passwords/pure numeric/dates/all), and max digit count. Outputs hit status + plaintext + attempt count.",
     examples: [
       { in: "e10adc3949ba59abbe56e057f20f883e", param: "algo=auto, dict=numeric, maxDigits=6", out: "hit ✓ algorithm: md5 plaintext: 123456 attempts: 123457", desc: "this is the MD5 of 123456; the pure-numeric dictionary hits on the 123457th (including 0)" },

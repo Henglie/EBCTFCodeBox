@@ -16,7 +16,6 @@
  * 一个 op 可挂多张图（如 morse 有圆形/山形两种变体图）→ 用数组。
  *
  * 红线：纯数据，无 import、无副作用。只填 registry 真实存在的 opId + 图鉴真实存在的文件。
- * 图片版权：同类工具 224 编码图（webp/png）归同类工具工作室，本箱内嵌致谢；
  * polybius/tapcode/adfgx/adfgvx 四张 svg 为本箱自制（公共领域古典密码规则表）。
  */
 export default {

@@ -2,11 +2,12 @@
  * hexview.js — 十六进制查看器数据层（T91，cat:'analysis'）。
  *
  * 覆盖（全部 run 单向，返回多行报告文本；核心纯函数 export 供 UI 复用）：
- * - hexView：经典 hexdump（偏移 | hex 字节 | ASCII），支持高亮区间标记
  * - hexRange：指定偏移区间字节的多格式展示（hex/dec/oct/bin/ASCII/UTF-8）
  * - hexStats：字节值分布统计（256 桶密度网格 + 可打印率 + 全局/滑窗香农熵 + top-N 高频）
  *   T349 增强：滑窗熵曲线（分块窗口熵随偏移变化，文本块字符条，定位加密/压缩/内嵌区）
  *   + 字节分布图（16×16 密度网格，对数分档，256 桶全覆盖）
+ *   T428：独立 hexView op 已移除；hexdump 展示由字符显示器（universalViewer，复用
+ *   buildHexRows）承接，formatHexDump/parseRanges 等数据层能力保留供复用。
  *
  * 纯函数 export（供 UI hex viewer 数据层复用）：
  * - buildHexRows(bytes, opts) → {offset, hexCols, asciiCol, startIndex, endIndex}[]
@@ -396,27 +397,18 @@ function formatStats(bytes, opts = {}) {
 }
 
 // ============ op run 包装 ============
-function runHexView(text, p) {
-  const bytes = (p && p.rawBytes && p.rawBytes.length)
-    ? (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes))
-    : inputToBytes(text, p);
-  const bpl = Number((p && p.bytesPerLine) || 16);
-  const ranges = parseRanges(p && p.highlight);
-  const maxLines = Number((p && p.maxLines) || 0);
-  const header = `十六进制查看（${bytes.length} 字节，每行 ${bpl} 字节）`;
-  let rangeInfo = "";
-  if (ranges.length > 0) {
-    rangeInfo = "\n高亮区间: " + ranges.map((r) => `0x${padHex(r.start, 4)}-0x${padHex(r.end, 4)}`).join("; ") +
-      ` (${ranges.reduce((a, r) => a + (r.end - r.start + 1), 0)} 字节，hex 列大写标记)`;
+// T419：区分「没有文件」与「零长度文件」。rawBytes 通道存在即用（含空文件→0 字节），
+// 通道缺失才回退文本解析——绝不把「已载入文件 x (0 B)」占位提示文本当输入解析。
+function takeBytes(text, p) {
+  const rb = p && p.rawBytes;
+  if (rb instanceof Uint8Array || Array.isArray(rb)) {
+    return rb instanceof Uint8Array ? rb : new Uint8Array(rb);
   }
-  const dump = formatHexDump(bytes, { bytesPerLine: bpl, highlightRanges: ranges, showOffset: true, showAscii: true, maxLines });
-  return header + rangeInfo + "\n" + dump;
+  return inputToBytes(text, p);
 }
 
 function runHexRange(text, p) {
-  const bytes = (p && p.rawBytes && p.rawBytes.length)
-    ? (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes))
-    : inputToBytes(text, p);
+  const bytes = takeBytes(text, p);
   const start = parseNum((p && p.start) ?? 0);
   const endInput = (p && p.end);
   const end = (endInput == null || endInput === "") ? Math.max(0, bytes.length - 1) : parseNum(endInput);
@@ -424,9 +416,7 @@ function runHexRange(text, p) {
 }
 
 function runHexStats(text, p) {
-  const bytes = (p && p.rawBytes && p.rawBytes.length)
-    ? (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes))
-    : inputToBytes(text, p);
+  const bytes = takeBytes(text, p);
   // 窗口 clamp：16..65536（窗口太小段数爆炸，太大曲线失焦；非数字回默认 256）
   const w = Number(p && p.window);
   const window = (!Number.isFinite(w) || w <= 0) ? 256 : clamp(Math.floor(w), 16, 65536);
@@ -436,24 +426,9 @@ function runHexStats(text, p) {
 }
 
 // ============ 注册 ============
-register({
-  id: "hexView", cat: "data", name: "十六进制查看器",
-  desc: "经典 hexdump（偏移 | hex 字节 | ASCII），支持高亮区间标记（hex 列大写）",
-  params: [
-    INPUT_ENC_PARAM,
-    { key: "bytesPerLine", label: "每行字节数", type: "select", default: "16",
-      options: [
-        { value: "8", label: "8" },
-        { value: "16", label: "16" },
-        { value: "32", label: "32" },
-      ],
-    },
-    { key: "highlight", label: "高亮区间（如 0x10-0x1f 或 5,10;20-30）", type: "text", default: "", placeholder: "start-end 或 start,end;..." },
-    { key: "maxLines", label: "最多显示行数（0=不限）", type: "number", default: 0, placeholder: "0=不限" },
-  ],
-  run: runHexView,
-  acceptsBytes: true,
-});
+// 独立 hexView op 已移除（旧深链由 main.js 迁移到字符显示器 Hex 视图）。
+// 底层数据层完整保留：buildHexRows/byteStats/formatHexDump/parseRanges/parseNum/takeBytes，
+// hexRange/hexStats 两个 op 继续注册。
 
 register({
   id: "hexRange", cat: "data", name: "Hex 区间提取",

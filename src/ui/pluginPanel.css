@@ -110,6 +110,9 @@
 }
 .chip-btn:hover { background: var(--surface-hi); }
 .chip-btn:active { transform: scale(.95); }
+@media (pointer: coarse), (max-width: 600px) {
+  .chip-btn { min-height: 44px; }
+}
 
 .chip-btn.primary {
   background: var(--primary);

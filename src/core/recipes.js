@@ -13,6 +13,8 @@
  */
 import { topoSort, executeRecipe, validateRecipe } from "./recipe.js";
 import { getOp } from "./registry.js";
+import { transitTextOf } from "./productResult.js";
+export { recipeDisplayText, recipeTerminalText, productFileEntries as recipeFileEntries } from "./productResult.js";
 
 // ---- 异步执行器（支持 async op）----
 
@@ -72,7 +74,7 @@ export async function executeRecipeAsync(graph, input) {
     } else {
       const join = (node.params && node.params.join) || "";
       inputText = incoming
-        .map((e) => (outputs.has(e.from) ? outputs.get(e.from) : ""))
+        .map((e) => (outputs.has(e.from) ? transitTextOf(outputs.get(e.from)) : ""))
         .join(join);
     }
     outputs.set(id, await runNodeAsync(node, inputText));

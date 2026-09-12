@@ -17,7 +17,7 @@ export default {
       "Quarter Round: ARX-mixes 4 words $(a,b,c,d)$ — `a+=b; d=(d⊕a)<<<16; c+=d; b=(b⊕c)<<<12; a+=b; d=(d⊕a)<<<8; c+=d; b=(b⊕c)<<<7` — using only modulo-$2^{32}$ addition, circular left rotation, and XOR, giving natural resistance to linear/differential attacks.\n\n" +
       "Swirl Round: first runs one Quarter Round each over $(s_0..s_3)$ and $(s_4..s_7)$, then runs one each over the diagonals $(s_0,s_5,s_2,s_7)$ and $(s_1,s_4,s_3,s_6)$ — the diagonal mixing lets the two state groups diffuse fully.\n\n" +
       "Keystream: take $\\text{fixed initial state} \\oplus \\text{key} \\oplus \\text{nonce}$ as the base block, mix in a 64-bit counter, run 8/20 Swirl Rounds, then add back the original state (ChaCha-style finalization to prevent inversion), outputting a 32-byte keystream block XORed with the plaintext.\n\n" +
-      "Encryption and decryption are identical: ciphertext = plaintext ⊕ keystream, and decryption XORs again with the same key/nonce to recover it.",
+      "Encryption and decryption are identical: ciphertext = plaintext $\\oplus$ keystream, and decryption XORs again with the same key/nonce to recover it.",
     usage: "Enter text in the input box; for parameters, key is 64 hex digits (32 bytes), nonce is 48 hex digits (24 bytes), and rounds selects 20 (standard) or 8 (fast). Encode outputs hex ciphertext; decode with the same key/nonce/rounds recovers it.",
     examples: [
       { in: "Hello", param: "key=64 hex, nonce=48 hex, rounds=20", out: "(hex ciphertext)", desc: "symmetric stream cipher; encryption and decryption use the same key+nonce, ciphertext = plaintext ⊕ keystream" },
@@ -42,7 +42,7 @@ export default {
       "Key setup: split the 16-byte key into 8 16-bit subkeys K[0..7], initialize X and C by different formulas for even/odd indices, iterate nextState 4 times, then cross-XOR C with X.\n\n" +
       "IV setup: split the 8-byte IV into 4 16-bit fragments, mix them into C per RFC 4503 §2.4, then iterate nextState 4 times.\n\n" +
       "nextState: first update the counters (with a carry chain), then use the g function $g(u) = \\text{low}_{32}(u^2) \\oplus \\text{high}_{32}(u^2)$ to compute G[0..7], finally update X by rotate-and-add formulas. To extract keystream, XOR the 16-bit half-words of X to output a 16-byte block.\n\n" +
-      "Encryption and decryption are identical: ciphertext = plaintext ⊕ keystream, and decryption XORs again with the same key/IV to recover it.",
+      "Encryption and decryption are identical: ciphertext = plaintext $\\oplus$ keystream, and decryption XORs again with the same key/IV to recover it.",
     usage: "Enter text in the input box; for parameters, key is 32 hex digits (16 bytes) and iv is 16 hex digits (8 bytes). Encode outputs hex ciphertext; decode with the same key/iv recovers the text.",
     examples: [
       { in: "Hello", param: "key=00000000000000000000000000000000, iv=0000000000000000", out: "(hex ciphertext)", desc: "the all-zero key/IV RFC 4503 §3 test-vector scenario; encode/decode are symmetric and reversible" },
@@ -52,7 +52,7 @@ export default {
     ],
     tips: [
       "Rabbit's key must be 16 bytes (32 hex) and the IV must be 8 bytes (16 hex); anything shorter errors out.",
-      "Stream-cipher trait: encryption and decryption use the same key+IV, ciphertext = plaintext ⊕ keystream.",
+      "Stream-cipher trait: encryption and decryption use the same key+IV, ciphertext = plaintext $\\oplus$ keystream.",
       "In CTF, when a challenge gives Rabbit parameters and ciphertext, just fill in the key/iv and decode.",
     ],
     aka: ["rabbit", "rabbit流密码", "rfc 4503", "Rabbit", "Rabbit cipher", "兔子流密码", "Rabbit stream cipher", "eSTREAM", "高速流密码", "对称流密码", "Rabbit加密", "128位流密码"],

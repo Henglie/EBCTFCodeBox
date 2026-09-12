@@ -71,8 +71,9 @@ export function des2Mitm(plainBytes, cipherBytes, keyBits) {
 }
 
 function des2MitmOp(text, p = {}) {
-  const [plainHex, cipherHex] = String(text || "").trim().split(/\s+/);
-  if (!plainHex || !cipherHex) throw new Error("输入格式：明文hex 空格 密文hex（各 8 字节）");
+  const plainHex = String(p.plainHex || "").trim();
+  const cipherHex = String(p.cipherHex || "").trim();
+  if (!plainHex || !cipherHex) throw new Error("需在参数框填入明文hex 和 密文hex（各 8 字节；主输入框不再使用）");
   const keyBits = Math.max(1, Math.min(20, Number(p.keyBits) || 16));
   const pt = hexToBytes(plainHex);
   const ct = hexToBytes(cipherHex);
@@ -87,9 +88,11 @@ function des2MitmOp(text, p = {}) {
 }
 
 register({
-  id: "des2Mitm", cat: "analysis", name: "2DES 中间相遇",
-  desc: "2DES 中间相遇攻击（MITM）：C=DES_k2(DES_k1(P))，forward 表 + 反向查表恢复双密钥（keyBits 控制每半密钥空间，默认 16 位）",
+  id: "des2Mitm", family: "des", familyLabel: "mitm", cat: "block", name: "2DES 中间相遇",
+  desc: "2DES 中间相遇攻击（MITM）：C=DES_k2(DES_k1(P))，forward 表 + 反向查表恢复双密钥（keyBits 控制每半密钥空间，默认 16 位；参数框填明文hex/密文hex，各 8 字节；主输入框不再使用）",
   params: [
+    { key: "plainHex", label: "已知明文（hex）", type: "text", default: "", placeholder: "8 字节明文 hex，如 0011223344556677" },
+    { key: "cipherHex", label: "对应密文（hex）", type: "text", default: "", placeholder: "8 字节密文 hex，如 1122334455667788" },
     { key: "keyBits", label: "每半密钥位数", type: "number", default: 16, placeholder: "1-20" },
   ],
   run: des2MitmOp,

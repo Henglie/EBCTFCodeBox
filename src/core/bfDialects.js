@@ -218,14 +218,14 @@ function cowDecode(src) { return cowRun(src); }
 
 // ---- 注册 ----
 register({
-  id: "blub", cat: "fancy", name: "Blub!",
+  id: "blub", cat: "esolang", name: "Blub!",
   desc: "BrainFuck 的 Ook 同族方言（Blub. Blub? Blub! 三 token，两两组合映射 8 指令）。encode 生成 / decode 执行。",
   encode: blubEncode, decode: blubDecode,
   detect: (t) => (/Blub[.?!]/.test(t) ? 0.6 : 0),
 });
 
 register({
-  id: "cow", cat: "fancy", name: "COW / MOO",
+  id: "cow", cat: "esolang", name: "COW / MOO",
   desc: "COW 深奥语言（Sean Heber，12 指令 moo/mOo/moO/mOO/Moo/MOo/MoO/MOO/OOO/MMM/oom/OOM，含循环+寄存器+自解释 mOO，步数上限 500 万）。encode 生成 / decode 执行。",
   encode: cowEncode, decode: cowDecode,
   detect: (t) => {
@@ -235,4 +235,3 @@ register({
 });
 
 export { blubEncode, blubDecode, cowEncode, cowDecode, cowRun, bfRun, BLUB_MAP, COW_TOKENS };
-

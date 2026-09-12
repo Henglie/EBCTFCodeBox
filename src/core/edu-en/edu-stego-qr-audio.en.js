@@ -111,4 +111,16 @@ export default {
     tips: ["An audio spectrum that looks like a line-by-line scanned image + a sync tone at the start → SSTV. To actually produce the image, demodulate with dedicated software like RX-SSTV/QSSTV."],
     aka: ["sstv", "慢扫描电视", "sstv识别", "vis码", "slow scan television", "sstv模式识别", "sstv mode", "无线电传图", "vis code", "scottie martin robot", "业余无线电图像"],
   },
+
+  qrFormatBrute: {
+    what: "QR format info brute force: when the format info strip (the 15 modules recording ECL and mask pattern, stored twice) is scribbled over, covered, or misprinted so that normal decoding fails outright, this tool tries all 32 legal combinations and lists every one that decodes along with its plaintext. Capability on par with QRazyBox's format info enumeration (merricx/qrazybox, MIT).",
+    principle:
+      "Format info $=2$ error-correction indicator bits $+3$ mask indicator bits, BCH$(15,5)$-coded (generator $x^{10}+x^8+x^5+x^4+x^2+x+1$, i.e. $0x537$) into 15 bits, then XORed with the fixed mask $0x5412$ — only $2^5=32$ legal combinations exist. For each $(\\mathrm{ECL}, \\mathrm{mask})$ candidate: unmask, read codewords in zigzag, deinterleave, RS-correct, decode segments; combinations where all RS blocks pass and segments are recognizable are candidate solutions.",
+    usage: "Paste the QR 0/1 matrix (qrGen JSON or ASCII art); the tool outputs all solvable combinations (sorted by RS error count, 0 errors = most credible) with their plaintexts, and notes when the format strip is actually intact.",
+    examples: [
+      { in: "QR matrix with blacked-out format strip", out: "ECL=M mask=5 (format 101111011111000) RS 0 errors → plaintext", desc: "32 combinations tried; wrong ones are rejected by RS/segment checks" },
+    ],
+    tips: ["Reach for it when normal decoding reports 'cannot recognize format info'. If all 32 combinations fail, the data region is damaged beyond RS correction — it's not just the format strip."],
+    aka: ["qr格式信息爆破", "format info brute force", "格式区损坏修复", "qr格式修复", "掩码爆破", "纠错级枚举", "ecl mask枚举", "qrazybox", "格式信息恢复", "qr salvage", "二维码格式修复", "损坏二维码修复", "格式信息枚举"],
+  },
 };

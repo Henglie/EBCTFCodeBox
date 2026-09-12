@@ -197,7 +197,7 @@ function skipjackRun(text, p, dir) {
 
 register({
   id: "skipjack",
-  cat: "modern",
+  cat: "block",
   name: "Skipjack 分组密码",
   desc: "Skipjack 分组密码（NSA 1998 解密，Clipper 芯片核心）：64 位分组，80 位密钥，32 轮（8A+8B+8A+8B）。明文/密文/密钥均 hex，ECB 多块。encode 加密 / decode 解密。已过 NIST SP800-17 Table 6 官方向量。",
   params: [

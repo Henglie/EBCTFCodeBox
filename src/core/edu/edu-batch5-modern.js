@@ -1,4 +1,4 @@
-// 科普内容分片：modern 段补全 11（ror13Hash/byteArith/bwt/lzstring/cast5/twofish/hotp/totp/zuc/sm2/sm9）。
+// 科普内容分片：modern 段补全 8（ror13Hash/byteArith/bwt/lzstring/hotp/totp/zuc/sm2；cast5/twofish 现由 edu-modern-rest.js 单供，sm9 已拆到 edu-sm9-family.js 五卡）。
 // 纯数据，无 import 无副作用无 register。examples 均为实跑取值（对齐 RFC/GM/T 权威向量）。
 export default {
   ror13Hash: {
@@ -76,39 +76,6 @@ export default {
       "仅 Latin-1：直接压中文会报错，需先转 UTF-8 字节序列再压。",
     ],
     aka: ["lz-string", "lzw 压缩", "lzstring", "字典压缩", "lzw", "lempel-ziv-welch", "lz string", "字典编码压缩", "lzw字典", "lz-string压缩", "滑动字典压缩", "词典压缩"],
-  },
-
-  cast5: {
-    what: "CAST-128（CAST5）——RFC 2144 的分组密码，早期 PGP 的默认对称算法。64 位块、密钥 5-16 字节、12 或 16 轮 Feistel。",
-    principle:
-      "Feistel 网络：64 位明文分左右两半，密钥 ≤80 位（≤10 字节）跑 12 轮，>80 位跑 16 轮。每轮用三种轮函数之一（按轮号循环切换 Type 1/2/3），每种用不同的 S-box 组合做字节替换 + 密钥加/异/减 + 循环移位。共 8 个 S-box（S1-S4 轮函数、S5-S8 密钥扩展），各 256×32 位，数据照抄 RFC 2144 附录 A。子密钥由密钥扩展从主密钥派生，解密用同一套结构逆序轮密钥。",
-    usage: "填密钥（5-16 字节）、选模式（ECB/CBC，CBC 要 IV）、密钥编码与密文编码。encode 加密、decode 解密。块 8 字节，PKCS7 填充。",
-    examples: [
-      { in: "Hello", param: "mode=ECB, key='12345678'(8字节), outEnc=base64", out: "0nHCcDfF0Ys=", desc: "8 字节密钥=64 位→12 轮；decode 同参还原" },
-    ],
-    tips: [
-      "块 8 字节（同 DES），密文长度是 8 的倍数——和 AES 的 16 字节块区分开。",
-      "密钥长度决定轮数：≤10 字节 12 轮，>10 字节 16 轮。",
-      "PGP 早期默认就是它；题面提 PGP 又不像 AES/DES 的块大小，往 CAST5 想。",
-    ],
-    aka: ["cast-128", "cast5", "rfc 2144", "pgp 默认密码"],
-  },
-
-  twofish: {
-    what: "Twofish——Schneier 1998 年设计的 AES 五强候选之一，128 位块、16 轮 Feistel，招牌是「密钥相关 S-box」。",
-    principle:
-      "128 位明文拆成四个 32 位字，16 轮。每轮用两个密钥相关的 S-box 做字节替换——S-box 由密钥经固定 q0/q1 置换 + MDS 矩阵（GF(2⁸)，多项式 0x169）派生，每次加密 S-box 都不同。结果经 PHT 混合与另一半异或，再叠加 RS 矩阵（GF(2⁸)，多项式 0x14D）派生的轮子密钥。密钥 128/192/256 位，输入/输出还做白化异或。解密逆序轮密钥复用同一结构。\n\n" +
-      "密钥相关 S-box 是它和 AES 最大区别——攻击者无法预计算固定 S-box，安全性高但速度略逊 Rijndael，最终 AES 评选败北。",
-    usage: "填密钥（16/24/32 字节）、选模式（ECB/CBC，CBC 要 IV）、密钥编码与密文编码。encode 加密、decode 解密。块 16 字节，PKCS7 填充。",
-    examples: [
-      { in: "Hello", param: "mode=ECB, key='1234567890123456'(16字节), outEnc=base64", out: "kZd8pH5FNfZ4CuHQVqR52w==", desc: "Twofish-128 ECB；decode 同参还原" },
-    ],
-    tips: [
-      "块 16 字节（同 AES）→ 密文是 16 的倍数。",
-      "AES 五强之一（与 Rijndael/MARS/RC6/Serpent 同列），逆向见到密钥派生 S-box + MDS 矩阵的多半是它。",
-      "密钥必须 16/24/32 字节之一，其他长度直接报错。",
-    ],
-    aka: ["twofish", "schneier aes 候选", "密钥相关 s-box"],
   },
 
   hotp: {
@@ -189,21 +156,6 @@ export default {
     aka: ["sm2", "国密椭圆曲线", "gm/t 0003", "国密公钥密码", "sm2算法", "国密ecc", "商密椭圆曲线", "sm2p256v1", "国密非对称加密", "sm2椭圆曲线密码", "商用密码sm2", "国密公钥算法"],
   },
 
-  sm9: {
-    what: "SM9——国密标识密码（GB/T 38635.1-2020，前身 GM/T 0044-2016），招牌是「用邮箱/手机号当公钥」的双线性对密码。本工具仅做关键字识别，不含运算。",
-    principle:
-      "基于双线性对（pairing）的标识密码体系：用户的公钥直接由标识（如 `alice@example.com`）经哈希映射到椭圆曲线上的点生成，私钥由密钥生成中心（KGC）用主密钥签发。签名/密钥封装都用双线性对的性质。\n\n" +
-      "因为双线性对运算复杂、无固定短前缀，本工具的识别很粗略：仅当输入文本含 `sm9` 关键字时判为疑似（低置信度 0.5）。真正的运算需要完整 pairing 实现，暂不支持。",
-    usage: "输入框填任意文本，点 run 输出识别结果。无参数、无加解密、无 decode。",
-    examples: [
-      { in: "sm9 标识密码", param: "（无参数）", out: "识别为 SM9 相关输入（置信度 0.5）。SM9 基于双线性对，运算暂不支持。", desc: "含 sm9 关键字触发识别" },
-      { in: "普通文本", param: "（无参数）", out: "未识别为 SM9 输入", desc: "无 sm9 字样不匹配" },
-    ],
-    tips: [
-      "SM9 密文/签名无像 SM2 那样的固定前缀——靠结构特征识别困难，本工具仅凭关键字。",
-      "认场景：题面提「标识密码 / IBC / 双线性对 / KGC / 用邮箱当公钥」基本就是 SM9。",
-      "运算需专用库（如 GmSSL、PBC 库），本工具只标记不计算。",
-    ],
-    aka: ["sm9", "标识密码", "gm/t 0044", "双线性对密码", "ibc", "sm9算法", "基于标识的密码", "identity-based cryptography", "国密标识密码", "商密sm9", "标识加密", "身份基密码"],
-  },
+  // sm9 旧识别-only 卡已删除：SM9 已升级为完整运算五档族（sm9KeyGen/Sign/Verify/Encrypt/Decrypt），
+  // 科普卡见 edu-sm9-family.js（T397 批1，双线性对内核 pairing.js + sm9ops.js）。
 };

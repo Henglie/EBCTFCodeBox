@@ -371,7 +371,7 @@ function rabbitDecode(hex, p) {
 // 只注册 rabbit op（modernExt.js 无此 op）。
 register({
   id: "rabbit",
-  cat: "modern",
+  cat: "stream",
   name: "Rabbit 流密码",
   desc: "RFC 4503 Rabbit 流密码（128-bit key + 64-bit IV）。encode: 文本→Hex 密文；decode: Hex→文本。对称可逆。RFC4503 §3 测试向量（全 0 key/IV）已验证。",
   params: [

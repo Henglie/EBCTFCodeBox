@@ -152,7 +152,7 @@ export default {
       { in: "known plaintext + ciphertext", param: "n=2", out: "2×2 key matrix K", desc: "requires P invertible mod 26" },
     ],
     formulas: [{ tex: "K = C\\,P^{-1} \\bmod 26", caption: "recover the key matrix from plaintext-ciphertext pairs" }],
-    tips: ["The P assembled from the chosen plaintext blocks must be invertible (gcd(det P, 26)=1); if not invertible, swap in a few other plaintext groups and retry."],
+    tips: ["The P assembled from the chosen plaintext blocks must be invertible ($\\gcd(\\det P, 26) = 1$); if not invertible, swap in a few other plaintext groups and retry."],
     aka: ["hill known plaintext", "hill 已知明文", "希尔密码攻击", "希尔已知明文", "hill攻击",
       "known plaintext attack", "已知明文攻击", "hill密钥矩阵求解", "矩阵密码破解", "希尔密码破解", "求密钥矩阵", "hill cipher attack"],
   },

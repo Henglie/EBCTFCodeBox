@@ -38,7 +38,7 @@ export default {
   },
 
   rsaModinv: {
-    what: "Modular inverse: find the multiplicative inverse of a modulo m, i.e. an x such that a·x ≡ 1 (mod m). RSA's private key d, common-modulus attacks, and many number-theory challenges all need it.",
+    what: "Modular inverse: find the multiplicative inverse of a modulo m, i.e. an x such that $a \\cdot x \\equiv 1 \\pmod{m}$. RSA's private key d, common-modulus attacks, and many number-theory challenges all need it.",
     principle:
       "The inverse exists if and only if $\\gcd(a,m)=1$. Use the extended Euclidean algorithm to solve for x in $ax+my=1$, then reduce mod m to get the inverse. This tool is self-inverse: taking the inverse of the inverse returns the original number.",
     usage: "Fill in a and m; outputs the inverse of a mod m. encode/decode are mutually inverse (inv(inv(a))=a).",
@@ -54,7 +54,7 @@ export default {
   },
 
   rsaEgcd: {
-    what: "Extended Euclidean: while computing the gcd(a,b), also produce the Bézout coefficients x, y such that a·x + b·y = gcd. The underlying building block for modular inverse and common-modulus attacks.",
+    what: "Extended Euclidean: while computing the $\\gcd(a,b)$, also produce the Bézout coefficients x, y such that $a \\cdot x + b \\cdot y = \\gcd$. The underlying building block for modular inverse and common-modulus attacks.",
     principle:
       "Plain Euclidean division only yields the gcd; the extended version back-substitutes each step's quotient to additionally solve for the coefficients x, y. When $\\gcd(a,b)=1$, x is the inverse of a modulo b.",
     usage: "Fill a and b in the input box; outputs the gcd along with integers x, y satisfying ax+by=g.",
@@ -64,15 +64,15 @@ export default {
     formulas: [
       { tex: "a\\,x + b\\,y = \\gcd(a,b)", caption: "Bézout's identity" },
     ],
-    tips: ["In common-modulus attacks use it to solve a·e1+b·e2=1; for the inverse just take x mod m."],
+    tips: ["In common-modulus attacks use it to solve $a \\cdot e1 + b \\cdot e2 = 1$; for the inverse just take $x \\bmod m$."],
     aka: ["扩展欧几里得", "extended euclidean", "egcd", "bezout", "贝祖", "扩展欧几里得算法", "贝祖系数", "bezout coefficients", "extended gcd", "ext euclid", "裴蜀定理", "ax+by=gcd", "扩展辗转相除"],
   },
 
   rsaModpow: {
-    what: "Big-number fast modular exponentiation: compute base^exp mod m for huge exponents. It's the core operation of RSA encryption/decryption (c=m^e mod n, m=c^d mod n); computing it directly would blow up, so this is required.",
+    what: "Big-number fast modular exponentiation: compute $\\mathrm{base}^{\\mathrm{exp}} \\bmod m$ for huge exponents. It's the core operation of RSA encryption/decryption ($c = m^{e} \\bmod n$, $m = c^{d} \\bmod n$); computing it directly would blow up, so this is required.",
     principle:
       "Break the exponent into binary and process it bit by bit with 'square-and-multiply': each step squares the base and takes the modulus, and on each 1 bit of the exponent multiplies once more. This way even a dozens-of-digits e needs only dozens of multiplications, and intermediate results stay bounded by mod.",
-    usage: "Fill base, exp, mod in the input box (one per line or comma-separated); outputs base^exp mod m.",
+    usage: "Fill base, exp, mod in the input box (one per line or comma-separated); outputs $\\mathrm{base}^{\\mathrm{exp}} \\bmod m$.",
     examples: [
       { in: "base=65, exp=17, mod=3233", out: "2790", desc: "RSA encryption: m=65 → c=2790" },
       { in: "base=2790, exp=2753, mod=3233", out: "65", desc: "private-key decryption restores m" },
@@ -80,7 +80,7 @@ export default {
     formulas: [
       { tex: "c = m^e \\bmod n,\\qquad m = c^d \\bmod n", caption: "RSA encryption/decryption is modular exponentiation" },
     ],
-    tips: ["Once you have p, q, e, use rsaParams to find d, then run c^d mod n with this to get the plaintext."],
+    tips: ["Once you have p, q, e, use rsaParams to find d, then run $c^{d} \\bmod n$ with this to get the plaintext."],
     aka: ["快速幂", "模幂", "modular exponentiation", "modpow", "平方乘", "大数快速幂", "快速幂取模", "模幂运算", "square and multiply", "pow mod", "幂模", "二进制快速幂", "modexp"],
   },
 };

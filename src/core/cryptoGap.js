@@ -251,7 +251,7 @@ const RC2_OUT_OPTS = [
 ];
 
 register({
-  id: "rc2", cat: "modern", name: "RC2",
+  id: "rc2", family: "rc", familyLabel: "rc2", cat: "block", name: "RC2",
   desc: "RC2 对称加解密（RFC 2268，ECB/CBC，纯 JS，key 1..128 字节）",
   params: [
     { key: "key", label: "密钥", type: "text", default: "", placeholder: "1..128 字节密钥" },

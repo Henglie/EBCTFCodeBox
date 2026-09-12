@@ -135,12 +135,19 @@ function zipCreateRun(text, p) {
 
   const z = makeZip(data, pp.filename, pp.method);
   const methodName = z.method === 0 ? "Stored" : "Deflated";
-  return [
-    `已打包 ${z.size} 字节到「${z.name}」（${methodName}），ZIP 共 ${z.bytes.length} 字节（压缩 ${z.compSize}）。`,
-    "",
-    "ZIP base64：",
-    bytesToBase64(z.bytes),
-  ].join("\n");
+  // T361 产物协议：ZIP 字节走 files 下载按钮（真文件交付），不再倾倒 base64 文本。
+  // 需要文本形态时可用 Base 系列对下载文件再编码；zipRepair/zipPseudoEncrypt 等链式 op 走文件导入。
+  const zipName = (z.name && /\.[^./\\]+$/.test(z.name) ? z.name.replace(/\.[^./\\]+$/, "") : (z.name || "out")) + ".zip";
+  return {
+    text: [
+      `已打包 ${z.size} 字节到「${z.name}」（${methodName}），ZIP 共 ${z.bytes.length} 字节（压缩后 ${z.compSize}）。`,
+      "",
+      "ZIP 文件已生成，点击下方按钮直接下载。",
+      "ZIP base64（供配方链/复制使用）：",
+      bytesToBase64(z.bytes),
+    ].join("\n"),
+    files: [{ name: zipName, mime: "application/zip", bytes: z.bytes }],
+  };
 }
 
 // ============ 加载期自检（import 即跑；异常未处理会非零退出） ============
@@ -183,14 +190,17 @@ function zipCreateRun(text, p) {
   // ⑥ hex 输入路径：把 "AB" 字节打包再解回
   {
     const out = zipCreateRun("4142", { filename: "bin.dat", method: "Deflated", inputEnc: "hex" });
-    if (!out.includes("2 字节到「bin.dat」（Deflated）")) throw new Error(`zipCreate 自检⑥失败: ${out}`);
-    const b64 = out.split("\n").pop();
-    const zip = typeof Buffer !== "undefined" ? Uint8Array.from(Buffer.from(b64, "base64")) : null;
+    const outTxt = typeof out === "string" ? out : out.text;
+    if (!outTxt.includes("2 字节到「bin.dat」（Deflated）")) throw new Error(`zipCreate 自检⑥失败: ${outTxt}`);
+    // T361 产物协议：ZIP 从 files[0].bytes 拿（旧字符串路径仅兜底兼容）
+    const zip = (out.files && out.files[0] && out.files[0].bytes instanceof Uint8Array)
+      ? out.files[0].bytes
+      : (typeof Buffer !== "undefined" ? Uint8Array.from(Buffer.from(out.split("\n").pop(), "base64")) : null);
     if (zip) {
       const zr = zipEntries(zip);
       const content = zipReadEntry(zip, zr.entries[0]);
       if (content.length !== 2 || content[0] !== 0x41 || content[1] !== 0x42) throw new Error("zipCreate 自检⑥-内容失真");
-    }
+    } else throw new Error("zipCreate 自检⑥-产物缺失");
   }
   // ⑦ 默认参数（node 直跑）：makeZip Deflated 空内容也能出合法 ZIP（仅校验拼装不炸）
   {
@@ -203,7 +213,7 @@ function zipCreateRun(text, p) {
 // ============ register ============
 
 register({
-  id: "zipCreate", cat: "forensic", name: "ZIP 创建（出题）",
+  id: "zipCreate", family: "zip", familyLabel: "create", cat: "forensic", name: "ZIP 创建（出题）",
   desc: "把一段数据（文本/任意字节）打包成单文件 ZIP，可选内部文件名与压缩方式（Deflated/Stored）；出 misc 题常接 ZIP 伪加密（置位）做伪加密题",
   params: [
     { key: "inputEnc", label: "输入编码（文本输入时）", type: "select", default: "auto",

@@ -521,7 +521,7 @@ function bmpPaletteRun(text, p) {
 // 注册
 // ============================================================
 register({
-  id: "bmpPalette",
+  id: "bmpPalette", family: "bmp", familyLabel: "palette",
   cat: "stego",
   name: "BMP 调色板隐写分析",
   desc: "解析 1/4/8-bit 索引 BMP 调色板：dump 全部项 + 抽取 LSB/索引顺序/相邻差值隐写候选 + 未用索引统计，命中 flag 高亮",

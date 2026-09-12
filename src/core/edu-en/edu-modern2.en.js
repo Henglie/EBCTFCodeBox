@@ -10,7 +10,7 @@ export default {
     ],
     tips: [
       "64-bit block → ciphertext is a multiple of 8 bytes.",
-      "Recognize the signature: multiplication mod 65537 means IDEA.",
+      "Recognize the signature: multiplication $\\bmod 65537$ means IDEA.",
     ],
     aka: ["idea", "国际数据加密算法", "pgp加密", "lai massey", "IDEA", "International Data Encryption Algorithm", "IDEA加密", "lai-massey结构", "IPES", "分组密码"],
   },
@@ -53,7 +53,7 @@ export default {
       "Weak-key challenge: take header.payload and the signature, use hmacKeyBrute to crack the HS256 key.",
       "The payload is directly readable, don't expect it to hide anything.",
     ],
-    aka: ["jwt", "json web token", "jot", "hs256", "JWT", "JSON Web Token", "RFC 7519", "json令牌", "web令牌", "token鉴权"],
+    aka: ["jwt令牌", "jwt token", "jwt", "json web token", "jot", "hs256", "JWT", "JSON Web Token", "RFC 7519", "json令牌", "web令牌", "token鉴权"],
   },
 
   jwtNone: {

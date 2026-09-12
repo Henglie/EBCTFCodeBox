@@ -3,7 +3,7 @@
  *
  * 依赖: stegoImage.js（查重，不碰；已有 pngText/exifExtract 等文本块读写，本文件不重复）。
  *
- * 覆盖（全部 run 单向；文本报告 + gifFrames 逐帧 PNG dataURL，iccStrip 返回 base64）：
+ * 覆盖（全部 run 单向；文本报告 + gifFrames 逐帧 PNG dataURL，iccStrip 走产物协议返回去 ICC 后的文件）：
  * - pngChunkList : PNG 全块解析（列举所有 chunk + 解析 bKGD/tEXt/zTXt/iTXt/iCCP 内容）
  * - jpegAppList : JPEG APPn 段列举（APP0-APP15 全部段，marker/长度/标识符/摘要）
  * - gifComment : GIF 注释扩展块提取（0x21 0xFE，拼接所有 sub-block）
@@ -17,7 +17,77 @@
  * 参考资料：PNG (ISO/IEC 15948), JPEG (ITU-T T.81), GIF89a (W3C gif89a spec)。
  */
 import { register } from "./registry.js";
-import { rgbaToDataURL } from "./mcMap.js";
+import { encodePNG } from "./mcMap.js";
+import { streamCompress } from "./compress.js";
+
+// ============ 通用工具（自包含，不依赖 stegoImage2 内部函数） ============
+
+/**
+ * T422：多条目 ZIP 打包（STORE 直存——PNG 本身已压缩，二次 deflate 无收益）。
+ * 标准结构：每条目 LFH + 尾部 CDH×n + EOCD，布局口径与 zipCreate.js makeZip 一致。
+ * entries: [{ name: string, bytes: Uint8Array }]
+ */
+function buildZipMulti(entries) {
+  const crc32 = (data) => {
+    const table = new Int32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; table[n] = c; }
+    let c = 0xffffffff;
+    for (const b of data) c = table[(c ^ b) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const enc = new TextEncoder();
+  // 段式收集（Uint8Array 为主），最终一次性拼接——帧 PNG 动辄数百 KB、大 GIF 成百上千帧，
+  // 普通 Array 逐元素 push 会触到数组长度上限（4294967296）且极慢，禁用。
+  const chunks = [];
+  const putBytes = (b) => { chunks.push(b); total += b.length; };
+  const putU8 = (...bs) => { const a = new Uint8Array(bs.length); for (let i = 0; i < bs.length; i++) a[i] = bs[i] & 0xFF; chunks.push(a); total += a.length; };
+  const putU16 = (v) => putU8(v & 0xFF, (v >>> 8) & 0xFF);
+  const putU32 = (v) => putU8(v & 0xFF, (v >>> 8) & 0xFF, (v >>> 16) & 0xFF, (v >>> 24) & 0xFF);
+  let total = 0;
+  const centrals = [];
+  for (const e of entries) {
+    const nameB = enc.encode(e.name);
+    const flag = nameB.some((b) => b > 127) ? 0x0800 : 0; // 非 ASCII 文件名 → UTF-8 标志
+    const crc = crc32(e.bytes);
+    const lfhOff = total;
+    putU8(0x50, 0x4B, 0x03, 0x04);
+    putU16(0x0014); putU16(flag); putU16(0); // STORE
+    putU16(0x4800); putU16(0x5987); // 时间/日期（任意合法值，同 makeZip 口径）
+    putU32(crc); putU32(e.bytes.length); putU32(e.bytes.length);
+    putU16(nameB.length); putU16(0);
+    putBytes(nameB); putBytes(e.bytes);
+    const cd = [];
+    const pushC = (...bs) => { for (const b of bs) cd.push(b & 0xFF); };
+    pushC(0x50, 0x4B, 0x01, 0x02);
+    pushC(0x1E, 0x03); // versionMadeBy 0x031E
+    pushC(0x1E, 0x03); // versionNeeded 0x031E
+    pushC(flag & 0xFF, (flag >>> 8) & 0xFF);
+    pushC(0, 0); // STORE
+    pushC(0x00, 0x48, 0x87, 0x59); // 时间/日期
+    pushC(crc & 0xFF, (crc >>> 8) & 0xFF, (crc >>> 16) & 0xFF, (crc >>> 24) & 0xFF);
+    const sz = e.bytes.length;
+    pushC(sz & 0xFF, (sz >>> 8) & 0xFF, (sz >>> 16) & 0xFF, (sz >>> 24) & 0xFF);
+    pushC(sz & 0xFF, (sz >>> 8) & 0xFF, (sz >>> 16) & 0xFF, (sz >>> 24) & 0xFF);
+    pushC(nameB.length & 0xFF, (nameB.length >>> 8) & 0xFF);
+    // extraLen(2) + commentLen(2) + diskStart(2) + internalAttr(2) + externalAttr(4) = 12 字节全零
+    pushC(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    pushC(lfhOff & 0xFF, (lfhOff >>> 8) & 0xFF, (lfhOff >>> 16) & 0xFF, (lfhOff >>> 24) & 0xFF);
+    for (const b of nameB) cd.push(b);
+    centrals.push(cd);
+  }
+  const cdOff = total;
+  let cdSize = 0;
+  for (const cd of centrals) { cdSize += cd.length; putBytes(Uint8Array.from(cd)); }
+  putU8(0x50, 0x4B, 0x05, 0x06);
+  putU16(0); putU16(0);
+  putU16(entries.length); putU16(entries.length);
+  putU32(cdSize); putU32(cdOff);
+  putU16(0);
+  const out = new Uint8Array(total);
+  let w = 0;
+  for (const ch of chunks) { out.set(ch, w); w += ch.length; }
+  return out;
+}
 
 // ============ 通用工具（自包含，不依赖 stegoImage.js 内部函数） ============
 
@@ -402,12 +472,14 @@ function gifCheckSig(bytes) {
 }
 
 /** 读 GIF sub-block 序列，返回拼接后的 Uint8Array。传入 position（指向首个 sub-block 长度字节）。返回 {data, nextPos}。 */
-function gifReadSubBlocks(bytes, pos) {
+function gifReadSubBlocks(bytes, pos, strict = false) {
   const parts = [];
+  let ended = false;
   while (pos < bytes.length) {
     const len = bytes[pos++];
-    if (len === 0) break; // 0 表示结束
+    if (len === 0) { ended = true; break; } // 0 表示结束
     if (pos + len > bytes.length) {
+      if (strict) throw new Error("GIF sub-block 截断");
       parts.push(bytes.subarray(pos, bytes.length));
       pos = bytes.length;
       break;
@@ -415,6 +487,7 @@ function gifReadSubBlocks(bytes, pos) {
     parts.push(bytes.subarray(pos, pos + len));
     pos += len;
   }
+  if (strict && !ended) throw new Error("GIF sub-block 缺终止符");
  // 拼接
   let total = 0;
   for (const p of parts) total += p.length;
@@ -530,6 +603,7 @@ function gifCommentRun(text, p) {
 
 /** GIF LZW 解码（可变码长，含 clear/eoi 码 + 字典重建）。返回索引数组（每像素一个调色板索引）。 */
 function gifLzwDecode(data, minCodeSize, expectedPixels) {
+  if (!Number.isInteger(minCodeSize) || minCodeSize < 2 || minCodeSize > 8 || !Number.isSafeInteger(expectedPixels) || expectedPixels < 1 || expectedPixels > 4194304) throw new Error("GIF LZW 参数或像素预算非法");
   const clearCode = 1 << minCodeSize;
   const eoiCode = clearCode + 1;
   const out = new Uint8Array(expectedPixels);
@@ -546,7 +620,7 @@ function gifLzwDecode(data, minCodeSize, expectedPixels) {
 
   const readCode = () => {
     while (bitCnt < codeSize) {
-      if (pos >= data.length) return eoiCode;
+      if (pos >= data.length) throw new Error("GIF LZW 数据截断，缺结束码");
       bitBuf |= data[pos++] << bitCnt;
       bitCnt += 8;
     }
@@ -571,7 +645,7 @@ function gifLzwDecode(data, minCodeSize, expectedPixels) {
 
     if (prevCode === -1) {
  // clear 后首个码必为字面量
-      if (code >= clearCode) break; // 异常，止损
+      if (code >= clearCode || outPos >= expectedPixels) throw new Error("GIF LZW 首码或像素数非法");
       out[outPos++] = code;
       prevCode = code;
       continue;
@@ -579,18 +653,21 @@ function gifLzwDecode(data, minCodeSize, expectedPixels) {
     const inCode = code;
     let sp = 0;
  // 未入字典的码（KwKwK）：先压上一串的首字节，再展开上一码
-    if (code >= dictSize) {
+    if (code > dictSize) throw new Error("GIF LZW 未定义字典码");
+    if (code === dictSize) {
       stack[sp++] = first[prevCode];
       code = prevCode;
     }
     while (code >= clearCode) {
+      if (code >= dictSize || sp >= MAX || prefix[code] >= code) throw new Error("GIF LZW 字典链非法");
       stack[sp++] = suffix[code];
       code = prefix[code];
     }
     const firstByte = code; // 字面码，即整串首字节
     stack[sp++] = firstByte;
  // 出栈（逆序）写入输出
-    while (sp > 0 && outPos < expectedPixels) out[outPos++] = stack[--sp];
+    if (outPos + sp > expectedPixels) throw new Error("GIF LZW 像素数超过帧尺寸");
+    while (sp > 0) out[outPos++] = stack[--sp];
  // 新字典项 = prevCode + firstByte
     if (dictSize < MAX) {
       prefix[dictSize] = prevCode;
@@ -600,8 +677,8 @@ function gifLzwDecode(data, minCodeSize, expectedPixels) {
       if (dictSize === (1 << codeSize) && codeSize < 12) codeSize++;
     }
     prevCode = inCode;
-    if (outPos >= expectedPixels) break;
   }
+  if (outPos !== expectedPixels) throw new Error("GIF LZW 像素不足，拒绝补零伪造成功帧");
   return out;
 }
 
@@ -616,16 +693,36 @@ function interlaceRowOrder(h) {
 }
 
 /**
- * gifFrames run：解码 GIF 每一帧为真实 RGBA，合成后逐帧导出 PNG（data URL）。
+ * gifFrames run：解码 GIF 每一帧为真实 RGBA，合成后逐帧导出 PNG。
  * 处理帧偏移、局部/全局调色板、透明索引、处置方法（恢复背景/恢复前帧）。
  * @param {string} text base64 GIF
- * @returns {string} 多行报告 + 每帧 PNG data URL
+ * @returns {string|{text,files}} 多行报告；≥1 帧解码成功时附单 ZIP（全部帧 PNG + frames.txt）
  */
-function gifFramesRun(text, p) {
+// Encode each frame before advancing; never retain a list of RGBA snapshots.
+const GIF_PACK_BYTES_MAX = 128 * 1024 * 1024;
+let gifTask = Promise.resolve();
+let gifTaskId = 0;
+// One extraction per JS realm, including recipe/MCP callers. A new request supersedes the old one.
+function gifFramesRun(text, p = {}) {
+  const id = ++gifTaskId;
+  const checkCurrent = () => { if (id !== gifTaskId) throw new Error("GIF任务已被新任务取消，未生成ZIP"); };
+  const task = gifTask.catch(() => {}).then(() => {
+    checkCurrent();
+    return extractGifFrames(text, p, checkCurrent);
+  });
+  gifTask = task.then(() => undefined, () => undefined);
+  return task;
+}
+
+async function extractGifFrames(text, p, checkCurrent) {
+  if (!p.rawBytes && String(text).length > 48 * 1024 * 1024) throw new Error("GIF文本输入超过48MiB预算");
   const bytes = (p && p.rawBytes && p.rawBytes.length)
     ? (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes))
     : b64ToBytes(text);
   if (!gifCheckSig(bytes)) throw new Error("非 GIF 文件（签名非 GIF87a/GIF89a）");
+  if (bytes.length > 32 * 1024 * 1024) throw new Error("GIF 输入超过32MiB预算");
+  const maxFrames = Number(p.maxFrames ?? 0);
+  if (!Number.isInteger(maxFrames) || maxFrames < 0 || maxFrames > 4096) throw new Error("maxFrames 须为0..4096整数，0表示全部");
   const lines = [];
   lines.push(`GIF 多帧提取（文件大小 ${bytes.length} 字节）`);
   const sig = latin1(bytes.subarray(0, 6));
@@ -636,6 +733,7 @@ function gifFramesRun(text, p) {
   if (pos + 7 > bytes.length) return lines.concat(["(文件过短)"]).join("\n");
   const screenW = readU16le(bytes, pos);
   const screenH = readU16le(bytes, pos + 2);
+  if (!screenW || !screenH || screenW * screenH > 4194304) throw new Error("GIF 画布超过4194304像素预算或尺寸为空");
   const packed = bytes[pos + 4];
   const bgIndex = bytes[pos + 5];
   const gctFlag = (packed & 0x80) !== 0;
@@ -651,19 +749,27 @@ function gifFramesRun(text, p) {
  // 画布（RGBA），跨帧持久；每帧解码后按处置方法更新。
   const canvas = new Uint8Array(screenW * screenH * 4); // 初始全透明
   const frames = [];
+  const frameEntries = [];
+  let packBytes = 0, totalPixels = 0, reachedTrailer = false, userLimited = false;
+  const deadline = Date.now() + 30000;
   let pendingDelay = 0;
   let pendingDispose = 0;
   let pendingTransIdx = -1;
 
   while (pos < bytes.length) {
+    checkCurrent();
     const introducer = bytes[pos];
-    if (introducer === 0x3B) break; // Trailer
+    if (introducer === 0x3B) { reachedTrailer = true; break; } // Trailer
     if (introducer === 0x2C) { // 图像描述符
+      if (maxFrames && frames.length >= maxFrames) { userLimited = true; break; }
+      if (frames.length >= 4096) throw new Error("GIF超过4096帧，未生成不完整ZIP；可显式选择前若干帧");
       if (pos + 10 > bytes.length) break;
       const left = readU16le(bytes, pos + 1);
       const top = readU16le(bytes, pos + 3);
       const w = readU16le(bytes, pos + 5);
       const h = readU16le(bytes, pos + 7);
+      totalPixels += Math.max(w * h, screenW * screenH);
+      if (!w || !h || w * h > 4194304 || totalPixels > 536870912 || Date.now() > deadline) throw new Error("GIF帧尺寸、累计536870912像素或30秒处理预算超限，未生成ZIP");
       const lctPacked = bytes[pos + 9];
       const lctFlag = (lctPacked & 0x80) !== 0;
       const interlace = (lctPacked & 0x40) !== 0;
@@ -677,7 +783,7 @@ function gifFramesRun(text, p) {
       const delay = pendingDelay;
       if (pos >= bytes.length) break;
       const minCodeSize = bytes[pos++];
-      const sub = gifReadSubBlocks(bytes, pos);
+      const sub = gifReadSubBlocks(bytes, pos, true);
       pos = sub.nextPos;
 
  // 处置前先备份（dispose=3 恢复前帧要用）
@@ -701,7 +807,7 @@ function gifFramesRun(text, p) {
               const idx = indices[ry * w + rx];
               if (idx === transIdx) continue; // 透明像素：保留画布下层
               const po = idx * 3;
-              if (po + 2 >= palette.length) continue;
+              if (po + 2 >= palette.length) throw new Error("GIF 调色板索引越界");
               const co = (cy * screenW + cx) * 4;
               canvas[co] = palette[po];
               canvas[co + 1] = palette[po + 1];
@@ -709,17 +815,24 @@ function gifFramesRun(text, p) {
               canvas[co + 3] = 255;
             }
           }
-          rendered = canvas.slice(); // 快照当前合成结果作为该帧成品
+          const png = await encodePNG(canvas, screenW, screenH, raw => streamCompress("deflate", raw));
+          checkCurrent();
+          if (packBytes + png.length > GIF_PACK_BYTES_MAX) throw new Error("GIF ZIP预算超过128MiB，未生成不完整包");
+          packBytes += png.length;
+          frameEntries.push({ name: `frame_${String(frames.length + 1).padStart(3, "0")}.png`, bytes: png });
+          rendered = true;
+          await new Promise(resolve => setTimeout(resolve, 0));
         } catch (e) {
-          rendered = null;
+          throw new Error(`GIF第${frames.length + 1}帧失败，未生成ZIP：${e.message}`);
         }
       }
+      if (!rendered) throw new Error(`GIF第${frames.length + 1}帧缺有效调色板或LZW参数，未生成ZIP`);
 
       frames.push({
         left, top, width: w, height: h,
         localColorTable: lctFlag, interlace,
         delay, dispose, transparentIndex: transIdx,
-        rgba: rendered,
+        encoded: rendered,
       });
 
  // 应用处置方法，为下一帧准备画布
@@ -746,9 +859,10 @@ function gifFramesRun(text, p) {
       pos += 2;
       if (label === 0xF9) { // 图形控制扩展
         if (pos < bytes.length && bytes[pos] === 4) {
+          if (pos + 6 > bytes.length || bytes[pos + 5] !== 0) throw new Error("GIF GCE 截断或缺终止符");
           const gcePacked = bytes[pos + 1];
           pendingDispose = (gcePacked >> 2) & 0x07;
-          pendingTransIdx = (gcePacked & 0x01) !== 0 ? bytes[pos + 3] : -1;
+          pendingTransIdx = (gcePacked & 0x01) !== 0 ? bytes[pos + 4] : -1;
           pendingDelay = readU16le(bytes, pos + 2);
           pos += 1 + 4;
           if (pos < bytes.length && bytes[pos] === 0) pos++;
@@ -766,6 +880,8 @@ function gifFramesRun(text, p) {
   }
 
   lines.push(`帧数: ${frames.length}${gctFlag ? `，全局调色板 ${gctSize} 项（背景索引 ${bgIndex}）` : "，无全局调色板"}`);
+  if (!reachedTrailer && !userLimited) throw new Error("GIF未到达Trailer，结构截断；未生成不完整ZIP");
+  if (userLimited) lines.push(`用户选择仅导出前${maxFrames}帧；后续帧未扫描，非完整动画包。`);
   lines.push("");
   if (frames.length === 0) {
     lines.push("(无图像帧 0x2C)");
@@ -776,9 +892,10 @@ function gifFramesRun(text, p) {
   let decodedCount = 0;
   frames.forEach((f, idx) => {
     lines.push(`[帧 ${idx + 1}] 位置=(${f.left},${f.top}) 尺寸=${f.width}×${f.height} 延迟=${f.delay * 10}ms 处置=${disposeNames[f.dispose] || f.dispose} 透明索引=${f.transparentIndex >= 0 ? f.transparentIndex : "无"}`);
-    if (f.rgba) {
+    if (f.encoded) {
       decodedCount++;
-      lines.push(rgbaToDataURL(f.rgba, screenW, screenH));
+      // T422（恒烈 2026-09-06 下单）：帧 PNG 进单个压缩包，不再往报告里倾倒 dataURL
+      //（旧版逐帧下载按钮 + 大文本正是卡死根因）。
     } else {
       lines.push("  (本帧无调色板或 LZW 解码失败，仅列信息)");
     }
@@ -788,14 +905,33 @@ function gifFramesRun(text, p) {
     lines.push("");
     lines.push(`动画总延迟: ${totalDelay * 10}ms；成功解码 ${decodedCount}/${frames.length} 帧为 PNG（每帧合成到 ${screenW}×${screenH} 逻辑屏尺寸）`);
   }
-  return lines.join("\n");
+  if (frameEntries.length === 0) return lines.join("\n");
+
+  // T422（恒烈 2026-09-06 下单）：全部帧打包成单个 ZIP 一次性下载。
+  // 附 frames.txt 元数据（帧信息与报告一致，供离线核对）。
+  const meta = lines.join("\n") + "\n";
+  checkCurrent();
+  const zipEntriesAll = [
+    ...frameEntries,
+    { name: "frames.txt", bytes: new TextEncoder().encode(meta) },
+  ];
+  const zip = buildZipMulti(zipEntriesAll);
+  if (zip.length > GIF_PACK_BYTES_MAX) throw new Error("ZIP容器和元数据超过128MiB，未交付不完整包");
+  lines.push("");
+  lines.push(`已打包 ${frameEntries.length} 帧（ZIP 共 ${zip.length} 字节，含 frame_*.png 与 frames.txt 元数据），点击下方按钮直接下载。`);
+  return {
+    text: lines.join("\n"),
+    files: [{ name: "gif_frames.zip", mime: "application/zip", bytes: zip }],
+  };
 }
 
 // ============ ICC profile 剥离 ============
 /**
- * iccStrip run：剥离 ICC profile（PNG iCCP chunk / JPEG APP2 ICC 段），返回去 ICC 后的 base64。
+ * iccStrip run：剥离 ICC profile（PNG iCCP chunk / JPEG APP2 ICC 段）。
+ * T363b 产物协议 2026-09-02：返回 { text, files }，files 交付去 ICC 后的真文件
+ * （PNG → out.png，JPEG → out.jpg），text 保留原 base64（链式/复制兼容）。
  * @param {string} text base64 图像
- * @returns {string} base64（去 ICC 后）
+ * @returns {{text:string, files:[{name,mime,bytes}]}}
  */
 function iccStripRun(text, p) {
   const bytes = (p && p.rawBytes && p.rawBytes.length)
@@ -809,8 +945,11 @@ function iccStripRun(text, p) {
     const chunks = pngParseChunks(bytes);
     const iccp = chunks.filter((c) => c.type === "iCCP");
     if (iccp.length === 0) {
-      report.push("PNG: 无 iCCP chunk，无需剥离");
-      return bytesToB64(bytes) + "\n[报告] PNG: 无 iCCP chunk，无需剥离";
+      // T363b 产物协议 2026-09-02：文件未被修改，原 PNG 字节仍走 files 交付，text 保留 base64 + 报告行。
+      return {
+        text: bytesToB64(bytes) + "\n[报告] PNG: 无 iCCP chunk，无需剥离",
+        files: [{ name: "out.png", mime: "image/png", bytes }],
+      };
     }
  // 构造新文件：跳过 iCCP chunk
     const out = [];
@@ -832,7 +971,8 @@ function iccStripRun(text, p) {
     let off = 0;
     for (const b of out) { newBytes.set(b, off); off += b.length; }
     report.push(`PNG: ${bytes.length} → ${newBytes.length} 字节（减少 ${bytes.length - newBytes.length}）`);
-    return bytesToB64(newBytes);
+    // T363b 产物协议 2026-09-02：去 ICC 后的 PNG 字节走 files 下载按钮，text 保留原 base64（链式/复制兼容）。
+    return { text: bytesToB64(newBytes), files: [{ name: "out.png", mime: "image/png", bytes: newBytes }] };
   }
 
   if (bytes.length >= 4 && bytes[0] === 0xFF && bytes[1] === 0xD8) {
@@ -869,14 +1009,19 @@ function iccStripRun(text, p) {
     }
     out.push(bytes.subarray(lastOff));
     if (stripped === 0) {
-      return bytesToB64(bytes) + "\n[报告] JPEG: 无 ICC_PROFILE 段，无需剥离";
+      // T363b 产物协议 2026-09-02：文件未被修改，原 JPEG 字节仍走 files 交付，text 保留 base64 + 报告行。
+      return {
+        text: bytesToB64(bytes) + "\n[报告] JPEG: 无 ICC_PROFILE 段，无需剥离",
+        files: [{ name: "out.jpg", mime: "image/jpeg", bytes }],
+      };
     }
     const totalLen = out.reduce((s, b) => s + b.length, 0);
     const newBytes = new Uint8Array(totalLen);
     let off = 0;
     for (const b of out) { newBytes.set(b, off); off += b.length; }
     report.push(`JPEG: ${bytes.length} → ${newBytes.length} 字节（减少 ${bytes.length - newBytes.length}，剥离 ${stripped} 段）`);
-    return bytesToB64(newBytes);
+    // T363b 产物协议 2026-09-02：去 ICC 后的 JPEG 字节走 files 下载按钮，text 保留原 base64（链式/复制兼容）。
+    return { text: bytesToB64(newBytes), files: [{ name: "out.jpg", mime: "image/jpeg", bytes: newBytes }] };
   }
 
   throw new Error("非 PNG/JPEG 文件，无法剥离 ICC");
@@ -884,7 +1029,7 @@ function iccStripRun(text, p) {
 
 // ============ register ============
 register({
-  id: "pngChunkList", cat: "stego", name: "PNG 全块解析",
+  id: "pngChunkList", family: "png", familyLabel: "chunks", cat: "stego", name: "PNG 全块解析",
   desc: "列举 PNG 所有 chunk（IHDR/PLTE/tEXt/zTXt/iTXt/bKGD/iCCP/IDAT/IEND 等），解析文本块与元数据",
   params: [],
   run: pngChunkListRun,
@@ -892,7 +1037,7 @@ register({
 });
 
 register({
-  id: "jpegAppList", cat: "stego", name: "JPEG APPn 段列举",
+  id: "jpegAppList", family: "jpeg", familyLabel: "app", cat: "stego", name: "JPEG APPn 段列举",
   desc: "列举 JPEG 所有 APP0-APP15 段及 marker 段（SOF/DQT/DHT/COM 等），标识段内容",
   params: [],
   run: jpegAppListRun,
@@ -900,7 +1045,7 @@ register({
 });
 
 register({
-  id: "gifComment", cat: "stego", name: "GIF 注释扩展",
+  id: "gifComment", family: "gif", familyLabel: "comment", cat: "stego", name: "GIF 注释扩展",
   desc: "提取 GIF 89a 注释扩展块（0x21 0xFE），拼接所有 sub-block 文本",
   params: [],
   run: gifCommentRun,
@@ -908,9 +1053,9 @@ register({
 });
 
 register({
-  id: "gifFrames", cat: "stego", name: "GIF 多帧提取",
-  desc: "解码 GIF 每一帧（LZW + 调色板 + 帧偏移/透明/处置合成），逐帧导出为真实 PNG（可预览+下载）",
-  params: [],
+  id: "gifFrames", family: "gif", familyLabel: "frames", cat: "stego", name: "GIF 多帧提取",
+  desc: "逐帧解码合成并压缩为 PNG，单 ZIP 下载；默认全部帧，受4096帧/128MiB ZIP及像素、时间预算约束，失败不交付不完整包",
+  params: [{ key: "maxFrames", label: "仅导出前N帧（0=全部，最大4096）", type: "number", default: 0 }],
   run: gifFramesRun,
   acceptsBytes: true,
 });

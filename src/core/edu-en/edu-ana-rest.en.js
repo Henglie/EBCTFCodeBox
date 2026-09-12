@@ -32,7 +32,7 @@ export default {
   getAllCasings: {
     what: "All-casings permutation: try upper and lower case for every letter of a word, generating all combinations. Used to brute-force case-insensitive passwords/flags.",
     principle:
-      "n letters give 2^n case combinations. For each letter position take upper or lower case, enumerating the full Cartesian product. With many letters the combinations explode, so the tool limits input to ≤20 letters to avoid stalling.",
+      "n letters give $2^{n}$ case combinations. For each letter position take upper or lower case, enumerating the full Cartesian product. With many letters the combinations explode, so the tool limits input to ≤20 letters to avoid stalling.",
     usage: "Enter a word; outputs the list of all its case combinations.",
     examples: [
       { in: "abc", out: "abc, abC, aBc, aBC, Abc, AbC, ABc, ABC", desc: "3 letters → 2³=8 combinations" },

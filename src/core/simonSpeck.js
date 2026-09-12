@@ -215,7 +215,7 @@ function crypt(text, p, decrypt) {
 // ============================================================
 register({
   id: "simonSpeck",
-  cat: "modern",
+  cat: "block",
   name: "Simon / Speck 轻量密码",
   desc: "NSA Simon（AND-rotate）与 Speck（ARX）轻量级分组密码，ECB 单/多块。明文密文密钥均 hex。encode 加密 / decode 解密。已过论文附录 C 官方测试向量。",
   params: [

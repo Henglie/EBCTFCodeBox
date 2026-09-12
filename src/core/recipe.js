@@ -2,6 +2,7 @@
 // 图模型: { nodes: [{id, opId, params}], edges: [{from, to}] }
 // 本模块只做编排，不注册新 op，不产生任何加载副作用。
 import { getOp, OPS } from "./registry.js";
+import { transitTextOf } from "./productResult.js";
 
 // ---- 内部工具 ----
 
@@ -120,7 +121,7 @@ export function executeRecipe(graph, input) {
     } else {
       const join = (node.params && node.params.join) || "";
       inputText = incoming
-        .map((e) => (outputs.has(e.from) ? outputs.get(e.from) : ""))
+        .map((e) => (outputs.has(e.from) ? transitTextOf(outputs.get(e.from)) : ""))
         .join(join);
     }
     outputs.set(id, runNode(node, inputText));

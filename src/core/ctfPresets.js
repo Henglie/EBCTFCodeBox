@@ -18,7 +18,7 @@
  * - 纯数据，无 import、无副作用。
  * - CTF_HOT / CTF_HOT_META 里的每个 id 都必须在 registry 里真实注册存在
  * 宁可少标也不标不存在的 id。当前清单已逐个对照过源码 register 的 id。
- * - 数量刻意控制在 40~70，标太多等于没标。
+ * - 数量刻意控制在 40~75，标太多等于没标。
  */
 
 // 超高频（rank 1）：几乎每场赛都可能出现，选手最先试的那一批。
@@ -84,6 +84,22 @@ export const CTF_HOT_META = {
   rsaSmallE:         { rank: 2, note: "小 e（如 e=3）低指数攻击" },
   rsaFermat:         { rank: 2, note: "费马分解，p、q 相近时秒解" },
   rsaCrt:            { rank: 2, note: "CRT/Hastad 相关，dp/dq 已知" },
+
+ // ---- 现代密码学工具（v0.1.6 密钥生命周期/签名/PQC 扩充；恒烈 2026-09-02 指示与常用算法同权高亮。
+ //      仅星标 + 搜索加权，不参与 magic 一把梭——keygen/签名类无 detect，本就不该进）----
+  rsaGenKeyPair:     { rank: 1, note: "RSA 密钥对生成（PEM 导出），非对称工具入口" },
+  sm2:               { rank: 1, note: "SM2 国密椭圆曲线，加解密/签名/密钥交换主力" },
+  sm4:               { rank: 1, note: "SM4 国密分组密码，全工作模式" },
+  rsaSign:           { rank: 2, note: "RSA 签名 PKCS#1 v1.5 / PSS" },
+  rsaVerify:         { rank: 2, note: "RSA 验签，与 rsaSign 配对" },
+  ecdsaKeyGen:       { rank: 2, note: "ECDSA 密钥生成（secp256k1 / P-256 等）" },
+  ecdsaSign:         { rank: 2, note: "ECDSA 签名（RFC 6979 确定 k）" },
+  mlkemKeyGen:       { rank: 2, note: "ML-KEM 后量子密钥封装（FIPS 203），配套 encaps/decaps" },
+  jwtSign:           { rank: 2, note: "JWT 签发（HS/RS/ES 系列）" },
+  aesCmac:           { rank: 2, note: "AES-CMAC / SM4-CMAC / KMAC 消息认证码" },
+  ascon:             { rank: 2, note: "Ascon 轻量级 AEAD（NIST SP 800-232）" },
+  pemToHex:          { rank: 2, note: "PEM 密钥解析为 DER/hex，配 hexToPem 回写" },
+  bigCalc:           { rank: 2, note: "大整数计算器（modpow/modinv/分解），RSA/ElGamal 手工验算常备" },
 
  // ---- 哈希 ----
   md5:               { rank: 1, note: "MD5，最常出现的哈希" },

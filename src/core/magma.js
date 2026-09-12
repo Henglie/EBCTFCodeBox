@@ -121,7 +121,7 @@ function magmaDecode(text, p) { return magmaCrypt(text, p, true); }
 
 register({
   id: "magma",
-  cat: "modern",
+  cat: "block",
   name: "Magma（GOST R 34.12-2015）",
   desc: "俄罗斯联邦标准 Magma 分组密码（原 GOST 28147-89 现代化定义）：64 位分组 / 256 位密钥 / 32 轮 Feistel，S 盒 id-tc26-gost-28147-param-Z。ECB 多块，明文/密文/密钥均 hex。encode 加密 / decode 解密。过官方 §A.2 向量。",
   params: [

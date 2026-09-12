@@ -152,7 +152,7 @@ export default {
       { in: "已知明文+密文", param: "n=2", out: "2×2 密钥矩阵 K", desc: "需 P 模 26 可逆" },
     ],
     formulas: [{ tex: "K = C\\,P^{-1} \\bmod 26", caption: "由明密文对反解密钥矩阵" }],
-    tips: ["选出的明文分组拼成的 P 必须可逆（gcd(det P, 26)=1），不可逆就换几组明文重试。"],
+    tips: ["选出的明文分组拼成的 P 必须可逆（$\\gcd(\\det P,\ 26) = 1$），不可逆就换几组明文重试。"],
     aka: ["hill known plaintext", "hill 已知明文", "希尔密码攻击", "希尔已知明文", "hill攻击",
       "known plaintext attack", "已知明文攻击", "hill密钥矩阵求解", "矩阵密码破解", "希尔密码破解", "求密钥矩阵", "hill cipher attack"],
   },

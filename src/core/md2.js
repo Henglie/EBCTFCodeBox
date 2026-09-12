@@ -77,7 +77,7 @@ function md2(text) {
 }
 
 register({
-  id: "md2", cat: "hash", name: "MD2",
+  id: "md2", cat: "hash", name: "MD2", family: "md", familyLabel: "MD2",
   desc: "MD2 消息摘要（128 位，RFC 1319，256 字节置换表 + 校验字节，纯 JS）",
   run: (t) => md2(t),
 });

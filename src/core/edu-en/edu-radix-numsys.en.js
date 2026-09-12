@@ -51,7 +51,7 @@ export default {
     ],
     tips: [
       "A negative base can represent negative numbers without a sign bit — that's its most interesting point relative to ordinary binary.",
-      "Verify: 11010 = (-2)^4+(-2)^3+(-2)^1 = 16-8-2 = 6.",
+      "Verify: $11010 = (-2)^{4} + (-2)^{3} + (-2)^{1} = 16-8-2 = 6$.",
     ],
     aka: ["负进制", "negabinary", "base -2", "负二进制", "负基数进制", "negative base", "负底数进制", "-2进制", "负三进制", "negaternary", "负数进制", "无符号负数表示"],
   },

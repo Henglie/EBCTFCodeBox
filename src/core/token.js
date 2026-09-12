@@ -289,7 +289,7 @@ function jwtDetect(t) {
 // 注册
 // ============================================================
 register({
-  id: "jwt", cat: "modern", name: "JWT", desc: "JSON Web Token 签发(HS256/384/512)/解析+验签",
+  id: "jwt", family: "jwt", familyLabel: "parse", cat: "modern", name: "JWT", desc: "JSON Web Token 签发(HS256/384/512)/解析+验签",
   params: [
     { key: "secret", label: "密钥", type: "text", default: "", placeholder: "HS* 验签/签发密钥" },
     { key: "alg", label: "算法", type: "select", default: "HS256", options: ["HS256", "HS384", "HS512"] },
@@ -299,7 +299,7 @@ register({
 });
 
 register({
-  id: "jwtNone", cat: "modern", name: "JWT None 攻击", desc: "alg:none 无签名 JWT 构造 / 攻击检测",
+  id: "jwtNone", family: "jwt", familyLabel: "none", cat: "modern", name: "JWT None 攻击", desc: "alg:none 无签名 JWT 构造 / 攻击检测",
   encode: jwtNoneEncode, decode: jwtNoneDecode,
   detect: (t) => {
     const parts = String(t).trim().split(".");
@@ -323,7 +323,7 @@ register({
 });
 
 register({
-  id: "b64urlJson", cat: "modern", name: "Base64url ↔ JSON", desc: "Base64url 与 JSON 互转 + 美化",
+  id: "b64urlJson", cat: "data", name: "Base64url ↔ JSON", desc: "Base64url 与 JSON 互转 + 美化（不验证签名）",
   encode: b64urlJsonEncode, decode: b64urlJsonDecode,
 });
 

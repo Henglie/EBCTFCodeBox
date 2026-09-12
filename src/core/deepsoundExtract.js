@@ -321,19 +321,19 @@ async function deepsoundRun(text, p) {
     return lines.join("\n");
   }
   const td = new TextDecoder("utf-8", { fatal: false });
-  let bin = "";
-  for (const b of a.files[0].data) bin += String.fromCharCode(b);
-  const b64 = btoa(bin);
-  const preview = td.decode(a.files[0].data);
-  lines.push(
-    "",
-    `[${a.files[0].name}] 文本预览:`,
-    preview.length > 1024 ? preview.slice(0, 1024) + "…（截断）" : (preview || "(空/不可打印)"),
-    "",
-    `[${a.files[0].name}] Base64${b64.length > 4096 ? "（截断，全文 " + b64.length + " 字符）" : ""}:`,
-    b64.length > 4096 ? b64.slice(0, 4096) + "…" : b64,
-  );
-  return lines.join("\n");
+  for (const f of a.files) {
+    const sample = f.data.subarray(0, 256);
+    const printable = sample.filter(b => b === 9 || b === 10 || b === 13 || (b >= 32 && b <= 126)).length;
+    lines.push("", `[${f.name}] ${f.data.length} 字节`);
+    if (sample.length && printable / sample.length >= 0.7) lines.push(`文本预览${f.data.length > sample.length ? `（截断，全文 ${f.data.length} 字节见下载）` : ""}:`, td.decode(sample));
+    else lines.push("（空文件或二进制内容，跳过文本预览）");
+  }
+  lines.push("", "完整文件请使用下方下载按钮；预览不代表完整内容。");
+  return {
+    text: lines.join("\n"),
+    files: a.files.map(f => ({ name: String(f.name || "file.bin").replace(/[\\/:*?"<>|\x00-\x1f]/g, "_").trim() || "file.bin",
+      mime: ({ txt: "text/plain", log: "text/plain", json: "application/json", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", zip: "application/zip", pdf: "application/pdf", wav: "audio/wav" })[String(f.name).split(".").at(-1).toLowerCase()] || "application/octet-stream", bytes: f.data })),
+  };
 }
 
 // ============ 注册 ============

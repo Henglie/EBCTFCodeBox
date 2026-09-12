@@ -11,8 +11,8 @@ export default {
       "CityHash 的设计思路是「按长度分档、每档用最省指令的混合公式」，而不是像 MD5 那样统一走压缩函数。三个 64 位质数常数贯穿全程：k0 = 0xc3a5c85c97cb3127、k1 = 0xb492b66fbe98f273、k2 = 0x9ae16a3b2f90404f。\n\n" +
       "CityHash64 按输入长度走五条互不相同的分支：\n" +
       "• len = 0：直接返回 k2；\n" +
-      "• 1 ≤ len ≤ 3：只取首字节、中间字节、尾字节拼成两个 32 位量 y、z，做 `ShiftMix(y·k2 ^ z·k0)·k2`；\n" +
-      "• 4 ≤ len ≤ 7：取首尾各 4 字节，交给 HashLen16 的 Murmur 式双轮混合；\n" +
+      "• $1 \le \\mathrm{len} \le 3$：只取首字节、中间字节、尾字节拼成两个 32 位量 y、z，做 `ShiftMix(y·k2 ^ z·k0)·k2`；\n" +
+      "• $4 \\le \\mathrm{len} \\le 7$：取首尾各 4 字节，交给 HashLen16 的 Murmur 式双轮混合；\n" +
       "• 8 ≤ len ≤ 16：取首尾各 8 字节，配合 `mul = k2 + 2·len` 做旋转-乘-加；\n" +
       "• 17 ≤ len ≤ 32 与 33 ≤ len ≤ 64：分别用 HashLen17to32 / HashLen33to64，读取更多重叠的 8 字节窗口，穿插 Rotate（右旋）、bswap_64（字节序翻转）、ShiftMix（`x ^ (x >> 47)`）。\n\n" +
       "len > 64 时进入主循环：先从末尾取 x、y、z 三个 64 位状态种子，再用 WeakHashLen32WithSeeds 把结尾 64 字节压成两对 (v, w)，然后每轮吃 64 字节、更新 x/y/z/v/w 并交换 z 与 x，最后两层 HashLen16 收尾。所有中间量都在 uint64 上自然回绕——JS 里必须每步 `& 0xFFFF...FFFF` 截断，否则 BigInt 无限精度会让高位污染结果。\n\n" +

@@ -28,7 +28,7 @@
  * 红线：算法照官方参考，不编造；纯本地零外发；core 层零 UI 依赖（仅 registry）。
  * 自检：node --input-type=module -e "import('./src/core/yescrypt.js').then(m=>m.selfCheck())"
  *
- * 契约：register({ id:"yescrypt", cat:"crypto", name, desc, params, run })。
+ * 契约：register({ id:"yescrypt", cat:"hash", name, desc, params, run })。
  */
 import { register } from "./registry.js";
 import { sha256Sync } from "./balloon.js"; // 复用同步 SHA-256（FIPS 180-4，balloon.js 已验证）
@@ -443,7 +443,7 @@ function yescryptRun(text, p = {}) {
 
 register({
   id: "yescrypt",
-  cat: "crypto",
+  cat: "hash",
   name: "yescrypt 密钥派生",
   desc: "yescrypt 内存硬口令 KDF（Solar Designer，openwall 官方参考实现）：flags=0 输出与经典 scrypt 完全一致；WORM=最小偏差；RW 默认=prehash + 12KB S-box pwxform + wrap 随机访问 + SCRAM 尾处理。抗 GPU/ASIC。参数 N（2 的幂）/r/p/t/dkLen。",
   params: [

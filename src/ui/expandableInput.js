@@ -113,6 +113,7 @@ export function expandableInput(opts = {}) {
  */
 export function openExpandModal(initialValue = "", onSave, labels = {}) {
   ensureExpStyles();
+  const previousFocus = document.activeElement;
   const {
     modalTitle = "编辑",
     cancelLabel = "取消",
@@ -172,7 +173,10 @@ export function openExpandModal(initialValue = "", onSave, labels = {}) {
     document.removeEventListener("keydown", onKey);
     overlay.classList.add("exp-closing");
  // 出场动画后移除
-    setTimeout(() => overlay.remove(), 175);
+    setTimeout(() => {
+      overlay.remove();
+      if (previousFocus?.isConnected) previousFocus.focus();
+    }, 175);
   }
   function commit() {
     if (typeof onSave === "function") onSave(ta.value);

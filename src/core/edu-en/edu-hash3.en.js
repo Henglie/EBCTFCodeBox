@@ -96,7 +96,7 @@ export default {
       { tex: "\\text{sum1} \\mathrel{+}= d_i,\\quad \\text{sum2} \\mathrel{+}= \\text{sum1}\\ (\\bmod\\ M)", caption: "Fletcher dual accumulators (16-bit M=255, 32-bit M=65535)" },
     ],
     tips: [
-      "Similar idea to Adler-32 (both dual-accumulator), the difference is the modulus: Fletcher-16 mod 255, Adler mod 65521.",
+      "Similar idea to Adler-32 (both dual-accumulator), the difference is the modulus: Fletcher-16 $\\bmod 255$, Adler $\\bmod 65521$.",
       "32-bit processes 16-bit words, so how odd-length data is padded affects the result — mind the implementation convention.",
     ],
     aka: ["fletcher-16", "fletcher16", "fletcher-32", "fletcher32", "弗莱彻校验和", "弗莱彻校验和32", "fletcher checksum", "弗莱彻校验", "双累加器校验和", "fletcher algorithm", "弗莱切校验和", "fletcher8"],

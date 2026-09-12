@@ -155,4 +155,16 @@ export default {
     tips: ["Pairs with confusablesScan: Scan tells you where the trickery is, Skeleton bashes it back to original form for comparison against a whitelist."],
     aka: ["同形字骨架", "confusables skeleton", "骨架归一化", "钓鱼域名比对", "unicode skeleton", "confusable skeleton", "视觉骨架", "同形字归一", "skeleton algorithm", "混淆字骨架", "相似字归一化", "homoglyph skeleton"],
   },
+
+  textBlindWatermark: {
+    what: "Text blind watermark: guofei9987's text_blind_watermark (v1 JS format) — hides a watermark string inside cover text using zero-width character U+200C, completely invisible to the eye and preserved through copy-paste. Common in leak-tracing and CTF zero-width challenges.",
+    principle:
+      "Each watermark character becomes a binary string (variable length, zero-padded NOT; separated by spaces between characters, with one trailing space), then mapped bit by bit: `1` = one U+200C, space = two U+200C (separator), `0` = nothing added; each bit consumes one cover character (zero-width run inserted after it). Decoding scans with a state machine: single ZWNJ=1, double ZWNJ=separator, normal character=0, then splits on spaces to restore. No key, no encryption — pure steganography.",
+    usage: "encode: watermark + cover text → stego text (cover length must be ≥ watermark bit count); decode: stego text → watermark.",
+    examples: [
+      { in: "watermark 'flag' + any cover text", out: "cover text with unchanged appearance (carrying U+200C)", desc: "flag → 1100110 1101100 1100001 1100111, 32 bits with separators" },
+    ],
+    tips: ["Incompatible with 'Zero-Width Steganography' (Misawa radix-4 fixed-length) — neither decodes the other's output. The original decoder emits an invisible U+0000 tail for cover residue; this implementation fixes that. Non-BMP characters are split per UTF-16 code unit and reassemble completely on decode."],
+    aka: ["文本盲水印", "text blind watermark", "textBlindWatermark", "文本隐水印", "盲水印", "guofei9987", "零宽盲水印", "text watermark", "文字隐水印", "隐形水印", "文本隐形水印", "zwnj隐写", "郭飞盲水印"],
+  },
 };

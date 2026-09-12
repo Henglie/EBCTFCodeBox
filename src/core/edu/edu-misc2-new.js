@@ -48,12 +48,12 @@ export default {
   },
 
   xiangyue: {
-    what: "想曰 XiangYue（仅解密方向）：把中文/Emoji/零宽/日文/韩文/象形字密文解回原文，是重加密体系。",
+    what: "想曰 XiangYue 解密：把中文/Emoji/零宽/日文/韩文/象形字密文解回原文，是重加密体系（加密方向见同族「想曰 加密」）。",
     principle:
       "密文先按字符类型自动识别是哪套映射（中文/Emoji/零宽字符/日文/韩文/象形），反查回 Base64，再自动侦测两种密文格式：\n\n" +
       "format1：seed(16) + ChaCha20-Poly1305 密文，主密钥用 $Argon2id$（t=2, m=64MiB, p=1）派生，再 HKDF-SHA512 派生各子密钥 → ChaCha20-Poly1305 → AES-CTR → zlib 解压。\n\n" +
       "format2：salt(16)+nonce(12)+密文，$PBKDF2\\text{-}SHA256$（50 万次）派生，HKDF-SHA256 → ChaCha20-Poly1305 → AES-CTR → zlib。\n\n" +
-      "内置默认口令 `a184f7b849ffed24d266a30298c72ef2f5ad040db73bf37151fac767630728`。反编译源只有解密函数，故本 op 单向解密（format1 的 Argon2id 派生较慢，约数秒）。",
+      "内置默认口令 `a184f7b849ffed24d266a30298c72ef2f5ad040db73bf37151fac767630728`。原始反编译源只有解密函数，加密方向为本项目按解密链严格逆推实现（format1 的 Argon2id 派生较慢，约数秒）。",
     usage: "粘想曰密文（各种映射自动识别），口令默认内置。可勾「附带识别信息」看识别到的映射类型和格式。仅解密。",
     examples: [
       { in: "（一串想曰中文/Emoji 密文）", param: "口令默认", out: "还原的原文", desc: "自动识别映射与格式" },
@@ -61,6 +61,21 @@ export default {
     tips: ["想曰密文形态多变（可能是汉字、Emoji、看不见的零宽字符、日韩文），靠内置 650 条映射表识别。", "format1 用 Argon2id 内存 64MiB，解密会卡一下几秒是正常的。"],
     aka: ["想曰", "xiangyue", "XiangYue", "想曰解密", "zbXiangYue", "xiang yue", "想曰编码",
       "argon2想曰", "chacha想曰", "重加密中文", "想曰密文", "多映射解密", "想曰XiangYue"],
+  },
+
+  xiangyueEnc: {
+    what: "想曰加密方向：把明文加密成想曰密文——中文/日文/韩文/象形/Emoji/零宽/Base64 七种外观任选，输出可被「想曰」解密自动识别还原。",
+    principle:
+      "解密链的严格反向：明文 UTF-8 → zlib deflate → AES-CTR → ChaCha20-Poly1305 → 组包 → Base64 → 按所选映射表输出对应外观的密文字符。\n\n" +
+      "format2：salt(16)+nonce(12)+密文，$PBKDF2\\text{-}SHA256$（50 万次）派生密钥，约 0.3 秒；format1：seed(16) 开头，$Argon2id$ 64MiB 派生，单次约数秒。\n\n" +
+      "默认口令与解密侧同源内置；解密须用同一口令。",
+    usage: "输入明文，选密文格式（默认 format2）与外观（默认中文），点转换得纯密文。复制密文到「想曰」解密即可还原（口令一致）。",
+    examples: [
+      { in: "flag{test}", param: "format2 中文外观", out: "一串中文密文", desc: "加密后可回贴解密闭环验证" },
+    ],
+    tips: ["输出纯密文，可直接复制到「想曰」解密闭环验证。", "format1 更慢（Argon2id 64MiB）但密钥派生更硬，按需选。", "零宽外观密文肉眼不可见，配合「零宽字符可视化」查看。"],
+    aka: ["想曰加密", "xiangyue encrypt", "想曰编码", "想曰加密器", "XiangYue加密", "xiangyue enc",
+      "想曰生成", "想曰制作", "xiangyueEncrypt", "重加密生成", "想曰密文生成", "想曰反向", "想曰加密方向"],
   },
 
   xiongyue: {
@@ -276,7 +291,7 @@ export default {
     principle:
       "54 张牌：1-52 普通牌，53=大王(A)，54=小王(B)。每输出一个密钥流值前，牌堆演化四步：\n\n" +
       "1. 大王下移 1 位\n2. 小王下移 2 位\n3. Triple cut：以两王为界交换首尾两段\n4. Count cut：按底牌值把顶部若干张移到底牌之上\n\n" +
-      "然后看顶牌值 n，取第 n+1 张的牌值当密钥流（王牌跳过重跑），映射到 1-26。加密：明文字母(1-26) + 密钥流 mod 26；解密：减。可用 keyword 预先排牌。",
+      "然后看顶牌值 n，取第 n+1 张的牌值当密钥流（王牌跳过重跑），映射到 1-26。加密：明文字母(1-26) + 密钥流 $\\bmod\ 26$；解密：减。可用 keyword 预先排牌。",
     usage: "可选填 keyword 密钥（预排牌堆，留空用默认牌序）。编码/解码只处理字母，非字母忽略。",
     examples: [
       { in: "AAAAAAAAAA", param: "keyword 留空", out: "EXKYIZSGEH", desc: "Schneier 官方向量" },

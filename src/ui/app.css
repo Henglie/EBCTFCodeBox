@@ -271,10 +271,46 @@ label.switch,
 /* main.js 用的类名别名：ctf-hot 同 hot；rank1（ctf-hot-top）更强调；ctf-star 星标 */
 .nav-subitem.ctf-hot { color: var(--primary); font-weight: 600; }
 .nav-subitem.ctf-hot-top { font-weight: 700; }
-.nav-subitem.ctf-hot-top .ctf-star { color: var(--primary); }
 /* 星标改内联 SVG（.msym 容器），主色实心星，替代原 emoji ★ */
-.ctf-star { width: 14px; height: 14px; color: var(--primary); margin-inline-end: var(--sp-1); flex: none; opacity: .95; }
-.ctf-star > svg { width: 14px; height: 14px; }
+/* 族条目 ×N 乘数标签（T385）：小胶囊 badge，明确是「档位数」不是算法名的一部分 */
+.fam-count {
+  margin-inline-start: auto; flex: none;
+  font-size: 11px; font-weight: 600; line-height: 1;
+  padding: 3px 7px; border-radius: 999px;
+  background: var(--primary-container, var(--surface-3)); color: var(--on-primary-container, var(--primary));
+}
+.nav-subitem { display: flex; align-items: center; gap: var(--sp-1); }
+
+/* 主输入隐藏提示条（T399）：io=none 的 op 用细提示替代巨型输入框 */
+.io-none-hint {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-3); border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--surface-hi) 45%, transparent);
+  color: var(--on-surface-var); font-size: 13px;
+}
+.io-none-hint .msym { font-size: 18px; color: var(--primary); flex: none; }
+
+/* 族选档菜单（T395）：族条目拖入配方链时选具体算法（fixed 定位，跟随落点，视口内夹取） */
+.fam-pick-menu {
+  position: fixed; z-index: 1000; min-width: 240px; max-width: 320px;
+  background: var(--surface, var(--surface-3)); color: var(--on-surface);
+  border: 1px solid var(--surface-hi, var(--outline)); border-radius: var(--r-md, 10px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  padding: var(--sp-1); max-height: 60vh; overflow-y: auto;
+}
+.fam-pick-head {
+  font-size: 12px; color: var(--on-surface-var); padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--surface-hi, var(--outline)); margin-bottom: var(--sp-1);
+}
+.fam-pick-item {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  width: 100%; border: none; background: none; cursor: pointer;
+  font: inherit; color: inherit; text-align: start;
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm, 8px);
+}
+.fam-pick-item:hover { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); }
+.fam-pick-name { font-size: 13px; }
+.fam-pick-cat { font-size: 11px; color: var(--on-surface-var); font-family: var(--mono, monospace); }
 
 /* ============ 工作区 ============ */
 .workspace { flex: 1; min-width: 0; overflow-y: auto; padding: var(--sp-5); }
@@ -294,17 +330,56 @@ label.switch,
   height: 40px; padding: 0 var(--sp-3);
   background: var(--field-bg); color: var(--on-surface);
   border: 1px solid var(--outline); border-radius: var(--r-sm);
-  font-family: inherit; font-size: var(--fs-base);
+  font-family: var(--io-font), var(--font); font-size: var(--fs-base);
   flex: 1 1 auto; min-width: 0;
 }
 .param input:focus, .param select:focus { outline: 2px solid var(--primary); border-color: transparent; }
+.param-big { width: 100%; min-width: 0; flex-wrap: wrap; }
+.param-big > label { flex: 0 0 100%; white-space: normal; }
+.param-bigbox { display: flex; align-items: stretch; gap: var(--sp-1); flex: 1 1 auto; width: min(560px, 100%); min-width: 0; }
+.param-bigta {
+  flex: 1; min-width: 0; resize: vertical;
+  padding: var(--sp-2) var(--sp-3); background: var(--field-bg); color: var(--on-surface);
+  border: 1px solid var(--outline); border-radius: var(--r-sm);
+  font-family: var(--io-font), var(--font); font-size: var(--fs-base);
+  line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.param-bigta:focus { outline: 2px solid var(--primary); border-color: transparent; }
+.act-btn.fav-btn { flex: 0 0 48px; width: 48px; height: 48px; min-width: 48px; min-height: 48px; max-width: 48px; max-height: 48px; padding: 0; border-radius: 50%; margin-inline-start: auto; justify-content: center; }
+.act-btn.fav-btn .msym { font-size: 28px; display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
+/* 星居中终修（恒烈 2026-09-13「还靠在左下，再往右上移动」）：Material Symbols star 字形
+   在 960 视窗内本身不居中（getBBox 实测中心偏左 1.57px/偏下 2.46px @28px），flex 盒只能
+   盒子居中救不了字形——按量得偏移反向平移 1.6/2.5px。 */
+.act-btn.fav-btn .msym svg { transform: translate(1.6px, -2.5px); }
+.fav-btn:not(.on) { opacity: .55; }
+.fav-btn.on { background: var(--primary-container); color: var(--on-primary-container); }
+.fav-btn.on .msym { color: inherit; }
+.fav-empty { padding: var(--sp-3); color: var(--on-surface-var); font-size: var(--fs-base); line-height: 1.5; }
+.fav-empty-hint { margin-top: var(--sp-1); font-size: var(--fs-sm); }
+.op-search-item-fav { color: var(--primary); margin-inline-start: auto; display: inline-flex; }
+.fav-menu {
+  position: fixed; z-index: 10001; min-width: 160px; max-width: calc(100vw - 8px); max-height: calc(100dvh - 8px); overflow-y: auto; padding: var(--sp-1); font-size: var(--fs-sm);
+  background: var(--surface-3); color: var(--on-surface); border: 1px solid var(--outline-var);
+  border-radius: var(--r-sm); box-shadow: var(--el-2);
+  animation: m3-pop-in var(--dur-4) var(--ease-emph-dec);
+}
+.fav-menu button {
+  display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-height: 44px;
+  border: none; border-radius: var(--r-xs); padding: var(--sp-2) var(--sp-3);
+  background: transparent; color: inherit; font: inherit; cursor: pointer;
+}
+.fav-menu button svg { width: 20px; height: 20px; fill: currentColor; }
+.cloud-warn-dialog .exp-view { white-space: normal; }
+.cloud-warn-setting { display: flex; align-items: center; gap: var(--sp-2); margin-block: var(--sp-3); min-height: 44px; font-size: var(--fs-sm); cursor: pointer; }
+.cloud-warn-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); justify-content: flex-end; }
+.fav-menu button:hover, .fav-menu button:focus-visible { background: var(--surface-4); }
 /* M3 stepper（[−][input][＋]），替代原生 number spinner */
 .stepper { display: flex; align-items: center; gap: var(--sp-1); flex: 1 1 auto; min-width: 0; }
 .stepper .stepper-inp {
   height: 40px; padding: 0 var(--sp-2); text-align: center;
   background: var(--field-bg); color: var(--on-surface);
   border: 1px solid var(--outline); border-radius: var(--r-sm);
-  font-family: inherit; font-size: var(--fs-base);
+  font-family: var(--io-font), var(--font); font-size: var(--fs-base);
   flex: 1 1 auto; min-width: 48px; width: 100%;
 }
 .stepper .stepper-inp:focus { outline: 2px solid var(--primary); border-color: transparent; }
@@ -383,7 +458,7 @@ label.switch,
      state.ioFont 覆盖；此 CSS 默认管无 inline 的框（home/recipe/uv/exhaust）。 */
   font-size: calc(var(--fs-base) + 2px);
  /* 内容区用天珩全字库族显示生僻字（去掉原多余的 var(--mono) 首行声明，避免重复覆盖） */
-  font-family: var(--font-content), var(--mono);
+  font-family: var(--io-font);
  /* textarea 对 OpenType 特性支持有限，三管齐下强制开启组合/连字/上下文替换。
      注意：多数浏览器仍会忽略 textarea 内的 calt/liga（textarea 渲染限制，非 CSS 缺失），
      彻底解决需把渲染改为 div contenteditable / 输出区改 div。 */
@@ -432,7 +507,7 @@ label.switch,
 }
 .act-btn:hover { background: var(--surface-hi); }
 .act-btn:active { transform: scale(.96); }
-.act-btn.primary { background: var(--primary); color: var(--on-primary); }
+.act-btn.primary { background: var(--grad-primary, var(--primary)); color: var(--on-primary); }
 .act-btn.primary:hover { filter: brightness(1.08); }
 .act-btn .msym { font-size: 20px; }
 
@@ -445,7 +520,7 @@ label.switch,
 }
 .mid-btn:hover { background: var(--surface-hi); }
 .mid-btn:active { transform: scale(.9); }
-.mid-btn.primary { background: var(--primary); color: var(--on-primary); }
+.mid-btn.primary { background: var(--grad-primary, var(--primary)); color: var(--on-primary); }
 .mid-btn.primary:hover { filter: brightness(1.08); }
 .mid-btn .msym { font-size: 22px; }
 
@@ -453,6 +528,11 @@ label.switch,
 .dir-seg { display: inline-flex; background: var(--surface-2); border-radius: var(--r-full); padding: 3px; margin-bottom: var(--sp-3); }
 .dir-seg button { height: 32px; padding: 0 var(--sp-4); border-radius: var(--r-full); font-size: var(--fs-base); color: var(--on-surface-var); transition: all var(--dur-short) var(--ease); }
 .dir-seg button.on { background: var(--primary); color: var(--on-primary); font-weight: 600; }
+
+/* T498b 族滑块：多档位（CRC 10 档 / RSA 攻击 13 档等）改单行横向滚动，
+   不再溢出屏幕或与参数区穿模；覆盖窄屏 .dir-seg 的 wrap 规则（更高特异性）。 */
+.dir-seg.fam-seg { display: flex; max-width: 100%; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: thin; overscroll-behavior-x: contain; }
+.dir-seg.fam-seg button { flex: 0 0 auto; white-space: nowrap; }
 
 /* ---- 首页一把梭 ---- */
 .home-hero { max-width: 760px; margin: 0 auto; }
@@ -471,7 +551,7 @@ label.switch,
 /* onekey-card 专用入场：仅淡入 + 轻微上移，无横向位移（区别于 toast 的 fadeUp） */
 @keyframes cardIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .onekey-card .ok-name { font-size: var(--fs-sm); color: var(--primary); font-weight: 600; }
-.onekey-card .ok-val { font-family: var(--font-content), var(--mono); font-feature-settings: var(--font-features); margin-top: var(--sp-1); line-height: 1.55; word-break: break-all; }
+.onekey-card .ok-val { font-family: var(--io-font); font-feature-settings: var(--font-features); margin-top: var(--sp-1); line-height: 1.55; word-break: break-all; }
 .onekey-empty { color: var(--on-surface-var); text-align: center; padding: var(--sp-6); }
 /* ---- 暴力爆破独立通道结果区（不参与主排序，单独折叠区） ---- */
 .onekey-brute {
@@ -586,7 +666,7 @@ label.switch,
 .onekey-brute-branch:hover { background: var(--surface-hi); }
 .onekey-brute-branch.crib-hit { border-inline-start: 3px solid var(--success); background: var(--surface-hi); }
 .onekey-brute-param { font-size: var(--fs-sm); color: var(--primary); font-weight: 600; }
-.onekey-brute-branch .ok-val { font-family: var(--font-content), var(--mono); font-feature-settings: var(--font-features); margin-top: var(--sp-1); line-height: 1.55; word-break: break-all; }
+.onekey-brute-branch .ok-val { font-family: var(--io-font); font-feature-settings: var(--font-features); margin-top: var(--sp-1); line-height: 1.55; word-break: break-all; }
 
 /* 「三元组摘要行」——置顶最优解摘要卡，视觉与普通候选卡区分 */
 .onekey-card.onekey-summary { border-inline-start-color: var(--primary); background: var(--surface-hi); }
@@ -690,7 +770,7 @@ label.switch,
 .file-section.alert .file-section-title .msym { color: var(--error); }
 .file-section.warn .file-section-title { color: var(--warning-text); }
 .file-section.alert .file-section-title { color: var(--error); }
-.file-section-body { white-space: pre-wrap; word-break: break-all; font-family: var(--font-content), var(--mono); font-feature-settings: var(--font-features); line-height: 1.55; }
+.file-section-body { white-space: pre-wrap; word-break: break-all; font-family: var(--io-font); font-feature-settings: var(--font-features); line-height: 1.55; }
 /* section actions（下载按钮行 + 双击查看提示） */
 .file-section-actions { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-2); }
 /* 下载按钮升为 M3 filled-tonal 明显按钮 */
@@ -799,7 +879,7 @@ label.switch,
   padding: var(--sp-2) var(--sp-3);
   background: var(--field-bg); border: 1px solid var(--outline-var);
   border-radius: var(--r-sm); font-size: calc(var(--fs-base) + 2px); color: var(--on-surface);
-  font-family: var(--font-content), var(--mono);
+  font-family: var(--io-font);
  /* 同 .io-area，强制开天珩特性 + 字号 +2 */
   font-feature-settings: var(--font-features);
   -webkit-font-feature-settings: var(--font-features);
@@ -808,10 +888,10 @@ label.switch,
   transition: border-color var(--dur-short) var(--ease);
 }
 .crypto-input:focus { outline: 2px solid var(--primary); border-color: transparent; }
-.crypto-field .io-area { min-height: 80px; font-family: var(--font-content), var(--mono); font-feature-settings: var(--font-features); }
+.crypto-field .io-area { min-height: 80px; font-family: var(--io-font); font-feature-settings: var(--font-features); }
 
 .crypto-toolbar { display: flex; justify-content: flex-end; margin-bottom: var(--sp-3); }
-.crypto-run { font-size: var(--fs-base); padding: 0 var(--sp-4); }
+.crypto-run { font-size: var(--fs-base); padding: 0 var(--sp-4); width: auto; height: 40px; border-radius: var(--r-full); gap: 6px; }
 .crypto-run .msym { font-size: 20px; }
 
 .crypto-out { display: flex; flex-direction: column; gap: var(--sp-2); }
@@ -923,6 +1003,20 @@ label.switch,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 搜索结果「加载更多」分页按钮（默认 20 条一页，全量可达） */
+.op-search-more {
+  display: block;
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  background: none;
+  border: none;
+  border-top: 1px solid var(--surface-hi);
+  color: var(--primary);
+  font-size: var(--fs-sm);
+  text-align: center;
+  cursor: pointer;
+}
+.op-search-more:hover { background: var(--surface-hi); }
 .op-search-empty {
   padding: var(--sp-4);
   text-align: center;
@@ -1473,15 +1567,15 @@ a.about-ref-name:hover { text-decoration: underline; }
 /* 徽章内小图标（可选，如 terminal/desktop_windows），跟随徽章文字色 */
 .exe-badge .msym { font-size: 12px; flex: none; }
 
-/* ============ 前庭无障碍：全局尊重 prefers-reduced-motion ============ */
-/* 用户在系统里开了"减弱动态效果"→ 全站动画/过渡近乎瞬时（保留最终态，去掉运动过程）。 */
-@media (prefers-reduced-motion: reduce) {
- *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
+/* ============ 前庭无障碍：减少动效开关（T471b，2026-09-09 恒烈指示改造） ============ */
+/* 原版挂在 OS 的 prefers-reduced-motion 上——部分 Windows 关闭「动画效果」后用户将永远
+   看不到任何动画（实机确诊）。改为应用内开关：html.reduce-motion 类由 main.js 依
+   localStorage('ebctf.reduceMotion') 控制，默认不启用（动画照常播放，尊重用户显式选择）。 */
+html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }
 
 /* ============ 快速换算视图（MT81，类名前缀 qc-）============ */
@@ -1768,3 +1862,55 @@ a.about-ref-name:hover { text-decoration: underline; }
   .stepper .stepper-inp { min-height: 44px; }
   .stepper-btn { width: 44px; height: 44px; }
 }
+
+/* 编辑框字形统一（恒烈 2026-09-02）：CodeMirror 算法编辑器 bundle 内联 fontFamily:"monospace"
+   （Win 落 Courier New，0/O 不易分），覆盖为专业编程栈。!important 压 CM6 styleModule 内联。 */
+.cm-editor .cm-content, .cm-editor .cm-scroller { font-family: var(--mono) !important; }
+
+/* ================= T471 M3 动效保真（2026-09-09，恒烈批准直改动画/形态层） ================= */
+/* 1) 触点涟漪：**已停用（恒烈 2026-09-13「涟漪效果太糟糕了，取消吧」）**——JS 侧 initM3Ripple
+      直接 return 不再挂载；以下样式与宿主 position:relative 保留备将来重做，当前无消费者。 */
+.act-btn, .nav-item, .nav-subitem, .stepper-btn, .dir-seg button, .io-mini-btn, .nav-toggle, .fav-btn { position: relative; }
+.m3-ripple { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
+.m3-ripple-dot { position: absolute; border-radius: 50%; background: currentColor; opacity: 0;
+  transform: translate(-50%, -50%) scale(0); will-change: transform, opacity; }
+.m3-ripple-dot.run { opacity: var(--ripple-op, .12); transform: translate(-50%, -50%) scale(1);
+  transition: transform 400ms var(--ease-emph, cubic-bezier(.2, 0, 0, 1)), opacity 200ms linear; } /* T471c ¾ 档 */
+.m3-ripple-dot.out { opacity: 0; transition: opacity 250ms linear; }
+
+/* 2) 菜单/搜索面板 M3 入场（scale+fade，emphasized-decelerate）。
+      搜索面板动画挂在 .open 态上：仅开合切换重放，打字只重填 innerHTML 不重放。 */
+.tcm-menu, .op-search-panel.open { animation: m3-pop-in var(--dur-medium) var(--ease-emph-dec, cubic-bezier(.05, .7, .1, 1)); transform-origin: top left; }
+@keyframes m3-pop-in { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
+
+/* 3) Switch 按压形变：按住时 thumb 增宽（M3 pressed thumb 扩张）；
+      knob 过渡补 width（同名规则后写覆盖前写的 transition 清单）。 */
+.switch .knob { transition: inset-inline-start var(--dur-short) var(--ease), background var(--dur-short) var(--ease), width var(--dur-short) var(--ease); }
+.switch:active .knob { width: 18px; }
+.switch input:checked:active ~ .knob { inset-inline-start: 22px; } /* 26-(18-14)：右缘不动、向左扩 */
+
+/* 4) 减动效偏好：ripple/弹出/导航高度动画全停（与上面全局开关同源于 html.reduce-motion，
+      JS 侧同步判断同一类名，不再读 OS 偏好——T471b） */
+html.reduce-motion .m3-ripple-dot.run, html.reduce-motion .m3-ripple-dot.out { transition: none; }
+html.reduce-motion .tcm-menu, html.reduce-motion .op-search-panel.open { animation: none; }
+html.reduce-motion .nav-sub { transition: none !important; }
+
+/* T499 科普卡别名标签区（复用 M3 令牌，flex 换行防 375 溢出） */
+.edu-aka-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.edu-aka-chip { font-size: var(--fs-base); padding: 2px 10px; border-radius: var(--r-full); background: var(--surface-2); color: var(--on-surface-var); border: 1px solid var(--outline-var); white-space: nowrap; }
+
+/* ── T510 第一批灰度（恒烈 2026-09-12 真机验后批准）：弹簧动效内核 ──
+   html.spring-motion 时：弹层改弹簧开合（关 CSS 入场动画）、族滑块用滑动指示器。 */
+html.spring-motion .tcm-menu, html.spring-motion .op-search-panel.open { animation: none; }
+html.spring-motion .fam-seg { position: relative; }
+html.spring-motion .fam-seg .seg-thumb { position: absolute; top: 3px; bottom: 3px; left: 0; background: var(--primary); border-radius: var(--r-full); z-index: 0; will-change: transform; }
+html.spring-motion .fam-seg button { position: relative; z-index: 1; }
+html.spring-motion .fam-seg button.on { background: transparent; color: var(--on-primary); }
+
+/* ── T510 第二批（恒烈 2026-09-13 四反馈）：thumb 微弹参数与滚动保持纯 JS；本段收拉弹化+切页+涟漪 ── */
+/* ④ 收拉菜单弹化：入场位移/透明度改由 main.js toggleCat 弹簧驱动（velocity carry 打断续接），
+     关闭 CSS keyframe 防 animation 覆盖内联 transform（cascade 中 animation 恒赢 inline）。 */
+html.spring-motion .nav-sub.animate-in { animation: none; }
+/* ③ 切页过渡：容器纯淡入 150ms（恒烈定稿：从无到有、平滑、快、无弹动），走合成器属性 */
+html.spring-motion .workspace { will-change: transform, opacity; }
+/* ④ 涟漪已停用（恒烈 2026-09-13 裁决取消）——安卓14 扩散环规则随之移除 */

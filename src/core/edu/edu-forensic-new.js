@@ -1,14 +1,29 @@
 // 科普内容分片：forensic 取证类新增 19 项（压缩包破解 / john 哈希提取 / 流量分析 / Minecraft 存档 / pyc 隐写 / CRC 爆破）。纯数据，无 import 无副作用。
 export default {
+  adsTool: {
+    what: "NTFS 备用数据流（ADS）工具：检测/提取/删除/添加 ZIP 内嵌的 ADS。Windows 资源管理器压缩会把 ADS 连同 NTFS 扩展字段一起打进 ZIP——「file.txt:secret」类 CTF 隐流题的载体。",
+    principle:
+      "ZIP 规范（PKWARE APPNOTE）预留扩展字段 0x000A（NTFS）：内含 Tag 0x0001，记录修改/访问/创建三个 FILETIME 时间戳，以及若干 {流名(UTF-16), 流大小} 配对；流数据本体按 Info-ZIP 口径以独立条目「宿主:流名」随包存放。\n\n" +
+      "本工具解析中央目录逐条目读该字段：检测=列出全部流；提取=按流名解出字节（stored/deflate 均支持）；删除=重写 ZIP 剔除流条目并清理宿主扩展字段配对；添加=写配对+新增流条目。纯 JS 实现，替代原 Windows GUI exe。",
+    usage: "拖入/粘贴 ZIP（base64），选模式：检测直接出清单；提取/删除填「宿主:流名」（删除可填 * 全删）；添加填新流名+内容框写数据。删除/添加产物为下载 ZIP，可用检测模式回读验证。",
+    examples: [
+      { in: "一个内嵌 ADS 的 ZIP", param: "模式=检测", out: "1. file.txt:secret 128B 来源=NTFS 扩展字段", desc: "列出流名/大小/来源/时间戳" },
+      { in: "同一 ZIP", param: "模式=提取，流=file.txt:secret", out: "流内容字节预览 + 可下载文件", desc: "解出藏的数据" },
+    ],
+    tips: ["浏览器拿不到主机 NTFS 上文件的真实 ADS（拖入只有主数据流），本工具作用于 ZIP 载体——CTF 题中的 ADS 就是随 ZIP 打包的。", "拿到可疑 ZIP 先跑检测；流名带冒号（file.txt:flag）就是 ADS 形态。", "添加模式可自制 ADS 藏字 ZIP 用于出题；删除模式产出「干净包」，可用它验证清理是否彻底。"],
+    aka: ["NTFS ADS", "备用数据流", "Alternate Data Stream", "ads", "ntfs ads", "数据流隐写", "ads检测", "ads提取", "ads删除", "ads添加", "ntfs数据流", "zone identifier", "隐藏数据流", "流隐写", "adsTool"],
+  },
+
   bkcrackAttack: {
     what: "ZipCrypto 已知明文攻击（Biham-Kocher）：传统 ZipCrypto 加密的 ZIP，只要拿到某条目 ≥12 字节连续已知明文，就能直接恢复内部密钥态并解密整个压缩包，无视密码长度。",
     principle:
-      "传统 ZipCrypto（非 AES）的加密强度来自三个 32 位内部寄存器 key0/key1/key2。Biham-Kocher 攻击不猜密码，而是从「已知明文 ⊕ 密文」反推这三个寄存器的值。只要 ≥12 字节连续已知明文对上密文，就能把密钥态解出来，之后可解密该 ZIP 全部 ZipCrypto 条目。\n\n关键点：ZipCrypto 加密的是**压缩后**字节。若条目 `method=0`(stored) 已知明文=原文；若 `method=8`(deflate) 已知明文需是原文做同参数 deflate 后的压缩流。AES 加密的 ZIP 无法用本攻击。\n\n引擎是 kimci86/bkcrack 经 emscripten 编成 wasm，本地懒加载，缺失时降级为参数回显。攻击 CPU 密集，典型耗时几分钟到几十分钟。",
-    usage: "填加密 ZIP（hex/base64 或拖文件）、目标条目名（如 flag.txt）、≥12 字节已知明文及其编码/偏移。模式选「恢复密钥态」只出 key0/key1/key2，或「恢复并解密」直接导出目标条目。",
+      "传统 ZipCrypto（非 AES）的加密强度来自三个 32 位内部寄存器 key0/key1/key2。Biham-Kocher 攻击不猜密码，而是从「已知明文 $\\oplus$ 密文」反推这三个寄存器的值。只要 ≥12 字节连续已知明文对上密文，就能把密钥态解出来，之后可解密该 ZIP 全部 ZipCrypto 条目。\n\n关键点：ZipCrypto 加密的是**压缩后**字节。若条目 `method=0`(stored) 已知明文=原文；若 `method=8`(deflate) 已知明文需是原文做同参数 deflate 后的压缩流。AES 加密的 ZIP 无法用本攻击。\n\n引擎是 kimci86/bkcrack 经 emscripten 编成 wasm，本地懒加载，缺失时降级为参数回显。攻击 CPU 密集，典型耗时几分钟到几十分钟。",
+    usage: "四种模式：① 已知明文攻击恢复密钥态——填加密 ZIP（hex/base64 或拖文件）、目标条目名（如 flag.txt）、≥12 字节已知明文及其编码/偏移；② 恢复并解密——同①，并把目标条目直接解出（解出的是压缩后字节，method=8 需再用解压 op inflate）；③ 已知密钥态解密——免明文免攻击，「密钥态」填 3 组 8 位 hex（如 e8adb3d5 49151c56 08a55810）+ 目标条目名；④ 已知密钥态恢复密码——连 ZIP 都不用，填密钥态 + 密码长度上限 + 候选字符集，暴力反推原始密码。",
     examples: [
       { in: "加密 ZIP + 条目 flag.txt + 12+ 字节已知明文", param: "mode=recover", out: "key0 key1 key2 三个 8 位 hex 内部密钥态", desc: "拿到内部态即可解密全档" },
+      { in: "加密 ZIP + 条目 flag.txt + 密钥态 e8adb3d5 49151c56 08a55810", param: "mode=decryptKeys（免明文免攻击）", out: "目标条目解密后字节预览 + 可下载文件", desc: "题面直接给三组 hex 密钥态时走此模式，秒出结果" },
     ],
-    tips: ["明文来源：ZIP 内已知内容文件、文件头魔数（PNG 89504E47、PDF %PDF、内嵌 ZIP 504B0304）。恢复出密钥态后还能 bkcrack -k 反推原始密码字符串。AES 加密的 ZIP 用不了本攻击，改走 zip2john 爆破。"],
+    tips: ["明文来源：ZIP 内已知内容文件、文件头魔数（PNG 89504E47、PDF %PDF、内嵌 ZIP 504B0304）。恢复出密钥态后直接切「已知密钥态恢复密码」模式反推原始密码字符串，全程本工具内闭环，无需外部 CLI。AES 加密的 ZIP 用不了本攻击，改走 zip2john 爆破。"],
     aka: ["bkcrack", "zipcrypto", "已知明文攻击", "known plaintext attack", "biham kocher", "比哈姆科赫", "zip明文攻击", "pkzip stream cipher", "传统zip加密破解", "plaintext attack", "zip密码破解", "known-plaintext", "kimci86", "zip已知明文"],
   },
 
@@ -22,13 +37,13 @@ export default {
       { in: "5d41402abc4b2a76b9719d911017c592", out: "哈希: 32 hex 字符 = 128 bit，可能 MD5 / MD4 / NTLM / LM" },
     ],
     tips: ["拿到一坨不明字符串先丢这里，它会告诉你可能的方向。alg=none 的 JWT、私钥 PEM、比特币助记词都会被高亮为敏感物。"],
-    aka: ["格式识别", "format sniff", "特征识别", "指纹识别", "format detection", "格式嗅探", "identify format", "magic sniff", "格式检测", "数据类型识别", "format fingerprint", "what is this string", "识别输入", "格式判别"],
+    aka: ["魔数", "magic number", "文件头", "文件签名", "文件类型识别", "格式识别", "format sniff", "特征识别", "指纹识别", "format detection", "格式嗅探", "identify format", "magic sniff", "格式检测", "数据类型识别", "format fingerprint", "what is this string", "识别输入", "格式判别"],
   },
 
   sevenZip2john: {
     what: "7z 哈希提取（7z2john）：从加密的 7z 压缩包里提取 John/hashcat 能用的 hash 串（只提取不爆破），输出 `$7z$` 格式，对应 hashcat mode 11600。",
     principle:
-      "7z 用 AES-256 + SHA-256 KDF 加密。工具解析 7z 的 SignatureHeader（magic 37 7A BC AF 27 1C）和 NextHeader，从 Folder 的 Coder 链里找 AES 编码器（codecId 06F10701），取出它的 Properties：NumCyclesPower（KDF 迭代=2^n）、salt、IV，再读加密数据、CRC、pack/dec 长度，拼成 `$7z$type$NumCyclesPower$saltLen$salt$ivLen$iv$crc$encLen$decLen$encData` 的 hash 串。头部加密（-mhe=on）时从 ENCODED_HEADER 提取。",
+      "7z 用 AES-256 + SHA-256 KDF 加密。工具解析 7z 的 SignatureHeader（magic 37 7A BC AF 27 1C）和 NextHeader，从 Folder 的 Coder 链里找 AES 编码器（codecId 06F10701），取出它的 Properties：NumCyclesPower（KDF 迭代 $= 2^{n}$）、salt、IV，再读加密数据、CRC、pack/dec 长度，拼成 `$7z$type$NumCyclesPower$saltLen$salt$ivLen$iv$crc$encLen$decLen$encData` 的 hash 串。头部加密（-mhe=on）时从 ENCODED_HEADER 提取。",
     usage: "输入 7z 文件（hex/base64/拖文件），选输入编码，maxDataLen 控制内联加密数据上限。输出 `$7z$` hash 串，喂给 `hashcat -m 11600` 或 john。",
     examples: [
       { in: "加密 7z 文件字节", out: "$7z$0$19$0$$8$<iv>$<crc>$<encLen>$<decLen>$<encData>", desc: "type=0 stored, NumCyclesPower=19 即 2^19 次" },
@@ -69,7 +84,7 @@ export default {
     examples: [
       { in: "RAR5 加密文件字节", out: "$rar5$16$<salt>$15$<iv>$8$<pswcheck>", desc: "iter_log2=15 即 PBKDF2 2^15=32768 次" },
     ],
-    tips: ["rar2john 只提取不爆破。RAR3-hp 用 hashcat 12500，RAR3-p 用 23700/23800，RAR5 用 13000。RAR5 的 iter 是对数（15→2^15）。"],
+    tips: ["rar2john 只提取不爆破。RAR3-hp 用 hashcat 12500，RAR3-p 用 23700/23800，RAR5 用 13000。RAR5 的 iter 是对数（$15 \\to 2^{15}$）。"],
     aka: ["rar2john", "rar哈希提取", "rar hash", "$RAR3$", "$rar5$", "rar crack", "rar密码提取", "hashcat 12500", "hashcat 13000", "rar密码破解", "winrar hash", "rar john", "rar5 hash", "rar3 hash"],
   },
 

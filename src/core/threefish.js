@@ -195,7 +195,7 @@ function threefishRun(text, p, dir) {
 
 register({
   id: "threefish",
-  cat: "modern",
+  cat: "block",
   name: "Threefish 可调分组密码",
   desc: "Threefish 可调分组密码（Skein v1.3 内建）：256/512/1024 位分组，密钥同长，72/80 轮无密钥调度器 + 128 位 tweak。明文/密文/密钥/tweak 均 hex，ECB 多块。encode 加密 / decode 解密。已过 Crypto++ threefish.txt 官方向量。",
   params: [

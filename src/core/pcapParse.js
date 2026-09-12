@@ -1082,7 +1082,7 @@ export function pcapParseRun(text, p = {}) {
 }
 
 register({
-  id: "pcapParse",
+  id: "pcapParse", family: "pcap", familyLabel: "parse",
   cat: "forensic",
   name: "pcap/pcapng 结构解析",
   desc: "解析 pcap/pcapng 流量文件：全局头+包记录+Ethernet/IPv4/IPv6/TCP/UDP/ICMP/HTTP/DNS 分帧，输出包摘要表+协议详情+载荷提取。纯前端零依赖",

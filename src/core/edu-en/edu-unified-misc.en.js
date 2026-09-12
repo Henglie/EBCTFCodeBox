@@ -42,7 +42,7 @@ export default {
     tips: [
       "In CTF, seeing a string starting with `1` / `3` / `bc1` and about 34 chars long, throw it in first to verify whether it's a BTC address.",
       "ETH address checksums rely on case; an all-lowercase/all-uppercase ETH address can't be EIP-55 validated (but is still a valid address).",
-      "Bech32 and Bech32m are easy to confuse: witver=0 uses Bech32, witver≥1 (Taproot) uses Bech32m; picking the wrong one fails the checksum.",
+      "Bech32 and Bech32m are easy to confuse: witver=0 uses Bech32, witver $\\ge 1$ (Taproot) uses Bech32m; picking the wrong one fails the checksum.",
       "This tool only parses, never generates private keys — safe and risk-free.",
     ],
     aka: ["crypto address", "加密货币地址", "btc地址", "eth地址", "区块链地址", "比特币地址", "以太坊地址", "钱包地址", "bitcoin address", "ethereum address", "地址校验", "Base58Check Bech32"],

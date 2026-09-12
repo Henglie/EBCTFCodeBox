@@ -17,7 +17,7 @@
  * - 只新建本文件，不碰任何现有 core/*.js。
  * - 大数一律 BigInt；modInverse / rsaPow 复用 modern.js 已导出的纯函数（import，不重造）。
  * - 攻击类用 run 单向；参数计算类如可逆则 encode+decode（rsaModinv 自反双向）。
- * - 注册契约：register({id, cat:"analysis", name, desc, params, run?})。
+ * - 注册契约：register({id, cat:"asym"|"crypto", name, desc, params, run?})——数学工具类（rsaParams/Modinv/Egcd/Crt/Modpow）cat:"asym"（T384 挪入），真攻击类（SmallE/CommonModulus/Wiener/Fermat/Pollard）cat:"crypto" 留守。
  *
  * 输入约定：大数十进制字符串；多值按换行或逗号分隔（parseBigInts）。
  * 主待处理数据（密文/待分解数/待求逆值）走输入框 text，结构化参数走 params。
@@ -101,9 +101,10 @@ function iroot(n, k) {
 // RSA 参数计算（p,q,e → n,φ,d,dp,dq,qinv）
 // ============================================================
 function rsaParamsReport(text, p) {
-  const nums = parseBigInts(text);
-  if (nums.length < 2) throw new Error("需输入 p 和 q（每行一个或逗号分隔）");
-  const pp = nums[0], qq = nums[1];
+  const pStr = String((p && p.p) || "").trim();
+  const qStr = String((p && p.q) || "").trim();
+  if (!pStr || !qStr) throw new Error("需在参数框填入 p 和 q（十进制，主输入框不再使用）");
+  const pp = BigInt(pStr), qq = BigInt(qStr);
   const e = BigInt(String((p && p.e) || "65537").trim());
   const n = pp * qq;
   const phi = (pp - 1n) * (qq - 1n);
@@ -189,9 +190,10 @@ function commonModulusAttack(n, e1, e2, c1, c2) {
 }
 
 function rsaCommonModulusReport(text, p) {
-  const nums = parseBigInts(text);
-  if (nums.length < 2) throw new Error("需输入 c1 和 c2（每行一个或逗号分隔）");
-  const c1 = nums[0], c2 = nums[1];
+  const c1Str = String((p && p.c1) || "").trim();
+  const c2Str = String((p && p.c2) || "").trim();
+  if (!c1Str || !c2Str) throw new Error("需在参数框填入 c1 和 c2（十进制，主输入框不再使用）");
+  const c1 = BigInt(c1Str), c2 = BigInt(c2Str);
   const n = BigInt(String((p && p.n) || "").trim());
   const e1 = BigInt(String((p && p.e1) || "").trim());
   const e2 = BigInt(String((p && p.e2) || "").trim());
@@ -249,9 +251,10 @@ function wienerAttack(e, n) {
 }
 
 function rsaWienerReport(text, p) {
-  const nums = parseBigInts(text);
-  if (nums.length < 2) throw new Error("需输入 e 和 n（每行一个或逗号分隔）");
-  const e = nums[0], n = nums[1];
+  const eStr = String((p && p.e) || "").trim();
+  const nStr = String((p && p.n) || "").trim();
+  if (!eStr || !nStr) throw new Error("需在参数框填入 e 和 n（十进制，主输入框不再使用）");
+  const e = BigInt(eStr), n = BigInt(nStr);
   const r = wienerAttack(e, n);
   const lines = [];
   lines.push("=== Wiener 攻击（连分数，针对小 d）===");
@@ -361,20 +364,21 @@ function rsaPollardReport(text, p) {
 // ============================================================
 // 模逆（双向自反：encode = decode = 求 a⁻¹ mod m；inv(inv(a)) = a）
 // ============================================================
-function modinvOp(text) {
-  const nums = parseBigInts(text);
-  if (nums.length < 2) throw new Error("需输入 a 和 m（每行一个或逗号分隔）");
-  const a = nums[0], m = nums[1];
-  return modInverse(a, m).toString();
+function modinvOp(text, p) {
+  const aStr = String((p && p.a) || "").trim();
+  const mStr = String((p && p.m) || "").trim();
+  if (!aStr || !mStr) throw new Error("需在参数框填入 a 和 m（十进制，主输入框不再使用）");
+  return modInverse(BigInt(aStr), BigInt(mStr)).toString();
 }
 
 // ============================================================
 // 扩展欧几里得报告（a·x + b·y = g）
 // ============================================================
-function rsaEgcdReport(text) {
-  const nums = parseBigInts(text);
-  if (nums.length < 2) throw new Error("需输入 a 和 b（每行一个或逗号分隔）");
-  const a = nums[0], b = nums[1];
+function rsaEgcdReport(text, p) {
+  const aStr = String((p && p.a) || "").trim();
+  const bStr = String((p && p.b) || "").trim();
+  if (!aStr || !bStr) throw new Error("需在参数框填入 a 和 b（十进制，主输入框不再使用）");
+  const a = BigInt(aStr), b = BigInt(bStr);
   const [g, x, y] = egcd(a, b);
   const lines = [];
   lines.push("=== 扩展欧几里得 ===");
@@ -449,10 +453,12 @@ function rsaCrtReport(text) {
 // ============================================================
 // 大数快速幂（base^exp mod m，复用 modern.js rsaPow）
 // ============================================================
-function rsaModpowReport(text) {
-  const nums = parseBigInts(text);
-  if (nums.length < 3) throw new Error("需输入 base, exp, mod（每行一个或逗号分隔）");
-  const [base, exp, mod] = nums;
+function rsaModpowReport(text, p) {
+  const baseStr = String((p && p.base) || "").trim();
+  const expStr = String((p && p.exp) || "").trim();
+  const modStr = String((p && p.mod) || "").trim();
+  if (!baseStr || !expStr || !modStr) throw new Error("需在参数框填入 base、exp、mod（十进制，主输入框不再使用）");
+  const base = BigInt(baseStr), exp = BigInt(expStr), mod = BigInt(modStr);
   const r = rsaPow(base, exp, mod);
   const lines = [];
   lines.push("=== 大数快速幂 ===");
@@ -468,17 +474,19 @@ function rsaModpowReport(text) {
 // 注册
 // ============================================================
 register({
-  id: "rsaParams",
-  cat: "crypto",
+  id: "rsaParams", family: "rsa", familyLabel: "params",
+  cat: "asym",
   name: "RSA 参数计算（p,q→n,φ,d）",
-  desc: "由 p,q,e 推导 n、φ(n)、d、dp、dq、qinv（输入框填 p 和 q，每行一个或逗号分隔）",
+  desc: "由 p,q,e 推导 n、φ(n)、d、dp、dq、qinv（参数框填 p 和 q，十进制；主输入框不再使用）",
   params: [
+    { key: "p", label: "素数 p", type: "text", default: "", placeholder: "十进制大素数" },
+    { key: "q", label: "素数 q", type: "text", default: "", placeholder: "十进制大素数" },
     { key: "e", label: "公钥指数 e", type: "text", default: "65537", placeholder: "十进制，如 65537 / 17 / 3" },
   ],
   run: rsaParamsReport,
 });
 register({
-  id: "rsaSmallE",
+  id: "rsaSmallE", family: "rsaatk", familyLabel: "smalle",
   cat: "crypto",
   name: "RSA 小 e 攻击（整数开根）",
   desc: "e 很小时对密文 c 开 e 次整数根恢复 m（含 c+k·n 试探应对 m^e 略大于 n）",
@@ -489,27 +497,32 @@ register({
   run: rsaSmallEReport,
 });
 register({
-  id: "rsaCommonModulus",
+  id: "rsaCommonModulus", family: "rsaatk", familyLabel: "commonmod",
   cat: "crypto",
   name: "RSA 共模攻击",
-  desc: "同一 n 同一明文 m，不同互质 e1/e2 加密 → 扩展欧几里得恢复 m（输入框填 c1 和 c2）",
+  desc: "同一 n 同一明文 m，不同互质 e1/e2 加密 → 扩展欧几里得恢复 m（参数框填 c1 和 c2，十进制；主输入框不再使用）",
   params: [
     { key: "n", label: "模数 n", type: "text", default: "", placeholder: "十进制模数" },
     { key: "e1", label: "公钥指数 e1", type: "text", default: "", placeholder: "须与 e2 互质" },
     { key: "e2", label: "公钥指数 e2", type: "text", default: "", placeholder: "须与 e1 互质" },
+    { key: "c1", label: "密文 c1", type: "text", default: "", placeholder: "e1 加密所得十进制密文" },
+    { key: "c2", label: "密文 c2", type: "text", default: "", placeholder: "e2 加密所得十进制密文" },
   ],
   run: rsaCommonModulusReport,
 });
 register({
-  id: "rsaWiener",
+  id: "rsaWiener", family: "rsaatk", familyLabel: "wiener",
   cat: "crypto",
   name: "RSA Wiener 攻击（连分数）",
-  desc: "连分数展开 e/n 找收敛子，恢复小 d 密钥（适用 d < n^(1/4)/3；输入框填 e 和 n）",
-  params: [],
+  desc: "连分数展开 e/n 找收敛子，恢复小 d 密钥（适用 d < n^(1/4)/3；参数框填 e 和 n，十进制；主输入框不再使用）",
+  params: [
+    { key: "e", label: "公钥指数 e", type: "text", default: "", placeholder: "十进制公钥指数" },
+    { key: "n", label: "模数 n", type: "text", default: "", placeholder: "十进制模数" },
+  ],
   run: rsaWienerReport,
 });
 register({
-  id: "rsaFermat",
+  id: "rsaFermat", family: "rsaatk", familyLabel: "fermat",
   cat: "crypto",
   name: "费马分解（p,q 相近）",
   desc: "n = a²-b² = (a-b)(a+b)，从 ceil(√n) 递增 a 找 b²（适用 |p-q| 较小；输入框填 n）",
@@ -519,7 +532,7 @@ register({
   run: rsaFermatReport,
 });
 register({
-  id: "rsaPollard",
+  id: "rsaPollard", family: "rsaatk", familyLabel: "pollard",
   cat: "crypto",
   name: "Pollard rho 分解",
   desc: "Floyd 环检测 + gcd 分解半素数 n（适合含较小因子；输入框填 n）",
@@ -529,25 +542,31 @@ register({
   run: rsaPollardReport,
 });
 register({
-  id: "rsaModinv",
-  cat: "crypto",
+  id: "rsaModinv", family: "rsa", familyLabel: "modinv",
+  cat: "asym",
   name: "模逆（a⁻¹ mod m）",
-  desc: "扩展欧几里得求 a 在模 m 下的乘法逆元；双向自反（encode/decode 互逆：inv(inv(a))=a）",
-  params: [],
+  desc: "扩展欧几里得求 a 在模 m 下的乘法逆元；双向自反（encode/decode 互逆：inv(inv(a))=a）（参数框填 a 和 m，十进制；主输入框不再使用）",
+  params: [
+    { key: "a", label: "待求逆值 a", type: "text", default: "", placeholder: "十进制整数" },
+    { key: "m", label: "模数 m", type: "text", default: "", placeholder: "十进制模数" },
+  ],
   encode: modinvOp,
   decode: modinvOp,
 });
 register({
-  id: "rsaEgcd",
-  cat: "crypto",
+  id: "rsaEgcd", family: "rsa", familyLabel: "egcd",
+  cat: "asym",
   name: "扩展欧几里得（Bézout）",
-  desc: "求 gcd(a,b) 及 Bézout 系数 x,y 使 a·x + b·y = g（输入框填 a 和 b）",
-  params: [],
+  desc: "求 gcd(a,b) 及 Bézout 系数 x,y 使 a·x + b·y = g（参数框填 a 和 b，十进制；主输入框不再使用）",
+  params: [
+    { key: "a", label: "整数 a", type: "text", default: "", placeholder: "十进制整数" },
+    { key: "b", label: "整数 b", type: "text", default: "", placeholder: "十进制整数" },
+  ],
   run: rsaEgcdReport,
 });
 register({
-  id: "rsaCrt",
-  cat: "crypto",
+  id: "rsaCrt", family: "rsa", familyLabel: "crt",
+  cat: "asym",
   name: "中国剩余定理 CRT",
   desc: "合并同余方程组 x ≡ r_i mod m_i（残差、模数各一框，逗号分隔）",
   params: [],
@@ -560,11 +579,15 @@ register({
   run: rsaCrtReport,
 });
 register({
-  id: "rsaModpow",
-  cat: "crypto",
+  id: "rsaModpow", family: "rsa", familyLabel: "modpow",
+  cat: "asym",
   name: "大数快速幂（base^exp mod m）",
-  desc: "BigInt 模幂运算（输入框填 base, exp, mod，每行一个或逗号分隔）",
-  params: [],
+  desc: "BigInt 模幂运算（参数框填 base、exp、mod，十进制；主输入框不再使用）",
+  params: [
+    { key: "base", label: "底数 base", type: "text", default: "", placeholder: "十进制底数" },
+    { key: "exp", label: "指数 exp", type: "text", default: "", placeholder: "十进制指数" },
+    { key: "mod", label: "模数 mod", type: "text", default: "", placeholder: "十进制模数" },
+  ],
   run: rsaModpowReport,
 });
 

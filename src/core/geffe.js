@@ -27,7 +27,8 @@
  * 不写 detect：纯 0/1 串是多 op 公共入口，analysis 类爆破工具不参与
  * magic 自动预筛（对齐 lfsrRecover / nonogram / spiralMatrix / xorAnalyze）。
  *
- * 契约：register({id, cat:'analysis', name, desc, params, run})。
+ * 契约：两个独立 op（T396-A 拆分，不硬凑族）：geffeGenerate / geffeAttack，
+ *        cat:'analysis'。
  *
  * 参考：
  * - Geffe generator（Geffe 1973, IEEE Trans. Inf. Theory IT-19）
@@ -239,22 +240,27 @@ function polyToString(taps) {
 }
 
 // ============================================================
-// run：主入口
+// 双 op 拆分（T396-A，2026-09-04：废除单 op 多 mode 下拉）
+// geffeGenerate（生成）/ geffeAttack（相关攻击）拆为两个独立 op，不加 family：
+// 两档输入结构差异大（生成=3 抽头+3 初态+长度；攻击=keystream+3 抽头+bruteL2），
+// 且 cat:'analysis' 无族先例、fam.lbl 现有 key 无 generate/attack 可用，硬凑一族
+// 需新增两个 i18n key 不划算。底层 lfsrGenerate/geffeKeystream/correlationAttack/
+// bruteL2 实现原样复用，每个 op 只保留本档参数面。
 // ============================================================
-function geffeRun(text, p) {
-  const mode = (p && p.mode) || "generate";
+
+// 公共：解析 3 个 LFSR 抽头 + 报告头。返回 { lines, taps1, taps2, taps3, L1, L2, L3 }，
+// 解析失败时 lines 已含错误提示，调用方直接返回。
+function geffeTapsHeader(p) {
   const lines = [];
   lines.push("=== Geffe 生成器 + 相关攻击 ===");
   lines.push("");
-
-  // 解析 3 个 LFSR 抽头
   const taps1 = parseTaps(p && p.lfsr1Taps);
   const taps2 = parseTaps(p && p.lfsr2Taps);
   const taps3 = parseTaps(p && p.lfsr3Taps);
   if (!taps1 || !taps2 || !taps3) {
     lines.push("✗ LFSR 抽头解析失败。请填反馈多项式抽头，例如 1,4 表示 x^4+x+1（含最高次=级数）。");
     lines.push("  支持格式：\"1,4\" / \"1 4\" / \"x^4+x+1\"");
-    return lines.join("\n");
+    return { lines, taps1: null, taps2: null, taps3: null, L1: 0, L2: 0, L3: 0 };
   }
   const L1 = Math.max(...taps1);
   const L2 = Math.max(...taps2);
@@ -265,13 +271,33 @@ function geffeRun(text, p) {
   lines.push("组合函数: f(x1,x2,x3) = x1·x2 ⊕ x2·x3 ⊕ x3  (x2=0→f=x3, x2=1→f=x1)");
   lines.push("相关性: P(f=x1)=3/4, P(f=x3)=3/4, P(f=x2)=1/2");
   lines.push("");
+  return { lines, taps1, taps2, taps3, L1, L2, L3 };
+}
 
-  if (mode === "generate") {
+// ---- op① 生成 keystream ----
+register({
+  id: "geffeGenerate",
+  cat: "analysis",
+  name: "Geffe 生成器",
+  desc: "Geffe 组合生成器（Geffe 1973）：3 个 LFSR + 非线性组合函数 f=x1x2⊕x2x3⊕x3 输出 keystream。已知 3 LFSR 抽头+初态+输出长度 → keystream（自验/构造测试用；可接「Geffe 相关攻击」验证还原初态）",
+  params: [
+    { key: "lfsr1Taps", label: "LFSR1 抽头", type: "text", default: "1,4", placeholder: "如 1,4 表示 x^4+x+1（含最高次=级数 L）" },
+    { key: "lfsr2Taps", label: "LFSR2 抽头", type: "text", default: "2,5", placeholder: "如 2,5 表示 x^5+x^2+1" },
+    { key: "lfsr3Taps", label: "LFSR3 抽头", type: "text", default: "1,6", placeholder: "如 1,6 表示 x^6+x+1" },
+    { key: "lfsr1Init", label: "LFSR1 初态", type: "text", default: "0001", placeholder: "bitstring 长度=L1，如 0001" },
+    { key: "lfsr2Init", label: "LFSR2 初态", type: "text", default: "00001", placeholder: "bitstring 长度=L2" },
+    { key: "lfsr3Init", label: "LFSR3 初态", type: "text", default: "000001", placeholder: "bitstring 长度=L3" },
+    { key: "length", label: "输出长度 (bit)", type: "number", default: 200, placeholder: "默认 200 bit" },
+  ],
+  run: (text, p) => {
+    const head = geffeTapsHeader(p);
+    if (!head.taps1) return head.lines.join("\n");
+    const { lines, taps1, taps2, taps3, L1, L2, L3 } = head;
     const init1 = parseInit(p && p.lfsr1Init, L1);
     const init2 = parseInit(p && p.lfsr2Init, L2);
     const init3 = parseInit(p && p.lfsr3Init, L3);
     if (!init1 || !init2 || !init3) {
-      lines.push("✗ 初态解析失败。generate 模式需填 3 个 LFSR 初态（bitstring，长度=级数）。");
+      lines.push("✗ 初态解析失败。需填 3 个 LFSR 初态（bitstring，长度=级数）。");
       lines.push("  例如 L=4 填 0001；也支持 hex（0x..）。");
       return lines.join("\n");
     }
@@ -284,131 +310,120 @@ function geffeRun(text, p) {
     const ks = geffeKeystream(taps1, init1, taps2, init2, taps3, init3, length);
     lines.push("keystream: " + ks.join(""));
     lines.push("");
-    lines.push("说明: 该 keystream 可作为 attack 模式的输入，验证相关攻击能否还原初态。");
+    lines.push("说明: 该 keystream 可作为「Geffe 相关攻击」op 的输入，验证相关攻击能否还原初态。");
     return lines.join("\n");
-  }
+  },
+});
 
-  // mode === "attack"
-  const keystream = parseBits(text);
-  if (keystream.length === 0) {
-    lines.push("✗ attack 模式：输入框需填 keystream（0/1 串，容忍空格/换行/逗号分隔）。");
-    return lines.join("\n");
-  }
-  lines.push("--- 相关攻击 ---");
-  lines.push("输入 keystream: " + keystream.length + " bit");
-  lines.push("");
-
-  // LFSR1 相关攻击
-  lines.push("▶ LFSR1 相关攻击（P(f=x1)=3/4，穷举 2^" + L1 + " 初态）:");
-  const atk1 = correlationAttack(keystream, taps1);
-  if (atk1.tooLarge != null) {
-    lines.push("  ✗ L=" + atk1.tooLarge + " 过大（>22），穷举不可行。请手动缩小或用 lfsrRecover 辅助。");
-  } else {
-    lines.push("  穷举 " + (1 << L1) + " 个初态，最佳匹配率: " + atk1.bestRate.toFixed(4) +
-      " (" + atk1.bestMatch + "/" + keystream.length + ")");
-    lines.push("  最佳候选初态: " + (atk1.bestInit || "（无）"));
-    if (atk1.candidates.length > 1) {
-      lines.push("  其他高匹配候选 (率≥0.7):");
-      for (const c of atk1.candidates.slice(1, 6)) {
-        lines.push("    " + c.init + "  率=" + c.rate.toFixed(4) + " (" + c.match + "/" + keystream.length + ")");
-      }
-    }
-    if (atk1.bestRate < 0.65) {
-      lines.push("  ⚠ 最佳匹配率 < 0.65，可能 LFSR1 抽头不对，或 keystream 太短（建议 ≥ 10×L1）。");
-    }
-  }
-  lines.push("");
-
-  // LFSR3 相关攻击
-  lines.push("▶ LFSR3 相关攻击（P(f=x3)=3/4，穷举 2^" + L3 + " 初态）:");
-  const atk3 = correlationAttack(keystream, taps3);
-  if (atk3.tooLarge != null) {
-    lines.push("  ✗ L=" + atk3.tooLarge + " 过大（>22），穷举不可行。");
-  } else {
-    lines.push("  穷举 " + (1 << L3) + " 个初态，最佳匹配率: " + atk3.bestRate.toFixed(4) +
-      " (" + atk3.bestMatch + "/" + keystream.length + ")");
-    lines.push("  最佳候选初态: " + (atk3.bestInit || "（无）"));
-    if (atk3.bestRate < 0.65) {
-      lines.push("  ⚠ 最佳匹配率 < 0.65，可能 LFSR3 抽头不对，或 keystream 太短。");
-    }
-  }
-  lines.push("");
-
-  // LFSR2
-  lines.push("▶ LFSR2（P(f=x2)=1/2，无线性相关性，需穷举+验证）:");
-  const bruteL2Flag = !!(p && p.bruteL2);
-  if (!bruteL2Flag) {
-    lines.push("  bruteL2 未开启。LFSR2 无法用相关攻击恢复（P=0.5）。");
-    lines.push("  如需恢复：开启 bruteL2 参数穷举 2^" + L2 + "（L≤22 时可行），用 L1/L3 验证。");
-    lines.push("  或：用 lfsrRecover（Berlekamp-Massey）直接分析 keystream 求等效 LFSR。");
-  } else {
-    if (atk1.bestInit && atk3.bestInit) {
-      lines.push("  穷举 2^" + L2 + " 个初态，用 L1=" + atk1.bestInit + " / L3=" + atk3.bestInit + " 验证...");
-      const init1Arr = atk1.bestInit.split("").map(Number);
-      const init3Arr = atk3.bestInit.split("").map(Number);
-      const res2 = bruteL2(keystream, taps1, init1Arr, taps3, init3Arr, taps2);
-      if (res2.ok) {
-        lines.push("  ✓ 命中: LFSR2 初态 = " + res2.init);
-      } else if (res2.tooLarge != null) {
-        lines.push("  ✗ L=" + res2.tooLarge + " 过大（>22），穷举不可行。");
-      } else {
-        lines.push("  ✗ 全部穷举未命中。可能 L1/L3 初态错（匹配率不足），或 L2 抽头不对。");
-      }
-    } else {
-      lines.push("  ✗ L1/L3 未恢复，无法穷举 L2 验证。");
-    }
-  }
-  lines.push("");
-
-  // 汇总
-  lines.push("--- 恢复汇总 ---");
-  lines.push("LFSR1 初态: " + (atk1.bestInit || "（未恢复）") +
-    (atk1.bestRate ? "  匹配率=" + atk1.bestRate.toFixed(4) : ""));
-  lines.push("LFSR3 初态: " + (atk3.bestInit || "（未恢复）") +
-    (atk3.bestRate ? "  匹配率=" + atk3.bestRate.toFixed(4) : ""));
-  let l2Summary = "（未穷举）";
-  if (bruteL2Flag && atk1.bestInit && atk3.bestInit) {
-    const init1Arr = atk1.bestInit.split("").map(Number);
-    const init3Arr = atk3.bestInit.split("").map(Number);
-    const r = bruteL2(keystream, taps1, init1Arr, taps3, init3Arr, taps2);
-    l2Summary = r.ok ? r.init : "（穷举未命中）";
-  }
-  lines.push("LFSR2 初态: " + l2Summary);
-  lines.push("");
-  lines.push("说明:");
-  lines.push("  · 相关攻击原理: f 与 x1/x3 的相关性 P=3/4 > 1/2，正确初态匹配率 ≈0.75，错误初态 ≈0.5。");
-  lines.push("  · keystream 越长越准: 统计区分 0.75 vs 0.5 需要足够样本，建议 ≥ 10×max(L1,L3)。");
-  lines.push("  · LFSR2 P=0.5 无相关性: 需穷举+L1/L3 验证（bruteL2），或用 lfsrRecover 直接分析。");
-  lines.push("  · 级数 L>22 时穷举不可行（2^22≈4M），需用代数攻击或 BM + 已知明文辅助。");
-  return lines.join("\n");
-}
-
-// ============================================================
-// 注册
-// ============================================================
+// ---- op② 相关攻击 ----
 register({
-  id: "geffe",
+  id: "geffeAttack",
   cat: "analysis",
-  name: "Geffe 生成器 / 相关攻击",
-  desc: "Geffe 组合生成器（3 LFSR + f=x1x2⊕x2x3⊕x3）双向：generate 生成 keystream，attack 用相关攻击（P=3/4）穷举恢复 L1/L3 初态，可选穷举 L2",
+  name: "Geffe 相关攻击",
+  desc: "Geffe 生成器相关攻击（Siegenthaler 1984）：f 与 x1/x3 相关性 P=3/4>1/2，穷举 2^L 初态按匹配率恢复 L1/L3（正确 ≈0.75，错误 ≈0.5）；LFSR2 P=0.5 无相关性，可选 bruteL2 穷举+L1/L3 验证。输入 keystream + 3 LFSR 抽头",
   params: [
-    {
-      key: "mode", label: "模式", type: "select", default: "generate",
-      options: [
-        { value: "generate", label: "生成（已知 3 LFSR 抽头+初态 → keystream）" },
-        { value: "attack", label: "相关攻击（已知 keystream+3 抽头 → 恢复 L1/L3 初态）" },
-      ],
-    },
     { key: "lfsr1Taps", label: "LFSR1 抽头", type: "text", default: "1,4", placeholder: "如 1,4 表示 x^4+x+1（含最高次=级数 L）" },
     { key: "lfsr2Taps", label: "LFSR2 抽头", type: "text", default: "2,5", placeholder: "如 2,5 表示 x^5+x^2+1" },
     { key: "lfsr3Taps", label: "LFSR3 抽头", type: "text", default: "1,6", placeholder: "如 1,6 表示 x^6+x+1" },
-    { key: "lfsr1Init", label: "LFSR1 初态 (generate)", type: "text", default: "0001", placeholder: "bitstring 长度=L1，如 0001" },
-    { key: "lfsr2Init", label: "LFSR2 初态 (generate)", type: "text", default: "00001", placeholder: "bitstring 长度=L2" },
-    { key: "lfsr3Init", label: "LFSR3 初态 (generate)", type: "text", default: "000001", placeholder: "bitstring 长度=L3" },
-    { key: "length", label: "输出长度 (generate)", type: "number", default: 200, placeholder: "默认 200 bit" },
-    { key: "bruteL2", label: "attack 时穷举 L2", type: "bool", default: false },
+    { key: "bruteL2", label: "穷举 L2", type: "bool", default: false },
   ],
-  run: geffeRun,
+  run: (text, p) => {
+    const head = geffeTapsHeader(p);
+    if (!head.taps1) return head.lines.join("\n");
+    const { lines, taps1, taps2, taps3, L1, L2, L3 } = head;
+    const keystream = parseBits(text);
+    if (keystream.length === 0) {
+      lines.push("✗ 输入框需填 keystream（0/1 串，容忍空格/换行/逗号分隔）。");
+      return lines.join("\n");
+    }
+    lines.push("--- 相关攻击 ---");
+    lines.push("输入 keystream: " + keystream.length + " bit");
+    lines.push("");
+
+    // LFSR1 相关攻击
+    lines.push("▶ LFSR1 相关攻击（P(f=x1)=3/4，穷举 2^" + L1 + " 初态）:");
+    const atk1 = correlationAttack(keystream, taps1);
+    if (atk1.tooLarge != null) {
+      lines.push("  ✗ L=" + atk1.tooLarge + " 过大（>22），穷举不可行。请手动缩小或用 lfsrRecover 辅助。");
+    } else {
+      lines.push("  穷举 " + (1 << L1) + " 个初态，最佳匹配率: " + atk1.bestRate.toFixed(4) +
+        " (" + atk1.bestMatch + "/" + keystream.length + ")");
+      lines.push("  最佳候选初态: " + (atk1.bestInit || "（无）"));
+      if (atk1.candidates.length > 1) {
+        lines.push("  其他高匹配候选 (率≥0.7):");
+        for (const c of atk1.candidates.slice(1, 6)) {
+          lines.push("    " + c.init + "  率=" + c.rate.toFixed(4) + " (" + c.match + "/" + keystream.length + ")");
+        }
+      }
+      if (atk1.bestRate < 0.65) {
+        lines.push("  ⚠ 最佳匹配率 < 0.65，可能 LFSR1 抽头不对，或 keystream 太短（建议 ≥ 10×L1）。");
+      }
+    }
+    lines.push("");
+
+    // LFSR3 相关攻击
+    lines.push("▶ LFSR3 相关攻击（P(f=x3)=3/4，穷举 2^" + L3 + " 初态）:");
+    const atk3 = correlationAttack(keystream, taps3);
+    if (atk3.tooLarge != null) {
+      lines.push("  ✗ L=" + atk3.tooLarge + " 过大（>22），穷举不可行。");
+    } else {
+      lines.push("  穷举 " + (1 << L3) + " 个初态，最佳匹配率: " + atk3.bestRate.toFixed(4) +
+        " (" + atk3.bestMatch + "/" + keystream.length + ")");
+      lines.push("  最佳候选初态: " + (atk3.bestInit || "（无）"));
+      if (atk3.bestRate < 0.65) {
+        lines.push("  ⚠ 最佳匹配率 < 0.65，可能 LFSR3 抽头不对，或 keystream 太短。");
+      }
+    }
+    lines.push("");
+
+    // LFSR2
+    lines.push("▶ LFSR2（P(f=x2)=1/2，无线性相关性，需穷举+验证）:");
+    const bruteL2Flag = !!(p && p.bruteL2);
+    if (!bruteL2Flag) {
+      lines.push("  穷举 L2 未开启。LFSR2 无法用相关攻击恢复（P=0.5）。");
+      lines.push("  如需恢复：开启「穷举 L2」参数穷举 2^" + L2 + "（L≤22 时可行），用 L1/L3 验证。");
+      lines.push("  或：用 lfsrRecover（Berlekamp-Massey）直接分析 keystream 求等效 LFSR。");
+    } else {
+      if (atk1.bestInit && atk3.bestInit) {
+        lines.push("  穷举 2^" + L2 + " 个初态，用 L1=" + atk1.bestInit + " / L3=" + atk3.bestInit + " 验证...");
+        const init1Arr = atk1.bestInit.split("").map(Number);
+        const init3Arr = atk3.bestInit.split("").map(Number);
+        const res2 = bruteL2(keystream, taps1, init1Arr, taps3, init3Arr, taps2);
+        if (res2.ok) {
+          lines.push("  ✓ 命中: LFSR2 初态 = " + res2.init);
+        } else if (res2.tooLarge != null) {
+          lines.push("  ✗ L=" + res2.tooLarge + " 过大（>22），穷举不可行。");
+        } else {
+          lines.push("  ✗ 全部穷举未命中。可能 L1/L3 初态错（匹配率不足），或 L2 抽头不对。");
+        }
+      } else {
+        lines.push("  ✗ L1/L3 未恢复，无法穷举 L2 验证。");
+      }
+    }
+    lines.push("");
+
+    // 汇总
+    lines.push("--- 恢复汇总 ---");
+    lines.push("LFSR1 初态: " + (atk1.bestInit || "（未恢复）") +
+      (atk1.bestRate ? "  匹配率=" + atk1.bestRate.toFixed(4) : ""));
+    lines.push("LFSR3 初态: " + (atk3.bestInit || "（未恢复）") +
+      (atk3.bestRate ? "  匹配率=" + atk3.bestRate.toFixed(4) : ""));
+    let l2Summary = "（未穷举）";
+    if (bruteL2Flag && atk1.bestInit && atk3.bestInit) {
+      const init1Arr = atk1.bestInit.split("").map(Number);
+      const init3Arr = atk3.bestInit.split("").map(Number);
+      const r = bruteL2(keystream, taps1, init1Arr, taps3, init3Arr, taps2);
+      l2Summary = r.ok ? r.init : "（穷举未命中）";
+    }
+    lines.push("LFSR2 初态: " + l2Summary);
+    lines.push("");
+    lines.push("说明:");
+    lines.push("  · 相关攻击原理: f 与 x1/x3 的相关性 P=3/4 > 1/2，正确初态匹配率 ≈0.75，错误初态 ≈0.5。");
+    lines.push("  · keystream 越长越准: 统计区分 0.75 vs 0.5 需要足够样本，建议 ≥ 10×max(L1,L3)。");
+    lines.push("  · LFSR2 P=0.5 无相关性: 需穷举+L1/L3 验证（穷举 L2 开关），或用 lfsrRecover 直接分析。");
+    lines.push("  · 级数 L>22 时穷举不可行（2^22≈4M），需用代数攻击或 BM + 已知明文辅助。");
+    return lines.join("\n");
+  },
 });
 
 export { lfsrGenerate, geffeCombine, geffeKeystream, correlationAttack, bruteL2, parseTaps, parseInit, parseBits, polyToString };

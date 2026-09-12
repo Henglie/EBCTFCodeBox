@@ -1,7 +1,7 @@
 // 科普内容分片：analysis RSA 攻击后半（侧信道 / 泄露 / 格攻击）。纯数据，无 import 无副作用。
 export default {
   rsaDpDqLeak: {
-    what: "dp/dq 泄露攻击：CRT 加速用的私钥碎片 dp(=d mod p−1) 一旦泄露，不用分解 n 也能直接把 p 挖出来，进而求出完整私钥 d。",
+    what: "dp/dq 泄露攻击：CRT 加速用的私钥碎片 dp（$= d \\bmod (p-1)$）一旦泄露，不用分解 n 也能直接把 p 挖出来，进而求出完整私钥 d。",
     principle:
       "已知 e、n、dp，其中 $dp \\equiv d \\pmod{p-1}$，即 $e\\cdot dp \\equiv 1 \\pmod{p-1}$。取任意底数 g（如 2），由费马小定理 $g^{(p-1)} \\equiv 1 \\pmod p$，可推出 $\\gcd(g^{\\,e\\cdot dp}-g,\\ n)$ 大概率就是素因子 p。\n\n" +
       "拿到 p 后 $q=n/p$、$\\varphi=(p-1)(q-1)$、$d\\equiv e^{-1}\\pmod{\\varphi}$，整条私钥就还原了。给了 dq 可交叉验证。",
@@ -66,11 +66,11 @@ export default {
   },
 
   rsaBonehDurfee: {
-    what: "Boneh-Durfee 攻击：Wiener 攻击的加强版，把「小私钥可破」的门槛从 d < N^0.25 推高到 d < N^0.292，更多小 d 的题都能拿下。",
+    what: "Boneh-Durfee 攻击：Wiener 攻击的加强版，把「小私钥可破」的门槛从 $d < N^{0.25}$ 推高到 $d < N^{0.292}$，更多小 d 的题都能拿下。",
     principle:
       "当私钥 $d < N^{0.292}$ 时，可把求 d 的问题化成一个二元模方程 $f(x,y)\\equiv 0$，用 Coppersmith 式的格约化（LLL）求小根解出 d，不必分解 n。\n\n" +
       "本工具检查 d 是否落在可攻击的门槛内，并说明格构造方法；实际求解需 SageMath 跑格约化脚本。",
-    usage: "填 e、n（若已知 d 位数上界），工具判断是否满足 d < N^0.292 并给出方法说明。",
+    usage: "填 e、n（若已知 d 位数上界），工具判断是否满足 $d < N^{0.292}$ 并给出方法说明。",
     examples: [
       { in: "e, n", out: "d < N^0.292 门槛判定 + 格攻击方法提示" },
     ],

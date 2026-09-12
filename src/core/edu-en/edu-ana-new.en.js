@@ -38,7 +38,7 @@ export default {
     principle:
       "CRC-32/ISO-HDLC (IEEE 802.3, same as zip/gzip) is a 32-bit checksum: reflected polynomial 0xEDB88320, init=0xFFFFFFFF, refIn/refOut=true, xorOut=0xFFFFFFFF.\n\n" +
       "With only about 4.2 billion possible values, brute-forcing all possible contents for short plaintext (≤5 bytes) and comparing CRC32 is entirely feasible:\n" +
-      "- 4 printable ASCII bytes: 95⁴ ≈ 81 million, seconds\n" +
+      "- 4 printable ASCII bytes: $95^{4} \\approx 81$ million, seconds\n" +
       "- 5 printable ASCII bytes: 95⁵ ≈ 7.7 billion, a browser doing this synchronously will stall; hard cap set to 5\n" +
       "- 6 bytes reaches 730 billion, infeasible in a browser; needs offline hashcat / a custom script\n\n" +
       "This tool uses table-driven + DFS incremental computation (reusing the CRC register along the search path), about 8× faster than recomputing each candidate from scratch.",

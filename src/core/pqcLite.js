@@ -127,14 +127,14 @@ function ntruOp(text, p = {}) {
 }
 
 register({
-  id: "lweToy", cat: "crypto", name: "LWE 玩具加解密",
+  id: "lweToy", cat: "asym", name: "LWE 玩具加解密",
   desc: "后量子教学：Regev LWE（q=257, n=8）比特加解密演示——理解格密码公钥机制（非生产参数）",
   params: [{ key: "bits", label: "比特串（0/1）", type: "text", default: "1010", placeholder: "如 10100101" }],
   run: lweOp,
 });
 
 register({
-  id: "ntruToy", cat: "crypto", name: "NTRU 玩具加解密",
+  id: "ntruToy", family: "ntru", familyLabel: "toy", cat: "asym", name: "NTRU 玩具加解密",
   desc: "后量子教学：NTRU 截断多项式环（n=8, q=257, p=3）加解密演示——理解 NTRU 机制（非生产参数）",
   params: [{ key: "msg", label: "消息多项式（空格分隔）", type: "text", default: "1 0 1 0 0 0 0 0", placeholder: "8 项 mod 3" }],
   run: ntruOp,

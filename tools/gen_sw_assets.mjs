@@ -68,13 +68,17 @@ const assets = ["./", "./index.html", "./manifest.json", "./sw.js", "./sw-assets
   .concat(kept.map((file) => `./${file.replaceAll("\\", "/")}`));
 
 const hash = createHash("sha256");
+const swSource = await readFile("sw.js", "utf8");
+// Exclude the generated stamp from its own digest so regeneration is idempotent.
+const swWithoutStamp = swSource.replace(/^\/\/ BUILD-STAMP:.*\r?\n/m, "");
 for (const file of ["index.html", "manifest.json", "sw.js", ...kept]) {
   hash.update(file);
-  hash.update(await readFile(file));
+  hash.update(file === "sw.js" ? swWithoutStamp : await readFile(file));
 }
 const revision = hash.digest("hex").slice(0, 16);
 const source = `self.__EBCTF_ASSET_REV = ${JSON.stringify(revision)};\nself.__EBCTF_ASSETS = ${JSON.stringify(assets, null, 2)};\n`;
 await writeFile("sw-assets.js", source);
+await writeFile("sw.js", `// BUILD-STAMP: ${revision}\n${swWithoutStamp}`);
 console.log(`sw-assets.js: ${assets.length} files, revision ${revision}`);
 console.log(`按需资产剔除 ${dropped.length} 项（运行时回填 + cache-first 兜底）:`);
 const byReason = new Map();

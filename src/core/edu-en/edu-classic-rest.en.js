@@ -31,8 +31,8 @@ export default {
 
   hill: {
     what: "Hill Cipher, a polygraphic substitution cipher invented by Lester S. Hill in 1929, encrypting with linear-algebra matrix operations.",
-    principle: "Plaintext letters are grouped into n-dimensional vectors, multiplied by an n×n key matrix (elements 0-25), and reduced mod 26 to get the ciphertext. Decryption needs the inverse of the key matrix mod 26. The matrix determinant must be coprime with 26 (invertible).",
-    usage: "The key is a letter or digit string whose length must be a perfect square (≥4, i.e. 2×2 and up). A letter string maps to matrix elements by A=0, B=1, …. Plaintext is padded with X if short.",
+    principle: "Plaintext letters are grouped into n-dimensional vectors, multiplied by an n×n key matrix (elements 0-25), and reduced $\\bmod 26$ to get the ciphertext. Decryption needs the inverse of the key matrix $\\bmod 26$. The matrix determinant must be coprime with 26 (invertible). Custom alphabet supported: the modulus becomes the alphabet length, and both key and plaintext characters map through the same table — spaces/punctuation can be table members (generic form of Hill 1929: $\\mathbf{C}=(\\mathbf{K}\\cdot\\mathbf{P})\\bmod m$).",
+    usage: "The key is a letter or digit string whose length must be a perfect square (≥4, i.e. 2×2 and up). A letter string maps to matrix elements by A=0, B=1, …. Plaintext is padded with X if short. An alphabet parameter is available (empty = default 26 uppercase); custom tables are case-sensitive, out-of-table characters are dropped; repeated key strings may yield a singular matrix (det=0, non-invertible).",
     examples: [
       { in: "HELLO", param: { key: "GYBNQKURP" }, out: "TFJJZX", desc: "3×3 matrix [[6,24,1],[13,16,10],[20,17,15]]; HELLO is padded with X to HELLOX and encrypted in two groups" },
       { in: "TFJJZX", param: { key: "GYBNQKURP" }, out: "HELLOX", desc: "Decrypt with the inverse matrix; the trailing X is padding" }
@@ -43,17 +43,18 @@ export default {
       { tex: "\\det(\\mathbf{K}) \\perp 26", caption: "Invertibility: determinant coprime with 26" }
     ],
     tips: [
-      "The key matrix must be invertible mod 26 (determinant coprime with 26), otherwise decryption is impossible",
+      "The key matrix must be invertible $\\bmod 26$ (determinant coprime with 26), otherwise decryption is impossible",
       "A known-plaintext attack can solve for the key matrix with linear algebra",
       "The default key GYBNQKURP is the classic 3×3 teaching matrix"
     ],
     aka: ["Hill", "希尔", "矩阵密码", "希尔密码", "Hill cipher", "Hill Cipher",
-      "线性代数密码", "矩阵加密", "希尔加密", "多字母替换", "Lester Hill", "模26矩阵"]
+      "线性代数密码", "矩阵加密", "希尔加密", "多字母替换", "Lester Hill", "模26矩阵",
+      "自定义字母表", "29字母表", "字母表希尔", "yunser hill", "hill 自定义"]
   },
 
   affine: {
-    what: "Affine Cipher, a monoalphabetic substitution cipher combining a multiplicative and a shift cipher, with the form y = ax + b mod 26.",
-    principle: "Encryption applies y = (a·x + b) mod 26 to each plaintext letter's index x. Decryption uses the modular inverse a⁻¹: x = a⁻¹·(y - b) mod 26. Requires a coprime with 26 (a ∈ {1,3,5,7,9,11,15,17,19,21,23,25}).",
+    what: "Affine Cipher, a monoalphabetic substitution cipher combining a multiplicative and a shift cipher, with the form $y = ax + b \\bmod 26$.",
+    principle: "Encryption applies $y = (a \\cdot x + b) \\bmod 26$ to each plaintext letter's index x. Decryption uses the modular inverse $a^{-1}$: $x = a^{-1} \\cdot (y - b) \\bmod 26$. Requires a coprime with 26 ($a \\in \\{1,3,5,7,9,11,15,17,19,21,23,25\\}$).",
     usage: "The parameter a (multiplier, default 5) must be coprime with 26, and b (shift, default 8). Case is preserved, non-letters pass through unchanged.",
     examples: [
       { in: "HELLO", param: { a: 5, b: 8 }, out: "RCLLA", desc: "H(7): 5×7+8=43%26=17=R; E(4):28%26=2=C; L(11):63%26=11=L" },
@@ -188,7 +189,7 @@ export default {
       { tex: "C = K[P], \\quad P = K^{-1}[C]", caption: "K is a 26-letter permutation table; encrypt/decrypt are mutually inverse lookups" }
     ],
     tips: [
-      "The key space is 26!≈4×10²⁶, infeasible to brute-force but trivial for frequency analysis",
+      "The key space is $26! \\approx 4 \\times 10^{26}$, infeasible to brute-force but trivial for frequency analysis",
       "English frequency analysis (E/T/A/O/I…) is a classic cryptography introductory exercise",
       "The key must be 26 distinct letters (a permutation of A-Z), otherwise it errors"
     ],

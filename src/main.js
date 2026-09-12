@@ -10,8 +10,12 @@
  *
  * 无框架、无构建，原生 ES module。状态极简：当前视图 view + 当前 op + 方向 dir。
  */
-import { CATEGORIES, OPS, opsByCat, getOp, defaultParams, register } from "./core/registry.js";
+import { CATEGORIES, OPS, opsByCat, getOp, defaultParams, register, familyGroup, FAMILY_NAMES, inferIoMode } from "./core/registry.js";
 import { t, tBilingual, getLocale, setLocale, locales, onLocaleChange, initLocale, getDir, LOCALE_META } from "./i18n/index.js";
+import { downloadBytes, cloudWarnGate, fmtByteSize, isCloudDeploy } from "./ui/download.js";
+import { productFileEntries } from "./core/productResult.js";
+import "./core/stegoQuickScan.js";
+import { magicFilterReset, filterMagicCands, filterBruteCands, magicFilterBar } from "./ui/resultFilter.js";
 import { magicDecode } from "./core/magic/magic.js";
 import { runMagic, cancelMagic } from "./core/magic/magicClient.js"; // 真多线程调度（Worker 优先，降级主线程）+ 中断接管
 import { analyzeFile } from "./core/fileAnalysis.js";
@@ -22,6 +26,8 @@ import { analyze7zFile } from "./core/sevenzip.js"; // 7z 拖入文件真列表/
 import { cryptoTryAll } from "./core/cryptoTryAll.js";
 import { bridgeHealth } from "./core/localBridge.js";
 import { icon as iconSvg } from "./ui/icons.js";
+import { HLSpring } from "./ui/spring.js"; // T510 弹簧动效内核（总开关 ebctf.springMotion）
+import { pinyinKeys } from "./ui/pinyinSearch.js"; // T514 拼音全拼/首字母搜索兼容层（ksmm=凯撒密码）
 import { FONT_PLANES, loadFontPlane, fontStatus, onFontStatusChange, humanSize, preloadAllPlanes } from "./ui/fontLoader.js";
 import { CTF_HOT, CTF_HOT_META } from "./core/ctfPresets.js";
 import { getEdu, eduAliases, registerEduEn } from "./core/eduContent.js";
@@ -33,9 +39,11 @@ import { renderEnhancedView, invisibleReport, invisibleToggle } from "./ui/input
 import { openEnvPanel } from "./ui/envPanel.js";
 import { resolveDecodeConfig, loadLastConfig, saveLastConfig } from "./core/decodeProfile.js"; // 解码强度档 → op 白名单 + 预算
 import { openDecodeStrength } from "./ui/decodeStrength.js"; // 「解码强度」弹窗（5 档滑块 + 参与算法多选 + 命名方案）
-import { applyAccent, enableHctEngine, DEFAULT_ACCENT } from "./ui/dynamicColor.js"; // M3 动态取色（HSL 近似 + HCT 精确引擎）
+import { applyAccent, enableHctEngine, DEFAULT_ACCENT, resetAccent } from "./ui/dynamicColor.js"; // M3 动态取色（HSL 近似 + HCT 精确引擎）
+import { themeVariant } from "./ui/themePicker.js";
 import { attachEditorToolbar } from "./ui/editorToolbar.js"; // 通用编辑框工具条（记事本化，全站复用）
 import { attachTextContextMenu } from "./ui/textContextMenu.js"; // 编辑框右键文本处理菜单
+import { loadFavorites, isFavorite, toggleFavorite, openFavMenu } from "./ui/favorites.js";
 // MT72：自定义算法（魔改）——UI 开关/编辑器 + Worker 沙箱执行（magic/穷举侧排除）
 import { renderCustomToggle } from "./ui/customImplEditor.js";
 import { getCustomImpl, listEnabledOpIds } from "./core/customImplStore.js";
@@ -90,9 +98,11 @@ import "./core/radix.js";
 import "./core/radixExt.js";
 import "./core/hash.js";
 import "./core/hashExt.js";
+import "./core/hashMore.js"; // 批F 哈希查漏 md6/snefru/sha0/has160/gostHash（hash, run, 64 组 KAT, 无 detect）
 import "./core/cn.js";
 import "./core/modern.js";
 import "./core/modernExt.js";
+import "./core/blockMore.js"; // 对称查漏 noekeon/shacal2/cast6（block, 双向, NESSIE/RFC 2612 向量, 无 detect）
 import "./core/modernExt2.js"; // 现代分组密码补全组2（RC5/IDEA/Blowfish/RC6）
 import "./core/analysis.js";
 import "./core/stego.js";
@@ -101,13 +111,21 @@ import "./core/stegoImage.js";
 import "./core/stegoImage2.js"; // 图像隐写扩展（PNG全块/JPEG APPn/GIF注释/GIF多帧/ICC剥离）
 import "./core/imagefix.js"; // 图像尺寸修复（pngSizeRecover/jpegSizeRead/gifSizeRead，替代 pngFix，更全）
 import "./core/trailerCarve.js"; // 文件附加数据剥离 + binwalk 式全文魔数扫描（替代 carve）
+import "./core/foremostJs.js"; // 文件雕刻（Foremost 纯 JS 版）foremostCarve（forensic, run, 头尾魔数雕刻内嵌文件, 无 detect）
+import "./core/hashFrontier.js"; // 哈希前沿补遗（T398 批B）argon2/tiger/tiger2/kupyna（hash, run, 无 detect）
 import "./core/stegoText.js"; // 隐写文本检测组（零宽/同形字/规范化/空格/Bidi/字符透视，检测类 run 单向）
+import "./core/textBlindWatermark.js"; // 文本盲水印 textBlindWatermark（stego, 双向+detect 分级, guofei v1 变长二进制+单双 U+200C, 与 zeroWidth 互不兼容）——T516 外部 F12 交付 M 接线
+import "./core/qrFormatBrute.js"; // QR 格式信息 32 组合爆破 qrFormatBrute（stego, qr 族 formatBrute 档, run 型报告）——T518 外部 F12 交付 M 接线
 import "./core/invisibles.js"; // 不可见字符可视化（零宽/控制符/BOM/空白 → 可见占位符 + scan/visualize/strip）
 import "./core/workerPool.js";
 import "./core/detectExt.js"; // detect 补全扩展层
 import "./core/detectExt2.js"; // detect 大表补强（82 op 补 detect，提升一把梭命中率）
 import "./core/exclusiveCodec.js"; // 冷门/独有算法复刻
 import "./core/token.js"; // JWT/令牌解析组
+import "./core/cmac.js";
+import "./core/cmacMore.js"; // CMAC 扩展 cmacExt（hash, run, Camellia/SEED/Twofish/RC6/IDEA/Blowfish/CAST5, RFC 4493 结构, 无 detect） // CMAC 家族 aesCmac/sm4Cmac/kmac（hash, run, RFC 4493 + SP 800-185 cSHAKE, 无 detect）
+import "./core/jwtsign.js"; // JWT 签发/验签 jwtSign/jwtVerify（crypto, run async, HS/RS/ES256, RFC 7519/7518, 无 detect）——T348 接线行曾在交接轮重排中丢失，T366 复检补回
+import "./core/mlkem.js"; // ML-KEM keyGen/encaps/decaps（crypto, run, FIPS 203, 无 detect）
 import "./core/netcodec.js"; // 网络/协议编码组
 import "./core/timecodec.js"; // 时间戳/日期编码组
 import "./core/checkdigit.js"; // 条码/校验位组
@@ -139,18 +157,23 @@ import "./core/timecodecExt.js"; // 时间戳扩展组（儒略日/Excel序列�
 import "./core/hexview.js"; // hexview (hexdump/range/stats)
 import "./core/audiostego.js"; // 音频隐写识别组（WAV头解析/音频LSB提取/DTMF Goertzel/SSTV识别，run 单向分析类）
 import "./core/esolang2.js"; // esolang 扩展组
+import "./core/malbolgeExec.js"; // Malbolge 解释器 malbolgeExec（esolang, run 型: 执行/normalize/assemble, 步数护栏, 官方 7 样例对拍 17/17）——T519 外部 F11 交付 M 接线
 
 import "./core/difftool.js"; // diff 对比工具（两文本/两 hex 逐字节 diff，run 单向分析类）
 import "./core/classicExt3.js"; // 古典补全组3（otp/multiplicative/keywordcipher/simplesub/runningkey）
+import "./core/classicExt4.js"; // T508 批一古典（homophonic/doubleTrans/pollux/morbit/bookCipher/turningGrille/kenny，dCode 双例对拍）
+import "./core/engEncoding.js"; // T508 批四工程编码（hexdump/modhex/citrixCtx1/scriptDecoder/rison/unixPerms，xxd+CyberChef 向量对拍）
+import "./core/encodingExt3.js"; // T508 批二编码映射（crockford32/alienAlphabet/futhark/countingRods/chuckUnary/wingdings/cardanGrille，dCode/Wikipedia/字体 cmap 三源对拍）
+import "./core/compressExt2.js"; // T508 批三压缩校验（rle/lzw/elias/verhoeff/lz4Dec/bzip2Dec，PIL/CLI/规范三源对拍，bzip2 全链）
 import "./core/fracmorse.js"; // 分数摩斯 Fractionated Morse
 import "./core/hamming.js"; // 海明码纠错编解码
-import { renderRecipe, rState as recipeState, addRecipeOpAt } from "./ui/recipeView.js"; // 配方链 UI
+import { renderRecipe, rState as recipeState, addRecipeOpAt, addRecipeFamilyAt } from "./ui/recipeView.js"; // 配方链 UI
 import { renderExhaustive } from "./ui/exhaustiveView.js"; // 穷举全解视图（一键全解码器穷举）
 import { renderUniversalViewer, disposeUniversalViewer } from "./ui/universalViewer.js"; // 字符显示器（Hex/Unicode逐字符/不可见字符）
-import { renderCodeImageViewer } from "./ui/codeImageViewer.js"; // 224编码图查询器（图形编码对照图）
+import { renderCodeImageViewer } from "./ui/codeImageViewer.js"; // 编码图鉴查询器（图形编码对照图）
 import { renderQuickConv } from "./ui/quickConv.js"; // 快速换算（程序员进制联动 + 分类单位换算，MT81）
 import { exhaustiveDecode } from "./core/exhaustiveDecode.js"; // 穷举全解并入首页智能解码（末尾追加可折叠区）
-import { expandableInput, ensureExpStyles } from "./ui/expandableInput.js"; // 密钥/IV/crib 可展开输入框 + 弹层样式注入
+import { expandableInput, ensureExpStyles, openExpandModal } from "./ui/expandableInput.js"; // 密钥/IV/crib 可展开输入框 + 弹层样式注入
 import "./core/snow.js"; // Snow 行尾空白隐写（Space/Tab 编码比特）
 import "./core/bazeries.js"; // Bazeries 密码（5×5 方阵+数字key分组反转）
 import "./core/fenham.js"; // Fenham 密码（ASCII 二进制逐位 XOR）
@@ -172,6 +195,7 @@ import "./core/byteTools.js"; // UUID解析/VarInt/字节序交换
 import "./core/lzcodec.js"; // LZString 压缩
 import "./core/streamcipher.js"; // Rabbit 流密码
 import "./core/flashswirl.js"; // FlashSwirl 闪旋 ARX 流密码（风之暇想）
+import "./core/flasksession.js"; // Flask Session 解码/签发/验签（crypto, run async, itsdangerous v1/v2, 无 detect）
 import "./core/sevenzip.js"; // 7z 归档解析/解压（run 型，wasm 缺失降级纯头解析）
 import "./core/exebridge.js"; // pyc/exe 反编译（本地桥，run 型 op）
 import { decompileBytes, formatResult as formatDecompileResult } from "./core/exebridge.js"; // 拖入分派用
@@ -180,7 +204,9 @@ import "./core/rotspecial.js"; // Rot 任意位移 + ROT8000（classic/fancy）
 import "./core/pickle.js"; // Pickle 反汇编（analysis, run 型, 危险 opcode 告警）
 import "./core/jjencode.js"; // JJEncode（JS 符号混淆编码, fancy）
 import "./core/sm2.js"; // 国密 SM2 完整运算（GB/T 32918-2016：签名/验签+加密/解密）
-import "./core/sm.js"; // 国密 ZUC/SM9（modern，ZUC 完整流密码，SM9 结构识别）
+import "./core/sm.js"; // 国密 ZUC 流密码（GB/T 33133.1-2016 完整实现；SM2/SM9 已独立成模块）
+import "./core/pairing.js"; // SM9 双线性对内核（BN 曲线 R-ate pairing：Fp2/Fp4/Fp12 扩域塔 + Miller + finalExp）
+import "./core/sm9ops.js"; // 国密 SM9 完整运算（GB/T 38635-2020：标识密钥生成/签名/验签/加密/解密五档族）
 import "./core/archiveUnified.js"; // 压缩/归档归一（analysis, run 型, 复用 compress+sevenzip 纯函数）
 import "./core/spoon.js"; // Spoon 语言（BF 前缀码变体, fancy）
 import "./core/ssti.js"; // SSTI 关键字识别（analysis, run 型, 只识别不执行）
@@ -201,6 +227,16 @@ import "./core/pietExec.js"; // Piet 执行（fancy，有 detect）
 import "./core/carbonaro.js"; // Carbonaro 密码（classic）
 import "./core/albam.js"; // Al Bhed / Albam 替换（classic）
 import "./core/bfDialects.js"; // BF 方言 Blub/COW（fancy，有 detect）
+import "./core/bftoolsImg.js"; // Brainloller/Braincopter 图像变体（stego，T389）
+import "./core/xwing.js"; // X-Wing 混合 KEM（asym，T398 批A）
+import "./core/stegdetect.js"; // stegdetect JPEG 隐写检测（analysis，T391）
+import "./core/jsteg.js"; // jsteg JPEG 系数隐写（stego，T390）
+import "./core/dtmfWav.js"; // DTMF 拨号音 WAV 编/解（stego；此前仅经 audioAnalysis 间接注册，Node/Worker 闭包缺项）
+import "./core/xmssLms.js"; // XMSS/LMS 哈希签名（asym，T398 批A）
+import "./core/hqc.js"; // HQC 后量子 KEM（asym，T398 批A）
+import "./core/ntruReal.js"; // 真 NTRU（asym，T398 批A）
+import "./core/bls.js"; // BLS 签名（asym，T398 批C）
+import "./core/protocolSig.js"; // Merkle/Pedersen/Feldman/LSAG（asym，T398 批C）
 import "./core/ctfCipherExt.js"; // 冷门编码/换位补齐 twinHex/trollScript/asciiSum（fancy，有 detect）+ caesarBox/curveCipher（classic）
 import "./core/zipCrack.js"; // ZIP 弱口令爆破（analysis, run 型, 单向）
 import "./core/chaocipher.js"; // 混沌密码 chaocipher（classic, 双向）
@@ -212,7 +248,8 @@ import "./core/straddleCheckerboard.js"; // 跨界棋盘密码 straddleCheckerbo
 import "./core/xorCribDrag.js"; // XOR拖曳已知明文 xorCribDrag（analysis, run）
 import "./core/zipCrc32Brute.js"; // ZIP CRC32内容爆破 zipCrc32Brute（analysis, run）
 import "./core/nihilist.js"; // 虚无党密码 nihilistCipher（classic, 双向, 原 id nihilist 已改避让 classic.js）
-import "./core/solitaire.js"; // Solitaire/Pontifex 扑克流密码（classic, 双向, Schneier 官方向量验证）
+import "./core/solitaire.js"; // Solitaire/Pontifex 扑克流密码（classic, 双向, Schneier 官方向量验证）——T373 接线误覆盖后补回
+import "./core/ls47.js"; // LS47 字母牌密码 ls47（classic, encode+decode, 官方 ls47.py 对拍, 无 detect） // Solitaire/Pontifex 扑克流密码（classic, 双向, Schneier 官方向量验证）
 import "./core/alberti.js"; // Alberti 圆盘密码（classic, 双向, 转盘 periodicShift）
 import "./core/wabun.js"; // Wabun 和文摩尔斯（fancy, 双向, 假名↔摩尔斯）
 import "./core/gematria.js"; // Gematria 数值密码（classic, 希伯来/英文/希腊 isopsephy 多计算法）
@@ -229,9 +266,23 @@ import "./core/bkcrack.js"; // ZipCrypto已知明文攻击 bkcrackAttack（analy
 import "./core/pcapDeep.js"; // 流量深度分析 pcapTcpReassemble/pcapHttpExtract/pcapDnsTunnel/pcapIcmpPayload（analysis, run, 无 detect）
 import "./core/dlp.js"; // 离散对数求解 dlp（modern, run, BSGS+Pollard rho, 无 detect）
 import "./core/primeGen.js"; // 大素数生成 primeGen（radix, run, Miller-Rabin, 无 detect）
+import "./core/bigmath.js"; // BigInt 大数计算器 bigCalc（radix, run, 四则/数论/素性/分解, 无 detect）
 import "./core/randomSeed.js"; // 随机种子生成 randomSeed（radix, run, crypto CSPRNG, 无 detect）
 import "./core/dictGen.js"; // 字典生成 dictGen（analysis, run, 笛卡尔积/掩码, 无 detect）
 import "./core/elgamal.js"; // ElGamal 公钥加密 elgamal（modern, 双向, HAC §8.4, 无 detect）
+import "./core/elgamalKeyGen.js"; // ElGamal 密钥生成 elgamalKeyGen（modern, run, HAC §8.4.1 安全素数法, 无 detect）
+import "./core/rsagen.js"; // RSA 密钥对生成 rsaGenKeyPair（modern, run, RFC 8017/5208/5280 + X.690 DER, 无 detect）
+import "./core/pemkeys.js"; // PEM/JWK/DER 密钥格式互转 pemToHex/hexToPem/pemToJwk/jwkToPem/pubFromPriv（crypto, run, RFC 7468/7517/7518/5480, 无 detect）
+import "./core/ascon.js"; // Ascon-AEAD128/Hash256（modern/hash, run, NIST SP 800-232, 无 detect）
+import "./core/keywrap.js"; // AES 密钥包装 aesKeyWrap（modern, run, RFC 3394/5649, 无 detect）
+import "./core/rsasign.js"; // RSA 签名/验签 rsaSign/rsaVerify（crypto, run, RFC 8017 PKCS#1 v1.5+PSS, 无 detect）——T373 接线误覆盖后补回
+import "./core/ed448x448.js"; // Ed448 签名+验签与 X448 ed448Sign/ed448Verify/x448KeyGen/x448Shared（asym, run, RFC 8032 §7.4 九组+RFC 7748 向量, 无 detect）
+import "./core/gostsign.js"; // GOST R 34.10-2012 签名/验签 gostSign/gostVerify（asym, run, RFC 7091 官方向量+pygost 对拍, 无 detect） // RSA 签名/验签 rsaSign/rsaVerify（crypto, run, RFC 8017 PKCS#1 v1.5+PSS, 无 detect）
+import "./core/pgp.js";
+import "./core/quantumBB84.js";
+import "./core/tokensign.js"; // JWS/JWE/PASETO v4 签发/验签 jwsSign/jwsVerify/jweEncrypt/jweDecrypt/pasetoV4（crypto, run async, RFC 7515/7516, 无 detect）
+import "./core/mldsa.js";
+import "./core/slhdsa.js"; // SLH-DSA keygen/sign/verify（asym, run, FIPS 205, ACVP keyGen 10+sigGen 7+sigVer 14 向量, 无 detect）——T369 接线行此前缺失，收口核检补回 // ML-DSA keygen/sign/verify（asym, run, FIPS 204, ACVP 204 向量, 无 detect） // BB84 量子密钥分发仿真 bb84Qkd（modern, run, Bennett-Brassard 1984, 无 detect） // PGP 全家 pgpGenKeyPair/Encrypt/Decrypt/Sign/Verify/组合/ParseKey（crypto, run async, openpgp.js v5.11.2 lazy vendor, 无 detect） // JWT 签发/验签 jwtSign/jwtVerify（crypto, run async, HS/RS/ES256, RFC 7519/7518, 无 detect）
 import "./core/emojiAes.js"; // emoji-aes 完整版 emojiAes（fancy, 双向, 复用 aesEncrypt+md5+EMOJI_INIT）
 import "./core/moyue.js"; // 魔曰 moyue（cn, 双向, vendored abracadabra-cn v3.7.7, 内部 import lib）
 import "./core/mcSave.js"; // Minecraft 存档分析地基 mcLevelDat（analysis, run, 自写大端序 NBT 解析器 + level.dat 摘要, 无 detect）
@@ -260,7 +311,8 @@ import "./core/jsEscape.js"; // JS escape 编码 jsEscape（text, 双向, 旧版
 import "./core/ppencode.js"; // Perl 关键字编码 ppencode（text, 双向, 256 词表 + 768 候选反向表, 参考交叉验证, 无 detect）
 import "./core/stegpy.js"; // stegpy stegv3 隐写 stegpy（stego, 双向, bit 平面交错 + PBKDF2-Fernet, 参考交叉验证, 无 detect）
 import "./core/stereogram.js"; // 立体图求解 stereogramSolver（stego, run, roll+diff 偏移解码, numpy 参考逐像素对拍, 无 detect）
-import "./core/cast128.js"; // CAST-128 分组密码 cast128（modern, 双向, RFC 2144 三向量 + pycryptodome 对拍, 无 detect）
+import "./core/certparse.js"; // X.509 证书/SSH 公钥解析 x509Parse/sshHostKeyParse（crypto, run, RFC 5280/4251/4253/5656/8709, 无 detect）
+import "./core/csrlparse.js"; // CSR/CRL 解析 csrParse/crlParse（crypto, run, RFC 2986/5280 §5, 无 detect）
 import "./core/des2Mitm.js"; // 2DES 中间相遇 des2Mitm（analysis, run, forward 表+反向查表, 本地往返验证, 无 detect）
 import "./core/mimeMultipart.js"; // MIME multipart 解析 mimeMultipart（text, 双向, boundary 分 part + base64/QP 解码, 无 detect）
 import "./core/lcgMore.js"; // RANDU/截断LCG randu+truncLcgRecover（analysis, run, 教学演示, 无 detect）
@@ -270,9 +322,8 @@ import "./core/spnAnalysis.js"; // SPN 差分线性 spnAnalysis（analysis, run,
 import "./core/collisionShow.js"; // MD5 截断碰撞 md5CollisionShow（analysis, run, 生日法教学, 无 detect）
 import "./core/pqcLite.js"; // LWE/NTRU 玩具 lweToy+ntruToy（crypto, run, 教学级小参数, 无 detect）
 import "./core/crc32Reverse.js"; // CRC32 反向碰撞 crc32Reverse（analysis, run, 表驱动反推4字节补丁, 参考交叉验证, 无 detect）
-import "./core/roar.js"; // 兽音译者 roar 4字符codec变体（fancy, 双向, hex偏移+codec映射, 反编参考交叉验证, 无 detect）
-import "./core/bfSwap.js"; // BF 交换重跑变体 bfSwap（fancy, 双向, 逗号空操作+失败7字符对称交换重跑, 无 detect）
-import "./core/geffe.js"; // Geffe 生成器/相关攻击 geffe（analysis, run, 3 LFSR 组合 + 相关攻击, 子代理交付, 无 detect）
+import "./core/roar.js"; // 兽音译者 roar 4字符codec变体（fancy, 双向, hex偏移+codec映射, 参考交叉验证, 无 detect）
+import "./core/geffe.js"; // Geffe 生成器/相关攻击 geffe（analysis, run, 3 LFSR 组合 + 相关攻击, 无 detect）
 import "./core/pcapRepair.js"; // pcap 文件修复 pcapRepair（analysis, run, magic/字节序/全局头/incl_len 诊断修复, 无 detect）
 import "./core/spectrogram.js"; // 音频频谱图 spectrogram（stego, run, STFT + radix-2 FFT + Hann 窗 + magma 色阶 → PNG dataURL, 复用 audiostego/mcMap, 无 detect）
 import "./core/lfsrRecover.js"; // LFSR 序列恢复 lfsrRecover（analysis, run, Berlekamp-Massey 求最短 LFSR + 反馈多项式 + 外推预测, 无 detect）
@@ -288,6 +339,7 @@ import "./core/sosemanuk.js"; // Sosemanuk 流密码 sosemanuk（modern, 双向�
 import "./core/spritz.js"; // Spritz 流密码 spritz（modern, 双向自反, 论文 2014-10-27 版 a 计数吸收, 权威向量验证, 无 detect）
 import "./core/vmpc.js"; // VMPC 流密码 vmpc（modern, 双向自反, 作者官方实现 BASIC/FULL 模式, 官方向量验证, 无 detect）
 import "./core/mickey.js"; // MICKEY-128 2.0 流密码 mickey（modern, 双向自反, 160 位双寄存器不规则钟控, eSTREAM 官方源码逐行移植, 官方向量验证, 无 detect）
+import "./core/ecdsa.js"; // 通用 ECDSA 全家+eccCalc（crypto/modern, 四曲线 secp256k1/P-256/P-384/P-521, RFC 6979, X9.62 DER, 无 detect）
 import "./core/ecdsaReuseK.js"; // ECDSA nonce 重用攻击 ecdsaReuseK（crypto, run, 纯数论恢复 k+私钥 d + 内置 secp256k1/P-256 EC 点乘公钥校验消歧, 自造签名验证, 无 detect）
 import "./core/rabin.js"; // Rabin 密码 rabin（crypto, 双向, x²≡c mod n 平方根解密四根, RFC 无但经典教学, 往返验证, 无 detect）
 import "./core/x25519.js"; // X25519 密钥交换 x25519（crypto, run, Curve25519 Montgomery ladder, RFC 7748 §5.2 官方向量验证, 无 detect）
@@ -329,6 +381,7 @@ import "./core/unitConv.js"; // 单位换算 unitConv（data, run, 数据量 SI/
 import "./core/gifTiming.js"; // GIF 帧时序隐写 gifTiming（stego, run, GCE Delay 厘秒→数字/ASCII/二进制阈值三模式, 无 detect）
 import "./core/jpgSizeRecover.js"; // JPEG 宽高修复 jpgSizeRecover（forensic, run, SOF+霍夫曼熵解码数 MCU 反推真实高度, 无 detect）
 import "./core/zipRepair.js"; // ZIP 伪加密修复/置位 zipRepair+zipPseudoEncrypt（forensic, run, EOCD→CD→LFH 清/置通用位标志 bit0, 无 detect）
+import "./core/adsTools.js"; // NTFS ADS 备用数据流 adsTool（forensic, run, ZIP 内嵌 ADS 检测/提取/删除/添加, APPNOTE 0x000A 口径, 无 detect）——替代 ntfsstreams GUI exe
 import "./core/stringsExtract.js"; // 字符串提取 stringsExtract（forensic, run, ASCII/UTF-16LE 双模式可打印串扫描, 无 detect）
 import "./core/jwtCrack.js"; // JWT 密钥爆破 jwtCrack（modern, run async, HS256/384/512 弱密钥字典爆破, 无 detect）
 import "./core/zstegScan.js"; // LSB 全组合扫描 zstegScan（stego, run, 位平面×通道×位序×行列组合+可读性打分, 无 detect）
@@ -543,6 +596,7 @@ function renderNav() {
   $nav.append(toggle);
 
   for (const cat of CATEGORIES) {
+    if (cat.id === "base") $nav.append(renderFavNav());
     const isHome = cat.id === "home";
     const count = isHome ? 0 : opsByCat(cat.id).length;
     const curCat = state.view === "op" ? getOp(state.opId)?.cat : (state.view === "home" ? "home" : null);
@@ -552,7 +606,7 @@ function renderNav() {
     const item = el("div",
       { class: "nav-item" + (active ? " on" : "") + (cat.pinned ? " pinned" : "") + (expanded ? " expanded" : "") + (cat.id.startsWith("bridge") ? " bridge" : ""),
         title: navRail() ? catName(cat) : "",
-        onclick: () => onNavClick(cat), ...keyBtn(() => onNavClick(cat)) },
+        onclick: (e) => onNavClick(cat, e.currentTarget), ...keyBtn(() => onNavClick(cat)) },
       msym(cat.icon),
       el("span", { class: "nav-label" }, catName(cat)),
       count ? el("span", { class: "nav-count" }, String(count)) : null,
@@ -612,7 +666,55 @@ function renderNav() {
  // 仅「分类刚展开」那一刻放入场动画；已展开态下切 op（selectOp 重渲染）不重放，消除闪烁
       const justOpened = !state._animatedCats.includes(cat.id);
       const sub = el("div", { class: "nav-sub" + (justOpened ? " animate-in" : "") });
+     // 算法族聚合（T380）：带 family 的 op 不逐条渲染，聚合为「族显示名 ×N」一条，
+     // 点击进族内第一个 op（档位切换在工作区族滑块里做）。family 字段缺失时 famMap 为空，
+     // 走原逐条渲染，零回归。无 family 的 op 渲染路径一字不动。
+      const famMap = new Map(familyGroup(cat.id).map((g) => [g.family, g]));
+      const _famDone = new Set(); // 已渲染聚合条的族（族内后续成员跳过）
       for (const op of opsByCat(cat.id)) {
+        if (op.family && famMap.has(op.family)) {
+          if (_famDone.has(op.family)) continue;
+          _famDone.add(op.family);
+          const grp = famMap.get(op.family);
+          const first = grp.ops[0]; // 点族名进族内第一档 op
+         // 族条目 CTF_HOT 高亮：取族内成员的最高 rank（rank 数字越小越热）
+          let bestRank = 0, bestNote = "";
+          for (const m of grp.ops) {
+            const md = CTF_HOT.has(m.id) ? CTF_HOT_META[m.id] : null;
+            if (!md) continue;
+            const r = md.rank || 2;
+            if (!bestRank || r < bestRank) { bestRank = r; bestNote = md.note || ""; }
+          }
+          const famOn = grp.ops.some((m) => m.id === state.opId); // 当前 op 在族内 → 族条目高亮 on
+          const fa = el("a",
+            { class: "nav-subitem nav-family"
+              + (famOn ? " on" : "")
+              + (bestRank ? " ctf-hot" : "")
+              + (bestRank === 1 ? " ctf-hot-top" : ""),
+              href: "#/op/" + first.id,
+              draggable: "true",
+               title: bestNote,
+               oncontextmenu: e => showFavoriteMenu(e, { entries: grp.ops.map(m => ({ opId: m.id, label: opName(m) })) }),
+              onclick: (e) => {
+                if (e.ctrlKey || e.metaKey || e.button === 1) return;
+                e.preventDefault(); e.stopPropagation(); selectOp(first.id);
+              },
+              ondragstart: (e) => {
+                if (!e.dataTransfer) return;
+                e.dataTransfer.effectAllowed = "copy";
+                // T395：族条目额外携带 family MIME → 配方链 drop 时弹选档菜单（旧口径只能拖进第一档）
+                try { e.dataTransfer.setData("application/x-ebctf-family", grp.family); } catch { /* 某些环境禁用 */ }
+                try { e.dataTransfer.setData("application/x-ebctf-op", first.id); } catch { /* 某些环境禁用 */ }
+                try { e.dataTransfer.setData("text/plain", grp.name); } catch { /* 忽略 */ }
+              } },
+            el("span", { class: "nav-subitem-label" }, grp.name),
+            // ×N 乘数用高亮标签（T385）：防误读成「两倍 xxx 算法」
+            el("span", { class: "fam-count" }, "×" + grp.ops.length),
+          );
+          sub.append(fa);
+          attachTouchDragToRecipe(fa, () => first.id, () => grp.family);
+          continue;
+        }
         const hot = CTF_HOT.has(op.id);            // CTF 常考项高亮
         const meta = hot ? CTF_HOT_META[op.id] : null;
         const cls = "nav-subitem"
@@ -624,7 +726,8 @@ function renderNav() {
         const a = el("a",
           { class: cls, href: "#/op/" + op.id,
             draggable: "true",   // 可拖到配方链画布追加/插入节点（不在画布 drop 则无副作用）
-            title: meta ? meta.note : "",
+             title: meta ? meta.note : "",
+             oncontextmenu: e => showFavoriteMenu(e, { opId: op.id }),
             onclick: (e) => {
               if (e.ctrlKey || e.metaKey || e.button === 1) return; // 放行新标签打开
               e.preventDefault(); e.stopPropagation(); selectOp(op.id);
@@ -637,7 +740,6 @@ function renderNav() {
               try { e.dataTransfer.setData("text/plain", opName(op)); } catch { /* 忽略 */ }
             } },
           op.requiresBridge ? el("span", { class: "exe-badge" }, "EXE") : null,
-          hot ? msym("star", "ctf-star") : null,
           el("span", { class: "nav-subitem-label" }, opName(op)),
         );
         sub.append(a);
@@ -651,6 +753,77 @@ function renderNav() {
   }
 }
 
+let warnedFavoriteStorage = false;
+function showFavoriteMenu(event, options) {
+  event.preventDefault();
+  event.stopPropagation();
+  const rect = event.currentTarget.getBoundingClientRect();
+  openFavMenu(event.clientX || rect.left, event.clientY || rect.bottom, { ...options, onChange: favoritesChanged });
+}
+function favoritesChanged(result) {
+  if (result?.full) toast(t("ui.fav.full"));
+  else if (result?.persisted === false && !warnedFavoriteStorage) {
+    warnedFavoriteStorage = true;
+    toast(t("ui.fav.storageFail"));
+  }
+  renderNav();
+  const button = document.querySelector(".fav-btn");
+  if (button) {
+    const active = isFavorite(state.opId);
+    button.classList.toggle("on", active);
+    button.setAttribute("aria-pressed", String(active));
+    button.title = t(active ? "ui.fav.remove" : "ui.fav.add");
+    button.setAttribute("aria-label", button.title);
+  }
+  document.querySelectorAll(".op-search-item[data-opid]").forEach(item => {
+    item.querySelector(".op-search-item-fav")?.remove();
+    if (isFavorite(item.dataset.opid)) item.querySelector(".op-search-item-main")?.append(el("span", { class: "op-search-item-fav", "aria-hidden": "true" }, msym("star")));
+  });
+}
+
+function renderFavNav() {
+  const fragment = document.createDocumentFragment();
+  const ops = loadFavorites().map(getOp).filter(Boolean);
+  const expanded = state.expandedCats.includes("fav") && !navRail();
+  const toggle = () => {
+    if (navRail()) { if (ops.length) selectOp(ops[0].id); return; }
+    if (expanded) state.expandedCats = state.expandedCats.filter(id => id !== "fav");
+    else state.expandedCats.push("fav");
+    renderNav();
+  };
+  fragment.append(el("div", {
+    class: "nav-item nav-fav" + (expanded ? " expanded" : ""),
+    title: t("ui.fav.cat"), "aria-expanded": String(expanded), ...keyBtn(toggle),
+    onclick: toggle,
+    oncontextmenu: event => {
+      event.preventDefault(); event.stopPropagation();
+      openFavMenu(event.clientX, event.clientY, { onChange: favoritesChanged });
+    },
+  }, msym("star"), el("span", { class: "nav-label" }, t("ui.fav.cat")),
+  el("span", { class: "nav-count" }, String(ops.length))));
+  if (expanded) {
+    const sub = el("div", { class: "nav-sub" });
+    if (!ops.length) sub.append(el("div", { class: "fav-empty" },
+      el("div", {}, t("ui.fav.emptyNone")),
+      el("div", { class: "fav-empty-hint" }, t("ui.fav.emptyHint"))));
+    for (const op of ops) {
+      sub.append(el("a", {
+        class: "nav-subitem" + (state.opId === op.id ? " on" : ""), href: "#/op/" + op.id,
+        onclick: event => {
+          if (event.ctrlKey || event.metaKey || event.button === 1) return;
+          event.preventDefault(); event.stopPropagation(); selectOp(op.id);
+        },
+        oncontextmenu: event => {
+          event.preventDefault(); event.stopPropagation();
+          openFavMenu(event.clientX, event.clientY, { opId: op.id, onChange: favoritesChanged });
+        },
+      }, msym("star"), el("span", { class: "nav-subitem-label" }, opName(op))));
+    }
+    fragment.append(sub);
+  }
+  return fragment;
+}
+
 function toggleNav() {
   state.navCollapsed = !state.navCollapsed;
   if (state.navCollapsed) state.expandedCats = []; // 折叠时收起所有二级
@@ -658,7 +831,7 @@ function toggleNav() {
   renderNav();
 }
 
-function onNavClick(cat) {
+function onNavClick(cat, itemEl) {
   if (cat.id === "home") {
     goHome();
     return;
@@ -670,10 +843,60 @@ function onNavClick(cat) {
   if (navRail()) { selectOp(ops[0].id); return; }
 
  // 展开态：点已展开的分类头 → 收起；否则展开。支持多个分类同时展开（非手风琴）。
-  state.expandedCats = state.expandedCats.includes(cat.id)
-    ? state.expandedCats.filter((c) => c !== cat.id)
-    : [...state.expandedCats, cat.id];
+  const collapsing = state.expandedCats.includes(cat.id);
+  // T471b：减动效改由应用内开关（html.reduce-motion 类）驱动，不再读 OS 偏好——
+  // 部分 Windows 关闭「动画效果」会导致用户永远看不到动画（实机确诊，2026-09-09 恒烈指示）
+  const noMotion = document.documentElement.classList.contains("reduce-motion");
+  const springOn = !noMotion && document.documentElement.classList.contains("spring-motion");
+  const sub = itemEl && itemEl.nextElementSibling;
+
+  if (collapsing) {
+    state.expandedCats = state.expandedCats.filter((c) => c !== cat.id);
+    // T471 M3 高度收起动画（emphasized-accelerate）后再重渲染；无元素/减动效则立即重渲染
+    if (!noMotion && sub && sub.classList && sub.classList.contains("nav-sub")) {
+      if (springOn) {
+        // T510④ 弹簧收拉：高度仍走 CSS（弹簧内核无 height 属性），位移/透明度走弹簧
+        // （velocity carry——收拉途中反向点不跳变，安卓14 手感）；onRest+兜底双守卫防双渲染
+        sub.style.height = sub.scrollHeight + "px";
+        sub.style.transition = "height 250ms cubic-bezier(.3, 0, .8, .15)";
+        requestAnimationFrame(() => { sub.style.height = "0px"; });
+        let done = false;
+        const fin = () => { if (done) return; done = true; renderNav(); };
+        HLSpring.to(sub, { y: -8, opacity: 0 }, { preset: "dur250", onRest: () => fin() });
+        setTimeout(fin, 400);
+      } else {
+        sub.style.height = sub.scrollHeight + "px";
+        sub.style.transition = "height 250ms cubic-bezier(.3, 0, .8, .15), opacity 150ms linear";
+        requestAnimationFrame(() => { sub.style.height = "0px"; sub.style.opacity = "0"; });
+        setTimeout(renderNav, 250);
+      }
+    } else {
+      renderNav();
+    }
+    return;
+  }
+
+  state.expandedCats = [...state.expandedCats, cat.id];
+  // T471：renderNav 会重建整个导航 DOM，itemEl 随即脱离文档；先记序号，渲染后按序号取新元素
+  const navIdx = itemEl ? [...$nav.querySelectorAll(".nav-item")].indexOf(itemEl) : -1;
   renderNav();
+  // T471 M3 高度展开动画（emphasized-decelerate 400ms=T471c ¾ 档恰合 M3 long1 标准档；与原 fade/translate 入场叠加）
+  const newItem = navIdx >= 0 ? [...$nav.querySelectorAll(".nav-item")][navIdx] : null;
+  const sub2 = newItem && newItem.nextElementSibling;
+  if (!noMotion && sub2 && sub2.classList && sub2.classList.contains("nav-sub")) {
+    const h = sub2.scrollHeight;
+    sub2.style.transition = "none";
+    sub2.style.height = "0px";
+    if (springOn) HLSpring.set(sub2, { y: -8, opacity: 0 }); // T510④ 入场改弹簧（替换 .animate-in CSS 动画，CSS 侧已门控）
+    requestAnimationFrame(() => {
+      sub2.style.transition = "height 400ms cubic-bezier(.05, .7, .1, 1)";
+      sub2.style.height = h + "px";
+      if (springOn) HLSpring.to(sub2, { y: 0, opacity: 1 }, "dur250");
+      const done = () => { sub2.style.height = ""; sub2.style.transition = ""; };
+      sub2.addEventListener("transitionend", done, { once: true });
+      setTimeout(done, 500); // 兜底，防 transitionend 丢失导致高度卡死
+    });
+  }
 }
 
 // 回首页（首页输入已存 state.homeInput，renderHome 会自动恢复，进度不丢）
@@ -706,6 +929,11 @@ function selectOp(id) {
 let _routing = false;
 // 授权信息（启动异步 loadLicense 填入；未读到前按开源自编译默认显示）。
 let _license = OPENSOURCE_LICENSE;
+// 授权自定义软件名（2026-09-13 恒烈新需求）：license payload.appName（签名保护）优先，
+// 未声明回退 i18n 内置名。消费者：顶栏品牌/页面标题/关于页应用名。
+function appDisplayName() {
+  return (_license && _license.verified && _license.appName) || null;
+}
 function writeHash(h) {
   if (location.hash === h) return;
   _routing = true;
@@ -760,6 +988,16 @@ function applyRoute() {
     renderWorkspace();
   } else if (m && getOp(decodeURIComponent(m[1]))) {
     selectOpFromRoute(decodeURIComponent(m[1]));
+  } else if (m && decodeURIComponent(m[1]) === "hexView") {
+    // T428：hexView op 已移除，旧深链迁移到字符显示器（默认 Hex+ASCII 视图，可拖入文件）。
+    // 不伪造同 id op 把计数加回来；URL 同步改写为 #/inspect，避免刷新重复走迁移分支。
+    state.view = "inspect";
+    state.opId = null;
+    state.expandedCats = [];
+    renderNav();
+    renderWorkspace();
+    writeHash("#/inspect");
+    toast("「十六进制查看器」op 已移除：请改用字符显示器的 Hex+ASCII 视图（支持拖入文件）。");
   } else {
  // 无匹配 / #/home → 首页
     state.view = "home";
@@ -787,7 +1025,7 @@ window.addEventListener("hashchange", () => {
 });
 
 // ============ 工作区渲染 ============
-function renderWorkspace() {
+function renderWorkspaceInner() {
   // 离开字符显示器视图：释放 _rerender 闭包对旧视图 DOM 的引用（性能审计 H3，
   // hex 满载可达 13.9 万节点，不释放则逛其他视图的整段时间不可回收）
   if (state.view !== "inspect") disposeUniversalViewer();
@@ -801,6 +1039,19 @@ function renderWorkspace() {
   if (state.view === "about") return renderAbout($ws);
   if (state.view === "plugins") return renderPluginsView($ws);
   return renderOp();
+}
+
+// T510③ 切页过渡（恒烈 2026-09-13 二批反馈定稿：「不要弹动感，要从无到有的平滑过渡，动画要快，
+// 页面类的不要弹动」）：新内容渲染完成后容器纯淡入 150ms 无弹档——不加任何位移，杜绝弹跳感。
+// 同帧 set+to，初隐被重建内容遮住。仅 spring-motion 开时播；首屏不播；reduce-motion 下直切。
+let _wsMotionSeen = false;
+function renderWorkspace() {
+  const first = !_wsMotionSeen;
+  renderWorkspaceInner();
+  _wsMotionSeen = true;
+  if (first || !document.documentElement.classList.contains("spring-motion")) return;
+  HLSpring.set($ws, { opacity: 0 });
+  HLSpring.to($ws, { opacity: 1 }, "dur150");
 }
 
 // 进入配方链视图
@@ -823,7 +1074,7 @@ function goInspect() {
   renderWorkspace();
 }
 
-// 进入编码图鉴视图（224 编码图查询器）
+// 进入编码图鉴视图（编码图鉴查询器）
 function goCodeImg() {
   state.view = "codeimg";
   state.opId = null;
@@ -962,7 +1213,7 @@ function renderHome() {
  // 逐字输入不再自动解码——magicDecode + exhaustiveDecode 每次击键同步跑会逐字卡顿（恒烈反馈）。
  // 打字/改 crib/切开关只存 state，不解码；要出结果点「一键解码」按钮。
  // 文本解码取 .text 档（拖入文件的路径另取 .file 档，见 drop 处理）。
-  const forceTrigger = () => { runOneKey(input.value, outWrap, cribInput.value.trim(), state.homeStrength, true, topBanner, keyInput.value.trim(), runBtn); };
+  const forceTrigger = () => runOneKey(input.value, outWrap, cribInput.value.trim(), state.homeStrength, true, topBanner, keyInput.value.trim(), runBtn);
   input.addEventListener("input", () => { state.homeInput = input.value; });
   cribInput.addEventListener("input", () => { state.homeCrib = cribInput.value; });
   keyInput.addEventListener("input", () => { state.homeKey = keyInput.value; });
@@ -1031,6 +1282,10 @@ function activeCustomImplIds() {
 // strengthCfg = { level, customIds }（来自「解码强度」弹窗）。resolveDecodeConfig 解析成
 // allowOps 白名单 + 层数/暴力/参数网格/时间预算，替代原先的 intensive/multiLayer 两个布尔。
 async function runOneKey(text, outWrap, crib, strengthCfg, force = false, topBanner = null, key = "", runBtn = null) {
+  magicFilterReset(outWrap);
+  outWrap.__rf_magic = null;
+  outWrap.__rf_brute = null;
+  outWrap.__rf_rerender = null;
   outWrap.innerHTML = "";
   if (topBanner) topBanner.innerHTML = "";   // 横幅容器每次运行先清空
   const q = text.trim();          // 注意：不要用 t，会遮蔽 i18n 的 t()
@@ -1148,6 +1403,12 @@ async function runOneKey(text, outWrap, crib, strengthCfg, force = false, topBan
 // 渲染暴力爆破结果（独立通道）：追加在魔法候选区末尾，单独一个折叠区。
 // run 型 op 输出是报告文本（可能很长），每项截断到 1200 字符，完整内容可点开。
 function renderBruteResults(outWrap, q, results) {
+  outWrap.__rf_brute = { q, results: Array.isArray(results) ? results : [] };
+  renderOneKeySnapshot(outWrap);
+}
+
+function appendBruteResults(outWrap, results) {
+  if (!results.length) return;
   const sec = el("details", { class: "onekey-brute" });
   sec.open = true;
   sec.append(el("summary", { class: "onekey-brute-sum" },
@@ -1172,23 +1433,22 @@ function renderBruteResults(outWrap, q, results) {
 // 渲染 magic 候选（供 onPartial 部分结果 + 最终结果两处复用；每次全量重渲染 outWrap）。
 // 幂等：先清空 outWrap 再画原始卡 + 摘要 + 分组卡，多次调用只是用更全的候选覆盖。
 function renderMagicCands(outWrap, q, cands, crib) {
+  outWrap.__rf_magic = { q, cands: Array.isArray(cands) ? cands : [], crib };
+  outWrap.__rf_rerender = () => renderOneKeySnapshot(outWrap);
+  renderOneKeySnapshot(outWrap);
+}
+
+function renderOneKeySnapshot(outWrap) {
+  const snap = outWrap.__rf_magic;
+  if (!snap) return;
+  const { q, crib } = snap;
+  let cands = snap.cands.slice();
+  const brute = outWrap.__rf_brute ? outWrap.__rf_brute.results : [];
+
   outWrap.innerHTML = "";
- // 结果区置顶「原始输入」卡——原样展示用户输入，便于一眼比对原文与各解码结果。
- // 该卡不参与 crib 绿色高亮（即使含 flag 字样也不误标 crib-hit）。
   appendRawCard(outWrap, q);
 
-  if (!cands || !cands.length) {
-    outWrap.append(el("div", { class: "onekey-empty" },
-      t("ui.home.empty"),
-      el("div", { class: "onekey-hint" }, t("ui.home.emptyHint")),
-    ));
-    return;
-  }
-
- // Leet 降权——leetSpeak 解码对纯字母原样透传（flag/ctf 等前缀不变）
- // 原文若已含 crib 特征，leet 候选会「原样带出 flag」被误判命中变绿。识别这种假命中：
- // 候选链含 leetSpeak 且命中 crib，同时原文本身也命中 crib（说明 flag 是原文自带
- // 非 leet 真解出）→ 撤销绿色高亮并降到候选列表末尾。
+  // Leet 假命中标记与原排序规则保持不变；筛选只取保序子集。
   let cribRe = null;
   if (crib) { try { cribRe = new RegExp(crib, "i"); } catch { cribRe = null; } }
   const rawMatchesCrib = cribRe ? cribRe.test(q) : false;
@@ -1196,22 +1456,33 @@ function renderMagicCands(outWrap, q, cands, crib) {
     c._leetFalseHit = !!(cribRe && c.matchesCrib && rawMatchesCrib && c.chain.includes("leetSpeak"));
     c._cribHit = c.matchesCrib && !c._leetFalseHit;
   }
- // leet 假命中降到末尾，其余保持 magic 综合分原顺序（filter 保序）
   cands = [...cands.filter((c) => !c._leetFalseHit), ...cands.filter((c) => c._leetFalseHit)];
 
- // 「三元组摘要行」——取 magic 最优候选（leet 降权后 cands[0]）
- // 置顶一行紧凑展示 [解码N次] 明文 + 混合解码结果: 链路。chain 为空（原文即明文）不显示。
-  if (cands.length && cands[0].chain.length > 0) {
-    outWrap.append(renderSummaryCard(cands[0]));
+  const shown = filterMagicCands(outWrap, cands);
+  const shownBrute = filterBruteCands(outWrap, brute);
+  const total = cands.length + brute.length;
+  const matched = shown.length + shownBrute.length;
+
+  if (total) magicFilterBar(outWrap, matched, total);
+  else {
+    outWrap.append(el("div", { class: "onekey-empty" },
+      t("ui.home.empty"),
+      el("div", { class: "onekey-hint" }, t("ui.home.emptyHint")),
+    ));
+    return;
   }
 
- // 爆破分支合并单卡片。magic 参数扫描候选（chain 单元素、形如 caesar(shift=3)）
- // 会为同一算法产出几十条分支——同 baseOpId 归到一张可折叠卡（全列，命中即展开）。
-  const groups = groupSweepCands(cands);
+  // 摘要也来自筛选后的保序子集；不匹配时不展示全量候选的摘要。
+  if (shown.length && shown[0].chain.length > 0) {
+    outWrap.append(renderSummaryCard(shown[0]));
+  }
+
+  const groups = groupSweepCands(shown);
   for (const g of groups) {
     if (g.items.length >= 2) outWrap.append(renderBruteGroupCard(g));
     else outWrap.append(renderCandCard(g.items[0]));
   }
+  appendBruteResults(outWrap, shownBrute);
 }
 
 // 把 magic 候选按「爆破基算法」分组。参数扫描候选 chain 是单元素、形如
@@ -1605,20 +1876,6 @@ function renderFileReport(outWrap, r) {
   }
 }
 
-// 触发浏览器下载：bytes(Uint8Array/number[]) → Blob → a[download]（本地生成，零外发）。
-function downloadBytes(bytes, filename, mime) {
-  const u8a = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
-  const blob = new Blob([u8a], { type: mime || "application/octet-stream" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename || "download.bin";
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 // section view 动作：只读查看窗（文本 pre / 图片 img），复用 expandableInput 注入的 .exp-* modal 样式。
 function openSectionView(title, act) {
   ensureExpStyles(); // 文件报告页可能从未实例化过可展开输入框，样式表未注入 → 弹窗裸奔白底。此处兜底注入。
@@ -1669,6 +1926,28 @@ function mimeOfDataUrl(url) {
   return m ? m[1] : "image/png";
 }
 
+// ---- T361 op 产物协议（恒烈 2026-09-02 下单：全能密码学工具箱，该给文件的输出给下载按钮）----
+// run/encode/decode 允许返回新形态对象：{ text: string, files: [{ name, mime, bytes|dataUrl }] }。
+// 返回字符串的 op 全部走旧路径，647 op 零破坏。⚠ 一键解码（magic Worker）路径不认产物对象，
+// 参与 magic 的 op 勿返回对象。bytes 支持 Uint8Array / number[]；dataUrl 自动解字节并推 MIME。
+// 产物下载按钮列表：files 非空时追加到输出媒体区（renderOutMedia 清容器后调用，勿颠倒顺序）；
+// files 为 null/空时只移除旧列表（早退/清空路径由 renderOutMedia 的 innerHTML 清空兜底）。
+function renderOutFiles(container, files) {
+  if (!container) return;
+  const old = container.querySelector(".io-out-files");
+  if (old) old.remove();
+  if (!Array.isArray(files) || !files.length) return;
+  const box = el("div", { class: "io-out-files", style: "display:flex;flex-direction:column;gap:6px;margin-top:10px;align-items:flex-start" });
+  for (const { bytes, mime, name } of productFileEntries({ files })) {
+    box.append(el("button", {
+      type: "button", class: "file-section-act",
+      onclick: () => cloudWarnGate(() => downloadBytes(bytes, name, mime)),
+    }, msym("download", "file-act-glyph"),
+       el("span", {}, `${t("ui.outFiles.download")} ${name} (${fmtByteSize(bytes.length)})`)));
+  }
+  if (box.children.length) container.append(box);
+}
+
 // 输出区图片渲染：扫描 op 输出文本里的 data:image/*;base64,...（出图类 op 约定：
 // qrGen 二维码 / gifFrames 逐帧 / mcMap / bin2img / imgFft / spectrogram 等），
 // 逐个渲染成可见缩略图 + 下载按钮，点缩略图走灯箱放大。无匹配则清空媒体区。
@@ -1689,7 +1968,7 @@ function renderOutMedia(container, text) {
     img.addEventListener("click", () => openImageLightbox(url, ""));
     const dl = el("button", {
       type: "button", class: "file-section-act",
-      onclick: (e) => { e.stopPropagation(); downloadBytes(dataUrlToBytes(url), (state.opId || "image") + (multi ? "_" + (i + 1) : "") + ".png", mimeOfDataUrl(url)); },
+      onclick: (e) => { e.stopPropagation(); cloudWarnGate(() => downloadBytes(dataUrlToBytes(url), (state.opId || "image") + (multi ? "_" + (i + 1) : "") + ".png", mimeOfDataUrl(url))); },
     }, msym("download", "file-act-glyph"), el("span", {}, t("ui.op.export")));
     grid.append(el("figure", { class: "io-out-media-cell", style: "display:flex;flex-direction:column;gap:4px;align-items:center;margin:0" }, img, dl));
   });
@@ -1788,6 +2067,17 @@ function attachDropDecode(ta, onLoaded) {
 }
 
 // ---- 单 op 操作面板 ----
+// Shared by workspace family tabs and the search index.
+const FAM_LBL_ZH = { "fam.lbl.attack": "重用 k 攻击", "fam.lbl.sharedPub": "由公钥推导", "fam.lbl.homAdd": "同态加" };
+// T510 弹簧动效总开关：默认开（恒烈 2026-09-12 真机验演示后批准第一批灰度）；'0'=整体回退 CSS 动画
+document.documentElement.classList.toggle("spring-motion", localStorage.getItem("ebctf.springMotion") !== "0");
+const _segThumbPos = new Map(); // T510④ 族滑块指示器跨渲染位置记忆
+const _famSegScroll = new Map(); // T510② 族滑块横向滚动位置跨重渲染保持（恒烈 2026-09-13「点档位后滚动条重置不跟手」）
+function famLblText(lk) {
+  const v = t(lk);
+  return v === lk && FAM_LBL_ZH[lk] ? FAM_LBL_ZH[lk] : v;
+}
+
 function renderOp() {
   const op = getOp(state.opId);
   if (!op) return renderHome();
@@ -1799,6 +2089,70 @@ function renderOp() {
     opDesc(op) ? el("div", { class: "op-desc" }, opDesc(op)) : null,
   );
   $ws.append(head);
+
+  const favorite = isFavorite(op.id);
+  const favoriteTitle = t(favorite ? "ui.fav.remove" : "ui.fav.add");
+  const favBtn = el("button", {
+    class: "act-btn fav-btn" + (favorite ? " on" : ""), type: "button",
+    title: favoriteTitle, "aria-label": favoriteTitle, "aria-pressed": String(favorite),
+    onclick: () => favoritesChanged(toggleFavorite(op.id)),
+  }, msym("star"));
+  head.querySelector(".op-title")?.append(favBtn);
+  head.addEventListener("contextmenu", event => {
+    if (event.target.closest("input, textarea, [contenteditable], .fav-btn")) return;
+    event.preventDefault();
+    openFavMenu(event.clientX, event.clientY, { opId: op.id, onChange: favoritesChanged });
+  });
+
+ // 族滑块（T380）：当前 op 属于某算法族 → 标题下方、方向切换上方渲染族内档位条。
+ // 每档 = 一个独立 op，点档位 = selectOp(该 op.id)，工作区（参数表/IO/产物/自定义开关）随
+ // selectOp 全量重渲染——不引入任何新状态机。样式复用 dir-seg 的 on 态。
+ // 族字段缺失（并行添加期间）或族内不足 2 档时不渲染，其余分支零改动。滑块在页面内，
+ // 与侧栏/navRail 折叠态无关，窄屏照常渲染（dir-seg CSS 自带 flex-wrap）。
+  if (op.family) {
+    const famGrp = familyGroup(op.cat).find((g) => g.family === op.family);
+    if (famGrp && famGrp.ops.length > 1) {
+      const famSeg = el("div", { class: "dir-seg fam-seg", role: "group", "aria-label": famGrp.name,
+        oncontextmenu: e => showFavoriteMenu(e, { entries: famGrp.ops.map(m => ({ opId: m.id, label: opName(m) })) }) });
+     // T510② 滚动位置记忆：任何来源的滚动（拖条/滚轮/点档）都实时入 Map，重渲染后恢复
+      famSeg.addEventListener("scroll", () => _famSegScroll.set(op.family, famSeg.scrollLeft), { passive: true });
+      for (const m of famGrp.ops) {
+        const lk = "fam.lbl." + (m.familyLabel || m.id);
+        const lv = famLblText(lk); // 缺 key 回退 key 本身 → 再回退本地兜底表 → familyLabel 原值
+        famSeg.append(el("button",
+          { class: m.id === op.id ? "on" : "", type: "button", "aria-pressed": String(m.id === op.id),
+            onclick: () => { if (m.id !== op.id) selectOp(m.id); } },
+          lv === lk ? (m.familyLabel || m.id) : lv));
+      }
+      $ws.append(famSeg);
+     // T510② 恢复横向滚动位置 + 选中档滚入可视缘（不 scrollIntoView——那会连页面一起滚）
+      const savedScroll = _famSegScroll.get(op.family);
+      if (savedScroll != null) {
+        famSeg.scrollLeft = savedScroll;
+        const ob = famSeg.querySelector("button.on");
+        if (ob) {
+          const x0 = ob.offsetLeft, x1 = x0 + ob.offsetWidth;
+          if (x0 < famSeg.scrollLeft + 4) famSeg.scrollLeft = x0 - 4;
+          else if (x1 > famSeg.scrollLeft + famSeg.clientWidth - 4) famSeg.scrollLeft = x1 - famSeg.clientWidth + 4;
+        }
+      }
+ // T510④ 弹簧滑动指示器（spring-motion 关闭时不渲染，回退 .on 背景样式）
+      if (document.documentElement.classList.contains("spring-motion")) {
+        const onBtn = famSeg.querySelector("button.on");
+        if (onBtn) {
+          const thumb = el("span", { class: "seg-thumb", "aria-hidden": "true" });
+          const tx = onBtn.offsetLeft;
+          thumb.style.width = onBtn.offsetWidth + "px";
+          const prev = _segThumbPos.get(op.family);
+          famSeg.append(thumb);
+          HLSpring.set(thumb, { x: prev == null ? tx : prev });
+          // T510②(恒烈反馈①) 弹动缩减：bouncy150(ζ≈0.56,过冲13px) → 1422/57(名义ζ≈0.75,150ms档,过冲约减半)
+          if (prev != null && prev !== tx) HLSpring.to(thumb, { x: tx }, { stiffness: 1422, damping: 57 });
+          _segThumbPos.set(op.family, tx);
+        }
+      }
+    }
+  }
 
  // exe 型 op（requiresBridge）：无编解码语义，点即启动本机 exe / 跑 CLI。
  // 不渲染输入/输出/转换，改为「启动」按钮 + 结果显示区。若有 params（CLI 型）仍渲染参数栏。
@@ -1848,7 +2202,18 @@ function renderOp() {
  // IO 框可 resize:vertical（CSS）+ A-/A+ 调字号（会话态 state.ioFont）。
  // op 若声明 fields[] → 渲染多个带标签输入框，收集后按约定拼给 run/encode/decode。
   const hasFields = Array.isArray(op.fields) && op.fields.length > 0;
-  const inArea = ioArea({ class: "io-area", placeholder: t("ui.op.inPlaceholder") });
+  // T399 主输入框三态（恒烈拍板）：无需主输入的 op 不再显示巨型输入框。
+  //   推导见 registry.inferIoMode（run-only 且首参未引用 → none）；显式 op.io 可覆盖；
+  //   自定义实现启用时强制显示（魔改代码可能要吃 text）。inArea 仍会创建（闭包/复制链
+  //   引用它），只是不 append 进 DOM——convert() 对 ioIn 缺失按空输入直跑 run-only。
+  const ciSelf = getCustomImpl(op.id);
+  const ciSelfOn = !!(ciSelf && ciSelf.enabled && ciSelf.code && ciSelf.code.trim());
+  const ioMode = inferIoMode(op);
+  const showInput = ioMode !== "none" || ciSelfOn || hasFields;
+  // Whitespace programs require literal spaces, tabs and line feeds, not rich-text DOM.
+  const inArea = op.verbatimInput
+    ? el("textarea", { class: "io-area", placeholder: t("ui.op.inPlaceholder"), spellcheck: "false" })
+    : ioArea({ class: "io-area", placeholder: t("ui.op.inPlaceholder") });
   const outArea = ioArea({ class: "io-area", placeholder: t("ui.op.outPlaceholder"), readonly: true });
   inArea.id = "ioIn"; outArea.id = "ioOut";
  // 会话态字号（不持久化）
@@ -1892,12 +2257,13 @@ function renderOp() {
   runAct.addEventListener("click", () => convert());
   const chainAct = el("button", { class: "act-btn", title: t("ui.op.chainToInput") },
     msym("swap_vert"), " " + t("ui.op.chainToInput"));
-  chainAct.addEventListener("click", () => { inArea.value = outArea.value; convert(); });
+  chainAct.addEventListener("click", () => { inArea.value = outArea.value; delete inArea._rawBytes; convert(); });
 
- // 输入区主体：多字段模式渲染 fieldAreas，否则单 textarea。
+ // 输入区主体：多字段模式渲染 fieldAreas；io=none 且无自定义实现 → 细提示条替代巨型输入框。
   const inputBody = hasFields
     ? el("div", { class: "io-fields" }, ...fieldAreas)
-    : inArea;
+    : (showInput ? inArea : el("div", { class: "io-none-hint" },
+        msym("info"), " 本操作无需主输入：填好参数后直接运行（自定义实现启用时会恢复输入框）"));
   const clearAll = () => {
     inArea.value = "";
     outArea.value = "";
@@ -2043,33 +2409,37 @@ function renderEduCard(opId) {
 
  // 行内标记解析：$...$ → KaTeX 行内公式占位；`...` → 等宽小块。
  // 返回 DocumentFragment，供多段文本拼接。
+ // 顺序（T515 遗留修正）：先提取 `...` 码段，段内字面量不做 $ 公式切分——
+ // 否则 `$7z$type$...$` 这类哈希串模板（forensic 五卡）会被误切成伪公式。
   const parseInline = (text) => {
     const frag = document.createDocumentFragment();
- // 先按 $...$ 切，再对非公式段按 `...` 切
-    const parts = String(text).split(/(\$[^$]+\$)/g);
-    for (const p of parts) {
-      if (!p) continue;
-      if (p.startsWith("$") && p.endsWith("$") && p.length > 2) {
-        const span = el("span", { class: "edu-math" });
-        span.setAttribute("data-tex", p.slice(1, -1));
-        frag.append(span);
-      } else {
- // 处理反引号等宽块
-        const segs = p.split(/(`[^`]+`)/g);
-        for (const s of segs) {
-          if (!s) continue;
-          if (s.startsWith("`") && s.endsWith("`") && s.length > 2) {
-            frag.append(el("code", { class: "edu-code" }, s.slice(1, -1)));
-          } else if (/<[a-z][\s\S]*?>/i.test(s)) {
+    const pushPlain = (s) => {
+      if (!s) return;
  // 科普数据是本地可信源，允许富文本标签（<b>/<i>/<sub>/<sup>/<table>/<ul> 等）
-            const span = el("span", { class: "edu-rich" });
-            span.innerHTML = s;
-            frag.append(span);
-          } else {
-            frag.append(document.createTextNode(s));
-          }
-        }
+      if (/<[a-z][\s\S]*?>/i.test(s)) {
+        const span = el("span", { class: "edu-rich" });
+        span.innerHTML = s;
+        frag.append(span);
+      } else frag.append(document.createTextNode(s));
+    };
+ // 非码段内再按 $...$ 切公式
+    const pushSegment = (s) => {
+      const parts = String(s).split(/(\$[^$]+\$)/g);
+      for (const p of parts) {
+        if (!p) continue;
+        if (p.startsWith("$") && p.endsWith("$") && p.length > 2) {
+          const span = el("span", { class: "edu-math" });
+          span.setAttribute("data-tex", p.slice(1, -1));
+          frag.append(span);
+        } else pushPlain(p);
       }
+    };
+    const segs = String(text).split(/(`[^`]+`)/g);
+    for (const s of segs) {
+      if (!s) continue;
+      if (s.startsWith("`") && s.endsWith("`") && s.length > 2)
+        frag.append(el("code", { class: "edu-code" }, s.slice(1, -1)));
+      else pushSegment(s);
     }
     return frag;
   };
@@ -2180,6 +2550,13 @@ function renderEduCard(opId) {
       ul.append(li);
     }
     section("ui.edu.tips", ul);
+  }
+
+ // T499 别名（恒烈指示 2026-09-12）：全部可检索别名以标签形式列在科普卡末尾
+  if (Array.isArray(edu.aka) && edu.aka.length) {
+    const chips = el("div", { class: "edu-aka-chips" });
+    for (const a of edu.aka) chips.append(el("span", { class: "edu-aka-chip" }, a));
+    section("ui.edu.aka", chips);
   }
 
   $ws.append(card);
@@ -2346,6 +2723,22 @@ function renderParam(op, d) {
     };
     const box = el("div", { class: "stepper" }, btn("remove", -1, "减"), inp, btn("add", 1, "加"));
     wrap.append(el("label", { for: id }, d.label), box);
+  } else if (d.ui === "bigText" || d.type === "textarea") {
+    wrap.classList.add("param-big");
+    const ta = el("textarea", { id, class: "param-bigta", rows: String(Math.min(10, Math.max(3, d.rows ?? 5))),
+      placeholder: d.placeholder || "", spellcheck: "false", autocomplete: "off" });
+    ta.value = state.params[d.key] ?? "";
+    ta.addEventListener("input", () => { state.params[d.key] = ta.value; convert(); });
+    const btn = el("button", { type: "button", class: "exp-btn param-bigta-btn",
+      title: t("ui.expand.title"), "aria-label": t("ui.expand.title") }, msym("open_in_full"));
+    btn.addEventListener("click", () => {
+      openExpandModal(ta.value, value => {
+        ta.value = value;
+        state.params[d.key] = value;
+        convert();
+      }, { modalTitle: d.label, cancelLabel: t("ui.expand.cancel"), saveLabel: t("ui.expand.save") });
+    });
+    wrap.append(el("label", { for: id }, d.label), el("div", { class: "param-bigbox" }, ta, btn));
   } else if (EXPANDABLE_KEYS.has(d.key)) {
  // 密钥/IV/字典/替换表/crib 等长文本，用可展开输入框（加宽 + 展开 modal）
     const box = expandableInput({
@@ -2378,22 +2771,28 @@ const EXPANDABLE_KEYS = new Set([
 // 用 _convSeq 防竞态：慢的异步结果回来时若已不是最新一次调用，丢弃。
 let _convSeq = 0;
 async function convert() {
+  const seq = ++_convSeq;
+  const operationDir = state.dir;
   const op = getOp(state.opId);
   if (!op) return;
   const inArea = document.getElementById("ioIn");
   const outArea = document.getElementById("ioOut");
-  if (!inArea || !outArea) return;
+  if (!outArea) return;
  // 多字段模式下，从各字段框收集值，按 op.fieldsJoin（默认换行）拼成单一输入串。
   const hasFields = Array.isArray(op.fields) && op.fields.length > 0;
   let text;
   if (hasFields) {
     const vals = op.fields.map((f) => (document.getElementById("fld_" + f.key)?.value ?? ""));
  // 全空则清空输出（等价单框空输入）
-    if (vals.every((v) => v === "")) { outArea.value = ""; renderOutMedia(document.getElementById("ioOutMedia"), ""); return; }
+    if (vals.every((v) => v === "") && (op.encode || op.decode)) { outArea.value = ""; renderOutMedia(document.getElementById("ioOutMedia"), ""); return; }
+ // T366 修复：run 单向 op（keygen 类无输入）空输入是合法调用，不放行会被上面的清空分支吞掉。
     text = vals.join(op.fieldsJoin ?? "\n");
-  } else {
+  } else if (inArea) {
     text = inArea.value;
-    if (text === "") { outArea.value = ""; renderOutMedia(document.getElementById("ioOutMedia"), ""); return; }
+    if (text === "" && (op.encode || op.decode)) { outArea.value = ""; renderOutMedia(document.getElementById("ioOutMedia"), ""); return; }
+  } else {
+ // T399：主输入框隐藏（io=none 且未启用自定义实现）→ 空输入直跑 run-only（keygen 类合法调用）。
+    text = "";
   }
  // MT72：用户勾选了「高级 · 自定义实现」且有代码 → 用用户代码替换本 op 实现。
  // 执行走 Worker 沙箱 + 超时硬杀；结果形态 {ok,out|error} 在此归一为字符串或抛错。
@@ -2401,18 +2800,17 @@ async function convert() {
   const useCi = ci && ci.enabled && ci.code && ci.code.trim();
   const fn = useCi
     ? (text, p) => runCustomWithTimeout({
-        code: ci.code, dir: state.dir, input: text, params: p, rawBytes: p.rawBytes || null,
+        code: ci.code, dir: operationDir, input: text, params: p, rawBytes: p.rawBytes || null,
       }).then((r) => {
         if (!r.ok) throw new Error(r.error + (r.line ? `（第 ${r.line} 行）` : ""));
         return r.out;
       })
-    : (op.run || (state.dir === "encode" ? op.encode : op.decode));
-  const seq = ++_convSeq;
+    : (op.run || (operationDir === "encode" ? op.encode : op.decode));
  // 原始字节透传：op 声明 acceptsBytes 且输入框有拖入的真字节时
  // 通过 params.rawBytes 传给执行层（如 PNG 等需要真字节而非 hex 文本的 op）。
  // 未声明的 op 完全不受影响，params 里不注入 rawBytes。
-  let callParams = state.params;
-  if (op.acceptsBytes && !hasFields && inArea._rawBytes) {
+  let callParams = { ...state.params };
+  if (op.acceptsBytes && !hasFields && inArea && inArea._rawBytes) {
     callParams = { ...state.params, rawBytes: inArea._rawBytes, rawFileName: inArea._rawFileName };
   }
   try {
@@ -2422,13 +2820,22 @@ async function convert() {
     outArea.classList.remove("error");
     renderOutMedia(document.getElementById("ioOutMedia"), "");
     const out = await fn(text, callParams);
-    if (seq !== _convSeq) return; // 有更新的一次转换，丢弃本次
-    outArea.value = out;
+    if (seq !== _convSeq || !outArea.isConnected) return; // 有更新的一次转换，丢弃本次
+    // T361 产物协议：返回 {text, files:[...]} 对象 → text 进 outArea，files 渲染下载按钮；
+    // 字符串返回走旧路径完全不变。
+    let outText = out, outFiles = null;
+    if (out && typeof out === "object") {
+      outText = out.text != null ? out.text : "";
+      outFiles = "files" in out ? productFileEntries(out) : null;
+    }
+    outArea.value = outText;
     outArea.style.color = "";
     outArea.classList.remove("error");
-    renderOutMedia(document.getElementById("ioOutMedia"), out);
+    const mediaBox = document.getElementById("ioOutMedia");
+    renderOutMedia(mediaBox, outText);
+    renderOutFiles(mediaBox, outFiles); // 在 renderOutMedia 之后追加（其会清容器）
   } catch (e) {
-    if (seq !== _convSeq) return;
+    if (seq !== _convSeq || !outArea.isConnected) return;
     outArea.value = "✗ " + (e.message || t("ui.toast.convertFail"));
     outArea.style.color = "var(--error)";
     outArea.classList.add("error");
@@ -2494,20 +2901,32 @@ function systemPrefersDark() {
 // 偏好 → 实际明暗："system" 查系统；否则用偏好本身。
 function resolveTheme(pref) {
   if (pref === "light" || pref === "dark") return pref;
+  const variant = themeVariant(pref);
+  if (variant) return variant.dark ? "dark" : "light";
   return systemPrefersDark() ? "dark" : "light"; // system
 }
 // 读当前偏好（system/light/dark），无存储 → "system"。
+let activeThemePref = null;
 function themePref() {
-  try { const v = localStorage.getItem(THEME_KEY); return (v === "light" || v === "dark" || v === "system") ? v : "system"; }
+  if (activeThemePref !== null) return activeThemePref;
+  try { const v = localStorage.getItem(THEME_KEY); return (v === "light" || v === "dark" || v === "system" || themeVariant(v)) ? v : "system"; }
   catch { return "system"; }
 }
 // 应用偏好：算实际明暗写 data-theme + 同步图标 + 重算动态取色。persist=true 时持久化偏好。
 function applyThemePref(pref, persist, skipAccent) {
+  activeThemePref = pref;
   const actual = resolveTheme(pref);
   document.documentElement.setAttribute("data-theme", actual);
+  if (themeVariant(pref)) document.documentElement.setAttribute("data-palette", pref);
+  else document.documentElement.removeAttribute("data-palette");
   const iconNode = document.querySelector("#btnTheme .msym");
   if (iconNode) iconNode.innerHTML = iconSvg(actual === "dark" ? "dark_mode" : "light_mode");
   if (persist) { try { localStorage.setItem(THEME_KEY, pref); } catch { /* 忽略 */ } }
+  document.querySelectorAll("[data-theme-pref]").forEach(button => {
+    const selected = button.dataset.themePref === pref;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
   // skipAccent：模块顶层启动调用时跳过——此刻 reapplyAccent 依赖的 _systemAccentSeed(const)
   // 尚在 TDZ（暂时性死区），调它会 ReferenceError 中断整个模块。启动的动态取色由后面
   // restoreAccent/enableHctEngine 链负责，无需在此重算。
@@ -2556,7 +2975,7 @@ function initPwa() {
     location.reload();
   });
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js", { scope: "./", updateViaCache: "none" }).catch(() => {});
+    navigator.serviceWorker.register("sw.js", { scope: "./", updateViaCache: "none" }).catch((e) => console.warn("[sw] Service Worker 注册失败（PWA 离线不可用）：", e));
   }, { once: true });
 }
 
@@ -2592,6 +3011,48 @@ async function checkForUpdate() {
 }
 
 // ============ 顶栏交互 ============
+// T471 M3 触点涟漪（2026-09-09，恒烈批准直改动画层）。
+// 文档级 pointerdown 委托；载体 prepend 保证文字层在上；宿主裁剪由载体自身 overflow:hidden 承担，
+// 不改宿主 overflow（避免裁掉 focus outline）；pressed 不透明度走 --ripple-op（M3 规范 12%）；
+// 减动效偏好直接不生成涟漪。宿主重渲染销毁载体时由定时器兜底清理。
+(function initM3Ripple() {
+  return; // 恒烈 2026-09-13 裁决「涟漪效果太糟糕了，取消吧」——涟漪全线停用；CSS 与结构保留备将来重做
+  const HOST_SEL = ".act-btn, .nav-item, .nav-subitem, .stepper-btn, .dir-seg button, .io-mini-btn, .nav-toggle, .fav-btn";
+  const reduced = () => document.documentElement.classList.contains("reduce-motion"); // T471b：应用内开关
+  document.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;                 // 仅主键
+    if (reduced()) return;
+    const host = e.target && e.target.closest ? e.target.closest(HOST_SEL) : null;
+    if (!host || host.disabled) return;
+    const rect = host.getBoundingClientRect();
+    if (rect.width < 8 || rect.height < 8) return;
+    const olds = host.querySelectorAll(":scope > .m3-ripple");
+    if (olds.length >= 3) olds[0].remove();     // 并发上限 3 层，防快速连点堆叠
+    const span = document.createElement("span");
+    span.className = "m3-ripple";
+    const dot = document.createElement("span");
+    dot.className = "m3-ripple-dot";
+    const d = Math.max(rect.width, rect.height) * 2.2;
+    dot.style.width = dot.style.height = d + "px";
+    dot.style.left = (e.clientX - rect.left) + "px";
+    dot.style.top = (e.clientY - rect.top) + "px";
+    span.append(dot);
+    host.prepend(span);
+    requestAnimationFrame(() => requestAnimationFrame(() => dot.classList.add("run"))); // 两帧后启动，确保 scale(0) 初态先落
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      dot.classList.add("out");
+      setTimeout(() => span.remove(), 300);
+    };
+    setTimeout(release, 470);                    // 长按也自动淡出（T510④ 环扩散 450ms 播完再淡）
+    host.addEventListener("pointerup", release, { once: true });
+    host.addEventListener("pointercancel", release, { once: true });
+    host.addEventListener("pointerleave", release, { once: true });
+  }, true);
+})();
+
 function initTopbar() {
  // 顶栏版本号由全局 APP_VERSION 注入（index.html 的占位会被覆盖，避免版本号割裂）。
   const appVerEl = document.getElementById("appVer");
@@ -2684,7 +3145,7 @@ function toggleFontPanel(anchor) {
 
 // ---- 触摸拖拽 → 配方链（HTML5 DnD 在触摸设备不触发，touch 模拟）----
 // 长按 320ms 进入拖拽；长按前移动视为正常滚动，避免左侧抽屉无法上下滑。
-function attachTouchDragToRecipe(node, getOpId) {
+function attachTouchDragToRecipe(node, getOpId, getFamilyId) {
   let timer = null, active = false, tracking = false;
   let sx = 0, sy = 0, ghost = null;
 
@@ -2746,7 +3207,10 @@ function attachTouchDragToRecipe(node, getOpId) {
     const t = e.changedTouches[0];
     e.preventDefault();
     const opId = getOpId();
-    if (opId && chainAt(t.clientX, t.clientY)) addRecipeOpAt(opId, t.clientX, t.clientY);
+    // T395：族条目触摸拖入 → 选档菜单；普通条目 → 直接入链
+    const famId = typeof getFamilyId === "function" ? (getFamilyId() || "") : "";
+    if (famId && chainAt(t.clientX, t.clientY)) addRecipeFamilyAt(famId, t.clientX, t.clientY);
+    else if (opId && chainAt(t.clientX, t.clientY)) addRecipeOpAt(opId, t.clientX, t.clientY);
     cleanup();
   }, { passive: false });
   node.addEventListener("touchcancel", cleanup, { passive: true });
@@ -2764,9 +3228,23 @@ function buildSearchIndex() {
     const nm = opName(op);
     const ds = opDesc(op);
     const aka = aliases[op.id] || [];
- // 拼一条可小写匹配的检索串：名称 + 别名 + 描述 + id + 分类
-    const hay = [nm, ...aka, ds, op.id, op.cat].join("").toLowerCase();
-    idx.push({ id: op.id, name: nm, desc: ds, cat: op.cat, aka, hay });
+ // 算法族（T381）：族显示名 + 档位短名并入可检索文本，让「pgp 加密」「ML-KEM 密钥」
+ // 这类「族名+档名」组合词能命中族内 op。family 字段缺失时 famName 为空串，行为同旧。
+    const famName = op.family ? (FAMILY_NAMES[op.family] || "") : "";
+    let famLbl = "";
+    if (op.family && op.familyLabel) {
+      const lk = "fam.lbl." + op.familyLabel;
+      const lv = famLblText(lk);
+      famLbl = lv === lk ? "" : lv; // 缺 key 回退空串，不把裸 key 混进检索文本
+    }
+ // 拼一条可小写匹配的检索串：名称 + 别名 + 描述 + id + 分类 + 族名 + 档名
+ // T514：中文名/中文别名的拼音全拼+首字母序列并入（ksmm/kaisamima 命中凯撒密码）；
+ // 派生序列不回写 aka（双轨），非中文串返回空集零开销。
+    const pyKeys = pinyinKeys(nm, aka);
+    const hay = [nm, ...aka, ds, op.id, op.cat, famName, famLbl, ...pyKeys].join("").toLowerCase();
+ // name 保持 op 原名：评分（名称前缀命中）与短名优先 tie-break 不受族名影响，保守零回归；
+ // 族显示名只用于结果渲染（r.famName → 「族名 - op名」）与所属族标注。
+    idx.push({ id: op.id, name: nm, desc: ds, cat: op.cat, aka, famName, hay, py: pyKeys });
   }
   return idx;
 }
@@ -2775,7 +3253,15 @@ function searchOps(q) {
   const query = q.trim().toLowerCase();
   if (!query) return [];
  // 支持空格分词：全部词都命中才算（AND）
-  const terms = query.split(/\s+/).filter(Boolean);
+ // T509 P0：剥离查询中的动作词（「3DES 解密」「JWT 伪造」「base58解码」→ 算法本体）。
+ // 动作词不承载算法身份，全库 aka 也不含（BASE_NOTES 历史防泛词滤除），不剥则系统性 0 命中。
+  const ACTION_WORDS = /^(加密|解密|编码|解码|解析|解压|转换|生成|识别|提取|破解|计算|伪造|encrypt|decrypt|encode|decode|parse|convert|generate|identify|extract|crack|calculate|forge|decompress)$/i;
+  const ACTION_SUFFIX = /(加密|解密|编码|解码|解析|解压|转换|生成|识别|提取|破解|计算|伪造|encrypt|decrypt|encode|decode|parse|convert|generate|identify|extract|crack|calculate|forge|decompress)$/i;
+  let terms = query.split(/\s+/).filter(Boolean);
+  const stripped = terms
+    .filter((term) => !ACTION_WORDS.test(term))
+    .map((term) => { const core = term.replace(ACTION_SUFFIX, ""); return core.length >= 2 ? core : term; });
+  if (stripped.length) terms = stripped;
   const scored = [];
   for (const e of _searchIndex) {
     let ok = true;
@@ -2784,16 +3270,24 @@ function searchOps(q) {
       const pos = e.hay.indexOf(term);
       if (pos < 0) { ok = false; break; }
  // 名称开头命中给高分，别名/描述命中给低分
+ // T514：拼音键前缀命中（ksmm/ksm m 这类首字母查询的本体命中）介于别名与兜底之间，
+ // 让「想曰 xy」强于恰好在中段含 xy 的无关 op；键中段命中仍走 hay 兜底 +10。
       const nmPos = e.name.toLowerCase().indexOf(term);
       if (nmPos === 0) score += 100;
       else if (nmPos > 0) score += 40;
       else if (e.aka.some((a) => a.toLowerCase().includes(term))) score += 30;
+      else if (e.py && e.py.some((k) => k.startsWith(term))) score += 20;
       else score += 10;
     }
-    if (ok) scored.push({ e, score });
+    if (ok) {
+ // 恒烈 2026-09-02：常用 op（CTF_HOT）搜索加权——修「RSA 密钥对生成」被注册序靠前的
+ // 攻击类变体（同 100 分）挤出候选位的 bug；同分再按短名优先（入口级 op 排变体长尾前）。
+      score += CTF_HOT.has(e.id) ? 25 : 0;
+      scored.push({ e, score, nl: e.name.length });
+    }
   }
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, 12).map((s) => s.e);
+  scored.sort((a, b) => (b.score - a.score) || (a.nl - b.nl));
+  return scored; // 全量返回，分页由渲染层负责（默认 20 条 + 加载更多）
 }
 
 let _searchActiveIdx = -1;
@@ -2803,8 +3297,13 @@ function initOpSearch() {
   if (!input || !panel) return;
 
   const closePanel = () => {
-    panel.classList.remove("open");
-    panel.innerHTML = "";
+    if (document.documentElement.classList.contains("spring-motion")) {
+      panel.style.pointerEvents = "none";
+      HLSpring.to(panel, { scale: 0.95, opacity: 0 }, { preset: "dur150", onRest: () => {
+        panel.classList.remove("open"); panel.innerHTML = ""; panel.style.pointerEvents = "";
+        HLSpring.set(panel, { scale: 1, opacity: 1 });
+      } });
+    } else { panel.classList.remove("open"); panel.innerHTML = ""; }
     _searchActiveIdx = -1;
   };
 
@@ -2815,7 +3314,10 @@ function initOpSearch() {
     selectOp(id);
   };
 
-  const renderResults = (results) => {
+  const renderResults = (results, keepShown) => {
+    // 恒烈 2026-09-02：搜索结果不再砍到 12 条——默认 20 条 + 「加载更多」分页，全量可达。
+    const PAGE = 20;
+    if (!keepShown) _searchShown = PAGE;
     panel.innerHTML = "";
     _searchActiveIdx = -1;
     if (!results.length) {
@@ -2823,11 +3325,16 @@ function initOpSearch() {
       panel.classList.add("open");
       return;
     }
-    results.forEach((r, i) => {
-      const item = el("div", { class: "op-search-item", "data-idx": String(i), "data-opid": r.id, draggable: "true", title: t("ui.recipe.dragSearchHint") },
+    results.slice(0, _searchShown).forEach((s, i) => {
+      const r = s.e;
+      // T381：族内 op 结果显示名 =「族显示名 - op名」（命中项据此标注所属族）；非族 op 原名不变
+      const dispName = r.famName ? (r.famName + " - " + r.name) : r.name;
+      const item = el("div", { class: "op-search-item", tabindex: "0", "data-idx": String(i), "data-opid": r.id, draggable: "true", title: t("ui.recipe.dragSearchHint"),
+        oncontextmenu: e => showFavoriteMenu(e, { opId: r.id }) },
         el("div", { class: "op-search-item-main" },
-          el("span", { class: "op-search-item-name" }, r.name),
+          el("span", { class: "op-search-item-name" }, dispName),
           el("span", { class: "op-search-item-cat" }, catNameById(r.cat)),
+          isFavorite(r.id) ? el("span", { class: "op-search-item-fav", "aria-hidden": "true" }, msym("star")) : null,
         ),
         r.desc ? el("div", { class: "op-search-item-desc" }, r.desc) : null,
       );
@@ -2844,8 +3351,20 @@ function initOpSearch() {
       attachTouchDragToRecipe(item, () => r.id);
       panel.append(item);
     });
+    if (results.length > _searchShown) {
+      panel.append(el("button", {
+        type: "button", class: "op-search-more",
+        onclick: (e) => { e.stopPropagation(); _searchShown += PAGE; renderResults(results, true); },
+      }, `${t("ui.search.more")}（${results.length - _searchShown}）`));
+    }
+    const wasOpen = panel.classList.contains("open");
     panel.classList.add("open");
+    if (!wasOpen && document.documentElement.classList.contains("spring-motion")) {
+      HLSpring.set(panel, { scale: 0.95, opacity: 0 });
+      HLSpring.to(panel, { scale: 1, opacity: 1 }, "dur150");
+    }
   };
+  let _searchShown = 20;
 
   const items = () => Array.from(panel.querySelectorAll(".op-search-item"));
   const setActive = (i) => {
@@ -2909,6 +3428,11 @@ const REFERENCE_PROJECTS = [
     borrow: "「配方链」线性管道式操作串联的交互范式借鉴自它。",
   },
   {
+    name: "dCode",
+    url: "https://www.dcode.fr/",
+    borrow: "1300+ 编码/密码工具清单交叉对照与收录判定源；多算法口径与官方示例对拍基准。",
+  },
+  {
     name: "ToolsFx（密码学工具箱）",
     url: "https://github.com/Leon406/ToolsFx",
     borrow: "部分古典/现代密码与哈希算法的纯 JS 实现思路参考自其公开实现。",
@@ -2935,7 +3459,7 @@ function renderAbout(host) {
     el("img", { class: "about-logo-img", src: "public/logo.webp", alt: "", width: "96", height: "96", loading: "lazy" }));
 
  // ② 标题（去掉 badges，只留名 + 版本号小字）
-  const title = el("div", { class: "about-title" }, t("ui.about.appName"));
+  const title = el("div", { class: "about-title" }, appDisplayName() || t("ui.about.appName"));
   const ver = el("div", { class: "about-ver" }, "v" + APP_VERSION);
 
  // ③ 简介
@@ -2944,7 +3468,7 @@ function renderAbout(host) {
  // ④ GitHub 入口（零外发：仅外跳链接，不嵌徽章图、不拉 star 数）
   const repoBtn = el("a", {
     class: "about-repo-btn", href: REPO_URL, target: "_blank", rel: "noopener noreferrer",
-  }, msym("star"), el("span", null, t("ui.about.repoBtn")));
+  }, msym("code"), el("span", null, t("ui.about.repoBtn")));
 
   page.append(el("div", { class: "about-hero" }, logo, title, ver, intro, repoBtn));
 
@@ -3027,8 +3551,10 @@ function renderAbout(host) {
     { name: "霍雅", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribHuoya" },
     { name: "0x0off", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contrib0x0off" },
     { name: "懒羊羊大王", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribLyy" },
-    { name: "风之遐想", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribFzxx" },
+    { name: "风之暇想", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribFzxx" },
     { name: "jluvb", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribJluvb" },
+    { name: "smile1110", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribSmile1110" },
+    { name: "拉面", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribLamian" },
   ];
   for (const c of OTHER_CONTRIBUTORS) {
     const cap = el("span", { class: c.avatar ? "about-capsule about-capsule-founder" : "about-capsule" });
@@ -3144,8 +3670,9 @@ function applyStaticI18n() {
   setIcon("#btnTheme .msym", document.documentElement.getAttribute("data-theme") === "dark" ? "dark_mode" : "light_mode");
 
   const set = (sel, txt) => { const n = document.querySelector(sel); if (n) n.textContent = txt; };
-  set(".brand-title", t("ui.brand.title"));
-  document.title = t("ui.brand.title");
+  const brandName = appDisplayName() || t("ui.brand.title"); // 授权 appName 覆盖（未声明用内置名）
+  set(".brand-title", brandName);
+  document.title = brandName;
   set("#btnUpdate .icon-btn-label", t("ui.topbar.update"));
   set("#btnLang .icon-btn-label", t("ui.topbar.lang"));
   set("#btnFont .icon-btn-label", t("ui.env.btn"));
@@ -3165,7 +3692,8 @@ function applyStaticI18n() {
 // 切到英文时懒加载英文科普层（首次 import，后续缓存）。
 onLocaleChange((loc) => {
   if (loc === "en") {
-    import("./core/eduContent.en.js").catch(() => null);
+ // 英文科普层懒加载完成后再补一次渲染——否则本次切换的当前页 edu 因先渲染后注册而临时回落中文（T504 P1 修复时实证的既有竞态）
+    import("./core/eduContent.en.js").then(() => renderWorkspace()).catch((e) => console.warn("[edu-en] 英文科普层加载失败，回落中文科普：", e)); // T504：此静默曾掩盖 P1（分片语法错全包回落），保留回落行为只加可见性
   }
   applyStaticI18n();
   renderNav();
@@ -3220,6 +3748,11 @@ function initNavResizer() {
 }
 
 // ============ 启动 ============
+// T471b：应用内减动效开关（默认关＝动画照常；localStorage 'ebctf.reduceMotion'='1' 开启）。
+// 必须在任何渲染前落类，保证首屏动画策略一致。OS 偏好不再自动接管（恒烈 2026-09-09 指示）。
+if (localStorage.getItem("ebctf.reduceMotion") === "1") {
+  document.documentElement.classList.add("reduce-motion");
+}
 initPwa();
 // 加载屏遮白屏。模块顶层 import 已完成才执行到这，故进度从「初始化界面」起步。
 setLoadingProgress(60, "ui.loading.ui");
@@ -3248,6 +3781,8 @@ applyRoute();
 loadLicense().then((lic) => {
   if (lic) _license = lic;
   if (state.view === "about") renderWorkspace();
+ // 授权自带自定义软件名时刷新顶栏品牌与页面标题（启动时 license 已按内置名渲染过一遍）
+  if (appDisplayName()) applyStaticI18n();
 }).catch(() => { /* 读取失败静默留开源默认 */ });
 setLoadingProgress(100, "ui.loading.ready");
 hideLoadingScreen();
@@ -3267,6 +3802,7 @@ function currentThemeDark() {
   return document.documentElement.getAttribute("data-theme") !== "light";
 }
 function applySavedAccent() {
+  if (document.documentElement.hasAttribute("data-palette")) { resetAccent(); return; }
   let seed = null;
   try { seed = localStorage.getItem(ACCENT_KEY); } catch { /* 隐私模式忽略 */ }
  // 无保存色 → 回落默认砖红种子，走动态取色管线生成整套 M3 主题（含淡暖灰中性 surface）
@@ -3277,6 +3813,7 @@ function applySavedAccent() {
 // 主题切换后调：设过自定义色才以新明暗重算，否则不动（出厂色随 theme.css 自动切）。
 // 无用户保存色但启动已应用系统强调色时，回退用系统色重算（明暗切换跟随系统色）。
 function reapplyAccent() {
+  if (document.documentElement.hasAttribute("data-palette")) { resetAccent(); return; }
   let seed = null;
   try { seed = localStorage.getItem(ACCENT_KEY); } catch { /* 忽略 */ }
   if (!seed) seed = _systemAccentSeed;
@@ -3321,14 +3858,19 @@ async function initSystemAccent() {
   const hex = await fetchSystemAccent();
   if (!hex) return;                         // 降级：静默留 theme.css 砖红
   _systemAccentSeed = hex;
+  if (document.documentElement.hasAttribute("data-palette")) return;
   try { applyAccent(hex, { dark: currentThemeDark() }); } catch { return; }
   console.info("[accent] 已应用系统强调色 " + hex);   // 降级链上最多一条 info
 }
 // 供 envPanel「同步系统色」按钮调用：手动读系统色并应用。用户主动点 → 持久化为选择。
 // 返回 { ok, accent } 供 UI toast 反馈。
+function exitPaletteKeepLightness() {
+  if (document.documentElement.hasAttribute("data-palette")) applyThemePref(currentThemeDark() ? "dark" : "light", true);
+}
 window.__ebctfSyncAccent = async () => {
   const hex = await fetchSystemAccent();
   if (!hex) return { ok: false };
+  exitPaletteKeepLightness();
   try { applyAccent(hex, { dark: currentThemeDark() }); } catch { return { ok: false }; }
   try { localStorage.setItem(ACCENT_KEY, hex); } catch { /* 忽略 */ }
   _systemAccentSeed = null;                 // 已持久化为用户选择，清系统色临时态
@@ -3336,11 +3878,20 @@ window.__ebctfSyncAccent = async () => {
 };
 // 供 envPanel 色板 UI 调用：选色即时应用 + 持久化；resetAccent 由 envPanel 直接 import。
 window.__ebctfSetAccent = (seed) => {
+  seed = normAccentHex(seed);
+  if (!seed) return;
+  exitPaletteKeepLightness();
   try { applyAccent(seed, { dark: currentThemeDark() }); } catch { /* 忽略 */ }
   try { localStorage.setItem(ACCENT_KEY, seed); } catch { /* 忽略 */ }
 };
 window.__ebctfClearAccent = () => {
   try { localStorage.removeItem(ACCENT_KEY); } catch { /* 忽略 */ }
+};
+window.__ebctfResetAccentToOriginal = () => {
+  exitPaletteKeepLightness();
+  _systemAccentSeed = null;
+  window.__ebctfClearAccent();
+  applyAccent(DEFAULT_ACCENT.seed, { dark: currentThemeDark() });
 };
 
 // window.__ebctfRuntime 供 envPanel 等读取当前形态（"local" | "server"，探测前 null）。

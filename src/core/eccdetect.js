@@ -1166,7 +1166,7 @@ register({
 });
 register({
   id: "ecCurveIdent",
-  cat: "crypto",
+  cat: "analysis",
   name: "椭圆曲线参数识别",
   desc: "识别 secp256k1/P-256/Curve25519 等曲线（输入曲线名 / 点分 OID / DER OID，输出域参数 p,a,b,G,n,h）",
   params: [],

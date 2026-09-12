@@ -15,13 +15,13 @@
 export default {
   // ============ crypto: Shamir's Secret Sharing ============
   shamir: {
-    what: 'Shamir\'s Secret Sharing (SSS) — split a secret into n shares such that any k shares can reconstruct it, while k-1 shares reveal nothing (information-theoretic security). Operates in GF(2^8) with polynomial f(x) = s + a1*x + a2*x^2 + ... + a_{k-1}*x^{k-1}.',
+    what: 'Shamir\'s Secret Sharing (SSS) — split a secret into n shares such that any k shares can reconstruct it, while k-1 shares reveal nothing (information-theoretic security). Operates in $GF(2^{8})$ with polynomial $f(x) = s + a_1 x + a_2 x^2 + \\cdots + a_{k-1} x^{k-1}$.',
     principle:
-      'Adi Shamir\'s 1979 paper How to Share a Secret: the secret is encoded as the constant term of a degree-(k-1) polynomial over GF(2^8) with irreducible polynomial 0x11B (the AES field).\n' +
+      'Adi Shamir\'s 1979 paper How to Share a Secret: the secret is encoded as the constant term of a degree-(k-1) polynomial over $GF(2^{8})$ with irreducible polynomial 0x11B (the AES field).\n' +
       '' +
       'Split (encode): For each secret byte s, generate a random polynomial f(x) = s + a1*x + a2*x^2 + ... + a_{k-1}*x^{k-1} with coefficients a_i drawn from crypto.getRandomValues. Evaluate at x = 1,2,...,n to produce n shares, each of the form xx:hex where xx is the x-coordinate in hex.\n' +
       '' +
-      'Combine (decode): Given at least k shares (x_i, y_i), use Lagrange interpolation to recover f(0) = s for each byte position. All operations in GF(2^8) with multiplication via exp/log lookup tables and division via gfDiv(a,b) = gfMul(a, gfInv(b)).\n' +
+      'Combine (decode): Given at least k shares (x_i, y_i), use Lagrange interpolation to recover $f(0) = s$ for each byte position. All operations in $GF(2^{8})$ with multiplication via exp/log lookup tables and division via gfDiv(a,b) = gfMul(a, gfInv(b)).\n' +
       '' +
       'Information-theoretically secure: fewer than k shares provide zero information about the secret, regardless of computational power. Used in HashiCorp Vault, HSM, and multi-party key management.\n',
     usage: 'Encode: Enter the secret text, set n (total shares, 2..255) and k (threshold, >= 2, <= n). Output is n lines of xx:hex shares. Decode: Paste >= k shares (lines in xx:hex format), click Decode. Lines starting with # are ignored. The x values must be hex bytes (01..ff), and all shares must be the same length.',
@@ -37,7 +37,7 @@ export default {
       'The first output line # shamir k=... n=... is a comment — decode ignores it automatically, so you can paste it verbatim.',
       'x coordinates are bytes (01..ff); share hex length is the same for all shares of a given secret. Mismatched lengths mean shares from different secrets.',
       'In CTF, if given a list of shares with a k value, just paste them into the decode input and click Decode.',
-      'GF(2^8) field: reduction polynomial 0x11B, generator 0x03. The same field as AES SubBytes, so the math is well-tested in hardware.',
+      '$GF(2^{8})$ field: reduction polynomial 0x11B, generator 0x03. The same field as AES SubBytes, so the math is well-tested in hardware.',
     ],
     aka: [
       'shamir',
@@ -65,15 +65,15 @@ export default {
       '' +
       'Signing (classic Schnorr, not BIP340):\n' +
       '1. Generate random nonce k, compute R = k*G\n' +
-      '2. Challenge e = H(R_x || P_x || m) mod n (SHA-256)\n' +
-      '3. Signature s = (k + e*d) mod n\n' +
+      '2. Challenge $e = H(R_x \\| P_x \\| m) \\bmod n$ (SHA-256)\n' +
+      '3. Signature $s = (k + e \\cdot d) \\bmod n$\n' +
       '4. Output (e, s)\n' +
       '' +
-      'Verification: Compute R\' = s*G - e*P, then e\' = H(R\'_x || P_x || m) mod n. Accept if e\' = e.\n' +
+      'Verification: Compute R\' = s*G - e*P, then $e\' = H(R\'_x \\| P_x \\| m) \\bmod n$. Accept if $e\' = e$.\n' +
       '' +
       'Nonce-reuse attack: If the same nonce k signs two different messages m1 != m2:\n' +
       's1 = k + e1*d, s2 = k + e2*d\n' +
-      '=> d = (s1 - s2) / (e1 - e2) mod n, k = s1 - e1*d mod n\n' +
+      '=> $d = (s1 - s2)/(e1 - e2) \\bmod n$, $k = s1 - e1 \\cdot d \\bmod n$\n' +
       '' +
       'This is the Schnorr counterpart to ECDSA\'s k-reuse attack. secp256k1 field arithmetic is shared with the ecdsaReuseK module.\n',
     usage: 'keygen: Generate a key pair. Priv key can be left blank for random generation. sign: Provide private key (64 hex) and message (text or hex). Optionally specify a fixed nonce k for testing reuse attacks. verify: Provide public key (Px, Py), challenge e, signature s, and the message. attack: Enter two signatures (e1, s1) and (e2, s2) — recovers private key d and nonce k.',
@@ -113,13 +113,13 @@ export default {
   ecdsaReuseK: {
     what: 'ECDSA nonce (k) reuse attack — given two ECDSA signatures sharing the same random nonce k (hence same r), recovers the private key d and nonce k using pure modular arithmetic. Supports secp256k1, secp256r1 (NIST P-256), and custom curves.',
     principle:
-      'ECDSA signing: For message hash z, random nonce k, private key d: r = (k*G)_x mod n, s = k^{-1}(z + r*d) mod n.\n' +
+      'ECDSA signing: For message hash z, random nonce k, private key d: $r = (kG)_x \\bmod n$, $s = k^{-1}(z + r d) \\bmod n$.\n' +
       '' +
       'Attack: If two signatures reuse the same k (so r1 = r2 = r):\n' +
       's1 = k^{-1}(z1 + r*d), s2 = k^{-1}(z2 + r*d)\n' +
-      'Subtracting: s1 - s2 = k^{-1}(z1 - z2) mod n\n' +
-      '=> k = (z1 - z2) * (s1 - s2)^{-1} mod n\n' +
-      'Back-substituting: d = (s1*k - z1) * r^{-1} mod n\n' +
+      'Subtracting: $s1 - s2 = k^{-1}(z1 - z2) \\bmod n$\n' +
+      '=> $k = (z1 - z2) \\cdot (s1 - s2)^{-1} \\bmod n$\n' +
+      'Back-substituting: $d = (s1 k - z1) \\cdot r^{-1} \\bmod n$\n' +
       '' +
       'ECDSA\'s s value has a low-s normalization ambiguity (both s and n-s are valid). This tool tries all 4 sign combinations. If the public key Qx/Qy is provided, it automatically verifies d*G = Q to pick the correct combination. Built-in curve parameters for secp256k1 and secp256r1.\n',
     usage: 'Enter anything in the input box (not directly used). Parameters: select the curve, provide r (common to both signatures), s1, s2, z1 (hash of message 1 as integer), z2 (hash of message 2 as integer). All values in decimal or 0x-hex. Optional: Qx/Qy for automatic verification and sign disambiguation.',
@@ -157,18 +157,18 @@ export default {
   },
   // ============ crypto: Rabin cryptosystem ============
   rabin: {
-    what: 'Rabin cryptosystem — a public-key encryption scheme based on the difficulty of computing modular square roots. Encryption: c = m^2 mod n. Decryption produces four candidate roots, disambiguated by a magic-number suffix (0xAB 0xCD). Requires p,q both congruent to 3 mod 4.',
+    what: 'Rabin cryptosystem — a public-key encryption scheme based on the difficulty of computing modular square roots. Encryption: $c = m^{2} \\bmod n$. Decryption produces four candidate roots, disambiguated by a magic-number suffix (0xAB 0xCD). Requires p,q both congruent to $3 \\pmod 4$.',
     principle:
-      'Rabin (1979) is provably as hard as integer factorization. Key generation: choose two primes p,q such that p = q = 3 mod 4, set n = p*q.\n' +
+      'Rabin (1979) is provably as hard as integer factorization. Key generation: choose two primes p,q such that $p \\equiv q \\equiv 3 \\pmod 4$, set $n = p q$.\n' +
       '' +
-      'Encryption: c = m^2 mod n where m < n.\n' +
+      'Encryption: $c = m^{2} \\bmod n$ where $m < n$.\n' +
       '' +
       'Decryption (CRT-based): Compute square roots modulo p and q using the closed form for Blum primes:\n' +
-      'm_p = c^{(p+1)/4} mod p, m_q = c^{(q+1)/4} mod q\n' +
+      '$m_p = c^{(p+1)/4} \\bmod p$, $m_q = c^{(q+1)/4} \\bmod q$\n' +
       'Use extended Euclidean algorithm to find y_p, y_q such that y_p*p + y_q*q = 1, then combine via CRT to get 4 roots.\n' +
       '' +
       'Four roots always exist. To disambiguate, this implementation appends two magic bytes 0xAB 0xCD to the plaintext before encryption. Decryption selects the root whose trailing bytes match the magic number.\n',
-    usage: 'Text mode: Enter text; the tool appends 0xAB 0xCD internally. Int mode: Enter a decimal integer m. Parameters: p and q (both primes = 3 mod 4). Default demo primes: p=2147483647 (2^31-1), q=2305843009213693951 (2^61-1). Encode encrypts, decode decrypts.',
+    usage: 'Text mode: Enter text; the tool appends 0xAB 0xCD internally. Int mode: Enter a decimal integer m. Parameters: p and q (both primes \\equiv 3 \\pmod 4). Default demo primes: p=2147483647 ($2^{31}-1$), q=2305843009213693951 ($2^{61}-1$). Encode encrypts, decode decrypts.',
     examples: [
       { in: '42', param: 'inputMode=int, p=2147483647, q=2305843009213693951', out: 'c = m^2 mod n = 1764\nc (hex) = 0x6e4', desc: 'integer mode: 42^2 = 1764 which is less than n, so the ciphertext equals the square literally' },
       { in: 'Hello', param: 'inputMode=text', out: 'c = (large integer)\nc (hex) = 0x...', desc: 'text mode: plaintext + 0xAB 0xCD suffix converted to BigInt, then squared mod n; decode recovers Hello' },
@@ -180,7 +180,7 @@ export default {
     tips: [
       'Rabin encryption is deterministic (no randomness), making it vulnerable to chosen-plaintext attacks in pure form.',
       'The 0xAB 0xCD magic suffix is this tool\'s convention for disambiguation — standard Rabin requires an external redundancy scheme.',
-      'In CTF, if you see c = m^2 mod n with p, q given, this is a Rabin problem. Just plug p and q into decode.',
+      'In CTF, if you see $c = m^{2} \\bmod n$ with p, q given, this is a Rabin problem. Just plug p and q into decode.',
       'The default demo primes are Mersenne primes, chosen for fast arithmetic. Real applications use much larger primes.',
     ],
     aka: [
@@ -203,9 +203,9 @@ export default {
   },
   // ============ crypto: X25519 key exchange ============
   x25519: {
-    what: 'X25519 — Elliptic-curve Diffie-Hellman (ECDH) on Curve25519, the Montgomery curve v^2 = u^3 + 486662*u^2 + u over GF(2^255-19). RFC 7748 compliant, uses x-only scalar multiplication with the Montgomery ladder.',
+    what: 'X25519 — Elliptic-curve Diffie-Hellman (ECDH) on Curve25519, the Montgomery curve $v^2 = u^3 + 486662 u^2 + u$ over $GF(2^{255}-19)$. RFC 7748 compliant, uses x-only scalar multiplication with the Montgomery ladder.',
     principle:
-      'Curve: Montgomery form v^2 = u^3 + 486662*u^2 + u, prime p = 2^255 - 19.\n' +
+      'Curve: Montgomery form $v^2 = u^3 + 486662 u^2 + u$, prime $p = 2^{255} - 19$.\n' +
       '' +
       'Clamping (RFC 7748 Section 5): Before use, private keys are clamped: clear the 3 low bits, clear the highest bit, set the second-highest bit. This ensures the scalar is a multiple of cofactor 8.\n' +
       '' +
@@ -250,9 +250,9 @@ export default {
   },
   // ============ crypto: Ed25519 signature ============
   ed25519: {
-    what: 'Ed25519 — a high-speed digital signature scheme using the twisted Edwards curve -x^2 + y^2 = 1 + d*x^2*y^2 over GF(2^255-19), with SHA-512 as the internal hash. RFC 8032 compliant.',
+    what: 'Ed25519 — a high-speed digital signature scheme using the twisted Edwards curve $-x^2 + y^2 = 1 + d x^2 y^2$ over $GF(2^{255}-19)$, with SHA-512 as the internal hash. RFC 8032 compliant.',
     principle:
-      'Curve: Twisted Edwards form, d = -121665/121666 mod p, p = 2^255 - 19.\n' +
+      'Curve: Twisted Edwards form, $d = -121665/121666 \\bmod p$, $p = 2^{255} - 19$.\n' +
       '' +
       'Key generation: h = SHA-512(sk), a = clamp(h_{0:32}), prefix = h_{32:64}. Public key A = encodePoint(a*B).\n' +
       '' +
@@ -299,13 +299,13 @@ export default {
     principle:
       'Pascal Paillier (1999), from Public-Key Cryptosystems Based on Composite Degree Residuosity Classes:\n' +
       '' +
-      'Key generation: Choose two large primes p, q. n = p*q, lambda = lcm(p-1, q-1). Standard choice g = n + 1. mu = L(g^lambda mod n^2)^{-1} mod n where L(x) = (x-1)/n.\n' +
+      'Key generation: Choose two large primes p, q. $n = p q$, $lambda = \\mathrm{lcm}(p-1, q-1)$. Standard choice $g = n + 1$. $mu = L(g^{lambda} \\bmod n^2)^{-1} \\bmod n$ where $L(x) = (x-1)/n$.\n' +
       '' +
-      'Encryption: c = g^m * r^n mod n^2, with random r coprime to n.\n' +
+      'Encryption: $c = g^{m} r^{n} \\bmod n^2$, with random r coprime to n.\n' +
       '' +
-      'Decryption: m = L(c^lambda mod n^2) * mu mod n.\n' +
+      'Decryption: $m = L(c^{lambda} \\bmod n^2) \\cdot mu \\bmod n$.\n' +
       '' +
-      'Homomorphic addition: E(m1) * E(m2) mod n^2 = E(m1 + m2 mod n).\n',
+      'Homomorphic addition: $E(m1) \\cdot E(m2) \\bmod n^2 = E(m1 + m2 \\bmod n)$.\n',
     usage: 'Five modes: demo — full walkthrough: generates 64-bit key, encrypts 42 and 100, homomorphically adds them, decrypts to 142. keygen — generate keys. encrypt — encrypt integer m. decrypt — decrypt ciphertext. add — input two ciphertexts separated by comma/space, output homomorphic sum.',
     examples: [
       { in: '(n/a)', param: 'mode=demo', out: 'm1 = 42, m2 = 100\nE(m1)*E(m2) mod n^2 = (ciphertext)\n解密 = 142  (equals m1+m2)', desc: 'full demo: encrypts two values, multiplies ciphertexts, decrypts to verify the sum' },
@@ -362,7 +362,7 @@ export default {
     tips: [
       'A5/1 is self-inverse: the same operation encrypts and decrypts. Feed hex ciphertext to decode with the same key/frame.',
       'Key must be exactly 16 hex characters (64 bits). Shorter keys are zero-padded on the left.',
-      'Frame number range is 0..2^22-1 (4,194,303). Enter as decimal or 0x-hex.',
+      'Frame number range is $0..2^{22}-1$ (4,194,303). Enter as decimal or 0x-hex.',
       'In CTF, A5/1 challenges often provide the key and frame, requiring you to decrypt a GSM-like message.',
       'A5/1 is cryptographically broken (real-time attacks since 2000s), but still appears as a classic stream cipher exercise.',
     ],
@@ -390,7 +390,7 @@ export default {
     principle:
       'Structure: 32-round Feistel network on a 64-bit block split into two 32-bit halves (a1, a0).\n' +
       '' +
-      'Round function g[k](a): t((a + k) mod 2^32) <<< 11. The t-transform splits the 32-bit word into 8 nibbles, passes each through one of 8 different 4-bit S-boxes (nibble 0 = lowest 4 bits), and recombines. S-box set: id-tc26-gost-28147-param-Z.\n' +
+      'Round function g[k](a): t$((a + k) \\bmod 2^{32}$) <<< 11. The t-transform splits the 32-bit word into 8 nibbles, passes each through one of 8 different 4-bit S-boxes (nibble 0 = lowest 4 bits), and recombines. S-box set: id-tc26-gost-28147-param-Z.\n' +
       '' +
       'Key schedule: The 256-bit key is split into 8 subkeys K1..K8 (each 32 bits). Rounds 1-24 use K1..K8 repeated 3 times. Rounds 25-32 use K8..K1 in reverse.\n' +
       '' +
@@ -430,7 +430,7 @@ export default {
   present: {
     what: 'PRESENT — an ultra-lightweight block cipher (Bogdanov et al. 2007, CHES; ISO/IEC 29192-2). 64-bit block, 80 or 128-bit key, 31-round SPN designed for resource-constrained devices (RFID, IoT, sensors).',
     principle:
-      'Structure: 31 rounds of SPN plus a final key XOR (round key 32). Each round: 1) addRoundKey: XOR state with round key. 2) sBoxLayer: Apply 4-bit S-box {C,5,6,B,9,0,A,D,3,E,F,8,4,7,1,2} to all 16 nibbles. 3) pLayer: Bit permutation P(i) = (16*i) mod 63 for i=0..62, P(63)=63.\n' +
+      'Structure: 31 rounds of SPN plus a final key XOR (round key 32). Each round: 1) addRoundKey: XOR state with round key. 2) sBoxLayer: Apply 4-bit S-box {C,5,6,B,9,0,A,D,3,E,F,8,4,7,1,2} to all 16 nibbles. 3) pLayer: Bit permutation $P(i) = 16 i \\bmod 63$ for $i = 0..62$, $P(63) = 63$.\n' +
       '' +
       'Key schedule (PRESENT-80): 80-bit key register. Round key = top 64 bits. Rotate left 61 bits, S-box top 4 bits, XOR round counter into bits 19..15.\n' +
       'Key schedule (PRESENT-128): Similar with 128-bit register.\n' +
@@ -473,7 +473,7 @@ export default {
     principle:
       'ARX structure: Operates on four 64-bit state words with 64-bit modular arithmetic.\n' +
       '' +
-      'Initialization: From 16-byte key (k0, k1) LE: v0=k0^0x736f6d6570736575, v1=k1^0x646f72616e646f6d, v2=k0^0x6c7967656e657261, v3=k1^0x7465646279746573.\n' +
+      'Initialization: From 16-byte key (k0, k1) LE: `v0=k0^0x736f6d6570736575`, `v1=k1^0x646f72616e646f6d`, `v2=k0^0x6c7967656e657261`, `v3=k1^0x7465646279746573`.\n' +
       '' +
       'Compression (c rounds): For each 8-byte message block: v3^=m, do c SipRounds, v0^=m.\n' +
       'Finalization (d rounds): After last block, v2^=0xff, do d SipRounds.\n' +
@@ -519,7 +519,7 @@ export default {
       '2. For each of p blocks: B_i = ROMix(B_i, N) — memory-hard mixing\n' +
       '3. DK = PBKDF2-HMAC-SHA256(P, B, 1, dkLen) — final derivation\n' +
       '' +
-      'ROMix(N): The memory-hard core. Initialize V[0]=X, then for i=1..N: V[i]=X, X=BlockMix(X). Then for i=1..N: j=Integerify(X) mod N, X=BlockMix(X XOR V[j]). Memory ~128*r*N bytes.\n' +
+      'ROMix(N): The memory-hard core. Initialize V[0]=X, then for i=1..N: V[i]=X, X=BlockMix(X). Then for i=1..N: $j = \\mathrm{Integerify}(X) \\bmod N$, $X = \\mathrm{BlockMix}(X \\oplus V[j])$. Memory ~$128 r N$ bytes.\n' +
       '' +
       'BlockMix: Operates on 2r blocks of 64 bytes using Salsa20/8 core (1/4 of full Salsa20). Interleaves output for diffusion.\n' +
       '' +
@@ -659,7 +659,7 @@ export default {
       '' +
       'Key schedule: K^0 = H, K^r = rho[c^r](K^{r-1}) with round constants from S-box.\n' +
       '' +
-      'Padding: Append 0x80, zeros to length = 32 mod 64, then 256-bit big-endian bit-length.\n' +
+      'Padding: Append 0x80, zeros to length $= 32 \\bmod 64$, then 256-bit big-endian bit-length.\n' +
       '' +
       'Self-check: S-box must be a valid permutation; empty and abc hashes match ISO vectors.\n',
     usage: 'Enter input text (UTF-8) or hex bytes. Output is fixed 512-bit (128 hex char) digest. No parameters. One-way, irreversible. All 8 ISO test vectors verified (empty, a, abc, message digest, alphabet strings, quick brown fox, 1 million a\'s).',
@@ -705,7 +705,7 @@ export default {
       'Round transform LPS:\n' +
       '1. S — bytewise Pi substitution box (256 entries)\n' +
       '2. P — 64 bytes transposed as 8×8 matrix\n' +
-      '3. L — each 64-bit word through GF(2) linear transform matrix A ($2^{64}$ diffusion)\n\n' +
+      '3. L — each 64-bit word through $GF(2)$ linear transform matrix A ($2^{64}$ diffusion)\n\n' +
       'Key schedule: $K_{i+1} = LPS(K_i \\oplus C_i)$, 12 iteration constants C from golden-ratio bits.\n\n' +
       'Message is compressed in 512-bit blocks right-to-left; final block padded $0^*||1||M$ with length encoding; then two more rounds over N and the checksum (sum of message blocks). 256-bit output takes the high 256 bits, with a different IV.\n\n' +
       'All RFC 6986 §10 official vectors (M1/M2 × 512/256-bit) pass.',
@@ -779,7 +779,7 @@ export default {
       'Skipjack runs 32 rounds = 8×Rule A + 8×Rule B + 8×Rule A + 8×Rule B. The block is split into four 16-bit words w1-w4:\n\n' +
       'Rule A: w1\' = G_k(w1) ^ w4 ^ (k+1); w2\' = G_k(w1); w3\' = w2; w4\' = w3.\n' +
       'Rule B: w1\' = w4; w2\' = G_k(w1); w3\' = w1 ^ w2 ^ (k+1); w4\' = w3.\n\n' +
-      'The core is the key-dependent permutation G_k (4-round Feistel): each round uses one key byte (rotating 4k mod 10) into a 256-entry F-table XOR.\n\n' +
+      'The core is the key-dependent permutation G_k (4-round Feistel): each round uses one key byte (rotating $4k \\bmod 10$) into a 256-entry F-table XOR.\n\n' +
       'Decryption uses the inverse permutation h and walks the rules backward, with the same tab preprocessing (tab[i][c] = F[c ^ key[9-i]]).\n\n' +
       'Designed for fast hardware (the Clipper chip), the community distrusted its secrecy; Biham et al. (1994) cracked 16 of the 32 rounds.',
     usage:
@@ -808,7 +808,7 @@ export default {
     principle:
       'Threefish is deliberately minimal: no complex key scheduler. Instead each subkey is assembled directly from key words, the tweak and the round counter, injected every 4 rounds.\n\n' +
       'Round function: pair the state words and MIX — y0 = x0 + x1; y1 = (x1 rotate-left R) ^ y0 — then permute the words so the next round mixes different partners. Rotation constants repeat every 8 rounds.\n\n' +
-      'Subkey s: the first Nw-3 words are cyclic picks of key words K[(s+j) mod (Nw+1)], the last 3 add T[s mod 3], T[(s+1) mod 3] and s (the counter). Here K_{Nw} = C240 ^ K0 ^ ... ^ K_{Nw-1} (C240 a fixed magic constant), T2 = T0 ^ T1.\n\n' +
+      'Subkey s: the first Nw-3 words are cyclic picks of key words $K[(s+j) \\bmod (\\mathrm{Nw}+1)]$, the last 3 add $T[s \\bmod 3]$, $T[(s+1) \\bmod 3]$ and s (the counter). Here $K_{\\mathrm{Nw}} = C240 \\oplus K0 \\oplus \\cdots \\oplus K_{\\mathrm{Nw}-1}$ (C240 a fixed magic constant), $T2 = T0 \\oplus T1$.\n\n' +
       'The tweak lets one key produce different keystreams in different contexts (hash chunk counts, stream positions) — the foundation of Skein\'s tweakable hashing.',
     usage:
       'Param size picks 256/512/1024-bit block; key must match block length in hex; tweak is 128-bit hex (default all-zero). Input plaintext hex in whole blocks. Encode → hex ciphertext, decode with same key/tweak to restore (ECB multi-block).',
@@ -939,7 +939,7 @@ export default {
       '' +
       'Single-byte hash: Initialize h = 0. For each byte c: h = T[h XOR c]. Output is h (one byte).\n' +
       '' +
-      'Multi-byte extension: For the j-th output byte, replace first message byte with (msg[0] + j) mod 256 and re-run. Empty input uses j as virtual first byte.\n' +
+      'Multi-byte extension: For the j-th output byte, replace first message byte with $(\\mathrm{msg}[0] + j) \\bmod 256$ and re-run. Empty input uses j as virtual first byte.\n' +
       '' +
       'Permutation table T: Must be a permutation of 0..255 (each value exactly once). This implementation uses the Wikipedia reference permutation table. Module self-checks that T is a valid permutation.\n' +
       '' +
@@ -1018,9 +1018,9 @@ export default {
   },
   // ============ text: yEnc encode/decode ============
   yenc: {
-    what: 'yEnc — a binary-to-text encoding for Usenet newsgroups (NNTP), specified in yEnc-1.3 (Jurgen Helbing, 2002). Encodes each byte as (b + 42) mod 256, with critical characters escaped using the = prefix.',
+    what: 'yEnc — a binary-to-text encoding for Usenet newsgroups (NNTP), specified in yEnc-1.3 (Jurgen Helbing, 2002). Encodes each byte as $(b + 42) \\bmod 256$, with critical characters escaped using the = prefix.',
     principle:
-      'Encoding: E = (b + 42) mod 256. Maps all 256 byte values into the printable ASCII range.\n' +
+      'Encoding: $E = (b + 42) \\bmod 256$. Maps all 256 byte values into the printable ASCII range.\n' +
       '' +
       'Escaping (critical characters): If E is NUL(0x00), LF(0x0A), CR(0x0D), or =(0x3D), output = followed by (E + 64) mod 256.\n' +
       '' +
@@ -1155,10 +1155,10 @@ export default {
     what: 'SEED — Korean KISA national standard block cipher (RFC 4269 / RFC 4009), 128-bit block, 128-bit key, 16-round Feistel. Widely used in Korean finance and encrypted communications.',
     principle:
       'SEED is a 128-bit Feistel block cipher with a 128-bit key and 16 rounds.\n\n' +
-      'Round function F: split the 64-bit right half into R0/R1 (32-bit each), XOR with subkeys, then cross-mix through 3 layers of the G function with mod 2^32 addition:\n' +
-      '  t = (R0^Ki0) ^ (R1^Ki1),  a = R0^Ki0\n' +
-      '  R0\' = G[ G[G(t)+a] + G(t) ] + G[G(t)+a]\n' +
-      '  R1\' = G[ G[G(t)+a] + G(t) ]\n\n' +
+      'Round function F: split the 64-bit right half into R0/R1 (32-bit each), XOR with subkeys, then cross-mix through 3 layers of the G function with $2^{32}$ modular addition:\n' +
+      '  $t = (R0 \\oplus Ki0) \\oplus (R1 \\oplus Ki1)$,  $a = R0 \\oplus Ki0$\n' +
+      '  $R0\' = G[\\,G[G(t)+a] + G(t)\\,] + G[G(t)+a]$\n' +
+      '  $R1\' = G[\\,G[G(t)+a] + G(t)\\,]$\n\n' +
       'G function: split 32-bit input into 4 bytes, alternate two 8x8 S-boxes S0/S1, then linearly mix bytes with masks m0=0xFC/m1=0xF3/m2=0xCF/m3=0x3F (equivalent to four extended SS-boxes).\n\n' +
       'Key schedule: split the 128-bit key into 4x32-bit blocks Key0..Key3; 16 constants KC1..KC16 (golden-ratio 0x9E3779B9 rotated) generate two subkeys Ki0/Ki1 per round; odd rounds right-rotate Key0||Key1 by 8 bits, even rounds left-rotate Key2||Key3 by 8 bits.\n\n' +
       'Both RFC 4269 Appendix B vectors and multiple per-round intermediate subkeys match.',
@@ -1285,17 +1285,5 @@ export default {
     ],
   },
 
-  cast128: {
-    what: "CAST-128 (CAST5) — block cipher defined in RFC 2144: 64-bit block, 40-128 bit keys. 16-round Feistel with three alternating round function types (Type1 add / Type2 XOR / Type3 subtract combined with the subkey, then rotated left), eight 256-entry S-boxes. Occasional CTF appearance; recognizable by 5-16 byte keys and 8-byte blocks.",
-    principle:
-      "Key schedule: the 128-bit key x iterates through 4 intermediate z words (S5-S8 involved) to derive 32 subkeys K1..K32; K1..K16 are masking keys Kmi, the low 5 bits of K17..K32 are rotation keys Kri. Keys ≤ 80 bits (10 bytes) use only 12 rounds, otherwise 16.\n\n" +
-      "Round function: round i uses type (i mod 3)+1 — Type1: I=(Kmi+D)<<<Kri, f=((S1[Ia]^S2[Ib])-S3[Ic])+S4[Id]; Type2: I=(Kmi^D)<<<Kri, f=((S1-S2)+S3)^S4; Type3: I=(Kmi-D)<<<Kri, f=((S1+S2)^S3)-S4. Ia..Id are the four bytes of I. Feistel: Li=Ri-1, Ri=Li-1^f(Ri-1), output (R16, L16).",
-    usage: "Enter a hex key (10-32 hex digits = 5-16 bytes) and hex ciphertext (multiple of 8 bytes); encode encrypts / decode decrypts. Keys ≤ 10 bytes automatically use 12 rounds.",
-    examples: [
-      { in: "0123456789abcdef", param: "key=0123456712345678234567893456789a", out: "238b4fe5847e44b2", desc: "RFC 2144 Appendix B.1 official vector" },
-      { in: "238b4fe5847e44b2", param: "key=0123456712345678234567893456789a", out: "0123456789abcdef", desc: "decryption restores" },
-    ],
-    tips: ["RFC 2144 Appendix B.1 has three vectors (128/80/40-bit keys) for correctness checks. Keys shorter than 16 bytes are zero-padded on the right. Distinct from CAST-256 (CAST6, 128-bit block) — don't mix.", "Cross-check with openssl legacy provider's cast5 or pycryptodome's CAST."],
-    aka: ["cast128", "cast5", "CAST-128", "CAST5", "RFC 2144", "cast-128加密", "cast128分组密码", "cast5加密", "cast128解密", "cast5ecb", "cast128 算法", "cast密码", "cast5分组", "cast128密钥", "cast128向量"],
-  },
+
 };

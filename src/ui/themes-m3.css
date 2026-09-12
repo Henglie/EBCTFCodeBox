@@ -1,0 +1,205 @@
+/* ============ ①谷歌蓝（google-blue，暗）============
+ * 基线 Google 蓝 tonal：P10 #041E49 / P20 #062E6F / P30 #0842A0 / P40 #0B57D0 /
+ * P80 #A8C7FA / P90 #D3E3FD（Material 3 color tokens 参考蓝，Pixel/Google 系）。
+ * 暗色取 P80 主色 + 蓝调中性表面（微蓝灰，非纯灰）。 */
+html[data-palette="google-blue"] {
+  --primary: #a8c7fa;            /* blue-80 */
+  --on-primary: #062e6f;         /* blue-20 */
+  --primary-container: #0842a0;  /* blue-30 */
+  --on-primary-container: #d3e3fd; /* blue-90 */
+
+  --bg: #10141b;
+  --surface: #10141b;
+  --surface-1: #181c25;
+  --surface-2: #1d222c;
+  --surface-3: #242a36;
+  --surface-4: #2c3341;
+  --surface-hi: #363d4d;
+
+  --on-surface: #e1e6f0;
+  --on-surface-var: #bbc5d3;
+  --outline: #85909f;
+  --outline-var: #454c5b;
+
+  --error: #ffb4ab;              /* error-80 */
+  --on-error: #690005;           /* error-20 */
+  --success: #7ad39a;
+  --warning: #ffb77c;
+  --on-warning: #4a2500;
+  --warning-text: #ffb77c;
+
+  --field-bg: var(--surface-1);
+  --flag-hit: #ffe082;
+  --flag-format: #ffca28;
+
+ /* 渐变点睛：blue-80→blue-70 同色系，ΔL≈8%，135° */
+  --grad-primary: linear-gradient(135deg, #a8c7fa 0%, #87b3f4 100%);
+  --grad-brand: linear-gradient(120deg, #c5d9fc 0%, #a8c7fa 55%, #7da9ee 100%);
+}
+
+/* ============ ②常青（evergreen，暗）============
+ * Google 绿系 tonal（种子 #188038 换算 M3 tone 阶）：
+ * G10 #02210b / G20 #0a3a17 / G30 #1d5328 / G40 #2f6e38 / G80 #9cd9a3 / G90 #b8f1be。
+ * 暗色取 G80 主色 + 绿调中性表面。 */
+html[data-palette="evergreen"] {
+  --primary: #9cd9a3;            /* green-80 */
+  --on-primary: #0a3a17;         /* green-20 */
+  --primary-container: #1d5328;  /* green-30 */
+  --on-primary-container: #b8f1be; /* green-90 */
+
+  --bg: #0d130e;
+  --surface: #0d130e;
+  --surface-1: #151c16;
+  --surface-2: #1a231c;
+  --surface-3: #222b24;
+  --surface-4: #2a342d;
+  --surface-hi: #343f37;
+
+  --on-surface: #dee8df;
+  --on-surface-var: #b5c6b8;
+  --outline: #809284;
+  --outline-var: #3e4a41;
+
+  --error: #ffb4ab;
+  --on-error: #690005;
+  --success: #7ad39a;
+  --warning: #ffb77c;
+  --on-warning: #4a2500;
+  --warning-text: #ffb77c;
+
+  --field-bg: var(--surface-1);
+  --flag-hit: #ffe082;
+  --flag-format: #ffca28;
+
+ /* 渐变点睛：green-80→green-70 同色系，ΔL≈9%，135° */
+  --grad-primary: linear-gradient(135deg, #9cd9a3 0%, #82c48c 100%);
+  --grad-brand: linear-gradient(120deg, #b6e8bb 0%, #9cd9a3 55%, #6fb378 100%);
+}
+
+/* ============ ③薰衣草（lavender，亮）============
+ * M3 基线紫 tonal（官方 baseline primary）：
+ * P10 #21005D / P30 #4F378B / P40 #6750A4 / P50 #7F67BE / P80 #D0BCFF / P90 #EADDFF。
+ * 亮色取 P40 主色 + M3 baseline 亮色中性阶（#FEF7FF/#F7F2FA/#F3EDF7/#ECE6F0/#E6E0E9）。 */
+html[data-palette="lavender"] {
+  --primary: #6750a4;            /* purple-40（M3 基线） */
+  --on-primary: #ffffff;
+  --primary-container: #eaddff;  /* purple-90 */
+  --on-primary-container: #21005d; /* purple-10 */
+
+  --bg: #fef7ff;                 /* M3 baseline light surface */
+  --surface: #fef7ff;
+  --surface-1: #f7f2fa;          /* surface-container-low */
+  --surface-2: #f3edf7;          /* surface-container */
+  --surface-3: #ece6f0;          /* surface-container-high */
+  --surface-4: #e6e0e9;          /* surface-container-highest */
+  --surface-hi: #dfd8e3;
+
+  --on-surface: #1d1b20;
+  --on-surface-var: #49454f;
+  --outline: #79747e;
+  --outline-var: #cac4d0;
+
+  --error: #ba1a1a;              /* error-40 */
+  --on-error: #ffffff;
+  --success: #256d47;
+  --warning: #ff9800;
+  --on-warning: #ffffff;
+  --warning-text: #a34e00;
+
+  --field-bg: var(--surface-1);
+  --flag-hit: #ffb300;
+  --flag-format: #ffca28;
+
+ /* 渐变点睛：purple-50→purple-40 同色系，ΔL≈9%，135° */
+  --grad-primary: linear-gradient(135deg, #7f67be 0%, #6750a4 100%);
+  --grad-brand: linear-gradient(120deg, #8f79cc 0%, #6750a4 55%, #4f378b 100%);
+}
+
+/* ============ ④暖阳（sunny，亮）============
+ * M3 黄/琥珀 tonal（种子暖阳黄换算 tone 阶）：
+ * Y10 #241a00 / Y20 #3d2e00 / Y30 #584400 / Y40 #745b00 / Y80 #e9c349 / Y90 #ffdf9e。
+ * 亮色取 Y40 主色（黄系 40 档够深，白字 ≥4.5:1）+ 暖调中性表面。 */
+html[data-palette="sunny"] {
+  --primary: #745b00;            /* yellow-40 */
+  --on-primary: #ffffff;
+  --primary-container: #ffdf9e;  /* yellow-90 */
+  --on-primary-container: #241a00; /* yellow-10 */
+
+  --bg: #fff8f1;
+  --surface: #fff8f1;
+  --surface-1: #f9f0e3;
+  --surface-2: #f4eada;
+  --surface-3: #eee2cf;
+  --surface-4: #e7d9c4;
+  --surface-hi: #e0d0b9;
+
+  --on-surface: #1e1b13;
+  --on-surface-var: #4e473a;
+  --outline: #807667;
+  --outline-var: #d2c4ae;
+
+  --error: #ba1a1a;
+  --on-error: #ffffff;
+  --success: #256d47;
+  --warning: #ff9800;
+  --on-warning: #ffffff;
+  --warning-text: #a34e00;
+
+  --field-bg: var(--surface-1);
+  --flag-hit: #ffb300;
+  --flag-format: #ffca28;
+
+ /* 渐变点睛：yellow-45→yellow-40 同色系，ΔL≈6%，135° */
+  --grad-primary: linear-gradient(135deg, #8a6d00 0%, #745b00 100%);
+  --grad-brand: linear-gradient(120deg, #9a7c10 0%, #745b00 55%, #584400 100%);
+}
+
+/* ============ ⑤石墨（graphite，暗）============
+ * M3 中性变体 tonal（近中性微冷灰）：
+ * NV10 #191c20 / NV20 #2e3136 / NV30 #44474d / NV80 #c3c7cf / NV90 #dfe2eb。
+ * 暗色取 NV80 主色 + 纯中性阶表面——M3「 monochrome/中性」方案气质。 */
+html[data-palette="graphite"] {
+  --primary: #c3c7cf;            /* neutral-variant-80 */
+  --on-primary: #2e3136;         /* neutral-variant-20 */
+  --primary-container: #44474d;  /* neutral-variant-30 */
+  --on-primary-container: #dfe2eb; /* neutral-variant-90 */
+
+  --bg: #101214;
+  --surface: #101214;
+  --surface-1: #181b1d;
+  --surface-2: #1d2023;
+  --surface-3: #24272b;
+  --surface-4: #2c2f34;
+  --surface-hi: #353940;
+
+  --on-surface: #e2e4e8;
+  --on-surface-var: #babec5;
+  --outline: #858a92;
+  --outline-var: #43474d;
+
+  --error: #ffb4ab;
+  --on-error: #690005;
+  --success: #7ad39a;
+  --warning: #ffb77c;
+  --on-warning: #4a2500;
+  --warning-text: #ffb77c;
+
+  --field-bg: var(--surface-1);
+  --flag-hit: #ffe082;
+  --flag-format: #ffca28;
+
+ /* 渐变点睛：NV-80→NV-60 同色系，ΔL≈10%，135° */
+  --grad-primary: linear-gradient(135deg, #c3c7cf 0%, #a4aab5 100%);
+  --grad-brand: linear-gradient(120deg, #d8dce3 0%, #c3c7cf 55%, #99a0ac 100%);
+}
+
+/* ============ 首页大标题渐变文字（仅本系列五主题启用） ============ */
+html[data-palette="google-blue"] .home-hero .op-title,
+html[data-palette="evergreen"] .home-hero .op-title,
+html[data-palette="lavender"] .home-hero .op-title,
+html[data-palette="sunny"] .home-hero .op-title,
+html[data-palette="graphite"] .home-hero .op-title {
+  background: var(--grad-brand);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+}

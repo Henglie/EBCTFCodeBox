@@ -192,8 +192,8 @@ function hc128Decode(text, p = {}) {
 })();
 
 register({
-  id: "hc128",
-  cat: "modern",
+  id: "hc128", family: "hc", familyLabel: "hc128",
+  cat: "stream",
   name: "HC-128 流密码",
   desc: "HC-128 流密码（Wu Hongjun FSE 2004，eSTREAM 决赛）：P/Q 各 512×32bit 表 + f1/f2（SHA-256 σ）+ h1/h2 非线性映射。128 位 key + 128 位 IV。自反 XOR：encode 文本→密文 hex，decode 密文 hex→文本。已过 Crypto++ 官方向量（key=IV=0 + key=80..0）。",
   params: [

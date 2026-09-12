@@ -13,7 +13,7 @@ export default {
       "① Forward table: the standard 256-entry CRC table table[i] (each entry iterates 8 bits with the reflected polynomial).\n" +
       "② Reverse table: for each high-byte value m (0..255), collect all bytes j where table[j]>>24 == m — the candidate set for one reverse step.\n" +
       "③ Reverse solve: start from the target final CRC, walk the reverse table in a 4-level DFS (each level picks a byte j, register = ((reg ^ table[j]) << 8)); at level 4, derive the 4 original bytes and verify with the forward calc.\n" +
-      "④ Since CRC32 has 2^32 possible values and 4-byte patches also number 2^32, every target CRC has (on average) exactly 1 four-byte solution — the mathematical guarantee that solving always works.\n\n" +
+      "④ Since CRC32 has $2^{32}$ possible values and 4-byte patches also number $2^{32}$, every target CRC has (on average) exactly 1 four-byte solution — the mathematical guarantee that solving always works.\n\n" +
       "Optional 'printable prefix' mode: enumerate 2-character prefixes in a chosen charset, compute their CRC, then reverse-solve 4 patch bytes (requiring patch bytes also in the charset) to get a readable 6-byte collision string (e.g. for forging ZIP file names).",
     usage: "Enter a target CRC32 (hex, 1-8 digits, optional 0x prefix). Run to get: ① the 4-byte patch (hex); ② readable collision strings via printable prefix + patch. The prefix charset parameter controls readability (printable ASCII / alphanumeric / digits / hex).",
     examples: [

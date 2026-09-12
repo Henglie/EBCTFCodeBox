@@ -204,7 +204,7 @@ const ariaDecode = (t, p) => ariaCrypt(t, p, true);
 
 register({
   id: "aria",
-  cat: "modern",
+  cat: "block",
   name: "ARIA（RFC 5794）",
   desc: "韩国标准 ARIA 分组密码：128 位分组，密钥 128/192/256 位（12/14/16 轮）。SL1/SL2 交替替换层 + 对合扩散层 A，RFC 5794 密钥调度。ECB 多块，明文/密文/密钥均 hex。encode 加密 / decode 解密。过 RFC 5794 附录 A 三组向量。",
   params: [

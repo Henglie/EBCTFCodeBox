@@ -957,7 +957,7 @@ function renderRenderAllView(text) {
   embedChk.checked = uvState.renderall.embedFont;
   embedChk.addEventListener("change", () => { uvState.renderall.embedFont = embedChk.checked; });
   const embedLabel = el("label", { class: "uv-export-opt", title: tt("ui.uv.embedFontHint") },
-    embedChk, el("span", {}, tt("ui.uv.embedFont")));
+    el("span", { class: "switch" }, embedChk, el("span", { class: "track" }), el("span", { class: "knob" })), el("span", {}, tt("ui.uv.embedFont")));
   const scaleSel = el("select", { class: "uv-export-scale", title: tt("ui.uv.scale") });
   for (const s of ["1", "2", "3"]) scaleSel.append(el("option", { value: s }, s + "x"));
   scaleSel.value = String(uvState.renderall.pngScale);

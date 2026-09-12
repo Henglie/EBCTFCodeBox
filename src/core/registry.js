@@ -15,6 +15,12 @@
  * run(text, p) 单向工具（如哈希），填了 run 就不显示双向切换
  * detect(text) 可选，一键解码用的识别指纹，返回 0..1 置信度
  *
+ * 产物协议（T361，2026-09-02）：encode/decode/run 可返回对象
+ * { text: string, files: [{ name, mime, bytes|dataUrl }] } —— text 进输出区，
+ * files 渲染为「⬇ 下载」按钮（云端部署时下载前弹本地桥/敏感数据警告，见 main.js cloudWarnGate）。
+ * 返回字符串的 op 行为不变；⚠ 参与 magic 一键解码的 op 勿返回对象（Worker 路径不认）。
+ * bytes 支持 Uint8Array / number[]；dataUrl 自动解字节并推 MIME。
+ *
  * 参数声明 params 每项：
  * { key, label, type: 'text'|'number'|'select'|'bool', default, options?, placeholder? }
  */
@@ -25,9 +31,13 @@ export const CATEGORIES = [
   { id: "base",    name: "Base 系列",     icon: "tag" },
   { id: "text",    name: "文本 / 传输编码", icon: "translate" },
   { id: "fancy",   name: "花式 / CTF 编码", icon: "auto_awesome" },
+  { id: "esolang", name: "深奥编程语言", icon: "terminal" },
   { id: "cn",      name: "中文 / 本土编码", icon: "language" },
   { id: "classic", name: "古典密码",       icon: "history_edu" },
-  { id: "modern",  name: "现代加密",       icon: "lock" },
+  { id: "block",   name: "现代密码·分组",   icon: "grid_view" },
+  { id: "stream",  name: "现代密码·流",     icon: "waves" },
+  { id: "asym",    name: "现代密码·非对称", icon: "key" },
+  { id: "modern",  name: "现代密码·其他",   icon: "lock" },
   { id: "hash",    name: "哈希 / 校验",    icon: "fingerprint" },
   { id: "radix",   name: "进制 / 字符集",  icon: "calculate" },
   { id: "analysis",name: "分析 / 爆破",    icon: "query_stats" },
@@ -36,9 +46,9 @@ export const CATEGORIES = [
   { id: "data",    name: "数据结构 / 序列化", icon: "web" },
   { id: "stego",   name: "隐写 / 图像",    icon: "image" },
  // ---- 本地桥·外部 exe 专用分类（requiresBridge，仅 Windows + 起桥可用），按用途细分 ----
-  { id: "bridgeLang",     name: "本地桥·语言执行", icon: "terminal" },
+ // bridgeLang（语言执行）2026-09-13 恒烈裁删：成员已全部移植纯 JS/wasm，分类空转。
+ // bridgeForensic（检测取证）2026-09-13 撤销：ntfsstreams GUI 被 adsTool（forensic 类）替代。
   { id: "bridgeStego",    name: "本地桥·隐写嵌入", icon: "visibility_off" },
-  { id: "bridgeForensic", name: "本地桥·检测取证", icon: "travel_explore" },
 ];
 
 // 注册表本体。各算法模块 import register 往里塞。
@@ -110,6 +120,157 @@ export function getOp(id) {
 
 export function opsByCat(catId) {
   return OPS.filter((o) => o.cat === catId);
+}
+
+// ============ 算法族（T380，恒烈 2026-09-03 拍板）============
+// 非对称等分类同算法族 op 太多（如 PGP 8 档），侧栏不逐条展开：聚合为「族显示名 ×N」一条，
+// 工作区内用族滑块换档。方案形态：每一档滑块 = 一个独立 op（族内 op 实现零改动），
+// 不是「单 op 多 mode」。族字段由各算法 op 声明：family = 族 id，familyLabel = 档位短名 key
+// （ASCII，文案查 i18n fam.lbl.<familyLabel>）。不带 family 的 op 不参与聚合，渲染路径不变。
+
+// 族显示名（技术名 zh/en 相同，不做 i18n）
+export const FAMILY_NAMES = {
+  md: "MD",
+  crc: "CRC",
+  sha: "SHA",
+  shake: "SHAKE",
+  pgp: "PGP / OpenPGP",
+  // T427 v2（恒烈 2026-09-08 拍板）：base64/base58 家族并入本尊，长尾仅保留 Unicode Base 4 项组
+  base64: "Base64 家族",
+  base58: "Base58 家族",
+  // 恒烈 2026-09-08 特许 F1：base64steg/base32steg 自成一族「Base 隐写」，
+  // 解决「Base32 隐写在 Base64 族、Base32 本尊却独立」的错位（手法同源：padding 冗余位藏 offset）
+  basesteg: "Base 隐写",
+  unicodebase: "Unicode Base",
+  ecdsa: "ECDSA",
+  mlkem: "ML-KEM",
+  mldsa: "ML-DSA",
+  slhdsa: "SLH-DSA",
+  ed448: "Ed448",
+  x448: "X448",
+  gost: "GOST 签名",
+  jws: "JWS",
+  jwe: "JWE",
+  paseto: "PASETO",
+  sm2: "SM2 国密",
+  paillier: "Paillier 同态",
+  dsa: "DSA",
+  schnorr: "Schnorr",
+  ed25519: "Ed25519",
+  x25519: "X25519",
+  sm9: "SM9 国密标识",
+  xwing: "X-Wing",
+  hqc: "HQC",
+  ntru: "NTRU",
+  bls: "BLS 签名",
+  rot: "ROT",
+  qqxiuzi: "千千秀字",
+  xiangyue: "想曰 XiangYue",
+  rc: "RC",
+  blake: "BLAKE",
+  des: "DES",
+  cast: "CAST",
+  gostdigest: "GOST 摘要",
+  jwt: "JWT",
+  flask: "Flask Session",
+  rsa: "RSA",
+  xmss: "XMSS",
+  lms: "LMS",
+  merkle: "Merkle",
+  lsag: "LSAG",
+  elgamal: "ElGamal",
+  rsaatk: "RSA 攻击",
+  zip: "ZIP",
+  pcap: "PCAP",
+  mc: "Minecraft",
+  usb: "USB 流量",
+  tea: "TEA",
+  a5: "A5",
+  hc: "HC",
+  grain: "Grain",
+  aes: "AES",
+  sm4: "SM4",
+  brainloller: "Brainloller",
+  braincopter: "Braincopter",
+  qr: "QR 码",
+  gif: "GIF",
+  png: "PNG",
+  arnold: "Arnold",
+  jpeg: "JPEG",
+  bmp: "BMP",
+};
+
+/**
+ * T417：从 run 函数源码取首参名。兼容六种签名形态——匿名箭头 (a,p)=>、async 箭头、
+ * 具名 function f(a,p){、async function、方法简写 run(a,p){、生成器 function* f(a,p)。
+ * 参数表用括号平衡提取（默认值里可能含括号/花括号），再取顶层首个参数名并剥默认值。
+ * 返回 null 表示签名无法解析 → 调用方保守按 text 处理，绝不因解析失败判 none。
+ */
+function runFirstParam(src) {
+  const head = /^(?:async\s+)?(?:function\s*(?:\*\s*)?(?:[A-Za-z_$][\w$]*)?\s*)?/.exec(src);
+  let i = head[0].length;
+  if (src[i] !== "(") {
+    const open = src.indexOf("(");
+    if (open === -1) return null;
+    i = open;
+  }
+  let depth = 0, end = -1;
+  for (let j = i; j < src.length; j++) {
+    const c = src[j];
+    if (c === "(" || c === "[" || c === "{") depth++;
+    else if (c === ")" || c === "]" || c === "}") { depth--; if (depth === 0) { end = j; break; } }
+  }
+  if (end === -1) return null;
+  return src.slice(i + 1, end).split(",")[0].trim().split("=")[0].trim();
+}
+
+/**
+ * 主输入框渲染模式推导（T399，恒烈 2026-09-04 拍板：无需主输入的 op 不再显示巨型输入框）。
+ * 返回 "text"（显示主输入框）| "none"（隐藏，渲染层换细提示条）。
+ * 优先级：显式 op.io 覆盖 > 静态推导 > 默认 text。
+ * 静态推导：run-only（无 encode/decode）且 run 首参从未在函数体被引用 → none。
+ *   推导按「取首参名 → 查函数体是否引用该名」做，与参数叫什么无关（混淆/压缩改名后依然成立）。
+ *   T417：签名解析只认箭头形态曾把具名/async/简写形态全部误判 none（首参明明被引用），
+ *   现改走 runFirstParam 六形态兼容；无法解析的未知签名保守按 text（宁可多显示）。
+ * 结果缓存在 op._ioMode（op 对象生命周期=会话）。fields 机制（多输入框）不受本函数影响。
+ */
+export function inferIoMode(op) {
+  if (!op) return "text";
+  if (op.io === "none" || op.io === "text") return op.io;
+  if (op._ioMode) return op._ioMode;
+  let mode = "text";
+  if (typeof op.encode !== "function" && typeof op.decode !== "function" && typeof op.run === "function") {
+    try {
+      const src = op.run.toString().trim();
+      const first = runFirstParam(src);
+      const body = src.slice(src.indexOf("{") + 1);
+      if (first !== null && (!first || first === "p" || !new RegExp("\\b" + first + "\\b").test(body))) mode = "none";
+    } catch { /* toString/解析异常按 text 处理，宁可多显示 */ }
+  }
+  op._ioMode = mode;
+  return mode;
+}
+
+/**
+ * 取某分类下的族分组（op 按声明序归组，组按首成员声明序）。
+ * 返回 [{ family, name(族显示名), ops:[op…] }]；不带 family 的 op 不进结果；
+ * family 字段缺失（并行添加期间/老数据）时返回空数组，调用方按无族渲染，天然容错。
+ */
+export function familyGroup(catId) {
+  const groups = [];
+  const byFam = new Map();
+  for (const op of opsByCat(catId)) {
+    const fam = op && op.family;
+    if (typeof fam !== "string" || !fam) continue;
+    let g = byFam.get(fam);
+    if (!g) {
+      g = { family: fam, name: FAMILY_NAMES[fam] || fam, ops: [] };
+      byFam.set(fam, g);
+      groups.push(g);
+    }
+    g.ops.push(op);
+  }
+  return groups;
 }
 
 /** 用参数默认值构造一份初始参数对象。 */

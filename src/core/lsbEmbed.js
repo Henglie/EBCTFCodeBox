@@ -34,7 +34,7 @@
 import { register } from "./registry.js";
 import { inputToBytes } from "./compress.js";
 import { decodePngPixels, decodeBmpPixels } from "./lsbExtract.js";
-import { encodePNG, rgbaToDataURL } from "./mcMap.js";
+import { encodePNG, previewDataURL } from "./mcMap.js";
 
 // ============ 基础工具 ============
 
@@ -137,7 +137,10 @@ function lsbEmbedRun(text, p) {
   const res = lsbEmbedPixels(rgba, n, chans, bit, msbFirst, payloadBytes);
   if (!res.ok) return res.error;
 
-  return rgbaToDataURL(rgba, width, height);
+  return {
+    text: `LSB 嵌入完成：${width}×${height}；通道 ${chans.map(i => "RGBA"[i]).join("")}，bit${bit}，${msbFirst ? "msb" : "lsb"}。\n载荷: ${payloadBytes.length} 字节（${payloadBytes.length * 8} 位），容量 ${res.capacity} 位。\n完整隐写图请使用文件下载，再用 zstegScan 按相同组合提取；以下仅为长边不超过256px的缩略预览，不应用于提取。\n` + previewDataURL(rgba, width, height),
+    files: [{ name: `stego_lsb_${width}x${height}.png`, mime: "image/png", bytes: encodePNG(rgba, width, height) }],
+  };
 }
 
 // ============ 测试构造器（供回归构造已知封面） ============
@@ -207,7 +210,7 @@ export function makeSolidPng(width, height, rgba) {
   if (!out8.includes("载荷过大")) throw new Error(`lsbEmbed 自检⑧失败: ${out8}`);
   // ⑨ 空载荷也出图（写入 0 位）
   const out9 = lsbEmbedRun(cover8, { payload: "", channels: "RGB", inputEnc: "hex" });
-  if (!out9.startsWith("data:image/png;base64,")) throw new Error("lsbEmbed 自检⑨失败");
+  if (!out9.text.includes("data:image/png;base64,") || !decodePngPixels(out9.files[0].bytes)) throw new Error("lsbEmbed 自检⑨失败");
 })();
 
 // ============ register ============

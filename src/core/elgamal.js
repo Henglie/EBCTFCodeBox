@@ -198,7 +198,7 @@ const ELGAMAL_DATA_ENC = [
 ];
 
 register({
-  id: "elgamal", cat: "modern", name: "ElGamal",
+  id: "elgamal", family: "elgamal", familyLabel: "encdec", cat: "asym", name: "ElGamal",
   desc: "ElGamal 公钥加密：密文 (c1,c2)，c1=g^k c2=m·y^k，解密 m=c2·(c1^x)⁻¹。密文格式 c1,c2（逗号分隔）",
   params: [
     { key: "p", label: "素数 p", type: "text", default: "", placeholder: "十进制大素数" },

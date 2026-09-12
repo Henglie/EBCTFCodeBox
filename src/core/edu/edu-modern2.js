@@ -10,7 +10,7 @@ export default {
     ],
     tips: [
       "块 64 位 → 密文 8 字节倍数。",
-      "认特征：出现 mod 65537 的乘法就是 IDEA。",
+      "认特征：出现 $\\bmod\ 65537$ 的乘法就是 IDEA。",
     ],
     aka: ["idea", "国际数据加密算法", "pgp加密", "lai massey", "IDEA", "International Data Encryption Algorithm", "IDEA加密", "lai-massey结构", "IPES", "分组密码"],
   },
@@ -53,7 +53,7 @@ export default {
       "弱密钥题：拿 header.payload 和签名，用 hmacKeyBrute 爆 HS256 的 key。",
       "payload 能直接读，别指望它藏东西。",
     ],
-    aka: ["jwt", "json web token", "jot", "hs256", "JWT", "JSON Web Token", "RFC 7519", "json令牌", "web令牌", "token鉴权"],
+    aka: ["jwt令牌", "jwt token", "jwt", "json web token", "jot", "hs256", "JWT", "JSON Web Token", "RFC 7519", "json令牌", "web令牌", "token鉴权"],
   },
 
   jwtNone: {

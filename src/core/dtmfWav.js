@@ -4,6 +4,8 @@
  * 按键序列 ↔ 音频。
  * encode: 按键序列（0-9 A-D * #）→ 叠加行/列两正弦 → 16 位单声道 WAV → base64
  * decode: WAV(base64/hex) → Goertzel 逐帧检测 8 基频 → 按键序列
+ *   解码支持编码格式：1=整数 PCM（8/16/24/32 位）、3=IEEE float（32/64 位）、7=µ-law（G.711）
+ *   —— float/µ-law 为 dtmf2num.exe 桥的补齐路径（exe 本身拒绝这两种，JS 超越）。
  *
  * 标准（ITU-T Q.23）：行频 697/770/852/941，列频 1209/1336/1477/1633（Hz）。
  * 自包含 WAV 解析 + Goertzel，不依赖外部文件。
@@ -102,7 +104,8 @@ function dtmfEncode(text, p) {
     const s = clamp(Math.round(samples[i] * 32767), -32768, 32767);
     dv.setInt16(44 + i * 2, s, true);
   }
-  return bytesToBase64(buf);
+  // T363b 产物协议 2026-09-02：WAV 字节走 files 下载按钮（真文件交付 dtmf.wav），text 保留 base64（链式/复制兼容）。
+  return { text: bytesToBase64(buf), files: [{ name: "dtmf.wav", mime: "audio/wav", bytes: buf }] };
 }
 
 // ---- WAV 解析（自包含最小实现，取 PCM data 块） ----
@@ -117,7 +120,7 @@ function parseWavPcm(bytes) {
   while (off + 8 <= bytes.length) {
     const id = ascii(off, 4), size = u32(off + 4), d = off + 8;
     if (id === "fmt " && d + 16 <= bytes.length) {
-      fmt = { channels: u16(d + 2), sampleRate: u32(d + 4), bits: u16(d + 14) };
+      fmt = { formatTag: u16(d), channels: u16(d + 2), sampleRate: u32(d + 4), bits: u16(d + 14) };
     } else if (id === "data") {
       data = { offset: d, size: Math.min(size, bytes.length - d) };
     }
@@ -127,11 +130,23 @@ function parseWavPcm(bytes) {
   }
   if (!fmt || !data) throw new Error("DTMF 解码: WAV 缺 fmt 或 data 块");
  // fmt 字段零校验：bits/channels=0 会使 frameBytes=0 → data.size/0=Infinity → new Float64Array(Infinity) 崩溃。
-  if (!fmt.bits || fmt.bits < 8 || fmt.bits > 32 || (fmt.bits & 7) !== 0) {
-    throw new Error("DTMF 解码: WAV 位深非法（仅支持 8/16/24/32）");
+  if (!fmt.bits || fmt.bits < 8 || fmt.bits > 64 || (fmt.bits & 7) !== 0) {
+    throw new Error("DTMF 解码: WAV 位深非法（仅支持 8/16/24/32/64）");
   }
   if (!fmt.channels || fmt.channels < 1 || fmt.channels > 8) {
     throw new Error("DTMF 解码: WAV 声道数非法");
+  }
+ // 编码格式校验：tag 1=整数 PCM，3=IEEE float，7=µ-law（G.711）。
+ // 对齐 dtmf2num 补齐路径（T387）：float PCM / µ-law 输入正确解码（dtmf2num.exe 本身拒绝这两种，JS 超越）。
+  const TAG_NAMES = { 1: "整数 PCM", 3: "IEEE float PCM", 7: "µ-law (G.711)" };
+  if (![1, 3, 7].includes(fmt.formatTag)) {
+    throw new Error("DTMF 解码: WAV 编码格式 " + fmt.formatTag + " 不支持（支持 1=PCM / 3=float / 7=µ-law）");
+  }
+  if (fmt.formatTag === 3 && fmt.bits !== 32 && fmt.bits !== 64) {
+    throw new Error("DTMF 解码: float PCM 仅支持 32/64 位");
+  }
+  if (fmt.formatTag === 7 && fmt.bits !== 8) {
+    throw new Error("DTMF 解码: µ-law 为 8 位编码");
   }
  // 读单声道（多声道取声道 0）归一化 Float
   const bps = fmt.bits >> 3;
@@ -139,14 +154,25 @@ function parseWavPcm(bytes) {
   const frames = Math.floor(data.size / frameBytes);
   const sig = new Float64Array(frames);
   const scale = Math.pow(2, fmt.bits - 1) || 1;
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+ // G.711 µ-law → 线性（CCITT G.711 参考实现，Sun microsystems 版）
+  const ulaw2lin = (u) => {
+    u = ~u & 0xFF;
+    let t = ((u & 0x0F) << 3) + 0x84;
+    t <<= (u & 0x70) >> 4;
+    return (u & 0x80) ? (0x84 - t) : (t - 0x84);
+  };
   for (let f = 0; f < frames; f++) {
     const p = data.offset + f * frameBytes;
     let v;
-    if (fmt.bits === 8) v = (bytes[p] - 128) / 128;
+    if (fmt.formatTag === 7) {
+      v = ulaw2lin(bytes[p]) / 32768;
+    } else if (fmt.formatTag === 3) {
+      v = (fmt.bits === 32) ? dv.getFloat32(p, true) : dv.getFloat64(p, true);
+    } else if (fmt.bits === 8) v = (bytes[p] - 128) / 128;
     else if (fmt.bits === 16) { let x = bytes[p] | (bytes[p + 1] << 8); if (x >= 0x8000) x -= 0x10000; v = x / scale; }
     else if (fmt.bits === 24) { let x = bytes[p] | (bytes[p + 1] << 8) | (bytes[p + 2] << 16); if (x >= 0x800000) x -= 0x1000000; v = x / scale; }
-    else if (fmt.bits === 32) { let x = (bytes[p] | (bytes[p + 1] << 8) | (bytes[p + 2] << 16) | (bytes[p + 3] << 24)); v = x / scale; }
-    else v = 0;
+    else { let x = (bytes[p] | (bytes[p + 1] << 8) | (bytes[p + 2] << 16) | (bytes[p + 3] << 24)); v = x / scale; }
     sig[f] = v;
   }
   return { sig, sampleRate: fmt.sampleRate };
@@ -213,7 +239,7 @@ register({
   id: "dtmfWav",
   cat: "stego",
   name: "DTMF 拨号音 WAV",
-  desc: "按键序列 ↔ 拨号音 WAV：encode 数字(0-9 A-D * #)→叠加行/列双正弦 16位单声道 WAV(base64)；decode WAV(base64/hex)→Goertzel 检 8 基频→按键。对标 dtmf2num。",
+  desc: "按键序列 ↔ 拨号音 WAV：encode 数字(0-9 A-D * #)→叠加行/列双正弦 16位单声道 WAV(base64)；decode WAV(base64/hex)→Goertzel 检 8 基频→按键。解码支持整数 PCM(8/16/24/32bit)/IEEE float(32/64bit)/µ-law，对标并超越 dtmf2num。",
   params: [
     { key: "toneMs", label: "每键时长(ms)", type: "number", default: 200, placeholder: "20-2000（仅 encode）" },
     { key: "gapMs", label: "键间间隔(ms)", type: "number", default: 100, placeholder: "0-2000（仅 encode）" },

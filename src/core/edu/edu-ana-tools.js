@@ -36,18 +36,6 @@ export default {
     aka: ["hmac爆破", "hmac brute", "hmac密钥爆破", "jwt密钥爆破", "hmac key brute", "hmac密钥破解", "jwt secret brute", "jwt弱密钥", "hmac secret crack", "jwt签名爆破", "hmac字典爆破"],
   },
 
-  hexView: {
-    what: "十六进制查看器：把任意数据按经典 hexdump 格式排出来——左边偏移、中间 hex 字节、右边可打印 ASCII。看文件结构、找 magic 头必备。",
-    principle:
-      "每行 16 字节：行首是偏移地址，中间是 16 个字节的两位 hex，末尾把可打印字符原样显示、不可打印的用 `.` 占位。对照 hex 和 ASCII 两列，既能认文件签名又能扫出夹在二进制里的可读串。",
-    usage: "粘数据（或 hex），输出 hexdump 视图，支持高亮指定区间。",
-    examples: [
-      { in: "PNG 文件字节", out: "00000000  89 50 4e 47 0d 0a 1a 0a  ...  .PNG....", desc: "开头 89 50 4E 47 是 PNG magic" },
-    ],
-    tips: ["认文件类型看开头几字节：89504E47=PNG、FFD8FF=JPEG、504B0304=ZIP、25504446=PDF。ASCII 列里常能瞄到藏的 flag。"],
-    aka: ["hexdump", "十六进制查看", "hex view", "hex 视图", "hex viewer", "hex查看器", "十六进制查看器", "hex dump", "字节查看器", "十六进制转储", "hexdump视图", "hex显示"],
-  },
-
   hexRange: {
     what: "Hex 区间提取：从数据里截出指定偏移范围的那几个字节，同时用 hex/十进制/八进制/二进制/ASCII/UTF-8 多种方式展示。",
     principle:
@@ -56,7 +44,7 @@ export default {
     examples: [
       { in: "文件字节 + 区间 [16,20)", out: "hex=00 00 01 F4 / dec=500 / ...", desc: "把 4 字节当整数读出 500" },
     ],
-    tips: ["配合 hexView 先定位再提取：先 dump 看清结构，锁定可疑字段偏移，再用它精确取值解读。"],
+    tips: ["先用字符显示器的 Hex+ASCII 视图看清结构、锁定可疑字段偏移，再用区间提取精确取值。"],
     aka: ["hex区间", "hex range", "字节提取", "区间提取", "hex range extract", "字节区间", "hex片段提取", "byte range", "偏移提取", "字节切片", "hex slice", "区段提取"],
   },
 

@@ -155,4 +155,16 @@ export default {
     tips: ["和 confusablesScan 配套：Scan 告诉你哪儿有诈，Skeleton 把它拍回原形好和白名单比对。"],
     aka: ["同形字骨架", "confusables skeleton", "骨架归一化", "钓鱼域名比对", "unicode skeleton", "confusable skeleton", "视觉骨架", "同形字归一", "skeleton algorithm", "混淆字骨架", "相似字归一化", "homoglyph skeleton"],
   },
+
+  textBlindWatermark: {
+    what: "文本盲水印：guofei9987 的 text_blind_watermark（v1 JS 版格式）——把一段水印文字用零宽字符 U+200C 嵌进掩护文本，肉眼完全不可见，复制传播也不丢。防泄密溯源、CTF 零宽题常客。",
+    principle:
+      "水印逐字符转二进制（变长不补零，字符间以空格分隔、末尾再补一个空格），逐位映射：`1` = 1 个 U+200C、空格 = 2 个 U+200C（分隔符）、`0` = 不加；每一位消耗 1 个掩护字符（零宽串插在该字符后）。解码用状态机扫描：单 ZWNJ=1、双 ZWNJ=分隔、普通字符=0，再按空格切段还原。无密钥无加密，纯隐写。",
+    usage: "encode: 水印 + 掩护文本 → 隐写文本（掩护文本长度需 ≥ 水印位数）；decode: 隐写文本 → 水印。",
+    examples: [
+      { in: "水印 flag + 任意掩护文本", out: "外观不变的掩护文本（内藏 U+200C）", desc: "flag → 1100110 1101100 1100001 1100111 加分隔共 32 位" },
+    ],
+    tips: ["与「零宽字符隐写」（Misawa radix-4 定长）格式互不兼容，互解不通。原版解码器对掩护残余段会多输出隐形 U+0000 尾巴，本实现已修；BMP 外字符按 UTF-16 码元拆编，成对码元可完整还原。"],
+    aka: ["文本盲水印", "text blind watermark", "textBlindWatermark", "文本隐水印", "盲水印", "guofei9987", "零宽盲水印", "text watermark", "文字隐水印", "隐形水印", "文本隐形水印", "zwnj隐写", "郭飞盲水印"],
+  },
 };

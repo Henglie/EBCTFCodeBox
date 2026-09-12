@@ -6,7 +6,7 @@
  *
  * 覆盖范围（经 rt_t170_diff.mjs 差集核查）:
  * registry cat=stego(43)/analysis(71) 共 114 op，已有科普 112 个（覆盖率 98.2%）
- * 本文件补齐剩余 2 个 stego op 缺口：dtmfWav（DTMF 拨号音 WAV）+ exeBridge（本地桥·外部 exe）。
+ * 本文件补齐 stego op 缺口：dtmfWav（DTMF 拨号音 WAV）。exeBridge 卡随 CLI 桥退役删除（2026-09-13 桥大清除）。
  *
  * examples 取值:
  * - dtmfWav: 由 src/core/dtmfWav.js 的 dtmfEncode/dtmfDecode 实跑取值。
@@ -44,26 +44,5 @@ export default {
  // ============================================================
  // 本地桥·外部 exe
  // ============================================================
-  exeBridge: {
-    what: "前端调用本地 bridge.py 服务执行白名单外部 exe（steghide/bkcrack/foremost 等 7 款），把纯前端搞不定的隐写/取证题交给本地工具跑。仅 Windows，零外发。",
-    principle:
-      "纯前端 JS 受浏览器沙箱限制，跑不了 steghide/bkcrack 这类原生 exe。本 op 通过 localhost:8181 调用本地 bridge.py（Python 服务），bridge 收到请求后执行白名单 exe，把 stdout/stderr 回传前端。\n\n**流程**：前端 POST `/api/run` → bridge 校验 tool 在白名单 → 把 coverFile（base64）解码写临时文件，替换 args 里的 `{cover}` 占位符 → 执行 exe → 收集 stdout/stderr/exitCode → 返回前端。\n\n**白名单 7 工具**：dtmf2num（DTMF 解码）/ foremost（文件雕复）/ steghide（图像隐写 embed/extract）/ snow（空白隐写）/ jsteg（JPEG LSB）/ bkcrack（ZIP 已知明文攻击）/ mp3stego（MP3 隐写）。\n\n**安全**：仅 localhost:8181，绝外发；tool/args 透传 bridge 白名单校验，前端不自行执行 exe。bridge 未启动或非 Win 时返回友好提示，不抛错。",
-    usage:
-      "前置：先在本地运行 `python bridge.py`（端口 8181）。选工具（tool）→ 填参数（args，空格分隔，`{cover}` 是 coverFile 的临时文件占位符）→ 填 stdin 输入（按 inputEnc 编码解析）→ 拖入文件粘贴 base64 到 coverFile。点运行后 bridge 执行 exe，返回 stdout。bridge 未启动时返回提示。",
-    examples: [
-      { in: "（拖入含 steghide 隐写的 JPG，粘贴 base64 到 coverFile）", param: "tool=steghide, args=`extract -sf {cover} -p pass`, inputEnc=utf8", out: "stdout = 隐藏的文本内容（需 bridge.py 运行）", desc: "steghide 用密码 pass 从 JPG 提取隐写文本；{cover} 被 bridge 替换成临时 JPG 路径" },
-      { in: "（拖入伪加密/已知明文 ZIP，粘贴 base64 到 coverFile）", param: "tool=bkcrack, args=`-C {cover} -c entry.txt -p plain.txt`", out: "stdout = bkcrack 破解进度 + 三组密钥（需 bridge.py）", desc: "bkcrack 对 ZIP 做已知明文攻击，需提供明文文件" },
-      { in: "（拖入 fragmented 镜像）", param: "tool=foremost, args=`-i {cover} -o out`", out: "stdout = foremost 雕复日志，输出目录含 carved 文件（需 bridge.py）", desc: "foremost 按文件头尾雕复被删除/嵌入的文件" },
-    ],
-    formulas: [],
-    tips: [
-      "必须先 `python bridge.py` 起服务，否则 op 返回「bridge 未启动」提示，不会抛错。",
-      "`{cover}` 是关键占位符：coverFile 的 base64 由 bridge 解码写临时文件，args 里的 `{cover}` 被替换成该临时文件路径——不要自己填路径。",
-      "7 个白名单工具覆盖 CTF 常见隐写/取证场景：图像隐写（steghide/jsteg）、音频（dtmf2num/mp3stego）、文件雕复（foremost）、ZIP 攻击（bkcrack）、空白隐写（snow）。",
-      "零外发：仅 localhost:8181，不上传任何文件到外部服务器，文件只在本地 bridge 处理。",
-      "非 Windows 时部分 exe 不可用，bridge 会返回平台提示。",
-      "与纯前端 op 不同：本 op 是「本地桥」机制，依赖外部环境；纯前端能做的隐写（如 LSB/zeroWidth）已有独立 op 不走 bridge。",
-    ],
-    aka: ["本地桥", "bridge.py", "steghide", "bkcrack", "foremost", "jsteg", "mp3stego", "snow", "dtmf2num", "external exe bridge"],
-  },
+
 };

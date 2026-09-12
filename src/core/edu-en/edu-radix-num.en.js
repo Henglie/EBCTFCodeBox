@@ -32,7 +32,7 @@ export default {
       { tex: "x = (-1)^{s}\\times 1.m \\times 2^{e-127}", caption: "Single precision: s sign, e exponent (bias 127), m mantissa" },
     ],
     tips: ["Seeing memory-dump-like hex such as `0x40490FDB`, try decoding it as IEEE 754 — it may hide a number like 3.14.", "0x7F800000 is +∞, 0xFFC00000 is NaN; don't panic when you hit these special values."],
-    aka: ["ieee754", "浮点数编码", "float hex", "浮点位模式", "单精度双精度", "ieee 754", "浮点数转hex", "float to hex", "double hex", "半精度浮点", "尾数指数", "IEEE浮点标准", "浮点二进制表示"],
+    aka: ["浮点数转换", "浮点转换", "ieee754", "浮点数编码", "float hex", "浮点位模式", "单精度双精度", "ieee 754", "浮点数转hex", "float to hex", "double hex", "半精度浮点", "尾数指数", "IEEE浮点标准", "浮点二进制表示"],
   },
 
   bcd: {
@@ -180,7 +180,7 @@ export default {
   },
 
   primeFactor: {
-    what: "Factors an integer into a product of primes, e.g. 360 = 2³ × 3² × 5. Uses BigInt to support large numbers.",
+    what: "Factors an integer into a product of primes, e.g. $360 = 2^{3} \\times 3^{2} \\times 5$. Uses BigInt to support large numbers.",
     principle: "Trial-divide starting from 2; each time it divides evenly, record a prime factor and keep dividing, until the trial divisor squared exceeds the remaining value; whatever's left at the end (if >1) is also a prime factor. Identical factors are merged into exponents.",
     usage: "Paste a non-negative integer, run outputs the prime factorization.",
     examples: [

@@ -1,3 +1,4 @@
+import { HLSpring } from "./spring.js";
 // textContextMenu.js — 编辑框自定义右键文本处理菜单（对标同类工具「文本区右键菜单」）
 // 零耦合：自持样式注入、菜单 DOM、纯本地文本处理，零外发。
 // 用法：attachTextContextMenu(area, opts) 在 area 上绑 contextmenu，弹 M3 风格菜单，处理后写回 area.value。
@@ -272,8 +273,17 @@ function injectStyle() {
 }
 
 let openMenu = null;
+const _springOn = () => document.documentElement.classList.contains("spring-motion");
 function closeMenu() {
-  if (openMenu) { openMenu.remove(); openMenu = null; }
+  if (openMenu) {
+    const m = openMenu;
+    openMenu = null;
+    if (_springOn() && !m.dataset.closing) {
+      m.dataset.closing = "1";
+      m.style.pointerEvents = "none";
+      HLSpring.to(m, { scale: 0.92, opacity: 0 }, { preset: "dur150", onRest: (el) => el.remove() });
+    } else m.remove();
+  }
   document.removeEventListener("pointerdown", onDocDown, true);
   document.removeEventListener("keydown", onKeyDown, true);
   window.removeEventListener("blur", closeMenu);
@@ -316,6 +326,7 @@ function buildMenu(items, area, opts, x, y) {
   menu.style.left = nx + "px";
   menu.style.top = ny + "px";
 
+  if (_springOn()) { HLSpring.set(menu, { scale: 0.92, opacity: 0 }); HLSpring.to(menu, { scale: 1, opacity: 1 }, "dur150"); }
   openMenu = menu;
   document.addEventListener("pointerdown", onDocDown, true);
   document.addEventListener("keydown", onKeyDown, true);

@@ -160,7 +160,7 @@ function pollardPm1Run(text, p) {
 // 注册
 // ============================================================
 register({
-  id: "rsaPollardPm1",
+  id: "rsaPollardPm1", family: "rsaatk", familyLabel: "pollardpm1",
   cat: "crypto",
   name: "RSA Pollard p-1 分解",
   desc: "Pollard p-1 算法分解 RSA 模数 N（适用 p-1 B-光滑；输入框填 N，每行一个或逗号分隔）",

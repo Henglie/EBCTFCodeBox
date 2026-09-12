@@ -205,7 +205,7 @@ function streebog(input, outputBits = 512) {
 }
 
 register({
-  id: "streebog",
+  id: "streebog", family: "gostdigest", familyLabel: "gost2012",
   cat: "hash",
   name: "Streebog（GOST R 34.11-2012）",
   desc: "俄罗斯国标哈希 Streebog（GOST R 34.11-2012 / RFC 6986）：512 位输出（可选 256 位截断），Merkle-Damgård + 12 轮压缩函数，信创与俄系赛题常见。参数 len=512/256。过 RFC 6986 §10 官方向量。",

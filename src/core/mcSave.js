@@ -22,6 +22,7 @@
 import { register } from "./registry.js";
 import { inputToBytes } from "./pcapParse.js";
 import { streamDecompress as safeStreamDecompress } from "./compress.js"; // v0.1.5：安全流（超时+纯JS兜底）
+const MAX_INFLATE = 128 * 1024 * 1024;
 
 // ============================================================
 // 解压：代理 compress.js 安全流，按魔数判 gzip / zlib(deflate)
@@ -534,7 +535,7 @@ function mcSaveDetect(t) {
 // 注册
 // ============================================================
 register({
-  id: "mcLevelDat",
+  id: "mcLevelDat", family: "mc", familyLabel: "leveldat",
   cat: "forensic",
   name: "Minecraft level.dat 解析",
   desc: "解析 Minecraft Java 版世界存档 level.dat（gzip 压缩的 NBT）：种子/出生点/GameRules/版本/DataVersion，高亮非常规 GameRule 与异常坐标等可疑字段。自写大端序 NBT 解析器，Long 用 BigInt，纯前端零外发",

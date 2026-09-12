@@ -869,7 +869,7 @@ function barcodeIdentifyOp(text) {
 // 注册
 // ============================================================
 register({
-  id: "qrGen", cat: "stego", name: "QR 码生成",
+  id: "qrGen", family: "qr", familyLabel: "gen", cat: "stego", name: "QR 码生成",
   desc: "纯 JS QR 编码（数字/字母/字节模式 + L/M/Q/H 纠错），输出可扫描二维码 PNG（含静默区）+ 0/1 矩阵 JSON。核心移植自 Nayuki (MIT)",
   params: [
     { key: "ecl", label: "纠错级", type: "select", default: "M",
@@ -888,7 +888,7 @@ register({
 });
 
 register({
-  id: "qrParse", cat: "stego", name: "QR 结构解析",
+  id: "qrParse", family: "qr", familyLabel: "parse", cat: "stego", name: "QR 结构解析",
   desc: "解析 QR 矩阵（ASCII art / 0-1 行）：版本/掩码/纠错级识别 + finder/暗模块校验",
   params: [],
   run: qrParseOp,

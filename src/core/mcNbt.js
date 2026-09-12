@@ -236,7 +236,7 @@ async function mcNbtViewRun(text, p = {}) {
 // 注册
 // ============================================================
 register({
-  id: "mcNbtView",
+  id: "mcNbtView", family: "mc", familyLabel: "nbtview",
   cat: "forensic",
   name: "Minecraft NBT 树查看器",
   desc: "浏览器版 NBTExplorer：把任意 Minecraft Java 版 NBT（level.dat / *.dat / " +

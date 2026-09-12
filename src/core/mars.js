@@ -315,7 +315,7 @@ function marsRun(text, p, dir) {
 
 register({
   id: "mars",
-  cat: "modern",
+  cat: "block",
   name: "MARS 分组密码",
   desc: "MARS 分组密码（IBM 1998，AES 决赛圈）：128 位分组，128/192/256 位密钥，32 轮（前向混合+加密核心+后向混合）。明文/密文/密钥均 hex，ECB 多块。encode 加密 / decode 解密。已过 Crypto++ marsval.dat 官方向量。",
   params: [

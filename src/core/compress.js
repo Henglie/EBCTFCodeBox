@@ -111,7 +111,7 @@ function b64urlToBytes(s) {
  */
 function inputToBytes(text, p) {
  // 拖入文件走 rawBytes 通道（acceptsBytes 约定）：直接用真字节，跳过 hex/base64 文本解析。
-  if (p && p.rawBytes && p.rawBytes.length) {
+  if (p && p.rawBytes != null) {
     return p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes);
   }
   const enc = (p && p.inputEnc) || "auto";
@@ -262,18 +262,81 @@ async function streamDecompress(format, bytes) {
   }
 }
 
+/** 纯 JS 压缩兜底（T366 补齐，2026-09-02）：stored 模式 deflate（RFC 1951 BTYPE=00）。
+ *  正确性 100%（任何解压器可解），不做体积压缩——兜底路径优先正确性，desc 已注明。
+ *  权威验证：node zlib.gunzipSync/inflateSync/inflateRawSync 反解逐字节一致（见 rt 测试）。 */
+const _crc32Table = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32Bytes(bytes) {
+  let c = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) c = _crc32Table[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+function adler32Bytes(bytes) {
+  let a = 1, b = 0;
+  for (let i = 0; i < bytes.length; i++) { a = (a + bytes[i]) % 65521; b = (b + a) % 65521; }
+  return ((b << 16) | a) >>> 0;
+}
+/** RFC 1951 stored 块 raw deflate：每块 ≤65535 字节，BTYPE=00，末块 BFINAL=1。 */
+function deflateStoredRaw(bytes) {
+  const MAX = 65535;
+  const nBlocks = Math.max(1, Math.ceil(bytes.length / MAX));
+  const out = new Uint8Array(bytes.length + nBlocks * 5);
+  let o = 0;
+  if (bytes.length === 0) {
+    out[o++] = 0x01; out[o++] = 0x00; out[o++] = 0x00; out[o++] = 0xff; out[o++] = 0xff;
+  } else {
+    for (let i = 0; i < bytes.length; i += MAX) {
+      const len = Math.min(MAX, bytes.length - i);
+      out[o++] = i + len >= bytes.length ? 1 : 0;
+      out[o++] = len & 0xff; out[o++] = (len >>> 8) & 0xff;
+      out[o++] = ~len & 0xff; out[o++] = (~len >>> 8) & 0xff;
+      out.set(bytes.subarray(i, i + len), o); o += len;
+    }
+  }
+  return out.subarray(0, o);
+}
+/** 按格式包装：gzip 头尾（RFC 1952）/ zlib 头尾（RFC 1950）/ raw。 */
+function jsDeflateFallback(format, bytes) {
+  if (format === "deflate-raw") return deflateStoredRaw(bytes);
+  const raw = deflateStoredRaw(bytes);
+  if (format === "deflate") {
+    const out = new Uint8Array(raw.length + 6);
+    out[0] = 0x78; out[1] = 0x01;
+    out.set(raw, 2);
+    const ad = adler32Bytes(bytes);
+    out[out.length - 4] = (ad >>> 24) & 0xff; out[out.length - 3] = (ad >>> 16) & 0xff;
+    out[out.length - 2] = (ad >>> 8) & 0xff; out[out.length - 1] = ad & 0xff;
+    return out;
+  }
+  if (format === "gzip") {
+    const out = new Uint8Array(raw.length + 18);
+    out.set([0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff], 0);
+    out.set(raw, 10);
+    const crc = crc32Bytes(bytes), isize = bytes.length >>> 0;
+    const t = out.length - 8;
+    out[t] = crc & 0xff; out[t+1] = (crc >>> 8) & 0xff; out[t+2] = (crc >>> 16) & 0xff; out[t+3] = (crc >>> 24) & 0xff;
+    out[t+4] = isize & 0xff; out[t+5] = (isize >>> 8) & 0xff; out[t+6] = (isize >>> 16) & 0xff; out[t+7] = (isize >>> 24) & 0xff;
+    return out;
+  }
+  throw new Error("不支持的压缩格式: " + format);
+}
 /** 压缩：原生流 + 超时（无纯 JS deflate 实现，超时直接报错）。 */
 async function streamCompress(format, bytes) {
-  if (!hasStreams()) {
-    throw new Error("当前环境无 CompressionStream（浏览器实测；node 18+ 实验性可用，旧 node 跳过）");
-  }
+  if (!hasStreams()) return jsDeflateFallback(format, bytes); // T366：无 Streams 也走 stored 兜底
   try {
     return await withTimeout(nativeCompress(format, bytes), TIMEOUT_MS);
   } catch (e) {
-    if (e && e.message === "STREAM_TIMEOUT") {
-      throw new Error(format + " 压缩超时（浏览器 CompressionStream 挂死；本工具暂未内置纯 JS deflate）");
-    }
-    throw e;
+    // T366 补齐（2026-09-02，恒烈指出压缩侧不能留尾巴）：超时/失败/无 Streams →
+    // stored deflate 兜底（合法 deflate 流、任何解压器可解；不压缩体积但 100% 正确）。
+    return jsDeflateFallback(format, bytes);
   }
 }
 
@@ -288,11 +351,27 @@ function bytesToB64(bytes) {
 // encode: 文本 → UTF-8 字节 → 压缩 → base64 输出
 // decode: 输入（hex/base64/UTF-8 自动识别）→ 字节 → 解压 → 文本（可打印）或 hex
 // ============================================================
+
+// T363a 产物协议（2026-09-02）：encode 压缩后的二进制流走 files 下载通道，
+// text 仍为原 base64（配方链兼容）。按 format 映射产物文件名与 MIME。
+const ENCODE_FILE_META = {
+  "gzip": { name: "out.gz", mime: "application/gzip" },
+  "deflate": { name: "out.zlib", mime: "application/zlib" },
+  "deflate-raw": { name: "out.deflate", mime: "application/octet-stream" },
+};
+
 function makeCompressOps(format, label) {
   async function encode(text) {
     const bytes = te(text);
     const zipped = await streamCompress(format, bytes);
-    return bytesToB64(zipped);
+    // T363a 产物协议（2026-09-02）：成功路径返回 {text, files}；text 保持原
+    // base64 不变（链式兼容），files 供 main.js 渲染「⬇ 下载」按钮。
+    // 压缩失败仍沿 streamCompress 抛错（错误路径形态不变）。
+    const meta = ENCODE_FILE_META[format] || { name: "out.bin", mime: "application/octet-stream" };
+    return {
+      text: bytesToB64(zipped),
+      files: [{ name: meta.name, mime: meta.mime, bytes: zipped }],
+    };
   }
   async function decode(text, p) {
     const bytes = inputToBytes(text, p);
@@ -304,12 +383,23 @@ function makeCompressOps(format, label) {
         "（确认输入为 " + label + " 流；浏览器实测，node 旧版无 DecompressionStream）");
     }
     const r = bytesToOutput(out);
+    if (p && p.toFile && r.mode !== "text") {
+      // T507 P2：二进制解压产物走 files 协议给下载。默认关——本 op 参与 magic
+      // 一键解码（Worker 路径不认对象返回，registry 红线），仅用户显式开启时
+      // 改变返回形态，detect/配方默认路径零变化。
+      return {
+        text: "(解压成功，结果为二进制 " + out.length + " 字节，已提供完整文件下载；hex 预览前 4096 字节)\n" + r.text,
+        files: [{ name: "decompressed.bin", mime: "application/octet-stream", bytes: out }],
+      };
+    }
     return r.mode === "text"
       ? r.text
       : "(解压成功，但结果非可打印文本，输出 hex)\n" + r.text;
   }
   return { encode, decode };
 }
+
+const OUTPUT_FILE_PARAM = { key: "toFile", label: "二进制结果输出为文件", type: "bool", default: false };
 
 const gzipOps = makeCompressOps("gzip", "gzip");
 const zlibOps = makeCompressOps("deflate", "zlib");
@@ -813,7 +903,7 @@ const INPUT_ENC_PARAM = {
 register({
   id: "gzipCodec", cat: "forensic", name: "Gzip 解压 / 压缩",
   desc: "gzip 流双向（浏览器 DecompressionStream；输入 hex/base64/UTF-8 自动识别）",
-  params: [INPUT_ENC_PARAM],
+  params: [INPUT_ENC_PARAM, OUTPUT_FILE_PARAM],
   encode: gzipOps.encode, decode: gzipOps.decode,
   detect: gzipDetect,
   acceptsBytes: true,
@@ -821,7 +911,7 @@ register({
 register({
   id: "zlibCodec", cat: "forensic", name: "Zlib 解压 / 压缩",
   desc: "zlib 流（含 2 字节头 + adler32 尾）双向；浏览器实测",
-  params: [INPUT_ENC_PARAM],
+  params: [INPUT_ENC_PARAM, OUTPUT_FILE_PARAM],
   encode: zlibOps.encode, decode: zlibOps.decode,
   detect: zlibDetect,
   acceptsBytes: true,
@@ -829,7 +919,7 @@ register({
 register({
   id: "deflateRawCodec", cat: "forensic", name: "Raw Deflate 解压 / 压缩",
   desc: "raw deflate（无 zlib 头）双向；浏览器实测",
-  params: [INPUT_ENC_PARAM],
+  params: [INPUT_ENC_PARAM, OUTPUT_FILE_PARAM],
   encode: deflateRawOps.encode, decode: deflateRawOps.decode,
   acceptsBytes: true,
 });
@@ -853,4 +943,5 @@ export {
   archiveIdentifyRun, zipListRun, tarListRun, b64CompressedProbeRun,
   parseZipStructure, parseTarString, detectArchiveMagic, inputToBytes, bytesToOutput,
   hasStreams, streamCompress, streamDecompress,
+  jsDeflateFallback, deflateStoredRaw, crc32Bytes, adler32Bytes, // T366 压缩兜底（stored deflate）
 };

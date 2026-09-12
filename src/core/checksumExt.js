@@ -255,7 +255,7 @@ register({
 
 // 2. crc16Modbus：CRC-16/MODBUS
 register({
-  id: "crc16Modbus", cat: "hash", name: "CRC-16/MODBUS",
+  id: "crc16Modbus", family: "crc", familyLabel: "modbus", cat: "hash", name: "CRC-16/MODBUS",
   desc: "CRC-16/MODBUS（poly=0x8005, init=0xFFFF, refIn/refOut=true, xorOut=0x0000，Modbus RTU 用）",
   params: [],
   run: function (t) {
@@ -266,7 +266,7 @@ register({
 
 // 3. crc16CcittTrue：CRC-16/CCITT-FALSE
 register({
-  id: "crc16CcittTrue", cat: "hash", name: "CRC-16/CCITT-FALSE",
+  id: "crc16CcittTrue", family: "crc", familyLabel: "ccittfalse", cat: "hash", name: "CRC-16/CCITT-FALSE",
   desc: "CRC-16/CCITT-FALSE（poly=0x1021, init=0xFFFF, refIn/refOut=false, xorOut=0x0000）",
   params: [],
   run: function (t) {
@@ -277,7 +277,7 @@ register({
 
 // 4. crc16Arc：CRC-16/ARC
 register({
-  id: "crc16Arc", cat: "hash", name: "CRC-16/ARC",
+  id: "crc16Arc", family: "crc", familyLabel: "arc", cat: "hash", name: "CRC-16/ARC",
   desc: "CRC-16/ARC（poly=0x8005, init=0x0000, refIn/refOut=true, xorOut=0x0000，LHA/ARC 用）",
   params: [],
   run: function (t) {
@@ -288,7 +288,7 @@ register({
 
 // 5. crc16Xmodem：CRC-16/XMODEM
 register({
-  id: "crc16Xmodem", cat: "hash", name: "CRC-16/XMODEM",
+  id: "crc16Xmodem", family: "crc", familyLabel: "xmodem", cat: "hash", name: "CRC-16/XMODEM",
   desc: "CRC-16/XMODEM（poly=0x1021, init=0x0000, refIn/refOut=false, xorOut=0x0000，XMODEM 协议用）",
   params: [],
   run: function (t) {

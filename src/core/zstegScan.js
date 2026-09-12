@@ -186,6 +186,41 @@ export function zstegScan(bytes, opts = {}) {
   };
 }
 
+export function zstegExport(bytes, o = {}) {
+  const raw = String(o.combo ?? "").trim();
+  let match = /^bit([0-7])\s+(r|g|b|rgb|bgr)\s+(msb|lsb)(\s+列优先)?$/i.exec(raw);
+  let bit, cname, order, traversal;
+  if (match) [, bit, cname, order, traversal] = match;
+  else {
+    const fields = {};
+    for (const part of raw.split(/\s*&\s*/)) {
+      const m = /^(bit|channel|ch|order|bitorder|traversal|dir)\s*[=＝]\s*([a-z0-9\u4e00-\u9fff]+)$/i.exec(part.trim());
+      if (!m) throw new Error("导出组合格式错误：bit0 rgb msb 或 bit=0&channel=rgb&order=msb&traversal=row");
+      const key = ({ ch: "channel", bitorder: "order", dir: "traversal" })[m[1].toLowerCase()] || m[1].toLowerCase();
+      if (key in fields) throw new Error("导出组合字段重复：" + key);
+      fields[key] = m[2].toLowerCase();
+    }
+    ({ bit = "0", channel: cname = "r", order = "msb", traversal = "row" } = fields);
+  }
+  if (!/^[0-7]$/.test(bit) || !/^(msb|lsb)$/i.test(order) || (traversal && !/^(\s*列优先|row|column)$/.test(traversal))) throw new Error("导出组合参数超出允许范围");
+  cname = cname.toLowerCase();
+  const combo = CHANNEL_COMBOS.find(([name]) => name === cname);
+  if (!combo) throw new Error("未知通道组合：" + cname);
+  const maxBytes = Number(o.exportMaxBytes ?? 65536);
+  if (!Number.isInteger(maxBytes) || maxBytes < 1 || maxBytes > 1048576) throw new Error("导出上限须为1..1048576字节整数");
+  const decoded = decodePngPixels(bytes) || decodeBmpPixels(bytes);
+  if (!decoded || decoded.unsupported) throw new Error(decoded?.unsupported || "仅支持 PNG/BMP");
+  const { width, height, channels, samples } = decoded;
+  const chans = combo[1].filter(c => c < channels);
+  if (!chans.length) throw new Error("该图没有所选通道");
+  const colMajor = traversal === "column" || String(traversal).trim() === "列优先";
+  const msb = order.toLowerCase() === "msb";
+  const output = (msb ? extractPlane : extractPlaneLsbFirst)(samples, width, height, channels, chans, Number(bit), colMajor, maxBytes);
+  const capacity = Math.floor(width * height * chans.length / 8);
+  return { bytes: output, width, height, channels, capacity, truncated: output.length < capacity,
+    note: `bit${bit} ${cname} ${msb ? "msb" : "lsb"}${colMajor ? " 列优先" : ""}` };
+}
+
 // ============ 测试构造器（供回归构造已知嵌入的载体） ============
 /**
  * 把 msg 的比特（MSB 先）写进指定通道的指定位平面，输出 PNG。
@@ -230,6 +265,13 @@ function zstegRun(text, p) {
   const bytes = (p && p.rawBytes && p.rawBytes.length)
     ? (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes))
     : inputToBytes(text, p);
+  if (String(p?.exportCombo || "").trim()) {
+    const ex = zstegExport(bytes, { combo: p.exportCombo, exportMaxBytes: p.exportMaxBytes });
+    return {
+      text: `导出 · ${ex.note}\n${ex.width}×${ex.height} · ${ex.channels} 通道\n字节数 ${ex.bytes.length} / 容量 ${ex.capacity}${ex.truncated ? "（已截断：达到导出上限）" : "（该组合完整字节流）"}\n原字节由像素提取，包含尾部填充；不是报告文本预览。`,
+      files: [{ name: "zsteg_export.bin", mime: "application/octet-stream", bytes: ex.bytes }],
+    };
+  }
   const r = zstegScan(bytes, {
     maxBit: p && p.maxBit,
     columnMajor: !!(p && p.columnMajor),
@@ -271,6 +313,8 @@ register({
     { key: "maxBit", label: "最大 bit 位（0..7）", type: "number", default: 0 },
     { key: "columnMajor", label: "含列优先遍历", type: "bool", default: false },
     { key: "flagRegex", label: "flag 正则（空=不加成）", type: "text", default: "flag\\{" },
+    { key: "exportCombo", label: "导出组合（如 bit0 rgb msb；空=扫描）", type: "text", default: "" },
+    { key: "exportMaxBytes", label: "导出上限（字节，最大1048576）", type: "number", default: 65536 },
   ],
   run: zstegRun,
   acceptsBytes: true,

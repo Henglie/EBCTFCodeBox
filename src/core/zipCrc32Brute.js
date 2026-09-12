@@ -197,7 +197,7 @@ export function bruteForceCrc32(targetCrc, charset, minLen, maxLen) {
 }
 
 register({
-  id: "zipCrc32Brute",
+  id: "zipCrc32Brute", family: "zip", familyLabel: "crcbrute",
   cat: "forensic",
   name: "ZIP CRC32 内容爆破",
   desc: "ZIP 里 Stored 小文件已知 CRC32 反查内容。对长度 ≤6 的所有可能内容穷举 CRC32，命中即输出。表驱动增量计算",

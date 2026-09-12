@@ -112,7 +112,7 @@ export default {
       "RC4 has two phases (this op matches real RC4 exactly, only adding trace recording):\n\n" +
       "**KSA (key scheduling)**: the S box starts as the identity permutation 0..255, then runs 256 steps of $j=(j+S[i]+key[i\\bmod keylen])\\bmod 256$, swapping $S[i]\\leftrightarrow S[j]$ each step to \"load\" the key into the S box.\n\n" +
       "**PRGA (keystream generation)**: for each byte $i=(i+1)\\bmod 256$, $j=(j+S[i])\\bmod 256$, swap $S[i]\\leftrightarrow S[j]$, output $K=S[(S[i]+S[j])\\bmod 256]$, and XOR it with the plaintext. RC4 is self-inverse: encryption and decryption are the same operation.",
-    usage: "Fill in the RC4 key (UTF-8 or hex), the number of KSA steps to show, and the number of PRGA bytes to generate. Optionally provide plaintext to see \"plaintext ⊕ keystream = ciphertext\". Output is KSA detail + S box + PRGA detail + keystream hex.",
+    usage: "Fill in the RC4 key (UTF-8 or hex), the number of KSA steps to show, and the number of PRGA bytes to generate. Optionally provide plaintext to see \"plaintext $\\oplus$ keystream $=$ ciphertext\". Output is KSA detail + S box + PRGA detail + keystream hex.",
     examples: [
       { in: "（可选明文）", param: "key=Key, prgaBytes=16", out: "S 表 + 密钥流 hex + 每步 i/j/swap", desc: "classic RC4 key Key" },
     ],
@@ -175,7 +175,7 @@ export default {
       { tex: "\\text{keylen} = \\arg\\min_{k}\\ \\frac{1}{k}\\,\\text{Hamming}(\\text{block}_i, \\text{block}_{i+1})", caption: "The keylen with the minimum normalized Hamming distance is most likely" },
     ],
     tips: [
-      "The longer the ciphertext, the more accurate — aim for ≥ 10 × keylen bytes.",
+      "The longer the ciphertext, the more accurate — aim for $\\ge 10 \\times \\mathrm{keylen}$ bytes.",
       "Only works on English plaintext (chi-square/bigram use English frequencies).",
       "When confidence is low, raise maxKeyLen, or confirm the input really is a repeating-key XOR.",
     ],
@@ -351,9 +351,9 @@ export default {
   },
 
   des2Mitm: {
-    what: "2DES meet-in-the-middle attack: C = DES_k2(DES_k1(P)) looks like 112-bit security, but MITM reduces it to ~2^56 × 2 (with b-bit halves: 2^b × 2). CTF 2DES challenges usually constrain the keys to a small space; this op brute-recovers (k1, k2).",
+    what: "2DES meet-in-the-middle attack: C = DES_k2(DES_k1(P)) looks like 112-bit security, but MITM reduces it to ~$2^{56} \\times 2$ (with b-bit halves: $2^{b} \\times 2$). CTF 2DES challenges usually constrain the keys to a small space; this op brute-recovers (k1, k2).",
     principle:
-      "MITM: build a forward table { DES_k1(P) → k1 } over all k1 (2^b entries), then for each k2 compute DES_k2⁻¹(C) and look it up; hits are candidates. Verify each candidate with the full chain C'=DES_k2(DES_k1(P)) to filter table collisions. Complexity drops from 2^(2b) to 2^b × 2.\n\n" +
+      "MITM: build a forward table { DES_k1(P) → k1 } over all k1 ($2^{b}$ entries), then for each k2 compute $\\mathrm{DES}_{k2}^{-1}(C)$ and look it up; hits are candidates. Verify each candidate with the full chain C'=DES_k2(DES_k1(P)) to filter table collisions. Complexity drops from $2^{2b}$ to $2^{b} \\times 2$.\n\n" +
       "Key encoding: k1/k2 each occupy keyBits bits (default 16), big-endian into 8 bytes for DES. Note DES ignores the parity bit (bit 0) of each byte — the recovered key may be an equivalent (e.g. 0x619F ≈ 0x609E).",
     usage: "Input format: plaintext-hex space ciphertext-hex (8 bytes each). keyBits controls each half's key space (default 16, ≤20). Outputs the matching key pairs + timing.",
     examples: [

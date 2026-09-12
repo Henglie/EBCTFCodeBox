@@ -197,7 +197,7 @@ function flashSwirlDecode(hex, p) {
 
 register({
   id: "flashSwirl",
-  cat: "modern",
+  cat: "stream",
   name: "FlashSwirl 闪旋",
   desc: "作者「风之暇想」的 ARX 对称流密码（256-bit key + 192-bit nonce，8/20 轮）。encode: 文本→Hex 密文；decode: Hex→文本。对称可逆，官方 stream 测试向量已验证。",
   params: [

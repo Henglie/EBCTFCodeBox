@@ -14,7 +14,8 @@
  * 红线：算法照 RFC 8032，纯 BigInt + 内置纯 JS SHA-512，零外发。core 仅 import registry。
  *       随机私钥用 crypto.getRandomValues。用 RFC 8032 §7.1 官方测试向量验证。
  *
- * 契约：register({ id:"ed25519", cat:"crypto", run, params })。
+ * 契约：族滑块三档 op（T396-A）：ed25519KeyGen / ed25519Sign / ed25519Verify，
+ *        family:"ed25519"。
  */
 
 import { register } from "./registry.js";
@@ -240,69 +241,54 @@ function msgBytes(text, msgMode) {
   return new TextEncoder().encode(String(text == null ? "" : text));
 }
 
-function ed25519Run(text, p) {
-  const mode = (p && p.mode) || "sign";
-  const msgMode = (p && p.msgMode) || "text";
-  const lines = [];
+// ============================================================
+// Ed25519 三档算法族（T396-A，2026-09-04：同族多操作必须族滑块，废除下拉切模式）
+// family:"ed25519"（与已有 ed448 族命名区分）+ familyLabel → fam.lbl.*
+// （keygen/sign/verify 三 key 均已在 zh/en 主表）。底层 publicKey/sign/verify
+// 实现原样复用，每个 op 只保留本档参数面。
+// ============================================================
 
-  if (mode === "keygen") {
+// ---- 档① 生成密钥对 ----
+register({
+  id: "ed25519KeyGen",
+  cat: "asym",
+  family: "ed25519",
+  familyLabel: "keygen",
+  name: "Ed25519 密钥生成",
+  desc: "Ed25519 密钥生成（RFC 8032 §5.1.5）：私钥 32 字节随机（或给定）→ h=SHA-512(私钥)，a=clamp(h[0:32])，公钥 = encodePoint(a·B)。配套「签名/验签」档使用",
+  params: [
+    { key: "priv", label: "私钥 (32B hex)", type: "text", default: "", placeholder: "64 hex 字符，留空随机" },
+  ],
+  run: (_text, p) => {
     const skRaw = (p && p.priv && String(p.priv).trim());
     const sk = skRaw ? need32(hexToBytes(skRaw), "私钥") : randomKey();
     const pk = publicKey(sk);
-    lines.push("=== Ed25519 密钥生成 ===");
-    lines.push(`私钥 (32B) = ${bytesToHex(sk)}`);
-    lines.push(`公钥 (32B) = ${bytesToHex(pk)}`);
-    return lines.join("\n");
-  }
-
-  if (mode === "sign") {
-    const sk = need32(hexToBytes((p && p.priv) || ""), "私钥");
-    const msg = msgBytes(text, msgMode);
-    const pk = publicKey(sk);
-    const sig = sign(sk, msg);
-    lines.push("=== Ed25519 签名 ===");
-    lines.push(`私钥 = ${bytesToHex(sk)}`);
-    lines.push(`公钥 = ${bytesToHex(pk)}`);
-    lines.push(`消息 (${msgMode}) = ${msgMode === "hex" ? bytesToHex(msg) : JSON.stringify(text || "")}`);
-    lines.push("");
-    lines.push(`签名 (64B) = ${bytesToHex(sig)}`);
-    lines.push("");
-    lines.push("自检验签：" + (verify(pk, msg, sig) ? "✓ 通过" : "✗ 失败"));
-    return lines.join("\n");
-  }
-
-  if (mode === "verify") {
-    const pk = need32(hexToBytes((p && p.pub) || ""), "公钥");
-    const sig = hexToBytes((p && p.sig) || "");
-    if (sig.length !== 64) throw new Error(`签名必须 64 字节，当前 ${sig.length}`);
-    const msg = msgBytes(text, msgMode);
-    const ok = verify(pk, msg, sig);
-    lines.push("=== Ed25519 验签 ===");
-    lines.push(`公钥 = ${bytesToHex(pk)}`);
-    lines.push(`消息 (${msgMode}) = ${msgMode === "hex" ? bytesToHex(msg) : JSON.stringify(text || "")}`);
-    lines.push(`签名 = ${bytesToHex(sig)}`);
-    lines.push("");
-    lines.push(ok ? "✓ 验签通过" : "✗ 验签失败");
-    return lines.join("\n");
-  }
-
-  throw new Error(`未知 mode: ${mode}`);
-}
-
-register({
-  id: "ed25519",
-  cat: "crypto",
-  name: "Ed25519 签名 / 验签",
-  desc: "Ed25519 数字签名（RFC 8032）：生成密钥 / 签名 / 验签。扭曲 Edwards 曲线 + 内置纯 JS SHA-512，纯 BigInt 本地计算。",
-  params: [
-    {
-      key: "mode", label: "模式", type: "select", default: "sign",
-      options: [
-        { value: "keygen", label: "生成密钥对（私钥→公钥）" },
-        { value: "sign", label: "签名（私钥+消息→签名）" },
-        { value: "verify", label: "验签（公钥+消息+签名）" },
+    // T362 产物协议（2026-09-02）：私钥 / 公钥分开交付下载按钮（hex 文本）。
+    return {
+      text: [
+        "=== Ed25519 密钥生成 ===",
+        `私钥 (32B) = ${bytesToHex(sk)}`,
+        `公钥 (32B) = ${bytesToHex(pk)}`,
+        "",
+        "私钥 / 公钥已分开生成：私钥 ⚠ 敏感请妥善保管。点击下方按钮下载。",
+      ].join("\n"),
+      files: [
+        { name: "ed25519_priv.hex", mime: "text/plain", bytes: new TextEncoder().encode(bytesToHex(sk) + "\n") },
+        { name: "ed25519_pub.hex", mime: "text/plain", bytes: new TextEncoder().encode(bytesToHex(pk) + "\n") },
       ],
-    },
+    };
+  },
+});
+
+// ---- 档② 签名 ----
+register({
+  id: "ed25519Sign",
+  cat: "asym",
+  family: "ed25519",
+  familyLabel: "sign",
+  name: "Ed25519 签名",
+  desc: "Ed25519 签名（RFC 8032 §5.1.6）：r=H(prefix‖M) mod L，R=r·B，k=H(R‖A‖M) mod L，S=(r+k·a) mod L，签名=R(32B)‖S(32B)。确定性签名（无随机 nonce）。输出含自检验签",
+  params: [
     {
       key: "msgMode", label: "消息形式", type: "select", default: "text",
       options: [
@@ -310,11 +296,62 @@ register({
         { value: "hex", label: "Hex 字节" },
       ],
     },
-    { key: "priv", label: "私钥 (hex, keygen/sign)", type: "text", default: "", placeholder: "32B hex，keygen 留空随机" },
-    { key: "pub", label: "公钥 (hex, verify)", type: "text", default: "", placeholder: "32B hex" },
-    { key: "sig", label: "签名 (hex, verify)", type: "text", default: "", placeholder: "64B hex" },
+    { key: "priv", label: "私钥 (32B hex)", type: "text", default: "", placeholder: "64 hex 字符" },
   ],
-  run: ed25519Run,
+  run: (text, p) => {
+    const msgMode = (p && p.msgMode) || "text";
+    const sk = need32(hexToBytes((p && p.priv) || ""), "私钥");
+    const msg = msgBytes(text, msgMode);
+    const pk = publicKey(sk);
+    const sig = sign(sk, msg);
+    return [
+      "=== Ed25519 签名 ===",
+      `私钥 = ${bytesToHex(sk)}`,
+      `公钥 = ${bytesToHex(pk)}`,
+      `消息 (${msgMode}) = ${msgMode === "hex" ? bytesToHex(msg) : JSON.stringify(text || "")}`,
+      "",
+      `签名 (64B) = ${bytesToHex(sig)}`,
+      "",
+      "自检验签：" + (verify(pk, msg, sig) ? "✓ 通过" : "✗ 失败"),
+    ].join("\n");
+  },
+});
+
+// ---- 档③ 验签 ----
+register({
+  id: "ed25519Verify",
+  cat: "asym",
+  family: "ed25519",
+  familyLabel: "verify",
+  name: "Ed25519 验签",
+  desc: "Ed25519 验签（RFC 8032 §5.1.7）：检查 8·S·B == 8·R + 8·k·A（实现用非批量 S·B == R + k·A）。输入公钥 (32B)、签名 (64B) 与消息",
+  params: [
+    {
+      key: "msgMode", label: "消息形式", type: "select", default: "text",
+      options: [
+        { value: "text", label: "UTF-8 文本" },
+        { value: "hex", label: "Hex 字节" },
+      ],
+    },
+    { key: "pub", label: "公钥 (32B hex)", type: "text", default: "", placeholder: "64 hex 字符" },
+    { key: "sig", label: "签名 (64B hex)", type: "text", default: "", placeholder: "128 hex 字符" },
+  ],
+  run: (text, p) => {
+    const msgMode = (p && p.msgMode) || "text";
+    const pk = need32(hexToBytes((p && p.pub) || ""), "公钥");
+    const sig = hexToBytes((p && p.sig) || "");
+    if (sig.length !== 64) throw new Error(`签名必须 64 字节，当前 ${sig.length}`);
+    const msg = msgBytes(text, msgMode);
+    const ok = verify(pk, msg, sig);
+    return [
+      "=== Ed25519 验签 ===",
+      `公钥 = ${bytesToHex(pk)}`,
+      `消息 (${msgMode}) = ${msgMode === "hex" ? bytesToHex(msg) : JSON.stringify(text || "")}`,
+      `签名 = ${bytesToHex(sig)}`,
+      "",
+      ok ? "✓ 验签通过" : "✗ 验签失败",
+    ].join("\n");
+  },
 });
 
 export { sha512, publicKey, sign, verify, hexToBytes, bytesToHex };

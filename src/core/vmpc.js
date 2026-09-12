@@ -142,7 +142,7 @@ function vmpcDecode(text, p = {}) {
 
 register({
   id: "vmpc",
-  cat: "modern",
+  cat: "stream",
   name: "VMPC 流密码",
   desc: "VMPC 流密码（Zoltak 2004）：768 轮 KSA + 自反 XOR keystream，抗 RC4 已知攻击。模式 basic=Key→IV 两遍 / full=Key→IV→Key 三遍（更安全）。key/iv 文本或 hex 自动识别。encode 文本→密文 hex，decode 密文 hex→文本。",
   params: [

@@ -2,7 +2,7 @@
 export default {
   aes: {
     what: "AES (Advanced Encryption Standard): today's most widely used symmetric cipher — key length 128/192/256 bits, supporting ECB/CBC/CFB/OFB/CTR/GCM modes.",
-    principle: "AES is a block cipher that splits plaintext into 16-byte (128-bit) blocks, each transformed over 10/12/14 rounds (for 128/192/256-bit keys). Each round has 4 steps: SubBytes (S-box byte substitution), ShiftRows (row shifting), MixColumns (column mixing, GF(2⁸) matrix multiplication), AddRoundKey (round key XOR). ECB mode encrypts each block independently (identical plaintext → identical ciphertext, insecure); CBC/CFB/OFB/CTR use an IV (initialization vector) to chain block dependencies. GCM mode runs on native WebCrypto acceleration.",
+    principle: "AES is a block cipher that splits plaintext into 16-byte (128-bit) blocks, each transformed over 10/12/14 rounds (for 128/192/256-bit keys). Each round has 4 steps: SubBytes (S-box byte substitution), ShiftRows (row shifting), MixColumns (column mixing, $GF(2^{8})$ matrix multiplication), AddRoundKey (round key XOR). ECB mode encrypts each block independently (identical plaintext → identical ciphertext, insecure); CBC/CFB/OFB/CTR use an IV (initialization vector) to chain block dependencies. GCM mode runs on native WebCrypto acceleration.",
     formulas: [
       { tex: "\\text{State}' = \\text{AddRoundKey}(\\text{MixColumns}(\\text{ShiftRows}(\\text{SubBytes}(\\text{State}))), K_r)", caption: "AES per-round four-step transform" },
     ],
@@ -20,7 +20,7 @@ export default {
 
   des: {
     what: "DES (Data Encryption Standard): a symmetric cipher published in 1977 — 64-bit blocks, 56-bit effective key. Replaced by AES but still common in CTF.",
-    principle: "DES is a Feistel network: 64-bit plaintext goes through initial permutation IP, then splits into left/right halves L₀/R₀ over 16 Feistel rounds. Each round: Rₙ = Lₙ₋₁ ⊕ F(Rₙ₋₁, Kₙ), Lₙ = Rₙ₋₁. The F function includes: expansion permutation E (32→48 bits), XOR with subkey, 8 S-box substitutions (48→32 bits), permutation P. Subkeys are generated from the key via PC-1/PC-2 and cyclic left shifts, producing 16 48-bit subkeys. The 56-bit key is brute-forceable (a few hours).",
+    principle: "DES is a Feistel network: 64-bit plaintext goes through initial permutation IP, then splits into left/right halves $L_0/R_0$ over 16 Feistel rounds. Each round: $R_n = L_{n-1} \\oplus F(R_{n-1}, K_n)$, $L_n = R_{n-1}$. The F function includes: expansion permutation E (32→48 bits), XOR with subkey, 8 S-box substitutions (48→32 bits), permutation P. Subkeys are generated from the key via PC-1/PC-2 and cyclic left shifts, producing 16 48-bit subkeys. The 56-bit key is brute-forceable (a few hours).",
     usage: "Enter plaintext or ciphertext. Params: choose mode (ECB/CBC/CFB/OFB/CTR), key (8 bytes), key encoding, ciphertext encoding.",
     examples: [
       { in: "Hello", param: "mode=ECB, key='12345678'(8 bytes)", out: "oVmfzWxhH88= (base64)", desc: "DES-ECB, PKCS7 padding" },
@@ -46,7 +46,7 @@ export default {
     tips: [
       "3DES is 1/3 the speed of DES and still uses 8-byte blocks — superseded by AES.",
       "A 16-byte key = two-key mode (K1=K3); 24 bytes = three-key mode.",
-      "The Sweet32 attack can break 3DES within 2³² encryptions — unsuitable for large data volumes.",
+      "The Sweet32 attack can break 3DES within $2^{32}$ encryptions — unsuitable for large data volumes.",
     ],
     aka: ["3DES", "TripleDES", "TDEA", "Triple DES", "三重DES", "三重数据加密", "3DES加密", "EDE模式", "DES-EDE", "Triple Data Encryption Algorithm"],
   },

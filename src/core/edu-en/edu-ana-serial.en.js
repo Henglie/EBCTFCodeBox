@@ -9,7 +9,7 @@ export default {
       { in: "-----BEGIN PUBLIC KEY----- ...", out: "type=RSA public key, n=..., e=65537" },
     ],
     tips: ["RSA private-key challenges often just hand you a PEM; parse out n, e and you can chain into factorization. Certificate challenges: look for the flag hidden in the validity/CN/SAN."],
-    aka: ["pem", "der", "pem解析", "密钥解析", "证书解析", "privacy enhanced mail", "PEM格式", "DER编码", "x.509证书", "certificate parse", "PEM结构解析", "-----BEGIN-----"],
+    aka: ["证书格式", "pem", "der", "pem解析", "密钥解析", "证书解析", "privacy enhanced mail", "PEM格式", "DER编码", "x.509证书", "certificate parse", "PEM结构解析", "-----BEGIN-----"],
   },
 
   asn1Parse: {

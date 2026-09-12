@@ -20,7 +20,7 @@ export default {
       "密钥装载：把 16 字节密钥拆成 8 个 16 位子密钥 K[0..7]，按 even/odd 不同公式初始化 X 和 C，再迭代 4 次 nextState 后把 C 与 X 交叉异或。\n\n" +
       "IV 装载：把 8 字节 IV 拆成 4 个 16 位片段，按 RFC 4503 §2.4 混入 C，再迭代 4 次 nextState。\n\n" +
       "nextState：先更新计数器（带进位链），再用 g 函数 $g(u) = \\text{low}_{32}(u^2) \\oplus \\text{high}_{32}(u^2)$ 算出 G[0..7]，最后按旋转加法公式更新 X。提取密钥流时把 X 的 16 位半字异或输出 16 字节块。\n\n" +
-      "加解密同形：密文 = 明文 ⊕ 密钥流，解密用同样的 key/IV 再异或一次即还原。",
+      "加解密同形：密文 = 明文 $\\oplus$ 密钥流，解密用同样的 key/IV 再异或一次即还原。",
     usage: "输入框填文本，参数 key 填 32 位 hex（16 字节），iv 填 16 位 hex（8 字节）。编码输出 hex 密文；解码填同样的 key/iv 即可还原文本。",
     examples: [
       { in: "Hello", param: "key=00000000000000000000000000000000, iv=0000000000000000", out: "A5D2690B58", desc: "全 0 key/IV：密钥流取 RFC 4503 §3.2 的 S[0]=edb70567… 前 5 字节与 Hello 异或" },
@@ -30,7 +30,7 @@ export default {
     ],
     tips: [
       "Rabbit 的 key 必须 16 字节（32 hex），IV 必须 8 字节（16 hex），少了会报错。",
-      "流密码特征：加解密用同一套 key+IV，密文 = 明文 ⊕ 密钥流。",
+      "流密码特征：加解密用同一套 key+IV，密文 = 明文 $\\oplus$ 密钥流。",
       "CTF 里题目给 Rabbit 参数和密文，直接填 key/iv 解码即可。",
     ],
     aka: ["rabbit", "rabbit流密码", "rfc 4503", "Rabbit", "Rabbit cipher", "兔子流密码", "Rabbit stream cipher", "eSTREAM", "高速流密码", "对称流密码", "Rabbit加密", "128位流密码"],
@@ -44,7 +44,7 @@ export default {
       "Quarter Round：对 4 个字 $(a,b,c,d)$ 做 ARX 混合——`a+=b; d=(d⊕a)<<<16; c+=d; b=(b⊕c)<<<12; a+=b; d=(d⊕a)<<<8; c+=d; b=(b⊕c)<<<7`，只用模 $2^{32}$ 加法、循环左移、异或，天然抗线性/差分攻击。\n\n" +
       "Swirl Round：先对 $(s_0..s_3)$ 和 $(s_4..s_7)$ 各跑一次 Quarter Round，再对角线取 $(s_0,s_5,s_2,s_7)$ 和 $(s_1,s_4,s_3,s_6)$ 各跑一次——对角混合让两组状态充分扩散。\n\n" +
       "密钥流：把 $\\text{固定初始状态} \\oplus \\text{key} \\oplus \\text{nonce}$ 作基础块，混入 64 位计数器后跑 8/20 轮 Swirl Round，最后加回原始状态（ChaCha 式 finalization 防逆推），输出 32 字节密钥流块与明文异或。\n\n" +
-      "加解密同形：密文 = 明文 ⊕ 密钥流，解密用同样的 key/nonce 再异或一次即还原。",
+      "加解密同形：密文 = 明文 $\\oplus$ 密钥流，解密用同样的 key/nonce 再异或一次即还原。",
     usage: "输入框填文本，参数 key 填 64 位 hex（32 字节），nonce 填 48 位 hex（24 字节），rounds 选 20 轮（标准）或 8 轮（快速）。编码输出 hex 密文；解码填同样的 key/nonce/rounds 即可还原。",
     examples: [
       { in: "Hello", param: "key=64 hex, nonce=48 hex, rounds=20", out: "(hex 密文)", desc: "对称流密码，加解密用同一套 key+nonce，密文 = 明文 ⊕ 密钥流" },

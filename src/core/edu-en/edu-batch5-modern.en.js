@@ -1,4 +1,4 @@
-// English edu shard: modern segment completion 11 (ror13Hash/byteArith/bwt/lzstring/cast5/twofish/hotp/totp/zuc/sm2/sm9).
+// English edu shard: modern segment completion 7 (ror13Hash/byteArith/lzstring/hotp/totp/zuc/sm2; cast5/twofish now solely from edu-modern-rest.en.js, bwt from edu-batch5-new.en.js; sm9 moved to edu-sm9-family.js five cards).
 // Pure data, no import, no side effects, no register. All examples are actual run values (aligned with authoritative RFC/GM/T vectors).
 export default {
   ror13Hash: {
@@ -25,7 +25,7 @@ export default {
   byteArith: {
     what: "Byte-by-byte add/subtract/multiply mod 256 — the most naive byte-level arithmetic transform, often the \"last obfuscation layer\" in reverse challenges.",
     principle:
-      "For each byte $b$, compute per operation op and key k: add $b'=(b+k)\\bmod 256$, subtract $b'=(b-k)\\bmod 256$, multiply $b'=(b\\cdot k)\\bmod 256$. Add/subtract are mutual inverses; the inverse of multiplication is multiplying by the modular inverse of k mod 256 — but only odd k has an inverse (since only odd numbers are coprime to 256), so an even k is irreversible after encryption.",
+      "For each byte $b$, compute per operation op and key k: add $b'=(b+k)\\bmod 256$, subtract $b'=(b-k)\\bmod 256$, multiply $b'=(b\\cdot k)\\bmod 256$. Add/subtract are mutual inverses; the inverse of multiplication is multiplying by the modular inverse of k $\\bmod 256$ — but only odd k has an inverse (since only odd numbers are coprime to 256), so an even k is irreversible after encryption.",
     usage: "encode: input text → byte-by-byte operation → Hex string. decode: input Hex → inverse operation → restore text. Select the operation param (add/sub/mul) and key (0-255). mul decryption is only reversible for an odd key.",
     formulas: [
       { tex: "b' = (b \\mathbin{\\text{op}} k) \\bmod 256", caption: "Byte-by-byte arithmetic mod 256" },
@@ -40,24 +40,6 @@ export default {
       "In CTF reversing it's often nested with XOR: byteArith first then XOR; watch the order when peeling the onion.",
     ],
     aka: ["字节算术", "byte arithmetic", "模 256 加减乘", "byte arith", "字节加减乘", "mod 256", "逐字节运算", "字节算术运算", "模256加密", "byte math", "字节级混淆", "加减乘模256"],
-  },
-
-  bwt: {
-    what: "The Burrows-Wheeler Transform — the core preprocessing step of bzip2 compression. Reversible but not encrypting; it rearranges data into a form where \"identical characters clump together\" for easier compression.",
-    principle:
-      "Construct all cyclic rotations of the input string, sort them lexicographically, take the last column as the BWT output, and record the row number of the original string in the sorted matrix (primary).\n\n" +
-      "After rearrangement, characters with the same context cluster together (e.g. `banana` → `nnbaaa`), aiding subsequent RLE/MTF compression. The inverse uses LF-mapping: starting from primary, iteratively restore by the \"last column → first column\" correspondence. There's also an optional `$` sentinel mode — append a `$` smaller than all characters to the end, so primary is implicitly the position of `$` in the BWT string, and the output needs no index.",
-    usage: "encode: input text → output `BWTstring|primary` (separator configurable); sentinel mode outputs a BWT string containing `$`. decode: input the same format → restore. Note sentinel mode requires the original text not contain `$`.",
-    examples: [
-      { in: "banana", param: "no sentinel (separator |)", out: "nnbaaa|3", desc: "BWT string=nnbaaa, primary=3; decode restores banana" },
-      { in: "banana", param: "sentinel mode (add $)", out: "annb$aa", desc: "The position of $ is the implicit primary; decode drops the trailing $" },
-    ],
-    tips: [
-      "Reversible, not encrypting — in CTF it's often a preprocessing layer for compression or steganography; a \"shuffled string + index\" look like `nnbaaa|number` is it.",
-      "Sentinel-mode input can't contain `$` (it's commandeered as the EOF marker).",
-      "Often chained with MTF (Move-to-Front) and RLE: BWT → MTF → RLE → entropy coding is bzip2's standard pipeline.",
-    ],
-    aka: ["burrows-wheeler", "bwt 变换", "块排序变换", "bzip2 前置", "bwt", "burrows wheeler transform", "块排序压缩变换", "循环移位排序", "bzip2变换", "b-w变换", "bwt编码", "字符重排变换"],
   },
 
   lzstring: {
@@ -76,39 +58,6 @@ export default {
       "Latin-1 only: compressing Chinese directly errors, so convert to a UTF-8 byte sequence first.",
     ],
     aka: ["lz-string", "lzw 压缩", "lzstring", "字典压缩", "lzw", "lempel-ziv-welch", "lz string", "字典编码压缩", "lzw字典", "lz-string压缩", "滑动字典压缩", "词典压缩"],
-  },
-
-  cast5: {
-    what: "CAST-128 (CAST5) — the RFC 2144 block cipher, the default symmetric algorithm of early PGP. 64-bit block, 5-16 byte key, 12 or 16 Feistel rounds.",
-    principle:
-      "Feistel network: 64-bit plaintext split into left and right halves; a key ≤80 bits (≤10 bytes) runs 12 rounds, >80 bits runs 16 rounds. Each round uses one of three round functions (cycling Type 1/2/3 by round number), each using a different S-box combination for byte substitution + key add/xor/subtract + rotation. There are 8 S-boxes total (S1-S4 for round functions, S5-S8 for key expansion), each 256×32 bits, with data copied verbatim from RFC 2144 Appendix A. Subkeys are derived from the master key by key expansion; decryption uses the same structure with reversed round keys.",
-    usage: "Fill the key (5-16 bytes), select the mode (ECB/CBC, CBC needs an IV), and the key encoding and ciphertext encoding. encode encrypts, decode decrypts. 8-byte block, PKCS7 padding.",
-    examples: [
-      { in: "Hello", param: "mode=ECB, key='12345678'(8 bytes), outEnc=base64", out: "0nHCcDfF0Ys=", desc: "8-byte key = 64 bits → 12 rounds; decode with same params restores" },
-    ],
-    tips: [
-      "8-byte block (same as DES), ciphertext length is a multiple of 8 — distinguish from AES's 16-byte block.",
-      "Key length determines rounds: ≤10 bytes 12 rounds, >10 bytes 16 rounds.",
-      "It was early PGP's default; when a challenge mentions PGP but the block size doesn't look like AES/DES, think CAST5.",
-    ],
-    aka: ["cast-128", "cast5", "rfc 2144", "pgp 默认密码"],
-  },
-
-  twofish: {
-    what: "Twofish — one of the AES top-five finalists designed by Schneier in 1998, 128-bit block, 16 Feistel rounds, signature feature is \"key-dependent S-boxes\".",
-    principle:
-      "128-bit plaintext split into four 32-bit words, 16 rounds. Each round uses two key-dependent S-boxes for byte substitution — the S-boxes are derived from the key via fixed q0/q1 permutations + an MDS matrix (GF(2⁸), polynomial 0x169), so the S-boxes differ every encryption. The result is mixed by PHT and XORed with the other half, then combined with round subkeys derived from an RS matrix (GF(2⁸), polynomial 0x14D). Key is 128/192/256 bits, and input/output also do a whitening XOR. Decryption reuses the same structure with reversed round keys.\n\n" +
-      "The key-dependent S-boxes are its biggest difference from AES — an attacker can't precompute a fixed S-box, giving high security but slightly slower speed than Rijndael, which ultimately lost the AES selection.",
-    usage: "Fill the key (16/24/32 bytes), select the mode (ECB/CBC, CBC needs an IV), and the key encoding and ciphertext encoding. encode encrypts, decode decrypts. 16-byte block, PKCS7 padding.",
-    examples: [
-      { in: "Hello", param: "mode=ECB, key='1234567890123456'(16 bytes), outEnc=base64", out: "kZd8pH5FNfZ4CuHQVqR52w==", desc: "Twofish-128 ECB; decode with same params restores" },
-    ],
-    tips: [
-      "16-byte block (same as AES) → ciphertext is a multiple of 16.",
-      "One of the AES top five (alongside Rijndael/MARS/RC6/Serpent); when reversing, key-derived S-boxes + an MDS matrix is likely it.",
-      "The key must be one of 16/24/32 bytes; other lengths error out directly.",
-    ],
-    aka: ["twofish", "schneier aes 候选", "密钥相关 s-box"],
   },
 
   hotp: {
@@ -189,21 +138,6 @@ export default {
     aka: ["sm2", "国密椭圆曲线", "gm/t 0003", "国密公钥密码", "sm2算法", "国密ecc", "商密椭圆曲线", "sm2p256v1", "国密非对称加密", "sm2椭圆曲线密码", "商用密码sm2", "国密公钥算法"],
   },
 
-  sm9: {
-    what: "SM9 — the Chinese national identity-based cryptography (GB/T 38635.1-2020, formerly GM/T 0044-2016), signature feature being \"use email/phone number as the public key\" bilinear-pairing cryptography. This tool only does keyword recognition, no computation.",
-    principle:
-      "An identity-based cryptography system based on bilinear pairing: the user's public key is generated directly from an identity (e.g. `alice@example.com`) hash-mapped to a point on the elliptic curve, and the private key is issued by a Key Generation Center (KGC) using a master key. Signing/key-encapsulation both use the properties of the bilinear pairing.\n\n" +
-      "Because bilinear-pairing operations are complex and have no fixed short prefix, this tool's recognition is crude: only judges as suspected when the input text contains the `sm9` keyword (low confidence 0.5). Real computation requires a full pairing implementation, not currently supported.",
-    usage: "Fill the input box with any text, click run to output the recognition result. No params, no encrypt/decrypt, no decode.",
-    examples: [
-      { in: "sm9 identity-based crypto", param: "(no params)", out: "Recognized as SM9-related input (confidence 0.5). SM9 is based on bilinear pairing; computation not currently supported.", desc: "Containing the sm9 keyword triggers recognition" },
-      { in: "ordinary text", param: "(no params)", out: "Not recognized as SM9 input", desc: "No sm9 wording, no match" },
-    ],
-    tips: [
-      "SM9 ciphertext/signatures have no fixed prefix like SM2 — recognizing by structural features is hard, so this tool relies on the keyword alone.",
-      "Recognizing the scenario: a challenge mentioning \"identity-based cryptography / IBC / bilinear pairing / KGC / email as public key\" is basically SM9.",
-      "Computation needs a dedicated library (e.g. GmSSL, the PBC library); this tool only marks, it doesn't compute.",
-    ],
-    aka: ["sm9", "标识密码", "gm/t 0044", "双线性对密码", "ibc", "sm9算法", "基于标识的密码", "identity-based cryptography", "国密标识密码", "商密sm9", "标识加密", "身份基密码"],
-  },
+  // Old sm9 recognition-only card removed: SM9 upgraded to a full five-op family
+  // (sm9KeyGen/Sign/Verify/Encrypt/Decrypt); see edu/edu-sm9-family.js (T397 batch 1).
 };

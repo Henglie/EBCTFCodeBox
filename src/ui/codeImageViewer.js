@@ -1,5 +1,4 @@
 // codeImageViewer.js — 图形编码对照表查询器（244 张外星文字/游戏文字/古文字/符号/旗语/条码等）
-// 图片来源：224 种编码图鉴，版权归原作者，此处仅内嵌引用。
 // 左侧分类树（按中文分类分组）+ 名称/别名搜索 + 右侧大图 + 名称/别名。
 // 图片走本地 public/codeimages/，IntersectionObserver 懒加载，点击看大图。
 // 自持 el/msym（icon 注水），tt/window.__ebctfT 兜底 i18n（不进主表）。零外发。
@@ -41,7 +40,6 @@ const CI_FALLBACK = {
   "ui.ci.empty": "无匹配结果。",
   "ui.ci.pick": "从左侧选择一张编码图查看。",
   "ui.ci.count": "共 {0} 张",
-  "ui.ci.source": "图片来源：224 种编码图鉴，版权归原作者，此处仅内嵌引用。",
   "ui.ci.unconfirmed": "待确认",
   "ui.ci.alias": "别名",
   "ui.ci.loadFail": "图片加载失败",
@@ -128,10 +126,7 @@ export async function renderCodeImageViewer(container) {
     el("div", { class: "op-desc" }, tt("ui.ci.desc")),
   ));
 
- // 来源致谢横幅（显著标注）
-  wrap.append(el("div", { class: "ci-credit" },
-    msym("info"), el("span", {}, tt("ui.ci.source")),
-  ));
+ // 来源横幅已按恒烈令移除（原来源声明版权归属不实）。
 
   const body = el("div", { class: "ci-body" });
   wrap.append(body);

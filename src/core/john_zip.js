@@ -431,7 +431,7 @@ function zip2johnRun(text, p = {}) {
 // 注册 op
 // ============================================================
 register({
-  id: "zip2john",
+  id: "zip2john", family: "zip", familyLabel: "tojohn",
   cat: "forensic",
   name: "ZIP 哈希提取（zip2john）",
   desc: "从加密 ZIP 提取 John/hashcat 格式 hash 串（只提取不爆破）。ZipCrypto→$pkzip2$ 格式(hashcat 17200-17230)；WinZip AES→$zip2$ 格式(hashcat 13600)。输出可直接喂 john/hashcat 离线爆破",
