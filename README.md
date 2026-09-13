@@ -1156,6 +1156,10 @@ AI 的联网出口只有可选的 `aiClient`，且必须用户自备 endpoint + 
 - 拉面：反馈千千秀字、佛曰、SNOW 的原版兼容性，Unicode 与 Twin-Hex 空白边界，以及 Whitespace 执行、Malbolge 识别问题；提出 Scytale 双密钥形式、零宽隐写字符集与格式扩充、科普和工具分类纠正、Brainfuck 非标准变体功能取舍建议。
 - smile1110 — 提出ECC 等现代密码算法扩充提议（v0.1.6 密钥生命周期与签名扩充方向即由此推进）
 
+## Community
+
+- [Linux.Do](https://linux.do) — 本项目非常认可 LinuxDo 社区！
+
 ## 开源协议
 
 本项目自有代码采用 **Apache License 2.0**，可自由使用、修改与再分发，详见根目录 [`LICENSE`](./LICENSE) 全文。第三方资源按各自许可证使用。
