@@ -1,5 +1,5 @@
 /*
- * elgamal.js — ElGamal 公钥加密（T277 P1，cat:'modern'）。
+ * elgamal.js — ElGamal 公钥加密（P1，cat:'modern'）。
  *
  * 算法照 Menezes Handbook of Applied Cryptography §8.4（Algorithm 8.81/8.82）实现：
  * 密钥生成：选大素数 p + 原根 g，私钥 x ∈ [1,p-2]，公钥 y = g^x mod p
@@ -26,6 +26,7 @@
  */
 import { register } from "./registry.js";
 import { bytesToBigInt, bigIntToBytes } from "./modern.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 编码工具（与 cryptoGap.js 范式一致，modern.js 未导出 decodeInput/encodeOutput 故自备）
@@ -105,7 +106,7 @@ function randomK(p) {
   const buf = new Uint8Array(bytes);
   let k;
   do {
-    crypto.getRandomValues(buf);
+    buf.set(randBytes(buf.length));
     k = 0n;
     for (const b of buf) k = (k << 8n) | BigInt(b);
     k = (k % (pMinus2)) + 1n; // [1, p-2]

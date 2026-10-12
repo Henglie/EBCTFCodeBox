@@ -202,8 +202,11 @@ function parseHex(s, name, expectLen) {
   const raw = String(s != null ? s : "").trim().replace(/^0x/i, "").replace(/\s+/g, "");
   if (!raw) throw new Error(`请填写${name}（hex）`);
   if (!/^[0-9a-fA-F]+$/.test(raw)) throw new Error(`${name}必须为十六进制：${raw}`);
-  if (expectLen && raw.length > expectLen) throw new Error(`${name}最长 ${expectLen} 个十六进制字符`);
-  const hex = expectLen ? raw.padStart(expectLen, "0") : raw;
+  if (expectLen && raw.length !== expectLen) {
+    // 定长校验：不再左补零静默接受短输入（如 120 位 Kc 补成 128 位）
+    throw new Error(`${name}须为 ${expectLen * 4} 位（${expectLen} 个十六进制字符），当前 ${raw.length} 个：${raw}`);
+  }
+  const hex = raw;
   if (hex.length % 2) throw new Error(`${name}十六进制长度必须为偶数`);
   const out = new Uint8Array(hex.length / 2);
   for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);

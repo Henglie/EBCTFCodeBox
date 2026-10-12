@@ -150,10 +150,10 @@ function rleLine(line) {
 
 // 在游程序列中匹配「1:1:3:1:1」窗（窗口起点 s）。
 // 判据（ISO/IEC 18004 §6.3.2 的 1:1:3:1:1 比例）：
-//   - 5 段交替，且第 0/2/4 段为 finderColor，第 1/3 段为相反色；
-//   - 中央（第 2）段为严格最长，且长度在 [2,6]（典型 3，即 3×3 暗核），
-//     且中央长度 ≥ 2× 最大外侧长度（比例约束，抑制时序/格式区的伪命中）；
-//   - 四段外侧长度均「细」（1..3），对应 finder 外环与夹心亮带。
+//  - 5 段交替，且第 0/2/4 段为 finderColor，第 1/3 段为相反色；
+//  - 中央（第 2）段为严格最长，且长度在 [2,6]（典型 3，即 3×3 暗核），
+//    且中央长度 ≥ 2× 最大外侧长度（比例约束，抑制时序/格式区的伪命中）；
+//  - 四段外侧长度均「细」（1..3），对应 finder 外环与夹心亮带。
 // 返回 {center, lens} 或 null。
 function matchWindowAt(runs, s, finderColor) {
   const r0 = runs[s], r1 = runs[s + 1], r2 = runs[s + 2],
@@ -409,9 +409,9 @@ export function geometryNormalize(matrix, size, opts = {}) {
 // ============================================================
 // 解码调度（几何感知）：注入 decoder(matrix, w, h) → 结果或抛错
 // 处理：极性归一 → 3 finder 方向归一（含 identity/transpose 歧义多试）
-//      → 2 finder 缺角兜底（推算+重绘定位符/格式后解）
+//     → 2 finder 缺角兜底（推算+重绘定位符/格式后解）
 // 预算：每个几何候选至多 1 次解码尝试；3 finder 至多 2 路（歧义），
-//       2 finder 至多 1 路归一 + 1 次重建解码。
+//      2 finder 至多 1 路归一 + 1 次重建解码。
 // ============================================================
 export function decodeGeometryAware(matrix, size, decoder) {
   const det = detectFindersPolarity(matrix, size);

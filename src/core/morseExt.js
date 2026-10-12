@@ -1,5 +1,5 @@
 /*
- * morseExt.js — 摩斯 / 声光编码扩展组（T52，cat:'fancy'）。
+ * morseExt.js — 摩斯 / 声光编码扩展组（cat:'fancy'）。
  *
  * 覆盖：
  * - 美式摩斯码（American Morse Code，19 世纪大陆电报，含内部间隔/长划）

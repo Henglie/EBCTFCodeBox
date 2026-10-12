@@ -132,6 +132,7 @@ function intToChinese(numStr) {
       result += "零"; // 整组为零且非末组：组间补一个零
     }
   });
+  result = result.replace(/零{2,}/g, "零"); // 组间零与下一组前导零重叠 → 折叠（100000001 应读「一亿零一」，非「一亿零零一」）
   result = result.replace(/^一十/, "十"); // 十几 省首「一」
   result = result.replace(/零+$/, "");     // 去尾零
   return result || "零";

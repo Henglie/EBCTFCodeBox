@@ -15,7 +15,7 @@
  * run(text, p) 单向工具（如哈希），填了 run 就不显示双向切换
  * detect(text) 可选，一键解码用的识别指纹，返回 0..1 置信度
  *
- * 产物协议（T361，2026-09-02）：encode/decode/run 可返回对象
+ * 产物协议（2026-09-02）：encode/decode/run 可返回对象
  * { text: string, files: [{ name, mime, bytes|dataUrl }] } —— text 进输出区，
  * files 渲染为「⬇ 下载」按钮（云端部署时下载前弹本地桥/敏感数据警告，见 main.js cloudWarnGate）。
  * 返回字符串的 op 行为不变；⚠ 参与 magic 一键解码的 op 勿返回对象（Worker 路径不认）。
@@ -78,10 +78,49 @@ function callerModuleUrl() {
   return null;
 }
 
-/** 注册一个 op（重复 id 抛错，防覆盖）。 */
+/** 惰载 stub 播种：仅元数据占位（无 encode/decode/run），按 registerAll 序直插 OPS。
+ *  只允许 opStubs.js 开机调用；真实 op 后续经 register() 的 stub 升级路径原位替换。 */
+export function seedStub(stub) {
+  if (!stub || typeof stub.id !== "string" || !stub.id) {
+    throw new Error(`stub 必须有非空字符串 id`);
+  }
+  // 真实 op 已先注册（如工具按序加载、Worker 全量路径）→ 无需 stub，静默跳过（任意加载序安全）
+  const existed = _byId.get(stub.id);
+  if (existed && !existed.__stub) return existed;
+  if (existed) throw new Error(`重复播种 stub id: ${stub.id}`);
+  if (!_catIds.has(stub.cat)) {
+    throw new Error(`stub ${stub.id} 的 cat "${stub.cat}" 不在 CATEGORIES 中`);
+  }
+  const op = { __stub: true, ...stub, params: stub.params || [] };
+  _byId.set(op.id, op);
+  OPS.push(op);
+  return op;
+}
+
+/** 注册一个 op（重复 id 抛错，防覆盖；对惰载 stub 走原位升级路径）。 */
 export function register(op) {
   if (!op || typeof op.id !== "string" || !op.id) {
     throw new Error(`op 必须有非空字符串 id`);
+  }
+ // 惰载 stub 升级：开机播种的 __stub 占位（仅元数据）被真实 op 原位替换。
+ // 数组位置保持 stub 序（= registerAll 注册序），UI 列表序与 eager 态一致；
+ // detect 四件套在 S1 求值期已对 stub 打过补丁，升级时合并保留，免除重放时序问题。
+  const stub = _byId.get(op.id);
+  if (stub && stub.__stub) {
+    if (!_catIds.has(op.cat)) {
+      throw new Error(`op ${op.id} 的 cat "${op.cat}" 不在 CATEGORIES 中`);
+    }
+    op.params = op.params || [];
+    if (stub.detect && op.detect === undefined) op.detect = stub.detect;
+   // 权威源码 URL 注入必须与完整 register 路径一致——懒载升级分支此前漏了这一步，
+   // 导致全部懒载 op 无 sourceFile、「权威源码」面板静默空白（2026-10-12 恒烈真机发现）。
+    if (!("sourceFile" in op)) {
+      op.sourceFile = callerModuleUrl();
+    }
+    const i = OPS.indexOf(stub);
+    if (i >= 0) OPS[i] = op;
+    _byId.set(op.id, op);
+    return op;
   }
   if (_byId.has(op.id)) throw new Error(`重复注册 op id: ${op.id}`);
  // cat 合法性校验：不在 CATEGORIES 里的 cat 会导致 op 静默不显示，直接抛错拦住。
@@ -132,7 +171,7 @@ export function opsByCat(catId) {
   return OPS.filter((o) => o.cat === catId);
 }
 
-// ============ 算法族（T380，产品负责人 2026-09-03 拍板）============
+// ============ 算法族（产品负责人 2026-09-03 拍板）============
 // 非对称等分类同算法族 op 太多（如 PGP 8 档），侧栏不逐条展开：聚合为「族显示名 ×N」一条，
 // 工作区内用族滑块换档。方案形态：每一档滑块 = 一个独立 op（族内 op 实现零改动），
 // 不是「单 op 多 mode」。族字段由各算法 op 声明：family = 族 id，familyLabel = 档位短名 key
@@ -145,7 +184,7 @@ export const FAMILY_NAMES = {
   sha: "SHA",
   shake: "SHAKE",
   pgp: "PGP / OpenPGP",
-  // T427 v2（产品负责人 2026-09-08 拍板）：base64/base58 家族并入本尊，长尾仅保留 Unicode Base 4 项组
+  // v2（产品负责人 2026-09-08 拍板）：base64/base58 家族并入本尊，长尾仅保留 Unicode Base 4 项组
   base64: "Base64 家族",
   base58: "Base58 家族",
   // 产品负责人 2026-09-08 特许 F1：base64steg/base32steg 自成一族「Base 隐写」，
@@ -173,6 +212,7 @@ export const FAMILY_NAMES = {
   hqc: "HQC",
   ntru: "NTRU",
   bls: "BLS 签名",
+  arnold: "Arnold 猫脸变换",
   rot: "ROT",
   qqxiuzi: "千千秀字",
   xiangyue: "想曰 XiangYue",
@@ -205,13 +245,13 @@ export const FAMILY_NAMES = {
   qr: "QR 码",
   gif: "GIF",
   png: "PNG",
-  arnold: "Arnold",
+  arnold: "Arnold 猫脸变换",
   jpeg: "JPEG",
   bmp: "BMP",
 };
 
 /**
- * T417：从 run 函数源码取首参名。兼容六种签名形态——匿名箭头 (a,p)=>、async 箭头、
+ * 从 run 函数源码取首参名。兼容六种签名形态——匿名箭头 (a,p)=>、async 箭头、
  * 具名 function f(a,p){、async function、方法简写 run(a,p){、生成器 function* f(a,p)。
  * 参数表用括号平衡提取（默认值里可能含括号/花括号），再取顶层首个参数名并剥默认值。
  * 返回 null 表示签名无法解析 → 调用方保守按 text 处理，绝不因解析失败判 none。
@@ -235,12 +275,12 @@ function runFirstParam(src) {
 }
 
 /**
- * 主输入框渲染模式推导（T399，产品负责人 2026-09-04 拍板：无需主输入的 op 不再显示巨型输入框）。
+ * 主输入框渲染模式推导（产品负责人 2026-09-04 拍板：无需主输入的 op 不再显示巨型输入框）。
  * 返回 "text"（显示主输入框）| "none"（隐藏，渲染层换细提示条）。
  * 优先级：显式 op.io 覆盖 > 静态推导 > 默认 text。
  * 静态推导：run-only（无 encode/decode）且 run 首参从未在函数体被引用 → none。
  *   推导按「取首参名 → 查函数体是否引用该名」做，与参数叫什么无关（混淆/压缩改名后依然成立）。
- *   T417：签名解析只认箭头形态曾把具名/async/简写形态全部误判 none（首参明明被引用），
+ * 签名解析只认箭头形态曾把具名/async/简写形态全部误判 none（首参明明被引用），
  *   现改走 runFirstParam 六形态兼容；无法解析的未知签名保守按 text（宁可多显示）。
  * 结果缓存在 op._ioMode（op 对象生命周期=会话）。fields 机制（多输入框）不受本函数影响。
  */

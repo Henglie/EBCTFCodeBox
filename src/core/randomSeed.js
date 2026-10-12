@@ -1,5 +1,5 @@
 /*
- * randomSeed.js — 随机字节/种子生成（T277 P3，cat:'radix'）。
+ * randomSeed.js — 随机字节/种子生成（P3，cat:'radix'）。
  *
  * 用 crypto.getRandomValues（浏览器 CSPRNG）生成随机字节，输出 hex/base64/utf8。
  *
@@ -12,6 +12,7 @@
  * run 单向，参数 length/format，输出随机字符串。
  */
 import { register } from "./registry.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 function bytesToHex(b) {
   let s = "";
@@ -40,7 +41,7 @@ register({
     const len = Math.max(1, Math.min(4096, Number(p?.length) || 16));
     const fmt = p?.format || "hex";
     const buf = new Uint8Array(len);
-    crypto.getRandomValues(buf);
+    buf.set(randBytes(buf.length));
     return fmt === "base64" ? bytesToB64(buf) : bytesToHex(buf);
   },
 });

@@ -294,7 +294,7 @@ function encEncode(b, enc) {
     for (const x of b) bin += String.fromCharCode(x);
     return btoa(bin);
   }
-  return new TextDecoder("utf-8").decode(b);
+  return new TextDecoder("utf-8", { ignoreBOM: true }).decode(b);
 }
 function parseScalarHex(s, label) {
   const t = String(s == null ? "" : s).trim();

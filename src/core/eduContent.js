@@ -81,7 +81,7 @@ import EDU_STEGO_TEXT from "./edu/edu-stego-text.js";        // stego 文本 14
 import EDU_STEGO_DETECT from "./edu/edu-stego-detect.js";    // 统一隐写检测 stegoDetect 1（11 mode 收敛入口）
 import EDU_BATCH6 from "./edu/edu-batch6.js";                // 补缺：9 新增 op 科普（usbKeyboard/usbMouse/sevenZipExtract/goldbug/acrostic/everyN/caseBitStego/nthChar/wordSpacingBits）
 // ---- 扩展模块交付但从未 import 的孤儿科普分片归并（44 个已注册 op 缺科普）----
-// 跨分片重复已清零（T504 二批摘除 cast5/twofish/bwt 输家块，2026-09-13）。
+// 跨分片重复已清零（二批摘除 cast5/twofish/bwt 输家块，2026-09-13）。
 import EDU_BATCH5_NEW from "./edu/edu-batch5-new.js";        // enigma/m209/bazeries/fenham/pizzini/kamasutra/lolcode/clockCipher/snow/qqxiuzi*/huoxingwen/jianfan/fuyouyue/tianshu 20
 import EDU_BATCH5_MODERN from "./edu/edu-batch5-modern.js";  // ror13Hash/byteArith/bwt/lzstring/hotp/totp/zuc/sm2/sm9 9
 import EDU_CLASSIC_REST from "./edu/edu-classic-rest.js";    // otp/keywordcipher/simplesub/runingkey 4
@@ -98,18 +98,18 @@ import EDU_EXE from "./edu/edu-exe.js";                      // pycExeDecompile 
 import EDU_FANCY_NEW from "./edu/edu-fancy-new.js";          // jjencode 1
 import EDU_MODERN_NEW from "./edu/edu-modern-new.js";        // rabbit/pbkdf2/hkdf/md2 4
 import EDU_FOREMOST from "./edu/edu-foremost.js";            // foremostCarve 1（文件雕刻 Foremost JS 版）
-import EDU_HASH_FRONTIER from "./edu/edu-hash-frontier.js";  // T398 批B：argon2/tiger/kupyna 3
-import EDU_T396A from "./edu/edu-t396a-family.js";           // T396-A 拆族 20 卡（paillier/dsa/schnorr/ed25519/x25519 族 + geffe）
-import EDU_SM2_FAMILY from "./edu/edu-sm2-family.js";        // SM2 六档族卡（T394：sm2KeyGen/Encrypt/Decrypt/Sign/Verify/KeyExchange）
-import EDU_SM9_FAMILY from "./edu/edu-sm9-family.js";        // SM9 五档族卡（T397 批1：sm9KeyGen/Sign/Verify/Encrypt/Decrypt，双线性对内核）
-import EDU_BFTOOLS_FAMILY from "./edu/edu-bftools-family.js";   // bftools 图像变体卡（T389：brainloller/braincopter 编解码）
-import EDU_XWING_FAMILY from "./edu/edu-xwing-family.js";      // X-Wing 混合 KEM 卡（T398 批A）
-import EDU_STEGDETECT from "./edu/edu-stegdetect.js";          // stegdetect 检测卡（T391）
-import EDU_JSTEG from "./edu/edu-jsteg.js";                    // jsteg 隐写卡（T390）
-import EDU_XMSS_LMS from "./edu/edu-xmss-lms.js";              // XMSS/LMS 卡（T398 批A）
-import EDU_HQC_FAMILY from "./edu/edu-hqc-family.js";         // HQC 卡（T398 批A）
-import EDU_NTRU_REAL from "./edu/edu-ntru-real.js";           // 真 NTRU 卡（T398 批A）
-import EDU_BLS_FAMILY from "./edu/edu-bls-family.js";         // BLS 卡（T398 批C）
+import EDU_HASH_FRONTIER from "./edu/edu-hash-frontier.js";  // 批B：argon2/tiger/kupyna 3
+import EDU_T396A from "./edu/edu-t396a-family.js";           // 拆族 20 卡（paillier/dsa/schnorr/ed25519/x25519 族 + geffe）
+import EDU_SM2_FAMILY from "./edu/edu-sm2-family.js";        // SM2 六档族卡（：sm2KeyGen/Encrypt/Decrypt/Sign/Verify/KeyExchange）
+import EDU_SM9_FAMILY from "./edu/edu-sm9-family.js";        // SM9 五档族卡（批1：sm9KeyGen/Sign/Verify/Encrypt/Decrypt，双线性对内核）
+import EDU_BFTOOLS_FAMILY from "./edu/edu-bftools-family.js";   // bftools 图像变体卡（：brainloller/braincopter 编解码）
+import EDU_XWING_FAMILY from "./edu/edu-xwing-family.js";      // X-Wing 混合 KEM 卡（批A）
+import EDU_STEGDETECT from "./edu/edu-stegdetect.js";          // stegdetect 检测卡（）
+import EDU_JSTEG from "./edu/edu-jsteg.js";                    // jsteg 隐写卡（）
+import EDU_XMSS_LMS from "./edu/edu-xmss-lms.js";              // XMSS/LMS 卡（批A）
+import EDU_HQC_FAMILY from "./edu/edu-hqc-family.js";         // HQC 卡（批A）
+import EDU_NTRU_REAL from "./edu/edu-ntru-real.js";           // 真 NTRU 卡（批A）
+import EDU_BLS_FAMILY from "./edu/edu-bls-family.js";         // BLS 卡（批C）
 import EDU_PROTOCOL_C from "./edu/edu-protocol-c.js";         // 批C 协议原语卡（Merkle/Pedersen/Feldman/LSAG）
 import EDU_CRYPTO_PG from "./edu/edu-crypto-pg.js";          // shamir/schnorr/ecdsaReuseK/rabin/x25519/ed25519/paillier/a51/magma 9
 import EDU_UNIFIED_MISC from "./edu/edu-unified-misc.js";    // archiveUnified/cryptoAddrUnified/imageStructUnified/numToPinyin/hanziToPinyin 5
@@ -131,15 +131,16 @@ import EDU_CRYPTO_B from "./edu/edu-crypto-b.js";           // a52/e0/hc128/hc25
 import EDU_HASH_XXHASH from "./edu/edu-hash-xxhash.js";    // xxhash 1
 import EDU_HASH_CITYHASH from "./edu/edu-hash-cityhash.js";  // cityhash 1
 import EDU_CTF_CIPHER_EXT from "./edu/edu-ctf-cipher-ext.js"; // twinHex/trollScript/asciiSum/caesarBox/curveCipher 5
-import EDU_TOOLS_RADIX from "./edu/edu-tools-radix.js";   // radixAll/progCalc/unitConv 3（T337-T339 工具类）
-import EDU_MT82 from "./edu/edu-mt82.js";                 // MT82 新增 15 op（gifTiming/jpgSizeRecover/zipRepair/zipPseudoEncrypt/stringsExtract/jwtCrack/zstegScan/pdfObjects/ooxmlMeta/apkManifest/elfInfo/peInfo/lsbEmbed/zipCreate/deepsoundExtract）
-import EDU_T359 from "./edu/edu-t359.js";                 // T359 新增 34 op（v0.1.6beta：rsaGen/ecdsa/mlkem/pem-jwk/证书解析/cmac/kmac/ascon/keywrap/jwt/flaskSession）
-import EDU_T356_HASH from "./edu/edu-t356-hash.js";       // T356 落盘 5 op（md6/snefru/sha0/has160/gostHash 历史哈希，aka 顺带批）
-import EDU_T376 from "./edu/edu-t376.js";                 // T376 新增 32 op（v0.1.6beta 全量补齐波收口：noekeon/shacal2/cast6/cmacExt/ls47/Ed448/X448/GOST R 34.10-2012/PGP8/BB84/JWS/JWE/PASETO v4/ML-DSA/SLH-DSA）
-import EDU_T508 from "./edu/edu-t508.js";                 // T508 批一古典 A1-A7（homophonic/doubleTrans/pollux/morbit/bookCipher/turningGrille/kenny）
-import EDU_T508_B4 from "./edu/edu-t508-b4.js";           // T508 批四工程编码（hexdump/modhex/citrixCtx1/scriptDecoder/rison/unixPerms 6）
-import EDU_T508_B2 from "./edu/edu-t508-b2.js";           // T508 批二编码映射（crockford32/alienAlphabet/futhark/countingRods/chuckUnary/wingdings/cardanGrille 7）
-import EDU_T508_B3 from "./edu/edu-t508-b3.js";           // T508 批三压缩校验（rle/lzw/elias/verhoeff/lz4Dec/bzip2Dec 6）
+import EDU_TOOLS_RADIX from "./edu/edu-tools-radix.js";   // radixAll/progCalc/unitConv 3（工具类）
+import EDU_MT82 from "./edu/edu-mt82.js";                 // 新增 15 op（gifTiming/jpgSizeRecover/zipRepair/zipPseudoEncrypt/stringsExtract/jwtCrack/zstegScan/pdfObjects/ooxmlMeta/apkManifest/elfInfo/peInfo/lsbEmbed/zipCreate/deepsoundExtract）
+import EDU_T359 from "./edu/edu-t359.js";                 // 新增 34 op（v0.1.6beta：rsaGen/ecdsa/mlkem/pem-jwk/证书解析/cmac/kmac/ascon/keywrap/jwt/flaskSession）
+import EDU_T356_HASH from "./edu/edu-t356-hash.js";       // 落盘 5 op（md6/snefru/sha0/has160/gostHash 历史哈希，aka 顺带批）
+import EDU_T376 from "./edu/edu-t376.js";                 // 新增 32 op（v0.1.6beta 全量补齐波收口：noekeon/shacal2/cast6/cmacExt/ls47/Ed448/X448/GOST R 34.10-2012/PGP8/BB84/JWS/JWE/PASETO v4/ML-DSA/SLH-DSA）
+import EDU_T508 from "./edu/edu-t508.js";                 // 批一古典 A1-A7（homophonic/doubleTrans/pollux/morbit/bookCipher/turningGrille/kenny）
+import EDU_T508_B4 from "./edu/edu-t508-b4.js";           // 批四工程编码（hexdump/modhex/citrixCtx1/scriptDecoder/rison/unixPerms 6）
+import EDU_T508_B2 from "./edu/edu-t508-b2.js";
+import EDU_CN_IMG_STEGO from "./edu/edu-cn-img-stego.js";           // 中文互联网图像玩法（mirageTank/tomatoScramble 2）           // 批二编码映射（crockford32/alienAlphabet/futhark/countingRods/chuckUnary/wingdings/cardanGrille 7）
+import EDU_T508_B3 from "./edu/edu-t508-b3.js";           // 批三压缩校验（rle/lzw/elias/verhoeff/lz4Dec/bzip2Dec 6）
 import EDU_PIP_ASTRO from "./edu/edu-pipAstro.js";        // 符号记数组（astroSymbols/pipNumerals 2）
 import EDU_STEGHIDE from "./edu/edu-steghide.js";           // steghide 隐写双向（1）
 import EDU_PCAP_FIELDS from "./edu/edu-pcap-fields.js";       // pcap 字段提取/过滤（1）
@@ -147,6 +148,9 @@ import EDU_GIFSHUFFLE from "./edu/edu-gifshuffle.js";       // GifShuffle 调色
 import EDU_OUTGUESS from "./edu/edu-outguess.js";           // OutGuess 0.4 隐写双向（1）
 import EDU_BLINDWM2 from "./edu/edu-blindwm2.js";         // 双图盲水印族（dualFftWatermark/dwtSvdWatermark 2）
 import EDU_PRIME_INSPECTOR from "./edu/edu-prime-inspector.js"; // 素数判定与筛选（primeInspector 1）
+import EDU_RANDOM_SECURE from "./edu/edu-randomSecure.js"; // 「增强随机安全」randomSecure 1（四档随机源）
+import EDU_RAND_BEACON from "./edu/edu-randBeacon.js"; // 公开随机信标验证 randBeacon 1（drand / NIST）
+import EDU_IMAGE_TOOLBOX from "./edu/edu-imageToolbox.js"; // 图像处理工具批 8（imageCompress/imageGray/imagePixelate/imageFrosted/imageSketch/imageToText/gifCompose/img2dataURI）
 
 // 科普分片新增（古典密码补全二 / 编码映射 / 取证格式，中文；英文层待发布阶段接）
 import EDU_BELLASO from "./edu/edu_bellaso.js";
@@ -282,6 +286,7 @@ const EDU = Object.assign(
   EDU_T508,
   EDU_T508_B4,
   EDU_T508_B2,
+  EDU_CN_IMG_STEGO,
   EDU_T508_B3,
   EDU_BELLASO,
   EDU_COLLON,
@@ -322,6 +327,9 @@ const EDU = Object.assign(
   EDU_PCAP_FIELDS,
   EDU_STEGHIDE,
   EDU_PRIME_INSPECTOR,
+  EDU_RANDOM_SECURE,
+  EDU_RAND_BEACON,
+  EDU_IMAGE_TOOLBOX,
 );
 
 import { ZH as INTEGRATED, HASH_VECTORS, BASE_NOTES, EXTRA_ALIASES, CRC_PARAMS } from "./edu/edu-integrated.js";

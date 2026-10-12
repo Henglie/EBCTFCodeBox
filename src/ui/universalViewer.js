@@ -98,7 +98,7 @@ const UV_FALLBACK = {
   "ui.uv.renderCheonDesc": "开启 OpenType 特性（ccmp/calt/liga），正确显示天珩堆叠字与冷僻码位。",
   "ui.uv.renderAllDesc": "合并渲染：同一视图内 Markdown 结构、$…$/$$…$$ 数学公式（本地 KaTeX）、天珩全字库同时生效。纯前端零外发。",
   "ui.uv.renderEmpty": "无可渲染内容。",
- // ---- T360：保存渲染结果图片 ----
+ // ---- ：保存渲染结果图片 ----
   "ui.uv.saveSvg": "保存 SVG",
   "ui.uv.savePng": "保存 PNG",
   "ui.uv.embedFont": "内嵌字体",
@@ -290,7 +290,7 @@ function renderHexView(bytes) {
 // ============================================================
 // 视图 ②：全字库 Unicode 逐字符表（复用 unicodeNames.js）
 // ============================================================
-// ---- 字素簇切分（MT78 疑因 A 修复，2026-08-23）----
+// ---- 字素簇切分（疑因 A 修复，2026-08-23）----
 // 旧实现用 [...text] 展开，那只按 **码位**（code point）切，仅正确处理代理对，
 // **不处理组合序列**：`u̲`（U+0075 LATIN SMALL LETTER U + U+0332 COMBINING LOW LINE）
 // 会被拆成两行 —— 组合下划线脱离基字单独成行渲染，既不连续、又错位。
@@ -676,7 +676,7 @@ function restoreMath(html, maths) {
 }
 
 // 把源文本合并渲染进目标容器（抽公式 → Markdown → 还原公式占位 → KaTeX）。
-// postHtml：可选后处理器，在 restoreMath 之后、写入 body 之前对 html 做一次变换（MT77① 码位描述还原用）。
+// postHtml：可选后处理器，在 restoreMath 之后、写入 body 之前对 html 做一次变换（码位描述还原用）。
 function renderMergedInto(body, text, postHtml) {
   const { text: mathless, maths } = extractMath(text);
   let html = mdToHtml(mathless);
@@ -688,11 +688,11 @@ function renderMergedInto(body, text, postHtml) {
 }
 
 // ============================================================
-// MT77①：Unicode 描述编码渲染 —— 把正文里的码位描述就地换成真字符。
+// Unicode 描述编码渲染 —— 把正文里的码位描述就地换成真字符。
 // 覆盖：U+4E00 / u+4e00、&#x4E00; / &#20013;、\u4E00、\u{1F600}、\U0001F600、
-//       \x{4E00}（Perl/Rust）、%u4E00、0x4E00（4–6 位 hex，保守边界）。
+//      \x{4E00}（Perl/Rust）、%u4E00、0x4E00（4–6 位 hex，保守边界）。
 // 实现：原文层替换成私有区占位符（避开 mdInline 的 \uE000/\uE001 与数学占位符
-//       \uE010/\uE011），markdown 渲染完成后由 restoreCpDescs 还原为 <span>。
+//      \uE010/\uE011），markdown 渲染完成后由 restoreCpDescs 还原为 <span>。
 // 这样既不受 markdown 转义影响，也不会被公式/行内代码流程误伤。
 // ============================================================
 const CP_PH_OPEN = "\uE012", CP_PH_CLOSE = "\uE013";
@@ -735,9 +735,9 @@ function restoreCpDescs(html, map) {
 }
 
 // ============================================================
-// T360：渲染全部 → 保存 SVG / PNG（导出管线）
+// ：渲染全部 → 保存 SVG / PNG（导出管线）
 // 原则：SVG 是独立文档，不吃页面 CSS —— 用 getComputedStyle 逐节点固化关键样式；
-//       零外发自检：导出前 assert 无 http(s)://；PNG 恒内嵌天珩字库（canvas 不加载外部字体）。
+//      零外发自检：导出前 assert 无 http(s)://；PNG 恒内嵌天珩字库（canvas 不加载外部字体）。
 // ============================================================
 const TH_FONT_NAME = "Cheonhyeong";
 const TH_FONT_URL = new URL("../../public/fonts/th/th-ctf-subset.woff2", import.meta.url);
@@ -749,7 +749,7 @@ const EXPORT_STYLE_PROPS = [
 
 // 克隆渲染体并逐节点固化计算样式（含 KaTeX 内层布局），不改原 DOM。
 // ⚠ 必须在「原树」上取 getComputedStyle（clone 未插入文档，计算样式拿不到），
-//   再把样式写入 clone 对应节点 —— 双树同步遍历。
+//  再把样式写入 clone 对应节点 —— 双树同步遍历。
 function cloneWithInlineStyles(root) {
   const clone = root.cloneNode(true);
   const walkPair = (src, dst) => {
@@ -802,11 +802,11 @@ async function fontDataUrl(url) {
 
 // ============ KaTeX 导出内联（所见即所得：公式渲染成品 = 页面渲染成品）============
 // 背景：导出 SVG/PNG 时 foreignObject 是独立文档，不吃页面 CSS。旧实现只把
-//   .uv-md-body 的少量计算样式固化成内联 style，KaTeX 公式依赖的 .katex 布局规则
-//   （position/width/white-space/display 等）与 KaTeX 字体全没带进去 → 公式塌陷，
-//   只剩 exportBg() 的背景色（白天白块/黑夜黑块）。产品负责人 2026-08-26 拍板：所见即所得。
+//  .uv-md-body 的少量计算样式固化成内联 style，KaTeX 公式依赖的 .katex 布局规则
+//  （position/width/white-space/display 等）与 KaTeX 字体全没带进去 → 公式塌陷，
+//  只剩 exportBg() 的背景色（白天白块/黑夜黑块）。产品负责人 2026-08-26 拍板：所见即所得。
 // 修法：把 katex.min.css 的布局规则原文注入 SVG <style>，并按公式实际用到的
-//   font-family 内嵌对应 woff2（data URL），让 foreignObject 渲染结果与页面一致。
+//  font-family 内嵌对应 woff2（data URL），让 foreignObject 渲染结果与页面一致。
 // 体积：仅内嵌扫描到的 family；纯文本/无公式场景不注入，SVG 保持 <200KB 判据。
 const KATEX_CSS_URL = new URL("../../public/vendor/katex/katex.min.css", import.meta.url);
 const KATEX_FONT_DIR = new URL("../../public/vendor/katex/fonts/", import.meta.url);
@@ -899,7 +899,7 @@ async function buildExportSvg(body, embedFont) {
 
 // SVG 文本 → PNG blob（canvas 管线，scale 倍率）
 // ⚠ 用 data: URL 而非 blob: URL —— 本 Chromium 版本把「blob URL 加载含 foreignObject 的 SVG」
-//   视为跨源而污染 canvas（T360 实测），data: URL 不受影响。
+//  视为跨源而污染 canvas（实测），data: URL 不受影响。
 function svgToPngBlob(svgText, scale) {
   return new Promise((resolve, reject) => {
     const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgText);
@@ -937,7 +937,7 @@ function renderRenderAllView(text) {
 
   wrap.append(el("div", { class: "uv-render-sec-desc" }, tt("ui.uv.renderAllDesc")));
 
-  // MT77①：码位描述编码转换开关（默认开；关 = 原文按原样渲染，互不污染）。
+  // 码位描述编码转换开关（默认开；关 = 原文按原样渲染，互不污染）。
   // 常驻渲染区上方——未点「分析」时也可见可切，不再藏在渲染结果里（产品裁决提前出现）。
   const cpDescLabel = el("label", { class: "uv-cp-toggle" });
   const cpDescChk = el("input", { type: "checkbox" });
@@ -951,7 +951,7 @@ function renderRenderAllView(text) {
   const stage = el("div", { class: "uv-render-stage" }, body);
   wrap.append(stage);
 
-  // T360：保存渲染结果（SVG / PNG）+ 内嵌字体开关 + PNG 倍率 —— 全部放显示区下方（产品裁决）
+  // ：保存渲染结果（SVG / PNG）+ 内嵌字体开关 + PNG 倍率 —— 全部放显示区下方（产品裁决）
   const exportRow = el("div", { class: "uv-export-row" });
   const embedChk = el("input", { type: "checkbox", id: "uv_embed_font" });
   embedChk.checked = uvState.renderall.embedFont;

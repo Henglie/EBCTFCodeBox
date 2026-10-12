@@ -1,5 +1,5 @@
 /*
- * invisibles.js — 不可见字符可视化表（T80，cat:'image'）。
+ * invisibles.js — 不可见字符可视化表（cat:'image'）。
  *
  * 定位：与 stegoText.js 的 zwScan（文本报告）正交——本文件是「可复用数据 + 结构化 API」
  * 供编辑框「显示不可见字符」开关与输入检测提醒直接调用。零宽 / 控制符 / BOM /

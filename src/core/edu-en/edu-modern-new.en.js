@@ -1,5 +1,5 @@
 /*
- * edu-modern-new.en.js — English edu shard (T310, modern crypto + hash/derivation).
+ * edu-modern-new.en.js — English edu shard (modern crypto + hash/derivation).
  *
  * Covers the edu cards for 4 genuinely-missing ops:
  * modern: rabbit

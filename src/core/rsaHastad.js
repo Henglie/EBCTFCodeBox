@@ -1,5 +1,5 @@
 /*
- * rsaHastad.js — RSA Håstad 广播攻击（T295，cat:'analysis'，单向 run）。
+ * rsaHastad.js — RSA Håstad 广播攻击（cat:'analysis'，单向 run）。
  *
  * 原理：同一明文 m 用相同 e 和 e 个互质 n_i 加密得 c_i = m^e mod n_i。
  * CRT 合并得 M ≡ c_i (mod n_i)，因 m < min(n_i) 故 m^e < Π n_i

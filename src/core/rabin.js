@@ -59,8 +59,8 @@ function toHex(x) { return "0x" + x.toString(16); }
 const MARK = [0xAB, 0xCD]; // 冗余魔数，尾部标记消歧 4 根
 
 // 默认 demo 素数（均为素数且 ≡ 3 mod 4）：
-//   p = 2^31-1 = 2147483647（梅森素数 M31）
-//   q = 2^61-1 = 2305843009213693951（梅森素数 M61）
+//  p = 2^31-1 = 2147483647（梅森素数 M31）
+//  q = 2^61-1 = 2305843009213693951（梅森素数 M61）
 const DEMO = {
   p: "2147483647",
   q: "2305843009213693951",
@@ -89,6 +89,7 @@ function rabinEncode(text, params) {
   let m;
   if (inputMode === "int") {
     m = parseBig(text, "明文整数 m");
+    if (m < 0n) throw new Error("Rabin：明文整数 m 不能为负（须在 [0, n) 内）");
     if (m >= n) throw new Error(`明文整数 m 必须 < n（n = ${n}）`);
     const c = powMod(m, 2n, n);
     return [

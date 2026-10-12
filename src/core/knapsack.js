@@ -38,6 +38,7 @@
  * 格归约（LLL / CJLOSS）几乎必然还原明文。本 op 仅讲原理，不实现完整 LLL。
  */
 import { register } from "./registry.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 编码工具
@@ -130,7 +131,7 @@ function randBigIntBelow(boundExclusive) {
   const buf = new Uint8Array(bytes);
   let n;
   do {
-    crypto.getRandomValues(buf);
+    buf.set(randBytes(buf.length));
     n = 0n;
     for (const b of buf) n = (n << 8n) | BigInt(b);
  // 掩掉高位多余 bit，减少 reject 概率
@@ -431,7 +432,7 @@ register({
       lines.push("  ✓ 密度 ≥ 0.9408：低密度格攻击不直接适用（但 Shamir 攻击等仍威胁原始 MH 方案）。");
     }
     lines.push("  ▸ Merkle-Hellman 原始方案已被 Shamir(1984) 攻破，仅作教学/CTF 用途，勿用于真实加密。");
-    // T362 产物协议（2026-09-02）：gen 现场生成时，公钥 β / 私钥 w·q·r / 密文 分开交付下载按钮；
+    // 产物协议（2026-09-02）：gen 现场生成时，公钥 β / 私钥 w·q·r / 密文 分开交付下载按钮；
     // demo/manual 模式（用户自填密钥）仍返回 string，不重复交付。
     if (key.generated) {
       lines.push("", "公钥 / 私钥 / 密文已分开生成：私钥 ⚠ 敏感请妥善保管。点击下方按钮下载（文本，可直接回填手动字段）。");
@@ -463,7 +464,7 @@ register({
     const bytes = bitsToBytes(bits, byteLen);
  // 去除末尾可能的补零字节（bit 补零通常落在最后一字节的低位或整字节 0）
     let end = bytes.length;
-    while (end > 0 && bytes[end - 1] === 0) end--;
+    while (8 % n !== 0 && end > 0 && bytes[end - 1] === 0) end--;
     const trimmed = bytes.subarray(0, end);
     const out = encodeOutput(end === bytes.length ? bytes : trimmed, p.outEnc || "utf8");
 

@@ -24,12 +24,12 @@ const SNEFRU_SBOXES = [
 // = sqrt(6) 小数部分前 960 bit。压缩输入 N = Q15 || K8 || U1 || V1 || B64（n=89）。
 const MD6_Q = [0x7311c2812425cfa0n,0x6432286434aac8e7n,0xb60450e9ef68b7c1n,0xe8fb23908d9f06f1n,0xdd2e76cba691e5bfn,0x0cd0d63b2c30bc41n,0x1f8ccf6823058f8an,0x54e5ed5b88e3775dn,0x4ad12aae0a6d6031n,0x3e7f16bb88222e0dn,0x8af8671d3fb50c2cn,0x995ad1178bd25c31n,0xc878c1dd04c4b633n,0x3b72066c7a1552acn,0x0d6f3522631effcbn];
 /*
- * hashMore.js — 哈希域查漏五件（T356 · 批F，CyberChef Hashing 全集对标）。
+ * hashMore.js — 哈希域查漏五件（批F，CyberChef Hashing 全集对标）。
  *
  * 覆盖：MD6 / Snefru-128/256 / SHA-0 / HAS-160 / GOST R 34.11-94。
  * 全部单向 run，输入 text/hex 可选，输出小写 hex。
  *
- * 红线与出处（每算法测试向量来源见各函数注释与 T356 回执）：
+ * 红线与出处（每算法测试向量来源见各函数注释与批次回执）：
  * - MD6：Rivest 2008 NIST SHA-3 竞赛提案（进入第二轮、未进终选，无 RFC 终稿，仅提案状态）。
  *   照 MIT 参考实现 md6-2009-04-15（md6_compress.c / md6_mode.c，MIT License）移植：
  *   n=89 = Q15+K8+U1+V1+B64；抽头 t0..t5 = 17,18,21,31,67,89；RL00..RL15 移位表逐字照抄；
@@ -66,6 +66,9 @@ const rotl32 = (x, n) => ((x << n) | (x >>> (32 - n))) >>> 0;
 
 /** text/hex 双编码输入。hex 非法直接抛错（项目惯例）。 */
 function inputBytes(text, p) {
+  if (p && p.rawBytes && p.rawBytes.length) {
+    return p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes); // rawBytes 契约（与 hash.js 世代一致）
+  }
   const mode = (p && p.inputType) || "text";
   if (mode === "hex") {
     const s = (text || "").replace(/\s+/g, "");

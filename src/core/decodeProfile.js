@@ -39,7 +39,7 @@
  * - 纯本地：方案存 localStorage，绝不外发。隐私模式 localStorage 抛错时静默降级为内存态。
  * - 不改 magic 排序逻辑：本模块只产出「允许哪些 op 参与」+ 预算参数，排序仍归 magic/scorer。
  *
- * ============ 循环解码（T350 增强） ============
+ * ============ 循环解码（增强） ============
  * 同一解码（Base64/Hex/URL）反复施加，直到三条件之一：无法继续（解码失败或结果
  * 不再变化）/ 命中正则提前停 / 达轮数上限。输出每轮中间值 + 最终结果。
  * 多层套娃编码（Base64 × N 层）一把解开。纯执行原语（零状态零 UI），
@@ -105,7 +105,7 @@ const CUSTOM_BUDGET = STRENGTH_PRESETS.enhanced.magic;
  */
 // 「倾向文件输入」的分类：智能解码走文件优先路径时的判据之一。
 // ⚠ 分类拆分后必须同步：原 forensic/stego 各自裂成 archive+crack+forensic+filefmt
-//   与 image+audio+stego，漏改会让这些类的 op 在智能解码里丢掉"文件优先"待遇。
+//  与 image+audio+stego，漏改会让这些类的 op 在智能解码里丢掉"文件优先"待遇。
 const FILE_FIRST_CATS = new Set([
   "archive", "crack", "forensic", "filefmt",
   "image", "audio", "stego",
@@ -444,7 +444,7 @@ export function importProfiles(json) {
 }
 
 // ============================================================
-// 循环解码（T350）：同一解码反复施加，直到不再变化 / 命中正则 / 达上限
+// 循环解码（）：同一解码反复施加，直到不再变化 / 命中正则 / 达上限
 // ============================================================
 
 /** 循环解码支持的编码（三件最常用）。Base64/Hex 解码前先去空白，URL 走 %XX 解码。 */
@@ -567,7 +567,7 @@ export function formatLoopReport(result) {
 }
 
 // ============================================================
-// 字节统计模型提名报告（MT83 T351）
+// 字节统计模型提名报告
 // ============================================================
 
 /** 18 维统计特征的短名（与 inputProfile.statisticalFeatures 的顺序一一对应）。 */
@@ -602,7 +602,7 @@ export function formatByteStatReport(probe) {
 }
 
 // ============================================================
-// 加载期自检（T350，import 即跑，失败即抛）
+// 加载期自检（import 即跑，失败即抛）
 // ============================================================
 (function loopSelfTest() {
   const assert = (cond, msg) => { if (!cond) throw new Error("decodeProfile 自检失败: " + msg); };
@@ -667,7 +667,7 @@ export function formatByteStatReport(probe) {
     const report = formatLoopReport(r);
     assert(report.includes("（截断，共"), "截断标注缺失");
   }
-  // ⑫ 模型提名报告（MT83）：含预测标签 + 11 类概率 + 18 维特征
+  // ⑫ 模型提名报告：含预测标签 + 11 类概率 + 18 维特征
   {
     const fake = {
       predicted: "base64", top5: [{ label: "base64", probability: 0.9 }, { label: "hex", probability: 0.05 }],

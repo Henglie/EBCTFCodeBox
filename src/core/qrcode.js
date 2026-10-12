@@ -1,5 +1,5 @@
 /*
- * qrcode.js — 二维码 / 条码组（T58，cat:'image'）。
+ * qrcode.js — 二维码 / 条码组（cat:'image'）。
  *
  * 收录：
  * qrGen QR 码生成（encode 输出矩阵 JSON）：数字/字母/字节模式 + L/M/Q/H 纠错
@@ -292,7 +292,8 @@ class QrMatrix {
   }
 
   drawFormatBits(mask) {
-    const data = (this.ecl << 3) | mask;
+    const ECL_FMT = [1, 0, 3, 2]; // QR 标准格式位：L=01, M=00, Q=11, H=10（**不是**索引 0/1/2/3）
+    const data = (ECL_FMT[this.ecl] << 3) | mask;
     let rem = data;
     for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
     const bits = ((data << 10) | rem) ^ 0x5412; // 15-bit
@@ -623,7 +624,12 @@ function readFormatInfo(mat, size) {
     const d = Math.min(d1, d2);
     if (d < bestDist) { bestDist = d; bestData = data; }
   }
-  return { ecl: bestData >> 3, mask: bestData & 7, dist: bestDist };
+ // 格式信息 2 位指示符（ISO/IEC 18004 §6.9.1）：L=01, M=00, Q=11, H=10，
+ // 与编码侧 drawFormatBits 的 ECL_FMT=[1,0,3,2] 同一映射（该排列自逆，可直接反查）。
+ // 必须反查回 ECL 索引 0/1/2/3，否则 L 会被当 M、H 被当 Q 去查纠错块表，
+ // 干净无损的合法矩阵也会因校正子非零而 RS 解码失败。
+  const eclIndex = [1, 0, 3, 2][bestData >> 3];
+  return { ecl: eclIndex, mask: bestData & 7, dist: bestDist };
 }
 
 // 读版本信息（v7+），18 位

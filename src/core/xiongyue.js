@@ -1,6 +1,11 @@
 /*
  * xiongyue.js — 熊曰（cat: 'cn'）。
  *
+ * Copyright（熊曰算法逆向分析与 91 字映射表重建）：
+ *   Copyright (C) 2026 SheepChef (a.k.a. Haruka Hokuto)，Abracadabra 项目。
+ *   来源：https://github.com/SheepChef/Abracadabra/issues/123
+ * 本文件依上述逆向成果实现编解码；本项目的适配改动与实现错误由本项目负责。
+ *
  * 熊曰编码算法。
  * 算法：UTF-8 → zlib.compress(level=1)[2:-4]（raw deflate）→ base91 数值编码（13/14bit 自适应）→ 91字熊语字典映射 → 反转 → 前缀 "熊曰：呋"。
  *

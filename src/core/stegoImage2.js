@@ -1,5 +1,5 @@
 /*
- * stegoImage2.js — 图像隐写扩展组（T96，cat:'image'）。
+ * stegoImage2.js — 图像隐写扩展组（cat:'image'）。
  *
  * 依赖: stegoImage.js（查重，不碰；已有 pngText/exifExtract 等文本块读写，本文件不重复）。
  *
@@ -25,7 +25,7 @@ import { pngChunkRawExport } from "./pngChunks.js";
 // ============ 通用工具（自包含，不依赖 stegoImage2 内部函数） ============
 
 /**
- * T422：多条目 ZIP 打包（STORE 直存——PNG 本身已压缩，二次 deflate 无收益）。
+ * 多条目 ZIP 打包（STORE 直存——PNG 本身已压缩，二次 deflate 无收益）。
  * 标准结构：每条目 LFH + 尾部 CDH×n + EOCD，布局口径与 zipCreate.js makeZip 一致。
  * entries: [{ name: string, bytes: Uint8Array }]
  */
@@ -448,7 +448,7 @@ function jpegAppListRun(text, p) {
         }
       } else if (marker === 0xE1 && (ident === "Exif" || ident === "Exif\0\0".slice(0, 4))) {
         lines.push(`  EXIF 数据段（${segLen - 8} 字节 TIFF 数据，可用 exifExtract op 详查）`);
-      } else if (marker === 0xE1 && ident === "http://ns.adobe.com/xap/1./") {
+      } else if (marker === 0xE1 && ident === "http://ns.adobe.com/xap/1.0/") {
         lines.push(`  XMP 数据段（${segLen - 2 - ident.length - 1} 字节 RDF/XML）`);
       } else if (marker === 0xE2 && ident === "ICC_PROFILE") {
  // ICC: 标识符后跟 chunk_index(1) + num_chunks(1)
@@ -475,7 +475,7 @@ function jpegAppListRun(text, p) {
     } else if (marker === 0xC4) {
       lines.push(`FFC4 DHT: Huffman 表定义（段长=${segLen}）`);
     } else if (marker === 0xDD) {
-      lines.push(`FFDD DRI: 重启间隔=${segLen >= 4 ? readU16be(data, 2) : "?"}`);
+      lines.push(`FFDD DRI: 重启间隔=${segLen >= 4 ? readU16be(data, 0) : "?"}`);
     } else if (marker === 0xFE) {
  // COM 注释段
       const comment = latin1(data.subarray(0, Math.min(data.length, 200)));
@@ -927,7 +927,7 @@ async function extractGifFrames(text, p, checkCurrent) {
     lines.push(`[帧 ${idx + 1}] 位置=(${f.left},${f.top}) 尺寸=${f.width}×${f.height} 延迟=${f.delay * 10}ms 处置=${disposeNames[f.dispose] || f.dispose} 透明索引=${f.transparentIndex >= 0 ? f.transparentIndex : "无"}`);
     if (f.encoded) {
       decodedCount++;
-      // T422（产品负责人 2026-09-06 下单）：帧 PNG 进单个压缩包，不再往报告里倾倒 dataURL
+      // （产品负责人 2026-09-06 下单）：帧 PNG 进单个压缩包，不再往报告里倾倒 dataURL
       //（旧版逐帧下载按钮 + 大文本正是卡死根因）。
     } else {
       lines.push("  (本帧无调色板或 LZW 解码失败，仅列信息)");
@@ -940,7 +940,7 @@ async function extractGifFrames(text, p, checkCurrent) {
   }
   if (frameEntries.length === 0) return lines.join("\n");
 
-  // T422（产品负责人 2026-09-06 下单）：全部帧打包成单个 ZIP 一次性下载。
+  // （产品负责人 2026-09-06 下单）：全部帧打包成单个 ZIP 一次性下载。
   // 附 frames.txt 元数据（帧信息与报告一致，供离线核对）。
   const meta = lines.join("\n") + "\n";
   checkCurrent();
@@ -961,7 +961,7 @@ async function extractGifFrames(text, p, checkCurrent) {
 // ============ ICC profile 剥离 ============
 /**
  * iccStrip run：剥离 ICC profile（PNG iCCP chunk / JPEG APP2 ICC 段）。
- * T363b 产物协议 2026-09-02：返回 { text, files }，files 交付去 ICC 后的真文件
+ * 产物协议 2026-09-02：返回 { text, files }，files 交付去 ICC 后的真文件
  * （PNG → out.png，JPEG → out.jpg），text 保留原 base64（链式/复制兼容）。
  * @param {string} text base64 图像
  * @returns {{text:string, files:[{name,mime,bytes}]}}
@@ -978,7 +978,7 @@ function iccStripRun(text, p) {
     const chunks = pngParseChunks(bytes);
     const iccp = chunks.filter((c) => c.type === "iCCP");
     if (iccp.length === 0) {
-      // T363b 产物协议 2026-09-02：文件未被修改，原 PNG 字节仍走 files 交付，text 保留 base64 + 报告行。
+      // 产物协议 2026-09-02：文件未被修改，原 PNG 字节仍走 files 交付，text 保留 base64 + 报告行。
       return {
         text: bytesToB64(bytes) + "\n[报告] PNG: 无 iCCP chunk，无需剥离",
         files: [{ name: "out.png", mime: "image/png", bytes }],
@@ -1004,7 +1004,7 @@ function iccStripRun(text, p) {
     let off = 0;
     for (const b of out) { newBytes.set(b, off); off += b.length; }
     report.push(`PNG: ${bytes.length} → ${newBytes.length} 字节（减少 ${bytes.length - newBytes.length}）`);
-    // T363b 产物协议 2026-09-02：去 ICC 后的 PNG 字节走 files 下载按钮，text 保留原 base64（链式/复制兼容）。
+    // 产物协议 2026-09-02：去 ICC 后的 PNG 字节走 files 下载按钮，text 保留原 base64（链式/复制兼容）。
     return { text: bytesToB64(newBytes), files: [{ name: "out.png", mime: "image/png", bytes: newBytes }] };
   }
 
@@ -1042,7 +1042,7 @@ function iccStripRun(text, p) {
     }
     out.push(bytes.subarray(lastOff));
     if (stripped === 0) {
-      // T363b 产物协议 2026-09-02：文件未被修改，原 JPEG 字节仍走 files 交付，text 保留 base64 + 报告行。
+      // 产物协议 2026-09-02：文件未被修改，原 JPEG 字节仍走 files 交付，text 保留 base64 + 报告行。
       return {
         text: bytesToB64(bytes) + "\n[报告] JPEG: 无 ICC_PROFILE 段，无需剥离",
         files: [{ name: "out.jpg", mime: "image/jpeg", bytes }],
@@ -1053,7 +1053,7 @@ function iccStripRun(text, p) {
     let off = 0;
     for (const b of out) { newBytes.set(b, off); off += b.length; }
     report.push(`JPEG: ${bytes.length} → ${newBytes.length} 字节（减少 ${bytes.length - newBytes.length}，剥离 ${stripped} 段）`);
-    // T363b 产物协议 2026-09-02：去 ICC 后的 JPEG 字节走 files 下载按钮，text 保留原 base64（链式/复制兼容）。
+    // 产物协议 2026-09-02：去 ICC 后的 JPEG 字节走 files 下载按钮，text 保留原 base64（链式/复制兼容）。
     return { text: bytesToB64(newBytes), files: [{ name: "out.jpg", mime: "image/jpeg", bytes: newBytes }] };
   }
 

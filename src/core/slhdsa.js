@@ -24,6 +24,7 @@
  */
 
 import { register } from "./registry.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 字节工具
@@ -75,13 +76,7 @@ function bytesToUllBE(inp, inlen) {
 }
 
 function randomBytes(n) {
-  const c = globalThis.crypto;
-  if (c && typeof c.getRandomValues === "function") {
-    const b = new Uint8Array(n);
-    c.getRandomValues(b);
-    return b;
-  }
-  throw new Error("无可用 CSPRNG（crypto.getRandomValues），无法生成随机种子");
+  return randBytes(n);
 }
 
 function bytesEqual(a, b) {
@@ -415,7 +410,7 @@ function treehashx1(root, authPath, ctx, leafIdx, idxOffset, treeHeight, genLeaf
     let internalIdxOffset = idxOffset;
     let internalIdx = idx;
     let internalLeaf = leafIdx;
-    let stackTop = 0; // M 修（T369）：内层 let h 跨不出作用域；语义=新叶已合并到的层级
+    let stackTop = 0; // M 修（）：内层 let h 跨不出作用域；语义=新叶已合并到的层级
     for (let h = 0; ; h++, internalIdx >>= 1, internalLeaf >>= 1) {
       if (h === treeHeight) { root.set(current.subarray(n, 2 * n)); return; }
       if ((internalIdx ^ internalLeaf) === 1) {
@@ -885,10 +880,10 @@ register({
   run: (t, p = {}) => {
     const s = getSet(p.set);
     const msg = msgBytes(t, p.msgMode);
-    // det → 确定性（rnd 忽略）；hedged → 若 rnd 显式给 hex 则用之；留空仍走确定性（PK.seed）
+    // det uses PK.seed; hedged draws n random bytes unless rnd is explicitly supplied.
     let rnd;
     if (p.rndMode === "det") rnd = null;
-    else rnd = (String(p.rnd == null ? "" : p.rnd).trim() === "" ? null : p.rnd);
+    else rnd = (String(p.rnd == null ? "" : p.rnd).trim() === "" ? bytesToHex(randomBytes(s.n)) : p.rnd);
     const r = slhdsaSignBytes(p.set, p.sk, msg, p.ctx, rnd);
     return {
       text: [
@@ -924,7 +919,7 @@ register({
     const r = slhdsaVerifyBytes(p.set, p.pk, msg, p.ctx, p.sig);
     const lines = [
       setSummary(s),
-      `消息 M: ${msg.length} B（${p.msgMode === "hex" ? "hex" : "UTF-8"}），ctx: ${String(p.ctx || "").length} B`,
+      `消息 M: ${msg.length} B（${p.msgMode === "hex" ? "hex" : "UTF-8"}），ctx: ${ENC.encode(String(p.ctx || "")).length} B`,
       `签名长度: ${r.sigLen}/${r.expectedSigLen} B ${r.sigLen === r.expectedSigLen ? "✓" : "✗"}`,
     ];
     lines.push(`结论: ${r.valid ? "✓ 合法（验证通过）" : "✗ 不合法"} — ${r.reason}`);

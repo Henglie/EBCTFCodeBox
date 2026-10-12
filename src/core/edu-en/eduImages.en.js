@@ -22,8 +22,12 @@
  * Red line: pure data, no import, no side effects. Only fill in opIds that truly exist in
  * the registry + files that truly exist in the gallery.
  * Image copyright: the 224-encoding images (webp/png) from similar tools belong to that
- * tool's studio, credited within this box; the four svgs polybius/tapcode/adfgx/adfgvx are
- * made in-house (public-domain classic cipher rule tables).
+ * tool's studio, credited within this box; the svgs polybius/tapcode/adfgx/adfgvx are
+ * made in-house (public-domain classic cipher rule tables), as are american-morse /
+ * morse-rhythm / wabun / futhark / counting-rods / alien-alphabet / chuck-unary /
+ * cardan-grille / tadpole / wingdings-zapf (per-image sources in the engineering archive).
+ * baudot/decabit/pollux/morbit/straddle-checkerboard are likewise in-house (table values
+ * taken from this tool's op runtime, slot-checked 363/0; provenance and licenses are archived in the project sources.md).
  */
 export default {
   bacon: { src: "public/codeimages/bacon.png", cap: "Bacon cipher A/B five-bit letter reference table" },
@@ -41,4 +45,19 @@ export default {
     { src: "public/codeimages/morseircle.webp", cap: "Circular Morse reference dial" },
     { src: "public/codeimages/morsemountain.webp", cap: "Mountain-shape Morse reference chart" },
   ],
+  americanMorse: { src: "public/codeimages/american-morse.svg", cap: "American Morse code table (. dot, - dash, _ long dash; spaces inside a code = internal gap)" },
+  morseRhythm: { src: "public/codeimages/morse-rhythm.svg", cap: "Morse dot/dash symbol variant normalization chart (·− ↔ .-)" },
+  wabun: { src: "public/codeimages/wabun.svg", cap: "Wabun (Japanese) Morse standard table (katakana/marks ↔ dots-dashes)" },
+  futhark: { src: "public/codeimages/futhark.svg", cap: "Runic reference table (Elder 24 + Younger 16 + decode variants)" },
+  countingRods: { src: "public/codeimages/counting-rods.svg", cap: "Counting rods: vertical/horizontal forms (units vertical, tens horizontal)" },
+  alienAlphabet: { src: "public/codeimages/alien-alphabet.svg", cap: "Alien alphabet 26-symbol reference table (Unicode set, dCode table)" },
+  chuckUnary: { src: "public/codeimages/chuck-unary.svg", cap: "Chuck Norris unary code rule chart (bitstream → runs → 0/00 groups)" },
+  cardanGrille: { src: "public/codeimages/cardan-grille.svg", cap: "Cardan grille principle (X solid cells, _ holes; read letters through holes)" },
+  tadpole: { src: "public/codeimages/tadpole.svg", cap: "Tadpole cipher 16 symbols ↔ hex nibble reference table" },
+  wingdings: { src: "public/codeimages/wingdings-zapf.svg", cap: "Zapf Dingbats code table (wingdings op zapf range 0x21-0x7E)" },
+  baudot: { src: "public/codeimages/baudot.svg", cap: "Baudot code table (ITA2/ITA1 letters + figures, 5-bit codes)" },
+  decabit: { src: "public/codeimages/decabit.svg", cap: "Decabit pulse code table (values 0-126 ↔ 10-symbol +/− patterns)" },
+  pollux: { src: "public/codeimages/pollux.svg", cap: "Pollux cipher symbol mapping (dot/dash/separator symbol sets)" },
+  morbit: { src: "public/codeimages/morbit.svg", cap: "Morbit cipher symbol-pair ↔ digit reference (rank from 9-char key)" },
+  straddleCheckerboard: { src: "public/codeimages/straddle-checkerboard.svg", cap: "Straddle checkerboard 3×10 board (top row 8 high-frequency letters + two blank-column prefixes)" },
 };

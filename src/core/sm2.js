@@ -16,6 +16,7 @@
  */
 import { register } from "./registry.js";
 import { sm3Bytes } from "./hashExt.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 数论（BigInt，模运算）
@@ -371,7 +372,7 @@ function randomK() {
   if (typeof crypto === "undefined" || typeof crypto.getRandomValues !== "function") throw new Error("当前环境无密码学安全随机源，无法执行 SM2 签名/加密/密钥交换");
   const bytes = new Uint8Array(32);
   while (true) {
-    crypto.getRandomValues(bytes);
+    bytes.set(randBytes(bytes.length));
     const k = bytesToBig(bytes);
     if (k >= 1n && k < n) return k;
   }
@@ -478,7 +479,7 @@ function parseBigHex(s, label) {
 }
 
 // ============================================================
-// SM2 六档算法族（T394，产品负责人 2026-09-04 拍板：同族多操作必须族滑块，废除下拉切模式）
+// SM2 六档算法族（产品负责人 2026-09-04 拍板：同族多操作必须族滑块，废除下拉切模式）
 // family:"sm2" + familyLabel → fam.lbl.*（keygen/encrypt/decrypt/sign/verify/shared 六 key
 // 在 zh/en 主表已存在，i18n 零改动）。底层曲线/签名/加密/交换实现原样复用，
 // 每个 op 只保留本档参数面，消除旧单 op 跨模式参数冗余。
@@ -502,7 +503,7 @@ register({
   family: "sm2",
   familyLabel: "keygen",
   name: "SM2 密钥对生成",
-  desc: "生成 SM2（sm2p256v1，GB/T 32918.5-2017 附录 A 基点）密钥对：私钥 d ∈ [1,n-1]，公钥 P=dG。私钥/公钥（非压缩与压缩格式）分开下载（T362 产物协议）",
+  desc: "生成 SM2（sm2p256v1，GB/T 32918.5-2017 附录 A 基点）密钥对：私钥 d ∈ [1,n-1]，公钥 P=dG。私钥/公钥（非压缩与压缩格式）分开下载（产物协议）",
   params: [],
   run: () => {
     const d = randomK();
@@ -649,7 +650,8 @@ register({
   run: (text, p) => {
     const dA = parseBigHex(p.privKey, "本方私钥");
     const dB = parseBigHex(p.privKeyB, "对方私钥");
-    const klen = Number(p.klen) || 128;
+    const klenRaw = p.klen == null || String(p.klen).trim() === "" ? 128 : Number(p.klen);
+    const klen = klenRaw;
     if (!Number.isSafeInteger(klen) || klen < 1 || klen > 65536) throw new Error("SM2 共享密钥长度需为 1..65536 bit");
     const ida = encDecode(p.ida || "1234567812345678", "utf8");
     const idaB = encDecode(p.idaB || "ALICE123@YAHOO.COM", "utf8");

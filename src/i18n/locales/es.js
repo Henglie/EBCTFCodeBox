@@ -396,7 +396,7 @@ export default {
   "ui.uv.graphemes": "grafemas",
   "ui.uv.splitClusters": "Dividir secuencias combinantes (listar cada punto de código)",
   "ui.uv.noSegmenter": "(Segmentación de grafemas no admitida aquí; mostrando puntos de código)",
-  // 拼字 / IDS 视图（MT84）
+  // 拼字 / IDS 视图
   "ui.uv.tabIds": "Ideogramas / IDS",
   "ui.uv.idsDesc": "Secuencias de descripción ideográfica (IDS): consulta el árbol de descomposición de un carácter, busca caracteres por componente y convierte entre caracteres y cadenas IDS. Totalmente local, sin subida.",
   "ui.uv.idsLoading": "Cargando datos de ideogramas…",
@@ -422,7 +422,7 @@ export default {
   "ui.uv.idsNoExact": "Sin coincidencia exacta de IDS; buscando por componentes hoja:",
   "ui.uv.idsConvHits": "{0} coincidencias",
   "ui.uv.idsSrc": "fuente",
-  // 快速换算视图（MT81）
+  // 快速换算视图
   "ui.qc.title": "Conversión rápida",
   "ui.qc.desc": "Banco de trabajo de conversión de bases y unidades: edita cualquier campo y el resto se actualiza al instante. Todo local, sin red.",
   "ui.qc.tabRadix": "Bases de programador",
@@ -547,6 +547,8 @@ export default {
   "ui.env.syncAccentOk": "Color de acento del sistema sincronizado",
   "ui.env.syncAccentFail": "Color de acento del sistema no disponible",
   "ui.topbar.font": "Biblioteca de fuentes",
+  "ui.pwa.updateBar": "Hay una nueva versión disponible. Los recursos sin conexión están listos",
+  "ui.pwa.updateRefresh": "Recargar",
 
  // ---- topbar search ----
   "ui.search.placeholder": "Buscar codificadores / cifrados…",
@@ -739,7 +741,7 @@ export default {
   "op.sshPubkeyParse.name": "Analizador de clave pública SSH",
   "op.btcAddressIdent.name": "Identificar dirección Bitcoin",
   "op.ethAddressIdent.name": "Identificar dirección Ethereum",
- // ---- MT82 new ops (forensic/stego/modern) ----
+ // ---- new ops (forensic/stego/modern) ----
   "op.gifTiming.name": "Esteganografía de temporización de tramas GIF",
   "op.jpgSizeRecover.name": "Recuperación de tamaño JPEG",
   "op.zipRepair.name": "Reparación de ZIP con cifrado falso",
@@ -1165,9 +1167,12 @@ export default {
   "ui.ds.customBadge": "Modificado (personalizado)",
   "ui.home.strengthBtn": "Intensidad",
 
- // ---- 2026-08-26 解冻新增（协作代理译文，主控已验）----
   "ui.op.fontDec": "Reducir tamaño de letra",
   "ui.op.fontInc": "Aumentar tamaño de letra",
+  "ui.op.localFonts": "Cargar fuentes locales",
+  "ui.op.localFontsDone": "Se cargaron {0} fuentes locales",
+  "ui.op.localFontsFail": "Error al cargar las fuentes locales: {0}",
+  "ui.op.pickImage": "Elegir imagen",
   "ui.exhaust.branchCount": "{0} ramas",
   "ui.exhaust.hitCount": "{0} coincidencias probables",
   "ui.exhaust.defaultParam": "predeterminado",
@@ -1431,6 +1436,8 @@ export default {
   'op.csrParse.name': 'Analizador de CSR (PKCS#10)',
   'op.crlParse.name': 'Analizador de CRL X.509',
   'cat.esolang': 'Lenguajes de programación esotéricos',
+  'cat.stegoText': 'Esteganografía de texto',
+  'cat.stegoFile': 'Esteganografía de archivos',
   'ui.about.contribSmile1110': 'Propuso ampliar la compatibilidad con ECC y la criptografía moderna.',
   'ui.about.contribLamian': 'Informes de errores y sugerencias: compatibilidad con las herramientas originales, casos límite de Unicode y espacios en blanco, lenguajes esotéricos, explicaciones, categorías y parámetros.',
   'ui.edu.aka': 'Alias (todos se pueden buscar)',
@@ -1567,6 +1574,13 @@ export default {
   'fam.lbl.base2048': 'Base2048',
   'fam.lbl.base65536': 'Base65536',
   'fam.lbl.ecoji': 'Ecoji (Base64 con emojis)',
+  'fam.lbl.fields': 'Extracción de campos',
+  'fam.lbl.attack': 'Reutilización de nonce k',
+  'fam.lbl.sharedPub': 'Desde clave pública',
+  'fam.lbl.homAdd': 'Suma homomórfica',
+  'fam.lbl.scan': 'Escaneo',
+  'fam.lbl.formatBrute': 'Fuerza bruta',
+  'fam.lbl.smartReport': 'Informe inteligente',
  // ----解冻批回填（外部交付 2026-09-26 + 内部 cat.*）----
   "ui.recipe.chooseFamilyOp": "Elegir una operación para añadir a la cadena de recetas",
   "op.base16.desc": "Codificación hexadecimal: representa cada byte con dos caracteres hexadecimales. Admite una tabla de caracteres personalizada y mayúsculas / separación por espacios.",

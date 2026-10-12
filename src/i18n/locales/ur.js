@@ -394,7 +394,7 @@ export default {
   "ui.uv.graphemes": "گرافیم کلسٹر",
   "ui.uv.splitClusters": "امتزاجی تسلسل تقسیم کریں (ہر کوڈ پوائنٹ الگ درج کریں)",
   "ui.uv.noSegmenter": "(اس ماحول میں گرافیم تقسیم دستیاب نہیں؛ کوڈ پوائنٹس دکھائے جا رہے ہیں)",
-  // 拼字 / IDS 视图（MT84）
+  // 拼字 / IDS 视图
   "ui.uv.tabIds": "آئیڈیوگرافس / IDS",
   "ui.uv.idsDesc": "آئیڈیوگرافک ڈسکرپشن سیکوئنسز (IDS): کسی حرف کا انحلالی درخت دیکھیں، جز سے حروف تلاش کریں، اور حروف و IDS سٹرنگز کے درمیان باہمی تبدیلی کریں۔ مکمل مقامی، صفر اپ لوڈ۔",
   "ui.uv.idsLoading": "آئیڈیوگراف ڈیٹا لوڈ ہو رہا ہے…",
@@ -420,7 +420,7 @@ export default {
   "ui.uv.idsNoExact": "کوئی درست IDS مماثلت نہیں؛ پتوں والے اجزا سے تلاش:",
   "ui.uv.idsConvHits": "{0} مماثلتیں",
   "ui.uv.idsSrc": "ماخذ",
-  // 快速换算视图（MT81）
+  // 快速换算视图
   "ui.qc.title": "فوری تبدیلی",
   "ui.qc.desc": "پروگرامر بیس اور یونٹ تبدیلی کا ورک بینچ: کسی بھی خانے میں لکھیں، باقی فوراً بدل جائیں گے۔ مکمل مقامی، کوئی نیٹ ورک نہیں۔",
   "ui.qc.tabRadix": "پروگرامر بیس",
@@ -553,6 +553,8 @@ export default {
   "ui.env.syncAccentOk": "سسٹم ایکسنٹ رنگ ہم آہنگ ہو گیا",
   "ui.env.syncAccentFail": "سسٹم ایکسنٹ رنگ دستیاب نہیں",
   "ui.topbar.font": "فونٹ لائبریری",
+  "ui.pwa.updateBar": "نیا ورژن دستیاب ہے۔ آف لائن وسائل تیار ہیں",
+  "ui.pwa.updateRefresh": "دوبارہ لوڈ کریں",
 
  // ---- topbar search ----
   "ui.search.placeholder": "اینکوڈرز / شیفرز تلاش کریں…",
@@ -771,7 +773,7 @@ export default {
   "op.sshPubkeyParse.name": "SSH Public Key Parser",
   "op.btcAddressIdent.name": "Bitcoin Address Identify",
   "op.ethAddressIdent.name": "Ethereum Address Identify",
- // ---- MT82 new ops (forensic/stego/modern) ----
+ // ---- new ops (forensic/stego/modern) ----
   "op.gifTiming.name": "GIF فریم ٹائمنگ اسٹیگنوگرافی",
   "op.jpgSizeRecover.name": "JPEG سائز ریکوری",
   "op.zipRepair.name": "ZIP جعلی-انکرپشن مرمت",
@@ -1166,7 +1168,6 @@ export default {
   "ui.ds.customBadge": "تبدیل شدہ (حسبِ ضرورت)",
   "ui.home.strengthBtn": "شدت",
 
- // ---- 2026-08-26 解冻新增（协作代理译文，主控已验）----
   "ui.op.fontDec": "فونٹ سائز چھوٹا کریں",
   "ui.op.fontInc": "فونٹ سائز بڑا کریں",
   "ui.exhaust.branchCount": "{0} شاخیں",
@@ -1345,6 +1346,10 @@ export default {
   "ui.custom.noBuiltin": "اس الگورتھم کے لیے کوئی پڑھنے کے قابل سورس نہیں (مقامی یا پل op)",
   "ui.exhaust.desc": "یہ سمارٹ خودکار ڈی کوڈ کو مکمل کرتا ہے۔",
   "ui.op.export": "بطور فائل برآمد کریں",
+  "ui.op.localFonts": "مقامی فونٹس لوڈ کریں",
+  "ui.op.localFontsDone": "{0} مقامی فونٹس لوڈ ہو گئے",
+  "ui.op.localFontsFail": "مقامی فونٹس لوڈ کرنے میں ناکامی: {0}",
+  "ui.op.pickImage": "تصویر منتخب کریں",
   'op.brainfuck.desc': '8 ہدایات والا BF: چلائیں/بنائیں، زیادہ سے زیادہ 50 لاکھ مراحل؛ حروف کی باہمی تبدیلی کی مطابقت پہلے سے فعال ہے۔',
   'ui.env.series.m3': 'M3 رنگ پیلیٹ',
   'ui.env.series.cn': 'چینی طرز',
@@ -1569,12 +1574,21 @@ export default {
   'fam.lbl.base2048': 'Base2048',
   'fam.lbl.base65536': 'Base65536',
   'fam.lbl.ecoji': 'Ecoji (ایموجی Base64)',
+  'fam.lbl.fields': 'فیلڈز نکالنا',
+  'fam.lbl.attack': 'نانس (nonce) k دوبارہ استعمال',
+  'fam.lbl.sharedPub': 'عوامی کلید سے اخذ',
+  'fam.lbl.homAdd': 'ہومومورفک جمع',
+  'fam.lbl.scan': 'اسکین',
+  'fam.lbl.formatBrute': 'بروٹ فورس',
+  'fam.lbl.smartReport': 'اسمارٹ رپورٹ',
  // ----解冻批回填（外部交付 2026-09-26 + 内部 cat.*）----
   "cat.archive": "کمپریشن / آرکائیو",
   "cat.crack": "پاس ورڈ / آرکائیو کا پاس ورڈ توڑنا",
   "cat.filefmt": "فائل فارمیٹ / ساخت",
   "cat.image": "تصویر / QR کوڈ",
   "cat.audio": "آڈیو / آڈیو اور ویڈیو",
+  "cat.stegoText": "متن سٹیگنوگرافی",
+  "cat.stegoFile": "فائل سٹیگنوگرافی",
   "ui.recipe.chooseFamilyOp": "ریسیپی زنجیر میں شامل کرنے کے لیے آپریشن کا انتخاب",
   "op.base16.desc": "ہیکساڈیسیمل اینکوڈنگ: ہر بائٹ کو دو ہیکساڈیسیمل حروف سے ظاہر کیا جاتا ہے۔ حسبِ ضرورت حروف کی جدول اور بڑے حروف / خالی جگہ سے علیحدگی کی معاونت موجود ہے۔",
   "op.base32.desc": "RFC 4648 کے مطابق Base32 اینکوڈنگ، 5 بِٹ کے گروپوں اور حسبِ ضرورت حروف کی جدول کی معاونت کے ساتھ۔",

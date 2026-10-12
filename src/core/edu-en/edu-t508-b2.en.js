@@ -1,5 +1,5 @@
 /*
- * edu-t508-b2.en.js — English edu cards for T508 batch 2 (encodingExt3.js).
+ * edu-t508-b2.en.js — English edu cards for batch 2 (encodingExt3.js).
  * crockford32 / alienAlphabet / futhark / countingRods / chuckUnary / wingdings / cardanGrille
  * Example outputs mirror the zh shard (real runs, test.mjs of 批2_编码映射).
  */
@@ -68,13 +68,13 @@ export default {
   countingRods: {
     what: "Counting rods — how China represented numbers with small sticks from the Spring-and-Autumn period through the Ming (Sunzi Suanjing: \"one is vertical, ten is horizontal\"). Unicode dedicates U+1D360+ to the vertical and horizontal forms of 1-9 plus 〇.",
     principle:
-      "Vertical 𝍩-𝍱 (U+1D369-1D371) and horizontal 𝍠-𝍨 (U+1D360-1D368) alternate by position: counting from the right, odd positions (units, hundreds, hundred-thousands…) are vertical, even positions (tens, thousands…) horizontal — adjacent positions differ in form so a board layout never blurs. Zero is 〇 (U+3007; earlier just a blank).\n\n" +
-      "Hence 231 = vertical-2 horizontal-3 vertical-1 → 𝍪𝍢𝍩; and 5089 = horizontal-5 〇 horizontal-8 vertical-9 → 𝍤〇𝍧𝍱.",
+      "Vertical 𝍠-𝍨 (U+1D360-1D368, Unicode name UNIT DIGIT) and horizontal 𝍩-𝍱 (U+1D369-1D371, TENS DIGIT) alternate by position: counting from the right, positions 1, 3, 5… (units, hundreds, ten-thousands…) are vertical, positions 2, 4, 6… (tens, thousands, hundred-thousands…) horizontal — adjacent positions differ in form so a board layout never blurs. Zero is 〇 (U+3007; earlier just a blank).\n\n" +
+      "Hence 231 = vertical-2 horizontal-3 vertical-1 → 𝍡𝍫𝍠; and 5089 = horizontal-5 〇 horizontal-8 vertical-9 → 𝍭〇𝍰𝍨.",
     usage: "Type decimal digit strings (spaces separate several numbers) to get rod numerals; paste rods to decode (either orientation accepted anywhere; 0 accepts 〇). No negatives/decimals (ancient red/black rods signed numbers — that's a combining character in Unicode, skipped for sanity).",
     examples: [
-      { in: "231", out: "𝍪𝍢𝍩", desc: "Wikipedia example: vertical-2, horizontal-3, vertical-1" },
-      { in: "5089", out: "𝍤〇𝍧𝍱", desc: "Wikipedia example: horizontal-5, zero, horizontal-8, vertical-9" },
-      { in: "71824", out: "𝍯𝍠𝍰𝍡𝍤", desc: "Wikipedia example (Yongle Encyclopedia digits)" },
+      { in: "231", out: "𝍡𝍫𝍠", desc: "Wikipedia example: vertical-2, horizontal-3, vertical-1" },
+      { in: "5089", out: "𝍭〇𝍰𝍨", desc: "Wikipedia example: horizontal-5, zero, horizontal-8, vertical-9" },
+      { in: "71824", out: "𝍦𝍩𝍧𝍪𝍣", desc: "Wikipedia example (Yongle Encyclopedia vol. 71824 digits): vertical-7, horizontal-1, vertical-8, horizontal-2, vertical-4" },
     ],
     tips: [
       "dCode's code-chinois page is a different thing (a scout stick cipher counting vowels/consonants) — name collision, unrelated.",
@@ -91,7 +91,7 @@ export default {
       "- a run of $N$ ones → group `0` + group of $N$ zeros\n" +
       "- a run of $N$ zeros → group `00` + group of $N$ zeros\n\n" +
       "Groups are space-separated; there is NO separator between characters (runs merge across boundaries — in 1000011+1000011 the middle 11 and 1 fuse into one 111 run). Decoding walks group pairs to rebuild the bit stream, then re-slices by width.",
-    usage: "Default 7-bit width (dCode/Codingame canon); if decoding fails try 8-bit. Ciphertext may contain only zeros and whitespace — anything else errors out.",
+    usage: "Default 7-bit width (dCode/Codingame canon); if decoding fails try 8-bit. Plaintext side: 7-bit accepts only 0-127 ASCII, 8-bit up to 0-255 — out of range errors instead of silently misaligning the stream. Ciphertext may contain only zeros and whitespace — anything else errors out.",
     examples: [
       { in: "CC", out: "0 0 00 0000 0 000 00 0000 0 00", desc: "bit stream 10000111000011: runs 1|0000|111|0000|11" },
       { in: "%", out: "00 0 0 0 00 00 0 0 00 0 0 0", desc: "0100101, six runs" },

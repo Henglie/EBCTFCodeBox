@@ -29,6 +29,7 @@ import { register } from "./registry.js";
 import { keccakF1600 } from "./hash.js";
 import { mlkemKeyGenBytes, mlkemEncapsBytes, mlkemDecapsBytes } from "./mlkem.js";
 import { x25519, scalarBase } from "./x25519.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 字节工具
@@ -65,13 +66,7 @@ function bytesEqual(a, b) {
 
 /** CSPRNG（mlkem.js 同款：无 crypto.getRandomValues 直接报错，不降级）。 */
 function randomBytes(n) {
-  const c = globalThis.crypto;
-  if (c && typeof c.getRandomValues === "function") {
-    const b = new Uint8Array(n);
-    c.getRandomValues(b);
-    return b;
-  }
-  throw new Error("无可用 CSPRNG（crypto.getRandomValues），无法生成随机种子");
+  return randBytes(n);
 }
 
 // ============================================================

@@ -1,5 +1,5 @@
 /*
- * dictGen.js — 字典生成器（T277 P2，cat:'analysis'）。
+ * dictGen.js — 字典生成器（P2，cat:'analysis'）。
  *
  * 按字符集+长度生成笛卡尔积字典，支持掩码（@=小写字母, #=数字, !=大写, ?=任意自定义）。
  *
@@ -86,7 +86,9 @@ register({
       if (!mask) throw new Error("掩码不能为空");
       positions = parseMask(mask);
     } else {
-      const charset = (p?.charset || "abcdefghijklmnopqrstuvwxyz0123456789").trim();
+      // 原 `(p?.charset || 默认)` 把显式空串也回落默认，令下方「字符集不能为空」成为死代码
+      // （假值合并吞合法参数）。改为仅在「未提供」时取默认，显式空串照抛。
+      const charset = (p && p.charset != null ? String(p.charset) : "abcdefghijklmnopqrstuvwxyz0123456789").trim();
       if (!charset) throw new Error("字符集不能为空");
       const len = Math.max(1, Math.min(6, Number(p?.length) || 4));
  // 预检条数是否超限

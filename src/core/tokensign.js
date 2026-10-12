@@ -9,7 +9,7 @@
  * 复用：hmacShaBytes/b64url ← token.js；aesGcmEncrypt/aesGcmDecrypt ← modern.js；
  *       modPow ← primeGen.js（RSA）；sha512/sign/verify ← ed25519.js（PASETO）。
  * 权威验证：RFC 7515 A.2.1（HS256 固定 JWS 向量逐字）；RFC 7516 A.2.3（RSA-OAEP+A128GCM JWE 向量）。
- * 产物协议：{ text, files }（T361）。
+ * 产物协议：{ text, files }（）。
  * 北极星：纯函数、零 UI 依赖、注释含标准出处。
  */
 import { register } from "./registry.js";
@@ -17,6 +17,7 @@ import { hmacShaBytes } from "./token.js";
 import { aesGcmEncrypt, aesGcmDecrypt } from "./modern.js";
 import { modPow } from "./primeGen.js";
 import { sign as ed25519Sign, verify as ed25519Verify, publicKey as ed25519Pub, hexToBytes as edHexToBytes } from "./ed25519.js"; // 同步签名（RFC 8032）
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 const TE_ENC = new TextEncoder();
 const td = new TextDecoder();
@@ -108,7 +109,7 @@ function derInt(bytes) {
 async function digestInfo(hashName, msg) {
   const h = await (hashName === "SHA-256" ? sha256Bytes : hashName === "SHA-384" ? sha384Bytes : sha512Bytes)(msg);
   const oidDer = oidToDer(SHA2_OID[hashName]);
-  const oidSeq = new Uint8Array([0x30, ...derLen(oidDer.length), ...oidDer]);
+  const oidSeq = new Uint8Array([0x06, ...derLen(oidDer.length), ...oidDer]);
   const nullPrm = new Uint8Array([0x05, 0x00]);
   const algId = new Uint8Array([0x30, ...derLen(oidSeq.length + nullPrm.length), ...oidSeq, ...nullPrm]);
   const dOctet = new Uint8Array([0x04, ...derLen(h.length), ...h]);
@@ -136,7 +137,7 @@ async function rsaSignRaw(n, d, msg, hashName) {
   return bigToBytes(s, (modBits(n) + 7) >> 3);
 }
 
-// ---------- ES256：P-256 走 WebCrypto（T397 批1 修正：WebCrypto ECDSA sign/verify 的
+// ---------- ES256：P-256 走 WebCrypto（批1 修正：WebCrypto ECDSA sign/verify 的
 // 签名格式本来就是 raw r||s（IEEE P1363，64B），旧实现误把 sign 输出当 DER 去解析，
 // 产出的签名实为错位字节——验签补齐时一并修正） ----------
 async function es256SignRaw(jwk, msg) {
@@ -172,6 +173,8 @@ register({
     const alg = p.alg || "HS256";
     let extra = {};
     if (p.extraHeader && String(p.extraHeader).trim()) { try { extra = JSON.parse(p.extraHeader); } catch { throw new Error("额外 header 不是合法 JSON"); } }
+    if (!extra || Array.isArray(extra) || typeof extra !== "object") throw new Error("额外 header 须为 JSON 对象");
+    if (extra.alg !== undefined && extra.alg !== alg) throw new Error("额外 header 不得覆盖 alg");
     const header = { alg, typ: "JWT", ...extra };
     const signingInput = compact([TE_ENC.encode(JSON.stringify(header)), TE_ENC.encode(String(text ?? ""))]);
     const [hSeg, pSeg] = signingInput.split(".");
@@ -241,7 +244,7 @@ register({
 register({
   id: "jweEncrypt", cat: "modern",
   family: "jwe", familyLabel: "encrypt", name: "JWE 加密",
-  desc: "JWE 加密（RFC 7516 compact）：dir+AES-256-GCM（alg=dir, enc=A256GCM）——CEK 直接给 32B hex；四段输出。RFC 7516 A 组向量结构验证",
+   desc: "JWE 加密（RFC 7516 compact）：dir+AES-256-GCM（alg=dir, enc=A256GCM）——CEK 直接给 32B hex；五段输出，第二段为空。额外 header 不得更改 alg/enc",
   params: [
     { key: "cek", label: "CEK（32B hex，A256GCM 直接内容加密密钥）", type: "text", default: "" },
     { key: "extraHeader", label: "额外 header 字段（JSON，可空）", type: "text", default: "" },
@@ -251,9 +254,11 @@ register({
     if (cek.length !== 32) throw new Error(`A256GCM 的 CEK 须为 32 字节 hex（当前 ${cek.length}）`);
     let extra = {};
     if (p.extraHeader && String(p.extraHeader).trim()) { try { extra = JSON.parse(p.extraHeader); } catch { throw new Error("额外 header 不是合法 JSON"); } }
+    if (!extra || Array.isArray(extra) || typeof extra !== "object") throw new Error("额外 header 须为 JSON 对象");
+    if ((extra.alg !== undefined && extra.alg !== "dir") || (extra.enc !== undefined && extra.enc !== "A256GCM")) throw new Error("额外 header 不得更改 dir/A256GCM");
     const header = { alg: "dir", enc: "A256GCM", ...extra };
     const hSeg = b64url(TE_ENC.encode(JSON.stringify(header)));
-    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const iv = randBytes(12);
     const ctAndTag = await aesGcmEncrypt(TE_ENC.encode(String(text ?? "")), cek, iv, TE_ENC.encode(hSeg));
     const tag = ctAndTag.slice(ctAndTag.length - 16);
     const ct = ctAndTag.slice(0, ctAndTag.length - 16);
@@ -275,10 +280,13 @@ register({
     if (seg.length !== 5) throw new Error(`JWE compact 应为 5 段（实际 ${seg.length}）`);
     const hdr = await jsonHeader(seg[0], "dir");
     if (hdr.enc !== "A256GCM") throw new Error(`enc 应为 A256GCM（实际 ${hdr.enc}）`);
+    if (seg[1] !== "") throw new Error("dir 模式 encrypted_key 段必须为空");
     const cek = hexToBytesLike(String(p.cek || "").trim());
+    if (cek.length !== 32) throw new Error("A256GCM 的 CEK 须为 32 字节 hex");
     const iv = b64urlToBytes(seg[2]);
     const ct = b64urlToBytes(seg[3]);
     const tag = b64urlToBytes(seg[4]);
+    if (iv.length !== 12 || tag.length !== 16) throw new Error("A256GCM 须为 12 字节 IV 与 16 字节 tag");
     const ctTag = new Uint8Array(ct.length + 16);
     ctTag.set(ct, 0); ctTag.set(tag, ct.length);
     let pt;
@@ -313,8 +321,12 @@ register({
     let payloadBytes = TE_ENC.encode(payload);
     try { payloadBytes = TE_ENC.encode(JSON.stringify(JSON.parse(payload))); } catch { /* 非 JSON 原样 */ }
     const m2 = preAuthV4(payloadBytes, p.footer, p.implicit);
-    const sig = ed25519Sign(sk, m2);
-    const token = "v4.public." + b64url(payloadBytes) + "." + b64url(sig) + (p.footer && String(p.footer).trim() ? "." + b64url(TE_ENC.encode(String(p.footer))) : "");
+    const seed = sk.subarray(0, 32);
+    if (!ed25519Pub(seed).every((b, i) => b === sk[32 + i])) throw new Error("Ed25519 私钥的种子与公钥不匹配");
+    const sig = ed25519Sign(seed, m2);
+    const body = new Uint8Array(payloadBytes.length + sig.length);
+    body.set(payloadBytes); body.set(sig, payloadBytes.length);
+    const token = "v4.public." + b64url(body) + (p.footer ? "." + b64url(TE_ENC.encode(String(p.footer))) : "");
     const textOut = `=== PASETO v4.public 签发 ===\n\n${token}`;
     return { text: textOut + "\n\n产物：1 个文件可下载", files: [{ name: "token.paseto", mime: "text/plain", bytes: TE_ENC.encode(token) }] };
   },
@@ -331,10 +343,13 @@ register({
   run: async (text, p) => {
     const parts = String(text ?? "").trim().split(".");
     if (parts[0] !== "v4" || parts[1] !== "public") throw new Error(`只支持 v4.public（实际 ${parts[0]}.${parts[1] ?? ""}）`);
-    if (parts.length !== 4 && parts.length !== 5) throw new Error("段数应为 4 或 5（footer 可选）");
-    const payload = b64urlToBytes(parts[2]);
-    const sig = b64urlToBytes(parts[3]);
-    const footer = parts[4] != null ? b64urlToBytes(parts[4]) : new Uint8Array(0);
+    if (parts.length !== 3 && parts.length !== 4) throw new Error("段数应为 3 或 4（footer 可选）");
+    if (!parts.slice(2).every(s => /^[A-Za-z0-9_-]*$/.test(s) && s.length % 4 !== 1)) throw new Error("PASETO 须为无填充 base64url");
+    const body = b64urlToBytes(parts[2]);
+    if (body.length < 64) throw new Error("PASETO 消息体至少须含 64 字节签名");
+    const payload = body.subarray(0, body.length - 64);
+    const sig = body.subarray(body.length - 64);
+    const footer = parts[3] != null ? b64urlToBytes(parts[3]) : new Uint8Array(0);
     const pk = edHexToBytes(String(p.pkHex || "").trim());
     if (pk.length !== 32) throw new Error(`Ed25519 公钥须为 32 字节 hex（当前 ${pk.length}）`);
     const m2 = preAuthV4(payload, footer, p.implicit);
@@ -350,11 +365,11 @@ register({
   },
 });
 
-// PASETO pre-authentication encoding（PAE，协议规范 §3）v4 用 PAE(footer)‖PAE(implicit)‖payload
+// PASETO PAE: little-endian 64-bit piece count and lengths.
 function pae(arrs) {
   const n = new Uint8Array(8);
-  new DataView(n.buffer).setBigUint64(0, BigInt(arrs.length), false);
-  const lens = arrs.map((a) => { const b = new Uint8Array(8); new DataView(b.buffer).setBigUint64(0, BigInt(a.length), false); return b; });
+  new DataView(n.buffer).setBigUint64(0, BigInt(arrs.length), true);
+  const lens = arrs.map((a) => { const b = new Uint8Array(8); new DataView(b.buffer).setBigUint64(0, BigInt(a.length), true); return b; });
   const total = 8 + arrs.reduce((s, a) => s + a.length, 0) + arrs.length * 8;
   const out = new Uint8Array(total);
   let off = 0;
@@ -363,8 +378,8 @@ function pae(arrs) {
   return out;
 }
 function preAuthV4(payload, footer, implicit) {
-  const f = footer && String(footer).trim() ? TE_ENC.encode(String(footer)) : new Uint8Array(0);
-  const im = implicit && String(implicit).trim() ? TE_ENC.encode(String(implicit)) : new Uint8Array(0);
+  const f = footer instanceof Uint8Array ? footer : TE_ENC.encode(String(footer ?? ""));
+  const im = implicit instanceof Uint8Array ? implicit : TE_ENC.encode(String(implicit ?? ""));
   return pae([TE_ENC.encode("v4.public."), payload, f, im]);
 }
 

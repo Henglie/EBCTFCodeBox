@@ -109,7 +109,11 @@ function hexToBytes(s) {
 
 function decodeInput(text, mode) {
   const s = String(text || "");
-  if (mode === "hex") return hexToBytes(s.trim());
+  if (mode === "hex") {
+    const t = s.trim();
+    if (/[^0-9a-fA-F\s]/.test(t)) throw new Error("siphash：消息含非十六进制字符（仅允许 0-9a-fA-F）");
+    return hexToBytes(t);
+  }
   if (mode === "base64") {
     const bin = atob(s.trim().replace(/\s/g, ""));
     const out = new Uint8Array(bin.length);

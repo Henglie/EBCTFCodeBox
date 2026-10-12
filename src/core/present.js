@@ -131,7 +131,9 @@ function presentRun(text, p, dir) {
     throw new Error(`PRESENT-${keyBits} 密钥须为 ${wantKeyHex} 个 hex 字符（${keyBits / 8} 字节）`);
   }
   const rk = keySchedule(hexToBig(keyHex), keyBits);
-  const dataHex = cleanHex(text);
+  const rawText = String(text == null ? "" : text);
+  if (/[^0-9a-fA-F\s]/.test(rawText)) throw new Error("PRESENT：数据含非十六进制字符（仅允许 0-9a-fA-F）");
+  const dataHex = cleanHex(rawText);
   if (dataHex.length % 16 !== 0) throw new Error("数据须为 8 字节（16 hex）的整数倍（ECB 分组）");
   let out = "";
   for (let i = 0; i < dataHex.length; i += 16) {

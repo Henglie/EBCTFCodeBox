@@ -6,7 +6,7 @@
  *
  * 输入格式（两种）：
  * ① 真图像：PNG 字节（拖入文件走 rawBytes 通道，acceptsBytes；文本态贴 base64 亦可）。
- *    npiet 桥补齐路径（T387）：逐像素分类到 Piet 18 色 + 黑白（npiet 口径：未知色按白），
+ *    npiet 桥补齐路径（）：逐像素分类到 Piet 18 色 + 黑白（npiet 口径：未知色按白），
  *    解压复用 pcapDeep.inflateRaw（zlib = 2B 头 + raw deflate，同 compress.js 范式）。
  * ② 纯文本网格：每行若干色块 token，空白分隔；行数 = 高，列数 = 宽（须矩形）。
  *    token 用色码：色相首字母 + 明度后缀，或黑白。

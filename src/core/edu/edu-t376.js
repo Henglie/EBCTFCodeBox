@@ -1,4 +1,4 @@
-// 科普内容分片：T376 批（v0.1.6beta 全量补齐波收口）32 个新 op 的科普卡——
+// 科普内容分片：批（v0.1.6beta 全量补齐波收口）32 个新 op 的科普卡——
 // noekeon/shacal2/cast6/cmacExt/ls47/Ed448/X448/GOST R 34.10-2012/PGP 8op/BB84/JWS/JWE/PASETO v4/ML-DSA/SLH-DSA。
 // 纯数据，无 import 无副作用。examples 的 out 全部是 node 直跑真实输出摘录（RFC/FIPS 官方向量逐字核对），未编造。
 export default {
@@ -348,14 +348,14 @@ export default {
   },
 
   bb84Qkd: {
-    what: "BB84 量子密钥分发教学仿真：随机基矢发送-测量 → 基矢比对筛密 → 抽样估误码率检出窃听 → 剩余为最终密钥。经典概率模型。",
+    what: "BB84 量子密钥分发教学仿真：随机基矢发送-测量 → 基矢比对筛密 → 抽样估误码率 → Alice 留存候选位。经典概率模型，未执行纠错与隐私放大。",
     principle:
       "BB84 协议（Bennett & Brassard 1984）是第一个量子密钥分发协议：Alice 对每个比特随机选基矢（+ 直角 / × 对角）发偏振光子；Bob 每光子再随机选基测量——基相同结果确定（无噪声 100% 一致），基不同结果均匀随机（测不准原理）。\n\n" +
       "公开信道只比对基矢（不公开比特），弃掉基不同的位置得筛后密钥（期望 n/2 位）；再从筛后密钥抽样公开比对估误码率 QBER：无窃听无噪声时 QBER=0；截获-重发式窃听（Eve 每光子以概率 eve 拦截、随机基测量后转发）在筛后位引入错率 ≈ eve/4（全拦时 ≈ 25%，超 BB84 安全阈值 ~11%）。QBER 超阈值 → 判定信道不安全，协议中止。\n\n" +
-      "本仿真用 splitmix64 可复现 PRNG（seed 留空随机并回显），经典概率模型演示 sift-then-check 逻辑；真实 QKD 需量子信道与单光子源。",
+      "本仿真用 splitmix64 可复现 PRNG（seed 留空随机并回显）。截获重发和独立信道翻转叠加时，理论 QBER = eve/4 + (1-eve/2)×err。这里只演示 sift-then-check，剩余 Alice 位未经过纠错/隐私放大，不能保证与 Bob 一致或满足安全密钥条件；真实 QKD 还需量子信道与认证经典信道。",
     usage: "设发送光子数 n、信道误码率 err、Eve 窃听率 eve、抽样比例 sampleRatio、检出门限 threshold、过程表显示行数 tableRows，种子 seed 可固定（复现）。",
     examples: [
-      { in: "（空输入，直接运行）", param: "n=128, err=0.02, eve=0.1, seed=demo, threshold=0.11", out: "④ 基相同 63 位 → 筛后密钥 / ⑤ 抽样 31 位不一致 1 位 → 实测 QBER = 3.23%（理论 ≈4.30%）/ ⑥ QBER 在门限内未检出窃听 / ⑦ 最终密钥 (32 bit) hex = a7b0c853", desc: "node 直跑真实输出（seed=demo 可复现）" },
+      { in: "", param: "n=4096, err=0.2, eve=1, seed=independent-properties-2, tableRows=0", out: "理论 QBER = 35.00%；本仿真不含纠错与隐私放大", desc: "独立概率公式；实测 QBER 为抽样值" },
       { in: "同 seed，eve 调到 1（全拦）", param: "n=128, eve=1, seed=demo", out: "实测 QBER ≈ 25% → QBER 超门限，Eve 被检出，本次密钥作废", desc: "窃听检出演示" },
     ],
     tips: [
@@ -373,7 +373,7 @@ export default {
       "- header：`{\"alg\":…,\"typ\":\"JWT\"}`，alg 决定签名算法；\n" +
       "- payload：你的数据（通常 JSON，RFC 7519 claims），只是编码不是加密；\n" +
       "- signature：对 `header.payload` 这个字符串签名——HS* 用 HMAC（RFC 7518 §3.2），RS256 用 RSA PKCS#1 v1.5 + SHA-256（§3.3），ES256 用 ECDSA P-256 + JOSE 定宽 r‖s（§3.4）。\n\n" +
-      "与 JWT 的关系：JWT 把 JWS/JWE 串加 payload 语义；JWS 本身只管签名，不含 token 类型。本工具过 RFC 7515 A.2.1 官方向量（HS256 固定 JWS 逐字）。",
+      "与 JWT 的关系：JWT 把 JWS/JWE 串加 payload 语义；JWS 本身只管签名，不含 token 类型。HS256 参考 RFC 7515 A.1；RS256 的 DigestInfo 内算法标识使用 ASN.1 OBJECT IDENTIFIER（tag 0x06）。额外 header 不得覆盖所选 alg。",
     usage: "payload JSON 进主输入框，选 alg，填密钥：HS* 填口令文本（长 base64url 形自动按字节解），RS256 填 n、d 两行，ES256 填 P-256 JWK JSON。可选额外 header 字段。",
     examples: [
       { in: '{"sub":"1234567890","name":"John Doe"}', param: "HS256, key=secret", out: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0.Q6CM1qIz2WTgTlhMzpFL8jI8xbu9FFfj5DY_bGVY98Y", desc: "node 直跑真实输出（HS256 + secret）" },
@@ -389,7 +389,7 @@ export default {
   jwsVerify: {
     what: "JWS 验签：重算签名逐字节比对，输出合法/不合法 + payload + header 全字段。篡改任一字节即拒。",
     principle:
-      "JWS 验签（RFC 7515 compact）：拆三段 base64url → 解码 header 看 alg → 用对应密钥对 `header.payload` 重算签名 → 与第三段逐字节比对。HS* 用 HMAC，RS256 用公钥 n/e 恢复 EM 再与期望 EMSA-PKCS1 比（逐字节找不一致），ES256 当前验签走 WebCrypto 待接（签名签发已支持）。\n\n" +
+      "JWS 验签（RFC 7515 compact）：拆三段 base64url → 解码 header 看 alg → 用对应密钥对 `header.payload` 重算签名 → 与第三段逐字节比对。HS* 用 HMAC，RS256 用公钥 n/e 恢复 EM 再与期望 EMSA-PKCS1 比，ES256 走 WebCrypto 验证 64 字节 raw r‖s。\n\n" +
       "输出合法/不合法 + 原因（签名不匹配 / EM 与重算不一致），并附 header、payload 全字段解码，便于查参数错在哪。\n\n" +
       "支持 alg 自动识别（从 header 读），但密钥形态须与 alg 匹配（HS 口令 / RS 的 n,e 两行）。",
     usage: "完整 JWS 进主输入框，填密钥（与签发同形态：HS 口令 / RS256 的 n、e 两行）。",
@@ -406,11 +406,11 @@ export default {
   },
 
   jweEncrypt: {
-    what: "JWE 加密（RFC 7516 compact）：dir + AES-256-GCM——CEK 直接给 32B hex，密文用 A256GCM 加密，附认证标签。四段输出。",
+    what: "JWE 加密（RFC 7516 compact）：dir + AES-256-GCM——CEK 直接给 32B hex，五段输出，encrypted_key 段为空。额外 header 不得更改 alg/enc。",
     principle:
       "JWE（JSON Web Encryptiom，RFC 7516）compact 序列化为五段：`protected_header.encrypted_key.iv.ciphertext.tag`。本 op 用简化 peg：alg=dir（direct，CEK 即对称密钥）、enc=A256GCM（AES-256-GCM 认证加密）。\n\n" +
       "流程：header JSON → base64url（作 AAD）；ceK 32 字节 hex；随机 12 字节 IV；AES-256-GCM 加密明文，输出密文 + 16 字节 tag；encrypted_key 段为空（dir 模式不包装密钥）。\n\n" +
-      "AES-GCM 认证加密：加密同时产认证标签，解密时标签不符直接拒——密文被改一个 bit 都逃不掉。与 RFC 7516 结构对齐；A 组 RSA-OAEP 向量用于结构验证（本 op 是 dir + A256GCM 的 A 组实测）。",
+      "AES-GCM 加密同时产认证标签，解密前须校验标签。本操作仅支持 RFC 7516 的 dir + A256GCM；RSA-OAEP 等密钥传输算法不在支持范围内。",
     usage: "明文进主输入框，填 CEK（32 字节 hex，A256GCM 直接内容加密密钥），可选额外 header 字段。",
     examples: [
       { in: "attack at dawn", param: "cek=606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f", out: "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..2Iak9XKWM6MiSarF.w8fySw55EZYJdJiH4AQ.9bfr-REJvX5YjKuoYyCE_w", desc: "node 直跑真实输出（IV 随机，两次不同）" },
@@ -428,7 +428,7 @@ export default {
     principle:
       "JWE 解密：拆五段 → 解码 protected header 验 alg/enc（须 dir / A256GCM）→ 取 IV 与密文 → 用 CEK 对 header + IV + 密文 + tag 做 AES-256-GCM 解密与认证。\n\n" +
       "GCM 认证失败会抛异常（标签不符），工具转为明确报错「密文/IV/header 被篡改或 CEK 错误」，不会静默给伪明文。\n\n" +
-      "输出明文与解码后的 header JSON。CEK 是那个 32 字节对称密钥（须与加密一致）。",
+      "输出明文与解码后的 header JSON。CEK 必须为 32 字节；dir 的 encrypted_key 必须为空，IV 必须为 12 字节，tag 必须为 16 字节。",
     usage: "完整 JWE 进主输入框，填 CEK（32B hex）。",
     examples: [
       { in: "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..2Iak9XKWM6MiSarF.w8fySw55EZYJdJiH4AQ.9bfr-REJvX5YjKuoYyCE_w", param: "cek=60616263…7e7f", out: "=== JWE 解密成功 ===\nheader: {\"alg\":\"dir\",\"enc\":\"A256GCM\"}\nattack at dawn", desc: "node 直跑真实输出，与 JWE 加密卡配套" },
@@ -445,12 +445,12 @@ export default {
   pasetoV4Sign: {
     what: "PASETO v4.public 签发：payload JSON + Ed25519 私钥 hex（64B 种子‖公钥）+ 可选 footer/implicit → v4.public token。",
     principle:
-      "PASETO（Platform-Agnostic Security Tokens）v4.public 是「非对称」版本，签名用 Ed25519（RFC 8032）。格式 `v4.public.payload.signature[.footer]`，版本与目的各一段 base64url。\n\n" +
-      "PAE（Pre-Authentication Encoding）做域分离（协议规范 §3）：`PAE([\"v4.public.\", payload, footer, implicit])` 把各段长度显式编码，防「截断/拼接」攻击——这是 PASETO 比手写 JWT 更安全的点。\n\n" +
+      "PASETO（Platform-Agnostic Security Tokens）v4.public 用 Ed25519（RFC 8032）。格式 `v4.public.base64url(payload‖signature)[.base64url(footer)]`，共三段或四段。版本与目的为固定文本。\n\n" +
+      "PAE（Pre-Authentication Encoding）做域分离：`PAE([\"v4.public.\", payload, footer, implicit])` 用 64 位小端整数编码段数及各段字节长度；footer/implicit 按原始 UTF-8 字节参与认证，包括空白。\n\n" +
       "v4.public 用 Ed25519 的 64 字节私钥（32 字节种子 + 32 字节公钥，标准 libsodium-like 形态）。payload 是 JSON 但签的是规范化字符串（工具会 try 重排 JSON）。本 op 支持 v4.public（v4.local 用 XChaCha20 暂不支持，desc 已注明）。",
     usage: "payload JSON 进主输入框，填 Ed25519 私钥 64 字节 hex、footer（JSON 或文本可空）、implicit assertion（可空）。",
     examples: [
-      { in: '{"sub":"test","iat":1577836800}', param: "skHex=22a3f972…3f4f（64B）", out: "v4.public.eyJzdWIiOiJ0ZXN0IiwiaWF0IjoxNTc3ODM2ODAwfQ.aG2JB9xWzkkLfzOd0dw-mR9KOnivIKz_JOv44A80704WKO4l1UkgsyKnBOP075r4gI30N0VVvQ69HYYGbgHMAA", desc: "node 直跑真实输出" },
+      { in: '{"data":"this is a signed message","exp":"2022-01-01T00:00:00+00:00"}', param: "skHex=b4cbfb43df4ce210727d953e4a713307fa19bb7d9f85041438d9e11b942a37741eb9dbbbbc047c03fd70604e0071f0987e16b28b757225c11f00415d0e20b1a2", out: "v4.public.eyJkYXRhIjoidGhpcyBpcyBhIHNpZ25lZCBtZXNzYWdlIiwiZXhwIjoiMjAyMi0wMS0wMVQwMDowMDowMCswMDowMCJ9bg_XBBzds8lTZShVlwwKSgeKpLT3yukTw6JUz3W4h_ExsQV-P0V54zemZDcAxFaSeef1QlXEFtkqxT1ciiQEDA", desc: "PASETO 官方向量 4-S-1（仅验证签名，未执行 claims 时效策略）" },
     ],
     tips: [
       "PASETO 与 JWT 的核心差异：版本化 + PAE 域分离 + 明确不允许 alg=none 等历史坑，号称「更不容易用错」。",
@@ -463,12 +463,12 @@ export default {
   pasetoV4Verify: {
     what: "PASETO v4.public 验签：token + Ed25519 公钥（32B hex）→ 合法/不合法 + payload + footer；PAE 域分离防拼接。",
     principle:
-      "验签：拆 v4.public 的段（段数须 4 或 5，footer 可选），解出 payload 字节与签名；用 Ed25519 公钥对 `PAE([\"v4.public.\", payload, footer, implicit])` 验签名——PAE 把段与长度编码进去，不能像无域分离方案那样去拼接段。\n\n" +
+      "验签：拆 v4.public 的三段或四段（footer 可选），第三段解码后末 64 字节为签名，其前为 payload；用 Ed25519 公钥对 `PAE([\"v4.public.\", payload, footer, implicit])` 验签。PAE 的段数与长度均为 64 位小端整数。\n\n" +
       "公钥 32 字节 hex 必须精确；implicit assertion 若签发时用了，验签时也必须一致。\n\n" +
       "输出 ✓/✗ + payload JSON + footer 存在与否。篡改 payload/footer/signature 任一段都过不了。",
     usage: "完整 PASETO token 进主输入框，填 Ed25519 公钥 32 字节 hex、implicit（可空，须与签发一致）。",
     examples: [
-      { in: "v4.public.eyJzdWIiOiJ0ZXN0IiwiaWF0IjoxNTc3ODM2ODAwfQ.aG2JB9xWzkkLfzOd0dw-mR9KOnivIKz_JOv44A80704WKO4l1UkgsyKnBOP075r4gI30N0VVvQ69HYYGbgHMAA", param: "pkHex=60120280…89ae（32B）", out: "✓ 签名有效\npayload: {\"sub\":\"test\",\"iat\":1577836800}\nfooter: (无)", desc: "node 直跑真实输出（公钥须与私钥对应）" },
+      { in: "v4.public.eyJkYXRhIjoidGhpcyBpcyBhIHNpZ25lZCBtZXNzYWdlIiwiZXhwIjoiMjAyMi0wMS0wMVQwMDowMDowMCswMDowMCJ9bg_XBBzds8lTZShVlwwKSgeKpLT3yukTw6JUz3W4h_ExsQV-P0V54zemZDcAxFaSeef1QlXEFtkqxT1ciiQEDA", param: "pkHex=1eb9dbbbbc047c03fd70604e0071f0987e16b28b757225c11f00415d0e20b1a2", out: "✓ 签名有效", desc: "PASETO 官方向量 4-S-1；token 日期不代替应用 claims 检查" },
     ],
     tips: [
       "公钥与私钥务必配套：Ed25519 公钥由私钥种子推导，拿错公钥必验签失败。",

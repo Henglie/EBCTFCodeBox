@@ -1,5 +1,5 @@
 /*
- * flasksession.js — Flask session cookie 三件：decode / sign / verify（T355，批B4）。
+ * flasksession.js — Flask session cookie 三件：decode / sign / verify（批B4）。
  *
  * 权威依据（逐行对照源码实现，注释中文件/函数均指 pallets 官方库）：
  *   - itsdangerous src/itsdangerous/signer.py

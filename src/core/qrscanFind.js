@@ -60,9 +60,9 @@ export function matchWindowScaled(runs, s, finderColor, opt = {}) {
   // 中央段必须是最长的（抑制时序区/数据区偶发同比例窗）
   if (!(r2.len > r0.len && r2.len > r1.len && r2.len > r3.len && r2.len > r4.len)) return null;
   // ⚠ 单位估计不能用 total/7：外侧黑环与相邻数据模块同色时会**合并**，
-  //   使 total 偏大 → 单位高估 → 外环确认点落到 finder 之外被误拒。
-  //   稳健做法取「各段折算成模块数后的最小值」：外侧四段各应 ~1 模块、中央 ~3 模块，
-  //   合并只会让长度变大，故取最小对合并免疫。
+  //  使 total 偏大 → 单位高估 → 外环确认点落到 finder 之外被误拒。
+  //  稳健做法取「各段折算成模块数后的最小值」：外侧四段各应 ~1 模块、中央 ~3 模块，
+  //  合并只会让长度变大，故取最小对合并免疫。
   const unitRobust = Math.max(1, Math.min(r0.len, r1.len, r3.len, r4.len, r2.len / 3));
   return { center: r2.start + (r2.len >> 1), unit: unitRobust, unitShape: unit,
            lens: [r0.len, r1.len, r2.len, r3.len, r4.len] };
@@ -144,8 +144,8 @@ export function findFinderCentersScaled(bits, w, h, finderColor = 1, opt = {}) {
     if (!okRing) continue;
     // 去重：距离小于一个 finder 宽度（约 7 unit）视为同一 finder
     // ⚠ 下游 pitch 用**稳健估计** bestU（各段折算最小值），不用 unitShape（total/7）：
-    //   total/7 在外侧黑环与相邻数据模块/静默区边界合并时系统性高估，
-    //   会让版本被低估（n 偏小）、采样矩阵尺寸错位，整条解码必然失败。
+    //  total/7 在外侧黑环与相邻数据模块/静默区边界合并时系统性高估，
+    //  会让版本被低估（n 偏小）、采样矩阵尺寸错位，整条解码必然失败。
     const u = bestU;
     const dup = out.find((o) => Math.abs(o.x - c.cx) <= 4 * o.unit + 2 && Math.abs(o.y - bestCy) <= 4 * o.unit + 2);
     if (dup) {
@@ -320,8 +320,8 @@ export function candidatesFromFinders(bits, w, h, trio, opt = {}) {
   for (const [tag, TR, BL] of variants) {
     const hyp = Math.hypot(TR.x - BL.x, TR.y - BL.y);
     // ⚠ hyp 是 TL 的**对边（斜边）**：TL 与 TR、TL 与 BL 各隔 (n-7) 个模块，
-    //   故 hyp = √2·(n-7)·pitch。估版本必须先除掉 √2，否则 n 被系统性低估
-    //   （例：n=25、pitch=8.6 时 hyp≈219，漏 √2 会算出 n≈32）。
+    //  故 hyp = √2·(n-7)·pitch。估版本必须先除掉 √2，否则 n 被系统性低估
+    //  （例：n=25、pitch=8.6 时 hyp≈219，漏 √2 会算出 n≈32）。
     const nHyp = Math.round(hyp / (trio.pitch * Math.SQRT2)) + 7;
     const ns = new Set();
     for (let d = -2; d <= 2; d++) if (LEGAL.has(nHyp + d)) ns.add(nHyp + d);
@@ -405,7 +405,7 @@ export function clusterHits(hits, axis) {
       if (d <= Math.max(3, 2.5 * u) && d < bestD) { best = k; bestD = d; }
     }
     // ⚠ 簇坐标用**中位数**而非均值：单个误合并的伪命中就能把均值拉偏约 1 模块，
-    //   而中心偏移会直接击穿外环确认（见 ringConfirmed 注释）。中位数对离群免疫。
+    //  而中心偏移会直接击穿外环确认（见 ringConfirmed 注释）。中位数对离群免疫。
     if (best) {
       best.xs.push(x); best.ys.push(y);
       best.us.push(hit.unit); best.ss.push(hit.unitShape || hit.unit);

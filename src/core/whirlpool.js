@@ -202,9 +202,11 @@ export function whirlpoolHex(data) {
 
 function whirlpoolRun(text, p = {}) {
   const inputMode = (p && p.inputMode) || "text";
-  const input = inputMode === "hex"
-    ? hexToBytes(text)
-    : new TextEncoder().encode(String(text || ""));
+  const input = p && p.rawBytes && p.rawBytes.length
+    ? (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes))
+    : inputMode === "hex"
+      ? hexToBytes(text)
+      : new TextEncoder().encode(String(text || ""));
 
   const digest = whirlpoolHex(input);
   const lines = [];

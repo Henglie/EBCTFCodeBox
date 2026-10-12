@@ -1071,7 +1071,6 @@ export default {
   "ui.ds.customBadge": "ئۆزگەرتىلدى (ئىختىيارىي)",
   "ui.home.strengthBtn": "يېشىش كۈچى",
 
- // ---- 2026-08-26 解冻新增（暂填中文，待外包译文替换）----
   "ui.op.fontDec": "خەت نومۇرىنى كىچىكلىتىش",
   "ui.op.fontInc": "خەت نومۇرىنى چوڭايتىش",
   "ui.exhaust.branchCount": "{0} تارماق",

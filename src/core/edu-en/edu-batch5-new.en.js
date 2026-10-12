@@ -277,6 +277,7 @@ export default {
     examples: [
       { in: "简体转换", out: "簡體轉換", desc: "Simplified → traditional" },
       { in: "簡體轉換", out: "简体转换", desc: "Traditional → simplified" },
+      { in: "汉字国门画", out: "漢字國門畫", desc: "Simplified/traditional conversion does not substitute Martian glyphs" },
     ],
     tips: ["It only does one-to-one mapping of common characters and does not handle 'one simplified to many traditional' semantic ambiguity (e.g. 后/後, 里/裡 are fixed to one per the table)."],
     aka: ["简繁转换", "繁简转换", "简繁体", "traditional-simplified", "简体繁体互转", "繁体转简体", "简体转繁体", "简繁互转", "简中繁中", "Simplified Chinese", "Traditional Chinese", "中文简繁"],

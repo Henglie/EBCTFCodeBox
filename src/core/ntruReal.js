@@ -1,5 +1,5 @@
 /*
- * ntruReal.js — 真 NTRU 公钥加密（EESS/NTRU Encrypt 产品式规范口径，T398 批A）。
+ * ntruReal.js — 真 NTRU 公钥加密（EESS/NTRU Encrypt 产品式规范口径，PQC 批A）。
  * 与 pqcLite.js 的 ntruToy（玩具参数 n=8, q=257）完全独立，本文件为产品级参数。
  *
  * ============ 规范来源（查证记录，2026-09-05） ============
@@ -56,6 +56,7 @@
 
 import { register } from "./registry.js";
 import { decodeUtf8Lossless } from "./bytesIo.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // BOM 保真的严格 UTF-8 解码（bytesIo 单一源）：非法序列抛 TypeError（同旧 fatal TextDecoder 语义），
 // 唯一行为差异是合法 BOM（U+FEFF 开头）不再被静默吞掉。
@@ -108,11 +109,7 @@ function bytesToHex(bytes) {
 }
 
 function randomU32() {
-  const c = globalThis.crypto;
-  if (c && typeof c.getRandomValues === "function") {
-    return c.getRandomValues(new Uint32Array(1))[0] >>> 0;
-  }
-  throw new Error("无可用 CSPRNG（crypto.getRandomValues）");
+  return new Uint32Array(randBytes(4).buffer)[0] >>> 0;
 }
 
 /** 无偏 [0,u) 随机整数（拒绝采样）。 */

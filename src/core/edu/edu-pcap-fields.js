@@ -105,14 +105,14 @@ export const PCAP_FIELDS_EDU_ZH = {
     what: "OLE/CFB 容器静态提取：解析 OLE2（Compound File Binary）复合文档的目录树，列出全部 storage/stream 并把流内容提取为文件，给出大小与 SHA-256。适用 .doc/.xls/.ppt（Office 97-2003）、.msi、vbaProject.bin 等。",
     principle:
       "CFB 把文件切成固定扇区（v3=512B，v4=4096B）：头部 512 字节给出 FAT/DIFAT 位置、目录起始扇区与 mini 流 cutoff（默认 4096B）。FAT 是扇区链表，把流的内容串起来；小于 cutoff 的「小流」不直接占扇区，而是打包进 Root Entry 的一段连续空间（mini 流），按 64 字节小扇区切分、由 MiniFAT 链接。目录是 128 字节定长项：名称 UTF-16LE、类型（storage/stream/root）、红黑树 sibling/child 指针、起始扇区、大小。解析时按兄弟树走完整目录，对每个流按大小选 FAT 或 MiniFAT 通道取字节。",
-    usage: "把 OLE 文件拖进输入框 → 输出容器版本、Root CLSID、完整目录树与每个流的大小/SHA-256，流内容附「⬇ 下载」产物（总量受上限参数保护）。静态只读，绝不执行宏或文档内代码。",
+    usage: "把 OLE 文件拖进输入框 → 输出容器版本、Root CLSID、完整目录树与每个流的大小/SHA-256，流内容附「⬇ 下载」产物（总量受上限参数保护）。容器内含 VBA 宏工程（VBA/dir）时自动解析 dir 记录、按代码页解压导出各模块宏源码文本。静态只读，绝不执行宏或文档内代码。",
     examples: [
       { in: "嵌套 OLE：Documents/A/B/nested.txt + 大流 Workbook.bin + 中文流名", out: "目录树 7 对象全列出；Workbook.bin(5000B) 走 FAT、小流走 MiniFAT，逐字节 SHA-256 对上生成期内容", desc: "双通道取流 + 深层嵌套 + UTF-16LE 流名" },
       { in: "magic 被破坏的文件", out: "显式报「不是 OLE/CFB 容器」，并提示 .docx/.xlsx 是 ZIP 容器应走解压类工具", desc: "如实拒绝，不猜测" },
     ],
     tips: [
       "Office 2007+ 的 .docx/.xlsx/.pptx 是 ZIP 不是 OLE——用解压/zipCreate 类工具。",
-      "vbaProject.bin 本身是一个 OLE 容器：先提取出来再喂回本工具可看其内部流（VBA 模块源码解压属后续阶段）。",
+      "vbaProject.bin 本身是 OLE 容器：本工具直接识别其中 VBA 宏工程，列出模块清单并导出宏源码（MS-OVBA 压缩解压，按工程代码页解码）。",
       "红线：只静态读取，不执行宏、不运行文档内任何代码。",
       "流超过产物上限时只列出并标注，不附下载。",
     ],
@@ -228,14 +228,14 @@ export const PCAP_FIELDS_EDU_EN = {
     what: "Static OLE/CFB container extraction: parses the directory tree of an OLE2 (Compound File Binary) document, lists every storage/stream, and extracts stream bytes as files with size and SHA-256. Applies to .doc/.xls/.ppt (Office 97-2003), .msi, vbaProject.bin, etc.",
     principle:
       "CFB slices files into fixed sectors (v3=512B, v4=4096B). The 512-byte header locates FAT/DIFAT, the first directory sector and the mini-stream cutoff (default 4096B). The FAT is a sector linked-list chaining a stream's content; streams smaller than the cutoff are packed into a contiguous region owned by the Root Entry (the mini stream), split into 64-byte mini sectors and linked by the MiniFAT. Directory entries are fixed 128 bytes: UTF-16LE name, type (storage/stream/root), red-black tree sibling/child pointers, start sector and size. The parser walks the sibling tree and reads each stream through the FAT or MiniFAT path by size.",
-    usage: "Drop an OLE file → container version, Root CLSID, full directory tree, per-stream size/SHA-256, with downloadable artifacts (total capped by a parameter). Strictly static and read-only — macros are never executed.",
+    usage: "Drop an OLE file → container version, Root CLSID, full directory tree, per-stream size/SHA-256, with downloadable artifacts (total capped by a parameter). If the container embeds a VBA project (VBA/dir), dir records are parsed and each module's macro source is decompressed per the project code page. Strictly static and read-only — macros are never executed.",
     examples: [
       { in: "Nested OLE: Documents/A/B/nested.txt + a large Workbook.bin + a Chinese-named stream", out: "7 objects listed; Workbook.bin (5000B) via FAT, small streams via MiniFAT, byte-exact SHA-256 against generator truth", desc: "Dual-channel stream reads + deep nesting + UTF-16LE names" },
       { in: "File with corrupted magic", out: "Explicit 'not an OLE/CFB container' error plus a hint that .docx/.xlsx are ZIP containers", desc: "Honest refusal, no guessing" },
     ],
     tips: [
       "Office 2007+ .docx/.xlsx/.pptx are ZIP, not OLE — use the unzip tools.",
-      "vbaProject.bin is itself an OLE container: extract it and feed it back to inspect inner streams (VBA module source decompression is a later phase).",
+      "vbaProject.bin is itself an OLE container: this tool detects the embedded VBA project directly, lists modules, and exports macro source (MS-OVBA decompression, decoded per the project code page).",
       "Red line: static reads only — no macro execution, no document code is ever run.",
       "Streams beyond the artifact cap are listed and flagged, not attached.",
     ],

@@ -91,9 +91,9 @@ export function deinterleaveMap(allCWLen, version, ecl) {
   const blockLen = Math.floor(rawCodewords / numBlocks);
   const map = new Array(rawCodewords).fill(null);
   // ⚠ 块内下标必须用**每块自己的 push 计数**，不能用外层循环变量 i：
-  //   现用 deinterleave 在 `i === blockLen - blockEccLen` 处对短块有一次跳过，
-  //   跳过后压入短块的下标整体比 i 小 1。早期版本直接写 `k: i`，导致**短块校验区**
-  //   的擦除位置全部偏移 1 位 → 擦除解码必然失败（实测 v2-M 每块 20 擦除只救回 3%）。
+  //  现用 deinterleave 在 `i === blockLen - blockEccLen` 处对短块有一次跳过，
+  //  跳过后压入短块的下标整体比 i 小 1。早期版本直接写 `k: i`，导致**短块校验区**
+  //  的擦除位置全部偏移 1 位 → 擦除解码必然失败（实测 v2-M 每块 20 擦除只救回 3%）。
   const kPerBlock = new Array(numBlocks).fill(0);
   let idx = 0;
   for (let i = 0; i < blockLen + 1; i++) {
@@ -132,14 +132,14 @@ export function decodeWithErasures(matrix, conf, size, version, ecl, mask, opt =
   const thr = opt.confThreshold == null ? 0.25 : opt.confThreshold;
   // 擦除上限：理论边界是 nsym（e + 2v ≤ nsym，v=0 时 e 可达 nsym）。
   // ⚠ 早期版本这里写成 nsym/2，等于把擦除能力又砍回传统上限，实测导致
-  //   「每块 20 擦除 / 校验 26」这种本可纠正的场景被直接弃用（全 0%）。
+  //  「每块 20 擦除 / 校验 26」这种本可纠正的场景被直接弃用（全 0%）。
   // ⚠ 但 e 恰好等于 nsym 时另有一个**正确性**漏洞：rsErasure 的「未知错误」搜索输入
-  //   长度为零（Forney 校正子取 x^e..x^{nsym-1}，e = nsym 时为空），于是无论实际还有
-  //   多少**未标注**的损坏模块，解都只能是「只动这 nsym 个位置」的唯一解 —— 结果必然是
-  //   一个合法码字（后验校正子全零、重编码判据也会通过），却可能不是原文（把未标注的
-  //   损坏整体"搬"到已标注位置上）。实测踩到过：某遮挡样本在 e = nsym 时输出「合法但
-  //   错误」的串。故默认留 1 个残余校正子做一致性检查：e ≤ nsym − 1。
-  //   确有精确位置来源（如已知的确定性掩码）时可显式 opt.allowFullErasure = true 放开。
+  //  长度为零（Forney 校正子取 x^e..x^{nsym-1}，e = nsym 时为空），于是无论实际还有
+  //  多少**未标注**的损坏模块，解都只能是「只动这 nsym 个位置」的唯一解 —— 结果必然是
+  //  一个合法码字（后验校正子全零、重编码判据也会通过），却可能不是原文（把未标注的
+  //  损坏整体"搬"到已标注位置上）。实测踩到过：某遮挡样本在 e = nsym 时输出「合法但
+  //  错误」的串。故默认留 1 个残余校正子做一致性检查：e ≤ nsym − 1。
+  //  确有精确位置来源（如已知的确定性掩码）时可显式 opt.allowFullErasure = true 放开。
   const eccPerBlock = ECC_CODEWORDS_PER_BLOCK[ecl][version];
   const maxErasPerBlock = opt.maxErasPerBlock == null
     ? (opt.allowFullErasure ? eccPerBlock : Math.max(0, eccPerBlock - 1))

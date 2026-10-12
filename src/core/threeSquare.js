@@ -59,6 +59,7 @@ function normalizeLetters(str, mode) {
 /** keyword → 25 字母方阵串（归一、去重、余字母补齐），与 twoSquare/fourSquare 同款。 */
 function buildSquare(keyword, mode) {
   const kw = normalizeLetters(keyword, mode);
+  if (!kw) throw new Error("三方密码：关键词须含表内字母（不能为空或全为非字母字符）。");
   const alpha = baseAlpha(mode);
   let sq = "";
   const seen = new Set();

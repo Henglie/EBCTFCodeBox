@@ -1,7 +1,7 @@
 /*
- * unitConv.js — 单位换算（cat:'data'，run 报告型，T339）。
+ * unitConv.js — 单位换算（cat:'data'，run 报告型）。
  *
- * 九组（任务卡口径 + MT81 尾巴补三组）：
+ * 九组（任务卡口径 + 收尾批次补三组）：
  * - 数据量：B/KB/MB/GB/TB/PB（SI 1000 制）与 KiB/MiB/GiB/TiB/PiB（IEC 1024 制）
  *   两制并列输出（最常被搞混的点）。
  * - 数据速率：bps/Kbps/Mbps/Gbps（bit，SI）与 B/s/KB/s/MB/s（Byte，bit×8）。
@@ -12,9 +12,9 @@
  *   ISO 行仅作辅助展示，不做双向解码。
  * - 频率：Hz/kHz/MHz/GHz。
  * - 角度：度/弧度/梯度。
- * - 长度（MT81）：km/m/cm/mm/in/ft/yd/mi/nmi/里/尺…（与 unitTables.js 同源）。
- * - 速度（MT81）：m/s、km/h、mph、kn（与 unitTables.js 同源）。
- * - 货币面额（MT81）：人民币元角分、美元 dollar/cent 等主辅币（**非汇率**，
+ * - 长度：km/m/cm/mm/in/ft/yd/mi/nmi/里/尺…（与 unitTables.js 同源）。
+ * - 速度：m/s、km/h、mph、kn（与 unitTables.js 同源）。
+ * - 货币面额：人民币元角分、美元 dollar/cent 等主辅币（**非汇率**，
  *   与 unitTables.js 同源）。
  *
  * 换算系数溯源（北极星第二条，每个系数给依据）：
@@ -186,11 +186,11 @@ const FREQ_UNITS = [
 // deg→rad：×π/180（ISO 80000-3）；deg→gon：×10/9（400 gon = 360°）
 const ANGLE_UNITS = ["deg", "rad", "gon"];
 
-// -- 长度（基准：米 m；MT81 尾巴：op 侧补齐，与 unitTables.js 的 LENGTH_UNITS 逐字同源） --
+// -- 长度（基准：米 m；收尾批次：op 侧补齐，与 unitTables.js 的 LENGTH_UNITS 逐字同源） --
 // 英制精确值来自 1959 年美英等六国《国际码磅协定》；市制取 1984 年国务院
 // 《关于在我国统一实行法定计量单位的命令》；au/ly 为天文距离参考。
 // ⚠ 同源约定：此表与 src/core/unitTables.js 的 LENGTH_UNITS 必须保持一致，
-//   改单位先改那边（视图层事实源），这边同步。禁止只改一边造成 op 与视图漂移。
+//  改单位先改那边（视图层事实源），这边同步。禁止只改一边造成 op 与视图漂移。
 const LEN_UNITS = [
   { u: "km", zh: "千米", k: rat(10n ** 3n) },
   { u: "m", zh: "米", k: R1 },
@@ -212,7 +212,7 @@ const LEN_UNITS = [
   { u: "ly", zh: "光年", k: rat(9460730472580800n) },
 ];
 
-// -- 货币「面额」换算（不是汇率！MT81 尾巴：op 侧补齐，与 unitTables.js 同源） --
+// -- 货币「面额」换算（不是汇率！ 收尾批次：op 侧补齐，与 unitTables.js 同源） --
 // 产品负责人 2026-08-23 明确：货币要的是「元/角/分」这种**同一种货币内部主辅币面额**换算，
 // 比例由法律/铸币法定死，是精确常数，不联网、不过期、与零外发红线无冲突。
 // ⚠ 每种货币各自成一组，组间绝不互转（跨币种才需汇率，本工具不做）。
@@ -279,7 +279,7 @@ const CURRENCY_SETS = [
   },
 ];
 
-// -- 速度（基准：m/s；MT81 尾巴：op 侧补齐 mph/kn，与 unitTables.js 的 SPEED_UNITS 同源）--
+// -- 速度（基准：m/s；收尾批次：op 侧补齐 mph/kn，与 unitTables.js 的 SPEED_UNITS 同源）--
 // mph = 1 mi/h = 0.44704 m/s 精确（由 mi 精确值导出）；kn = 1 nmi/h = 1852/3600 m/s 精确。
 // ⚠ 同源约定：与 unitTables.js 的 SPEED_UNITS 保持一致，改先改那边，这边同步。
 const SPEED_UNITS = [
@@ -469,7 +469,7 @@ function angleReport(qty, unit) {
   return lines.join("\n");
 }
 
-// -- 长度报告（MT81 尾巴）--
+// -- 长度报告（收尾批次）--
 function lengthReport(qty, unit) {
   const def = LEN_UNITS.find((x) => x.u === unit);
   const meters = ratMul(qty, def.k); // 基准米（有理数）
@@ -485,7 +485,7 @@ function lengthReport(qty, unit) {
   return lines.join("\n");
 }
 
-// -- 速度报告（MT81 尾巴）--
+// -- 速度报告（收尾批次）--
 function speedReport(qty, unit) {
   const def = SPEED_UNITS.find((x) => x.u === unit);
   const ms = ratMul(qty, def.k); // 基准 m/s（有理数）
@@ -500,7 +500,7 @@ function speedReport(qty, unit) {
   return lines.join("\n");
 }
 
-// -- 货币面额报告（MT81 尾巴；组间绝不互转，同种货币内部列全部面额）--
+// -- 货币面额报告（收尾批次；组间绝不互转，同种货币内部列全部面额）--
 function currencyReport(qty, unit) {
   const hits = CURRENCY_SETS.filter((g) => g.units.some((x) => x.u === unit));
   if (!hits.length) throw new Error(`未知货币面额 '${unit}'`);
@@ -719,7 +719,7 @@ function unitConvRun(text, p) {
     threwLong = /超过上限/.test(e.message);
   }
   must(threwLong, "4097 字符应报超上限");
-  // ── MT81 尾巴：长度 / 货币 ──
+  // ── 收尾批次：长度 / 货币 ──
   rep = unitConvRun("1 mi");
   must(/m\s+= 1609\.344/.test(rep), "1 mi 应含 m = 1609.344（1959 协定精确值）");
   must(/km\s+= 1\.609344/.test(rep), "1 mi 应含 km = 1.609344");
@@ -763,10 +763,10 @@ register({
 });
 
 // 导出面说明：
-// - 前 4 个是 T339 原有导出（op 报告 + 有理数工具 + 纪元嗅探）。
-// - 其余为 MT81「快速换算」视图所需：有理数四则、十进制解析、既有五组系数表与纪元表。
-//   目的是让 unitTables.js / ui 层**复用同一份系数表**，不再抄第二份（抄一份就多一处失同步风险）。
-//   只加导出，不改任何既有行为。
+// - 前 4 个是原有导出（op 报告 + 有理数工具 + 纪元嗅探）。
+// - 其余为「快速换算」视图所需：有理数四则、十进制解析、既有五组系数表与纪元表。
+//  目的是让 unitTables.js / ui 层**复用同一份系数表**，不再抄第二份（抄一份就多一处失同步风险）。
+//  只加导出，不改任何既有行为。
 export {
   unitConvRun, rat, ratToStr, sniffEpoch,
   ratMul, ratDiv, ratAdd, ratSub, ratToNum, ratIsZero, parseRatDecimal, normUnit,

@@ -180,7 +180,8 @@ function bytesToB64(bytes) {
 function blake3Run(text, p = {}) {
   const inputMode = (p && p.inputMode) || "text";
   let input;
-  if (inputMode === "hex") input = hexToBytes(String(text || ""));
+  if (p && p.rawBytes && p.rawBytes.length) input = (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes)); // rawBytes 契约（字节直通）
+  else if (inputMode === "hex") input = hexToBytes(String(text || ""));
   else input = new TextEncoder().encode(String(text || ""));
 
   let outLen = parseInt((p && p.outLen) || "32", 10);

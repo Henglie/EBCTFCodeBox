@@ -89,11 +89,14 @@ function w16(b, i, v, le) {
 }
 
 // magic 四种合法值（首字节序列）→ {le, nano}
+// 键 = 文件首 4 字节的磁盘十六进制（toHex(b.subarray(0, 4))）。
+// libpcap savefile(5)：magic 值 0xa1b2c3d4 按本机字节序写盘 —— LE 文件磁盘字节为 d4 c3 b2 a1
+//（与 pcapParse 的 u32le 判定、tcpdump/Wireshark 实盘一致），BE 文件为 a1 b2 c3 d4。
 const MAGICS = {
-  "a1b2c3d4": { le: true, nano: false, name: "LE 微秒 (标准 tcpdump)" },
-  "d4c3b2a1": { le: false, nano: false, name: "BE 微秒" },
-  "a1b2cd34": { le: true, nano: true, name: "LE 纳秒" },
-  "34cdb2a1": { le: false, nano: true, name: "BE 纳秒" },
+  "a1b2c3d4": { le: false, nano: false, name: "BE 微秒" },
+  "d4c3b2a1": { le: true, nano: false, name: "LE 微秒 (标准 tcpdump)" },
+  "a1b2cd34": { le: false, nano: true, name: "BE 纳秒" },
+  "34cdb2a1": { le: true, nano: true, name: "LE 纳秒" },
 };
 
 const GLOBAL_HDR_LEN = 24;
@@ -104,13 +107,13 @@ const REC_HDR_LEN = 16;
 // 块布局：Block Type(4) + Block Total Length(4) + Body + Block Total Length(4)
 // 长度含全部四个字段、4 字节对齐、最小 12。SHB 的 BOM(偏移 8)=0x1A2B3C4D 定字节序。
 // 修复只做有证据的六类；歧义只诊断不补造：
-//  R1 SHB BOM 损毁（magic 完好）：按块链在两种字节序下的可解性重写 BOM（两种都通=歧义→只诊断）
-//  R2 SHB magic 损毁（BOM/长度字段完好）：重写 0A0D0D0A
-//  R3 SHB 整体缺失（数据从 IDB/EPB 等块开始）：前插 28 字节标准 SHB（v1.0 / section_len 未指定；
-//     原头部选项无从恢复 → 只保证修后可解析，不承诺逐字节还原）
-//  R4 尾部长度与首部长度不符：链按首部长度走得通 → 重写尾部
-//  R5 首部长度损毁/链断裂：扫描自洽尾长度（值==块跨度 且 下一块类型已知/EOF）唯一 → 重写首部
-//  R6 长度非 4 字节对齐：同 R5 重同步；不唯一 → 只诊断
+// R1 SHB BOM 损毁（magic 完好）：按块链在两种字节序下的可解性重写 BOM（两种都通=歧义→只诊断）
+// R2 SHB magic 损毁（BOM/长度字段完好）：重写 0A0D0D0A
+// R3 SHB 整体缺失（数据从 IDB/EPB 等块开始）：前插 28 字节标准 SHB（v1.0 / section_len 未指定；
+//    原头部选项无从恢复 → 只保证修后可解析，不承诺逐字节还原）
+// R4 尾部长度与首部长度不符：链按首部长度走得通 → 重写尾部
+// R5 首部长度损毁/链断裂：扫描自洽尾长度（值==块跨度 且 下一块类型已知/EOF）唯一 → 重写首部
+// R6 长度非 4 字节对齐：同 R5 重同步；不唯一 → 只诊断
 // ============================================================
 const PCAPNG_SHB = 0x0a0d0d0a;
 const PCAPNG_BLOCK_NAMES = {
@@ -367,8 +370,8 @@ function pcapRepairRun(text, p) {
 
  // ---- pcapng 分派 ----
  // 优先级：①SHB magic 完好（0A0D0D0A 回文，两字节序同形）→ pcapng
- //        ②SHB magic 损毁但证据在（块长=28 且 BOM 合法）→ pcapng
- //        ③无 SHB 但已知块整链干净走完 → pcapng（证据强于经典链碰巧可解）
+ //       ②SHB magic 损毁但证据在（块长=28 且 BOM 合法）→ pcapng
+ //       ③无 SHB 但已知块整链干净走完 → pcapng（证据强于经典链碰巧可解）
   const damagedShb = !isPcapngShbMagic(b) && b.length >= 28 && (u32(b, 4, true) === 28 || u32(b, 4, false) === 28) && bomEndian(b) !== null;
   if (isPcapngShbMagic(b) || damagedShb || pcapngNoShbCandidate(b)) {
     const r = pcapngRepairRun(b);

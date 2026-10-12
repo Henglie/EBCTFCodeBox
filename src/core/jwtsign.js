@@ -1,5 +1,5 @@
 /*
- * jwtsign.js — JWT 签发 / 验签（T348 批B2，cat:'crypto'）。
+ * jwtsign.js — JWT 签发 / 验签（批B2，cat:'crypto'）。
  *
  * op：
  *   - jwtSign   HS256/HS384/HS512（HMAC）+ RS256（RSA PKCS#1 v1.5）+ ES256（ECDSA P-256）
@@ -188,7 +188,7 @@ async function jwtSignRun(text, p = {}) {
   L.push(`签名 (hex, ${sigBytes.length} B) = ${bytesToHex(sigBytes)}`);
   L.push("");
   L.push(`JWT = ${jwt}`);
-  // T364 产物协议：完整 JWT 三段串出 token.jwt 文本产物
+  // 产物协议：完整 JWT 三段串出 token.jwt 文本产物
   const files = [{ name: "token.jwt", mime: "text/plain", bytes: te(jwt) }];
   L.push("", `产物：1 个文件可下载（${files[0].name}，内容与上方 JWT 一致）`);
   return { text: L.join("\n"), files };

@@ -171,9 +171,13 @@ async function scryptRun(text, p = {}) {
   const pass = decodeInput(text, passEnc);
   const salt = decodeInput(p.salt != null ? p.salt : "", saltEnc);
   const N = parseInt(p.N, 10) || 16384;
-  const r = parseInt(p.r, 10) || 8;
+  const rRaw = p.r != null && String(p.r).trim() !== "" ? String(p.r).trim() : null;
+  const r = rRaw !== null ? parseInt(rRaw, 10) : 8;
+  if (rRaw !== null && (!Number.isInteger(r) || r <= 0)) throw new Error("scrypt：r 必须为正整数");
   const pp = parseInt(p.p, 10) || 1;
-  const dkLen = parseInt(p.dkLen, 10) || 32;
+  const dkLenRaw = p.dkLen != null && String(p.dkLen).trim() !== "" ? String(p.dkLen).trim() : null;
+  const dkLen = dkLenRaw !== null ? parseInt(dkLenRaw, 10) : 32;
+  if (dkLenRaw !== null && (!Number.isInteger(dkLen) || dkLen <= 0)) throw new Error("scrypt：dkLen 必须为正整数");
   lines.push(`口令: ${pass.length} 字节（${passEnc}）`);
   lines.push(`盐:   ${salt.length} 字节（${saltEnc}）`);
   lines.push(`参数: N=${N}, r=${r}, p=${pp}, dkLen=${dkLen}`);

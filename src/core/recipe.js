@@ -10,14 +10,14 @@ import { bytesToHex, bytesToEscapedText, decodeUtf8Lossless } from "./bytesIo.js
 // 而配方链此前只吃 inputText ⇒ 链头一断，后面全接不上台账第 3 节）。
 //
 // input 允许四种形态（前一种即原行为，零变化）：
-//   1) string                 —— 纯文本
-//   2) Uint8Array / number[]  —— 真字节
-//   3) {text?, bytes?}        —— 文本 + 文件字节（UI 拖入文件时用这种）
-//   4) null / 其它标量        —— 转 String
+//  1) string                 —— 纯文本
+//  2) Uint8Array / number[]  —— 真字节
+//  3) {text?, bytes?}        —— 文本 + 文件字节（UI 拖入文件时用这种）
+//  4) null / 其它标量        —— 转 String
 // 返回 { text, params }：
-//   · 链头 op 声明 acceptsBytes → params 注入 rawBytes（真字节无损进 op），text 取
-//     显式 text，缺省则给同一批字节的 hex（op 若只认文本也不至于拿到空串）；
-//   · 否则 text 取显式 text，缺省给 hex —— 与 UI「二进制文件拖入转 hex 进框」一致。
+//  · 链头 op 声明 acceptsBytes → params 注入 rawBytes（真字节无损进 op），text 取
+//    显式 text，缺省则给同一批字节的 hex（op 若只认文本也不至于拿到空串）；
+//  · 否则 text 取显式 text，缺省给 hex —— 与 UI「二进制文件拖入转 hex 进框」一致。
 // 只对链头生效：链中段产物由 transitTextOf 保证无损中转，不经此处。
 export function resolveRecipeHead(node, input) {
   const params = node.params || {};
@@ -53,12 +53,12 @@ export function resolveRecipeHead(node, input) {
 
 // ---- 链中段中转（F02 契约）----
 // 上游产物 → 下游节点的 { text, params }。规则：
-//   · 上游无真字节 ⇒ 照旧按 join 拼文本（零变化）。
-//   · 上游有真字节 ⇒ 只允许「全是字节」或「全是文本」；混拼显式拒绝。
-//       - 下游声明 acceptsBytes ⇒ 注入 params.rawBytes，text 给 hex（口径与链头一致）。
-//       - 下游不吃字节 ⇒ 只有「显示转义（\xNN）」形态才需要判严格 UTF-8：
-//           解得出来按内容走文本；解不出来**显式拒绝**（F02 根因：不许把转义串当内容算）。
-//           hex / base64 形态是用户显式选择的表示，照旧当文本传。
+//  · 上游无真字节 ⇒ 照旧按 join 拼文本（零变化）。
+//  · 上游有真字节 ⇒ 只允许「全是字节」或「全是文本」；混拼显式拒绝。
+//      - 下游声明 acceptsBytes ⇒ 注入 params.rawBytes，text 给 hex（口径与链头一致）。
+//      - 下游不吃字节 ⇒ 只有「显示转义（\xNN）」形态才需要判严格 UTF-8：
+//          解得出来按内容走文本；解不出来**显式拒绝**（F02 根因：不许把转义串当内容算）。
+//          hex / base64 形态是用户显式选择的表示，照旧当文本传。
 export function resolveTransitInput(node, upstreamOutputs, edges) {
   const params0 = node.params || {};
   const join = params0.join || "";

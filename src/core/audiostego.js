@@ -431,8 +431,8 @@ function audioLsbRun(text, p) {
   }
 
  // 原字节 files 产物：text 走无损形态以满足配方链护栏，files 交回精确字节供下载。
- //        参数文件名带位深/声道/位数，保留可读上下文（报告行不再进 text）。
- //        非 PCM（字节结果不可信）仍返回人类报告串、不产出下载，避免把无意义字节当载荷交付。
+ //       参数文件名带位深/声道/位数，保留可读上下文（报告行不再进 text）。
+ //       非 PCM（字节结果不可信）仍返回人类报告串、不产出下载，避免把无意义字节当载荷交付。
   if (!isPcm) {
     lines.push("");
     lines.push("--- 提取字节 (hex, 前 " + Math.min(outBytes.length, 4096) + " 字节；非 PCM 仅供参考) ---");
@@ -605,23 +605,24 @@ function goertzel(samples, start, N, freq, sampleRate) {
 // 7 数据位 LSB-first），按 VIS → 模式表标注。不还原图像。
 // ============================================================
 // 常见 SSTV VIS 码 → 模式名（部分；VIS 表存在历史差异，仅供识别标注参考）
+// pySSTV/通行标准 VIS 口径（此前 44/32/8 等多条映射与通行标准相反，Martin 信号会被标成 Robot 36）
 const SSTV_VIS = {
-  0: "Robot 12 (BW)",
-  8: "Robot 24 (BW)",
-  40: "Robot 72 (color)",
-  44: "Robot 36 (color)",
-  60: "Scottie 1",
-  56: "Scottie 2",
+  2: "Robot 8 BW",
+  10: "Robot 24 BW",
+  8: "Robot 36",
+  44: "Martin M1",
+  40: "Martin M2",
+  60: "Scottie S1",
+  56: "Scottie S2",
   76: "Scottie DX",
-  36: "Martin 2",
-  32: "Martin 1",
-  93: "PD 50",
-  95: "PD 90",
-  99: "PD 120",
-  113: "PD 160",
-  96: "PD 180",
-  98: "PD 240",
-  111: "PD 290",
+  99: "PD90",
+  95: "PD120",
+  98: "PD160",
+  96: "PD180",
+  97: "PD240",
+  94: "PD290",
+  55: "Wraase SC2-180",
+  63: "Wraase SC2-120",
 };
 
 /** 在信号窗内测各候选频率能量，返回最强频率与其相对主导度。 */
@@ -666,7 +667,7 @@ function sstvIdentRun(text, p) {
   const hop = Math.max(1, Math.floor(win / 2));
   const CAND = [1100, 1200, 1300, 1900]; // 同步/VIS 相关基频
   let syncStart = -1, syncRun = 0;
-  const needSyncWins = Math.max(3, Math.floor((0.150 / (hop / sr)))); // ~150ms 连续判定
+  const needSyncWins = Math.max(3, Math.floor((0.024 / (hop / sr)))); // ~24ms 连续判定（标准 VIS 起始位仅 30ms，150ms 阈值恒漏检）
   let firstSyncAt = -1;
   for (let start = 0; start + win <= N; start += hop) {
     const d = dominantFreq(buf, start, win, sr, CAND);
@@ -706,10 +707,8 @@ function sstvIdentRun(text, p) {
   const visBits = [];
   if (visSearch + bitDur * 9 <= N) {
     let pos = visSearch;
- // 起始位（应为 1200Hz）
-    const startBit = dominantFreq(buf, pos, Math.min(bitDur, N - pos), sr, [1100, 1200, 1300]);
-    if (startBit.freq === 1200) {
-      pos += bitDur;
+ // 检出的 1200Hz 游程即 VIS 起始位（标准信号恰为 30ms），游程末尾直接进 7 数据位
+    {
       let val = 0;
       let ok = true;
       for (let b = 0; b < 7; b++) {

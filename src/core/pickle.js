@@ -1,5 +1,5 @@
 /*
- * pickle.js — Python pickle 字节码反汇编 / 解析（T269，cat:'analysis'，run 单向）。
+ * pickle.js — Python pickle 字节码反汇编 / 解析（cat:'analysis'，run 单向）。
  *
  * 用途：CTF misc 常见「给一段 pickle 二进制，看它反序列化时会做什么」。
  * 本 op 逐 opcode 反汇编（pickletools.dis 风格），并高亮危险操作

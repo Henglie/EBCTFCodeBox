@@ -1,5 +1,5 @@
 /*
- * compressExt2.js — T508 批三·压缩校验卡（B3-B6 + E7-E8，6 op）。
+ * compressExt2.js — 批三·压缩校验卡（B3-B6 + E7-E8，6 op）。
  *
  * rle / lzw / elias（forensic，压缩编码族，与 gzipCodec 同分类）
  * verhoeff（hash，校验族）lz4Dec / bzip2Dec（forensic，解压族）。

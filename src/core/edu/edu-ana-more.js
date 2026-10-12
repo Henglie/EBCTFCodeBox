@@ -52,7 +52,7 @@ export default {
   birthdayCollision: {
     what: "生日碰撞演示：哈希输出截断到 b 位时，随机输入找碰撞的期望尝试数 $\\approx 2^{b/2}$（生日悖论）。教学演示哈希碰撞的本质与安全余量。",
     principle:
-      "生日悖论：n 个随机值中两两相同的概率在 $n \\approx 1.18 \\cdot 2^{b/2}$ 时过半。演示用截断 SHA-256 的前 b 位做键，随机输入查 Map，命中即碰撞对。",
+      "生日悖论：n 个近似均匀哈希值中两两相同的概率在 $n \\approx 1.18 \\cdot 2^{b/2}$ 时过半。演示依次哈希 x0、x1、x2…，取 SHA-256 最左侧 b 位（8–40 位）查 Map，命中即碰撞对；最多尝试 500000 个输入，未命中会明确报告。",
     usage: "设截断位数（默认 24），输出碰撞对与尝试次数。对比理论 $2^{b/2}$ 理解安全参数。",
     examples: [
       { in: "bitLen=24", out: "碰撞对 + 尝试次数", desc: "尝试 ≈ 2^12" },
@@ -64,7 +64,7 @@ export default {
   babaiCvp: {
     what: "Babai 最近平面（CVP）：给定格基和目标向量，找格上离目标最近的格点（近似）。LLL 归约后 Babai 算法给出 $2^{n/2}$ 近似因子内的最近点。CVP 是格密码/格攻击的基础原语。",
     principle:
-      "先 LLL 归约格基使基向量近正交短；再用 GSO 正交化求目标在正交基下的坐标，逐坐标四舍五入（round），组合回原始基即最近格点 $v \\approx \\sum \\mathrm{round}(\\mu_i) \\cdot b_i$。输入：每行一个格基向量，最后一行目标向量。",
+      "先 LLL 归约，再作精确有理数 Gram–Schmidt 正交化。令残差 r=t，从最后一个基向量向前取 c_i=round(〈r,b_i*〉/〈b_i*,b_i*〉)，更新 r←r−c_i b_i；输出 v=t−r。投影使用正交基 b_i*，残差更新使用原基 b_i，不能把二者混用；结果为近似 CVP 解，不保证全局最近。输入末行是目标向量。",
     usage: "粘贴格基（每行空格分隔整数）+ 末行目标向量，输出最近格点与残差。",
     examples: [
       { in: "2 0\\n1 1\\n3 1", out: "最近格点 3,1", desc: "目标恰在格上时精确恢复" },
@@ -77,7 +77,7 @@ export default {
     what: "HNP 隐藏数问题：ECDSA 签名 nonce k = t + x（t 已知、x 是小未知量）时，从 m 个签名恢复私钥 d。CTF 弱 nonce 题（如 k 只取部分随机位）的标准解法。",
     principle:
       "ECDSA 签名方程 $s \\cdot k \\equiv h + r \\cdot d \\pmod{n}$。若 $k_i = t_i + x$（共享小 x），对第一个签名穷举 x（xBound 次），每个 x 解出候选 d，再用其余签名的方程验证（$s \\cdot k \\equiv h + r \\cdot d$）。大 nonce 空间版本用格（Boneh-Venkatesan）——本 op 为小空间穷举教学版。",
-    usage: "输入：每行 `h r s t`（≥3 行），参数 xBound = nonce 未知量范围、n = 曲线阶（留空用 secp256k1）。输出候选私钥 d。",
+    usage: "输入：每行 `h r s t`（≥3 行），共享未知量满足 0 ≤ x < xBound；n 为曲线群阶，留空用 secp256k1 的 n（不是坐标域素数 p）。输出共享 x 与候选私钥 d（hex）。",
     examples: [
       { in: "h1 r1 s1 t1\\nh2 r2 s2 t2\\nh3 r3 s3 t3", param: "xBound=4096", out: "候选 d（hex）", desc: "用多签名交叉验证" },
     ],
@@ -93,7 +93,7 @@ export default {
     examples: [
       { in: "留空（PRESENT）", out: "DDT/LAT + 最强特征", desc: "PRESENT 最强差分概率 4/16" },
     ],
-    tips: ["PRESENT 的 S 盒最强差分 Δin=0x1→Δout=0x5 概率 4/16（经典教材数据）。S 盒越接近随机，DDT 最大项越小（理想 2/16）。"],
+    tips: ["PRESENT 的 S 盒最强差分 Δin=0x1→Δout=0x3（等价 0x7/0x9/0xD）概率 4/16（DDT 实测）。S 盒越接近随机，DDT 最大项越小（理想 2/16）。"],
     aka: ["差分分析", "线性分析", "ddt", "lat", "差分分布表", "线性逼近表", "spn", "s盒分析", "differential cryptanalysis", "linear cryptanalysis"],
   },
 

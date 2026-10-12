@@ -131,6 +131,48 @@
   background: color-mix(in srgb, var(--error) 10%, transparent);
 }
 
+/* ============ MCP 使用方法 / 最简提示词 ============ */
+.plugin-how {
+  display: flex; flex-direction: column; gap: var(--sp-1);
+  padding: var(--sp-3);
+  background: var(--surface-1);
+  border-radius: var(--r-sm);
+}
+.plugin-how h5 {
+  margin: 0;
+  font-size: var(--fs-sm); font-weight: 700; color: var(--on-surface);
+}
+.plugin-how-intro,
+.plugin-how-clients {
+  margin: 0;
+  font-size: var(--fs-sm); color: var(--on-surface-var);
+  line-height: 1.6;
+}
+.plugin-how-steps {
+  margin: 0;
+  padding-left: 20px;
+  font-size: var(--fs-sm); color: var(--on-surface-var);
+  line-height: 1.6;
+}
+.plugin-how-steps li { margin: 2px 0; }
+.plugin-prompt {
+  width: 100%; box-sizing: border-box;
+  margin-top: var(--sp-2);
+  padding: var(--sp-2);
+  background: var(--surface-2);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-sm);
+  color: var(--on-surface);
+  font-family: ui-monospace, Consolas, "Courier New", monospace;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  resize: vertical;
+}
+.plugin-prompt:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
 /* ============ 窄屏适配 ============ */
 @media (max-width: 520px) {
   .plugin-item {

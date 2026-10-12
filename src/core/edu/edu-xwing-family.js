@@ -1,5 +1,5 @@
 /*
- * edu-xwing-family.js — X-Wing 混合 KEM 三档算法族科普卡（T398 批A：PQC 迁移热点）。
+ * edu-xwing-family.js — X-Wing 混合 KEM 三档算法族科普卡（批A：PQC 迁移热点）。
  * 格式契约见 eduContent.js 头注释：纯数据、无 import、无副作用。
  * aka 均 ≥10 条真实别名（_alias_verify 三件套红线）。
  */

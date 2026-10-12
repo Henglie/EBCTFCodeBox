@@ -1,5 +1,5 @@
 /*
- * stegoText.js — 隐写文本检测组（T63，cat:'stego'）。
+ * stegoText.js — 隐写文本检测组（cat:'stego'）。
  *
  * 定位：与 stego.js（编码/解码）正交——本文件只做「检测 / 分析 / 透视」
  * 不修改 stego.js 的任何编码逻辑。所有 op 均为单向 run（输出报告文本）。

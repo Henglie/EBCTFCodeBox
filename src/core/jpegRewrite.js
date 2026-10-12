@@ -29,7 +29,7 @@
  * 注意：parseJpeg 不记录各标记段字节边界，本文件自行在 _raw 上重扫段结构。
  *
  * ---- 复用面 ----
- * jsteg.js（T391）嵌入 / 未来 Fridrich 校准（需改写系数后重打包）均调
+ * jsteg.js（）嵌入 / 未来 Fridrich 校准（需改写系数后重打包）均调
  * reencodeJpeg(parsed, newComponents)。本文件不注册 op、不碰 UI。
  *
  * 红线遵守：纯前端零外发，无 node 专属 API；报告无 emoji。

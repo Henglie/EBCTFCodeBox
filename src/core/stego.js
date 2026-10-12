@@ -60,7 +60,7 @@ const ZW_CHARSETS = {
   default: ZW_CHARS, // radix-4，原码表（U+200C/200D/202C/FEFF），8 字符/charCode
   extended8: ["\u200b", "\u200c", "\u200d", "\u200e", "\u200f", "\u202c", "\u2060", "\ufeff"], // radix-8，6 字符/charCode
   full12: ["\u200b", "\u200c", "\u200d", "\u200e", "\u200f", "\u202a", "\u202c", "\u2060", "\u2061", "\u2062", "\u2063", "\ufeff"], // radix-12，5 字符/charCode
- // T520 对齐 offdev/zwsp-steg-js 两个预设（与其 MODE_FULL / MODE_ZWSP 兼容）：
+ // 对齐 offdev/zwsp-steg-js 两个预设（与其 MODE_FULL / MODE_ZWSP 兼容）：
   zwspFull5: ["\u200b", "\u200c", "\u200d", "\u200e", "\u200f"], // radix-5，7 字符/charCode
   zwsp3: ["\u200b", "\u200c", "\u200d"], // radix-3，11 字符/charCode
 };
@@ -117,7 +117,7 @@ function zwDecodePayload(zwStr, chars = ZW_CHARS) {
   return out;
 }
 
-// T520 二进制模式（Misawa unicode-steganography.js 的 binary 口径）：
+// 二进制模式（Misawa unicode-steganography.js 的 binary 口径）：
 // 每字节定长 base-N（codelenBin = ceil(log256/log radix)，radix-4 时即 4 字符/字节）
 function zwCodelenBinary(chars) {
   return Math.ceil(Math.log(256) / Math.log(chars.length));

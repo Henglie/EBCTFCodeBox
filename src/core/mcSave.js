@@ -65,11 +65,28 @@ const TAG_NAMES = [
 const _latin1Decoder = { decode: (u8) => { let s = ""; for (let i = 0; i < u8.length; i += 8192) s += String.fromCharCode.apply(null, u8.subarray(i, Math.min(u8.length, i + 8192))); return s; } };
 const _utf8Decoder = (typeof TextDecoder === "function") ? new TextDecoder("utf-8", { fatal: false }) : _latin1Decoder;
 
-// NBT String 是 Java modified UTF-8。绝大多数场景等同普通 UTF-8，用 TextDecoder；
-// 抛错或无 TextDecoder 时兜底 latin1。
+// Java modified UTF-8 encodes NUL as C0 80 and supplementary characters as
+// two three-byte UTF-16 surrogate code units (DataInput.readUTF).
+// Preserve the existing ordinary UTF-8 fallback for non-Java producers.
 function decodeNbtString(u8) {
-  try { return _utf8Decoder.decode(u8); }
-  catch { return _latin1Decoder.decode(u8); }
+  try {
+    let out = "";
+    for (let i = 0; i < u8.length;) {
+      const a = u8[i++];
+      if (a < 0x80) { out += String.fromCharCode(a); continue; }
+      if ((a & 0xe0) === 0xc0) {
+        if (i >= u8.length || (u8[i] & 0xc0) !== 0x80) throw new Error("Invalid modified UTF-8");
+        out += String.fromCharCode(((a & 31) << 6) | (u8[i++] & 63));
+      } else if ((a & 0xf0) === 0xe0) {
+        if (i + 1 >= u8.length || (u8[i] & 0xc0) !== 0x80 || (u8[i + 1] & 0xc0) !== 0x80) throw new Error("Invalid modified UTF-8");
+        out += String.fromCharCode(((a & 15) << 12) | ((u8[i++] & 63) << 6) | (u8[i++] & 63));
+      } else throw new Error("Not modified UTF-8");
+    }
+    return out;
+  } catch {
+    try { return _utf8Decoder.decode(u8); }
+    catch { return _latin1Decoder.decode(u8); }
+  }
 }
 
 // 防炸：限制节点总数与嵌套深度。

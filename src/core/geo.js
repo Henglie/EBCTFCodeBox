@@ -1,4 +1,4 @@
-// T71 GPS/地理编码组 — DMS/geohash/Plus Code(OLC)/Maidenhead/UTM 双向互转
+// GPS/地理编码组 — DMS/geohash/Plus Code(OLC)/Maidenhead/UTM 双向互转
 //
 // 红线：算法照公开规范实现未编造：
 // - geohash: geohash.org 公开算法（base32 表 "0123456789bcdefghjkmnpqrstuvwxyz"，去 a/i/l/o）
@@ -529,8 +529,10 @@ function utmParse(text) {
   const s = String(text).trim().replace(/[,，]/g, " ").replace(/\s+/g, " ");
   const m = s.match(/^(\d{1,2})\s*([A-HJ-NP-Z])\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)$/);
   if (!m) throw new Error(`非法 UTM 格式，需 "ZoneLetter Easting Northing"（如 "31U 448251 5411937"）: ${text}`);
+  const zoneNum = parseInt(m[1], 10);
+  if (zoneNum < 1 || zoneNum > 60) throw new Error(`UTM 分区须 1-60: ${m[1]}`);
   return {
-    zone: parseInt(m[1], 10),
+    zone: zoneNum,
     letter: m[2].toUpperCase(),
     easting: parseFloat(m[3]),
     northing: parseFloat(m[4]),
@@ -671,7 +673,7 @@ register({
   },
 });
 
-// 导出纯函数供 T37 workerPool / 单元测试复用
+// 导出纯函数供 workerPool / 单元测试复用
 export {
   parseLatLon,
   formatLatLon,

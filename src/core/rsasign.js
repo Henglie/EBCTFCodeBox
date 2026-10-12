@@ -1,5 +1,5 @@
 /*
- * rsasign.js — RSASSA PKCS#1 v1.5 / RSASSA-PSS 签名与验签（任务卡 T347 · 批B1）
+ * rsasign.js — RSASSA PKCS#1 v1.5 / RSASSA-PSS 签名与验签（ · 批B1）
  *
  * 标准引用：
  * - RFC 8017 §9.2   EMSA-PKCS1-v1_5：EM = 0x00 || 0x01 || PS(0xFF×≥8) || 0x00 || DigestInfo
@@ -21,6 +21,7 @@ import { register } from "./registry.js";
 import { modPow } from "./primeGen.js";
 import { derDecode, derBytesToBigint } from "./rsagen.js";
 import { md5Bytes } from "./hash.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 基础字节工具
@@ -170,7 +171,7 @@ async function buildPssEm(mHash, hashKey, emBits, sLen) {
   }
   // 盐：密码学随机（RFC 8017 §9.1.1 步骤 4）
   const salt = new Uint8Array(sLen);
-  if (sLen > 0) globalThis.crypto.getRandomValues(salt);
+  if (sLen > 0) salt.set(randBytes(salt.length));
   // M' = 0x00×8 || mHash || salt（步骤 5-6）
   const mPrime = new Uint8Array(8 + hLen + sLen);
   mPrime.set(mHash, 8);
@@ -380,11 +381,12 @@ async function rsaSignRaw(msgBytes, hashKey, mode, d, n, sLenRaw) {
 /** 验签。返回 { ok, reason, 中间量 } */
 async function rsaVerifyRaw(msgBytes, sigBytes, hashKey, mode, e, n, sLenRaw) {
   const k = Math.ceil(bigintBitLen(n) / 8);
+  const mHash = await hashBytes(hashKey, msgBytes);
+  if (sigBytes.length !== k) return { ok: false, reason: `签名字节长度必须为 ${k}，当前 ${sigBytes.length}`, mHash };
   const s = bytesToBigint(sigBytes);
   // RFC 8017 §8.2.2 步骤 2：s 不在 [0, n-1] → invalid
-  if (s <= 0n || s >= n) return { ok: false, reason: `签名整数 s 不在 [1, n-1] 区间（s 位长 ${bigintBitLen(s)} vs n 位长 ${bigintBitLen(n)}）` };
-  const mHash = await hashBytes(hashKey, msgBytes);
-  const em = bigintToBytes(modPow(s, e, n), k, "恢复的 EM"); // RSAVP1（RFC 8017 §5.2.2）
+  if (s <= 0n || s >= n) return { ok: false, reason: `签名整数 s 不在 [1, n-1] 区间（s 位长 ${bigintBitLen(s)} vs n 位长 ${bigintBitLen(n)}）`, mHash };
+  let em = bigintToBytes(modPow(s, e, n), k, "恢复的 EM"); // RSAVP1（RFC 8017 §5.2.2）
   if (mode === "pkcs1v15") {
     let expected;
     try {
@@ -405,6 +407,11 @@ async function rsaVerifyRaw(msgBytes, sigBytes, hashKey, mode, e, n, sLenRaw) {
   const emLen = Math.ceil(emBits / 8);
   if (em.length !== emLen && em.length !== k) {
     return { ok: false, reason: `恢复 EM 长度 ${em.length} 异常（k=${k}）`, em, mHash };
+  }
+  if (em.length > emLen) {
+    const prefix = em.subarray(0, em.length - emLen);
+    if (prefix.some((b) => b !== 0)) return { ok: false, reason: "恢复的 EM 超出 PSS 编码长度", em, mHash };
+    em = em.subarray(em.length - emLen);
   }
   const sLen = resolveSaltLen(sLenRaw, hashKey, emLen, "verify");
   const r = await verifyPssEm(em, mHash, hashKey, emBits, sLen);
@@ -513,7 +520,7 @@ register({
         "PSS 签名带随机盐，同钥同文重复签名结果不同（RFC 8017 §8.1 属概率性方案，非缺陷）",
       );
     }
-    // T364：签名出 .sig 二进制产物（字节与文本区 hex 一致；文件名含哈希名）
+    // ：签名出 .sig 二进制产物（字节与文本区 hex 一致；文件名含哈希名）
     const files = [{ name: `rsa_sig_${hashKey}.sig`, mime: "application/octet-stream", bytes: r.sig }];
     lines.push("", `产物：1 个文件可下载（${files[0].name}，字节与上方签名 hex 一致）`);
     return { text: lines.join("\n"), files };

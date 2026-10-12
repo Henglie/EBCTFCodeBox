@@ -74,7 +74,7 @@ function failAll(message) {
  * @param {object} [params] op 参数（须可结构化克隆；rawBytes 走 Uint8Array 可克隆）
  * @param {object} [opts] { dir:"run"|"encode"|"decode"（默认按 op.run 优先），
  *                          timeoutMs:number 0=不限时 }
- * @returns {Promise<string|object>} op 返回值（T362 对象产物协议原样透传）；异常 reject
+ * @returns {Promise<string|object>} op 返回值（对象产物协议原样透传）；异常 reject
  */
 export function runOpOffThread(opId, input, params = {}, opts = {}) {
   const dir = opts.dir || "run";

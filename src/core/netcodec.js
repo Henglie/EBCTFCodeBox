@@ -1,5 +1,5 @@
 /*
- * netcodec.js — 网络/协议编码组（T49，cat:'radix'）。
+ * netcodec.js — 网络/协议编码组（cat:'radix'）。
  *
  * 覆盖：
  * - IPv4 ↔ 整数/hex（点分十进制 + 0x / 八进制 / 0b 变体，inet_aton 语义）

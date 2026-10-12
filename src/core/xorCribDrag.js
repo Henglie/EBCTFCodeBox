@@ -1,5 +1,5 @@
 /*
- * xorCribDrag.js — XOR crib-drag 已知明文拖动异或（T299，cat:'analysis'，单向 run）。
+ * xorCribDrag.js — XOR crib-drag 已知明文拖动异或（cat:'analysis'，单向 run）。
  *
  * 原理：XOR 流密码/重复密钥加密 C = P XOR K。若已知明文片段（crib）在明文 P
  * 的位置 i 处出现，则 C[i:i+L] XOR crib = K[i:i+L]（密钥片段）。

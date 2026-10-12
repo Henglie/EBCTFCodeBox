@@ -1,5 +1,5 @@
 /*
- * edu-exe.js — exe/pyc 类工具科普补缺分片（T318）。
+ * edu-exe.js — exe/pyc 类工具科普补缺分片（）。
  *
  * 覆盖 1 个真实缺失 op 的科普卡：
  * analysis: pycExeDecompile

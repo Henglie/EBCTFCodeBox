@@ -1,20 +1,24 @@
 import { candidateSignals, literalMatcher } from "./smartCandidates.js";
 import { SIGNAL_LIMITS } from "./signals.js";
 import { domainAdmit, isAutoCandidateExcluded } from "./domain.js";
-import { scopeAdmit } from "./domainScope.js";
+import { scopeAdmit, smallAlphabetGate } from "./domainScope.js";
 import { analyzeInfoSignals } from "./infoSignals.js";
 
-// 声明式定义域组合准入：已声明 op 走字符级缩限（scopeAdmit），未声明回退既有 domainAdmit。
+// 声明式定义域组合准入：① 小字母表输入门（字符类型数缩限——0/1 位串只准位串族/结构变换，
+// base64 类大字母表解码器语义不可能，拒绝）；② 已声明 op 走字符级缩限（scopeAdmit）；
+// ③ 未声明回退既有 domainAdmit。
 function combinedAdmit(opId, text) {
+  const small = smallAlphabetGate(text);
+  if (small && !small.has(opId)) return false;
   const scoped = scopeAdmit(opId, text);
   return scoped === null ? domainAdmit(opId, text) : scoped;
 }
 /*
- * core/magic/magic.js — Magic 一键智能识别（T32 交付）
+ * core/magic/magic.js — Magic 一键智能识别（交付）
  *
  * 升级 detect.js 的 oneClickDecode（朴素 BFS + confidence 乘积）为 CyberChef Magic 级：
  * - crib 目标过滤（CTF 杀手锏）：opts.crib 仅接受字面片段，有限加权、不硬过滤
- * - 综合评分排序：用 T31 scorer（熵+语言卡方+链长+crib）替换 confidence 乘积，分低=优
+ * - 综合评分排序：用 scorer（熵+语言卡方+链长+crib）替换 confidence 乘积，分低=优
  * - 强化剪枝：自打转检测（同 op 且 output==input 放弃，lib:287）、可选 outputCheck
  * - intensive 暴力模式：对前 N 字节跑 1-byte XOR 全 255 key + 位旋转 1-7（lib:142-166）
  *
@@ -42,16 +46,16 @@ import {
   PARAM_SCAN_DEFAULT_LIMIT, formatParamTag,
   inputFeatures, coarseAdmitPlain, sweepApplies,
 } from "../exhaustiveDecode.js";
-// MT83：字节统计编码识别模型（纯 JS 前向推理，提名用；加载失败静默降级纯规则）。
+// 字节统计编码识别模型（纯 JS 前向推理，提名用；加载失败静默降级纯规则）。
 import { loadByteStatWeights, byteStatPredict } from "./byteStatCnn.js";
 
-// ============ 字节统计模型提名（MT83 T351） ============
+// ============ 字节统计模型提名 ============
 // 模型只做「输入属于哪类编码」的提名，绝不硬过滤——最终判据仍是下方各 op 能否严格
 // decode 成功。三态：
-//   ① max softmax < BYTESTAT_MIN_CONF → ambiguous，不加权也不减权
-//   ② 判为 plain_text / opaque_token（正常文本/令牌）→ 不产生任何加权
-//   ③ 判为某编码类且置信达标 → 给「首层用同族 op 解出的候选」轻微加权（score -= 小值），
-//      量级对齐现有括号配对 -25 / flag 强档 -160 的风格，绝不压垮卡方主项。
+//  ① max softmax < BYTESTAT_MIN_CONF → ambiguous，不加权也不减权
+//  ② 判为 plain_text / opaque_token（正常文本/令牌）→ 不产生任何加权
+//  ③ 判为某编码类且置信达标 → 给「首层用同族 op 解出的候选」轻微加权（score -= 小值），
+//     量级对齐现有括号配对 -25 / flag 强档 -160 的风格，绝不压垮卡方主项。
 const BYTESTAT_MIN_CONF = 0.6;
 const BYTESTAT_NOMINATE_WEIGHT = 30;
 // 模型标签 → 本项目 op id 集合（候选链首层 op 与之匹配才吃加权）。
@@ -79,10 +83,10 @@ const FLAG_FORMAT_RE = /[a-z0-9_]{2,}\{[^{}]{1,}\}/i;
 // ⚠ 必须**词首 + 结构感知**，不能裸子串匹配：
 // - 前边界 (^|[^a-z])：保证关键词是词的开头，排除 monkey 的 key / compass 的 pass / donkey 的 key。
 // - 关键词后允许跟字母数字下划线 [a-z0-9_]*，覆盖 CTF 平台前缀 ctfshow/moectf/hgame/flagg 等
-//   （旧正则要求关键词后紧跟非字母，把 "ctfshow{...}" 漏成弱档 -40，真 flag 被乱码压到 #62）。
+//  （旧正则要求关键词后紧跟非字母，把 "ctfshow{...}" 漏成弱档 -40，真 flag 被乱码压到 #62）。
 // - 末尾必须紧跟结构符 [\{:=_]：保证是「flag 格式」而非普通英文句子——
-//   "Welcome to CTFshow vegetable" 无结构符不误命中；且修复旧正则「乱码里 ctf5*19 因 ctf 后跟
-//   数字误吃 -160 顶到 top1」（ctf5 后是 *，非 {:=_，不命中 → 乱码沉底，凯撒正解上位）。
+//  "Welcome to CTFshow vegetable" 无结构符不误命中；且修复旧正则「乱码里 ctf5*19 因 ctf 后跟
+//  数字误吃 -160 顶到 top1」（ctf5 后是 *，非 {:=_，不命中 → 乱码沉底，凯撒正解上位）。
 const FLAG_STRONG_RE = /(^|[^a-z])(flag|ctf|key|pass|hgame|moectf)[a-z0-9_]*[\{:=_]/i;
 
 const DEFAULTS = {
@@ -175,7 +179,7 @@ const KEYED_OPS = new Set(KEYED_OP_IDS);
 // knapsack：decode 型「教学报告」op——demo 密钥对任意逗号分隔数字串恒「可解」，返回
 // 带中文标题（=== 背包加密…解密 ===）+ 私钥 + 明文的多行报告，中文被词典命中抬分顶包。
 // 它不是通用解码器（需用户私钥），自动解码里纯噪声，拉黑。
-const NO_MAGIC_OPS = new Set(["luhn", "spiralMatrix", "ttlStego", "cnidCheck", "isbn", "ean13", "upc", "knapsack", "flashSwirl"]);
+const NO_MAGIC_OPS = new Set(["luhn", "spiralMatrix", "ttlStego", "cnidCheck", "isbn", "ean13", "upc", "knapsack", "flashSwirl", "keyboardSurround", "keyword9", "qweAbc"]);
 
 // 「明文样式变换」op：输入输出都是明文，只做字符美化/替换（leetSpeak 0↔o、rot 移位等）。
 // 一旦当前文本已是完整 flag（FLAG_STRONG 命中），再跑这些只会把成型 flag 劣化成噪声
@@ -186,6 +190,14 @@ const PLAINTEXT_STYLE_OPS = new Set(["leetSpeak", "rot13", "rot47", "rot5", "rot
 // 字符串 → UTF-8 字节序列（scorer 需要 bytes）
 function toBytes(str) {
   return Array.from(new TextEncoder().encode(str));
+}
+
+// decode 产物规范化：字节迁移后部分 op（a51/hc128/bitReverse/godzillaPhpXorBase64 等
+// textMode 档）的 decode 返回 {text, files} 产物对象——直接 String() 会产出 "[object Object]"
+// 候选（恒烈 2026-09-29 实测 20 条）。有 string .text 的对象取 .text，其余原样。
+function resultText(v) {
+  if (v != null && typeof v === "object" && typeof v.text === "string") return v.text;
+  return v;
 }
 
 // 单个 op.decode 的墙钟兜底：把（可能永不 resolve 的）decode 与一个超时竞速。
@@ -297,8 +309,8 @@ function looksLikeCiphertext(str) {
 // 冒到最前，挤占真正解开的那条。这里给这类候选统一降权。
 //
 // 判据（只认「归一化后完全相同」，不做模糊近似——近似判据会误伤真明文）：
-//   ① 完全相同；② 仅空白差异（空格/换行/制表被增删换位）；③ 仅不可见字符被剥掉；
-//   ④ 只做了一次恒等变换（解码结果与输入归一化后一致）。
+//  ① 完全相同；② 仅空白差异（空格/换行/制表被增删换位）；③ 仅不可见字符被剥掉；
+//  ④ 只做了一次恒等变换（解码结果与输入归一化后一致）。
 // 归一化：剥不可见字符 → **删除全部空白** → 转小写。
 // 空白按「全部删除」而非「折叠为单空格」：只删掉/插入一个空格（如 clockCipher 把
 // "hello world" 变成 "helloworld"）同样属于「没真正解开」，且它正是明文候选冒到最前的主因。
@@ -475,7 +487,7 @@ export async function magicDecode(input, opts = {}) {
 
   const f = inputFeatures(input);
 
- // ---- 字节统计模型提名（MT83）：对输入跑一次 CNN，供候选排序微调 + 可解释性 ----
+ // ---- 字节统计模型提名：对输入跑一次 CNN，供候选排序微调 + 可解释性 ----
  // 只做提名：加载失败/无权重/超时一律静默降级为纯规则打分，绝不抛错阻塞解码。
  // byteStatHint = { label, conf, opSet } 或 null；byteStatProbe 附到返回候选供调试展示。
   let byteStatHint = null;
@@ -510,7 +522,7 @@ export async function magicDecode(input, opts = {}) {
     : (o.allowOps instanceof Set ? o.allowOps : new Set(o.allowOps));
   const allowed = (opId) => _allowSet === null || _allowSet.has(opId);
 
- // 排除集（MT72：用户启用了自定义实现的 op 不进一键解码——原版结果会误导，且跑用户代码有风险）。
+ // 排除集（用户启用了自定义实现的 op 不进一键解码——原版结果会误导，且跑用户代码有风险）。
  // null = 不排除，保持旧行为；给集合则这些 op 完全退出自动解码候选。
   const _excludeSet = o.excludeOps == null
     ? null
@@ -520,7 +532,7 @@ export async function magicDecode(input, opts = {}) {
  // 候选 op 分两层（产品裁决1：所有编解码 op 都安排上，花式算法不遗漏）：
  // ① detectOps：有 detect 的 op —— 强信号，允许参与多层 BFS 链（≤maxDepth）。
  // ② plainOps ：无 detect 的纯编解码/花式 op —— 按字符集定义域(coarseAdmitPlain)预筛
- //    只在 depth 0 单层跑（不进 BFS，避免花式算法组合爆炸）。命中定义域才纳入。
+ //   只在 depth 0 单层跑（不进 BFS，避免花式算法组合爆炸）。命中定义域才纳入。
  // requiresBridge（exe 桥）与 noAuto（想曰等重 op）排除：自动跑无意义又慢。
   const decoders = OPS.filter(
     (op) => typeof op.detect === "function" && typeof op.decode === "function"
@@ -534,6 +546,8 @@ export async function magicDecode(input, opts = {}) {
  // 会被 compositeScore 当有意义明文误判 99% 冒头污染结果。它们不是解码器，绝不进自动解码。
  // 排除：有 detect 的（走 decoders）、PARAM_SWEEP 白名单（走参数扫描）、
  // requiresBridge/noAuto、keyed 加解密 op（走 keyed-crypto 注入，需 key）。
+ // 小字母表门（字符类型数缩限）：plainOps 只在 depth0 跑（cur.text===input），门对原输入算一次。
+  const _smallGate0 = smallAlphabetGate(input);
   const plainOps = OPS.filter(
     (op) => typeof op.detect !== "function"
       && typeof op.decode === "function"
@@ -542,6 +556,7 @@ export async function magicDecode(input, opts = {}) {
       && !PARAM_SWEEP[op.id]
       && !KEYED_OPS.has(op.id)
       && allowed(op.id)
+      && (!_smallGate0 || _smallGate0.has(op.id))
       && coarseAdmitPlain(op, f, !!o.lenient)
   );
 
@@ -676,11 +691,11 @@ export async function magicDecode(input, opts = {}) {
  // 同类工具 [解码N次] 明文 格式。候选只记录不入队（不再自产深层节点，防 BFS 组合爆炸）。
  // ⚠ 边界 `cur.depth<=1 && !cur.speculative`（不是只 depth0）：
  // - depth≤1 允许 2-op 链「base64(depth0→节点depth1) > caesar 网格」成立——base64 解出的
- //   密文再古典密码爆破是最常见 CTF 套路，caesar.detect 对乱序明文返回 0 进不了 decoders，
- //   只有 paramScan 全网格能解，故必须放到 depth1。
+ //  密文再古典密码爆破是最常见 CTF 套路，caesar.detect 对乱序明文返回 0 进不了 decoders，
+ //  只有 paramScan 全网格能解，故必须放到 depth1。
  // - 挡住 3-op 链：`base64>railFence>affine` 里 affine 网格是在 depth2 节点（railFence 的
- //   queued 输出）上跑的，depth≤1 直接排除 → 根除此前「三层组合凑 KEY/{} 乱码假阳性顶 99%」
- //   的 bug1 regression。
+ //  queued 输出）上跑的，depth≤1 直接排除 → 根除此前「三层组合凑 KEY/{} 乱码假阳性顶 99%」
+ //  的 bug1 regression。
  // - !speculative 挡住 xor/rot 暴力产物再喂古典密码（投机链凑任意子串）。
     if (o.paramScan && sweepGrids && cur.depth <= 1 && !cur.speculative) {
       let scanOver = false;
@@ -703,7 +718,7 @@ export async function magicDecode(input, opts = {}) {
             continue;
           }
           if (decoded == null) continue;
-          decoded = String(decoded);
+          decoded = String(resultText(decoded));
           if (decoded.length === 0 || decoded === cur.text) continue;
           const tag = formatParamTag(opId, params);
  // queue 传 null：参数扫描候选不参与后续 BFS（防爆炸），靠 compositeScore 排序。
@@ -730,7 +745,7 @@ export async function magicDecode(input, opts = {}) {
           continue;   // 抛错 / 超时（永不 resolve 的图像/音频 op）→ 跳过，不阻塞其余
         }
         if (decoded == null) continue;
-        decoded = String(decoded);
+        decoded = String(resultText(decoded));
         if (decoded.length === 0 || decoded === cur.text) continue;
  // 花式 op 单层候选不入队（queue null），靠 compositeScore 排序。
         _record(decoded, cur, op.id, 0.5, results, seen, cribRe, null, byteStatHint);
@@ -761,7 +776,7 @@ export async function magicDecode(input, opts = {}) {
             continue;
           }
           if (decoded == null) continue;
-          decoded = String(decoded);
+          decoded = String(resultText(decoded));
           if (decoded.length === 0 || decoded === cur.text) continue;
  // chain id 形如 aes(CBC,key:utf8,ct:base64)，与参数扫描候选同风格。
           _record(decoded, cur, `${opId}(${tag})`, 0.5, results, seen, cribRe, null, byteStatHint, "keyed");
@@ -803,7 +818,7 @@ export async function magicDecode(input, opts = {}) {
         continue;
       }
       if (decoded == null) continue;
-      decoded = String(decoded);
+      decoded = String(resultText(decoded));
 
  // 剪枝：空 / 无变化 / 自打转（同 op 且 output==input，lib:287）
       if (decoded.length === 0 || decoded === cur.text) continue;
@@ -818,7 +833,7 @@ export async function magicDecode(input, opts = {}) {
   }
 
   const cands = finalizeResults(results, o);
- // MT83 可解释性：把模型预测（11 类 top5 概率 + 18 维特征）附到返回候选——
+ // 可解释性：把模型预测（11 类 top5 概率 + 18 维特征）附到返回候选——
  // 用不可枚举属性，不参与 JSON 序列化/结构化克隆/展开，纯调试展示层（UI 后续可读 cands.byteStatProbe）。
   if (byteStatProbe) {
     try {
@@ -872,7 +887,7 @@ function finalizeResults(results, o) {
       signals: signal.signals, signalAdjust: strongAdjust + ordinaryAdjust, signalsTruncated: signal.truncated };
   });
 
- // MT535-DEFAULT-DEDUP：同 op 的单层候选中，「默认参数」候选（无 paramLabel）若与某个**带参数标签**
+ // 同 op 的单层候选中，「默认参数」候选（无 paramLabel）若与某个**带参数标签**
  // 的候选结果完全相同，则丢弃前者——带标签的行已完整表达该结果，空标签行是冗余
  // （卡面：Caesar 25 位移必须为 1 卡 25 行）。两者都带标签时一律保留，不影响
  // 「同算法同结果保留全部参数标签」。
@@ -944,9 +959,9 @@ function scoreToConfidence(score) {
  * compositeScore 归一化，不再用它做乘积。
  * @private
  */
-//   "base64" / "caesar(shift=10)" / "xor:5" / "aes(CBC,key:utf8,ct:base64)"。
+//  "base64" / "caesar(shift=10)" / "xor:5" / "aes(CBC,key:utf8,ct:base64)"。
 // source 由标签形态推导（与既有标签约定一一对应，不改任何调用点）：
-//   含 "(...)" → "sweep"（参数扫描）；含 ":" → "keyed"（密钥/暴力）；否则 → "detect"。
+//  含 "(...)" → "sweep"（参数扫描）；含 ":" → "keyed"（密钥/暴力）；否则 → "detect"。
 function _coerceParamValue(v) {
   if (v === "true") return true;
   if (v === "false") return false;
@@ -983,7 +998,7 @@ function _record(text, cur, opId, detectScore, results, seen, cribRe, queue, byt
   seen.add(key);
 
   let score = compositeScore(text, newChain.length, matchesCrib, newChain);
- // MT83 模型提名微调：输入被判为某编码类且置信达标时，给「首层用同族 op 解出」的候选
+ // 模型提名微调：输入被判为某编码类且置信达标时，给「首层用同族 op 解出」的候选
  // 轻微加权（score -= 小值）。模型只是提名，量级远小于 flag -160 / crib -10000，不压垮
  // 卡方主项；最终判据仍是该 op 能否严格 decode 成功。
   if (byteStatHint && byteStatHint.opSet && byteStatHint.opSet.has(newChain[0])) {

@@ -98,6 +98,7 @@ export default {
       "这是教学版——不处理 PEM 格式、不做填充。CTF 中拿到 n/e/c/d 的大数直接填进来算。",
       "RSA 攻击工具在 analysis 分类（rsaSmallE/rsaWiener/rsaFermat 等）——n 被分解或 e/d 有弱点时可破。",
       "实际 RSA 密文是十六进制大数——先转十进制再填入，或直接填 hex 让 BigInt 解析。",
+      "现实部署提醒：把「无填充原始 RSA 解密预言机」暴露出去很危险——2026 年的 eNFS 攻击（Shea / Haller / Suhl / Heninger / Thomé）可在**不分解模数**的前提下，凭临时拿到的预言机访问权长期离线解密选定密文、伪造签名。规范使用 OAEP / PSS 填充可阻断这类裸预言机；HSM 应关闭不必要的原始 PKCS#11 RSA 操作。",
     ],
     aka: ["RSA", "模幂运算", "RSA教学版", "RSA加密", "非对称加密", "公钥密码", "Rivest Shamir Adleman", "RSA算法", "公钥加密", "大数模幂"],
   },

@@ -1,5 +1,5 @@
 /*
- * confusables.js — Unicode 同形异义字（confusables）数据模块（T81，cat:'stego'）。
+ * confusables.js — Unicode 同形异义字（confusables）数据模块（cat:'stego'）。
  *
  * 覆盖：
  * - CONFUSABLE_SKELETON 同形字 → ASCII/拉丁骨架 映射（拉丁/西里尔/希腊常见子集）。
@@ -8,7 +8,7 @@
  * - detect(text) 混用告警：逐字符标注脚本，找出与主脚本不一致的同形字。
  *
  * 与已有区分：
- * - stegoText.js（T63，@伽马）已有 `confusablesScan`（检测报告 + 脚本分布）。
+ * - stegoText.js（@伽马）已有 `confusablesScan`（检测报告 + 脚本分布）。
  * - 本组新增能力：skeleton 骨架归一化（confusablesScan 没有）+ 导出纯函数供复用。
  * - 注册 id `confusablesSkeleton`（骨架归一化）；同形字检测已统一由 stegoText.js 的 `confusablesScan` 承担。
  *

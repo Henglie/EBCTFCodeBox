@@ -9,7 +9,7 @@
  *   pgpGenKeyPair / pgpEncrypt / pgpDecrypt / pgpSign / pgpVerify /
  *   pgpEncryptAndSign / pgpDecryptAndVerify / pgpParseKey
  *
- * 产物协议：{ text, files:[{name,mime,bytes}] }（T361 协议）；私钥产物标 ⚠ 敏感。
+ * 产物协议：{ text, files:[{name,mime,bytes}] }（协议）；私钥产物标 ⚠ 敏感。
  * 北极星：算法实现交给经广泛使用的 openpgp.js（权威源），本文件只做参数封装与产物化。
  */
 import { register } from "./registry.js";
@@ -79,7 +79,7 @@ register({
     const text = [
       "=== PGP 密钥对生成（RFC 4880）===",
       `算法: ${p?.alg === "rsa3072" ? "RSA-3072" : "Curve25519（ECDH+EdDSA）"}`,
-      `KeyID: ${key.getKeyID().hex}`,
+      `KeyID: ${key.getKeyID().toHex()}`,
       `创建: ${key.getCreationTime().toISOString()}`,
       `用户: ${(key.getUserIDs()[0] || "")}`,
       `指纹: ${key.getFingerprint().toUpperCase().replace(/(.{4})/g, "$1 ").trim()}`,
@@ -197,21 +197,27 @@ register({
   run: async (text, p) => {
     const o = await lib();
     const pub = await o.readKey({ armoredKey: p.pubKey });
-    const isClear = String(text ?? "").includes("BEGIN PGP SIGNED MESSAGE");
+    const signedInput = String(p.signedOrSig || text || "");
+    const isClear = signedInput.includes("BEGIN PGP SIGNED MESSAGE");
     let data, sigs;
-    if (isClear) {
-      const msg = await o.readCleartextMessage({ cleartextMessage: String(text ?? "") });
+    if (signedInput.includes("BEGIN PGP SIGNATURE") && !isClear) {
+      const msg = await o.createMessage({ text: String(text ?? "") });
+      const signature = await o.readSignature({ armoredSignature: signedInput });
+      const r = await o.verify({ message: msg, signature, verificationKeys: pub, format: "utf8" });
+      data = r.data; sigs = r.signatures;
+    } else if (isClear) {
+      const msg = await o.readCleartextMessage({ cleartextMessage: signedInput });
       const r = await o.verify({ message: msg, verificationKeys: pub, format: "utf8" });
       data = r.data; sigs = r.signatures;
     } else {
-      const msg = await o.readMessage({ armoredMessage: String(text ?? "") });
+      const msg = await o.readMessage({ armoredMessage: signedInput });
       const r = await o.verify({ message: msg, verificationKeys: pub, format: "utf8" });
       data = r.data; sigs = r.signatures;
     }
     const lines = [];
     for (const sig of sigs) {
       const valid = await sig.verified;
-      lines.push(`${valid ? "✓ 签名有效" : "✗ 签名无效"}（KeyID ${sig.keyID.hex}）`);
+      lines.push(`${valid ? "✓ 签名有效" : "✗ 签名无效"}（KeyID ${sig.keyID.toHex()}）`);
     }
     if (!sigs.length) lines.push("✗ 未发现签名包");
     lines.push("", "原文：", data);
@@ -261,7 +267,7 @@ register({
     const lines = ["=== PGP 解密并验签 ===", "", r.data, ""];
     for (const sig of r.signatures || []) {
       let s = "签名：未验证（未提供签名者公钥）";
-      try { s = (await sig.verified) ? `✓ 签名有效（KeyID ${sig.keyID.hex}）` : "✗ 签名无效"; } catch { /* 保持 */ }
+      try { s = (await sig.verified) ? `✓ 签名有效（KeyID ${sig.keyID.toHex()}）` : "✗ 签名无效"; } catch { if (p.pubKey && p.pubKey.trim()) s = "✗ 签名验证失败（签名无效或公钥不匹配）"; }
       lines.push(s);
     }
     return emit(lines.join("\n"), []);
@@ -284,10 +290,10 @@ register({
       // v5 实测无 canEncrypt/canSign 方法，按算法名推能力（RFC 4880 §5.5.2）
       const algo = (() => { try { return k.getAlgorithmInfo().algorithm; } catch { return ""; } })();
       const canE = /ecdh|rsaEncryptSign|^rsa$|elgamal|eax|ocb/i.test(algo);
-      const canS = /eddsa|ed25519|rsaSignSign|^rsa$|dsa|ecdsa/i.test(algo);
+      const canS = /eddsa|ed25519|rsaEncryptSign|rsaSign|^rsa$|dsa|ecdsa/i.test(algo);
       const cap = [canE ? "加密" : null, canS ? "签名" : null].filter(Boolean).join("/") || "—";
       return [
-        `${indent}KeyID: ${k.getKeyID().hex}`,
+        `${indent}KeyID: ${k.getKeyID().toHex()}`,
         `${indent}算法: ${algInfo}`,
         `${indent}创建: ${k.getCreationTime().toISOString()}`,
         `${indent}能力: ${cap}`,

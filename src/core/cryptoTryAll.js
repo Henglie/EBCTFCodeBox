@@ -1,11 +1,11 @@
 import { candidateSignals } from "./magic/smartCandidates.js";
 /*
- * core/cryptoTryAll.js — 密码学「密钥+密文一键尝试」（T34 交付）
+ * core/cryptoTryAll.js — 密码学「密钥+密文一键尝试」（交付）
  *
  * 思路参照同类工具密码学窗口 + CyberChef Magic：
  * 输入密文+密钥(+可选IV)，枚举 {AES/DES/3DES/RC4/XOR/Fernet} × {ECB/CBC/CFB/OFB/CTR}
  * × {key/密文/IV 编码 utf8|hex|base64|latin1} × {CBC/ECB pad PKCS7/NoPadding} 组合
- * 逐个试解，用 crib 或「可打印率+熵」打分（复用 T31 scorer），只返回像明文的候选。
+ * 逐个试解，用 crib 或「可打印率+熵」打分（复用 scorer），只返回像明文的候选。
  *
  * 红线：
  * - 算法层零 UI 依赖（纯函数，可 node 直跑单测）。
@@ -17,7 +17,7 @@ import { candidateSignals } from "./magic/smartCandidates.js";
  * cryptoTryAll({ cipherText, keyText, ivText?, crib? }, opts?) -> Promise<candidate[]>
  * candidate = { algo, mode?, pad?, keyEnc, cipherEnc, ivEnc?, plaintext, confidence, matchesCrib }
  *
- * 依赖：T12 modern.js 高层 API（就位）；T31 scorer（就位）。TEA/SM4 待 T21。
+ * 依赖： modern.js 高层 API（就位）； scorer（就位）。TEA/SM4 待。
  */
 import { register } from "./registry.js";
 import { aesDecrypt, desDecrypt, des3Decrypt, rc4, xorCrypt, fernetDecrypt } from "./modern.js";

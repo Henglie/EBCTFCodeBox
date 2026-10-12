@@ -68,7 +68,7 @@ export function findlessStage(e) {
 // 像素-模块坐标约定（全文件统一）
 // 像素 i 覆盖连续区间 [i, i+1)，中心为 i+0.5；`ox/oy` = 符号（模块 0 左/上边界）
 // 在连续坐标中的位置，`pitch` = 每模块像素数。故
-//   模块 k 的中心像素索引 = round(ox + (k + 0.5) * pitch - 0.5)
+//  模块 k 的中心像素索引 = round(ox + (k + 0.5) * pitch - 0.5)
 // pitch 为整数时即模块区间正中；pitch = 1 时退化为 ox + k（不产生错位）。
 // ============================================================
 export function moduleCenterIndex(o, k, pitch) { return Math.round(o + (k + 0.5) * pitch - 0.5); }

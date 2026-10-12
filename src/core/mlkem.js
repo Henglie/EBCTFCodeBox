@@ -23,6 +23,7 @@
 
 import { register } from "./registry.js";
 import { keccakF1600 } from "./hash.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 字节工具
@@ -59,13 +60,7 @@ function bytesEqual(a, b) {
 
 /** CSPRNG。密钥种子禁弱随机源：无 crypto.getRandomValues 直接报错，不降级。 */
 function randomBytes(n) {
-  const c = globalThis.crypto;
-  if (c && typeof c.getRandomValues === "function") {
-    const b = new Uint8Array(n);
-    c.getRandomValues(b);
-    return b;
-  }
-  throw new Error("无可用 CSPRNG（crypto.getRandomValues），无法生成随机种子");
+  return randBytes(n);
 }
 
 /** 种子参数解析：空 → 随机 32B；非空 → 严格 32B hex。 */
@@ -503,7 +498,7 @@ register({
   run: (t, p = {}) => {
     const r = mlkemKeyGenBytes(p.set, p.d, p.z);
     const s = PARAM_SETS[r.set];
-    // T362 产物协议（2026-09-02）：ek / dk 分开交付下载按钮（产品裁决），hex 文本文件。
+    // 产物协议（2026-09-02）：ek / dk 分开交付下载按钮（产品裁决），hex 文本文件。
     return {
       text: [
         `参数集: ML-KEM-${r.set} (k=${s.k}, η1=${s.eta1}, η2=${s.eta2}, du=${s.du}, dv=${s.dv})`,
@@ -536,7 +531,7 @@ register({
   ],
   run: (t, p = {}) => {
     const r = mlkemEncapsBytes(p.set, t, p.m);
-    // T362 产物协议（2026-09-02）：ct / SS 走下载按钮（ct 二进制 + SS hex），text 保留 hex（链式兼容）。
+    // 产物协议（2026-09-02）：ct / SS 走下载按钮（ct 二进制 + SS hex），text 保留 hex（链式兼容）。
     return {
       text: [
         `参数集: ML-KEM-${r.set}`,

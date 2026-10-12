@@ -137,25 +137,9 @@ export default {
     aka: ["zuc", "祖冲之", "gm/t 0001", "3gpp 流密码", "祖冲之密码", "祖冲之序列密码", "zuc算法", "国密流密码", "128-eea3", "128-eia3", "商密流密码", "zuc stream cipher"],
   },
 
-  sm2: {
-    what: "SM2——国密椭圆曲线公钥密码（GB/T 32918-2016，前身 GM/T 0003-2012），RSA/ECC 的国产对位物。本工具支持签名/验签 + 加密/解密完整运算。",
-    principle:
-      "基于 256 位素域椭圆曲线（推荐曲线 sm2p256v1）上的点运算。加密密文采用 `C1||C3||C2` 拼装：C1 是 65 字节椭圆曲线点（以 `0x04` 开头的未压缩格式），C3 是 32 字节 SM3 哈希（验证用），C2 是密文。签名采用 SM3 派生哈希值 e，ZA 由标识 ID_A 与公钥计算（GB/T 32918.2）。\n\n" +
-      "本工具已实现完整运算：签名/验签（GB/T 32918.2-2016）、加密/解密（GB/T 32918.4-2016），官方示例向量逐字节通过（含加载自检）。输入按 mode 参数选操作，私钥/公钥/标识填对应参数。",
-    usage: "mode 选加密/解密/签名/验签：加密填公钥 X/Y，解密填私钥，签名填私钥（可选公钥），验签填公钥 + r + s。标识 ID_A 默认官方样例 1234567812345678。",
-    examples: [
-      { in: "encryption standard", param: "mode=encrypt, pubX/pubY=官方样例公钥", out: "04 + C1(65B) + C3(32B) + C2 的 hex 密文", desc: "官方示例加密" },
-      { in: "message digest", param: "mode=sign, privKey=官方样例私钥", out: "r(32B) + s(32B) 的 hex 签名", desc: "官方示例签名" },
-      { in: "hello world", param: "mode=verify, 公钥+r+s 不符", out: "✗ 签名无效", desc: "验签失败路径" },
-    ],
-    tips: [
-      "认特征：hex 串以 `04` 开头且长度 ≥194 字符（97 字节），或 base64 解码后同条件——结构上像 SM2 密文。",
-      "C1||C3||C2 是 GB/T 32918.4 顺序；新规范（GM/T 0009-2023《SM2密码算法使用规范》）有时用 C1||C2||C3，认题面注明。",
-      "私钥与公钥须同曲线（sm2p256v1），验签失败先检查是否填错了 pubX/pubY。",
-    ],
-    aka: ["sm2", "国密椭圆曲线", "gm/t 0003", "国密公钥密码", "sm2算法", "国密ecc", "商密椭圆曲线", "sm2p256v1", "国密非对称加密", "sm2椭圆曲线密码", "商用密码sm2", "国密公钥算法"],
-  },
+  // sm2 旧合体卡已删除：SM2 已拆为六档族（sm2KeyGen/Encrypt/Decrypt/Sign/Verify/KeyExchange），
+  // 科普卡见 edu-sm2-family.js。
 
   // sm9 旧识别-only 卡已删除：SM9 已升级为完整运算五档族（sm9KeyGen/Sign/Verify/Encrypt/Decrypt），
-  // 科普卡见 edu-sm9-family.js（T397 批1，双线性对内核 pairing.js + sm9ops.js）。
+  // 科普卡见 edu-sm9-family.js（批1，双线性对内核 pairing.js + sm9ops.js）。
 };

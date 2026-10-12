@@ -1,8 +1,8 @@
 /*
- * flagpatterns.js — CTF flag 格式正则库（T78，纯数据模块，不注册 op）。
+ * flagpatterns.js — CTF flag 格式正则库（纯数据模块，不注册 op）。
  *
- * 定位：供 T66 flagdetect.js 复用的数据层。本模块只导出正则表 + findFlags 纯函数
- * 不调用 register，不进 OPS，不碰 main.js / i18n。flagdetect.js（T66）import 后
+ * 定位：供 flagdetect.js 复用的数据层。本模块只导出正则表 + findFlags 纯函数
+ * 不调用 register，不进 OPS，不碰 main.js / i18n。flagdetect.jsimport 后
  * 可直接用 findFlags(text) 拿区间列表做识别 / 高亮，或用 FLAG_PATTERNS 自行扫描。
  *
  * 覆盖（按置信度降序）：
@@ -32,7 +32,7 @@
  *
  * 红线：
  * - 纯函数零 DOM，不依赖 registry / compress / magic。
- * - 不注册 op，不进 OPS；T66 flagdetect 负责 op 注册 + UI 高亮。
+ * - 不注册 op，不进 OPS； flagdetect 负责 op 注册 + UI 高亮。
  * - 编程关键字 if/for/while/function 等用 KEYWORD_BLOCKLIST 排除，避免代码片段误报。
  */
 

@@ -302,7 +302,7 @@ function hillDecode(text, key = "GYBNQKURP") {
   return hillApply(text, invertMatrixMod(parseHillKey(key), 26));
 }
 
-// ============ Hill 自定义字母表（T517：模数=表长，密钥同表解析） ============
+// ============ Hill 自定义字母表（：模数=表长，密钥同表解析） ============
 // 默认 alphabet 为空时走上方原路径（行为零变化）；自定义表口径对齐
 // yunser hill-cipher 参照页：密钥字符也查表映射、表内字符（含空格/标点，
 // 大小写敏感精确匹配）参与运算、表外字符丢弃、det 与表长互素才可逆。

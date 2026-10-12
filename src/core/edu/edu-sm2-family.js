@@ -1,5 +1,5 @@
 /*
- * edu-sm2-family.js — SM2 六档算法族科普卡（T394：族滑块化后按 opId 拆卡）。
+ * edu-sm2-family.js — SM2 六档算法族科普卡（：族滑块化后按 opId 拆卡）。
  * 格式契约见 eduContent.js 头注释：纯数据、无 import、无副作用。
  * aka 均 ≥10 条真实别名（_alias_verify 三件套红线）。
  */

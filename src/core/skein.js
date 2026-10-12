@@ -162,7 +162,9 @@ const VARIANTS = {
 
 function skeinRun(text, p = {}) {
   const variant = (p && p.variant) || "512-512";
-  const [nw, hbl] = VARIANTS[variant] || [8, 512];
+  if (!Object.prototype.hasOwnProperty.call(VARIANTS, variant))
+    throw new Error(`Skein：未知变体 "${variant}"（可选：${Object.keys(VARIANTS).join(" / ")}）`);
+  const [nw, hbl] = VARIANTS[variant];
   const inputMode = (p && p.inputMode) || "text";
   const input = inputMode === "hex"
     ? hexToBytes(text)

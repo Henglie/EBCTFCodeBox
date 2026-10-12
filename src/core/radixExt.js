@@ -270,6 +270,10 @@ function standardCodeRun(text) {
           bytes = new Uint8Array(u8.length);
           for (let i = 0; i < u8.length; i += 2) { bytes[i] = u8[i + 1]; bytes[i + 1] = u8[i]; }
         } else if (enc === "latin1" || enc === "iso-8859-1") {
+          if ([...s].some((ch) => ch.charCodeAt(0) > 0xff)) {
+            lines.push(`${enc} 编码: （非 Latin1 域，无法表示）`);
+            continue;
+          }
           bytes = new Uint8Array(s.length);
           for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i) & 0xff;
         } else {

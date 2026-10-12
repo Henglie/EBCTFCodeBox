@@ -103,8 +103,8 @@ export default {
     what: "当私钥 d 太小时的经典攻击：用连分数展开 e/n 就能把 d 挖出来，不用分解 n。",
     principle:
       "当 $d < \\frac{1}{3} n^{1/4}$ 时，$\\frac{e}{n}$ 的连分数收敛子里就藏着 $\\frac{k}{d}$。逐个收敛子当作候选 $d$ 验证即可。",
-    usage: "输入框填 e 和 n（每行一个或逗号分隔），自动跑连分数找小 d。",
-    examples: [{ in: "e=..., n=...", out: "d=... (若满足小 d 条件)" }],
+    usage: "参数框填 e 和 n（十进制），自动跑连分数找小 d。",
+    examples: [{ in: "", param: "e=60084029, n=100160063", out: "=== Wiener 攻击（连分数，针对小 d）===\ne = 60084029\nn = 100160063\nn^(1/4) ≈ 100\n\n✓ 恢复私钥 d = 5\np = 10009\nq = 10007\nφ(n) = 100140048\n校验: e·d mod φ = 1 (应为 1)", desc: "p=10007、q=10009、d=5 自构样例，实跑原文" }],
     formulas: [{ tex: "d < \\tfrac{1}{3}\\,n^{1/4}", caption: "维纳攻击的适用门槛" }],
     tips: ["特征：e 特别大（接近 n），往往暗示 d 很小 → 试 Wiener。"],
     aka: ["wiener attack", "维纳攻击", "连分数攻击", "wiener", "威纳攻击", "小d攻击", "小私钥指数攻击", "continued fraction attack", "rsa wiener", "低解密指数攻击", "连分数展开", "wiener's attack"],
@@ -136,7 +136,7 @@ export default {
     principle:
       "$n = a^2 - b^2 = (a-b)(a+b)$。从 $a=\\lceil\\sqrt n\\rceil$ 起递增，检查 $a^2-n$ 是否为完全平方 $b^2$；一旦是，$p=a-b,\\ q=a+b$。$|p-q|$ 越小收敛越快。",
     usage: "输入框填 n，设最大迭代次数，自动找 p、q。",
-    examples: [{ in: "n=...", out: "p=..., q=..." }],
+    examples: [{ in: "100160063", out: "=== 费马分解（p,q 相近）===\nn = 100160063\nmaxIter = 100000\n\n✓ 分解成功（0 次迭代）:\np = 10007\nq = 10009\n校验: p·q = 100160063 (应 = n)\n|p - q| = 2", desc: "p=10007、q=10009（相差 2），实跑原文" }],
     formulas: [{ tex: "n = a^2 - b^2 = (a-b)(a+b)", caption: "费马分解" }],
     tips: ["特征：p、q 位数接近、生成时刻意相邻 → Fermat 几步就出。"],
     aka: ["fermat factorization", "费马分解", "费马因式分解", "fermat", "费马分解法", "费马因子分解", "平方差分解", "pq相近攻击", "fermat's factorization", "费马方法", "近素数分解", "rsa fermat"],
@@ -217,7 +217,7 @@ export default {
     what: "Windows 存口令用的哈希，本质是把 UTF-16LE 口令做一次 MD4。取证/域渗透题常见。",
     principle: "$\\text{NTLM} = \\text{MD4}(\\text{UTF-16LE}(password))$。长得和 MD5 一样是 32 位十六进制，但算法不同。",
     usage: "输入口令，输出 NTLM 哈希。反查用 hashDictCrack（支持 NTLM）。",
-    examples: [{ in: "password", out: "8846f7eaee8fb117ad06bdd830b7586c" }],
+    examples: [{ in: "password", out: "8846F7EAEE8FB117AD06BDD830B7586C" }],
     tips: ["32 位十六进制但题目背景是 Windows/SAM/域，优先按 NTLM 而非 MD5 试。"],
     aka: ["nt hash", "ntlm hash", "windows口令哈希", "ntlm", "nt哈希", "md4哈希", "windows密码哈希", "网络登录哈希", "ntlm认证", "windows hash", "md4 utf16", "域口令哈希"],
   },

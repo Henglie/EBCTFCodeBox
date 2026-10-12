@@ -1,4 +1,4 @@
-// T70 数字信号编码组 — 曼彻斯特/差分曼彻斯特/NRZI/密勒码/4B5B/PWM-PPM 比特流互转
+// 数字信号编码组 — 曼彻斯特/差分曼彻斯特/NRZI/密勒码/4B5B/PWM-PPM 比特流互转
 //
 // 红线：编码规则照 IEEE 802.3 / G.E. Thomas / USB NRZI / Miller / FDDI 4B5B 公开规范，未编造。
 // 注册契约：见 T2 回执。cat:'fancy'，每 op encode+decode 双向，输入输出均为字符串（'0'/'1' 比特流或可打印字符流）。
@@ -461,7 +461,7 @@ function inputToBits(text, p) {
   return toBitStream(text);
 }
 
-/** 把"比特流"按 inputFormat 还原成输出文本：bits 模式直接返回比特串，text 模式转回 UTF-8 */
+/** 把"比特流"按 inputFormat 还原成输出文本：bits 模式直接返回比特串，text/auto 模式转回 UTF-8 */
 function bitsToOutput(bits, p) {
   const fmt = p.inputFormat || "auto";
  // text 模式：转回 UTF-8 文本
@@ -472,6 +472,22 @@ function bitsToOutput(bits, p) {
       const txt = bitsToText(bits);
  // 检查是否全 0 尾部（补齐 8 位的）
       return txt;
+    } catch {
+      return bits;
+    }
+  }
+ // auto 模式：与 encode 侧对称（encode 的 auto 会判定 text/bits）——解码端同样**尝试还原文本**。
+ // 判据：严格 UTF-8（fatal:true）能完整解出才转文本，否则原样返回比特串。
+ // 注：bitsToText 用 fatal:false 会静默产出 U+FFFD，故 auto 分支改用严格解码器判定。
+ // 需要「比特流进→比特流出」的调用方，显式选 inputFormat:"bits" 即可。
+  if (fmt === "auto") {
+    if (!bits.length) return bits;
+    // 非 8 倍数位流：bitsToBytes 会丢弃尾部余位（1-7 位将产出 0 字节 → 空串），转文本会静默丢比特
+    // → 回退原位串保真（与下方"严格解码失败回退比特串"语义一致）。
+    if (bits.length % 8 !== 0) return bits;
+    try {
+      const { bytes } = bitsToBytes(bits);
+      return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     } catch {
       return bits;
     }
@@ -591,7 +607,7 @@ register({
   },
 });
 
-// 导出纯函数供 T37 workerPool / T85 单元测试补齐 复用
+// 导出纯函数供 workerPool / 单元测试补齐复用
 export {
   toBitStream,
   bitsToBytes,

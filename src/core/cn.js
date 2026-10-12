@@ -7,6 +7,7 @@
  * 中文电码 / 汉字笔画需大数据码表，留后续卡。
  */
 import { register } from "./registry.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 const te = new TextEncoder();
 const td = (bytes) => new TextDecoder("utf-8").decode(new Uint8Array(bytes));
@@ -133,10 +134,14 @@ function foyuEncode(text) {
     bytes[i * 2 + 1] = text.charCodeAt(i) >>> 8;
   }
   const encrypted = aesEncrypt(bytes, FO_KEY, { mode: "CBC", iv: FO_IV, pad: true });
-  const random = new Uint32Array(1);
   let out = "佛曰：";
   for (const b of encrypted) {
-    if (b >= 128) { crypto.getRandomValues(random); out += FO_MARKS[random[0] % FO_MARKS.length]; }
+    if (b >= 128) {
+      // 咒字选择：统一随机源取 4 字节（默认 system 档与原 crypto.getRandomValues 等价）
+      const rb = randBytes(4);
+      const rv = ((rb[0] << 24) | (rb[1] << 16) | (rb[2] << 8) | rb[3]) >>> 0;
+      out += FO_MARKS[rv % FO_MARKS.length];
+    }
     out += FO_CHARS[b & 127];
   }
   return out;

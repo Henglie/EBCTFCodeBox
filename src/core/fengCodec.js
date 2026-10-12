@@ -20,6 +20,7 @@
  */
 import { register } from "./registry.js";
 import { streamCompress, streamDecompress } from "./compress.js"; // v0.1.5：安全流（超时+纯JS兜底）
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 const te = (s) => new TextEncoder().encode(s);
 const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(b));
@@ -48,9 +49,7 @@ function b64ToBytes(b64) {
 }
 
 function randomBytes(n) {
-  const b = new Uint8Array(n);
-  globalThis.crypto.getRandomValues(b);
-  return b;
+  return randBytes(n);
 }
 
 // ============================================================

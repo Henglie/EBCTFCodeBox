@@ -401,7 +401,7 @@ export default {
   "ui.uv.graphemes": "grafemas",
   "ui.uv.splitClusters": "Dividir sequências combinantes (listar cada ponto de código)",
   "ui.uv.noSegmenter": "(Segmentação de grafemas não suportada aqui; exibindo pontos de código)",
-  // 拼字 / IDS 视图（MT84）
+  // 拼字 / IDS 视图
   "ui.uv.tabIds": "Ideogramas / IDS",
   "ui.uv.idsDesc": "Sequências de descrição ideográfica (IDS): consulte a árvore de decomposição de um caractere, pesquise caracteres por componente e converta entre caracteres e strings IDS. Totalmente local, zero upload.",
   "ui.uv.idsLoading": "Carregando dados de ideogramas…",
@@ -427,7 +427,7 @@ export default {
   "ui.uv.idsNoExact": "Sem correspondência exata de IDS; pesquisando por componentes folha:",
   "ui.uv.idsConvHits": "{0} correspondências",
   "ui.uv.idsSrc": "fonte",
-  // 快速换算视图（MT81）
+  // 快速换算视图
   "ui.qc.title": "Conversão rápida",
   "ui.qc.desc": "Bancada de conversão de bases e unidades: edite qualquer campo e todos os outros se atualizam ao vivo. Totalmente local, sem rede.",
   "ui.qc.tabRadix": "Bases de programador",
@@ -551,6 +551,8 @@ export default {
   "ui.env.syncAccentOk": "Cor de destaque do sistema sincronizada",
   "ui.env.syncAccentFail": "Cor de destaque do sistema indisponível",
   "ui.topbar.font": "Biblioteca de Fontes",
+  "ui.pwa.updateBar": "Há uma nova versão disponível. Os recursos offline estão prontos",
+  "ui.pwa.updateRefresh": "Recarregar",
 
  // ---- topbar search ----
   "ui.search.placeholder": "Buscar codificadores / cifras…",
@@ -743,7 +745,7 @@ export default {
   "op.sshPubkeyParse.name": "Analisador de Chave Pública SSH",
   "op.btcAddressIdent.name": "Identificar Endereço Bitcoin",
   "op.ethAddressIdent.name": "Identificar Endereço Ethereum",
- // ---- MT82 new ops (forensic/stego/modern) ----
+ // ---- new ops (forensic/stego/modern) ----
   "op.gifTiming.name": "Esteganografia de Temporização de Quadros GIF",
   "op.jpgSizeRecover.name": "Recuperação de Tamanho JPEG",
   "op.zipRepair.name": "Reparo de Criptografia Falsa ZIP",
@@ -1167,9 +1169,12 @@ export default {
   "ui.ds.customBadge": "Modificado (personalizado)",
   "ui.home.strengthBtn": "Intensidade",
 
- // ---- 2026-08-26 解冻新增（协作代理译文，主控已验）----
   "ui.op.fontDec": "Diminuir fonte",
   "ui.op.fontInc": "Aumentar fonte",
+  "ui.op.localFonts": "Carregar fontes locais",
+  "ui.op.localFontsDone": "{0} fontes locais carregadas",
+  "ui.op.localFontsFail": "Falha ao carregar fontes locais: {0}",
+  "ui.op.pickImage": "Escolher imagem",
   "ui.exhaust.branchCount": "{0} ramos",
   "ui.exhaust.hitCount": "{0} acertos prováveis",
   "ui.exhaust.defaultParam": "padrão",
@@ -1438,6 +1443,8 @@ export default {
   'op.csrParse.name': 'Analisador de CSR (PKCS#10)',
   'op.crlParse.name': 'Analisador de CRL X.509',
   'cat.esolang': 'Linguagens de programação esotéricas',
+  'cat.stegoText': 'Esteganografia de texto',
+  'cat.stegoFile': 'Esteganografia de arquivos',
   'ui.about.contribSmile1110': 'Propôs a expansão de ECC e da criptografia moderna.',
   'ui.about.contribLamian': 'Relatos de erros e sugestões: compatibilidade com as ferramentas originais, casos-limite de Unicode e espaços em branco, linguagens esotéricas, explicações, categorias e parâmetros.',
   'ui.edu.aka': 'Nomes alternativos (todos pesquisáveis)',
@@ -1574,6 +1581,13 @@ export default {
   'fam.lbl.base2048': 'Base2048',
   'fam.lbl.base65536': 'Base65536',
   'fam.lbl.ecoji': 'Ecoji (Base64 com emojis)',
+  'fam.lbl.fields': 'Extração de campos',
+  'fam.lbl.attack': 'Reutilização do nonce k',
+  'fam.lbl.sharedPub': 'A partir da chave pública',
+  'fam.lbl.homAdd': 'Adição homomórfica',
+  'fam.lbl.scan': 'Varredura',
+  'fam.lbl.formatBrute': 'Força bruta',
+  'fam.lbl.smartReport': 'Relatório inteligente',
  // ----解冻批回填（外部交付 2026-09-26 + 内部 cat.*）----
   "ui.recipe.chooseFamilyOp": "Escolher uma operação para adicionar à cadeia de receita",
   "op.base16.desc": "Codificação hexadecimal: cada byte é representado por dois caracteres hexadecimais. Suporta um alfabeto personalizado e maiúsculas / separação por espaços.",

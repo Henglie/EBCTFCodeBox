@@ -33,12 +33,13 @@
  * - 消息 hash：支持 SHA-1（Web Crypto）或直接输入整数 z（CTF 常直接给 H(m)）。
  * - 模逆 / 快速幂自备（扩展欧几里得 + 快速幂），不 import 其他 core。
  *
- * 契约：族滑块四档 op（T396-A）：dsaParamGen / dsaSign / dsaVerify / dsaReuseK，
+ * 契约：族滑块四档 op（-A）：dsaParamGen / dsaSign / dsaVerify / dsaReuseK，
  *        family:"dsa"。输出 === 标题 === 报告风格。
  */
 
 import { register } from "./registry.js";
 import { generatePrime, isProbablePrime } from "./primeGen.js"; // keygen 参数组生成复用（Miller-Rabin，FIPS 186-5 一致判据）
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 通用数论工具（BigInt，局部实现）
@@ -108,7 +109,7 @@ function randomK(q) {
   const buf = new Uint8Array(bytes);
   let k;
   do {
-    crypto.getRandomValues(buf);
+    buf.set(randBytes(buf.length));
     k = 0n;
     for (const b of buf) k = (k << 8n) | BigInt(b);
     k = (k % qMinus1) + 1n;               // [1, q-1]
@@ -293,7 +294,7 @@ const DEMO = {
 };
 
 // ============================================================
-// DSA 四档算法族（T396-A，2026-09-04：同族多操作必须族滑块，废除下拉切模式）
+// DSA 四档算法族（-A，2026-09-04：同族多操作必须族滑块，废除下拉切模式）
 // family:"dsa" + familyLabel → fam.lbl.*（keygen/sign/verify 已有主表 key；
 // 攻击档用 attack——需主控在 zh/en i18n 主表新增 fam.lbl.attack）。
 // 底层 dsaSign/dsaVerify/attackReuseK/参数组生成实现原样复用，
@@ -307,7 +308,7 @@ register({
   family: "dsa",
   familyLabel: "keygen",
   name: "DSA 密钥对/参数组生成",
-  desc: "DSA 密钥对与参数组生成（FIPS 186-5 §A.1.1-§A.2.1）：q（N 位素数）→ p=k·q+1（L 位素数）→ g=h^((p-1)/q) mod p（阶 q 生成元）→ 私钥 x ∈ [1,q-1]，公钥 y=g^x mod p。仅认可现行 (L,N)=(2048,224)/(2048,256)/(3072,256)，1024 及以下已废止",
+  desc: "DSA 密钥对与参数组生成（参数生成算法按 FIPS 186-4 附录 A.1.1/A.2.1；参数组限制按 SP 800-131A Rev.2 §3；FIPS 186-5 已整体移除 DSA 的参数与密钥生成，仅保留旧签名验证，本工具按 186-4 供兼容核对）：q（N 位素数）→ p=k·q+1（L 位素数）→ g=h^((p-1)/q) mod p（阶 q 生成元）→ 私钥 x ∈ [1,q-1]，公钥 y=g^x mod p。仅认可现行 (L,N)=(2048,224)/(2048,256)/(3072,256)，1024 及以下已废止",
   params: [
     {
       key: "ln", label: "参数组 L/N", type: "select", default: "2048/256",
@@ -346,7 +347,7 @@ register({
     if (G <= 1n) throw new Error("未找到阶为 q 的生成元 g（异常）");
     const X = randomK(Q); // ∈ [1, q-1]
     const Y = powMod(G, X, P);
-    // T362 产物协议（2026-09-02）：公钥（p/q/g/y）/ 私钥（p/q/x）分开交付下载按钮（十进制文本，
+    // 产物协议（2026-09-02）：公钥（p/q/g/y）/ 私钥（p/q/x）分开交付下载按钮（十进制文本，
     // 可直接粘回参数框）。
     return {
       text: [

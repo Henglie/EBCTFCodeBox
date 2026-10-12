@@ -1,12 +1,12 @@
 /*
- * hexview.js — 十六进制查看器数据层（T91，cat:'analysis'）。
+ * hexview.js — 十六进制查看器数据层（cat:'analysis'）。
  *
  * 覆盖（全部 run 单向，返回多行报告文本；核心纯函数 export 供 UI 复用）：
  * - hexRange：指定偏移区间字节的多格式展示（hex/dec/oct/bin/ASCII/UTF-8）
  * - hexStats：字节值分布统计（256 桶密度网格 + 可打印率 + 全局/滑窗香农熵 + top-N 高频）
- *   T349 增强：滑窗熵曲线（分块窗口熵随偏移变化，文本块字符条，定位加密/压缩/内嵌区）
+ * 增强：滑窗熵曲线（分块窗口熵随偏移变化，文本块字符条，定位加密/压缩/内嵌区）
  *   + 字节分布图（16×16 密度网格，对数分档，256 桶全覆盖）
- *   T428：独立 hexView op 已移除；hexdump 展示由字符显示器（universalViewer，复用
+ * 独立 hexView op 已移除；hexdump 展示由字符显示器（universalViewer，复用
  *   buildHexRows）承接，formatHexDump/parseRanges 等数据层能力保留供复用。
  *
  * 纯函数 export（供 UI hex viewer 数据层复用）：
@@ -256,7 +256,7 @@ export function byteStats(bytes) {
   };
 }
 
-// ============ 滑窗熵曲线（T349） ============
+// ============ 滑窗熵曲线（） ============
 /** 一段字节的香农熵（bits/byte，0..8），复用与 byteStats 相同的频数法。 */
 function shannonChunk(bytes, start, end) {
   const n = end - start;
@@ -317,7 +317,7 @@ function renderEntropyCurve(curve) {
   return lines.join("\n");
 }
 
-// ============ 字节分布图：16×16 密度网格（T349） ============
+// ============ 字节分布图：16×16 密度网格（） ============
 // 密度 6 级：空格(0 次) · ░ ▒ ▓ █(最高)；对数分档——大文件里桶计数跨数量级，
 // 线性映射会全挤在最低档，log 压缩后各数量级各占一档。
 const DENSITY_CHARS = "·░▒▓█";
@@ -397,7 +397,7 @@ function formatStats(bytes, opts = {}) {
 }
 
 // ============ op run 包装 ============
-// T419：区分「没有文件」与「零长度文件」。rawBytes 通道存在即用（含空文件→0 字节），
+// ：区分「没有文件」与「零长度文件」。rawBytes 通道存在即用（含空文件→0 字节），
 // 通道缺失才回退文本解析——绝不把「已载入文件 x (0 B)」占位提示文本当输入解析。
 function takeBytes(text, p) {
   const rb = p && p.rawBytes;
@@ -457,7 +457,7 @@ register({
 
 export { parseRanges, parseNum };
 
-// ============ 加载期自检（T349 增强，import 即跑，失败即抛） ============
+// ============ 加载期自检（增强，import 即跑，失败即抛） ============
 (function selfTest() {
   const assert = (cond, msg) => { if (!cond) throw new Error("hexview 自检失败: " + msg); };
   // 固定种子 LCG：确定性伪随机字节（统计上近似均匀 → 高熵）
@@ -502,7 +502,7 @@ export { parseRanges, parseNum };
     const row4 = g1.split("\n")[4]; // 0x40 行：行首"0x40 "(5 字符)后为 0x40..0x4F 桶
     assert(row4[6] === "█" && row4[5] === " ", "最高桶应 █，实测行: " + row4);
   }
-  // ⑦ byteStats 既有统计回归（不破坏 T91 行为）+ 新增 counts
+  // ⑦ byteStats 既有统计回归（不破坏既有行为）+ 新增 counts
   {
     const s = byteStats(new Uint8Array([0, 0, 1]));
     assert(Math.abs(s.entropy - 0.9183) < 0.0001 && s.nullCount === 2 && s.counts.length === 256 && s.counts[1] === 1, "byteStats 回归错");

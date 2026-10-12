@@ -1,5 +1,5 @@
 /*
- * stringsExtract.js — 通用可打印字符串提取（T347，cat:'filefmt'，单向 run）。
+ * stringsExtract.js — 通用可打印字符串提取（cat:'filefmt'，单向 run）。
  *
  * 场景：逆向 / 取证的起手动作——任意字节流里扫出「连续可打印字符 ≥ 最小长度」
  * 的片段（经典 strings 命令的浏览器版）。不限可执行文件，对任何二进制都可用，
@@ -150,7 +150,7 @@ function stringsExtractRun(text, p) {
   const b = (...bs) => new Uint8Array(bs);
 
   // ① ASCII 混合流：短片段被 minLen 过滤（参考用例）
-  //    "AB\0hello\0\1world!" → hello / world!（"AB" 长 2 被滤）
+  //   "AB\0hello\0\1world!" → hello / world!（"AB" 长 2 被滤）
   const d1 = b(0x41, 0x42, 0x00, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x00, 0x01, 0x77, 0x6F, 0x72, 0x6C, 0x64, 0x21);
   let out = stringsExtractRun("", { rawBytes: d1, minLen: 4, encoding: "ascii" });
   if (!out.includes("命中 2 条") || !out.includes("hello") || !out.includes("world!") || out.includes("AB")) {

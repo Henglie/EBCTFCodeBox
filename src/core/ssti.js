@@ -1,5 +1,5 @@
 /*
- * ssti.js — SSTI 服务端模板注入关键字/特征识别（T268，cat:'analysis'，单向 run）。
+ * ssti.js — SSTI 服务端模板注入关键字/特征识别（cat:'analysis'，单向 run）。
  *
  * 场景：CTF web / 代码审计里，给一段用户可控输入或页面回显，判断是否触及
  * 服务端模板注入（Server-Side Template Injection）。本 op 做纯静态特征扫描：

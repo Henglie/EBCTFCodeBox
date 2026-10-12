@@ -1,5 +1,5 @@
 /*
- * eccdetect.js — 椭圆曲线 / 现代密码识别组（T61，cat:'analysis'）。
+ * eccdetect.js — 椭圆曲线 / 现代密码识别组（cat:'analysis'）。
  *
  * 覆盖（全部 run 单向，只解析结构不做签名运算）：
  * - pemParse PEM/DER 结构解析（识别 RSA/EC/Ed25519 公私钥、证书、CSR）
@@ -777,7 +777,8 @@ function bech32HrpExpand(hrp) {
   return out;
 }
 function bech32VerifyChecksum(hrp, data) {
-  return bech32Polymod([...bech32HrpExpand(hrp), ...data]) === 1;
+  // BIP-173: witness v0 checksum constant = 1 (Bech32); BIP-350: witness v1+ (P2TR) checksum constant = 0x2bc830a3 (Bech32m)
+  return bech32Polymod([...bech32HrpExpand(hrp), ...data]) === (data[0] === 0 ? 1 : 0x2bc830a3);
 }
 function bech32Decode(addr) {
   const s = String(addr).trim();

@@ -252,6 +252,7 @@ export default {
     examples: [
       { in: "简体转换", out: "簡體轉換", desc: "简 → 繁" },
       { in: "簡體轉換", out: "简体转换", desc: "繁 → 简" },
+      { in: "汉字国门画", out: "漢字國門畫", desc: "简繁转换不混入火星文字形" },
     ],
     tips: ["只做常用字一对一映射，不处理「一简对多繁」的语义歧义（如「后/後」「里/裡」按表固定取一个）。"],
     aka: ["简繁转换", "繁简转换", "简繁体", "traditional-simplified", "简体繁体互转", "繁体转简体", "简体转繁体", "简繁互转", "简中繁中", "Simplified Chinese", "Traditional Chinese", "中文简繁"],

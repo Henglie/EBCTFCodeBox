@@ -25,6 +25,8 @@ import { icon as iconSvg } from "./icons.js";  // .msym 无字体 ligature，须
 import { THEME_VARIANTS } from "./themePicker.js";
 import { attachModalLifecycle } from "./modalLifecycle.js";
 import { getLocale } from "../i18n/index.js";
+// 「增强随机安全」全局入口（并入本环境面板）。独立组件，自带轻量 el/i18n。
+import { renderRandSecureSection } from "./randSecurePanel.js";
 
 const ACCENT_KEY = "ebctf.accent";  // 与 main.js 一致，仅读取判当前选中态
 
@@ -269,6 +271,8 @@ function renderPanelContent(state) {
   const detectBox = el("div", { class: "env-detect-box" });
   detectBox.append(renderDetectContent(state));
   wrap.append(detectBox);
+ // 增强随机安全区（全局随机源档位 + 配置 + 服务器测试连接）
+  wrap.append(renderRandSecureSection());
  // 字库区
   wrap.append(renderFontsSection());
  // 昼夜切换区（与强调色同属「外观」，放一起）

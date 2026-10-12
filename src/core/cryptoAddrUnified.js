@@ -1,5 +1,5 @@
 /*
- * cryptoAddrUnified.js — 加密货币地址解析归一（T263，cat:'analysis'，run 型）。
+ * cryptoAddrUnified.js — 加密货币地址解析归一（cat:'analysis'，run 型）。
  * 归一 façade：自动识别 BTC(legacy/segwit/taproot) / ETH / 其他
  * 输出地址类型/校验和验证/网络/编码方式。
  *

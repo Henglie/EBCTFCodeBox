@@ -1,5 +1,5 @@
 /*
- * spoon.js — Spoon 深奥语言（Brainfuck 的前缀码二进制变体，T267）。
+ * spoon.js — Spoon 深奥语言（Brainfuck 的前缀码二进制变体）。
  *
  * Spoon（Steven Goodwin 设计）把 Brainfuck 的 8 个指令换成一套可变长前缀码
  * （霍夫曼式），整段源程序因此变成一串 0/1。本模块做 Brainfuck ↔ Spoon 双向转换。

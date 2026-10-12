@@ -1,12 +1,12 @@
 /*
- * keyboardExt.js — 键盘 / 布局编码补全组（T59，cat:'fancy'）。
+ * keyboardExt.js — 键盘 / 布局编码补全组（cat:'fancy'）。
  *
  * 覆盖：
  * - layoutMap QWERTY ↔ Dvorak ↔ Colemak 物理键位映射（全 47 键双射置换）
  * - t9Phone 手机九宫格 T9（键号 + 按次二位编码 a=21 b=22 c=23 … z=94，空格=00）
  * - multitap 手机全键盘多击（2=a 22=b 222=c，空格分隔字母，0=空格）
  * - kbdFullCoord 键盘行列坐标（含数字行 4 行，格式 R.C 空格分隔，如 Q=2.1）
- * - stenoLetter Steno 速记字母（Plover 字母理论，A-Z ↔ 单 stroke 和弦）
+ * - stenoLetter Steno 速记字母（Plover 拼写形 fingerspelling，A-Z ↔ 单 stroke 和弦）
  * - arrowKey 方向键编码（↑↓←→ ↔ WASD/UDLR/数字小键盘，参数选方案）
  *
  * 红线：
@@ -15,7 +15,8 @@
  * fancy.js： keyboard / tapcode
  * fancy3.js： keyboardShift
  * - 本文件全部为双向 encode/decode，跑往返测试。
- * - 布局映射 / Steno 码表照抄 Wikipedia / Plover 公开标准，不编造。
+ * - 布局映射照抄 Wikipedia 公开标准；Steno 码表逐键取自 Plover 官方词典 main.json
+ * 的拼写形（fingerspelling）条目，不编造。
  *
  * 注册契约：register({id, cat:"fancy", name, desc, params, encode?, decode?})
  */
@@ -197,34 +198,39 @@ function kbdFullCoordDecode(text) {
   }).join("");
 }
 
-// ============ 5. stenoLetter：Steno 速记字母（Plover 字母理论） ============
-// 速记机（steno）单 stroke 字母和弦表，照抄 Plover 字母理论。
+// ============ 5. stenoLetter：Steno 速记字母（Plover 拼写形 fingerspelling） ============
+// 速记机（steno）单 stroke 拼写形和弦表，逐键取自 Plover 官方词典 main.json 的
+// 拼写形（fingerspelling）小写条目（A*=>{>}{&a} … STKPW*=>{>}{&z}），是 Plover
+// 和弦体系的拼写子集：不含大小写修饰、元音 e/i/u 星号在前（*E/*EU/*U）。
 // 每个字母 ↔ 一个唯一 steno chord（steno 键序 STKPWHRAO*EUFRPBLGTSDZ 的子集）。
 // 和弦间用空格分隔，往返无损（26 个 chord 两两不同）。
 const STENO_LETTER = {
-  A: "A", B: "PW", C: "KR", D: "TK", E: "E", F: "TP", G: "TKPW", H: "H",
-  I: "EU", J: "SKWR", K: "K", L: "HR", M: "PL", N: "TPB", O: "O", P: "P",
-  Q: "KW", R: "R", S: "S", T: "T", U: "U", V: "SR", W: "W", X: "KP",
-  Y: "KWR", Z: "S*",
+  A: "A*", B: "PW*", C: "KR*", D: "TK*", E: "*E", F: "TP*", G: "TKPW*", H: "H*",
+  I: "*EU", J: "SKWR*", K: "K*", L: "HR*", M: "PH*", N: "TPH*", O: "O*", P: "P*",
+  Q: "KW*", R: "R*", S: "S*", T: "T*", U: "*U", V: "SR*", W: "W*", X: "KP*",
+  Y: "KWR*", Z: "STKPW*",
 };
 const STENO_LETTER_REV = {};
 for (const [k, v] of Object.entries(STENO_LETTER)) STENO_LETTER_REV[v] = k;
 
 function stenoEncode(text) {
+  if (typeof text !== "string" || text.length === 0) throw new Error("stenoLetter: 输入必须为非空字符串");
   const tokens = [];
-  for (const ch of text) {
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
     const up = ch.toUpperCase();
     if (STENO_LETTER[up]) tokens.push(STENO_LETTER[up]);
     else if (ch === " ") tokens.push("/"); // 词间空格用 / 编码，避免与 join 分隔符混淆
-    else tokens.push(ch); // 其余非字母原样保留
+    else throw new Error("stenoLetter: 非法字符 " + JSON.stringify(ch) + "（位置 " + i + "）"); // 非字母显式抛错
   }
   return tokens.join(" ");
 }
 function stenoDecode(text) {
+  if (typeof text !== "string" || text.length === 0) throw new Error("stenoLetter: 输入必须为非空字符串");
   return text.split(/\s+/).filter((t) => t.length > 0).map((t) => {
     if (t === "/") return " ";
     if (STENO_LETTER_REV[t]) return STENO_LETTER_REV[t];
-    return t; // 无法识别的 token 原样保留
+    throw new Error("stenoLetter: 无法识别的 token " + JSON.stringify(t)); // 未知 token 显式抛错
   }).join("");
 }
 
@@ -320,7 +326,7 @@ register({
 
 register({
   id: "stenoLetter", cat: "fancy", name: "Steno 速记字母",
-  desc: "速记机字母和弦（Plover 字母理论，A-Z ↔ 单 stroke，空格分词）",
+  desc: "速记机字母和弦（Plover 拼写形 fingerspelling，A-Z ↔ 单 stroke，空格分词）",
   params: [],
   encode: stenoEncode,
   decode: stenoDecode,

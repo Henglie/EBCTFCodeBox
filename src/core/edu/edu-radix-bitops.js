@@ -43,20 +43,6 @@ export default {
     aka: ["字节序反转", "byte swap", "大小端转换", "endian", "端序转换", "字节交换", "byte order swap", "大端小端", "big endian little endian", "字节反序", "bswap", "字节序转换"],
   },
 
-  grayCodeBytes: {
-    what: "对每个字节独立做格雷码变换（$g = b \\oplus (b\\gg1)$）。和数值级 grayNum 不同，这个是逐字节处理字节流。",
-    principle:
-      "逐字节：`g = b ^ (b>>1)` 编码；解码逐位向下异或累积（`g ^= g>>1; g ^= g>>2; g ^= g>>4`）还原。\n\n" +
-      "文本转 UTF-8 字节后逐字节做，输出 Gray Hex。",
-    usage: "encode 把文本转成逐字节格雷码 Hex，decode 反向。无参数。",
-    examples: [
-      { in: "A", out: "61", desc: "0x41=01000001 → 01100001=0x61" },
-      { in: "61", param: "解码", out: "A" },
-    ],
-    tips: ["和 grayNum 区分：grayNum 把整个十进制数当一个整数，这个是对每个字节独立做，面向字节数据。", "图像/信号数据有时按字节做格雷码降低相邻噪声，逆向数据流时留意。"],
-    aka: ["字节级格雷码", "gray code bytes", "逐字节格雷码", "字节格雷"],
-  },
-
   bitPlaneExtract: {
     what: "从每个字节抽出指定的那一位（第 k 位），把所有字节的这一位拼成一个比特串。是有损的单向操作。",
     principle:

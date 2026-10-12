@@ -1,5 +1,5 @@
 /*
- * cmacMore.js — CMAC 扩展（cat:'hash'，单 run）。T374 批A，件内自注册。
+ * cmacMore.js — CMAC 扩展（cat:'hash'，单 run）。批A，件内自注册。
  *
  * op：
  *   - cmacExt   CMAC(K, M) 通用消息认证码，底层分组密码可选：

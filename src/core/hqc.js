@@ -2,7 +2,7 @@
  * hqc.js — HQC 后量子 KEM（Hamming Quasi-Cyclic，基于码的 KEM）keyGen / encaps(含 PKE 加密) / decaps
  *
  * 规范：HQC Specification 2025-08-22（pqc-hqc.org/doc/hqc_specifications_2025_08_22.pdf），
- * 参考实现对拍：gitlab.com/pqc-hqc/hqc（分支 next-release，src/ref + src/common）。
+ * 参考实现对拍：gitlab.com/pqc-hqc/hqc（v5.0.0，src/ref + src/common）。
  * NIST 第四轮入选算法（2025-03-11 宣布，继 ML-KEM 之后第二个标准化 KEM）。
  *
  * 方案结构（规范 §3，页码为 2025-08-22 版 PDF）：
@@ -19,11 +19,9 @@
  *     XOF=SHAKE256(seed‖0x01)、G=SHA3-512(‖0x00)、I=SHA3-512(‖0x02)、H=SHA3-256(‖0x01)、J=SHA3-256(‖0x03)。
  *   - KAT 的 PRNG 亦为 SHAKE256：SHAKE256(seed48‖0x00)（参考实现 tests/kats/test_kat.c + symmetric.c）。
  *
- * ⚠ 规范 PDF 与参考实现的一处出入：PDF §3.4.2（p.17）写 GF(2^8) 域多项式
- *   1+α²+α³+α⁴+α⁸（=0x11D，已逐字符核对上标，由此推出的 g1(x) 也只在该域下成立）；
- *   而参考实现三档参数头均用 PARAM_GF_POLY=0x11B（x⁸+x⁴+x³+x+1）、α=0x03，RS 生成多项式
- *   在该域下按根 α^1..α^{2δ} 展开与 parameters.h 的 RS_POLY_COEFS 逐字节一致（已数值验证）。
- *   KAT 由参考实现生成，故本实现取 0x11B / α=3 口径（两域仅影响 RS 字节表示，纠错能力等价）。
+ * 规范 §3.4.2 与 v5.0.0 参数头一致：GF(2^8) 多项式为 0x11D，生成元 α=2。
+ * 后续分支变更了域表示与重量参数，不能与本版本参数、KAT 混用。
+ * XOF 取数遵循 v5.0.0 symmetric.c：每次请求按 8 字节向上取整，丢弃余量。
  *
  * GF(2)[X]/(X^n−1) 乘法用 BigInt 位向量（bit i ↔ x^i 系数）：BigInt 硬件乘法 + x^n≡1 高半段
  * 异或折叠。RS 用 BM+Chien+Forney 代数译码，RM 用快速 Hadamard 变换（Green machine，§3.4.3）。
@@ -34,6 +32,7 @@
 
 import { register } from "./registry.js";
 import { keccakF1600 } from "./hash.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 字节 / hex 工具
@@ -69,13 +68,7 @@ function bytesEqual(a, b) {
 }
 
 function randomBytes(n) {
-  const c = globalThis.crypto;
-  if (c && typeof c.getRandomValues === "function") {
-    const b = new Uint8Array(n);
-    c.getRandomValues(b);
-    return b;
-  }
-  throw new Error("无可用 CSPRNG（crypto.getRandomValues）");
+  return randBytes(n);
 }
 
 // ============================================================
@@ -145,7 +138,7 @@ function xofInit(seed) {
   const s = new Sponge(136, 0x1f);
   s.absorb(seed);
   s.absorb(new Uint8Array([0x01]));
-  return s;
+  return { squeeze(n) { return s.squeeze(Math.ceil(n / 8) * 8).slice(0, n); } };
 }
 
 /** H = SHA3-256(str ‖ 0x01)；J = SHA3-256(str ‖ 0x03) */
@@ -156,7 +149,7 @@ const hashG = (str) => { const s = new Sponge(72, 0x06); s.absorb(str); s.absorb
 const hashI = (str) => { const s = new Sponge(72, 0x06); s.absorb(str); s.absorb(new Uint8Array([0x02])); return s.squeeze(64); };
 
 // ============================================================
-// GF(2^8)：域多项式 x^8+x^4+x^3+x+1 (0x11B)，生成元 α=3（参考实现 gf.h 口径）
+// GF(2^8)：域多项式 x^8+x^4+x^3+x^2+1 (0x11D)，生成元 α=2（v5.0.0）。
 // ============================================================
 
 const GF_EXP = new Uint16Array(512); // 双倍长度：gfMul 的 LOG 和最大 508（参考实现 exp[258] 同理）
@@ -166,11 +159,11 @@ const GF_LOG = new Uint16Array(256);
   for (let i = 0; i < 255; i++) {
     GF_EXP[i] = e;
     GF_LOG[e] = i;
-    // e *= α(=3)：无进位乘法 + mod 0x11B（积 < 2^9，两轮约减足够）
-    let p = e, acc = 0, m = 3;
+    // e *= α(=2)：无进位乘法 + mod 0x11D。
+    let p = e, acc = 0, m = 2;
     while (m) { if (m & 1) acc ^= p; p <<= 1; m >>= 1; }
-    if (acc & 0x200) acc ^= 0x11B << 1;
-    if (acc & 0x100) acc ^= 0x11B;
+    if (acc & 0x200) acc ^= 0x11D << 1;
+    if (acc & 0x100) acc ^= 0x11D;
     e = acc;
   }
   GF_EXP[255] = 1;
@@ -181,8 +174,8 @@ const gfMul = (a, b) => (a === 0 || b === 0) ? 0 : GF_EXP[GF_LOG[a] + GF_LOG[b]]
 const gfInv = (a) => (a === 0) ? 0 : GF_EXP[255 - GF_LOG[a]];
 const gfPow = (a, e) => (a === 0) ? 0 : GF_EXP[(GF_LOG[a] * e) % 255];
 
-// RS 生成多项式 g(x) = Π_{i=1..2δ} (x + α^i)，升幂系数（已在 GF(0x11B, α=3) 下对拍
-// hqc-1 参数头 RS_POLY_COEFS = 74,81,...,1）。按参数集惰性生成并缓存。
+// RS 生成多项式 g(x) = Π_{i=1..2δ} (x + α^i)，升幂系数（GF(0x11D, α=2)，对照
+// v5.0.0 参数头 RS_POLY_COEFS）。按参数集惰性生成并缓存。
 const _rsPolyCache = new Map();
 function rsGenPoly(delta) {
   if (_rsPolyCache.has(delta)) return _rsPolyCache.get(delta);
@@ -284,13 +277,15 @@ function getSet(key) {
 
 /**
  * SampleFixedWeightVect$（keygen 用 x,y）：无偏拒绝采样。
- * 每次取 3 字节 LE 24 位候选，≥ threshold 拒绝，否则 mod n；重复支持位置重采样。
+ * 每批取 3·weight 字节，按 BE 24 位读候选，≥ threshold 拒绝，否则 mod n；重复位置重采样。
  */
 function sampleFixedWeight1(ctx, weight, set) {
   const support = [];
+  let batch = new Uint8Array(0), offset = 0;
   while (support.length < weight) {
-    const b = ctx.squeeze(3);
-    const cand = b[0] | (b[1] << 8) | (b[2] << 16);
+    if (offset === batch.length) { batch = ctx.squeeze(3 * weight); offset = 0; }
+    const cand = (batch[offset] << 16) | (batch[offset + 1] << 8) | batch[offset + 2];
+    offset += 3;
     if (cand >= set.threshold) continue;
     const pos = cand % set.n;
     if (!support.includes(pos)) support.push(pos);

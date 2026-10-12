@@ -422,7 +422,9 @@ function yescryptRun(text, p = {}) {
   const flags = mode === "scrypt" ? 0 : mode === "worm" ? YESCRYPT_WORM : YESCRYPT_RW_DEFAULTS;
   const N = BigInt(parseInt(p.N, 10) || 2048);
   const r = parseInt(p.r, 10) || 8;
-  const pp = parseInt(p.p, 10) || 1;
+  const ppRaw = p.p != null && String(p.p).trim() !== "" ? String(p.p).trim() : null;
+  const pp = ppRaw !== null ? parseInt(ppRaw, 10) : 1;
+  if (ppRaw !== null && (!Number.isInteger(pp) || pp <= 0)) throw new Error("yescrypt：p 必须为正整数");
   const t = parseInt(p.t, 10) || 0;
   const dkLen = parseInt(p.dkLen, 10) || 32;
   lines.push(`口令: ${pass.length} 字节（${passEnc}）`);

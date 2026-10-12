@@ -86,6 +86,7 @@ import E_EN_EDU_UNIFIED_MISC from "./edu-en/edu-unified-misc.en.js";
 import E_EN_EDU_T508 from "./edu-en/edu-t508.en.js";
 import E_EN_EDU_T508_B4 from "./edu-en/edu-t508-b4.en.js";
 import E_EN_EDU_T508_B2 from "./edu-en/edu-t508-b2.en.js";
+import E_EN_CN_IMG_STEGO from "./edu-en/edu-cn-img-stego.en.js";      // 中文互联网图像玩法（mirageTank/tomatoScramble 2）
 import E_EN_EDU_T508_B3 from "./edu-en/edu-t508-b3.en.js";
 import E_EN_EDU_PIP_ASTRO from "./edu-en/edu-pipAstro.en.js";
 import E_EN_EDU_STEGHIDE from "./edu-en/edu-steghide.en.js"; // steghide (1)
@@ -93,12 +94,20 @@ import E_EN_EDU_PCAP_FIELDS from "./edu-en/edu-pcap-fields.en.js"; // pcap field
 import E_EN_EDU_GIFSHUFFLE from "./edu-en/edu-gifshuffle.en.js"; // GifShuffle (1)
 import E_EN_EDU_OUTGUESS from "./edu-en/edu-outguess.en.js"; // OutGuess 0.4 (1)
 import E_EN_EDU_BLINDWM2 from "./edu-en/edu-blindwm2.en.js";
+import E_EN_PEMKEYS from "./edu-en/edu-pemkeys.en.js";
+import E_EN_TOKEN_SIGNING from "./edu-en/edu-token-signing.en.js";
+import E_EN_RANDOM_SECURE from "./edu-en/edu-randomSecure.en.js"; // Enhanced Random Security 1（four-mode random source）
+import E_EN_RAND_BEACON from "./edu-en/edu-randBeacon.en.js"; // Public randomness beacon verify 1（drand / NIST）
+import E_EN_EDU_T359 from "./edu-en/edu-t359.en.js"; // RSA sign (rsaSign) 1 — partial shard, incl. the eNFS deployment tip
+import E_EN_EDU_IMAGE_TOOLBOX from "./edu-en/edu-imageToolbox.en.js"; // image toolbox batch 8（imageCompress/imageGray/imagePixelate/imageFrosted/imageSketch/imageToText/gifCompose/img2dataURI）
 
 const EDU_EN = Object.assign(
   {},
+  E_EN_PEMKEYS,
   E_EN_EDU_T508,
   E_EN_EDU_T508_B4,
   E_EN_EDU_T508_B2,
+  E_EN_CN_IMG_STEGO,
   E_EN_EDU_T508_B3,
   E_EN_EDU_PIP_ASTRO,
   E_EN_EDU_BLINDWM2,
@@ -171,6 +180,10 @@ const EDU_EN = Object.assign(
   E_EN_EDU_QR_SCAN_IMAGE,
   E_EN_EDU_UNIFIED_MISC,
   E_EN_CTF_CIPHER_EXT,
+  E_EN_RANDOM_SECURE,
+  E_EN_RAND_BEACON,
+  E_EN_EDU_T359,
+  E_EN_EDU_IMAGE_TOOLBOX,
 );
 
 import { EN as INTEGRATED, HASH_VECTORS, BASE_NOTES, EXTRA_ALIASES, CRC_PARAMS } from "./edu/edu-integrated.js";
@@ -206,5 +219,6 @@ for (const [id, out] of Object.entries(HASH_VECTORS)) {
     aka: (EDU_EN[id]?.aka || []).filter(word => !/encrypt|keccak/i.test(word)),
   };
 }
+Object.assign(EDU_EN, E_EN_TOKEN_SIGNING);
 registerEduEn(EDU_EN);
 export default EDU_EN;

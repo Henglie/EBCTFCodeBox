@@ -31,6 +31,7 @@
  */
 
 import { register } from "./registry.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 字节工具
@@ -60,13 +61,7 @@ function concatBytes(...arrs) {
 }
 
 function randomBytes(n) {
-  const c = globalThis.crypto;
-  if (c && typeof c.getRandomValues === "function") {
-    const b = new Uint8Array(n);
-    c.getRandomValues(b);
-    return b;
-  }
-  throw new Error("无可用 CSPRNG（crypto.getRandomValues），无法生成随机种子");
+  return randBytes(n);
 }
 
 function bytesEqual(a, b) {
@@ -997,7 +992,7 @@ register({
     }
     return {
       text: [
-        `参数集: ${lmsName} + ${otsName}（单级 LMS）`,
+        `参数集: LMS_SHA256_M32_${nm(p.h)} + LMOTS_SHA256_N32_${nw(p.w)}（单级 LMS）`,
         `消息 M: ${msg.length} B（${p.msgMode === "hex" ? "hex" : "UTF-8"}）`,
         `index q=${Number(p.q)}（已消耗，不可再用）`,
         `LMS 公钥 (${r.pk.length}B):`,

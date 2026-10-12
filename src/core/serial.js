@@ -1,5 +1,5 @@
 /*
- * serial.js — 序列化格式识别组（T76，cat:'analysis'）。
+ * serial.js — 序列化格式识别组（cat:'analysis'）。
  *
  * 覆盖（全部 run 单向，返回多行报告文本）：
  * - protobufParse：Protobuf wire 格式解析（无 schema，按 wire type 解析）

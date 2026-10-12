@@ -1,11 +1,11 @@
 /*
- * asmAssemble.js — 机器码汇编核心（MT73④，供「快速换算 · 机器码&汇编 互转」面板调用，非独立 op）。
+ * asmAssemble.js — 机器码汇编核心（供「快速换算 · 机器码&汇编互转」面板调用，非独立 op）。
  *
  * 引擎：WASM 汇编引擎（本地懒加载、零外发、失败明确报错；引擎与许可信息仅存工程文档 PROGRESS.md）。
  *       架构：x86/x86-64/ARM/ARM64/MIPS/PPC/SPARC/SystemZ/Hexagon/EVM。
  * 资产：public/wasm/vendor/ 下 glue + wasm（emscripten MODULARIZE 产物）。
  * 加载：懒加载单例，零外发；失败抛明确错误不假装成功。
- * ⚠ 鸿蒙原生版不支持 WebAssembly → 本面板鸿蒙不可用（MT79 能力矩阵登记）。
+ * ⚠ 鸿蒙原生版不支持 WebAssembly → 本面板鸿蒙不可用（能力矩阵登记）。
  */
 
 const GLUE_URL = "../../public/wasm/vendor/asm/asm-glue.js";

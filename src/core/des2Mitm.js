@@ -74,7 +74,11 @@ function des2MitmOp(text, p = {}) {
   const plainHex = String(p.plainHex || "").trim();
   const cipherHex = String(p.cipherHex || "").trim();
   if (!plainHex || !cipherHex) throw new Error("需在参数框填入明文hex 和 密文hex（各 8 字节；主输入框不再使用）");
-  const keyBits = Math.max(1, Math.min(20, Number(p.keyBits) || 16));
+  const kb = Number(p.keyBits);
+  if (!Number.isInteger(kb) || kb < 1 || kb > 20) {
+    throw new Error("des2Mitm：keyBits 须为 1-20 的整数（每半密钥空间 2^keyBits），当前：" + p.keyBits);
+  }
+  const keyBits = kb;
   const pt = hexToBytes(plainHex);
   const ct = hexToBytes(cipherHex);
   const t0 = Date.now();

@@ -1,5 +1,5 @@
 /*
- * edu-hqc-family.js — HQC 三档算法族科普卡（T398 批A：HQC 后量子 KEM 按规范实现）。
+ * edu-hqc-family.js — HQC 三档算法族科普卡（批A：HQC 后量子 KEM 按规范实现）。
  * 格式契约见 eduContent.js 头注释：纯数据、无 import、无副作用。
  * aka 均 ≥10 条真实别名（_alias_verify 三件套红线）。
  */

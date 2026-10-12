@@ -1,6 +1,6 @@
 /*
  * certparse.js — X.509 证书解析 + SSH 公钥（authorized_keys / known_hosts）解析
- * 任务卡 T354（v0.1.6beta 批A5）。单向 run 工具（解析器，无双向编码语义）。
+ * （v0.1.6beta 批A5）。单向 run 工具（解析器，无双向编码语义）。
  *
  * 标准依据（注释随行标注）：
  *   - ITU-T X.509 / RFC 5280：证书结构 §4.1、有效期 §4.1.2.5、扩展 §4.2
@@ -66,7 +66,7 @@ function bigintToHexUpper(v) {
 // ============================================================
 // OID 友好名表（约 100 条）
 // 来源：RFC 5280 §A.2 / RFC 4519 / ITU-T X.520 / PKCS#9(RFC 2985) /
-//       RFC 5480 / RFC 8017 §A / RFC 8410 / RFC 3279 / RFC 6960 §4.2.3 / NIST
+//      RFC 5480 / RFC 8017 §A / RFC 8410 / RFC 3279 / RFC 6960 §4.2.3 / NIST
 // [短名, 全名]；未知 OID 显示原值。
 // ============================================================
 
@@ -664,7 +664,7 @@ function x509ParseRun(text, p = {}) {
   if (sigValueNode.value[0] !== 0) out.push(`  警告：unused bits = ${sigValueNode.value[0]}（签名应恒 0）`);
   out.push(`  ${sigBytes.length} 字节：`);
   out.push(...wrap64(hexColon(sigBytes).replace(/:/g, "")));
-  // T364 产物协议：证书 DER 出 certificate.der（.cer 内容型，RFC 7468 换壳即 .pem）
+  // 产物协议：证书 DER 出 certificate.der（.cer 内容型，RFC 7468 换壳即 .pem）
   const files = [{ name: "certificate.der", mime: "application/pkix-cert", bytes: der }];
   out.push("", `产物：1 个文件可下载（${files[0].name}，与输入 DER 逐字节一致）`);
   return { text: out.join("\n"), files };
@@ -904,7 +904,7 @@ async function sshHostKeyParseRun(text) {
   out.push("[规范行重建]");
   const pubLine = `${info.algo} ${bytesToBase64(parsed.blob)}${parsed.comment ? " " + parsed.comment : ""}`;
   out.push(pubLine);
-  // T364 产物协议：公钥 blob 出 .pub 文件（OpenSSH 行格式 = 算法名 + base64 + 注释）
+  // 产物协议：公钥 blob 出 .pub 文件（OpenSSH 行格式 = 算法名 + base64 + 注释）
   const files = [{
     name: `${info.algo.replace(/[^A-Za-z0-9.-]/g, "_")}.pub`,
     mime: "text/plain", bytes: new TextEncoder().encode(pubLine + "\n"),

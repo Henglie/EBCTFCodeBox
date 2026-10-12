@@ -75,7 +75,7 @@ export default {
       "It does no whole-board DFS backtracking, so boards with multiple solutions or requiring guessing only get a partial solution. Size capped at 40×40; a line whose combinations exceed 200,000 is skipped.",
     usage: "Provide two blocks separated by a line of `---`: the top block has one group of row constraints per line (run lengths, space-separated), the bottom block one group of column constraints per line. Fill/blank characters are customizable.",
     examples: [
-      { in: "2\n1 1\n3\n---\n1\n1 1 1\n2", out: "3×3 点阵解", desc: "one block of row constraints / one of column constraints" },
+      { in: "1\n3\n1\n---\n1\n3\n1", out: "=== 数织 / Nonogram 求解 ===\n\n盘面: 3 行 × 3 列\n\n--- 解 ---\n·█·\n███\n·█·\n\n✓ 唯一解，全部确定。", desc: "plus-sign board: row/column clue sums each fit within the other side's line count; verbatim unique-solution run" },
     ],
     tips: [
       "An empty line (or 0) means that whole row/column is empty.",
@@ -205,28 +205,6 @@ export default {
  // ============================================================
  // crypto group (7)
  // ============================================================
-  dsa: {
-    what: "DSA digital signatures (FIPS 186): sign, verify, and the CTF-favorite \"k (nonce) reuse attack\" — if two signatures use the same random k, the private key x can be recovered. Pure BigInt local computation.",
-    principle:
-      "DSA parameters: primes $p$, $q$ ($q\\mid p-1$), a generator $g$ of order $q$, private key $x$, public key $y=g^x\\bmod p$.\n\n" +
-      "**Signing** (message hash denoted $z$): pick a per-message-unique random $k$, $r=(g^k\\bmod p)\\bmod q$, $s=k^{-1}(z+xr)\\bmod q$, signature $(r,s)$.\n\n" +
-      "**Verifying**: $w=s^{-1}$, $u_1=zw$, $u_2=rw$, $v=((g^{u_1}y^{u_2})\\bmod p)\\bmod q$, valid $\\Leftrightarrow v=r$.\n\n" +
-      "**k reuse attack**: two messages use the same $k$ (showing up as $r_1=r_2$); from $s_1-s_2=k^{-1}(z_1-z_2)$ solve $k=(z_1-z_2)(s_1-s_2)^{-1}\\bmod q$, then $x=(s_1k-z_1)r^{-1}\\bmod q$.",
-    usage: "Pick a mode: sign (private key x → r,s) / verify (public key y + r,s) / attack_reuse_k (recover x from two signatures with the same r). The hash accepts a direct integer H(m) or SHA-1 over text. Attack mode takes r/s1/s2/z1/z2/q.",
-    examples: [
-      { in: "z1,s1,z2,s2,r,q（同 k 两签名）", param: "mode=attack_reuse_k", out: "恢复 k 和私钥 x", desc: "recover the private key from nonce reuse" },
-    ],
-    formulas: [
-      { tex: "k=(z_1-z_2)(s_1-s_2)^{-1}\\bmod q,\\quad x=(s_1 k - z_1)\\,r^{-1}\\bmod q", caption: "k-reuse attack recovers the nonce and private key" },
-    ],
-    tips: [
-      "k in a signature must be unique and secret every time — reusing or leaking k directly exposes the private key.",
-      "Two signatures sharing the same r is the signal of k reuse — switch to attack mode immediately.",
-      "ECDSA (e.g. Bitcoin) nonce reuse recovers the private key the same way (identical principle).",
-    ],
-    aka: ["dsa", "数字签名算法", "digital signature algorithm", "fips 186", "dsa签名", "dsa验签", "nonce重用", "k重用攻击", "nonce reuse", "dsa攻击", "签名验签", "dsa私钥恢复", "重用随机数攻击", "dsa破解", "dsa nonce reuse"],
-  },
-
   hashLengthExtension: {
     what: "Hash length-extension attack: given H(secret) and the byte length of secret, you can compute H(secret‖padding‖append) without knowing secret. An inherent weakness of Merkle-Damgård hashes like MD5/SHA1/SHA256, very common in CTF web/crypto.",
     principle:
@@ -295,7 +273,7 @@ export default {
       "This op does $O(k^2)$ pairwise GCDs over all input moduli (plenty for CTF scale; for genuinely massive key sets use Bernstein's product-tree batch GCD at $O(k\\log^2 k)$). On finding a common factor it outputs p, q1, q2 with a verification.",
     usage: "Input several RSA moduli N (one per line or comma-separated, at least 2). Output is every pair of moduli sharing a prime factor, along with their factorization.",
     examples: [
-      { in: "N1=91\nN2=143", out: "gcd=13, N1=13×7, N2=13×11", desc: "two moduli sharing prime factor 13" },
+      { in: "91\n143", out: "=== RSA 公共因子分解（批量 GCD）===\n模数数量 = 2\n\n✓ 发现 1 对公共因子：\n\n[0] & [1]:\n  N1 = 91\n  N2 = 143\n  p  = 13  (公共因子)\n  q1 = N1/p = 7\n  q2 = N2/p = 11\n  校验: p·q1 = 91 (应 = N1) ✓\n  校验: p·q2 = 143 (应 = N2) ✓\n", desc: "two moduli sharing prime factor 13, verbatim run output" },
     ],
     formulas: [
       { tex: "\\gcd(N_i, N_j) = p > 1 \\;\\Rightarrow\\; N_i = p\\cdot\\frac{N_i}{p},\\ N_j = p\\cdot\\frac{N_j}{p}", caption: "A shared prime factor gives a double factorization in one GCD" },

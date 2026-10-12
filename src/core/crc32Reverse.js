@@ -138,9 +138,9 @@ function parseCrc(raw) {
 }
 
 function buildCharset(name) {
-  if (name === "alnum") return [..."abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"];
-  if (name === "digits") return [..."0123456789"];
-  if (name === "hex") return [..."0123456789abcdef"];
+  if (name === "alnum") return [..."abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"].map((c) => c.charCodeAt(0));
+  if (name === "digits") return [..."0123456789"].map((c) => c.charCodeAt(0));
+  if (name === "hex") return [..."0123456789abcdef"].map((c) => c.charCodeAt(0));
   // printable 默认：ASCII 可见字符
   return Array.from({ length: 95 }, (_, i) => i + 32);
 }

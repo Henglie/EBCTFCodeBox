@@ -21,6 +21,7 @@
 
 import { register } from "./registry.js";
 import { streebog } from "./streebog.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ==================== 参数集 ====================
 
@@ -145,11 +146,11 @@ function hexToBytes(hex) {
 }
 function bytesToHex(b) { return Array.from(b).map((x) => x.toString(16).padStart(2, "0")).join(""); }
 function randomBelow(q) {
-  const bytes = Math.ceil(q.toString(2).length / 8) + 8;
+  const bytes = Math.ceil(q.toString(2).length / 8);
   const buf = new Uint8Array(bytes);
   let v;
   do {
-    crypto.getRandomValues(buf);
+    buf.set(randBytes(buf.length));
     v = 0n;
     for (const b of buf) v = (v << 8n) | BigInt(b);
   } while (v >= q || v < 1n);

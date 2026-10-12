@@ -19,6 +19,7 @@
  * - bcrypt 只对 password 前 72 字节生效（含结尾 NUL），标准行为。
  */
 import { register } from "./registry.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // Blowfish π 初始常量（P-array 18×32bit + 4 个 S-box 各 256×32bit）
@@ -372,11 +373,7 @@ function passwordToKey(password) {
 // 解析 16 字节 salt：接受 base64bcrypt(22 字符) / hex(32) / 其他 hex，或随机生成
 function resolveSalt(saltStr, saltEnc) {
   if (!saltStr) {
-    const s = new Uint8Array(16);
-    (globalThis.crypto?.getRandomValues
-      ? globalThis.crypto.getRandomValues(s)
-      : s.forEach((_, i) => (s[i] = (Math.random() * 256) | 0)));
-    return s;
+    return randBytes(16);
   }
   const enc = saltEnc || "auto";
   if (enc === "hex") return hexToBytes(saltStr).subarray(0, 16);

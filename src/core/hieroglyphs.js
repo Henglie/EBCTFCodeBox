@@ -39,8 +39,8 @@
  *    https://www.dcode.fr/hieroglyphes-manuel-de-codage
  *    （20 字母编码表、30 字形解码表、SPHINX/ankh 例、C,E,J,O,U,V 不可编说明）。
  *  - Unicode 字符名内嵌 Gardiner 编号（编码 20 字形依次 G001/D058/D046/I009/
- *    W011/O004//V031/E023/G017/N035/Q003/N029/D021/S029/X001/G043/AA001/
- *   A/O034，本机 unicodedata 逐一核对），与 Wikipedia「Transliteration
+ *    W011/O004/M017/V031/E023/G017/N035/Q003/N029/D021/S029/X001/G043/AA001/
+ *    M017A/O034，本机 unicodedata 逐一核对），与 Wikipedia「Transliteration
  *    of Ancient Egyptian」单字母符集合一致（调研交叉核对）。
  */
 import { register } from "./registry.js";

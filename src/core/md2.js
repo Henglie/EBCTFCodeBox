@@ -9,7 +9,7 @@
  */
 import { register } from "./registry.js";
 
-const te = (s) => new TextEncoder().encode(s);
+const te = (v) => v instanceof Uint8Array ? v : new TextEncoder().encode(v); // 字节直通（rawBytes 契约）
 const toHex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 
 // RFC 1319 附录：256 字节 S 置换表（基于 pi 小数，照抄标准，不许编造）
@@ -79,7 +79,7 @@ function md2(text) {
 register({
   id: "md2", cat: "hash", name: "MD2", family: "md", familyLabel: "MD2",
   desc: "MD2 消息摘要（128 位，RFC 1319，256 字节置换表 + 校验字节，纯 JS）",
-  run: (t) => md2(t),
+  run: (t, p) => md2(p?.rawBytes ?? t),
 });
 
 export { md2, md2Bytes };

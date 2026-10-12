@@ -1,4 +1,4 @@
-// detectExt.js — T41 detect 识别函数补全（扩展层）。
+// detectExt.js — detect 识别函数补全（扩展层）。
 // 为 registry 中"有 decode 但缺 detect"的 op 补全识别函数，使 oneClickDecode 能识别更多格式。
 // 红线：不改开发方源码文件，运行时 monkey-patch 给 op 对象加 detect 字段。detect 只读不写。
 // 置信度策略：固定变换/字符集明确 0.3-0.5；需密钥/参数 0.1-0.2（兜底）；自反变换 0.1（防误报）。
@@ -170,6 +170,8 @@ const DETECTORS = {
 // monkey-patch：为缺 detect 且有 decode 的 op 补全
 let patched = 0;
 const patchedIds = [];
+// 惰载重放入口：循环幂等（缺 detect 才补），lazyCore 每批文件落地后调用
+export function applyDetectPatches() {
 for (const op of OPS) {
   if (typeof op.detect !== "function" && typeof op.decode === "function" && DETECTORS[op.id]) {
     op.detect = DETECTORS[op.id];
@@ -177,6 +179,8 @@ for (const op of OPS) {
     patchedIds.push(op.id);
   }
 }
+}
+applyDetectPatches();
 
 // 导出诊断信息（供测试/审计用）
 export const DETECT_PATCHED = patchedIds;

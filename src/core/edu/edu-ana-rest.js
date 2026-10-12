@@ -89,43 +89,6 @@ export default {
     aka: ["raw deflate", "裸deflate", "deflate", "deflate raw", "裸压缩流", "无头deflate", "DEFLATE解压", "LZ77+Huffman", "inflate", "raw inflate", "deflate解码", "裸压缩数据"],
   },
 
-  archiveIdentify: {
-    what: "归档/压缩流识别：拿一段二进制，按开头 magic 认出它是 gzip、zip、rar、7z、bzip2 还是 tar，认对了才知道用什么工具解。",
-    principle:
-      "各归档格式开头有固定签名：gzip `1F 8B`、zip `50 4B 03 04`(PK)、rar `52 61 72 21`(Rar!)、7z `37 7A BC AF 27 1C`、bzip2 `42 5A 68`(BZh)、zlib `78`、tar 在偏移 257 处有 `ustar`。工具比对这些 magic 并解析 gzip/bzip2 头。",
-    usage: "粘数据，工具报出格式类型和头部信息。",
-    examples: [
-      { in: "50 4b 03 04 ...", out: "ZIP 归档 (PK)" },
-      { in: "42 5a 68 39 ...", out: "bzip2 (BZh9)" },
-    ],
-    tips: ["认不出文件类型先看 magic：PK=zip、Rar!=rar、7z=7-Zip、BZh=bzip2。tar 的 ustar 在第 257 字节，不在开头。"],
-    aka: ["归档识别", "archive identify", "magic识别", "文件类型识别"],
-  },
-
-  zipList: {
-    what: "ZIP 结构解析：不解压，只读 ZIP 内部结构，列出里面有哪些文件、用什么压缩方式、是否加密。",
-    principle:
-      "ZIP 由「本地文件头（PK\\x03\\x04）+ 数据」若干段，加末尾的「中央目录（PK\\x01\\x02）」组成。中央目录记录每个文件的名字、压缩方法、大小和标志位。工具解析这两处列出文件清单，加密标志看通用位标记 bit0。",
-    usage: "粘 ZIP 数据，输出内含文件名、压缩方式、加密标志（只读结构，不解密加密项）。",
-    examples: [
-      { in: "ZIP 文件字节", out: "flag.txt (deflate, 加密), readme.md (stored)" },
-    ],
-    tips: ["伪加密题：中央目录和本地头的加密标志位不一致，把加密位清零就能正常解压。看清哪些项真加密。"],
-    aka: ["zip解析", "zip list", "zip结构", "zip文件列表"],
-  },
-
-  tarList: {
-    what: "TAR 头解析：读 tar 归档的 512 字节块头，列出里面的文件名、大小、类型。tar 不压缩，纯打包。",
-    principle:
-      "tar 把每个文件对齐成 512 字节块：先一个头块（含文件名、八进制的大小/权限、类型标志、`ustar` 魔数在偏移 257），后跟内容块。工具逐块读头，列出文件清单。",
-    usage: "粘 tar 数据，输出文件名 / 大小 / 类型列表。",
-    examples: [
-      { in: "tar 字节", out: "./secret.txt (1024 B, 普通文件)" },
-    ],
-    tips: ["tar 常和 gzip 套一起成 .tar.gz：先 gzipCodec 解压再 tarList 看内容。ustar 魔数在第 257 字节。"],
-    aka: ["tar解析", "tar list", "tar头", "ustar"],
-  },
-
   b64CompressedProbe: {
     what: "Base64 内嵌压缩流探测：扫文本里的 base64 段，自动解码 → 认 magic → 试着 gzip/zlib/deflate 解压，一条龙挖出藏在 base64 里的压缩数据。",
     principle:

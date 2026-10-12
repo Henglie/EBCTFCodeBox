@@ -112,7 +112,7 @@ export function mimeMultipartParse(src) {
         name: p.name,
         body: clean,
         // QP 需要保留行结构识别软换行（行尾 =）
-        decoded: decodePartBody(p.encoding === "quoted-printable" || p.encoding === "quoted_printable" ? raw : clean, p.encoding),
+        decoded: decodePartBody(clean, p.encoding),
       };
     }),
   };

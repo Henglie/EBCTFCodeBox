@@ -1,5 +1,5 @@
 /*
- * edu-jsteg.js — jsteg JPEG 隐写科普卡（T390/T391 配套）。
+ * edu-jsteg.js — jsteg JPEG 隐写科普卡（/ 配套）。
  * 格式契约见 eduContent.js 头注释：纯数据、无 import、无副作用。
  * aka 均 ≥10 条真实别名（_alias_verify 三件套红线）。
  */

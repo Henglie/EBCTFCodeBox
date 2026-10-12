@@ -2,6 +2,22 @@
  * edu-ana-more.en.js — English edu cards (C-group ops: MIME/LCG/SHA extension/birthday). Pure data.
  */
 export default {
+  hnpRecover: {
+    what: "Teaching recovery for ECDSA nonces k_i=t_i+x sharing one small unknown x. This is bounded enumeration, not a general lattice HNP solver.",
+    principle: "For 0 <= x < xBound, solve s*k = h+r*d (mod n) for d using the first signature, then check all remaining signature equations.",
+    usage: "Enter at least three h r s t rows. n is the group order; blank uses the secp256k1 order, not its coordinate-field prime. Output: shared x and candidate d in hex.",
+    examples: [{ in: "7 3 36 11\n13 9 31 21\n17 13 10 30", param: "n=101 xBound=8", out: "x=1, d=7", desc: "Small signature-equation fixture, not a full curve-signature vector" }],
+    tips: ["All nonces must share the same unknown offset. Different small offsets require a different attack."],
+    aka: ["HNP", "hidden number problem", "shared nonce offset"],
+  },
+  babaiCvp: {
+    what: "Babai nearest-plane approximation to the closest lattice vector, after LLL reduction.",
+    principle: "Compute exact rational Gram–Schmidt vectors b_i*. Start with residual r=t and work backwards: c_i=round(<r,b_i*>/<b_i*,b_i*>), then r=r-c_i*b_i. Return v=t-r. Projection uses the orthogonalized basis; residual subtraction uses the original basis. This is approximate CVP, not a guarantee of the global nearest point.",
+    usage: "Enter integer basis rows and the target vector in their respective fields.",
+    examples: [{ in: "3 0\n1 3\n-5 2", out: "最近格点 v = [-5, 3]", desc: "Nonorthogonal, already LLL-reduced basis; exact rational nearest-plane projection" }],
+    tips: ["A dependent basis is invalid.", "Inspect the residual to assess approximation quality."],
+    aka: ["babai", "nearest plane", "CVP", "closest vector", "lattice vector", "Gram Schmidt", "GSO", "LLL CVP", "Babai algorithm", "approximate CVP", "最近平面", "最近格点"],
+  },
   mimeMultipart: {
     what: "MIME multipart parsing: multipart/mixed bodies (email/HTTP) separate parts with a boundary — text parts, attachments, inline images. In CTF, flags often hide inside a base64 attachment part.",
     principle:
@@ -52,7 +68,7 @@ export default {
   birthdayCollision: {
     what: "Birthday collision demo: when a hash is truncated to b bits, finding a collision by random inputs takes $\\approx 2^{b/2}$ attempts (birthday paradox). Teaching demo of collision essence and security margins.",
     principle:
-      "Birthday paradox: among n random values a repeat occurs with probability ~$1/2$ when $n \\approx 1.18 \\cdot 2^{b/2}$. The demo keys a Map by the first b bits of truncated SHA-256 over random inputs; a hit is a collision pair.",
+      "Birthday paradox: among n approximately uniform hash values a repeat occurs with probability ~$1/2$ when $n \\approx 1.18 \\cdot 2^{b/2}$. This demo hashes x0, x1, x2, ... and keys a Map by the leftmost b SHA-256 bits (8–40 bits). It checks at most 500000 inputs and explicitly reports no collision when that bound is exhausted.",
     usage: "Set the truncation bits (default 24); outputs a collision pair and attempt count. Compare with the theoretical $2^{b/2}$ to understand security parameters.",
     examples: [
       { in: "bitLen=24", out: "collision pair + attempts", desc: "≈2^12 attempts" },

@@ -1,5 +1,5 @@
 /*
- * customImplStore.js — MT72 自定义实现的持久化与方案管理（纯数据层，零 DOM）。
+ * customImplStore.js — 自定义实现的持久化与方案管理（纯数据层，零 DOM）。
  *
  * 为什么放 core 而不是 ui：`activeCustomImplIds()`（magic/穷举排除用）与 Worker 侧都要读它，
  * 让 UI 持有这份状态会让 core 反向依赖 UI。先例：core/decodeProfile.js 同样在 core 里管 localStorage。
@@ -10,7 +10,7 @@
  *     schemes: { <名称>: { opId:string|null, code:string, note:string, ts:number } }  // 命名方案库
  *   }
  * 方案管理的交互契约对齐 core/decodeProfile.js 的 listProfiles/loadProfile/saveProfile/
- * deleteProfile/exportProfiles/importProfiles（MT72 需求 §6：复用那套 UI 模式，别另造一套）。
+ * deleteProfile/exportProfiles/importProfiles（需求 §6：复用那套 UI 模式，别另造一套）。
  */
 
 const STORE_KEY = "ebctf.customImpl.v1";
@@ -186,7 +186,7 @@ export function exportSchemes() {
 
 /**
  * 导入方案 JSON（同名覆盖）。返回导入条数。
- * ⚠ 调用方必须先向用户提示「这是可执行代码，只导入你信任的来源」（MT72 安全约束）。
+ * ⚠ 调用方必须先向用户提示「这是可执行代码，只导入你信任的来源」（安全约束）。
  * 兼容两种形状：{schemes:{…}} 和裸 {名称:{code…}}。坏 JSON / 空内容抛错，不静默吞。
  */
 export function importSchemes(json) {

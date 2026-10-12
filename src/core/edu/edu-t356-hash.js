@@ -1,4 +1,4 @@
-// 科普内容分片：T356 批 5 个历史哈希 op（md6/snefru/sha0/has160/gostHash，源码 src/core/hashMore.js）。
+// 科普内容分片：批 5 个历史哈希 op（md6/snefru/sha0/has160/gostHash，源码 src/core/hashMore.js）。
 // 纯数据，无 import 无副作用。examples 的 out 全部是 node 直跑真实输出（SHA-0 与 GOST-94 已对公认向量核对），未编造。
 export default {
   md6: {

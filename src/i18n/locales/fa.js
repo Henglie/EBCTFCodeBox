@@ -398,7 +398,7 @@ export default {
   "ui.uv.graphemes": "خوشه‌های نویسه",
   "ui.uv.splitClusters": "تفکیک دنباله‌های ترکیبی (فهرست جداگانه هر نقطه کد)",
   "ui.uv.noSegmenter": "(تفکیک خوشه‌ای در این محیط پشتیبانی نمی‌شود؛ نمایش بر پایه نقطه کد)",
-  // 拼字 / IDS 视图（MT84）
+  // 拼字 / IDS 视图
   "ui.uv.tabIds": "ایده‌نگاشت‌ها / IDS",
   "ui.uv.idsDesc": "توالی‌های توصیف ایده‌نگاشت (IDS): درخت تجزیه یک نویسه را جستجو کنید، بر اساس جزء نویسه جستجو کنید، و بین نویسه‌ها و رشته‌های IDS تبدیل کنید. کاملاً محلی، بدون ارسال.",
   "ui.uv.idsLoading": "در حال بارگذاری داده‌های ایده‌نگاشت…",
@@ -424,7 +424,7 @@ export default {
   "ui.uv.idsNoExact": "تطبیق دقیق IDS وجود ندارد؛ جستجو بر اساس جزءهای پایانی:",
   "ui.uv.idsConvHits": "{0} مورد مطابق",
   "ui.uv.idsSrc": "منبع",
-  // 快速换算视图（MT81）
+  // 快速换算视图
   "ui.qc.title": "تبدیل سریع",
   "ui.qc.desc": "میز کار تبدیل مبناها و واحدها: هر کادر را تغییر دهید، بقیه بی‌درنگ به‌روز می‌شوند. کاملاً محلی، بدون شبکه.",
   "ui.qc.tabRadix": "مبناهای برنامه‌نویس",
@@ -557,6 +557,8 @@ export default {
   "ui.env.syncAccentOk": "رنگ تأکید سیستم همگام شد",
   "ui.env.syncAccentFail": "رنگ تأکید سیستم در دسترس نیست",
   "ui.topbar.font": "کتابخانه فونت",
+  "ui.pwa.updateBar": "نسخه جدید در دسترس است. منابع آفلاین آماده‌اند",
+  "ui.pwa.updateRefresh": "بارگذاری مجدد",
 
  // ---- topbar search ----
   "ui.search.placeholder": "جستجوی کدگذارها / رمزها…",
@@ -775,7 +777,7 @@ export default {
   "op.sshPubkeyParse.name": "SSH Public Key Parser",
   "op.btcAddressIdent.name": "Bitcoin Address Identify",
   "op.ethAddressIdent.name": "Ethereum Address Identify",
- // ---- MT82 new ops (forensic/stego/modern) ----
+ // ---- new ops (forensic/stego/modern) ----
   "op.gifTiming.name": "استگانوگرافی زمان‌بندی فریم GIF",
   "op.jpgSizeRecover.name": "بازیابی اندازه JPEG",
   "op.zipRepair.name": "ترمیم رمزنگاری جعلی ZIP",
@@ -1170,9 +1172,12 @@ export default {
   "ui.ds.customBadge": "تغییر یافته (سفارشی)",
   "ui.home.strengthBtn": "شدت",
 
- // ---- 2026-08-26 解冻新增（协作代理译文，主控已验）----
   "ui.op.fontDec": "کوچک‌کردن اندازه قلم",
   "ui.op.fontInc": "بزرگ‌کردن اندازه قلم",
+  "ui.op.localFonts": "بارگذاری فونت‌های محلی",
+  "ui.op.localFontsDone": "{0} فونت محلی بارگذاری شد",
+  "ui.op.localFontsFail": "بارگذاری فونت‌های محلی ناموفق بود: {0}",
+  "ui.op.pickImage": "انتخاب تصویر",
   "ui.exhaust.branchCount": "{0} شاخه",
   "ui.exhaust.hitCount": "{0} برخورد محتمل",
   "ui.exhaust.defaultParam": "پیش‌فرض",
@@ -1567,12 +1572,21 @@ export default {
   'fam.lbl.base2048': 'Base2048',
   'fam.lbl.base65536': 'Base65536',
   'fam.lbl.ecoji': 'Ecoji (Base64 با ایموجی)',
+  'fam.lbl.fields': 'استخراج فیلدها',
+  'fam.lbl.attack': 'استفاده مجدد از nonce k',
+  'fam.lbl.sharedPub': 'از کلید عمومی',
+  'fam.lbl.homAdd': 'جمع همریختی',
+  'fam.lbl.scan': 'اسکن',
+  'fam.lbl.formatBrute': 'جست‌وجوی فراگیر',
+  'fam.lbl.smartReport': 'گزارش هوشمند',
  // ----解冻批回填（外部交付 2026-09-26 + 内部 cat.*）----
   "cat.archive": "فشرده‌سازی / بایگانی",
   "cat.crack": "گذرواژه / شکستن رمز بایگانی",
   "cat.filefmt": "قالب فایل / ساختار",
   "cat.image": "تصویر / کد QR",
   "cat.audio": "صدا / صوت و ویدئو",
+  "cat.stegoText": "استگانوگرافی متن",
+  "cat.stegoFile": "استگانوگرافی پرونده",
   "ui.recipe.chooseFamilyOp": "انتخاب عملیات برای افزودن به زنجیره دستور",
   "op.base16.desc": "کدگذاری شانزده‌شانزدهی: هر بایت با دو نویسهٔ شانزده‌شانزدهی نمایش داده می‌شود. از الفبای سفارشی و حروف بزرگ / جداسازی با فاصله پشتیبانی می‌کند.",
   "op.base32.desc": "کدگذاری Base32 مطابق RFC 4648، با گروه‌های 5 بیتی و پشتیبانی از الفبای سفارشی.",

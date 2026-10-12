@@ -1,5 +1,5 @@
 /*
- * edu-t508-b3.en.js — English edu cards for T508 batch 3 (compressExt2.js).
+ * edu-t508-b3.en.js — English edu cards for batch 3 (compressExt2.js).
  * rle / lzw / elias / verhoeff / lz4Dec / bzip2Dec
  * Example outputs mirror the zh shard (real runs, test.mjs).
  */

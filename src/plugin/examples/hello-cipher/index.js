@@ -11,7 +11,7 @@
  * 4. registerDecoder—— 声明一个一键解码贡献（因 op 带 detect 已自动进 magic，这里做显式登记）。
  * 5. registerAiProvider —— 声明一个 AI 提供方形状（OpenAI 兼容，key/endpoint 用户填）。
  * 6. registerCustomImpl —— 给「高级·自定义实现」预设下拉塞魔改模板：一条绑定 base64 op、
- *    一条传 null 对所有 op 可见（MT72 能力面）。
+ * 一条传 null 对所有 op 可见（能力面）。
  *
  * 插件契约：export const manifest + export default setup(ctx)。
  */
@@ -89,8 +89,8 @@ export default function setup(ctx) {
  // 真正的 chat 由 aiClient 用用户填的 key 发起；这里仅声明默认模型/端点。
   });
 
- // 6) 自定义实现预设（MT72）：opId 传 "base64" 只对该 op 可见；传 null 对所有 op 可见。
- //    预设 code 是用户可编辑的 JS 源码，运行时以 (input, rawBytes, params, dir, H) 为形参在沙箱执行。
+ // 6) 自定义实现预设：opId 传 "base64" 只对该 op 可见；传 null 对所有 op 可见。
+ //   预设 code 是用户可编辑的 JS 源码，运行时以 (input, rawBytes, params, dir, H) 为形参在沙箱执行。
   ctx.registerCustomImpl("base64", {
     id: "b64-rev-table",
     name: "Base64 码表逆序",

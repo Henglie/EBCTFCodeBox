@@ -41,15 +41,6 @@ export const ZH = {
   mcMapRender: { usage: "载入map_#.dat，选择scale；完整分辨率PNG由下载按钮保存，文本内长边≤256px的图仅作缩略预览。", tips: ["提取二维码或像素数据请使用完整PNG，不要使用缩略图。"] },
   lsbEmbed: { usage: "载入PNG/BMP封面，设置payload、通道、位平面和位序；完整隐写PNG由下载按钮保存。缩略预览不能替代原图用于提取。", tips: ["用zstegScan按同参数导出或扫描载荷。"] },
   deepsoundExtract: { usage: "载入支持的WAV并在需要时填写密码；全部提取文件逐个下载。文本只给有界预览，不再输出截断Base64冒充完整文件。", tips: ["原字节在files中；二进制不作文本预览，预览截断不会截断下载件。"] },
-  zstegScan: { usage: "exportCombo为空时扫描；复制报告中的组合如bit3 r msb，或填写bit=3&channel=r&order=msb&traversal=row，重新从像素导出原始字节。exportMaxBytes默认65536，允许1..1048576。", tips: ["下载包括该组合的填充字节，不自动猜载荷原长；超限明确标注截断。"] },
-  stegoQuickScan: {
-    what: "图片隐写快速分析：一次检查PNG/JPEG/GIF的结构、元数据和尾随数据。",
-    principle: "复用图像字节工具，按格式有界遍历；JPEG熵编码区处理填充与重启标记，不把压缩数据当坏marker。未检出不等于无隐写。",
-    usage: "拖入文件，或选择Base64/Hex输入。最多8MiB输入、4096结构步；元数据每段预览96字节、尾随最多256字节。",
-    examples: [{ in: "R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAkQBADs=", out: "Trailing bytes: 0", desc: "报告中的尾随结论；不会执行LZW解码。" }],
-    tips: ["LSB、位平面、密码、解释器、本机桥、像素及全部校验和未运行。压缩元数据不解压。异常与预算中止在报告中明确标识。"],
-    aka: ["圆柱密码", "斯巴达密码棒", "斯巴达", "图片隐写快速分析", "图片隐写聚合", "stego quick scan", "image steganography scan", "PNG结构扫描", "JPEG结构扫描", "GIF结构扫描", "尾随数据检查", "图片元数据检查", "轻量隐写分析", "image trailing data", "stegoQuickScan"],
-  },
   b64urlJson: { what: "Base64url与JSON互转及美化，属于数据转换，不是加密或JWT签名验证。", tips: ["能读出JWT载荷不代表签名有效；不要据此信任身份或权限声明。"] },
 };
 
@@ -62,8 +53,6 @@ export const EN = {
   mcMapRender: { usage: "Load map_#.dat and choose scale. Download the full-resolution PNG; the <=256px text-embedded image is a thumbnail only.", tips: ["Use the full PNG for QR decoding or pixel extraction."] },
   lsbEmbed: { usage: "Load PNG/BMP, set payload/channels/bit plane/bit order, then download the full stego PNG. Do not extract from the thumbnail.", tips: ["Use the same parameters in zstegScan."] },
   deepsoundExtract: { usage: "Load a supported WAV and supply a password if needed. Download all recovered files individually. Text is a bounded preview, not truncated Base64 pretending to be a full file.", tips: ["Binary files are not previewed as text; downloads retain the original bytes."] },
-  zstegScan: { usage: "Leave exportCombo empty to scan. Enter a report combination such as bit3 r msb, or bit=3&channel=r&order=msb&traversal=row, to export directly from pixels. exportMaxBytes defaults to 65536; range 1..1048576.", tips: ["Padding is retained; original payload length is not guessed. Limited exports are explicitly marked truncated."] },
-  stegoQuickScan: { what: "Quick PNG/JPEG/GIF structure, metadata and trailing-data analysis.", principle: "Bounded byte traversal; JPEG entropy bytes, stuffing and restart markers are distinguished from segment headers. No finding does not prove absence of steganography.", usage: "Drop a file or choose Base64/Hex. Limits: 8MiB, 4096 structural steps, 96 bytes per metadata preview and 256 trailing preview bytes.", examples: [{ in: "R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAkQBADs=", out: "Trailing bytes: 0", desc: "A report excerpt, without LZW decoding." }], tips: ["No LSB, bit planes, passwords, interpreters, bridges, pixel decoding, full checksum validation or metadata decompression."], aka: ZH.stegoQuickScan.aka },
   b64urlJson: { what: "Base64url/JSON conversion and formatting, not encryption or JWT signature verification.", tips: ["Readable claims do not prove a valid signature or authorization."] },
 };
 
@@ -119,8 +108,8 @@ export const EXTRA_ALIASES = {
 export const CRC_PARAMS = {
   crc8: ["CRC-8/SMBUS", "07", "00", false, "00", "f4"],
   crc8_maxim: ["CRC-8/MAXIM-DOW", "31", "00", true, "00", "a1"],
-  crc16: ["CRC-16/IBM-3740 (CCITT-FALSE)", "1021", "ffff", false, "0000", "29b1"],
-  crc32: ["CRC-32/ISO-HDLC", "04c11db7", "ffffffff", true, "ffffffff", "cbf43926"],
+  crc16: ["CRC-16/IBM-3740 (CCITT-FALSE)", "1021", "ffff", false, "0000", "29B1"],
+  crc32: ["CRC-32/ISO-HDLC", "04c11db7", "ffffffff", true, "ffffffff", "CBF43926"],
   crc32c: ["CRC-32/ISCSI (Castagnoli)", "1edc6f41", "ffffffff", true, "ffffffff", "e3069283"],
   crc64: ["CRC-64/ECMA-182", "42f0e1eba9ea3693", "0000000000000000", false, "0000000000000000", "6c40df5f0b497347"],
 };

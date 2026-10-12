@@ -179,8 +179,12 @@ function balloonRun(text, p = {}) {
   const saltEnc = p.saltEnc || "utf8";
   const pass = decodeInput(text, passEnc);
   const salt = decodeInput(p.salt != null ? p.salt : "", saltEnc);
-  const sCost = parseInt(p.sCost, 10) || 1024;
-  const tCost = parseInt(p.tCost, 10) || 3;
+  const sCostRaw = p.sCost != null && String(p.sCost).trim() !== "" ? String(p.sCost).trim() : null;
+  const sCost = sCostRaw !== null ? parseInt(sCostRaw, 10) : 1024;
+  if (sCostRaw !== null && (!Number.isInteger(sCost) || sCost <= 0)) throw new Error("balloon：sCost 必须为正整数");
+  const tCostRaw = p.tCost != null && String(p.tCost).trim() !== "" ? String(p.tCost).trim() : null;
+  const tCost = tCostRaw !== null ? parseInt(tCostRaw, 10) : 3;
+  if (tCostRaw !== null && (!Number.isInteger(tCost) || tCost <= 0)) throw new Error("balloon：tCost 必须为正整数");
   const delta = parseInt(p.delta, 10) || MIN_DELTA;
   lines.push(`口令: ${pass.length} 字节（${passEnc}）`);
   lines.push(`盐:   ${salt.length} 字节（${saltEnc}）`);

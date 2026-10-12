@@ -264,7 +264,7 @@ function jsHexDecode(text) {
   const bytes = [];
   let i = 0;
   while (i < text.length) {
-    if (text[i] === "\\" && text[i + 1] === "x" && /[0-9a-fA-F]/.test(text[i + 2]) && /[0-9a-fA-F]/.test(text[i + 3])) {
+    if (/^\\x[0-9a-fA-F]{2}/.test(text.slice(i, i + 4))) {
       bytes.push(parseInt(text.slice(i + 2, i + 4), 16));
       i += 4;
     } else {
@@ -468,6 +468,7 @@ function caretMDecode(text) {
       else if (next === "@") { bytes.push(0); i += 2; }
       else if (next >= "A" && next <= "Z") { bytes.push(next.charCodeAt(0) & 0x1f); i += 2; }
       else if (next >= "a" && next <= "z") { bytes.push(next.charCodeAt(0) & 0x1f); i += 2; }
+      else if (next === "[" || next === "\\" || next === "]" || next === "^" || next === "_") { bytes.push(next.charCodeAt(0) & 0x1f); i += 2; }  // man ascii 完备 caret 表
       else { bytes.push(94); i++; }  // ^ 不是转义
     } else if (ch === "M" && text[i + 1] === "-") {
  // M-X 或 M-^X

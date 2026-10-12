@@ -1,5 +1,5 @@
 /*
- * hashCrack.js — 哈希爆破 / 彩虹表组（T56，cat:'analysis'，单向 run）。
+ * hashCrack.js — 哈希爆破 / 彩虹表组（cat:'analysis'，单向 run）。
  *。
  *
  * 覆盖：

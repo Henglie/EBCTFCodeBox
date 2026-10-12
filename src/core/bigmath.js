@@ -1,5 +1,5 @@
 /*
- * bigmath.js — BigInt 大数计算器（T346 批E1+E2，cat:'radix'）。
+ * bigmath.js — BigInt 大数计算器（批E1+E2，cat:'radix'）。
  *
  * 覆盖：四则 add/sub/mul/div/mod、整数幂 pow、模幂 modpow、模逆 modinv、
  *       gcd/extgcd/lcm、素性检验 isPrime、邻素数 nextPrime/prevPrime、
@@ -28,6 +28,7 @@
  *       输入宽松解析（剥千分位逗号/下划线/空白，容许前导 +/-），非法输入中文报错。
  */
 import { register } from "./registry.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 输入解析（宽松：千分位逗号 / 下划线 / 各种空白一律剥掉）
@@ -233,32 +234,16 @@ function prevPrimeBig(a) {
 // 素因子分解：试除 + Pollard rho（Brent 变体）+ 递归下钻（显式栈）
 // ============================================================
 
-// 随机源：优先 crypto.getRandomValues（浏览器 CSPRNG / node webcrypto）；
-// 不可用时退化为 64 位 xorshift（rho 只需统计随机性，不承载安全语义）。
-let _rngState = 0n;
-function rngNext64() {
-  if (!_rngState) _rngState = BigInt(Date.now() % 0x10000) * 6364136223846793005n + 1n;
-  let x = _rngState;
-  x ^= x << 13n; x &= 0xffffffffffffffffn;
-  x ^= x >> 7n;
-  x ^= x << 17n; x &= 0xffffffffffffffffn;
-  _rngState = x;
-  return x;
-}
+// 随机源：统一走 randSource（默认 system 档逐字节零回归；增强随机性开关可接管）。
+// rho 只需统计随机性、不承载安全语义，但仍统一来源，便于用户自配熵源（不再本地兜底）。
 function randBelow(n) {
   // 均匀 [0, n)：按位长生成 + 拒绝采样
   const bits = n.toString(2).length;
   const words = Math.ceil(bits / 64);
-  const cryptoObj = globalThis.crypto;
   for (;;) {
+    const buf = randBytes(words * 8);
     let v = 0n;
-    if (cryptoObj && typeof cryptoObj.getRandomValues === "function") {
-      const buf = new Uint8Array(words * 8);
-      cryptoObj.getRandomValues(buf);
-      for (const b of buf) v = (v << 8n) | BigInt(b);
-    } else {
-      for (let i = 0; i < words; i++) v = (v << 64n) | rngNext64();
-    }
+    for (const b of buf) v = (v << 8n) | BigInt(b);
     v >>= BigInt(words * 64 - bits);
     if (v < n) return v;
   }

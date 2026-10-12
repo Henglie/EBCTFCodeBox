@@ -1,5 +1,5 @@
 /*
- * edu-t508.en.js — English edu cards for T508 batch 1 (classicExt4.js).
+ * edu-t508.en.js — English edu cards for batch 1 (classicExt4.js).
  * homophonic / doubleTrans / pollux / morbit / bookCipher / turningGrille / kenny
  * Example outputs mirror the zh shard (real runs, test_batch1.mjs).
  */

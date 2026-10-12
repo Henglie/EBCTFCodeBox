@@ -12,6 +12,7 @@
  * terminate 后置空，下次 runMagic 惰性重建。
  */
 import { magicDecode } from "./magic.js";
+import { ensureAll } from "../lazyCore.js"; // 主线程降级跑 OPS 全量面前先补齐惰载
 
 let _worker = null;
 let _workerBroken = false;   // 一旦创建/加载失败，标记不可用，永久走主线程降级（不反复试错）
@@ -94,10 +95,11 @@ export function runMagic(input, opts = {}) {
       worker.removeEventListener("error", failover);
       worker.removeEventListener("messageerror", failover);
     };
-    const fallback = () => {
+    const fallback = async () => {
       if (settled) return;
       settled = true;
       cleanup();
+      try { await ensureAll(); } catch { /* 尽力而为 */ } // 主线程 magic 需全量 op 面
       const ac = new AbortController();
       _activeReject = (reason) => { ac.abort(); reject(reason); };
       magicDecode(input, {
@@ -125,7 +127,7 @@ export function runMagic(input, opts = {}) {
         try { worker.terminate(); } catch { /* ignore */ }
         _worker = null;
       }
-      fallback();
+      fallback().catch((e) => { if (!settled) return; settled = true; reject(e); });
     };
     const handler = (e) => {
       const m = e.data || {};
@@ -140,7 +142,7 @@ export function runMagic(input, opts = {}) {
         _activeReject = null;
         resolve(m.cands);
       } else if (m.type === "error") {
-        fallback();
+        fallback().catch(() => { /* 降级再失败由 reject 链上报 */ });
       }
     };
     worker.addEventListener("message", handler);

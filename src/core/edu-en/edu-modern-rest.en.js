@@ -99,6 +99,7 @@ export default {
       "This is the teaching edition — no PEM format handling, no padding. In CTF, plug in the n/e/c/d big numbers directly.",
       "RSA attack tools are in the analysis category (rsaSmallE/rsaWiener/rsaFermat, etc.) — breakable when n is factored or e/d is weak.",
       "Real RSA ciphertext is a hex big number — convert to decimal first, or plug in hex and let BigInt parse it.",
+      "Deployment warning: exposing a raw unpadded RSA decryption oracle is dangerous — the 2026 eNFS attack (Shea / Haller / Suhl / Heninger / Thomé) lets an attacker, with only temporary oracle access, decrypt chosen ciphertexts and forge signatures offline for a long time, without factoring the modulus. Proper OAEP / PSS padding blocks such raw oracles; HSMs should disable unnecessary raw PKCS#11 RSA operations.",
     ],
     aka: ["RSA", "模幂运算", "RSA教学版", "RSA加密", "非对称加密", "公钥密码", "Rivest Shamir Adleman", "RSA算法", "公钥加密", "大数模幂"],
   },

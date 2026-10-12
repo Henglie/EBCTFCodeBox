@@ -68,6 +68,13 @@ function buildAlphabets(genKey, alphabet, N, n) {
   return { tables, tableOf, alpha1: h1.join("") + h2.join("") };
 }
 
+function parseAlphabetSel(p) {
+  const a = String((p && p.alphabet) != null ? p.alphabet : "26");
+  if (a === "26") return AZ;
+  if (a === "20") return IT20;
+  throw new Error("Bellaso：字母表档只能是 26（A-Z）或 20（意大利表），收到非法值 " + JSON.stringify(p && p.alphabet));
+}
+
 function bellasoRun(text, genKey, keyword, alphabet, N, n) {
   const { tables, tableOf, alpha1 } = buildAlphabets(genKey, alphabet, N, n);
   const keyLetters = [...String(keyword == null ? "" : keyword).toUpperCase()].filter((c) => alpha1.includes(c));
@@ -112,8 +119,8 @@ register({
     { key: "count", label: "表数 N", type: "number", default: 5 },
     { key: "step", label: "表间位移 n", type: "number", default: 1 },
   ],
-  encode: (t, p) => bellasoRun(t, (p && p.genkey) != null ? p.genkey : "CHIAVEALFABETICA", (p && p.keyword) != null ? p.keyword : "GIOVAN", String((p && p.alphabet) || "26") === "20" ? IT20 : AZ, (p && p.count) != null ? p.count : 5, (p && p.step) != null ? p.step : 1),
-  decode: (t, p) => bellasoRun(t, (p && p.genkey) != null ? p.genkey : "CHIAVEALFABETICA", (p && p.keyword) != null ? p.keyword : "GIOVAN", String((p && p.alphabet) || "26") === "20" ? IT20 : AZ, (p && p.count) != null ? p.count : 5, (p && p.step) != null ? p.step : 1),
+  encode: (t, p) => bellasoRun(t, (p && p.genkey) != null ? p.genkey : "CHIAVEALFABETICA", (p && p.keyword) != null ? p.keyword : "GIOVAN", parseAlphabetSel(p), (p && p.count) != null ? p.count : 5, (p && p.step) != null ? p.step : 1),
+  decode: (t, p) => bellasoRun(t, (p && p.genkey) != null ? p.genkey : "CHIAVEALFABETICA", (p && p.keyword) != null ? p.keyword : "GIOVAN", parseAlphabetSel(p), (p && p.count) != null ? p.count : 5, (p && p.step) != null ? p.step : 1),
 });
 
 export { bellasoRun, buildAlphabets, IT20 };

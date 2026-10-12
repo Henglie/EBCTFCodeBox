@@ -1,5 +1,5 @@
 /*
- * zipRepair.js — ZIP 伪加密修复 / 置位（T346，cat:'archive'，一对互逆 op）。
+ * zipRepair.js — ZIP 伪加密修复 / 置位（cat:'archive'，一对互逆 op）。
  *
  * 场景：ZIP「伪加密」= 通用位标志（General Purpose Bit Flag）的加密位 bit0 被
  * 置 1，但压缩数据本身没加密 —— 解压软件据此误报「需要密码」。
@@ -207,7 +207,7 @@ function zipRepairRun(text, p) {
   });
   lines.push("注意：若清位后解压仍报密码错或数据乱码，说明是真加密（ZipCrypto/AES）而非伪加密——需口令爆破（ZIP 弱口令爆破）而非清位。");
   lines.push("");
-  // T363a 产物协议（2026-09-02）：修复后 ZIP 字节走 files 下载按钮（真文件交付），
+  // 产物协议（2026-09-02）：修复后 ZIP 字节走 files 下载按钮（真文件交付），
   // text 保留原报告与 base64（链式兼容）；未改动路径仍返回 string。
   lines.push("修复后 ZIP 已生成，点击下方按钮直接下载。");
   lines.push("修复后 base64：");
@@ -246,7 +246,7 @@ function zipPseudoEncryptRun(text, p) {
   });
   lines.push("说明：伪加密只改标志位、不动数据——解压软件会误报「需要密码」。逆操作用「ZIP 伪加密修复」。");
   lines.push("");
-  // T363a 产物协议（2026-09-02）：置位后 ZIP 字节走 files 下载按钮（真文件交付），
+  // 产物协议（2026-09-02）：置位后 ZIP 字节走 files 下载按钮（真文件交付），
   // text 保留原报告与 base64（链式兼容）；未改动路径仍返回 string。
   lines.push("置位后 ZIP 已生成，点击下方按钮直接下载。");
   lines.push("置位后 base64：");
@@ -360,7 +360,7 @@ function allEncrypted(b) {
 // ============ 加载期自检（import 即跑） ============
 
 (() => {
-  // T363a 产物协议（2026-09-02）：改动成功路径返回 {text, files:[{bytes}]}，
+  // 产物协议（2026-09-02）：改动成功路径返回 {text, files:[{bytes}]}，
   // 未改动/错误路径仍为 string。取文本与产物字节走兼容取法（旧字符串路径兜底）。
   const outText = (o) => (typeof o === "string" ? o : o.text);
   const outBytes = (o) => {
@@ -432,7 +432,7 @@ function allEncrypted(b) {
   }
 
   // ⑩ 拼接文件：前缀垃圾字节 + ZIP。EOCD 声明偏移是 ZIP 相对值 → 前缀修正
-  //    （eocd - cdSize 反推真实 CD）后 CDH/LFH 均命中，修复后逐字节还原拼接原件
+  //   （eocd - cdSize 反推真实 CD）后 CDH/LFH 均命中，修复后逐字节还原拼接原件
   const glued = new Uint8Array(16 + plain.length);
   glued.set(Array.from("GIF89a-fake-img", (c) => c.charCodeAt(0)), 0);
   glued.set(plain, 16);

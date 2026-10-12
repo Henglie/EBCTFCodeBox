@@ -1,5 +1,5 @@
 /*
- * jjencode.js — JJEncode + AAEncode（cat:'fancy'，T266）。
+ * jjencode.js — JJEncode + AAEncode（cat:'fancy'）。
  *
  * JJEncode 由 Yosuke Hasegawa（utf-8.jp）发明：把任意 JavaScript 源码编码成
  * 只用符号 [ ] ! + $ _ " . = , ; 的等价可执行代码。核心手法：
@@ -20,7 +20,7 @@
  * 经往返测试验证。
  *
  * ============================================================
- * AAEncode（颜文字编码，同为 Yosuke Hasegawa 作品，T266 补全）
+ * AAEncode（颜文字编码，同为 Yosuke Hasegawa 作品，补全）
  *
  * 把任意 JavaScript 源码编码成日式颜文字（ﾟωﾟﾉ / ﾟΘﾟ / ﾟДﾟ 等），浏览器
  * 控制台粘贴即可执行。核心手法：
@@ -211,7 +211,7 @@ register({
 });
 
 // ============================================================
-// AAEncode（颜文字编码，Yosuke Hasegawa，T266 补全）
+// AAEncode（颜文字编码，Yosuke Hasegawa，补全）
 // 算法来源：utf-8.jp 原版 aaencode（经 PHP 移植版交叉验证）
 // ============================================================
 

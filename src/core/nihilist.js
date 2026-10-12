@@ -1,5 +1,5 @@
 /*
- * nihilist.js — Nihilist 密码（T300，cat:'classic'，双向）。
+ * nihilist.js — Nihilist 密码（cat:'classic'，双向）。
  *
  * 算法：Polybius 方阵 + 关键词加数古典密码（俄国民意党 1880s）。
  * 1. 构造 5×5 Polybius 方阵（关键词去重填入，I/J 合并，剩余字母按序补全）

@@ -1,5 +1,5 @@
-/* spring.js — M3 弹簧动效内核（T510 候选 · 零依赖 · 零外发 · ~150 行）
- * 产品负责人CTF编码工具箱 · T510 第一批灰度接入（弹层②+族滑块④，产品负责人真机验演示后批准）
+/* spring.js — M3 弹簧动效内核（候选 · 零依赖 · 零外发 · ~150 行）
+ * 产品负责人CTF编码工具箱 · 第一批灰度接入（弹层②+族滑块④，产品负责人真机验演示后批准）
  * 总开关：localStorage ebctf.springMotion（'0'=关闭回退 CSS 动画）
  *
  * 核心思想（安卓 12+/14 手感核心）：
@@ -28,7 +28,7 @@
  * 数值积分：半隐式欧拉（symplectic Euler，先速度后位置），游戏/动效库通用；
  *   dt 钳 1/30s —— 标签页切走后回来 dt 巨大时不爆冲（按 33ms 步进续算）。
  * 减动效：html.reduce-motion 存在（main.js 依 localStorage 'ebctf.reduceMotion' 加类）
- *   → to() 立即设终值、清速度，不启动 rAF —— 与现行 T471b 路径同源，无新增状态。
+ * → to() 立即设终值、清速度，不启动 rAF —— 与现行路径同源，无新增状态。
  */
 (function (global) {
   "use strict";
@@ -38,7 +38,7 @@
    *   dynamicanimation/animation/SpringForce）：STIFFNESS_HIGH=10000 / MEDIUM=1500 /
    *   LOW=200 / VERY_LOW=50；DAMPING_RATIO_HIGH_BOUNCY=0.2 / MEDIUM_BOUNCY=0.5 /
    *   LOW_BOUNCY=0.75 / NO_BOUNCY=1.0。
-   *   dur* 组：按 T471c 时长令牌换算（settle≈时长，T≈4/(ζω)，mass=1，ζ=1 无弹）。
+   * dur* 组：按时长令牌换算（settle≈时长，T≈4/(ζω)，mass=1，ζ=1 无弹）。
    *   M3 网页侧（m3.material.io/styles/motion）2025 expressive 更新引入 spring tokens
    *   但未公开数值常量表 —— 数值以 Android 权威常量 + 时长换算为准，不编造。 */
   var PRESETS = {

@@ -1,5 +1,5 @@
 /*
- * qrFormatBrute.js — QR 格式信息爆破（T518，cat:'image'，family:'qr'）。
+ * qrFormatBrute.js — QR 格式信息爆破（cat:'image'，family:'qr'）。
  *
  * 用途：格式信息区（15 位 BCH 码，两份副本）被涂改/遮挡/损坏的 QR——
  * qrDecode 依赖 readFormatInfo 识别 ECL/掩码，格式区坏则整码报废；

@@ -67,9 +67,9 @@ function asciiWidth(base) {
 
 // base=2 的二进制变体：bits=7|8 位宽、invert 0/1 取反、
 // bitReverse 逐字节位反转（LSB-first）。仅对二进制串有意义，其他 base 忽略这些 opts。
-//   - bits：7-bit 是纯 ASCII(<128) 的紧凑写法；8-bit 是标准字节。定宽无空格切分按此宽度。
-//   - invert：整串 0↔1 取反。
-//   - bitReverse：每组比特首尾镜像（有些编码器按 LSB-first 输出）。
+//  - bits：7-bit 是纯 ASCII(<128) 的紧凑写法；8-bit 是标准字节。定宽无空格切分按此宽度。
+//  - invert：整串 0↔1 取反。
+//  - bitReverse：每组比特首尾镜像（有些编码器按 LSB-first 输出）。
 function binWidth(base, opts) {
   if (base === 2) return (opts && Number(opts.bits) === 7) ? 7 : 8;
   return asciiWidth(base);

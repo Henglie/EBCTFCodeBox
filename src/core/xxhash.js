@@ -249,6 +249,8 @@ function parseSeed(s) {
 
 function xxhashRun(text, p = {}) {
   const variant = (p && p.variant) || "xxh64";
+  if (variant !== "xxh32" && variant !== "xxh64")
+    throw new Error(`xxHash：未知变体 "${variant}"（仅支持 xxh32 / xxh64）`);
   const inputMode = (p && p.inputMode) || "text";
   const data = inputMode === "hex" ? hexToBytes(text) : _enc.encode(String(text || ""));
   const seed = parseSeed(p && p.seed);

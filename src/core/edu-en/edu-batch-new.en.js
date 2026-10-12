@@ -1,6 +1,6 @@
 // English edu shard: newly added ops this round (capability fill + emoji reversing).
 // Covers 9 ops: txtmoji / godzillaPhpXorBase64 / behinderAesEcb / byteReverse /
-//   base32steg / pbeAesBrute / bin2img / imgFft / bmpSizeRecover.
+//  base32steg / pbeAesBrute / bin2img / imgFft / bmpSizeRecover.
 export default {
   // ============ emoji encryption ============
   txtmoji: {

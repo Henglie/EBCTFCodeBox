@@ -102,21 +102,6 @@ export default {
     aka: ["音频lsb", "audio lsb", "wav隐写", "音频隐写", "音频最低位隐写", "audio steganography", "pcm lsb", "wav lsb提取", "音频最低有效位", "audio lsb extract", "声音隐写"],
   },
 
-  dtmfDecode: {
-    what: "DTMF 双音多频提取：电话拨号那种「嘟嘟」按键音，每个键是两个特定频率叠加，从 WAV 里检出来还原成按键序列。",
-    principle:
-      "DTMF 把 12/16 个按键排成 4 行×4 列，每键 = 一个行频 + 一个列频（共 8 个标准频率）叠加。用 Goertzel 算法（只测这 8 个频率能量的高效 DFT）在滑动窗口里检测哪两个频率能量最强，查表得对应按键。",
-    usage: "输入含拨号音的 WAV PCM，工具滑窗跑 Goertzel 检测，输出按键序列（0-9 A-D * #）。",
-    examples: [
-      { in: "含拨号音的 WAV", out: "按键序列如 1234#" },
-    ],
-    formulas: [
-      { tex: "\\text{key} = (\\text{行频},\\ \\text{列频}) \\to \\{697/770/852/941\\} \\times \\{1209/1336/1477/1633\\}", caption: "行频×列频定位按键" },
-    ],
-    tips: ["音频听起来像电话拨号/按键音 → 试 DTMF。解出的数字串可能是密码或坐标。"],
-    aka: ["dtmf", "双音多频", "拨号音解码", "goertzel"],
-  },
-
   sstvIdent: {
     what: "SSTV 模式识别：业余无线电用声音传图片（慢扫描电视），先认出音频用的是哪种 SSTV 模式，为后续解调铺路。",
     principle:

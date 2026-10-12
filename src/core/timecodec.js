@@ -1,5 +1,5 @@
 /*
- * timecodec.js — 时间戳/日期编码组（T50，cat:'radix'）。
+ * timecodec.js — 时间戳/日期编码组（cat:'radix'）。
  *
  * 覆盖：
  * - Unix 时间戳（秒/毫秒/微秒 auto）↔ ISO8601
@@ -33,12 +33,14 @@ function formatIso(ms) {
   const d = new Date(ms);
   if (Number.isNaN(d.getTime())) throw new Error("无效时间戳: " + ms);
   const y = d.getUTCFullYear();
+ // RFC 3339 date-fullyear=4DIGIT、ES Date Time String Format：0-9999 年四位补零；负年/万年属扩展年表示（需双方约定），维持原样
+  const ys = y >= 0 && y <= 9999 ? String(y).padStart(4, "0") : String(y);
   const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
   const da = String(d.getUTCDate()).padStart(2, "0");
   const h = String(d.getUTCHours()).padStart(2, "0");
   const mi = String(d.getUTCMinutes()).padStart(2, "0");
   const se = String(d.getUTCSeconds()).padStart(2, "0");
-  return y + "-" + mo + "-" + da + "T" + h + ":" + mi + ":" + se + "Z";
+  return ys + "-" + mo + "-" + da + "T" + h + ":" + mi + ":" + se + "Z";
 }
 
 // ============ 1. Unix 时间戳 ↔ ISO8601 ============
@@ -51,7 +53,7 @@ function unixDetectUnit(n) {
 }
 
 function unixToMs(ts, unit) {
-  // 修复（T558）：空/纯空白原被 Number("")===0 静默当成 Unix 纪元 0。
+  // 修复（）：空/纯空白原被 Number("")===0 静默当成 Unix 纪元 0。
   const raw = String(ts).trim();
   if (!raw) throw new Error("时间戳: 空输入");
   const n = Number(raw);
@@ -77,7 +79,7 @@ function msToUnix(ms, unit) {
 const FILETIME_EPOCH_OFFSET_MS = 11644473600000n;
 
 function filetimeToMs(ft) {
-  // 修复（T558）：BigInt("")===0n，空串原被静默当成 FILETIME 0（1601 纪元）；
+  // 修复（）：BigInt("")===0n，空串原被静默当成 FILETIME 0（1601 纪元）；
   // 且负数经 /10000n 向零截断后静默落到 1601。FILETIME 为 64 位无符号（MS-DTYP 2.3.3）。
   const raw = String(ft).trim();
   if (!raw) throw new Error("FILETIME: 空输入");
@@ -102,7 +104,7 @@ function msToFiletime(ms) {
 const HFS_EPOCH_OFFSET_SEC = 2082844800;
 
 function hfsToMs(sec) {
-  // 修复（T558）：Number("")===0，空串原被静默当成 HFS+ 0（1904 纪元）；
+  // 修复（）：Number("")===0，空串原被静默当成 HFS+ 0（1904 纪元）；
   // HFS+ 为 32 位无符号（TN1150：UInt32 秒，自 1904-01-01 GMT，上限 2040-02-06）。
   const raw = String(sec).trim();
   if (!raw) throw new Error("HFS+ 时间: 空输入");
@@ -125,7 +127,7 @@ function msToHfs(ms) {
 const COCOA_EPOCH_OFFSET_SEC = 978307200;
 
 function cocoaToMs(sec) {
-  // 修复（T558）：Number("")===0，空串原被静默当成 Cocoa 0（2001 纪元）。
+  // 修复（）：Number("")===0，空串原被静默当成 Cocoa 0（2001 纪元）。
   // Cocoa/NSDate 为有符号，契约内负值合法（NSDate：早于 2001-01-01 为负）。
   const raw = String(sec).trim();
   if (!raw) throw new Error("Cocoa 时间: 空输入");
@@ -250,7 +252,10 @@ function chineseDateToIso(s) {
   const y = cnYearToNum(m[1]);
   const mo = cnMonthToNum(m[2]);
   const da = cnDayToNum(m[3]);
-  return formatIso(Date.UTC(y, mo - 1, da));
+  const d = new Date(Date.UTC(y, mo - 1, da));
+  if (y < 100) d.setUTCFullYear(y, mo - 1, da); // ES Date.UTC 将 0-99 年映射为 1900+y，须显式还原真实年份
+  const p2 = (n) => String(n).padStart(2, "0");
+  return String(y).padStart(4, "0") + "-" + p2(d.getUTCMonth() + 1) + "-" + p2(d.getUTCDate()) + "T00:00:00Z";
 }
 
 // ============ 7. 时区转换 ============
@@ -271,6 +276,7 @@ function formatIsoWithTz(ms, offsetMin) {
   const adjusted = ms + offsetMin * 60000;
   const d = new Date(adjusted);
   const y = d.getUTCFullYear();
+  const ys = y >= 0 && y <= 9999 ? String(y).padStart(4, "0") : String(y);
   const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
   const da = String(d.getUTCDate()).padStart(2, "0");
   const h = String(d.getUTCHours()).padStart(2, "0");
@@ -279,7 +285,7 @@ function formatIsoWithTz(ms, offsetMin) {
   const sign = offsetMin >= 0 ? "+" : "-";
   const oh = String(Math.floor(Math.abs(offsetMin) / 60)).padStart(2, "0");
   const om = String(Math.abs(offsetMin) % 60).padStart(2, "0");
-  return y + "-" + mo + "-" + da + "T" + h + ":" + mi + ":" + se + sign + oh + ":" + om;
+  return ys + "-" + mo + "-" + da + "T" + h + ":" + mi + ":" + se + sign + oh + ":" + om;
 }
 
 function tzConvert(iso, fromTz, toTz) {

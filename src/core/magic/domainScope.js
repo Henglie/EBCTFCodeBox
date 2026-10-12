@@ -209,6 +209,40 @@ export const DOMAIN_SCOPE = {
 /** 已声明 op 清单（按声明顺序）。 */
 export const SCOPE_OPS = Object.keys(DOMAIN_SCOPE);
 
+// ---------- 输入侧缩限：小字母表输入（字符类型数缩限，恒烈 2026-09-29 核心思路） ----------
+// 字符级定义域只能回答「输入是否落在我的字符表内」——base64 等大字母表解码器对纯 0/1 串
+// 恒「表内」（数字是合法码字），但输入只动用了字母表的 2/64，语义上不可能是正解，只会产出
+// 字节噪声（实测 0101011010011110 → base64/base85/分组密码等高分霸榜）。
+// 缩限规则：去空白后字符类型数 k ≤ 4 且长度 ≥ 8（位串/点划/双符号替换类输入）时，仅准
+// 白名单 op——位串族（把输入当位流解释）+ 对串本身做可见结构/替换变换的 op（换位、逐字移位、
+// 双符号映射）；解释型大字母表解码器（base 系/现代密码/文本码）一律拒绝。
+// 字母类小字母表输入（如 abababab）不受损：古典移位族在白名单内（对数字串它们是透传 no-op，
+// 会被「输出=输入」剪枝自然滤掉）；k ≥ 5 或短串维持现状，常规 hex/text/base 输入零影响。
+export const SMALL_ALPHABET_OPS = new Set([
+  // 位串族（输入即位流）
+  "manchester", "diffManchester", "nrzi", "miller", "fourB5B", "pwmPpm",
+  "bcd", "binPad", "graycode", "bitReverse", "bitRotate",
+  // 双符号/点划解释
+  "morse", "bacon",
+  // 对串本身做可见结构变换（换位/逐字移位/通用替换——保字母表，动位置或映射）
+  "railFence", "scytale", "caesarBox", "everyN",
+  "rot13", "rot18", "rot47", "rot5", "rotSpecial",
+  "caesar", "atbash", "affine", "beaufort", "autokey", "gronsfeld",
+  "trithemius", "keyboardShift", "vigenere", "porta",
+]);
+
+/**
+ * 小字母表输入门：命中返回白名单 Set（只准这些 op），未命中返回 null（不启用，走原逻辑）。
+ * 每层调用方对当前文本重算，不缓存。
+ */
+export function smallAlphabetGate(text) {
+  const t = String(text == null ? "" : text).replace(/\s+/g, "");
+  if (t.length < 8) return null;
+  let kinds;
+  try { kinds = new Set(t).size; } catch { return null; }
+  return kinds <= 4 ? SMALL_ALPHABET_OPS : null;
+}
+
 /**
  * 按当前文本重算该 op 的定义域画像（每层调用，不缓存）。
  * 未声明的 op 返回 null。

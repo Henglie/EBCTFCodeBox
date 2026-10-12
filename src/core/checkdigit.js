@@ -1,5 +1,5 @@
 /*
- * checkdigit.js — 条码 / 校验位组（T51，cat:'radix'）。
+ * checkdigit.js — 条码 / 校验位组（cat:'radix'）。
  *
  * 覆盖：
  * - Luhn 校验（信用卡/IMEI，ISO/IEC 7812）

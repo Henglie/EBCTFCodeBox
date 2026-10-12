@@ -29,6 +29,7 @@
 
 import { register } from "./registry.js";
 import { keccakF1600 } from "./hash.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 字节工具（与 mlkem.js 同风格，件内自包含）
@@ -65,13 +66,7 @@ function bytesEqual(a, b) {
 
 /** CSPRNG。密钥种子禁弱随机源：无 crypto.getRandomValues 直接报错，不降级。 */
 function randomBytes(n) {
-  const c = globalThis.crypto;
-  if (c && typeof c.getRandomValues === "function") {
-    const b = new Uint8Array(n);
-    c.getRandomValues(b);
-    return b;
-  }
-  throw new Error("无可用 CSPRNG（crypto.getRandomValues），无法生成随机种子");
+  return randBytes(n);
 }
 
 /** 种子参数解析：空 → 随机 32B；Uint8Array 直收；hex 须严格 32B。 */

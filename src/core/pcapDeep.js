@@ -162,11 +162,11 @@ export function reassembleFlows(dissected) {
 
 // 重组单方向：确定基准 ISN → 按相对偏移放置 → 首次写入优先（重传去重）。
 // 诊断指标约定（与 报告.md 同步声明，参考实现按同口径对拍）：
-//   retransSegs   到达时整段落在已覆盖区（零新字节）→ 纯重传/重复段
-//   oooSegs       到达时起点早于已见流尾且带新字节 → 乱序补洞段
-//   conflictBytes 重叠区内容与已写入不一致的字节数（保留首写，后到冲突字节丢弃并计数）
-//   gaps          最终仍未覆盖的流偏移区间 [from,to)（字节以 0x00 占位），同时给绝对 seq
-//   truncated     超过 MAX_STREAM 截断，或段尾被上限截掉
+//  retransSegs   到达时整段落在已覆盖区（零新字节）→ 纯重传/重复段
+//  oooSegs       到达时起点早于已见流尾且带新字节 → 乱序补洞段
+//  conflictBytes 重叠区内容与已写入不一致的字节数（保留首写，后到冲突字节丢弃并计数）
+//  gaps          最终仍未覆盖的流偏移区间 [from,to)（字节以 0x00 占位），同时给绝对 seq
+//  truncated     超过 MAX_STREAM 截断，或段尾被上限截掉
 export function reassembleDir(dir) {
   const segs = dir.segs;
   const diag = { segs: segs.length, retransSegs: 0, oooSegs: 0, conflictBytes: 0, gaps: [], truncated: false, discardedBeforeBase: 0 };

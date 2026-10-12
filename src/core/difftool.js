@@ -1,5 +1,5 @@
 /*
- * difftool.js — 差异对比工具（T92，cat:'analysis'）。
+ * difftool.js — 差异对比工具（cat:'analysis'）。
  *
  * 定位：纯函数字节级 / 行级 diff，输出差异区间报告。CTF 找隐藏差异用
  * （两段看似相同的 hex / 文本，定位被改动的字节 / 行）。

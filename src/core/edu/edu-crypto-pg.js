@@ -1,5 +1,5 @@
 /*
- * edu-crypto-pg.js — 科普补缺分片（T311，密码学专题：秘密共享 + 签名攻击 + 公钥密码 + 流/分组密码）。
+ * edu-crypto-pg.js — 科普补缺分片（密码学专题：秘密共享 + 签名攻击 + 公钥密码 + 流/分组密码）。
  *
  * 覆盖 9 个真实缺失 op 的科普卡：
  * crypto: shamir, schnorr, ecdsaReuseK, rabin, x25519, ed25519, paillier
@@ -36,36 +36,6 @@ export default {
       "CTF 里常见做法：给一组十六进制分片和 k 值，把分片粘进来解码即可。",
     ],
     aka: ["shamir", "Shamir秘密共享", "拉格朗日插值", "秘密分割", "门限方案", "Shamir's Secret Sharing", "SSS", "(k,n)门限", "密钥分片", "秘密共享", "Lagrange插值", "多项式秘密共享", "Shamir门限", "门限秘密共享", "秘密拆分"],
-  },
-
- // ============ crypto: Schnorr 签名/验签/攻击 ============
-  schnorr: {
-    what: "Schnorr 签名——高效简洁的椭圆曲线数字签名方案，基于离散对数难题，在 secp256k1 上用 SHA-256。支持签名、验签、以及 nonce 重用攻击恢复私钥。",
-    principle:
-      "Schnorr 签名协议基于 Fiat-Shamir 变换，将交互式零知识证明转成非交互式数字签名。\n\n" +
-      "密钥生成：在 secp256k1 曲线上随机选私钥 $d$，计算公钥 $Q = d \\cdot G$（$G$ 是基点）。\n\n" +
-      "签名：随机选 nonce $k$，计算承诺 $R = k \\cdot G$，取 $R$ 的 x 坐标 $r = R_x$；计算挑战 $e = H(r \\| Q \\| m)$（H=SHA-256）；签名 $s = k - e \\cdot d \\pmod{n}$；输出 $(e, s)$ 或 $(r, s)$。\n\n" +
-      "验签：计算 $R' = s \\cdot G + e \\cdot Q$，验证 $H(R'_x \\| Q \\| m) \\stackrel{?}{=} e$。\n\n" +
-      "nonce 重用攻击：若同一私钥 $d$ 用相同 $k$ 签两条不同消息 $m_1$、$m_2$，则 $s_1 = k - e_1 d$ 且 $s_2 = k - e_2 d$。相减消去 $k$：$s_1 - s_2 = d (e_2 - e_1)$，推出 $d = (s_1 - s_2) \\cdot (e_2 - e_1)^{-1} \\pmod{n}$。两个签名即可恢复私钥。",
-    usage:
-      "参数选 mode：keygen（生成密钥对）、sign（签名）、verify（验签）、attack（nonce 重用攻击）。\n" +
-      "签名：mode=sign，填私钥 (hex)、消息 msg (text 或 hex)，输出签名 $(e,s)$。\n" +
-      "验签：mode=verify，填公钥 Qx/Qy (hex)、消息 msg、签名 e/s，输出 valid/invalid。\n" +
-      "攻击：mode=attack，填两条用同一 k 的签名 $(e_1,s_1)$ 和 $(e_2,s_2)$，自动恢复私钥 $d$。",
-    examples: [
-      { in: "hello", param: "mode=sign, msgFormat=text, priv=0x0000000000000000000000000000000000000000000000000000000000000003", out: "签名 (e, s)", desc: "用极简私钥 3 对 'hello' 签名" },
-      { in: "（两条同 k 签名）", param: "mode=attack", out: "恢复的私钥 d（hex）", desc: "nonce 重用攻击：从两条同 k 签名恢复私钥" },
-    ],
-    formulas: [
-      { tex: "s = k - e \\cdot d \\pmod{n},\\quad e = H(R_x \\| Q \\| m)", caption: "Schnorr 签名：nonce k、挑战 e、私钥 d 的关系" },
-      { tex: "d = (s_1 - s_2) \\cdot (e_2 - e_1)^{-1} \\pmod{n}", caption: "nonce 重用攻击：消去 k 恢复私钥 d" },
-    ],
-    tips: [
-      "CTF 里看到两条签名用相同的 r（或 e）值 → nonce 重用漏洞，用 attack 模式直接恢复私钥。",
-      "Schnorr 签名比 ECDSA 更简洁（无求逆步骤），且天然支持多重签名聚合。",
-      "和 ECDSA 的区别：Schnorr 的 nonce 重用攻击能直接从 $(s_1-s_2)$ 和 $(e_2-e_1)$ 解出 d，公式更直接。",
-    ],
-    aka: ["schnorr", "Schnorr签名", "Schnorr验签", "nonce重用", "k重用", "Schnorr Signature", "Fiat-Shamir", "零知识证明", "Schnorr ZKP", "离散对数签名", "Schnorr数字签名", "Claus Schnorr", "Schnorr协议", "Sigma协议", "Schnorr识别"],
   },
 
  // ============ crypto: ECDSA nonce 重用攻击 ============
@@ -130,99 +100,6 @@ export default {
       "和 RSA 的区别：RSA 加密用 $m^e$（大指数），Rabin 加密只用 $m^2$（平方），计算快但解密要消歧。",
     ],
     aka: ["rabin", "Rabin密码", "Rabin公钥", "二次剩余", "模平方根", "Rabin Cryptosystem", "m² mod n", "Chinese Remainder Theorem", "四根", "Rabin加密", "Michael Rabin", "平方模n", "Rabin解密", "二次剩余密码", "Rabin公钥加密"],
-  },
-
- // ============ crypto: X25519 密钥交换 ============
-  x25519: {
-    what: "X25519——RFC 7748 定义的椭圆曲线 Diffie-Hellman 密钥交换，用 Curve25519 的 x-only 标量乘法，速度快、安全、是现代 TLS 的基础。",
-    principle:
-      "X25519 基于 Montgomery 曲线 $y^2 = x^3 + 486662 x^2 + x$ 在素域 $\\mathbb{F}_{2^{255}-19}$ 上。\n\n" +
-      "核心操作：标量乘法 $x_{out} = \\text{X25519}(\\text{scalar},\\, x_{in})$，在曲线上计算 $\\text{scalar} \\cdot P$ 的 x 坐标，只处理 x 坐标（Montgomery 阶梯算法），忽略 y 坐标。\n\n" +
-      "clamp：私钥标量在计算前要 clamp——低 3 位清零、高位置 0x40、次高位置 0x80——清除小阶子群点和保证高位固定。\n\n" +
-      "密钥交换：Alice 生成私钥 a 和公钥 A = X25519(a, G)；Bob 生成私钥 b 和公钥 B = X25519(b, G)。Alice 算共享密钥 K = X25519(a, B)，Bob 算 K = X25519(b, A)。两端结果一致。",
-    usage:
-      "三个 mode：\n" +
-      "keygen：随机生成 32 字节私钥和对应公钥（均 hex）。\n" +
-      "双方私钥求共享：填 Alice 私钥和 Bob 私钥（均为 32 字节 hex），各自算出公钥后交换计算共享密钥，验证两侧是否一致。\n" +
-      "己方私钥+对方公钥：填己方私钥和对方公钥（均为 32 字节 hex），算出共享密钥。",
-    examples: [
-      { in: "privA=77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a, privB=5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb", param: "mode=双方私钥", out: "共享K=4a5d9d5ba4ce2de1728e3bf4800a5084d0c0140155f2eed7b53e5e0e33e0e801（两侧一致✓）", desc: "RFC 7748 §6.1 官方测试向量，Alice 和 Bob 算出相同共享密钥" },
-    ],
-    formulas: [
-      { tex: "K = \\text{X25519}(a, B) = \\text{X25519}(b, A)", caption: "X25519 DH 密钥交换：双方用对方公钥和自己的私钥算出共享密钥" },
-    ],
-    tips: [
-      "X25519 是 x-only 的——不传 y 坐标，只传 32 字节的 x 坐标。公钥就是 32 字节 hex。",
-      "别把 X25519 和 Ed25519 搞混：前者做密钥交换（DH），后者做数字签名。两者曲线不同（Montgomery vs twisted Edwards）但共享同一底层素域。",
-      "私钥会自动 clamp，不用担心弱密钥。但私钥必须 32 字节。",
-      "CTF 常见场景：给 Alice/Bob 的私钥或公钥，叫选手算出共享密钥，然后用共享密钥解密对称加密的数据。",
-    ],
-    aka: ["x25519", "X25519", "Curve25519", "RFC 7748", "ECDH", "密钥交换", "椭圆曲线DH", "x25519密钥协商", "Montgomery曲线", "DH密钥交换", "X25519 ECDH", "Daniel Bernstein", "DH", "Curve25519 DH", "25519密钥交换"],
-  },
-
- // ============ crypto: Ed25519 签名/验签 ============
-  ed25519: {
-    what: "Ed25519——RFC 8032 定义的高速椭圆曲线数字签名方案，基于 twisted Edwards 曲线 + SHA-512，签名短（64 字节）、速度快、无分支。",
-    principle:
-      "Ed25519 工作在 twisted Edwards 曲线 $-x^2 + y^2 = 1 - \\frac{121665}{121666} x^2 y^2$ 上，基域同 Curve25519 的 $\\mathbb{F}_{2^{255}-19}$。\n\n" +
-      "密钥生成：32 字节随机种子，用 SHA-512 哈希后取低 256 位做私钥标量（clamp 处理），高 256 位做 nonce 前缀。公钥 $A = a \\cdot B$（$B$ 是基点）。\n\n" +
-      "签名：对消息 m，算 $r = \\text{SHA-512}(\\text{prefix} \\| m)$（确定性 nonce），$R = r \\cdot B$，$S = r + \\text{SHA-512}(R \\| A \\| m) \\cdot a \\pmod{\\ell}$。签名 = $R \\| S$（64 字节）。\n\n" +
-      "验签：检查 $S \\cdot B \\stackrel{?}{=} R + \\text{SHA-512}(R \\| A \\| m) \\cdot A$。\n\n" +
-      "特点：确定性签名（同消息同私钥签名相同，无随机数风险）、抗侧信道、批量验签。SHA-512 用纯 JS 实现。",
-    usage:
-      "三个 mode：keygen（生成密钥对）、sign（签名）、verify（验签）。\n" +
-      "签名：mode=sign，填私钥（32 字节 hex）和消息 msg（支持 text/hex 格式），输出 64 字节签名（hex）。\n" +
-      "验签：mode=verify，填公钥（32 字节 hex）、消息 msg、签名（64 字节 hex），输出 valid/invalid。\n" +
-      "keygen：随机生成私钥和对应公钥。",
-    examples: [
-      { in: "", param: "mode=sign, msgFormat=hex, priv=9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60", out: "签名=e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b", desc: "RFC 8032 §7.1 空消息测试向量，自检验签 ✓" },
-    ],
-    formulas: [
-      { tex: "R = r \\cdot B,\\quad S = r + H(R \\| A \\| m) \\cdot a \\pmod{\\ell}", caption: "Ed25519 签名：确定性 nonce r + 标量 S" },
-      { tex: "S \\cdot B \\stackrel{?}{=} R + H(R \\| A \\| m) \\cdot A", caption: "Ed25519 验签方程：核对基点标量乘法" },
-    ],
-    tips: [
-      "Ed25519 是确定性的——同一私钥同一消息，签名永远一样，没有 nonce 重用风险。",
-      "别和 X25519 搞混：Ed25519 做签名（twisted Edwards 曲线），X25519 做密钥交换（Montgomery 曲线），两者共享同一素域但用途不同。",
-      "Ed25519 公钥 32 字节、签名 64 字节，比 ECDSA 的 DER 编码紧凑很多。",
-      "CTF 常见：给 Ed25519 公钥和签名，要验证某消息是不是被该私钥签的——用 verify 模式。",
-    ],
-    aka: ["ed25519", "Ed25519", "EdDSA", "RFC 8032", "twisted Edwards", "爱德华兹曲线", "Ed25519签名", "高速签名", "Curve25519签名", "Daniel Bernstein", "Edwards曲线", "确定性签名", "Ed25519验签", "扭曲爱德华兹曲线", "EdDSA签名"],
-  },
-
- // ============ crypto: Paillier 加法同态加密 ============
-  paillier: {
-    what: "Paillier 同态加密——支持密文直接做加法运算（结果解密等于明文之和），基于复合剩余类的困难问题，是隐私计算的核心原语。",
-    principle:
-      "Paillier 加密基于 $n^2$ 模运算的复合剩余类假设（$n = p \\times q$）。\n\n" +
-      "密钥生成：选大素数 $p$、$q$，$n = p \\times q$，$\\lambda = \\text{lcm}(p-1, q-1)$，选 $g = n+1$（简化），预计算 $\\mu = \\lambda^{-1} \\bmod n$。公钥 $(n, g)$，私钥 $(\\lambda, \\mu)$。\n\n" +
-      "加密 $E(m) = g^m \\cdot r^n \\bmod n^2$：随机 $r \\in \\mathbb{Z}_n^*$ 提供语义安全性——同一明文每次加密产生不同密文。\n\n" +
-      "解密：$m = L(c^\\lambda \\bmod n^2) \\cdot \\mu \\bmod n$，其中 $L(x) = (x-1)/n$。\n\n" +
-      "同态加法：$E(m_1) \\cdot E(m_2) \\bmod n^2 = E(m_1 + m_2)$——要算两个数的加密和，只需把密文相乘。\n" +
-      "标量乘法：$E(m)^k \\bmod n^2 = E(k \\cdot m)$——加密值乘以常数。\n" +
-      "同态减法和取反也可通过密文操作实现。\n\n" +
-      "demo 模式展示完整流程：$E(42) \\cdot E(100) \\bmod n^{2}$ 解密得 $142 = 42 + 100$ ✓。",
-    usage:
-      "五个 mode：\n" +
-      "demo：完整演示——自动生成密钥、加密 42 和 100、做同态加法、解密验证 42+100=142。\n" +
-      "keygen：生成 Paillier 密钥对（默认 256 位，可调 keySize）。\n" +
-      "encrypt：用公钥 n 加密明文（整数）。\n" +
-      "decrypt：用私钥 λ 解密密文。\n" +
-      "add：做同态加法——输入两个密文，输出加密的和。",
-    examples: [
-      { in: "（自动）", param: "mode=demo", out: "142=42+100 ✓", desc: "demo 模式自动演示同态加法完整流程" },
-      { in: "42", param: "mode=encrypt, 公钥 n=...", out: "密文 c（每次不同）", desc: "Paillier 加密：语义安全，同明文每次加密结果不同" },
-    ],
-    formulas: [
-      { tex: "E(m) = g^m \\cdot r^n \\bmod n^2,\\quad g = n+1", caption: "Paillier 加密：明文 m 被随机数 r 掩蔽" },
-      { tex: "E(m_1) \\cdot E(m_2) \\equiv E(m_1 + m_2) \\pmod{n^2}", caption: "同态加法：密文相乘对应明文相加" },
-    ],
-    tips: [
-      "Paillier 是加法同态（半同态）——只支持加法和标量乘，不支持密文相乘。全同态（FHE）需要更复杂的方案。",
-      "同一明文的每次加密结果不同（随机数 r 的作用），这是语义安全的保证。",
-      "CTF 里看到同态计算、密文运算的题目，多半是 Paillier。demo 模式给你直观演示。",
-    ],
-    aka: ["paillier", "Paillier", "同态加密", "加法同态", "Paillier Cryptosystem", "半同态", "加法同态加密", "隐私计算", "密文计算", "n²模运算", "复合剩余", "Pascal Paillier", "Paillier公钥", "部分同态", "HE"],
   },
 
  // ============ modern: A5/1 GSM 流密码 ============

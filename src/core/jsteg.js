@@ -29,7 +29,7 @@
  *
  * ---- 依赖与复用 ----
  * JPEG 解析 import f5stego.js 的 parseJpeg/parseInput/findFlags（勿重写）；
- * 回写 import jpegRewrite.js 的 reencodeJpeg/analyzeScans（T390 产物）。
+ * 回写 import jpegRewrite.js 的 reencodeJpeg/analyzeScans（产物）。
  * 目标分量 = SOS 第一个扫描分量（Go 工具 reader 侧同口径，通常即亮度 Y）。
  *
  * 红线遵守：纯前端零外发；件内自注册；报告无 emoji（● ✓ ▸ × ✗ ⚠）；

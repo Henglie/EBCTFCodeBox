@@ -1,5 +1,5 @@
 /*
- * edu-t396a-family.js — T396-A 拆族 20 op 科普卡（paillier/dsa/schnorr/ed25519/x25519 族 + geffe 双件）。
+ * edu-t396a-family.js — 拆族 20 op 科普卡（paillier/dsa/schnorr/ed25519/x25519 族 + geffe 双件）。
  * 格式契约见 eduContent.js 头注释：纯数据、无 import、无副作用。每卡 aka ≥10 条真实别名。
  */
 export default {
@@ -111,7 +111,10 @@ export default {
     what: "Ed25519 签名：对消息产出 64 字节签名 R||S（RFC 8032）。",
     principle: "$r = \\mathrm{SHA512}(\\mathrm{prefix} \\| M)$ 派生确定性 nonce，$R = r \\cdot B$，$k = \\mathrm{SHA512}(R \\| A \\| M)$，$S = (r + k \\cdot \\mathrm{scalar}) \\bmod L$。签名只依赖消息与私钥，不依赖随机数——杜绝了 nonce 重用类事故。",
     usage: "输入消息（text 口径），填私钥（32B hex）。输出签名 64B hex 与公钥。",
-    examples: [{ in: "ed-msg", param: "priv=密钥对私钥", out: "签名 (64B) = …\\n公钥 = …", desc: "同输入同输出（确定性）" }],
+    examples: [
+      { in: "ed-msg", param: "priv=密钥对私钥", out: "签名 (64B) = …\\n公钥 = …", desc: "同输入同输出（确定性）" },
+      { in: "（空消息）", param: "priv=9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60", out: "公钥 = d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a\\n签名 (64B) = e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b", desc: "RFC 8032 §7.1 TEST 1 官方向量（空消息），例值已实跑核对，自检验签 ✓" },
+    ],
     tips: ["签名 64 字节 = R(32B)+S(32B)，CTF 里直接按位切。", "确定性意味着可以离线复现签名——出题人常用这一点设坑。", "SHA512 是 Ed25519 的一部分，别换成 SHA256。"],
     aka: ["Ed25519 签名", "ed25519 sign", "EdDSA 签名", "爱德华曲线签名", "ed25519 数字签名", "RFC 8032 签名", "ed25519 64字节签名", "Ed25519 R S", "ed25519 signature", "curve25519 签名", "ed25519 消息签名", "ed25519 签名 CTF"],
   },
@@ -135,7 +138,7 @@ export default {
     what: "X25519 双方私钥路径：各自输入私钥，本工具直接演示共享密钥的推导结果。",
     principle: "共享秘密 $K = \\mathrm{X25519}(\\mathrm{privA}, \\mathrm{pubB}) = \\mathrm{X25519}(\\mathrm{privB}, \\mathrm{pubA})$——DH 对称性。协议里双方只交换公钥，K 从不在信道上出现；再经 KDF 派生会话密钥。",
     usage: "填双方私钥（32B hex）。输出共享密钥 K（32B hex）。",
-    examples: [{ in: "（无需输入）", param: "privA/privB 各 32B hex", out: "共享密钥 K = …", desc: "等价于双方各自 X25519(自己私钥, 对方公钥)" }],
+    examples: [{ in: "（无需输入）", param: "privA=77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a, privB=5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb", out: "公钥 A = 8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a\\n公钥 B = de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f\\n共享 K (A·pkB) = 4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742\\n共享 K (B·pkA) = 4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742（两侧一致）", desc: "RFC 7748 §6.1 官方测试向量，例值已实跑核对（另经 OpenSSL 独立实现交叉验证）" }],
     tips: ["演示口径：真协议中双方各自算，K 相同即交换成功。", "K 要过 KDF 才能当对称密钥用，不能直接拿 K 加密。", "小阶点（u=0/1 等）会得到全零 K——这是 X25519 的已知坑，标准实现要检查。"],
     aka: ["X25519 共享密钥", "x25519 shared secret", "Curve25519 DH", "X25519 密钥交换", "x25519 双方私钥", "Diffie-Hellman X25519", "x25519 协商密钥", "RFC 7748 密钥交换", "X25519 ECDH", "x25519 会话密钥", "x25519 共享秘密", "X25519 对称推导"],
   },

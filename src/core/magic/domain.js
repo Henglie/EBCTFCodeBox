@@ -133,7 +133,7 @@ export function isAutoCandidateExcluded(op) {
   if (op.requiresBridge) return true;
   if (op.noAuto) return true;
   if (REPORT_TYPE_OPS.has(op.id)) return true;
-  if (op.acceptsBytes && !op.textTransit) return true; // textTransit=文本中转 op（MT656 契约），仍参与一键解码
+  if (op.acceptsBytes && !op.textTransit) return true; // textTransit=文本中转 op（契约），仍参与一键解码
   return false;
 }
 

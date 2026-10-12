@@ -67,6 +67,9 @@ export function ppDecode(src) {
   // 找第一个 and print chr 锚点；其前为随机前缀（丢弃）
   const isAnchor = (j) => tokens[j] === "and" && tokens[j + 1] === "print" && tokens[j + 2] === "chr";
   while (i + 2 < tokens.length && !isAnchor(i)) i++;
+  if (!(i + 2 < tokens.length)) {
+    throw new Error("ppencode：输入中未找到「and print chr」锚点，可能不是 ppencode 编码文本");
+  }
   while (i + 2 < tokens.length) {
     if (!isAnchor(i)) throw new Error("结构错误：期望 and print chr 位于 token " + i);
     i += 3; // 消费 and print chr
@@ -79,9 +82,10 @@ export function ppDecode(src) {
     }
     if (!hex) throw new Error("结构错误：chr 后无关键字");
     const c = ppRev.get(hex);
+    if (c === undefined) throw new Error("关键字组合不在 PPEncode 字典中");
     bytes.push(c);
   }
-  return new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(bytes));
+  return new TextDecoder("utf-8", { fatal: false, ignoreBOM: true }).decode(new Uint8Array(bytes));
 }
 
 register({

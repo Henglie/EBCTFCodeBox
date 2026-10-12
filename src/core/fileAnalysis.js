@@ -27,8 +27,10 @@ import { decodePngPixels, decodeBmpPixels, lsbReport } from "./lsbExtract.js";
 import { pngChunkCrcReport } from "./pngChunks.js";
 import { extractExif, extractXmp } from "./imgMeta.js";
 import { MAGIC_TABLE, identifyMagic } from "./trailerCarve.js";
-import { inflateRaw, analyzePcapBytes } from "./pcapDeep.js";
-import { analyzeTrafficBytes } from "./trafficReadable.js"; // 拖入 pcap/pcapng 时追加「人类可读结论」
+// 惰载：trafficReadable（102KB）退出首屏静态面，拖入 pcap 时再动态加载；
+// pcapDeep 仅静态引 inflateRaw（OOXML deflate 分支在同步链上），其余按需。
+import { inflateRaw } from "./pcapDeep.js";
+const _trafficChain = () => import("./trafficReadable.js");
 // 复用（单向 import，绝不改这些模块）：
 // invisibles.js — scan/strip/countByType（不可见字符结构化 API）
 // stegoText.js — zwScan（零宽扫描完整报告，供 view 详情）
@@ -951,10 +953,10 @@ function controlByteRatio(sub) {
 
 // 编码嗅探：Windows 中文文档常是 GBK/GB18030，直接按 UTF-8 解会满屏问号（U+FFFD）。
 // 策略：① UTF-8 fatal 能整段解出 → 就是 UTF-8（最常见、最可信）；
-//       ② 二进制流（控制字节多）直接 latin1——gb18030 码空间近乎全覆盖，会把随机字节
-//          误映射成生僻汉字（U+FFFD 极少），必须先用控制字节比率挡住，否则满屏假中文；
-//       ③ 像文本的非 UTF-8：试东亚编码，取 U+FFFD 最少者；
-//       ④ 全都大量乱码 → 回退 latin1。
+//      ② 二进制流（控制字节多）直接 latin1——gb18030 码空间近乎全覆盖，会把随机字节
+//         误映射成生僻汉字（U+FFFD 极少），必须先用控制字节比率挡住，否则满屏假中文；
+//      ③ 像文本的非 UTF-8：试东亚编码，取 U+FFFD 最少者；
+//      ④ 全都大量乱码 → 回退 latin1。
 // 返回 { text, enc }。enc 供 strings 提取复用（避免重复嗅探）。
 function sniffDecodeText(bytes, max = 4 * 1024 * 1024) {
   const n = Math.min(bytes.length, max);
@@ -1088,7 +1090,7 @@ function clearZipPseudoEnc(bytes) {
 // bytes: Uint8Array / number[]，name: 文件名（带扩展名）
 // 返回 report 对象
 // ============================================================
-export function analyzeFile(bytes, name = "") {
+export async function analyzeFile(bytes, name = "") { // pcap 人话结论惰载（trafficReadable 动态引入）
  // 兼容 number[] / Uint8Array
   if (!bytes || bytes.length === 0) {
     return {
@@ -1144,6 +1146,7 @@ export function analyzeFile(bytes, name = "") {
 
  // 2. pcap/pcapng 协议级分析（拖入即跑 TCP 重组/HTTP 提取/DNS 隧道/ICMP 载荷，免去手动逐个 op）
   if (detected && (detected.ext === "pcap" || detected.ext === "pcapng")) {
+    const [{ analyzePcapBytes }, { analyzeTrafficBytes }] = await Promise.all([import("./pcapDeep.js"), _trafficChain()]);
     const pcapSections = analyzePcapBytes(u8a);
     for (const s of pcapSections) sections.push(s);
     // 追加人类可读结论：USB 键鼠还原 / HTTP·DNS·TLS 摘要 / MQTT 主题表 / flag 与明文
@@ -1202,7 +1205,7 @@ export function analyzeFile(bytes, name = "") {
   }
 
  // 5.0 OOXML（docx/xlsx/pptx）正文：zip 内 XML 是 deflate 压缩的，直接扫字节只见压缩流乱码。
- //     解压对应部件 → 剥 XML 标签 → 抽正文文本（中文 flag/情报在此才现真身）。
+ //    解压对应部件 → 剥 XML 标签 → 抽正文文本（中文 flag/情报在此才现真身）。
   const ooxml = checkOoxmlText(u8a, detected);
   if (ooxml) {
     const bn = baseName(name);

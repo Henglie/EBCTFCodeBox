@@ -47,7 +47,11 @@ const M32 = 0xffffffff;
 function rotl(x, n) { return ((x << n) | (x >>> (32 - n))) >>> 0; }
 
 function hexToBytes(s) {
-  const clean = s.replace(/[^0-9a-fA-F]/g, "");
+  // 仅容忍空白（粘贴换行/空格），其余非法字符显式报错（不再静默剥离）
+  const clean = String(s).replace(/\s+/g, "");
+  if (/[^0-9a-fA-F]/.test(clean)) {
+    throw new Error("hashLengthExtension：hex 输入含非法字符（仅允许 0-9a-fA-F 和空白）：" + String(s).trim().slice(0, 60));
+  }
   if (clean.length % 2) throw new Error("hex 长度需为偶数");
   const out = new Uint8Array(clean.length / 2);
   for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);
@@ -438,7 +442,7 @@ register({
   id: "hashLengthExtension",
   cat: "crypto",
   name: "哈希长度扩展攻击（MD5/SHA1/SHA256）",
-  desc: "Merkle-Damgård 弱点：从 H(secret) 和 len(secret) 构造 H(secret||padding||append) 而不知 secret。MD5/SHA-1/SHA-256 全部纯 JS 落地（内部 state 反推 + 续压），无需 hashpump",
+  desc: "Merkle-Damgård 弱点：从 H(secret) 和 len(secret) 构造 H(secret||padding||append) 而不知 secret。MD5/SHA-1/SHA-256 全部纯 JS 落地（内部 state 反推 + 续压），无需 hashpump。输入按显式 hex 解析，任意非 hex 字符显式报错",
   params: [
     {
       key: "algo", label: "算法", type: "select", default: "md5",

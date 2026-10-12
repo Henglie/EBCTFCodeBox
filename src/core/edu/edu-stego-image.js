@@ -13,18 +13,22 @@ export default {
   },
 
   arnoldCat: {
-    what: "Arnold 猫脸变换：一种把正方形图像像素「搅乱」的置换，反复搅够多次会神奇地还原成原图（周期性）。CTF 里用来打乱/复原隐藏图像。",
+    what: "Arnold 猫脸变换：把图像像素「搅乱」的可逆置换，反复搅够周期次数会还原成原图（周期性）。支持正方形与任意矩形 M×N，可选逐通道置乱。CTF 里用来打乱/复原隐藏图像。",
     principle:
-      "对 N×N 图像每个像素坐标做线性变换 $(x,y)\\to(2x+y,\\ x+y)\\bmod N$，像素被搬到新位置。这个映射是双射且有周期 T——迭代 T 次后每个像素回到原位，图像复原。",
-    usage: "输入正方形图像和迭代次数：正向置乱打乱图像；继续迭代到周期 T 即复原。",
+      "对每个像素坐标做线性变换 $(x,y)\\to(x+ay,\\ bx+(ab+1)y)\\bmod N$（推广矩阵 $[[1,a],[b,ab+1]]$，$a=b=1$ 退化为经典形，det=1 故可逆），像素被搬到新位置。这个映射是双射且有周期 T——迭代 T 次后每个像素回到原位，图像复原。矩形 M×N 图像按行模/列模分置：先 $x'=(x+ay)\\bmod W$、再 $y'=(y+b x')\\bmod H$（det=1 矩阵的两次剪切，每步都是模平移双射，合成可逆；方阵时与闭式矩阵完全一致）。注意坐标约定：本工具默认首坐标=列；Python img[row][col] 类参考实现多为行优先（首坐标=行），勾「行优先约定」即可对齐，a/b 无需换序。「逐通道置乱」对齐流通脚本 img[:,:,i] 的逐 R/G/B 独立置乱语义（alpha 通道不动）。",
+    usage: "输入图像（正方形或任意矩形 M×N）和迭代次数：正向置乱打乱图像；继续迭代到周期 T 或勾「反向还原」复原。对 Python/MATLAB 流通脚本产物，按来源选约定（行优先/列优先）并按需勾逐通道。",
     examples: [
       { in: "N×N 图像", param: "迭代 k 次", out: "置乱后的图像", desc: "再迭代 T−k 次还原" },
+      { in: "参考实现打乱的 N×N 图", param: "行优先+反向还原，原 a/b，1 次", out: "原图复原", desc: "约定对齐后参数无需换序" },
+      { in: "300×500 矩形图", param: "反向还原，行列模数按宽高分置", out: "原图复原", desc: "矩形走两次剪切构造，双射可逆" },
+      { in: "MATLAB/GitHub 实验脚本逐通道打乱的彩色图", param: "勾逐通道置乱，按脚本填 a/b/约定", out: "原图复原", desc: "R/G/B 各平面独立置乱，alpha 不动" },
     ],
     formulas: [
       { tex: "\\begin{pmatrix}x'\\\\y'\\end{pmatrix}=\\begin{pmatrix}2&1\\\\1&1\\end{pmatrix}\\begin{pmatrix}x\\\\y\\end{pmatrix}\\bmod N", caption: "Arnold 猫脸变换矩阵" },
+      { tex: "x'=(x+ay)\\bmod W,\\ y'=(y+b x')\\bmod H", caption: "矩形 M×N：行模/列模分置（两次剪切）" },
     ],
-    tips: ["图像明显被块状打乱、且是正方形 → 试 Arnold。不知迭代次数就一直迭代，肉眼看到某次突然清晰就是复原点。"],
-    aka: ["arnold变换", "猫脸变换", "arnold cat map", "图像置乱", "Arnold Cat Map", "阿诺德变换", "猫映射", "arnold scrambling", "像素置乱", "图像还原变换"],
+    tips: ["图像明显被块状打乱、且是正方形 → 试 Arnold。不知迭代次数就一直迭代，肉眼看到某次突然清晰就是复原点。", "Python 猫脸脚本打乱的图在这里解不出？多半是行/列约定不同：勾「行优先约定」，a/b 按原值填、反向还原 1 次，无需换序也无需迭代到周期。", "矩形图也能直接解：猫脸变换不限于正方形，行列模数按宽高分置。流通脚本多只支持正方形，遇到矩形置乱图先怀疑广义猫脸。", "GitHub/MATLAB 图像加密实验代码常逐通道置乱（img[:,:,i] 各跑一遍猫脸）——遇到对应产物勾「逐通道置乱」对齐（alpha 通道不参与）。"],
+    aka: ["arnold变换", "猫脸变换", "arnold cat map", "图像置乱", "Arnold Cat Map", "阿诺德变换", "猫映射", "arnold scrambling", "像素置乱", "图像还原变换", "行优先约定", "arnold行优先", "逐通道置乱", "arnold逐通道", "矩形猫脸变换", "arnold矩形图像"],
   },
 
   imageBasic: {
@@ -136,18 +140,19 @@ export default {
   },
 
   arnoldCatBrute: {
-    what: "Arnold 猫脸暴破：当你不知道猫脸变换的参数（a/b/迭代次数）时，穷举全部组合逐个反向还原，把候选结果拼成一张网格图，肉眼扫一遍就能找到复原图。",
+    what: "Arnold 猫脸暴破：当你不知道猫脸变换的参数（a/b/迭代次数）时，穷举全部组合逐个反向还原，把候选结果拼成一张网格图，肉眼扫一遍就能找到复原图。可双约定同扫（列优先∪行优先）。",
     principle:
-      "参数化 Arnold 矩阵为 $\\begin{pmatrix}1&a\\\\b&ab+1\\end{pmatrix}\\bmod N$（行列式为 1，可逆）。正向 $\\begin{pmatrix}x'\\\\y'\\end{pmatrix}=M\\begin{pmatrix}x\\\\y\\end{pmatrix}$，反向用逆矩阵 $M^{-1}=\\begin{pmatrix}ab+1&-a\\\\-b&1\\end{pmatrix}$。暴力破解对 a、b、次数三个维度做嵌套遍历，每组参数把图逆变换并缩略排列到网格。",
-    usage: "上传正方形图，设定 a/b/次数的起止范围（默认 a:1-3、b:1-3、次数:1-5 共 45 组合），输出候选网格图。组合数上限 2000，别贪大。",
+      "参数化 Arnold 矩阵为 $\\begin{pmatrix}1&a\\\\b&ab+1\\end{pmatrix}\\bmod N$（行列式为 1，可逆）。正向 $\\begin{pmatrix}x'\\\\y'\\end{pmatrix}=M\\begin{pmatrix}x\\\\y\\end{pmatrix}$，反向用逆矩阵 $M^{-1}=\\begin{pmatrix}ab+1&-a\\\\-b&1\\end{pmatrix}$。暴力破解对 a、b、次数三个维度做嵌套遍历，每组参数把图逆变换并缩略排列到网格。约定枚举维：列优先（首坐标=列）与行优先（首坐标=行）两套坐标约定分别反向还原，行优先候选标签尾带 r。",
+    usage: "上传正方形图，设定 a/b/次数的起止范围（默认 a:1-3、b:1-3、次数:1-5 共 45 组合），输出候选网格图。约定可疑时勾「枚举行优先约定」，每个 (a,b,t) 组合再按行优先跑一遍。组合数上限 2000，别贪大。",
     examples: [
       { in: "置乱图", param: "a:1-3 b:1-3 次数:1-5", out: "45 格候选网格图", desc: "复原图在网格中的某格" },
+      { in: "行优先脚本置乱图", param: "默认范围 + 勾枚举行优先约定", out: "候选标签尾带 r 的网格", desc: "双约定同扫，约定不漏" },
     ],
     formulas: [
       { tex: "M=\\begin{pmatrix}1&a\\\\b&ab+1\\end{pmatrix},\\ M^{-1}=\\begin{pmatrix}ab+1&-a\\\\-b&1\\end{pmatrix}\\pmod N", caption: "参数化 Arnold 矩阵与逆矩阵" },
     ],
-    tips: ["题只给图没给参数 → 先默认范围扫一遍；出现边缘溢出/网格破碎的就是候选。a=b=1 是标准猫脸（退化情形）。图必须正方形。"],
-    aka: ["arnold暴破", "猫脸暴破", "arnold brute force", "猫脸破解", "arnold参数破解", "猫脸暴力破解", "arnold穷举", "猫脸穷举", "arnold crack", "猫脸还原"],
+    tips: ["题只给图没给参数 → 先默认范围扫一遍；出现边缘溢出/网格破碎的就是候选。a=b=1 是标准猫脸（退化情形）。图必须正方形。", "扫不出候选且约定可疑（Python 参考脚本多为行优先口径）→ 勾「枚举行优先约定」双约定同扫，标签尾 r 即行优先候选。"],
+    aka: ["arnold暴破", "猫脸暴破", "arnold brute force", "猫脸破解", "arnold参数破解", "猫脸暴力破解", "arnold穷举", "猫脸穷举", "arnold crack", "猫脸还原", "arnold约定枚举", "猫脸暴破行优先"],
   },
 
   stegpy: {

@@ -60,3 +60,6 @@ mickey_oracle.obj
 /mcp/extension_bridge.py
 /mcp/extension_worker.mjs
 /mcp/worker/
+
+# ── 本地投递目录（恒烈桌面交付物中转，不入库）──
+/桌面/

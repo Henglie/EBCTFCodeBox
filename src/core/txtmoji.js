@@ -23,6 +23,7 @@
 import { register } from "./registry.js";
 import { aesEncrypt, aesDecrypt } from "./modern.js";
 import { md5Bytes } from "./hash.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 const te = new TextEncoder();
 const td = (bytes) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(bytes));
@@ -99,10 +100,7 @@ function bytesToKey(password, salt, output = 48) {
 const SALTED = new Uint8Array([0x53, 0x61, 0x6c, 0x74, 0x65, 0x64, 0x5f, 0x5f]); // "Salted__"
 
 function randomBytes(n) {
-  const arr = new Uint8Array(n);
-  if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(arr);
-  else for (let i = 0; i < n; i++) arr[i] = Math.floor(Math.random() * 256);
-  return arr;
+  return randBytes(n);
 }
 
 // ---------- emoji 串 → base64 本体（decode 第一步）----------

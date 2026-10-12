@@ -251,7 +251,9 @@ function lyra2Run(text, p = {}) {
   const saltEnc = p.saltEnc || "utf8";
   const pass = decodeInput(text, passEnc);
   const salt = decodeInput(p.salt != null ? p.salt : "", saltEnc);
-  const tCost = parseInt(p.tCost, 10) || 2;
+  const tCostRaw = p.tCost != null && String(p.tCost).trim() !== "" ? String(p.tCost).trim() : null;
+  const tCost = tCostRaw !== null ? parseInt(tCostRaw, 10) : 2;
+  if (tCostRaw !== null && (!Number.isInteger(tCost) || tCost <= 0)) throw new Error("lyra2：tCost 必须为正整数");
   const mCost = parseInt(p.mCost, 10) || 4;
   const nCols = parseInt(p.nCols, 10) || 256;
   const kLen = parseInt(p.kLen, 10) || 32;

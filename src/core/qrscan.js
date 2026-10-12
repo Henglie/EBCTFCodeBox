@@ -504,9 +504,9 @@ function scanGrayDiag(gray, w, h, opt = {}) {
         conf.push(row);
       }
       // 两道判据，先严后宽：
-      //   严 —— 「重编码回同一码字流」（编码确定性，可彻底排除过纠正假成功；容量闸已在
-      //         qrErasureDecode.reencodeMatches 内按 ISO/IEC 18004 §6.4 前置）；
-      //   宽 —— 退化为「纯擦除纠正」替代判据（eras ≥ err）+ 精确容量闸。
+      //  严 —— 「重编码回同一码字流」（编码确定性，可彻底排除过纠正假成功；容量闸已在
+      //        qrErasureDecode.reencodeMatches 内按 ISO/IEC 18004 §6.4 前置）；
+      //  宽 —— 退化为「纯擦除纠正」替代判据（eras ≥ err）+ 精确容量闸。
       // 先严后宽：能过严判据的解证据最强；严判据不适用的场合（如原编码器的分段方式与
       // 本工具箱不同）再用宽判据兜住，二者都过不了就宁可不报。
       let r2 = null, err = null;
@@ -704,7 +704,13 @@ function scanGray(gray, w, h, opt = {}) {
 async function tryZxing(rgba, w, h, opt = {}) {
   if (!rgba || !w || !h) return null;
   try {
-    const hits = await zxingReadRgba(rgba, w, h, { formats: qrZxingFormatsOf(opt.formats) });
+    const formats = qrZxingFormatsOf(opt.formats);
+    let hits = await zxingReadRgba(rgba, w, h, { formats });
+    if (!hits || !hits.length) {
+      // 二段重试：tryDownscale 对「生成型锐利 1D 条码」会把模块缩糊导致读不出
+      //（拍照大图找小码的优化，对满幅条码反有害）；空结果时关掉再扫一次，仅失败路径付代价。
+      hits = await zxingReadRgba(rgba, w, h, { formats, tryDownscale: false });
+    }
     if (!hits || !hits.length) return null;
     // 放开读码范围后**二维码仍排最前**：本 op 的主语义是二维码，其余符号（条码/DataMatrix/
     // PDF417/Aztec）在诊断报告里逐个列出。若不做这步，「全部格式」会把 Aztec 之类顶到第一条，

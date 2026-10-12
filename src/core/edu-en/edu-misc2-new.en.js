@@ -174,6 +174,44 @@ export default {
       "音频反相", "时间倒放", "音频倒放", "倒放音频", "一阶差分", "阈值位流", "pcm波形"],
   },
 
+  barcodeGen: {
+    what: "Barcode generation: renders text into Code128 / EAN-13 / DataMatrix PNG barcodes (non-QR), verifiable via the built-in scanner. The auto mode picks the symbology from the content.",
+    principle:
+      "The engine is bwip-js (a JS port of the BWIPP PostScript barcode library); its raw interface supplies module geometry and the tool draws the PNG itself:\n\n" +
+      "1. Code128: switches automatically among code sets A/B/C (dense digit runs use set C, two digits per codeword); codewords = start + data + mod-103 check + stop, output as a bar-space width sequence (sbs)\n" +
+      "2. EAN-13: a 12-digit input gets its mod-10 check digit appended; a 13-digit input is verified first; guard bars are extended using BWIPP includetext geometry\n" +
+      "3. DataMatrix: arbitrary text (Chinese included) is encoded into a module matrix with ECC 200 Reed-Solomon error correction, square sizes from 10×10 upward\n\n" +
+      "The PNG includes a quiet zone: 10-11 modules for 1D by default, 2 for DataMatrix — a missing quiet zone is the most common cause of scan failures.",
+    usage: "Enter the content and pick the symbology (auto/code128/ean13/datamatrix). Code128 accepts printable ASCII only; EAN-13 digits only (12 digits get the check digit appended); DataMatrix takes any text. Output is a downloadable PNG plus a report (module width / codeword sequence / check digit). Verify by scanning it back with the QR/barcode scanner.",
+    examples: [
+      { in: "EBCTF{barcode_not_qr}", param: "sym=code128", out: "barcode_code128.png + codeword sequence and check character" },
+      { in: "211234567890", param: "sym=auto", out: "check digit 0 appended → barcode_ean13.png" },
+      { in: "示例文本123", param: "sym=datamatrix", out: "barcode_datamatrix.png (reads back via scanner)" },
+    ],
+    tips: ["Code128 rejecting non-ASCII is deliberate: BWIPP could encode Latin-1 via FNC4 but scanner support is poor; use DataMatrix for Chinese.", "Cropping away the quiet zone or blurry rescaling are the two top reasons a generated code fails to scan; regenerate with a larger module width.", "When the EAN-13 check digit is wrong the error names the correct value — drop the last digit and let the tool fill it in."],
+    aka: ["barcode", "barcode generator", "code128", "ean13", "datamatrix", "条码生成", "条形码", "ean-13 generator", "dm generation", "gs1 barcode"],
+  },
+
+  sstv: {
+    what: "SSTV (slow-scan television) encode/decode: recovers Martin M1 / Robot36 images from SSTV signals in WAV files — ham-radio transmissions, audio attachments, synthesized audio hiding a picture. Also synthesizes SSTV WAV from RGB data.",
+    principle:
+      "SSTV \"paints\" an image into audio line by line: each pixel maps luminance/chroma to a tone between 1500-2300Hz, with a 1200Hz sync pulse at each line start; a 300ms leader tone + VIS code (7-bit mode number + odd parity) announces the mode.\n\n" +
+      "decode (fully original receive chain):\n" +
+      "1. Quadrature down-conversion to complex baseband + Hamming-windowed complex low-pass FIR + polyphase decimation (working rate ≤11025Hz)\n" +
+      "2. Phase-difference FM discrimination → instantaneous-frequency stream, 5-point median despike + 3ms smoothing\n" +
+      "3. VIS header: 1900Hz leader → bit decisions at 1100/1300Hz with odd parity + stop-bit checks\n" +
+      "4. Per-line re-sync: line sync runs searched within ±15ms of the predicted position; the inter-line clock ratio ρ (EMA-smoothed) scales pixel duration — tolerant to ±2% TX/RX clock offset\n" +
+      "5. Pixel value = (f−1500)/800×255; Martin color order G,B,R; Robot36 luma Y + even-line Cr / odd-line Cb (BT.601 full range)\n\n" +
+      "encode aligns with pySSTV item by item (frequencies/timing/color coefficients) and interops with pySSTV output.",
+    usage: "decode: drop in a WAV (integer PCM 8/16/24/32-bit, 6k-384k sample rate); VIS and mode are auto-detected, output is a PNG plus diagnostics (clock ratio / parity / stop bit / line-sync hits). encode: feed RGB hex exactly matching the mode size (320×256 or 320×240), pick mode/rate/bit depth, get a WAV. Scottie/PD and other modes, plus float/compressed WAV, are rejected explicitly.",
+    examples: [
+      { in: "(an SSTV WAV attachment)", param: "(decode side, no parameters)", out: "sstv_decoded.png (flag hidden in the picture) + VIS/line-sync diagnostics" },
+      { in: "(RGB hex of a 320×256 image)", param: "mode=Martin M1 rate=44100", out: "sstv_encoded.wav" },
+    ],
+    tips: ["Diagonal tearing usually means large clock offset — this decoder self-calibrates via the clock ratio; check the reported ratio against 1 for residual skew.", "Robot36 chroma smears below ~10dB SNR (chroma is only 0.1375ms/pixel, a physical bandwidth limit); the luma outline stays readable.", "Scottie/PD headers are rejected explicitly rather than guessed; use the real mode for those."],
+    aka: ["sstv", "slow scan television", "martin m1", "robot36", "robot 36", "sstv decode", "sstv image", "sstv wav", "sstv encoder", "ham radio image"],
+  },
+
   spectrogram: {
     what: "Audio spectrogram (STFT): turns a WAV into a spectrogram PNG so you can see a flag/text painted into the audio frequency domain with your eyes — no Audacity needed. A CTF audio-stego killer.",
     principle:

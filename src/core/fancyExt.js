@@ -529,7 +529,7 @@ register({
   detect: (t) => (/^[+\-\s]+$/.test(t.trim()) && /[+\-]/.test(t) && t.trim().replace(/\s/g, "").length % 10 === 0 ? 0.5 : 0),
 });
 
-// ── T502 dCode 逐字节兼容路径（产品负责人 2026-09-12 批准三开关；默认关闭=存量口径零变化）──
+// ── dCode 逐字节兼容路径（产品负责人 2026-09-12 批准三开关；默认关闭=存量口径零变化）──
 const scytaleDcodeEncode = (plain, N, { pad = "|", strip = false } = {}) => {
   if (!Number.isSafeInteger(N) || N < 1) throw new Error("密钥须为正安全整数");
   const t = strip ? String(plain).replace(/[^A-Za-z0-9]/g, "") : String(plain);

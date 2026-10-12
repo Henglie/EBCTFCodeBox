@@ -108,17 +108,6 @@ export default {
     aka: ["base 62", "b62", "Base62", "base62编码", "base62 encode", "六十二进制", "字母数字编码", "短链接编码", "0-9A-Za-z", "base62解码"],
   },
 
-  base64url: {
-    what: "base64 的 URL 安全版：把 `+ /` 换成 `- _`，去掉或保留 `=`。JWT 的每一段就是它。",
-    principle: "编码规则和 base64 完全一样，只是最后两个字符换成 URL 里不需要转义的 `-` 和 `_`。",
-    usage: "粘 base64url 文本解码。看到 JWT（三段用 . 分隔）时，每段单独用它解。",
-    examples: [
-      { in: "SGVsbG8_d29ybGQ", out: "Hello?world", desc: "用了 _，且无 = 补齐" },
-    ],
-    tips: ["出现 - 或 _ 而没有 + /，是 base64url 的标志。JWT 各段都是它。"],
-    aka: ["base64 url", "url safe base64", "b64url"],
-  },
-
  // ============ 文本 / 传输编码 ============
   url: {
     what: "URL 百分号编码：把 URL 里不能直接出现的字符（空格、中文、符号）写成 `%` 加两位十六进制。Web 题最常见。",

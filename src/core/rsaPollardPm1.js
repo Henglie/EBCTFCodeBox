@@ -1,5 +1,5 @@
 /*
- * rsaPollardPm1.js — RSA Pollard p-1 分解（T296，cat:'analysis'，单向 run）。
+ * rsaPollardPm1.js — RSA Pollard p-1 分解（cat:'analysis'，单向 run）。
  *
  * 原理：若 RSA 模数 N 的某素因子 p 满足 p-1 是 B-光滑（p-1 的所有素数幂因子 ≤ B）
  * 令 M = ∏_{q≤B, q prime} q^floor(log_q B)，则 p-1 | M。

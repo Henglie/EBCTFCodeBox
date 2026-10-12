@@ -302,7 +302,7 @@ function trailerReport(bytes, fmt) {
   const pad = isPadding(bytes, end, bytes.length);
   lines.push(`附加数据: ${tail} 字节${pad ? "（疑似全 0x00/0xFF 填充）" : ""}`);
 
- // 附加数据开头魔数识别；命中时整段尾挂数据走 files 协议给下载按钮（T507 P1）
+ // 附加数据开头魔数识别；命中时整段尾挂数据走 files 协议给下载按钮（P1）
   const idMagic = identifyMagic(bytes, end);
   let carvedFile = null;
   if (idMagic) {

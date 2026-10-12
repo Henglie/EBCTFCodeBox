@@ -1,5 +1,5 @@
 /*
- * primeGen.js — 大素数生成 + 素性检验（T277 P1，cat:'radix'）。
+ * primeGen.js — 大素数生成 + 素性检验（P1，cat:'radix'）。
  *
  * 算法：Miller-Rabin 概率素性检验（确定性版本，对 n < 3.3e24 用前 13 个质数做 witness 足够）。
  * 生成：随机奇数 → Miller-Rabin → 不通过则 +2 重试，直到找到素数。
@@ -14,6 +14,7 @@
  * run 单向，输入忽略，参数 bits/count，输出素数十进制列表（每行一个）。
  */
 import { register } from "./registry.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // Miller-Rabin 素性检验（确定性版本）
@@ -91,7 +92,7 @@ function randomOddBigInt(bits) {
   if (bits < 2) throw new Error("位数至少 2");
   const bytes = Math.ceil(bits / 8);
   const buf = new Uint8Array(bytes);
-  crypto.getRandomValues(buf);
+  buf.set(randBytes(buf.length));
  // 转为 BigInt
   let n = 0n;
   for (const b of buf) n = (n << 8n) | BigInt(b);
@@ -151,7 +152,7 @@ register({
 });
 
 // ============================================================
-// 素性检验 op（T346 批E2 追加：不动上方任何既有逻辑/导出）
+// 素性检验 op（批E2 追加：不动上方任何既有逻辑/导出）
 // ============================================================
 
 // 前 64 个质数（第 64 个 = 311），供 n 超过确定性界后按轮数取固定基。

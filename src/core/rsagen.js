@@ -1,5 +1,5 @@
 /*
- * rsagen.js — RSA 密钥对生成 + DER/PEM 导出（T344 批A1，cat:'modern'）
+ * rsagen.js — RSA 密钥对生成 + DER/PEM 导出（批A1，cat:'modern'）
  *
  * 标准依据（照标准实现，不编造）：
  * - PKCS#1 v2.2 = RFC 8017 (2016-11)
@@ -65,7 +65,7 @@ function modInv(a, m) {
 }
 
 // ============================================================
-// DER 编解码（ITU-T X.690）— 纯函数，T350 PEM/JWK 层复用
+// DER 编解码（ITU-T X.690）— 纯函数，供 PEM/JWK 层复用
 // ============================================================
 
 /**
@@ -398,7 +398,7 @@ const PEM_TYPE_OPTIONS = [
   { value: "spki", label: "公钥 SPKI（PUBLIC KEY，RFC 5280）" },
 ];
 
-// T362 产物协议（2026-09-02）：下载文件格式选项——PEM 主交付，DER/JWK 为次级（产品裁决，
+// 产物协议（2026-09-02）：下载文件格式选项——PEM 主交付，DER/JWK 为次级（产品裁决，
 // 下拉选项走注册表 select 参数即项目原生风格）。JWK 按 RFC 7518 §6.3.1 全 CRT 参数。
 const DL_FORMAT_OPTIONS = [
   { value: "pem", label: "仅 PEM（私钥 + 公钥两个 .pem）" },
@@ -449,7 +449,7 @@ register({
       lines.push("", "提示：512/1024 位已被现实攻破（教学演示用），真实场景至少 2048 位。");
     }
 
-    // T362 产物协议（2026-09-02）：私钥 / 公钥分开交付（产品裁决）——PEM 主按钮，
+    // 产物协议（2026-09-02）：私钥 / 公钥分开交付（产品裁决）——PEM 主按钮，
     // DER / JWK 按 dlFormat 追加。文本区的 PEM 保持所选 pemType 不变。
     const fmtRaw = String(p?.dlFormat ?? "pem");
     const fmt = DL_FORMAT_OPTIONS.some((o) => o.value === fmtRaw) ? fmtRaw : "pem";

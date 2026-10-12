@@ -1,4 +1,4 @@
-// English edu shard: gap-fill batch (T284).
+// English edu shard: gap-fill batch .
 // Covers 9 ops:
 // analysis: usbKeyboard, usbMouse, sevenZipExtract
 // classic: goldbug
@@ -55,7 +55,7 @@ export default {
     aka: ["GoldBug", "Kidd cipher", "金甲虫", "Poe cipher", "金甲虫密码", "the gold bug", "爱伦坡密码", "Kidd船长密码", "symbol substitution", "符号替换密码", "gold-bug cipher", "基德密码"],
   },
 
- // ============ stego: text steganography (5 ops added in T278) ============
+ // ============ stego: text steganography (5 ops added in ) ============
   acrostic: {
     what: "Acrostic steganography — hide a secret message in the first letter of each line (or sentence/word).",
     principle: "When encoding, each character of the message is placed at a chosen position (head/tail/mid) of each cover unit (line/sentence/word). When decoding, take the character at that position from every unit and join them to get the hidden message. The acrostic is a classical Chinese literary tradition, and CTF often features the 'read the first character of each line' style.",

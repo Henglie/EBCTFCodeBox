@@ -1,4 +1,4 @@
-// 科普内容分片：工具类三件（radixAll / progCalc / unitConv，T337-T339 归并批）。纯数据，无 import 无副作用。
+// 科普内容分片：工具类三件（radixAll / progCalc / unitConv，归并批）。纯数据，无 import 无副作用。
 // 示例里的 in/out 全部是 node 直跑真实输出摘录，未编造。
 export default {
   radixAll: {

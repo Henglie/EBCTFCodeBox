@@ -76,11 +76,14 @@ function qqgo(cc) {
   return s;
 }
 
-// 简→繁（traditionalized，用 charPYStr/ftPYStr）
+// 前缀为网络异体字替换；其后才是简繁对照表。两方向须使用同一边界。
+const jianfanStart = charPYStr.indexOf("万与丑专业丛");
+
+// 简→繁（traditionalized，用 charPYStr/ftPYStr 的简繁段）
 function traditionalized(cc) {
   let s = "";
   for (const ch of cc) {
-    const idx = charPYStr.indexOf(ch);
+    const idx = charPYStr.indexOf(ch, jianfanStart);
     s += idx !== -1 ? ftPYStr[idx] : ch;
   }
   return s;
@@ -90,7 +93,7 @@ function traditionalized(cc) {
 function simplized(cc) {
   let s = "";
   for (const ch of cc) {
-    const idx = ftPYStr.indexOf(ch);
+    const idx = ftPYStr.indexOf(ch, jianfanStart);
     s += idx !== -1 ? charPYStr[idx] : ch;
   }
   return s;
@@ -152,7 +155,7 @@ register({
   id: "jianfan",
   cat: "cn",
   name: "简繁转换",
-  desc: "简体↔繁体转换（charPYStr/ftPYStr 映射表）",
+  desc: "简体↔繁体转换（charPYStr/ftPYStr 字级映射表）：完全正确的简繁转换依赖词义与上下文，本表为字级映射，存在地区字形与异体字差异（如「发→發/髮」需人工判别）",
   encode: (t) => traditionalized(t),
   decode: (t) => simplized(t),
   detect: detectJianfan,

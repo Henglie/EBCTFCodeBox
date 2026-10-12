@@ -23,6 +23,7 @@
  */
 
 import { register } from "./registry.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ---- splitmix64 PRNG（可复现，非密码学安全） ----
 function makeRng(seed) {
@@ -81,7 +82,19 @@ register({
     { key: "tableRows", label: "过程表显示行数", type: "number", default: 32 },
   ],
   run: (_text, p) => {
-    const n = Math.max(8, Math.min(4096, Math.floor(Number(p?.n) || 128)));
+    for (const key of ["sampleRatio", "threshold"]) {
+      if (p?.[key] != null && !Number.isFinite(Number(p[key]))) throw new Error(key + " 必须为有限数值");
+    }
+    // 光子数 n：显式提供时须为 ≥1 的有限数值（越域报错，不静默截断/回落默认值）；
+    // 未提供或留空 → 默认 128。上界 4096 保持原硬上限（防大 n 卡死）。
+    let n = 128;
+    if (p?.n != null && String(p.n).trim() !== "") {
+      const nv = Number(p.n);
+      if (!Number.isFinite(nv) || nv < 1) {
+        throw new Error("发送光子数 n 须为 1~4096 的数值，得到 " + p.n);
+      }
+      n = Math.min(4096, Math.floor(nv));
+    }
     const err = Math.max(0, Math.min(1, Number(p?.err) || 0));
     const eve = Math.max(0, Math.min(1, Number(p?.eve) || 0));
     const sampleRatio = Math.max(0.05, Math.min(1, Number(p?.sampleRatio ?? 0.5)));
@@ -94,8 +107,7 @@ register({
     if (seedStr != null) {
       seed = hashSeed(seedStr);
     } else {
-      const b = new Uint8Array(8);
-      crypto.getRandomValues(b);
+      const b = randBytes(8); // 统一随机源（默认 system 档与原 crypto.getRandomValues 等价）
       seed = 0n;
       for (const x of b) seed = (seed << 8n) | BigInt(x);
     }
@@ -162,9 +174,9 @@ register({
     L.push(`③ Bob 随机基测量完成`);
     L.push(`④ 公开比对基矢：双方基相同 ${sifted.length} 位（期望 ≈ n/2 = ${Math.round(n / 2)}）→ 筛后密钥`);
     L.push(`⑤ 抽样公开比对 ${sampled.length} 位：不一致 ${mism} 位 → 实测 QBER = ${(qber * 100).toFixed(2)}%`);
-    L.push(`   理论 QBER ≈ (eve/4 + (1-eve)×err) × 100% = ${((eve / 4 + (1 - eve) * err) * 100).toFixed(2)}%`);
+    L.push(`   理论 QBER ≈ (eve/4 + (1-eve/2)×err) × 100% = ${((eve / 4 + (1 - eve / 2) * err) * 100).toFixed(2)}%`);
     L.push(`⑥ 判定：${eveDetected ? "⚠ QBER 超门限——Eve 被检出，本次密钥作废（真实协议中止并换信道）" : "QBER 在门限内，未检出窃听"}`);
-    L.push(`⑦ 删除抽样位后剩余 ${finalBits.length} 位为最终共享密钥`);
+    L.push(`⑦ 删除抽样位后 Alice 剩余 ${finalBits.length} 位候选密钥（未执行纠错/隐私放大）`);
     L.push("");
     if (eveDetected) {
       L.push(`最终密钥：（已作废——Eve 被检出）`);

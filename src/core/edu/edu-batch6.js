@@ -1,5 +1,5 @@
 /*
- * edu-batch6.js — 科普补缺分片（T284）。
+ * edu-batch6.js — 科普补缺分片（）。
  *
  * 覆盖 9 个新增 op 的科普卡：
  * analysis: usbKeyboard, usbMouse, sevenZipExtract
@@ -61,7 +61,7 @@ export default {
     aka: ["GoldBug", "Kidd cipher", "金甲虫", "Poe cipher", "金甲虫密码", "the gold bug", "爱伦坡密码", "Kidd船长密码", "symbol substitution", "符号替换密码", "gold-bug cipher", "基德密码"],
   },
 
- // ============ stego: 文本隐写（T278 新增 5 op）============
+ // ============ stego: 文本隐写（新增 5 op）============
   acrostic: {
     what: "藏头诗隐写——把秘密消息藏在每行（或每句/每词）的首字母里。",
     principle: "编码时把消息的每个字符替换到载体每个单元（行/句/词）的指定位置（首/尾/中）。解码时取每个单元的指定位置字符拼起来就是隐藏消息。藏头诗是中文古典文学传统，CTF 里常见于'每行第一个字连起来读'的题型。",

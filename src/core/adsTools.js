@@ -16,7 +16,7 @@
  *   {u16 名长, UTF-16LE 名, u64 流大小} 配对）。流数据本体按 Info-ZIP 口径
  *   以独立条目「宿主:流名」存放（Windows 资源管理器压缩口径）。
  *
- * 复用：pcapDeep.js inflateRaw（deflate 解压，T346 先例）；crc32 自带（zipCreate 同款表）。
+ * 复用：pcapDeep.js inflateRaw（deflate 解压，先例）；crc32 自带（zipCreate 同款表）。
  * 不参与 magic（返回对象，Worker 红线无冲突）；files 产物协议（下载按钮）。
  */
 import { register } from "./registry.js";

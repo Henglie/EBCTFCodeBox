@@ -300,4 +300,4 @@ register({
 });
 
 export { ecdsaReuseKRun, recoverK, recoverD, ecMul, ecPointAdd, ecPointDouble, ecToAffine, CURVES, modInverse, mod };
-// ↑ 2026-09-02 T345 补充导出 ecPointAdd / ecPointDouble（ecdsa.js 点运算复用；仅加导出名，逻辑零改动）
+// ↑ 2026-09-02 补充导出 ecPointAdd / ecPointDouble（ecdsa.js 点运算复用；仅加导出名，逻辑零改动）

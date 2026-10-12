@@ -25,11 +25,11 @@ export function parseSbox(text) {
   return box;
 }
 
-/** 差分分布表：ddt[a][b] = #{x : S(x)⊕S(x⊕a) = b}（a,b ∈ 0..15） */
+/** 差分分布表：ddt[a][b] = #{x : S(x)⊕S(x⊕a) = b}（a,b ∈ 0..15，含 a=0 → DDT[0][0]=16） */
 export function ddtOf(box) {
   const ddt = Array.from({ length: 16 }, () => new Array(16).fill(0));
-  for (let x = 0; x < 16; x++) {
-    for (let a = 1; a < 16; a++) {
+  for (let a = 0; a < 16; a++) {
+    for (let x = 0; x < 16; x++) {
       const b = box[x] ^ box[x ^ a];
       ddt[a][b]++;
     }
@@ -37,19 +37,20 @@ export function ddtOf(box) {
   return ddt;
 }
 
-/** 线性逼近表：lat[α][β] = #{x : α·x ⊕ β·S(x) = 0} - 8（偏差，α,β ∈ 0..15） */
+/** 线性逼近表：lat[α][β] = #{x : α·x ⊕ β·S(x) = 0} - 8（偏差，α,β ∈ 0..15，含 α=β=0 → 8） */
 export function latOf(box) {
   const lat = Array.from({ length: 16 }, () => new Array(16).fill(0));
-  for (let x = 0; x < 16; x++) {
-    for (let a = 1; a < 16; a++) {
-      for (let b = 1; b < 16; b++) {
+  for (let a = 0; a < 16; a++) {
+    for (let b = 0; b < 16; b++) {
+      let count = 0;
+      for (let x = 0; x < 16; x++) {
         const pa = popcount(a & x) & 1;
         const pb = popcount(b & box[x]) & 1;
-        if ((pa ^ pb) === 0) lat[a][b]++;
+        if ((pa ^ pb) === 0) count++;
       }
+      lat[a][b] = count - 8;
     }
   }
-  for (let a = 1; a < 16; a++) for (let b = 1; b < 16; b++) lat[a][b] -= 8;
   return lat;
 }
 function popcount(v) {
@@ -76,8 +77,8 @@ function spnOp(text, p = {}) {
   const fmt = (t) => t.map((r) => r.map((v) => (v < 0 ? String(v) : " " + v).padStart(3)).join(" ")).join("\n");
   return (
     "S 盒：" + box.map((v) => v.toString(16)).join(" ") + "\n\n" +
-    "● 差分分布表 DDT（行=Δin 1-15，列=Δout 0-15）：\n" + fmt(ddt) + "\n\n" +
-    "● 线性逼近表 LAT（行=输入掩码，列=输出掩码；值=偏差，范围 -8..8）：\n" + fmt(lat) + "\n\n" +
+    "● 差分分布表 DDT（行=Δin 0-15，列=Δout 0-15；DDT[0][0]=16）：\n" + fmt(ddt) + "\n\n" +
+    "● 线性逼近表 LAT（行=输入掩码 0-15，列=输出掩码 0-15；值=偏差，范围 -8..8）：\n" + fmt(lat) + "\n\n" +
     "● 最强差分：Δin=" + bestD.a.toString(16) + " → Δout=" + bestD.b.toString(16) +
     "，计数 " + bestD.c + "/16（概率 " + (bestD.c / 16).toFixed(2) + "）\n" +
     "● 最强线性：掩码 " + bestL.a.toString(16) + " → " + bestL.b.toString(16) +

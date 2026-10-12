@@ -1,5 +1,5 @@
 /*
- * customImplClient.js — MT72 自定义算法主线程调度端（照 magicClient 的三层防护模式）。
+ * customImplClient.js — 自定义算法主线程调度端（照 magicClient 的三层防护模式）。
  *
  * 执行策略（红线：沙箱 + 超时，防死循环冻页面）：
  *  1. Worker 优先：module Worker 独立 realm 跑用户代码（realm 内已抹掉网络/存储能力），主线程零阻塞；
@@ -7,8 +7,13 @@
  *  3. 降级主线程：环境无 Worker / 模块 Worker 不可用（老浏览器、file:// 限制、CSP）→ 主线程同步执行。
  *     ⚠ 降级路径只有词法遮蔽，没有 realm 隔离，也无法硬杀死循环。返回值里带 sandbox:"main"，
  *       调用方（编辑器状态条）必须如实告诉用户，别让人以为一直在沙箱里。
+ *  4. 增强随机性生效时（非 system 档 / 鼠标熵辅助已开）：把「档位配置 + 服务器预取池快照」
+ *     随请求送进 Worker，Worker 端用同一份 randSource 复现同源取数（H.randBytes 跟随档位）。
+ *     **沙箱隔离与超时硬杀全部保留**——不把执行赶到主线程（那是 op 运行器的做法，因为它没法
+ *     把配置传进 Worker；自定义实现这边可以，故不做这个牺牲）。
  */
-import { runCustomImpl } from "./customImpl.js";
+import { runCustomImpl, buildHelpers } from "./customImpl.js";
+import { getRandConfig, randomBytes as randSourceBytes, isMouseAuxOn, snapshotServerPool } from "./randSource.js";
 
 let _worker = null;
 let _workerBroken = false;   // 创建/加载失败后永久走主线程降级，不反复试错
@@ -16,7 +21,24 @@ let _seq = 0;
 const _pending = new Map();  // runId → settle 回调（Worker 被杀时统一收尾，不留悬挂 Promise）
 let _running = false;
 
-/** 死循环看门狗时长。2s（与 compress.js TIMEOUT_MS 同量级；MT72 需求写「700ms 级」是下限参考）。 */
+/** 「增强随机性」是否生效（非 system 档，或鼠标熵辅助已开）。 */
+export function randEnhanced() {
+  try { return getRandConfig().mode !== "system" || isMouseAuxOn(); } catch { return false; }
+}
+
+/** 主线程可用的随机提供者：直连统一随机源（跟随当前档位 / 预取池 / 鼠标熵辅助）。 */
+const _mainRandProvider = (n) => randSourceBytes(n);
+
+/**
+ * 打包当前随机源配置 + 服务器预取池快照，随请求送进 Worker（结构化克隆安全）。
+ * Worker 端据此复现同一随机源 —— 沙箱隔离与超时硬杀全部保留，不必把执行赶到主线程。
+ */
+function buildRandSpec() {
+  const c = getRandConfig();
+  return { mode: c.mode, seed: c.seed, mouse: c.mouse, mouseOn: c.mouseOn, serverPool: snapshotServerPool() };
+}
+
+/** 死循环看门狗时长。2s（与 compress.js TIMEOUT_MS 同量级；需求文档写「700ms 级」是下限参考）。 */
 export const CUSTOM_TIMEOUT_MS = 2000;
 
 function spawnWorker() {
@@ -56,9 +78,10 @@ function killWorker() {
   }
 }
 
-/** 主线程直跑（降级路径 / Worker 不可用时）。 */
+/** 主线程直跑（降级路径 / Worker 不可用 / 增强随机性生效时）。 */
 function runOnMainThread(req) {
-  const res = runCustomImpl(req);
+  // 主线程直连统一随机源 → H.randBytes 跟随「增强随机性」当前档位。
+  const res = runCustomImpl({ ...req, helpers: buildHelpers(_mainRandProvider) });
   return res.ok
     ? { ok: true, out: res.out, sandbox: "main" }
     : { ok: false, error: res.error, line: res.line ?? null, phase: res.phase || null, reason: res.reason || null, sandbox: "main" };
@@ -75,6 +98,12 @@ export function runCustomWithTimeout(req) {
   const { code, dir, input, params, rawBytes } = req;
   const timeoutMs = Number(req.timeoutMs) > 0 ? Number(req.timeoutMs) : CUSTOM_TIMEOUT_MS;
   const plain = { code, dir, input, params: params || {}, rawBytes: rawBytes || null };
+
+  // 增强随机性生效时，把「档位配置 + 服务器预取池快照」随请求送进 Worker：
+  // Worker 端用同一份 randSource 复现同源取数，H.randBytes 跟随所选档位。
+  // **沙箱隔离与超时硬杀全部保留**（不必像 op 那样把执行赶到主线程）。
+  const randSpec = randEnhanced() ? buildRandSpec() : null;
+  if (randSpec) plain.randSpec = randSpec;
 
   const worker = spawnWorker();
   if (!worker) return Promise.resolve(runOnMainThread(plain));

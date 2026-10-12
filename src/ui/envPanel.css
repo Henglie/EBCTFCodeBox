@@ -342,3 +342,9 @@
 @media (hover: none) {
   .env-reset-btn, .env-reset-btn-cancel, .env-reset-btn-ok { min-height: 44px; }
 }
+
+/* 环境面板内「增强随机安全」一节（控件样式主体在 app.css，此处仅本区容器） */
+.env-rand-box { border-top: 1px solid var(--outline); padding-top: var(--sp-3); }
+.rand-note { color: var(--on-surface-var); font-size: var(--fs-xs); line-height: 1.6; }
+.rand-body { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-1); }
+.env-rand-box .rand-mode-badge { align-self: flex-start; }

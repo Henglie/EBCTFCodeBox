@@ -98,7 +98,7 @@ export default function setup(ctx) {
 
 **`ctx.plugin`** — 冻结的自身信息快照 `{id, name, version}`。
 
-**`ctx.registerCustomImpl(opId, preset)`** — 给「高级 · 自定义实现」预设下拉塞一条 CTF 魔改模板（MT72）。`opId` 传 op id 则只对该 op 可见，传 `null` 对全部 op 可见；`preset` 形如 `{ id, name, code }`，`code` 是用户可编辑的 JS 源码文本，运行时以 `(input, rawBytes, params, dir, H)` 为形参在 Worker 沙箱里执行（约定见 `src/core/customImpl.js` 文件头）。预设 id 自动加 `<插件id>/` 前缀防撞，卸载插件时自动摘除。也支持单参写法 `ctx.registerCustomImpl({id, name, code, opId})`。
+**`ctx.registerCustomImpl(opId, preset)`** — 给「高级 · 自定义实现」预设下拉塞一条 CTF 魔改模板。`opId` 传 op id 则只对该 op 可见，传 `null` 对全部 op 可见；`preset` 形如 `{ id, name, code }`，`code` 是用户可编辑的 JS 源码文本，运行时以 `(input, rawBytes, params, dir, H)` 为形参在 Worker 沙箱里执行（约定见 `src/core/customImpl.js` 文件头）。预设 id 自动加 `<插件id>/` 前缀防撞，卸载插件时自动摘除。也支持单参写法 `ctx.registerCustomImpl({id, name, code, opId})`。
 
 ```js
 ctx.registerCustomImpl("base64", {
@@ -171,7 +171,7 @@ CTF 自造编码通常归 `fancy`；中文本土编码归 `cn`；古典密码归
 
 ## 8. 完整参考插件
 
-`src/plugin/examples/hello-cipher/index.js` 是活样板，演示 `registerOp` / `addCategory` / `addMessages`（含新语言 ja）/ `registerDecoder` / `registerAiProvider` / `registerCustomImpl`（MT72 自定义实现预设：一条绑定 base64、一条全局可见）全部能力面。照抄改名即可起步。
+`src/plugin/examples/hello-cipher/index.js` 是活样板，演示 `registerOp` / `addCategory` / `addMessages`（含新语言 ja）/ `registerDecoder` / `registerAiProvider` / `registerCustomImpl`（自定义实现预设：一条绑定 base64、一条全局可见）全部能力面。照抄改名即可起步。
 
 在插件面板点「加载示例」即可启用它，验证注册、菜单出现、i18n 切换、卸载回收全链路。
 

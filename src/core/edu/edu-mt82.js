@@ -1,4 +1,4 @@
-// 科普内容分片：MT82 批新增 15 op（gifTiming/jpgSizeRecover/zipRepair/zipPseudoEncrypt/stringsExtract/jwtCrack/
+// 科普内容分片：批新增 15 op（gifTiming/jpgSizeRecover/zipRepair/zipPseudoEncrypt/stringsExtract/jwtCrack/
 // zstegScan/pdfObjects/ooxmlMeta/apkManifest/elfInfo/peInfo/lsbEmbed/zipCreate/deepsoundExtract）。纯数据，无 import 无副作用。
 export default {
   gifTiming: {
@@ -104,23 +104,6 @@ export default {
       "本工具只做弱密钥小字典演示，不做大规模爆破——高熵密钥请用 hashcat -m 16500（https://hashcat.net）或 John the Ripper 的 JWT 格式离线跑。",
     ],
     aka: ["jwt 爆破", "jwt 密钥爆破", "jwt 破解", "jwt secret 爆破", "jwt 弱密钥", "jwt crack", "jwt dictionary attack", "hs256 爆破", "hs256 crack", "hs384", "hs512", "hmac jwt 爆破", "jwt 字典攻击", "jwt 弱口令", "json web token 爆破"],
-  },
-
-  zstegScan: {
-    what: "PNG/BMP 的 LSB 隐写组合空间大（位平面×通道×位序×行列），本工具一次全试并按可读性排序。",
-    principle:
-      "按有界组合逐一提取 2048 字节：位平面 bit 0..maxBit × 通道 {r,g,b,rgb,bgr} × 位序 {msb,lsb} × 遍历 {行/列优先}。\n\n" +
-      "打分：字母/空格 +1.0、数字 +0.6、换行 +0.4、ASCII 标点 +0.3、控制字符 -3.0、其余 +0.1 取平均；含花括号再 +0.5，命中 flag 正则再 +5.0，降序取前 8。",
-    usage: "上传 PNG/BMP，默认只试 bit0 十组合（快），可疑再开 maxBit 到 7 并勾列优先（最多 160 组合）。flagRegex 可自定义命中加成。",
-    examples: [
-      { in: "R-LSB 行优先 MSB 嵌入 flag{lsb} 的图", out: "#1 [5.869] bit0 r msb → flag{zsteg_demo_2026}", desc: "命中组合自动排第一" },
-    ],
-    tips: [
-      "报告里分数断崖式领先的组合即命中。",
-      "全组合都没料时考虑 JPEG 载体（有损格式无稳定 LSB）或看 fileAnalysis 的 LSB 报告。",
-      "与本库 lsbExtract（固定排列手工看）互补，本 op 是自动打分版。",
-    ],
-    aka: ["zsteg", "zsteg 扫描", "lsb 扫描", "lsb 全组合扫描", "位平面扫描", "lsb steganography scan", "最低有效位扫描", "位平面隐写", "lsb 组合爆破", "通道扫描", "bit plane scan", "lsb 提取扫描", "隐写自动扫描", "png lsb 扫描", "bmp lsb 扫描"],
   },
 
   pdfObjects: {

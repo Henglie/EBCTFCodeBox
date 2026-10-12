@@ -1,5 +1,5 @@
 /*
- * edu-modern-new.js — 科普补缺分片（T310，现代加密 + 哈希/派生）。
+ * edu-modern-new.js — 科普补缺分片（现代加密 + 哈希/派生）。
  *
  * 覆盖 5 个真实缺失 op 的科普卡：
  * modern: rabbit, flashSwirl

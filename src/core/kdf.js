@@ -24,7 +24,10 @@ const toHex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0"
 function parseBytes(str, fmt) {
   str = str || "";
   if (fmt === "hex") {
-    const s = str.replace(/[^0-9a-fA-F]/g, "");
+    // 原实现 `replace(/[^0-9a-fA-F]/g,"")` 会静默丢弃表外字符（"zz"→空盐仍出哈希），
+    // 违反「按固定格式读、不符即报错」。改为：仅容忍空白分隔，其余非 hex / 奇长度一律报错。
+    const s = str.replace(/\s+/g, "");
+    if (s.length % 2 !== 0 || /[^0-9a-fA-F]/.test(s)) throw new Error("十六进制格式非法：须为偶数个 hex 字符（可含空白分隔）");
     const out = new Uint8Array(s.length >> 1);
     for (let i = 0; i < out.length; i++) out[i] = parseInt(s.substr(i * 2, 2), 16);
     return out;
@@ -121,7 +124,7 @@ register({
 // input = 密文（hex 或 base64），口令字典逐行 → PBKDF2 派生 key → AES 解密 → crib/可打印率判定。
 // 覆盖 openssl enc -aes-256-cbc -pbkdf2 及一般 PBKDF2+AES 场景。
 // 参数：salt/saltFormat、iterations、hash、keyBits(128/192/256)、mode(CBC/ECB)、
-//       ivHex（CBC 用，默认全0）、cipherFormat(hex/base64)、crib、wordlist（多行口令，input 为空时用内置小字典）。
+//      ivHex（CBC 用，默认全0）、cipherFormat(hex/base64)、crib、wordlist（多行口令，input 为空时用内置小字典）。
 function _hexToBytes(s) {
   const clean = String(s).replace(/[^0-9a-fA-F]/g, "");
   const out = new Uint8Array(clean.length >> 1);

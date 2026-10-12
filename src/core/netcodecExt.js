@@ -1,5 +1,5 @@
 /*
- * netcodecExt.js — 网络编码扩展组（T95，cat:'text' / 'analysis'）。
+ * netcodecExt.js — 网络编码扩展组（cat:'text' / 'analysis'）。
  *
  * 覆盖：
  * - urlQueryParse URL query 解析（? 后的 k=v&k=v，percent-decode，支持数组同名键）。run 单向。
@@ -9,7 +9,7 @@
  * - magnetParse magnet 链接解析（xt/dn/tr/xl 等参数拆解，btih 提取）。run 单向。
  *
  * 与已有区分：
- * - netcodec.js（T49）已有 ipv4Int/ipv6Format/macFormat/cidrCalc/userAgentParse（IP/MAC/UA 类）。
+ * - netcodec.js已有 ipv4Int/ipv6Format/macFormat/cidrCalc/userAgentParse（IP/MAC/UA 类）。
  * - 本组是应用层 HTTP/URI 文本解析，无 id 冲突。
  *
  * 红线：纯算法无外部依赖；percent-decode 用 decodeURIComponent 容错；base64 用 atob/btoa（浏览器）
@@ -179,6 +179,16 @@ function parseMagnet(text) {
   if (!m) throw new Error("非法 magnet 链接（需 magnet:?...）");
   const query = m[1];
   const pairs = query.split("&").filter(Boolean);
+ // BEP-005：xt（精确主题，如 urn:btih:<哈希>）为 magnet URI 必需字段，缺失/空值显式报错
+  const hasXt = pairs.some((pair) => {
+    const eq = pair.indexOf("=");
+    const k = (eq < 0 ? pair : pair.slice(0, eq)).replace(/\.\d+$/, "");
+    const v = eq < 0 ? "" : pair.slice(eq + 1);
+    return k === "xt" && v.trim() !== "";
+  });
+  if (!hasXt) {
+    throw new Error("非法 magnet 链接：缺少必需字段 xt（BEP-005 规定 xt 为精确主题 URI，如 urn:btih:<40 位哈希>，必填）");
+  }
   const labels = {
     xt: "精确主题 (xt)",
     dn: "显示名 (dn)",

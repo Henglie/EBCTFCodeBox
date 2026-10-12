@@ -1,5 +1,5 @@
 /*
- * archiveUnified.js — 压缩 / 归档归一入口（T262，cat:'analysis'）。
+ * archiveUnified.js — 压缩 / 归档归一入口（cat:'analysis'）。
  *
  * 定位：现有 compress.js（gzip/zlib/deflate/zip/tar 识别）+ sevenzip.js（7z）
  * 分散，本文件做「压缩归档」统一入口 façade：

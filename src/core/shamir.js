@@ -32,6 +32,7 @@
  * 契约：register({id, cat:"modern", name, desc, params, encode, decode})。
  */
 import { register } from "./registry.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // GF(2^8) 运算表（约化多项式 0x11B，生成元 0x03）
@@ -106,7 +107,7 @@ function gfLagrangeAt0(xs, ys) {
 // 编解码工具
 // ============================================================
 const te = (s) => new TextEncoder().encode(s);
-const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(b));
+const td = (b) => new TextDecoder("utf-8", { fatal: false, ignoreBOM: true }).decode(new Uint8Array(b));
 
 function byteHex(n) {
   return (n & 0xff).toString(16).padStart(2, "0");
@@ -149,7 +150,7 @@ function shamirSplit(text, p = {}) {
   for (let bi = 0; bi < secret.length; bi++) {
     const coeffs = new Uint8Array(k);
     coeffs[0] = secret[bi]; // 常数项 = 秘密字节
-    crypto.getRandomValues(rnd); // 随机高次系数（信息论安全）
+    rnd.set(randBytes(rnd.length)); // 随机高次系数（信息论安全）
     for (let c = 1; c < k; c++) coeffs[c] = rnd[c - 1];
     for (let x = 1; x <= n; x++) {
       shareBytes[x - 1][bi] = gfPolyEval(coeffs, x);
@@ -169,9 +170,14 @@ function shamirSplit(text, p = {}) {
 function shamirCombine(text, p = {}) {
   const shares = [];
   const seenX = new Set();
+  let headerK = 0; // 头部注释声明的阈值 k（# shamir k=<k> n=<n>）
   for (const raw of String(text).split(/\r?\n/)) {
     const line = raw.trim();
-    if (!line || line.startsWith("#")) continue;
+    if (!line || line.startsWith("#")) {
+      const hm = line.match(/^#\s*shamir\s+k=(\d+)/);
+      if (hm) headerK = parseInt(hm[1], 10);
+      continue;
+    }
     const m = line.match(/^([0-9a-fA-F]{1,2})\s*[:\-]\s*([0-9a-fA-F\s]+)$/);
     if (!m) throw new Error(`分片格式错误（应为 "x:hex"）：${line.slice(0, 40)}`);
     const x = parseInt(m[1], 16);
@@ -181,6 +187,9 @@ function shamirCombine(text, p = {}) {
     shares.push({ x, y: hexToBytes(m[2]) });
   }
   if (shares.length < 2) throw new Error("至少需要 2 份分片");
+  if (headerK >= 2 && shares.length < headerK) {
+    throw new Error(`shamir：分片不足——头部注明阈值 k=${headerK}，仅提供 ${shares.length} 份，少于 k 份无法还原秘密（强行插值只会得到错误结果）`);
+  }
   const len = shares[0].y.length;
   for (const s of shares) {
     if (s.y.length !== len) throw new Error("各分片长度不一致（可能混入了不同秘密的分片）");

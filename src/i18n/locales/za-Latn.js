@@ -1071,7 +1071,6 @@ export default {
   "ui.ds.customBadge": "Gaij le (cihdinh)",
   "ui.home.strengthBtn": "Cienghdo Geijmah",
 
- // ---- 2026-08-26 解冻新增（暂填中文，待外包译文替换）----
   "ui.op.fontDec": "Siu iq cehauc",
   "ui.op.fontInc": "Bungx henh cehauc",
   "ui.exhaust.branchCount": "{0} aen fenci",

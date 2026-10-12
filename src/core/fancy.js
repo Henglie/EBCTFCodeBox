@@ -15,9 +15,9 @@ const A_UP = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 // ============ 摩斯电码 ============
 // 码表照抄 WhatsInYourClipboard encodedText.js + 常用标点（ITU-R M.1677）
 // 码表来源：ITU-R M.1677-1 §1.1 的封闭清单 + 以下非 ITU 扩展（已逐条核验）：
-//   常见但非官方：! ; & _ $
-//   本工具自加：{ } * # %   （其中 # 在 ITU 清单中无对应码）
-//   注意：& (.-...) 与 % (...-.-) 的码值分别与 ITU 的 prosign「等待」「结束工作」同形，语义不同。
+//  常见但非官方：! ; & _ $
+//  本工具自加：{ } * # %   （其中 # 在 ITU 清单中无对应码）
+//  注意：& (.-...) 与 % (...-.-) 的码值分别与 ITU 的 prosign「等待」「结束工作」同形，语义不同。
 // 类外字符（非 '.'/'-' 且非本表码）按「整 token 忽略」处置，不产出字符。
 const MORSE = {
   ".-": "A", "-...": "B", "-.-.": "C", "-..": "D", ".": "E", "..-.": "F",
@@ -62,7 +62,7 @@ function morseDecode(text) {
     word.trim().split(/\s+/).filter(Boolean).map((c) => {
       if (MORSE[c]) return MORSE[c];
    // ④ 非纯点划 token = 类外输入：按「忽略」处置，该 token 不产出任何字符
-   //    （此前把任何非 '.' 字符都当作 '1' 位，故 '#' 会静默解出 U+0001 控制字符）
+   //   （此前把任何非 '.' 字符都当作 '1' 位，故 '#' 会静默解出 U+0001 控制字符）
       if (!/^[.\-]+$/.test(c)) return "";
    // ⑤ 未知纯点划码回退：'.'→0 '-'→1 → 16 位二进制 → chr（参考实现行为，仅对纯点划生效）
       const bin = [...c].map((ch) => (ch === "." ? "0" : "1")).join("").padStart(16, "0");
@@ -115,8 +115,8 @@ function railFenceEncode(text, p) {
   if (rails < 2 || rails >= text.length) return text;
   const rows = new Array(rails).fill("");
   let r = 0, dir = 1;
-  for (let i = 0; i < text.length; i++) {
-    rows[r] += text[i];
+  for (const ch of text) {   // 按码点迭代：text[i] 是 UTF-16 码元，非 BMP 字符（emoji 等）代理对会被拆散打乱
+    rows[r] += ch;
     if (r === 0) dir = 1;
     else if (r === rails - 1) dir = -1;
     r += dir;
@@ -126,7 +126,8 @@ function railFenceEncode(text, p) {
 function railFenceDecode(text, p) {
   const rails = Math.max(2, Number((p && p.rails) || 2));
   if (rails < 2 || rails >= text.length) return text;
-  const len = text.length;
+  const chars = [...text];   // 按码点切分（与 encode 的 for-of 对称），避免代理对被拆散
+  const len = chars.length;
  // 算 W 型 pattern
   const pattern = new Array(len);
   let r = 0, dir = 1;
@@ -143,7 +144,7 @@ function railFenceDecode(text, p) {
   const rows = [];
   let idx = 0;
   for (let i = 0; i < rails; i++) {
-    rows.push(text.slice(idx, idx + counts[i]).split(""));
+    rows.push(chars.slice(idx, idx + counts[i]));
     idx += counts[i];
   }
  // 按 pattern 重组
@@ -166,28 +167,42 @@ function caesarShift(text, shift) {
 }
 // encode +shift，decode -shift（互逆）
 // 递增/递减凯撒：第 x 字符位移 shift±x（参考实现 mode3/mode4 的字母版；非字母原样）
-function caesarProgressive(text, shift, isEncode, isDec) {
-  const s = ((shift % 26) + 26) % 26;
+function caesarProgressive(text, shift, isEncode, isDec, charset) {
+  const mod = charset === "ascii" ? 94 : 26;
+  const s = ((shift % mod) + mod) % mod;
+  const shiftFn = charset === "ascii" ? caesarShiftAscii : caesarShift;
   let out = "";
   for (let x = 0; x < text.length; x++) {
     const delta = isDec ? s - x : s + x;
-    out += caesarShift(text[x], isEncode ? delta : -delta);
+    out += shiftFn(text[x], isEncode ? delta : -delta);
   }
   return out;
+}
+// ASCII 可打印区（33-126，94 字符环，同 ROT47 域）：**全字符**位移——含 _ { } 数字与大小写，
+// 处理「非字母也在动」的凯撒变体题（如 flag{Caesar_variation} ← afZ_r9VYfScOeO_UL^RWUc）。
+// 域外字符（控制符/高位 Unicode）原样透传。
+function caesarShiftAscii(text, s) {
+  return [...text].map((c) => {
+    const code = c.charCodeAt(0);
+    if (code < 33 || code > 126) return c;
+    return String.fromCharCode(33 + ((((code - 33 + s) % 94) + 94) % 94));
+  }).join("");
 }
 function caesarEncode(t, p) {
   const shift = Number((p && p.shift) || 3);
   const mode = (p && p.mode) || "standard";
-  if (mode === "progInc") return caesarProgressive(t, shift, true, false);
-  if (mode === "progDec") return caesarProgressive(t, shift, true, true);
-  return caesarShift(t, shift);
+  const charset = (p && p.charset) || "alpha";
+  if (mode === "progInc") return caesarProgressive(t, shift, true, false, charset);
+  if (mode === "progDec") return caesarProgressive(t, shift, true, true, charset);
+  return charset === "ascii" ? caesarShiftAscii(t, shift) : caesarShift(t, shift);
 }
 function caesarDecode(t, p) {
   const shift = Number((p && p.shift) || 3);
   const mode = (p && p.mode) || "standard";
-  if (mode === "progInc") return caesarProgressive(t, shift, false, false);
-  if (mode === "progDec") return caesarProgressive(t, shift, false, true);
-  return caesarShift(t, -shift);
+  const charset = (p && p.charset) || "alpha";
+  if (mode === "progInc") return caesarProgressive(t, shift, false, false, charset);
+  if (mode === "progDec") return caesarProgressive(t, shift, false, true, charset);
+  return charset === "ascii" ? caesarShiftAscii(t, -shift) : caesarShift(t, -shift);
 }
 
 // ============ ROT 系列 ============
@@ -356,7 +371,7 @@ register({
 });
 
 register({
-  id: "caesar", cat: "classic", name: "凯撒密码", desc: "指定位移量（encode +shift，decode -shift）；mode 可切递增/递减凯撒（第 x 字符位移 shift±x）",
+  id: "caesar", cat: "classic", name: "凯撒密码", desc: "指定位移量（encode +shift，decode -shift）；mode 可切递增/递减凯撒（第 x 字符位移 shift±x）；字符集可切仅字母位移，或 ASCII 可打印区 33-126 全字符位移（处理非字母也在动的变体题）",
   params: [
     { key: "shift", label: "位移量", type: "number", default: 3, placeholder: "1-25" },
     { key: "mode", label: "模式", type: "select", default: "standard",
@@ -364,6 +379,11 @@ register({
         { value: "standard", label: "标准（固定位移）" },
         { value: "progInc", label: "递增凯撒（第 x 字符位移 shift+x）" },
         { value: "progDec", label: "递减凯撒（第 x 字符位移 shift-x）" },
+      ] },
+    { key: "charset", label: "字符集", type: "select", default: "alpha",
+      options: [
+        { value: "alpha", label: "字母（仅 A-Z a-z 位移）" },
+        { value: "ascii", label: "ASCII 可打印（33-126 全字符位移）" },
       ] },
   ],
   encode: (t, p) => caesarEncode(t, p),

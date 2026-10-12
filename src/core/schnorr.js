@@ -28,11 +28,12 @@
  * - 零外发：纯本地 BigInt。core 层零 UI 依赖（仅 registry）。
  * - SHA-256 自带（不依赖未导出的内部实现）。
  *
- * 契约：族滑块四档 op（T396-A）：schnorrKeyGen / schnorrSign / schnorrVerify /
+ * 契约：族滑块四档 op（-A）：schnorrKeyGen / schnorrSign / schnorrVerify /
  *        schnorrReuseK，family:"schnorr"。
  */
 import { register } from "./registry.js";
 import { CURVES, ecMul, ecToAffine, mod, modInverse } from "./ecdsaReuseK.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 自带 SHA-256（同步，纯 JS，FIPS 180-4）
@@ -131,9 +132,23 @@ function parseBig(s, name) {
   try { return /^0x/i.test(t) ? BigInt(t) : BigInt(t); }
   catch { throw new Error(`${name} 不是合法整数：${t}`); }
 }
+// 声明的 hex 字段解析（可带 0x 前缀；纯数字也按 hex 解）
+function parseHexBig(s, name) {
+  const t = String(s == null ? "" : s).trim();
+  if (!t) throw new Error(`缺少参数：${name}`);
+  const h = t.replace(/^0x/i, "").replace(/\s+/g, "");
+  if (!/^[0-9a-fA-F]+$/.test(h)) throw new Error(`${name} 不是合法 hex：${t}`);
+  return BigInt("0x" + h);
+}
+// 标量 hex（须 ∈ [1, n-1]）
+function parseScalarHex(s, name, n) {
+  const v = parseHexBig(s, name);
+  if (v <= 0n || v >= n) throw new Error(`${name} 须 ∈ [1, n-1]（当前 ${v}）`);
+  return v;
+}
 function randScalar() {
   const b = new Uint8Array(32);
-  crypto.getRandomValues(b);
+  b.set(randBytes(b.length));
   return (bytesToBig(b) % (N - 1n)) + 1n;
 }
 
@@ -201,7 +216,7 @@ function recoverPrivFromReusedNonce(e1, s1, e2, s2) {
 }
 
 // ============================================================
-// Schnorr 四档算法族（T396-A，2026-09-04：同族多操作必须族滑块，废除下拉切模式）
+// Schnorr 四档算法族（-A，2026-09-04：同族多操作必须族滑块，废除下拉切模式）
 // family:"schnorr" + familyLabel → fam.lbl.*（keygen/sign/verify 已有主表 key；
 // 攻击档用 attack——需主控在 zh/en i18n 主表新增 fam.lbl.attack）。
 // 底层 schnorrSign/schnorrVerify/recoverPrivFromReusedNonce 实现原样复用，
@@ -220,7 +235,7 @@ register({
   run: () => {
     const d = randScalar();
     const Pt = ecToAffine(ecMul(d, GX, GY, A, P), P);
-    // T362 产物协议（2026-09-02）：私钥 / 公钥分开交付下载按钮（hex 文本）。
+    // 产物协议（2026-09-02）：私钥 / 公钥分开交付下载按钮（hex 文本）。
     return {
       text: [
         "生成密钥对：",
@@ -255,10 +270,10 @@ register({
     const msgMode = (p && p.msgMode) || "text";
     const toMsgBytes = (s) => msgMode === "hex" ? hexToBytes(s) : new TextEncoder().encode(String(s || ""));
     const dRaw = (p && p.priv && String(p.priv).trim());
-    const d = dRaw ? parseBig(dRaw, "私钥 d") : randScalar();
+    const d = dRaw ? parseScalarHex(dRaw, "私钥 d", N) : randScalar();
     const msg = toMsgBytes(text);
     const kRaw = (p && p.nonce && String(p.nonce).trim());
-    const sig = schnorrSign(d, msg, kRaw ? parseBig(kRaw, "nonce k") : null);
+    const sig = schnorrSign(d, msg, kRaw ? parseScalarHex(kRaw, "nonce k", N) : null);
     const lines = [];
     lines.push("=== Schnorr 签名（经典版，secp256k1，挑战 e=H(R.x‖P.x‖m)） ===");
     lines.push("");
@@ -293,10 +308,10 @@ register({
   run: (text, p) => {
     const msgMode = (p && p.msgMode) || "text";
     const toMsgBytes = (s) => msgMode === "hex" ? hexToBytes(s) : new TextEncoder().encode(String(s || ""));
-    const Px = parseBig(p && p.pubX, "公钥 Px");
-    const Py = parseBig(p && p.pubY, "公钥 Py");
-    const e = parseBig(p && p.e, "e");
-    const s = parseBig(p && p.s, "s");
+    const Px = parseHexBig(p && p.pubX, "公钥 Px");
+    const Py = parseHexBig(p && p.pubY, "公钥 Py");
+    const e = parseHexBig(p && p.e, "e");
+    const s = parseHexBig(p && p.s, "s");
     const msg = toMsgBytes(text);
     const ok = schnorrVerify(Px, Py, e, s, msg);
     return [

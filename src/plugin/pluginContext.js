@@ -92,7 +92,7 @@ export function makeContext(manifest, record) {
     },
 
  /**
- * 注册一个「自定义实现」预设（MT72 §5：让插件也能塞 CTF 魔改模板）。
+ * 注册一个「自定义实现」预设（ §5：让插件也能塞 CTF 魔改模板）。
  * 用户在某 op 的「高级 · 自定义实现」编辑器里，预设下拉就会多出这一条，点选即填入代码。
  * @param {?string} opId 只对该 op 可见；传 null / 省略 = 对所有 op 可见
  * @param {{id:string, name:string, code:string}} preset code 是用户可编辑的 JS 源码文本

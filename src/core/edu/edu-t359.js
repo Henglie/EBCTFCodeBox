@@ -1,4 +1,4 @@
-// 科普内容分片：T359 批（v0.1.6beta 收口）34 个新 op 的科普卡——RSA/ECDSA/ML-KEM/证书/CMAC/Ascon/JWT/Flask session 等。
+// 科普内容分片：批（v0.1.6beta 收口）34 个新 op 的科普卡——RSA/ECDSA/ML-KEM/证书/CMAC/Ascon/JWT/Flask session 等。
 // 纯数据，无 import 无副作用。examples 的 out 全部是 node 直跑真实输出摘录（RFC 官方向量已逐字核对），未编造。
 export default {
   rsaGenKeyPair: {
@@ -184,6 +184,7 @@ export default {
       "512 位模数跑不了 SHA-256 以上的 PSS（emLen < hLen+sLen+2 直接报错），换大钥或减盐长。",
       "CTF 经典「Bleichenbacher'06 签名伪造」针对验证端没查 FF 填充长度——验签端逐字节比对的重要性看本工具「RSA 验签」的输出就懂。",
       "签名 ≠ 加密：签的是哈希的编码块，不是明文本身；别拿解密 op 反推 EM 当签名用。",
+      "现实部署提醒：若服务端暴露「无填充原始 RSA 签名/解密预言机」（如 HSM 裸 PKCS#11 操作、盲签名协议），2026 年的 eNFS 攻击（Shea / Haller / Suhl / Heninger / Thomé）可在**不分解模数**的前提下长期离线伪造任意签名。规范使用 PKCS#1 v1.5 / PSS 填充的常规签名不暴露该预言机。",
     ],
     aka: ["rsa签名", "rsa sign", "rsassa", "rsassa-pkcs1-v1_5", "pkcs1 v1.5", "rsassa-pss", "pss签名", "rsa私钥签名", "sha256withrsa", "rsa sha256签名", "openssl dgst -sign", "rsa signature", "消息签名", "数字签名rsa"],
   },
@@ -306,12 +307,12 @@ export default {
     principle:
       "Ascon 是 CAesar 竞赛冠军、NIST 轻量级密码（LWC）标准化项目胜者。AEAD128 用海绵结构：key/nonce 各 16 字节，初始化与终结跑 12 轮置换 p[12]，数据块跑 8 轮 p[8]，rate 128 位，小端字节序。\n\n" +
       "AEAD 的价值在「认证」：加密同时吃 aad（关联数据——不加密但要防篡改的头信息），末尾出 16 字节 tag。解密时 tag 对不上直接报错，密文被改一个 bit 都逃不掉。\n\n" +
-      "注意版本：本工具是 2025 标准版（IV 0x00001000808c0001），与老 Ascon-128 v1.2 的参数互不通用，对拍要认准 SP 800-232。NIST LWC KAT + ACVP 官方向量验证。",
-    usage: "选模式（加密/解密），key 与 nonce 各 16 字节 hex（加密时 nonce 可留空随机），可选 aad（text/hex）与 tag 长度。解密输入完整密文+tag。",
+      "注意版本：本工具是 2025 标准版（IV 0x00001000808c0001），与老 Ascon-128 v1.2 的参数互不通用，对拍要认准 SP 800-232。NIST LWC KAT + ACVP 官方向量验证。本工具加密直接产出可下载的密文字节文件（密文+tag），解密可原样喂入该文件字节，与独立参考实现四路字节闭环。",
+    usage: "选模式（加密/解密），key 与 nonce 各 16 字节 hex（加密时 nonce 可留空随机），可选 aad（text/hex）与 tag 长度。加密输出真正的密文字节产物（密文+tag，可下载；text 为其无损 hex）；解密输入可直接吃该字节产物或完整密文+tag 的 hex。",
     examples: [
-      { in: "ascon", param: "encrypt, key=000102030405060708090a0b0c0d0e0f, nonce=101112131415161718191a1b1c1d1e1f, aad=ascon", out: "密文 = 8d47855a81 / tag = 814432bbec572fe1d419f561d6633385（完整密文+tag: 8d47855a81814432bbec572fe1d419f561d6633385）", desc: "明文与 aad 同为 ascon" },
-      { in: "8d47855a81814432bbec572fe1d419f561d6633385", param: "decrypt, 同 key/nonce/aad", out: "tag 校验: 通过 / 明文 = ascon", desc: "往返自洽" },
-      { in: "上例 tag 改末字节 85→84", param: "decrypt, 同参数", out: "解密失败：tag 校验不符（密文、tag、key、nonce 或 aad 有误，或被篡改）", desc: "篡改即拒" },
+      { in: "ascon", param: "encrypt, key=000102030405060708090a0b0c0d0e0f, nonce=101112131415161718191a1b1c1d1e1f, aad=ascon", out: "密文+tag(hex) = 8d47855a81814432bbec572fe1d419f561d6633385（同时产出可下载文件 ascon-ciphertext.bin，真字节 21 字节）", desc: "明文与 aad 同为 ascon" },
+      { in: "8d47855a81814432bbec572fe1d419f561d6633385（或把 ascon-ciphertext.bin 原样喂入）", param: "decrypt, 同 key/nonce/aad", out: "明文 = ascon", desc: "往返自洽（真字节闭环）" },
+      { in: "上例 tag 改末字节 85→84", param: "decrypt, 同参数", out: "Ascon-AEAD128 解密失败：tag 校验不符（密文、tag、key、nonce 或 aad 有误，或被篡改）", desc: "篡改即拒" },
     ],
     tips: [
       "CTF 里 Ascon 多出现在 IoT/嵌入式题；认 16 字节 key+nonce 与海绵结构。老题若是 v1.2 参数（IV 0x000008080c000001）结果会不同，先确认标准版。",
@@ -415,9 +416,9 @@ export default {
   pemToHex: {
     what: "PEM 转 DER hex：把 `-----BEGIN/END-----` 块的 base64 肉剥出来，得原始 DER 字节（hex 或 hexdump 视图）。",
     principle:
-      "PEM（Privacy-Enhanced Mail，RFC 7468）= 文本标签 + base64 正文（64 字符折行）。本工具做 §6 的「宽松清洗」：剥空白、丢注脚行（如 openssl 证书尾部注释）、跳过 EC PARAMETERS 参数块，再 base64 解码得 DER。\n\n" +
+      "PEM 文本封装（RFC 7468 §2/§3）= 文本标签 + base64 正文；生成器每行 64 字符，末行可短。本工具忽略空白，并按项目兼容规则丢弃含冒号的行、跳过 EC PARAMETERS 参数块，再 base64 解码得 DER；省略 padding 与 URL-safe 字母表也是兼容扩展。\n\n" +
       "只提字节不解析结构——DER 里的 ASN.1 解读交给「PEM→JWK」「X.509 证书解析」这类后续工具。附带规范 base64 与识别出的标签。",
-    usage: "粘贴任意 PEM（标签不限），选输出 hex 或 16 字节 dump。对拍可用 openssl asn1parse / xxd -r -p。",
+    usage: "粘贴 PEM 或导入 UTF-8 PEM 文件（标签不限），选输出 hex 或 16 字节 dump。原始文件字节优先于文本；非法 UTF-8 报错。DER 文件产物可原样交给「DER→PEM」，报告文本不是逆操作输入。对拍可用 openssl asn1parse / xxd -r -p。",
     examples: [
       { in: "-----BEGIN PRIVATE KEY-----（P-256 PKCS#8 私钥）", param: "output=hex", out: "PEM 标签：PRIVATE KEY / DER 字节数：138（0x8a）/ 308187020100301306072a8648ce3d020106082a8648ce3d030107046d306b…（附规范 base64）", desc: "真实运行输出" },
     ],
@@ -430,12 +431,12 @@ export default {
   },
 
   hexToPem: {
-    what: "DER hex 或 base64 封装成 PEM：`-----BEGIN 标签-----` + 64 字符折行 base64 + 结尾，RFC 7468 §5.2 标准格式。",
+    what: "原始 DER 字节、hex 或 base64 封装成 PEM：`-----BEGIN 标签-----` + 64 字符折行 base64 + 结尾，折行依据 RFC 7468 §2。",
     principle:
       "PEM 的正文就是 DER 的 base64：输入按 hex/base64 自动判别（auto 下全 hex 字符按 hex），编码后每 64 字符折一行。\n\n" +
       "标签可选 RSA PRIVATE KEY / PRIVATE KEY / PUBLIC KEY / EC PRIVATE KEY / CERTIFICATE 或自定义——标签只是给人看的，DER 内容才是本体（但很多工具按标签路由解析，写错标签会被拒收）。\n\n" +
       "附带尝试 DER 顶层结构提示（不强制合法 DER）。",
-    usage: "粘贴 DER（hex 或 base64），选标签。产物可直接交 openssl 系工具。",
+    usage: "粘贴 DER 的 hex/base64 文本，或导入原始 DER 文件，选标签。原始字节优先并跳过输入编码选择；空字节报错。PEM 文件产物可原样交给「PEM→DER」或 openssl 系工具；报告文本不是逆操作输入。",
     examples: [
       { in: "308187020100301306072a8648ce3d020106082a8648ce3d030107046d306b…（138 字节 DER）", param: "input=hex, label=PRIVATE KEY", out: "-----BEGIN PRIVATE KEY----- / MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgya+p2EW6dRZrXCFX…（64 字符折行）/ -----END PRIVATE KEY-----", desc: "与「PEM→DER」互为逆操作" },
     ],

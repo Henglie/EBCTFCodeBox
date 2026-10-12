@@ -1,5 +1,5 @@
 /*
- * esolang2.js — esolang 扩展组（cat:'esolang'，T83）。
+ * esolang2.js — esolang 扩展组（cat:'esolang'）。
  * Deadfish 双向、Befunge-93 执行器、Emojicode 识别、Piet 识别。
  *
  * 红线：不与 fancy.js/fancy2.js/fancy3.js 已有的 brainfuck/ook/whitespace/
@@ -26,8 +26,8 @@ function deadfishNormalize(acc) {
   return acc;
 }
 
-// encode：文本 → deadfish 指令串。逐字符用 i/d 从当前累加器直达目标 charCode 后 o。
-// charCode 与当前 acc 都在 0..255（含目标），单调增减途中不会触碰 -1/256，故不触发重置。
+// encode：文本 → 输出字符码的 Deadfish 指令串；平方跨过重置点 256。
+// 256 每步后立即归零，标准 Deadfish 无法输出该值，必须显式拒绝。
 function deadfishEncode(text) {
   const s = String(text);
   let acc = 0;
@@ -37,10 +37,21 @@ function deadfishEncode(text) {
     if (target > 0xffff) {
       throw new Error("Deadfish: 仅支持 BMP 字符（码点 ≤ 65535），遇到 " + target);
     }
+    if (target === 256) throw new Error("Deadfish: 标准重置规则无法输出码点 256（U+0100）");
+    if (acc >= 257 && target <= 255) {
+      out += "d".repeat(acc - 256);
+      acc = 0;
+    } else if (acc <= 255 && target >= 257) {
+      // 17² = 289；再在 257..65535 内移动，不经过重置点。
+      out += acc <= 17 ? "i".repeat(17 - acc) : "d".repeat(acc - 17);
+      out += "s";
+      acc = 289;
+    }
     if (target > acc) out += "i".repeat(target - acc);
     else if (target < acc) out += "d".repeat(acc - target);
     out += "o";
     acc = target;
+    if (out.length > MAX_STEPS) throw new Error("Deadfish: 编码结果超过执行步数上限");
   }
   return out;
 }

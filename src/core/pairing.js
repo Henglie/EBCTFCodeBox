@@ -15,6 +15,7 @@
  * 北极星：算法零 UI 依赖、纯函数、导出核心，可被独立摘取当权威源（也为 BLS 铺路）。
  */
 import { sm3Bytes } from "./hashExt.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 数论（BigInt，模运算）
@@ -127,7 +128,7 @@ export function sm9RandomScalar() {
   if (typeof crypto === "undefined" || typeof crypto.getRandomValues !== "function") throw new Error("当前环境无密码学安全随机源，无法执行 SM9 密钥生成");
   const bytes = new Uint8Array(32);
   while (true) {
-    crypto.getRandomValues(bytes);
+    bytes.set(randBytes(bytes.length));
     const k = bytesToBig(bytes);
     if (k >= 1n && k < N) return k;
   }

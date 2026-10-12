@@ -17,6 +17,7 @@
 import { register } from "./registry.js";
 import { decodePNG, rgbaToDataURL, dataURLToBytes } from "./stegoPixels.js";
 import { fernetEncrypt, fernetDecrypt } from "./modern.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 const MAGIC = new TextEncoder().encode("stegv3");
 
@@ -114,11 +115,11 @@ function formatMessage(message, filename) {
 function parseMessage(msg) {
   if (msg.length < 11) throw new Error("数据过短，未找到编码信息");
   for (let i = 0; i < 6; i++) if (msg[i] !== MAGIC[i]) throw new Error("错误！未找到编码信息（缺 stegv3 魔数）");
-  const msgLen = (msg[6] << 24) | (msg[7] << 16) | (msg[8] << 8) | msg[9];
+  const msgLen = ((msg[6] << 24) | (msg[7] << 16) | (msg[8] << 8) | msg[9]) >>> 0;
   const nameLen = msg[10];
   const start = 11 + nameLen;
   if (start + msgLen > msg.length) throw new Error("消息长度越界（头声明 " + msgLen + "B，剩余 " + (msg.length - start) + "B）");
-  const decoder = new TextDecoder("utf-8", { fatal: false });
+  const decoder = new TextDecoder("utf-8", { fatal: false, ignoreBOM: true });
   const content = decoder.decode(msg.subarray(start, start + msgLen));
   if (nameLen > 0) {
     const filename = decoder.decode(msg.subarray(11, start));
@@ -152,7 +153,7 @@ async function stegpyEncodeOp(text, p = {}) {
   const bits = [1, 2, 4].includes(Number(p.bits)) ? Number(p.bits) : 2;
   let payload = formatMessage(message, null);
   if (p.password) {
-    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const salt = randBytes(16);
     const keyB64 = bytesToB64url(await pbkdf2Sha256(new TextEncoder().encode(String(p.password)), salt));
     const token = await fernetEncrypt(payload, keyB64);
     // 与参考实现一致：salt ‖ utf8(token 文本)（token 的 base64url 字符字节，非二进制）
@@ -172,17 +173,37 @@ async function stegpyDecodeOp(text, p = {}) {
   if (p.password) {
     if (payload.length < 16) throw new Error("数据过短，无法解密");
     const salt = payload.subarray(0, 16);
-    // 宿主容量 > 消息时尾部是补零/原像素垃圾区。Python 端 b64decode 遇 '=' padding
-    // 后忽略后续字节；JS atob 严格模式会拒绝 → 按第一个 '=' 截断 + 剥非 base64url 字符
-    // （对齐参考行为，token 的 padding 必在垃圾区之前）
-    const raw = new TextDecoder("utf-8", { fatal: false }).decode(payload.subarray(16));
-    const eq = raw.indexOf("=");
-    const tokenText = (eq >= 0 ? raw.slice(0, eq + 1) : raw).replace(/[^A-Za-z0-9\-_=]/g, "");
+    // 官方 stegpy 0.2.0 密码模式：嵌入流 = salt16 + 无 padding Fernet token（token 后为宿主
+    // 垃圾区）。对齐官方 fernet_token_lengths 多长度试探：先试 padding 端点，再按 4 的倍数
+    // 逐候选降长；任一候选 HMAC 校验通过即命中，全部失败才报「密码错误或数据未加密」。
+    // （旧实现按首个 '=' 截断，会把官方无 padding token 截进垃圾区致 InvalidToken）
+    const tokenBytes = payload.subarray(16);
+    const isTokenChar = (b) => (b >= 0x41 && b <= 0x5a) || (b >= 0x61 && b <= 0x7a) || (b >= 0x30 && b <= 0x39) || b === 0x2d || b === 0x5f || b === 0x3d;
+    let maxEnd = 0;
+    for (; maxEnd < tokenBytes.length && isTokenChar(tokenBytes[maxEnd]); maxEnd++);
+    const cands = [];
+    const eq0 = tokenBytes.indexOf(0x3d);
+    if (eq0 >= 0) {
+      let pe = eq0 + 1;
+      while (pe < tokenBytes.length && tokenBytes[pe] === 0x3d) pe++;
+      if (pe <= maxEnd) cands.push(pe);
+    }
+    for (let end = 4; end <= maxEnd; end += 4) cands.push(end);
     const keyB64 = bytesToB64url(await pbkdf2Sha256(new TextEncoder().encode(String(p.password)), salt));
-    try {
-      payload = await fernetDecrypt(tokenText, keyB64);
-    } catch (e) {
-      throw new Error("密码错误或数据未加密（" + e.message + "）");
+    let lastErr = null;
+    let hit = false;
+    for (const end of [...new Set(cands)]) {
+      const tokenText = Array.from(tokenBytes.subarray(0, end), (b) => String.fromCharCode(b)).join("");
+      try {
+        payload = await fernetDecrypt(tokenText, keyB64);
+        hit = true;
+        break;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    if (!hit) {
+      throw new Error("密码错误或数据未加密（" + (lastErr ? lastErr.message : "token 为空或含非法字符") + "）");
     }
   }
   const parsed = parseMessage(payload);

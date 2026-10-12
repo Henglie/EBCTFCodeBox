@@ -1,7 +1,7 @@
 /*
- * cryptanalysis2.js — 密码分析扩展（T97，cat:'analysis'）。
+ * cryptanalysis2.js — 密码分析扩展（cat:'analysis'）。
  *
- * 定位：与 T57 cryptanalysis.js（freqAnalysis/icAnalysis/kasiskiTest/...）正交——
+ * 定位：与 cryptanalysis.js（freqAnalysis/icAnalysis/kasiskiTest/...）正交——
  * 本文件做「自动化恢复」：给密文直接还原密钥 / 明文。不碰 cryptanalysis.js。
  *
  * 覆盖：

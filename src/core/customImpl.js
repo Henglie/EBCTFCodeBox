@@ -1,5 +1,5 @@
 /*
- * customImpl.js — 自定义算法实现（MT72）：用户用 JS 替换某 op 的 encode/decode。
+ * customImpl.js — 自定义算法实现：用户用 JS 替换某 op 的 encode/decode。
  *
  * 职责分层（红线：算法层零 UI 依赖）：
  *  本文件                     = 纯逻辑：沙箱编译、执行、白名单工具、预设模板（无 DOM）
@@ -14,6 +14,11 @@
  *            dir（"encode" | "decode"）、H（白名单工具，见 buildHelpers）
  *  返回：字符串（最常用）或 Uint8Array（UTF-8 可解则按 UTF-8，否则 latin1 直通不丢字节）
  *
+ *  取随机：用 H.randBytes(n) / H.randHex(n) / H.randInt(m)，**不要直接调 crypto.getRandomValues**
+ *  （那样是裸系统随机，会绕过「增强随机性」档位）。H 的随机函数由调用方注入 provider：
+ *  Worker 端由主线程随请求送来「档位配置 + 服务器预取池快照」，本 realm 用同一份 randSource
+ *  复现同源取数（沙箱隔离不受影响）；主线程降级路径直接注入 randSource.randomBytes。
+ *
  * ── 沙箱说明（诚实版，别把它当安全边界宣传）───────────────────────────────
  *  三层防护，强度递减：
  *   1. Worker realm 隔离（真隔离）：Worker 里没有 DOM，且启动即删掉 fetch/XHR/WebSocket/
@@ -23,8 +28,8 @@
  *      ⚠ 同 realm 内 JS 无法真沙箱——`(()=>{}).constructor("return globalThis")()` 可绕过遮蔽。
  *      所以主线程降级路径只当"能跑"，不当"安全"；真正的隔离永远来自第 1 层。
  *
- * ⚠ 编译用 new Function——MT72 在鸿蒙原生版不可用（ArkTS 禁 eval/new Function），
- *   已在 MT79 能力矩阵登记「鸿蒙版该功能不可用」。
+ * ⚠ 编译用 new Function—— 在鸿蒙原生版不可用（ArkTS 禁 eval/new Function），
+ * 已在能力矩阵登记「鸿蒙版该功能不可用」。
  */
 
 // ============ 白名单工具（自包含，零依赖；Worker 与主线程均可用） ============
@@ -239,14 +244,49 @@ function crc32(bytes) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-/** 构建用户代码可见的白名单工具对象（纯函数，不给 DOM/网络/存储）。 */
-export function buildHelpers() {
+/** 构建用户代码可见的白名单工具对象（纯函数，不给 DOM/网络/存储）。
+ *  randProvider：可选，n → Uint8Array。省略时用本 realm 的 crypto.getRandomValues（system 档等价）。
+ *  主线程调用方传入 randSource.randomBytes，即可让 H.randBytes 跟随「增强随机性」当前档位。 */
+export function buildHelpers(randProvider) {
+  const rand = typeof randProvider === "function" ? randProvider : _realmRandBytes;
   return {
     utf8Encode, utf8Decode, hexEncode, hexDecode,
     b64Encode, b64Decode, b32Encode, b32Decode,
     xorBytes, bytesToStr, strToBytes, toBytes, concatBytes, chunk,
     rol8, ror8, rol32, ror32, reverseBits, toBits, fromBits, rotN, crc32,
+    randBytes: (n) => toBytes(rand(_randLen(n))),
+    randHex: (n) => hexEncode(rand(_randLen(n))),
+    randInt: (maxExclusive) => _randInt(rand, maxExclusive),
   };
+}
+
+/** 本 realm 的系统随机字节（Worker / 主线程均可；无 CSPRNG → 显式抛错，禁静默回落）。 */
+function _realmRandBytes(n) {
+  const c = typeof globalThis !== "undefined" ? globalThis.crypto : null;
+  if (!c || typeof c.getRandomValues !== "function") {
+    throw new Error("无可用密码学安全随机源（crypto.getRandomValues 不可用）");
+  }
+  const b = new Uint8Array(n);
+  c.getRandomValues(b);
+  return b;
+}
+
+function _randLen(n) {
+  const v = Number(n);
+  if (!Number.isInteger(v) || v < 0) throw new Error(`randBytes: 字节数须为非负整数，收到 ${n}`);
+  return v;
+}
+
+/** [0, maxExclusive) 均匀随机整数（拒绝采样，无偏）。 */
+function _randInt(rand, maxExclusive) {
+  const m = Number(maxExclusive);
+  if (!Number.isInteger(m) || m <= 0) throw new Error(`randInt: 上界须为正整数，收到 ${maxExclusive}`);
+  const limit = Math.floor(0x100000000 / m) * m;
+  for (;;) {
+    const b = toBytes(rand(4));
+    const v = (((b[0] || 0) << 24) | ((b[1] || 0) << 16) | ((b[2] || 0) << 8) | (b[3] || 0)) >>> 0;
+    if (v < limit) return v % m;
+  }
 }
 
 /** 变量面板用的签名表（UI 只读展示 + 点击插入，见 customImplEditor）。 */
@@ -282,6 +322,9 @@ export const CUSTOM_HELPER_SIGNATURES = [
   { name: "fromBits", sig: "fromBits(bitStr) -> Uint8Array", note: "把 '01010101' 这样的二进制串每 8 位还原成一个字节" },
   { name: "rotN", sig: "rotN(text, n, alphabet?) -> string", note: "按字母表做位移（凯撒/ROT 的底座）；第三个参数可传自定义字母表，默认大写字母" },
   { name: "crc32", sig: "crc32(bytes) -> number", note: "算 CRC32 校验值，跟 zip、png 用的同一套算法" },
+  { name: "randBytes", sig: "randBytes(n) -> Uint8Array", note: "取 n 个随机字节。跟随「增强随机性」当前档位（系统/混合/自定义/服务器 + 鼠标熵辅助）；未开时即系统随机。" },
+  { name: "randHex", sig: "randHex(n) -> string", note: "取 n 个随机字节的 hex 串（等价 hexEncode(randBytes(n))）。" },
+  { name: "randInt", sig: "randInt(maxExclusive) -> number", note: "取 [0, maxExclusive) 的均匀随机整数（拒绝采样，无偏）。" },
 ];
 
 // ============ 沙箱：危险全局的词法遮蔽 ============
@@ -484,7 +527,7 @@ function bytesToText(bytes) {
 
 // ============ CTF 常用预设魔改（模板，用户可在此基础上改） ============
 
-// MT86/T356：EXTRA_PRESETS 扩充 24 个魔改预设（Base58 换表 / 凯撒多档 / TEA·XXTEA 自定义轮数 /
+// EXTRA_PRESETS 扩充 24 个魔改预设（Base58 换表 / 凯撒多档 / TEA·XXTEA 自定义轮数 /
 // Hill 加密 / 按位反码 / baseWidthBits 宽基底等）。依赖 zero 循环、自包含，Worker 与主线程均可用。
 import { EXTRA_PRESETS } from "./customPresetsExtra.js";
 import { decodeUtf8Lossless } from "./bytesIo.js";
@@ -498,7 +541,7 @@ function _decodeUtf8Fatal(bytes) {
 }
 
 /*
- * 预设选型依据：MT72 需求 §4 点名的六类（Base64 换表 / 码表移位逆序 / 凯撒非 26 /
+ * 预设选型依据：需求文档 §4 点名的六类（Base64 换表 / 码表移位逆序 / 凯撒非 26 /
  * XOR 递增位置相关 / 分组密码 S 盒替换 / 摩斯符号替换）+ CTF 高频的 Base32 换表。
  * 每条都可直接跑，参数从 params 取（用户在 op 参数栏填什么，这里就能拿到什么）。
  */
@@ -629,7 +672,7 @@ return H.hexEncode(H.utf8Encode(text));`;
 const _extraPresets = [];
 
 /**
- * 追加一个预设（插件能力面 §MT72-5）。
+ * 追加一个预设（插件能力面 §5）。
  * @param {{id:string, name:string, code:string, opId?:string}} preset opId 为空表示对所有 op 可见
  * @returns {object} 归一化后的预设对象（供调用方回收）
  */
@@ -657,7 +700,7 @@ export function removeCustomPreset(preset) {
   return false;
 }
 
-/** 某 op 可见的全部预设 = 内置 + 扩充(T356) + 插件登记（opId 为空的对所有 op 可见）。 */
+/** 某 op 可见的全部预设 = 内置 + 扩充 + 插件登记（opId 为空的对所有 op 可见）。 */
 export function presetsFor(opId) {
   return CUSTOM_PRESETS.concat(EXTRA_PRESETS, _extraPresets.filter((p) => !p.opId || p.opId === opId));
 }

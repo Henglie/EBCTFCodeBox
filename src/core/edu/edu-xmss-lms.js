@@ -1,5 +1,5 @@
 /*
- * edu-xmss-lms.js — XMSS / LMS·HSS（基于状态的哈希签名）科普卡（T398 批A）。
+ * edu-xmss-lms.js — XMSS / LMS·HSS（基于状态的哈希签名）科普卡（批A）。
  * 格式契约见 eduContent.js 头注释：纯数据、无 import、无副作用。
  * aka 均 ≥10 条真实别名。
  */

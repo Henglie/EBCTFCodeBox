@@ -1,0 +1,568 @@
+/**
+ * BLS != BLS.
+ * The file implements BLS (Boneh-Lynn-Shacham) signatures.
+ * Used in both BLS (Barreto-Lynn-Scott) and BN (Barreto-Naehrig)
+ * families of pairing-friendly curves.
+ * Consists of two curves: G1 and G2:
+ * - G1 is a subgroup of (x, y) E(Fq) over y² = x³ + 4.
+ * - G2 is a subgroup of ((x₁, x₂+i), (y₁, y₂+i)) E(Fq²) over y² = x³ + 4(1 + i) where i is √-1
+ * - Gt, created by bilinear (ate) pairing e(G1, G2), consists of p-th roots of unity in
+ *   Fq^k where k is embedding degree. Only degree 12 is currently supported, 24 is not.
+ * Pairing is used to aggregate and verify signatures.
+ * There are two modes of operation:
+ * - Long signatures:  X-byte keys + 2X-byte sigs (G1 keys + G2 sigs).
+ * - Short signatures: 2X-byte keys + X-byte sigs (G2 keys + G1 sigs).
+ * @module
+ **/
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import { aarray, abytes, notImplemented, randomBytes, validateObject, } from "../utils.js";
+import {} from "./curve.js";
+import { createHasher, } from "./hash-to-curve.js";
+import { getMinHashLength, mapHashToField } from "./modular.js";
+import {} from "./weierstrass.js";
+// prettier-ignore
+const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
+// Signed non-adjacent decomposition of the spec-defined Miller-loop parameter.
+// BN254 benefits most because `6x+2` has multiple adjacent `11` runs, but BLS12-381's
+// stored `|x|` still starts with `11`, so the Miller loop must also handle one `-1` digit there.
+function NAfDecomposition(a) {
+    const res = [];
+    // a>1 because of marker bit
+    for (; a > _1n; a >>= _1n) {
+        if ((a & _1n) === _0n)
+            res.unshift(0);
+        else if ((a & _3n) === _3n) {
+            res.unshift(-1);
+            a += _1n;
+        }
+        else
+            res.unshift(1);
+    }
+    return res;
+}
+function aNonEmpty(arr) {
+    // Aggregate helpers use this to reject empty variable-length inputs consistently.
+    // Without the guard, each caller would fall through into a different empty-input / identity
+    // case and hide missing inputs behind outputs that still look structurally valid.
+    if (!Array.isArray(arr) || arr.length === 0)
+        throw new Error('expected non-empty array');
+}
+// This should be enough for bn254, no need to export full stuff?
+function createBlsPairing(fields, G1, G2, params) {
+    validateObject(fields, { Fp: 'object', Fr: 'object', Fp2: 'object', Fp12: 'object' }, { Fp6: 'object' }, 'fields');
+    if (typeof G1 !== 'function')
+        throw new TypeError('"G1_Point" expected point constructor, got type=' + typeof G1);
+    if (typeof G2 !== 'function')
+        throw new TypeError('"G2_Point" expected point constructor, got type=' + typeof G2);
+    validateObject(params, { ateLoopSize: 'bigint', xNegative: 'boolean', twistType: 'string' }, { randomBytes: 'function', postPrecompute: 'function' }, 'params');
+    const { Fp, Fr, Fp2, Fp12 } = fields;
+    const { twistType, ateLoopSize, xNegative, postPrecompute } = params;
+    const fp2 = (c0, c1) => ({ c0, c1 });
+    const fp2f = ({ c0, c1 }) => Object.freeze({ c0, c1 });
+    const add2 = (a, b) => fp2(Fp.add(a.c0, b.c0), Fp.add(a.c1, b.c1));
+    const sub2 = (a, b) => fp2(Fp.sub(a.c0, b.c0), Fp.sub(a.c1, b.c1));
+    const mul2 = (a, b) => {
+        const t0 = Fp.mul(a.c0, b.c0);
+        const t1 = Fp.mul(a.c1, b.c1);
+        return fp2(Fp.sub(t0, t1), Fp.sub(Fp.mul(Fp.add(a.c0, a.c1), Fp.add(b.c0, b.c1)), Fp.add(t0, t1)));
+    };
+    const mul2ByFp = (a, rhs) => fp2(Fp.mul(a.c0, rhs), Fp.mul(a.c1, rhs));
+    // Delegates to the tower's mulByNonresidue: it has fast paths for ξ = u+1 / ξ = a+u
+    // (adds/scalar-muls instead of a full Karatsuba Fp2 multiplication).
+    const mul2ByNonresidue = (a) => Fp2.mulByNonresidue(a);
+    const mul014ByLine = ({ c0: f0, c1: f1 }, o0, l1, l4, Px, Py) => {
+        const o1 = mul2ByFp(l1, Px);
+        const o4 = mul2ByFp(l4, Py);
+        const { c0: a0, c1: a1, c2: a2 } = f0;
+        const { c0: b0, c1: b1, c2: b2 } = f1;
+        // t0 = Fp6.mul01(f0, o0, o1)
+        const t0_0 = mul2(a0, o0);
+        const t0_1 = mul2(a1, o1);
+        const t0_c0 = add2(mul2ByNonresidue(sub2(mul2(add2(a1, a2), o1), t0_1)), t0_0);
+        const t0_c1 = sub2(sub2(mul2(add2(o0, o1), add2(a0, a1)), t0_0), t0_1);
+        const t0_c2 = add2(sub2(mul2(add2(a0, a2), o0), t0_0), t0_1);
+        // t1 = Fp6.mul1(f1, o4)
+        const t1_c0 = mul2ByNonresidue(mul2(b2, o4));
+        const t1_c1 = mul2(b0, o4);
+        const t1_c2 = mul2(b1, o4);
+        // t2 = Fp6.mul01(Fp6.add(f0, f1), o0, Fp2.add(o1, o4))
+        const s0 = add2(a0, b0);
+        const s1 = add2(a1, b1);
+        const s2 = add2(a2, b2);
+        const o14 = add2(o1, o4);
+        const t2_0 = mul2(s0, o0);
+        const t2_1 = mul2(s1, o14);
+        const t2_c0 = add2(mul2ByNonresidue(sub2(mul2(add2(s1, s2), o14), t2_1)), t2_0);
+        const t2_c1 = sub2(sub2(mul2(add2(o0, o14), add2(s0, s1)), t2_0), t2_1);
+        const t2_c2 = add2(sub2(mul2(add2(s0, s2), o0), t2_0), t2_1);
+        return Object.freeze({
+            c0: Object.freeze({
+                c0: fp2f(add2(mul2ByNonresidue(t1_c2), t0_c0)),
+                c1: fp2f(add2(t1_c0, t0_c1)),
+                c2: fp2f(add2(t1_c1, t0_c2)),
+            }),
+            c1: Object.freeze({
+                c0: fp2f(sub2(sub2(t2_c0, t0_c0), t1_c0)),
+                c1: fp2f(sub2(sub2(t2_c1, t0_c1), t1_c1)),
+                c2: fp2f(sub2(sub2(t2_c2, t0_c2), t1_c2)),
+            }),
+        });
+    };
+    // Like mul014ByLine, params are named after the sparse slot they end up in: l0 is scaled by
+    // Py into o0, l3 is scaled by Px into o3, o4 is used as-is.
+    const mul034ByLine = ({ c0: f0, c1: f1 }, l0, l3, o4, Px, Py) => {
+        const o0 = mul2ByFp(l0, Py);
+        const o3 = mul2ByFp(l3, Px);
+        const { c0: a0, c1: a1, c2: a2 } = f0;
+        const { c0: b0, c1: b1, c2: b2 } = f1;
+        // a = f0 * o0
+        const a_c0 = mul2(a0, o0);
+        const a_c1 = mul2(a1, o0);
+        const a_c2 = mul2(a2, o0);
+        // b = Fp6.mul01(f1, o3, o4)
+        const b0m = mul2(b0, o3);
+        const b1m = mul2(b1, o4);
+        const b_c0 = add2(mul2ByNonresidue(sub2(mul2(add2(b1, b2), o4), b1m)), b0m);
+        const b_c1 = sub2(sub2(mul2(add2(o3, o4), add2(b0, b1)), b0m), b1m);
+        const b_c2 = add2(sub2(mul2(add2(b0, b2), o3), b0m), b1m);
+        // e = Fp6.mul01(Fp6.add(f0, f1), Fp2.add(o0, o3), o4)
+        const s0 = add2(a0, b0);
+        const s1 = add2(a1, b1);
+        const s2 = add2(a2, b2);
+        const o03 = add2(o0, o3);
+        const e0m = mul2(s0, o03);
+        const e1m = mul2(s1, o4);
+        const e_c0 = add2(mul2ByNonresidue(sub2(mul2(add2(s1, s2), o4), e1m)), e0m);
+        const e_c1 = sub2(sub2(mul2(add2(o03, o4), add2(s0, s1)), e0m), e1m);
+        const e_c2 = add2(sub2(mul2(add2(s0, s2), o03), e0m), e1m);
+        return Object.freeze({
+            c0: Object.freeze({
+                c0: fp2f(add2(mul2ByNonresidue(b_c2), a_c0)),
+                c1: fp2f(add2(b_c0, a_c1)),
+                c2: fp2f(add2(b_c1, a_c2)),
+            }),
+            c1: Object.freeze({
+                c0: fp2f(sub2(sub2(e_c0, a_c0), b_c0)),
+                c1: fp2f(sub2(sub2(e_c1, a_c1), b_c1)),
+                c2: fp2f(sub2(sub2(e_c2, a_c2), b_c2)),
+            }),
+        });
+    };
+    // Applies sparse multiplication as line function
+    let lineFunction;
+    if (twistType === 'multiplicative') {
+        lineFunction = (c0, c1, c2, f, Px, Py) => mul014ByLine(f, c0, c1, c2, Px, Py);
+    }
+    else if (twistType === 'divisive') {
+        // NOTE: it should be [c0, c1, c2], but we use different order here to reduce complexity of
+        // precompute calculations.
+        lineFunction = (c0, c1, c2, f, Px, Py) => mul034ByLine(f, c2, c1, c0, Px, Py);
+    }
+    else
+        throw new Error('bls: unknown twist type');
+    const Fp2div2 = Fp2.div(Fp2.ONE, Fp2.mul(Fp2.ONE, _2n));
+    function pointDouble(ell, Rx, Ry, Rz) {
+        const t0 = Fp2.sqr(Ry); // Ry²
+        const t1 = Fp2.sqr(Rz); // Rz²
+        const t2 = Fp2.mulByB(Fp2.mul(t1, _3n)); // 3 * T1 * B
+        const t3 = Fp2.mul(t2, _3n); // 3 * T2
+        const t4 = Fp2.sub(Fp2.sub(Fp2.sqr(Fp2.add(Ry, Rz)), t1), t0); // (Ry + Rz)² - T1 - T0
+        const c0 = Fp2.sub(t2, t0); // T2 - T0 (i)
+        const c1 = Fp2.mul(Fp2.sqr(Rx), _3n); // 3 * Rx²
+        const c2 = Fp2.neg(t4); // -T4 (-h)
+        ell.push([c0, c1, c2]);
+        Rx = Fp2.mul(Fp2.mul(Fp2.mul(Fp2.sub(t0, t3), Rx), Ry), Fp2div2); // ((T0 - T3) * Rx * Ry) / 2
+        // ((T0 + T3) / 2)² - 3 * T2²
+        Ry = Fp2.sub(Fp2.sqr(Fp2.mul(Fp2.add(t0, t3), Fp2div2)), Fp2.mul(Fp2.sqr(t2), _3n));
+        Rz = Fp2.mul(t0, t4); // T0 * T4
+        return { Rx, Ry, Rz };
+    }
+    function pointAdd(ell, Rx, Ry, Rz, Qx, Qy) {
+        // Addition
+        const t0 = Fp2.sub(Ry, Fp2.mul(Qy, Rz)); // Ry - Qy * Rz
+        const t1 = Fp2.sub(Rx, Fp2.mul(Qx, Rz)); // Rx - Qx * Rz
+        const c0 = Fp2.sub(Fp2.mul(t0, Qx), Fp2.mul(t1, Qy)); // T0 * Qx - T1 * Qy == Ry * Qx  - Rx * Qy
+        const c1 = Fp2.neg(t0); // -T0 == Qy * Rz - Ry
+        const c2 = t1; // == Rx - Qx * Rz
+        ell.push([c0, c1, c2]);
+        const t2 = Fp2.sqr(t1); // T1²
+        const t3 = Fp2.mul(t2, t1); // T2 * T1
+        const t4 = Fp2.mul(t2, Rx); // T2 * Rx
+        // T3 - 2 * T4 + T0² * Rz
+        const t5 = Fp2.add(Fp2.sub(t3, Fp2.mul(t4, _2n)), Fp2.mul(Fp2.sqr(t0), Rz));
+        Rx = Fp2.mul(t1, t5); // T1 * T5
+        Ry = Fp2.sub(Fp2.mul(Fp2.sub(t4, t5), t0), Fp2.mul(t3, Ry)); // (T4 - T5) * T0 - T3 * Ry
+        Rz = Fp2.mul(Rz, t3); // Rz * T3
+        return { Rx, Ry, Rz };
+    }
+    // Pre-compute coefficients for sparse multiplication
+    // Point addition and point double calculations is reused for coefficients
+    // pointAdd happens only if bit set, so wNAF is reasonable. Unfortunately we cannot combine
+    // add + double in windowed precomputes here, otherwise it would be single op (since X is static)
+    const ATE_NAF = NAfDecomposition(ateLoopSize);
+    const calcPairingPrecomputes = (point) => {
+        if (!(point instanceof G2))
+            throw new TypeError('"point" expected G2 point, got type=' + typeof point);
+        const p = point;
+        const { x, y } = p.toAffine();
+        // prettier-ignore
+        const Qx = x, Qy = y, negQy = Fp2.neg(y);
+        // prettier-ignore
+        let Rx = Qx, Ry = Qy, Rz = Fp2.ONE;
+        const ell = [];
+        for (const bit of ATE_NAF) {
+            const cur = [];
+            ({ Rx, Ry, Rz } = pointDouble(cur, Rx, Ry, Rz));
+            if (bit)
+                ({ Rx, Ry, Rz } = pointAdd(cur, Rx, Ry, Rz, Qx, bit === -1 ? negQy : Qy));
+            ell.push(cur);
+        }
+        if (postPrecompute) {
+            const last = ell[ell.length - 1];
+            postPrecompute(Rx, Ry, Rz, Qx, Qy, pointAdd.bind(null, last));
+        }
+        return ell;
+    };
+    function millerLoopBatch(pairs, withFinalExponent = false) {
+        aarray(pairs, 'pairs', (pair, title) => {
+            aarray(pair, title);
+            if (pair.length !== 3)
+                throw new TypeError(`"${title}" expected precompute tuple`);
+            aarray(pair[0], title + '[0]');
+        });
+        let f12 = Fp12.ONE;
+        if (pairs.length) {
+            const ellLen = pairs[0][0].length;
+            for (let i = 0; i < ellLen; i++) {
+                // sqr only one time for all pairings; skip sqr(ONE) at i=0
+                if (i !== 0)
+                    f12 = Fp12.sqr(f12);
+                // NOTE: we apply multiple pairings in parallel here
+                for (const [ell, Px, Py] of pairs) {
+                    for (const [c0, c1, c2] of ell[i])
+                        f12 = lineFunction(c0, c1, c2, f12, Px, Py);
+                }
+            }
+        }
+        if (xNegative)
+            f12 = Fp12.conjugate(f12);
+        return withFinalExponent ? Fp12.finalExponentiate(f12) : f12;
+    }
+    // Calculates product of multiple pairings
+    // This up to x2 faster than just `map(({g1, g2})=>pairing({g1,g2}))`
+    function pairingBatch(pairs, withFinalExponent = true) {
+        aarray(pairs, 'pairs');
+        const res = [];
+        for (let i = 0; i < pairs.length; i++) {
+            const pair = pairs[i];
+            validateObject(pair, { g1: 'object', g2: 'object' }, {}, 'pairs[' + i + ']');
+            const { g1, g2 } = pair;
+            if (!(g1 instanceof G1))
+                throw new TypeError('"pairs[' + i + '].g1" expected G1 point, got type=' + typeof g1);
+            if (!(g2 instanceof G2))
+                throw new TypeError('"pairs[' + i + '].g2" expected G2 point, got type=' + typeof g2);
+            // Mathematically, a zero pairing term contributes GT.ONE. We still reject it here because
+            // this API mainly backs BLS verification, where ZERO inputs usually mean broken hash /
+            // wiring. Silently skipping them would turn those failures into a neutral pairing product.
+            // Callers that want the algebraic neutral-element behavior can filter ZERO terms first.
+            if (g1.is0() || g2.is0())
+                throw new Error('pairing is not available for ZERO point');
+            // This uses toAffine inside
+            g1.assertValidity();
+            g2.assertValidity();
+            const Qa = g1.toAffine();
+            res.push([calcPairingPrecomputes(g2), Qa.x, Qa.y]);
+        }
+        return millerLoopBatch(res, withFinalExponent);
+    }
+    // Calculates bilinear pairing
+    function pairing(Q, P, withFinalExponent = true) {
+        if (!(Q instanceof G1))
+            throw new TypeError('"Q" expected G1 point, got type=' + typeof Q);
+        if (!(P instanceof G2))
+            throw new TypeError('"P" expected G2 point, got type=' + typeof P);
+        return pairingBatch([{ g1: Q, g2: P }], withFinalExponent);
+    }
+    const lengths = {
+        seed: getMinHashLength(Fr.ORDER),
+    };
+    const rand = params.randomBytes === undefined ? randomBytes : params.randomBytes;
+    // Seeded calls deterministically reduce exactly `lengths.seed` bytes into `1..Fr.ORDER-1`;
+    // omitting `seed` just fills that input buffer from the configured RNG first.
+    const randomSecretKey = (seed) => {
+        seed = seed === undefined ? rand(lengths.seed) : seed;
+        abytes(seed, lengths.seed, 'seed');
+        return mapHashToField(seed, Fr.ORDER);
+    };
+    Object.freeze(lengths);
+    return {
+        lengths,
+        Fr,
+        Fp12, // NOTE: we re-export Fp12 here because pairing results are Fp12!
+        millerLoopBatch,
+        pairing,
+        pairingBatch,
+        calcPairingPrecomputes,
+        randomSecretKey,
+    };
+}
+function createBlsSig(blsPairing, PubPoint, SigPoint, isSigG1, hashToSigCurve, SignatureCoder) {
+    const { Fr, Fp12, pairingBatch, randomSecretKey, lengths } = blsPairing;
+    if (!SignatureCoder) {
+        SignatureCoder = {
+            fromBytes: notImplemented,
+            fromHex: notImplemented,
+            toBytes: notImplemented,
+            toHex: notImplemented,
+        };
+    }
+    // Internal decoding must use the same owned callback snapshot exposed on `.Signature`.
+    // Retaining the caller's coder object would allow verification policy to change later.
+    const sigCoder = Object.freeze({ ...SignatureCoder });
+    function normPub(point) {
+        return point instanceof PubPoint ? point : PubPoint.fromBytes(point);
+    }
+    function normSig(point) {
+        return point instanceof SigPoint ? point : sigCoder.fromBytes(point);
+    }
+    // Sign/verify here take points already hashed onto the signature subgroup.
+    // Raw bytes and points from the other subgroup must fail this constructor-brand
+    // check before later validity checks run.
+    function amsg(m) {
+        if (!(m instanceof SigPoint))
+            throw new Error(`expected valid message hashed to ${!isSigG1 ? 'G2' : 'G1'} curve`);
+        return m;
+    }
+    // What matters here is what point pairing API accepts as G1 or G2, not actual size or names
+    const pair = !isSigG1
+        ? (a, b) => ({ g1: a, g2: b })
+        : (a, b) => ({ g1: b, g2: a });
+    return Object.freeze({
+        lengths: Object.freeze({ ...lengths, secretKey: Fr.BYTES }),
+        keygen(seed) {
+            const secretKey = randomSecretKey(seed);
+            const publicKey = this.getPublicKey(secretKey);
+            return { secretKey, publicKey };
+        },
+        // P = pk x G
+        getPublicKey(secretKey) {
+            let sec;
+            try {
+                sec = PubPoint.Fn.fromBytes(secretKey);
+            }
+            catch (error) {
+                // @ts-ignore
+                throw new Error('invalid private key: ' + typeof secretKey, { cause: error });
+            }
+            return PubPoint.BASE.multiply(sec);
+        },
+        // S = pk x H(m)
+        sign(message, secretKey, unusedArg) {
+            if (unusedArg != null)
+                throw new Error('sign() expects 2 arguments');
+            const sec = PubPoint.Fn.fromBytes(secretKey);
+            // BLS/BN point APIs allow infinity for compatibility; raw message bytes still fail amsg().
+            amsg(message).assertValidity();
+            return message.multiply(sec);
+        },
+        // Checks if pairing of public key & hash is equal to pairing of generator & signature.
+        // e(P, H(m)) == e(G, S)
+        // e(S, G) == e(H(m), P)
+        verify(signature, message, publicKey, unusedArg) {
+            if (unusedArg != null)
+                throw new Error('verify() expects 3 arguments');
+            signature = normSig(signature);
+            publicKey = normPub(publicKey);
+            const P = publicKey.negate();
+            const G = PubPoint.BASE;
+            const Hm = amsg(message);
+            const S = signature;
+            // This code was changed in 1.9.x:
+            // Before it was G.negate() in G2, now it's always pubKey.negate
+            // e(P, -Q)===e(-P, Q)==e(P, Q)^-1. Negate can be done anywhere (as long it is done once per pair).
+            // We just moving sign, but since pairing is multiplicative, we doing X * X^-1 = 1
+            try {
+                const exp = pairingBatch([pair(P, Hm), pair(G, S)]);
+                return Fp12.eql(exp, Fp12.ONE);
+            }
+            catch {
+                return false;
+            }
+        },
+        // https://ethresear.ch/t/fast-verification-of-multiple-bls-signatures/5407
+        // e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))
+        // TODO: maybe `{message: G2Hex, publicKey: G1Hex}[]` instead?
+        verifyBatch(signature, items) {
+            aNonEmpty(items);
+            const sig = normSig(signature);
+            const nMessages = items.map((i) => amsg(i.message));
+            const nPublicKeys = items.map((i) => normPub(i.publicKey));
+            // NOTE: this works only for exact same object
+            const messagePubKeyMap = new Map();
+            for (let i = 0; i < nPublicKeys.length; i++) {
+                const pub = nPublicKeys[i];
+                const msg = nMessages[i];
+                let keys = messagePubKeyMap.get(msg);
+                if (keys === undefined) {
+                    keys = [];
+                    messagePubKeyMap.set(msg, keys);
+                }
+                keys.push(pub);
+            }
+            const paired = [];
+            const G = PubPoint.BASE;
+            try {
+                for (const [msg, keys] of messagePubKeyMap) {
+                    const groupPublicKey = keys.reduce((acc, msg) => acc.add(msg));
+                    paired.push(pair(groupPublicKey, msg));
+                }
+                paired.push(pair(G.negate(), sig));
+                return Fp12.eql(pairingBatch(paired), Fp12.ONE);
+            }
+            catch {
+                return false;
+            }
+        },
+        // Adds a bunch of public key points together.
+        // pk1 + pk2 + pk3 = pkA
+        aggregatePublicKeys(publicKeys) {
+            aNonEmpty(publicKeys);
+            publicKeys = publicKeys.map((pub) => normPub(pub));
+            const agg = publicKeys.reduce((sum, p) => sum.add(p), PubPoint.ZERO);
+            agg.assertValidity();
+            return agg;
+        },
+        // Adds a bunch of signature points together.
+        // pk1 + pk2 + pk3 = pkA
+        aggregateSignatures(signatures) {
+            aNonEmpty(signatures);
+            signatures = signatures.map((sig) => normSig(sig));
+            const agg = signatures.reduce((sum, s) => sum.add(s), SigPoint.ZERO);
+            agg.assertValidity();
+            return agg;
+        },
+        hash(messageBytes, DST) {
+            abytes(messageBytes);
+            // Only omitted DST uses the default; explicit empty DST must reach normDST validation.
+            const opts = DST === undefined ? undefined : { DST };
+            return hashToSigCurve(messageBytes, opts);
+        },
+        Signature: Object.freeze({ ...sigCoder }),
+    }); /*satisfies Signer */
+}
+// NOTE: separate function instead of function override, so we don't depend on hasher in bn254.
+/**
+ * @param fields - Tower field implementations.
+ * @param G1_Point - G1 point constructor.
+ * @param G2_Point - G2 point constructor.
+ * @param params - Pairing parameters. See {@link BlsPairingParams}.
+ * @returns Pairing-only BLS helpers. The returned pairing surface rejects infinity inputs, while
+ *   empty `pairingBatch(...)` calls return the multiplicative identity in GT. This keeps the
+ *   low-level pairing API fail-closed for BLS-style callers, where identity points usually signal
+ *   broken hash / wiring instead of an intentionally neutral pairing term. This also eagerly
+ *   precomputes the G1 base-point table as a performance side effect.
+ * @throws If the pairing parameters or underlying curve helpers are inconsistent. {@link Error}
+ * @example
+ * ```ts
+ * import { blsBasic } from '@noble/curves/abstract/bls.js';
+ * import { bn254 } from '@noble/curves/bn254.js';
+ * // Rebuild the pairing-only helper from a concrete curve's public pieces.
+ * const pair = blsBasic(bn254.fields, bn254.G1.Point, bn254.G2.Point, bn254.params);
+ * const gt = pair.pairing(pair.G1.Point.BASE, pair.G2.Point.BASE);
+ * ```
+ */
+export function blsBasic(fields, G1_Point, G2_Point, params) {
+    // Fields are specific for curve, so for now we'll need to pass them with opts
+    const { Fp, Fr, Fp2, Fp6, Fp12 } = fields;
+    // Point on G1 curve: (x, y)
+    // const G1_Point = weierstrass(CURVE.G1, { Fn: Fr });
+    const G1 = { Point: G1_Point };
+    // Point on G2 curve (complex numbers): (x₁, x₂+i), (y₁, y₂+i)
+    const G2 = { Point: G2_Point };
+    const pairingRes = createBlsPairing(fields, G1_Point, G2_Point, params);
+    const { millerLoopBatch, pairing, pairingBatch, calcPairingPrecomputes, randomSecretKey, lengths, } = pairingRes;
+    G1.Point.BASE.precompute(4);
+    Object.freeze(G1);
+    Object.freeze(G2);
+    return Object.freeze({
+        lengths: Object.freeze(lengths),
+        millerLoopBatch,
+        pairing,
+        pairingBatch,
+        G1,
+        G2,
+        fields: Object.freeze({ Fr, Fp, Fp2, Fp6, Fp12 }),
+        params: Object.freeze({
+            ateLoopSize: params.ateLoopSize,
+            xNegative: params.xNegative,
+            twistType: params.twistType,
+            postPrecompute: params.postPrecompute,
+        }),
+        utils: Object.freeze({
+            randomSecretKey,
+            calcPairingPrecomputes,
+        }),
+    });
+}
+// We can export this too, but seems there is not much reasons for now? If user wants hasher, they can just create hasher.
+function blsHashers(fields, G1_Point, G2_Point, params, hasherParams) {
+    const base = blsBasic(fields, G1_Point, G2_Point, params);
+    validateObject(hasherParams, { hasherOpts: 'object', hasherOptsG1: 'object', hasherOptsG2: 'object' }, { mapToG1: 'function', mapToG2: 'function' }, 'hasherParams');
+    // Missing map hooks intentionally fail closed via notImplemented on first hash use.
+    const G1Hasher = createHasher(G1_Point, hasherParams.mapToG1 === undefined ? notImplemented : hasherParams.mapToG1, {
+        ...hasherParams.hasherOpts,
+        ...hasherParams.hasherOptsG1,
+    });
+    const G2Hasher = createHasher(G2_Point, hasherParams.mapToG2 === undefined ? notImplemented : hasherParams.mapToG2, {
+        ...hasherParams.hasherOpts,
+        ...hasherParams.hasherOptsG2,
+    });
+    return Object.freeze({ ...base, G1: G1Hasher, G2: G2Hasher });
+}
+// G1_Point: ProjConstructor<bigint>, G2_Point: ProjConstructor<Fp2>,
+// Rename to blsSignatures?
+/**
+ * @param fields - Tower field implementations.
+ * @param G1_Point - G1 point constructor.
+ * @param G2_Point - G2 point constructor.
+ * @param params - Pairing parameters. See {@link BlsPairingParams}.
+ * @param hasherParams - Hash-to-curve configuration. See {@link BlsHasherParams}.
+ * @param signatureCoders - Signature codecs.
+ * @returns BLS helpers with signers. The inherited pairing surface still rejects infinity inputs,
+ *   and empty `pairingBatch(...)` calls still return the multiplicative identity in GT. Aggregate
+ *   verification still requires proof of possession or another rogue-key defense from the caller.
+ * @throws If the pairing, hashing, or signature helpers are configured inconsistently. {@link Error}
+ * @example
+ * ```ts
+ * import { bls } from '@noble/curves/abstract/bls.js';
+ * import { bls12_381 } from '@noble/curves/bls12-381.js';
+ * // Rebuild a signer namespace from a concrete curve.
+ * // Applications usually import bls12_381 directly.
+ * const rebuilt = bls(
+ *   bls12_381.fields,
+ *   bls12_381.G1.Point,
+ *   bls12_381.G2.Point,
+ *   bls12_381.params,
+ *   {
+ *     hasherOpts: bls12_381.G2.defaults,
+ *     hasherOptsG1: bls12_381.G1.defaults,
+ *     hasherOptsG2: bls12_381.G2.defaults,
+ *   },
+ *   {}
+ * );
+ * const { secretKey, publicKey } = rebuilt.longSignatures.keygen();
+ * ```
+ */
+export function bls(fields, G1_Point, G2_Point, params, hasherParams, signatureCoders) {
+    const base = blsHashers(fields, G1_Point, G2_Point, params, hasherParams);
+    const pairingRes = {
+        ...base,
+        Fr: base.fields.Fr,
+        Fp12: base.fields.Fp12,
+        calcPairingPrecomputes: base.utils.calcPairingPrecomputes,
+        randomSecretKey: base.utils.randomSecretKey,
+    };
+    const longSignatures = createBlsSig(pairingRes, G1_Point, G2_Point, false, base.G2.hashToCurve, signatureCoders?.LongSignature);
+    const shortSignatures = createBlsSig(pairingRes, G2_Point, G1_Point, true, base.G1.hashToCurve, signatureCoders?.ShortSignature);
+    return Object.freeze({ ...base, longSignatures, shortSignatures });
+}

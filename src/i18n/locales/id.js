@@ -398,7 +398,7 @@ export default {
   "ui.uv.graphemes": "gugus grafem",
   "ui.uv.splitClusters": "Pisahkan urutan penggabung (daftar tiap titik kode)",
   "ui.uv.noSegmenter": "(Segmentasi grafem tidak didukung di sini; menampilkan code point)",
-  // 拼字 / IDS 视图（MT84）
+  // 拼字 / IDS 视图
   "ui.uv.tabIds": "Ideograf / IDS",
   "ui.uv.idsDesc": "Urutan Deskripsi Ideografik (IDS): cari pohon dekomposisi karakter, cari karakter berdasarkan komponen, serta ubah karakter menjadi string IDS dan sebaliknya. Sepenuhnya lokal, tanpa unggah.",
   "ui.uv.idsLoading": "Memuat data ideograf…",
@@ -424,7 +424,7 @@ export default {
   "ui.uv.idsNoExact": "Tidak ada kecocokan IDS tepat; cari berdasarkan komponen daun:",
   "ui.uv.idsConvHits": "{0} cocok",
   "ui.uv.idsSrc": "sumber",
-  // 快速换算视图（MT81）
+  // 快速换算视图
   "ui.qc.title": "Konversi cepat",
   "ui.qc.desc": "Meja kerja konversi basis bilangan dan satuan: ubah kolom mana pun, sisanya ikut berubah seketika. Sepenuhnya lokal, tanpa jaringan.",
   "ui.qc.tabRadix": "Basis pemrogram",
@@ -550,6 +550,8 @@ export default {
   "ui.env.syncAccentOk": "Warna aksen sistem tersinkron",
   "ui.env.syncAccentFail": "Warna aksen sistem tidak tersedia",
   "ui.topbar.font": "Pustaka Font",
+  "ui.pwa.updateBar": "Versi baru tersedia. Sumber daya offline siap",
+  "ui.pwa.updateRefresh": "Muat ulang",
 
  // ---- topbar search ----
   "ui.search.placeholder": "Cari enkoder / sandi…",
@@ -767,7 +769,7 @@ export default {
   "op.sshPubkeyParse.name": "Pengurai Kunci Publik SSH",
   "op.btcAddressIdent.name": "Identifikasi Alamat Bitcoin",
   "op.ethAddressIdent.name": "Identifikasi Alamat Ethereum",
- // ---- MT82 new ops (forensic/stego/modern) ----
+ // ---- new ops (forensic/stego/modern) ----
   "op.gifTiming.name": "Steganografi Timing Frame GIF",
   "op.jpgSizeRecover.name": "Pulihkan Ukuran JPEG",
   "op.zipRepair.name": "Perbaiki Enkripsi Palsu ZIP",
@@ -1168,9 +1170,12 @@ export default {
   "ui.ds.customBadge": "Diubah (kustom)",
   "ui.home.strengthBtn": "Intensitas",
 
- // ---- 2026-08-26 解冻新增（协作代理译文，主控已验）----
   "ui.op.fontDec": "Perkecil font",
   "ui.op.fontInc": "Perbesar font",
+  "ui.op.localFonts": "Muat font lokal",
+  "ui.op.localFontsDone": "{0} font lokal dimuat",
+  "ui.op.localFontsFail": "Gagal memuat font lokal: {0}",
+  "ui.op.pickImage": "Pilih gambar",
   "ui.exhaust.branchCount": "{0} cabang",
   "ui.exhaust.hitCount": "{0} kemungkinan hit",
   "ui.uv.title": "Penampil Karakter",
@@ -1439,6 +1444,8 @@ export default {
   'op.csrParse.name': 'Pengurai CSR (PKCS#10)',
   'op.crlParse.name': 'Pengurai CRL X.509',
   'cat.esolang': 'Bahasa pemrograman esoteris',
+  'cat.stegoText': 'Steganografi teks',
+  'cat.stegoFile': 'Steganografi berkas',
   'ui.about.contribSmile1110': 'Mengusulkan perluasan ECC dan kriptografi modern.',
   'ui.about.contribLamian': 'Laporan bug dan saran: kompatibilitas alat asli, kasus batas Unicode dan karakter spasi, bahasa esoteris, penjelasan, kategori, dan parameter.',
   'ui.edu.aka': 'Nama lain (semuanya dapat dicari)',
@@ -1575,6 +1582,13 @@ export default {
   'fam.lbl.base2048': 'Base2048',
   'fam.lbl.base65536': 'Base65536',
   'fam.lbl.ecoji': 'Ecoji (Base64 emoji)',
+  'fam.lbl.fields': 'Ekstraksi field',
+  'fam.lbl.attack': 'Penggunaan ulang nonce k',
+  'fam.lbl.sharedPub': 'Dari kunci publik',
+  'fam.lbl.homAdd': 'Penjumlahan homomorfik',
+  'fam.lbl.scan': 'Pindai',
+  'fam.lbl.formatBrute': 'Brute force',
+  'fam.lbl.smartReport': 'Laporan cerdas',
  // ----解冻批回填（外部交付 2026-09-26 + 内部 cat.*）----
   "ui.recipe.chooseFamilyOp": "Pilih operasi untuk ditambahkan ke rantai resep",
   "op.base16.desc": "Enkode heksadesimal: setiap byte dinyatakan dengan dua karakter heksadesimal. Mendukung alfabet khusus dan huruf besar / pemisah spasi.",

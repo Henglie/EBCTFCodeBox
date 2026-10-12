@@ -65,7 +65,7 @@ export default {
       "A starts at 1 (not 0), one of its small details.",
     usage: "Enter data, output the Adler-32 check value (hex, one-way run).",
     examples: [
-      { in: "Wikipedia", out: "0x11E60398", desc: "The classic example from the Wikipedia article" },
+      { in: "Wikipedia", out: "11e60398", desc: "The classic example from the Wikipedia article" },
     ],
     formulas: [
       { tex: "A = 1 + \\textstyle\\sum d_i \\bmod 65521,\\quad B = \\textstyle\\sum A_i \\bmod 65521", caption: "Adler-32 dual accumulators" },

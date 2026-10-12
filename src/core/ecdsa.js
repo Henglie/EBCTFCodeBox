@@ -1,5 +1,5 @@
 /*
- * ecdsa.js — 通用 ECDSA 全家 + ECC 点运算（T345，批A2+A6）。
+ * ecdsa.js — 通用 ECDSA 全家 + ECC 点运算（批A2+A6）。
  *
  * 五个 op（件内自注册）：
  *   ecdsaKeyGen     生成密钥对：d + 公钥（压缩/非压缩 hex）（crypto）
@@ -34,6 +34,7 @@
 import { register } from "./registry.js";
 import { ecMul, ecPointAdd, ecToAffine, mod, modInverse } from "./ecdsaReuseK.js";
 import { isProbablePrime, modPow } from "./primeGen.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 曲线域参数（BigInt 常量表）
@@ -367,7 +368,7 @@ function randBelow(n) {
   const len = byteLen(n);
   const b = new Uint8Array(len);
   for (;;) {
-    globalThis.crypto.getRandomValues(b);
+    b.set(randBytes(b.length));
     const v = bytesToBigInt(b);
     if (v >= 1n && v < n) return v;
   }
@@ -489,7 +490,7 @@ function ecdsaKeyGenRun(_text, p = {}) {
   L.push(`主格式（pubFormat=${mainFmt}）: ${mainFmt === "compressed" ? fmtCompressed(Q, c) : fmtUncompressed(Q, c)}`);
   L.push("");
   L.push("提示: 私钥切勿提交/外传；配套签名/验签见 ecdsaSign / ecdsaVerify。");
-  // T362 产物协议（2026-09-02）：私钥 / 公钥分开交付下载按钮（产品裁决）。
+  // 产物协议（2026-09-02）：私钥 / 公钥分开交付下载按钮（产品裁决）。
   // 私钥 = d 的 hex 文本；公钥 = 主格式（pubFormat）hex 文本，配套 pemkeys 可再转 PEM/JWK。
   const curveTag = (p.curve || "secp256k1").toLowerCase();
   return {
@@ -541,7 +542,7 @@ async function ecdsaSignRun(text, p = {}) {
   L.push(`公钥 Q（由 d 推导）:`);
   L.push(`  非压缩 = ${fmtUncompressed(Q, c)}`);
   L.push(`  压缩   = ${fmtCompressed(Q, c)}`);
-  // T364 产物协议：DER 签名出 .sig 二进制（字节与文本区「签名 DER (hex)」一致）
+  // 产物协议：DER 签名出 .sig 二进制（字节与文本区「签名 DER (hex)」一致）
   const files = [{
     name: `ecdsa_sig_${(p.curve || "secp256k1").toLowerCase()}_${hashKey}.sig`,
     mime: "application/octet-stream", bytes: der,

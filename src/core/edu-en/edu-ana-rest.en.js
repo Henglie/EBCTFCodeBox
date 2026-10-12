@@ -89,43 +89,6 @@ export default {
     aka: ["raw deflate", "裸deflate", "deflate", "deflate raw", "裸压缩流", "无头deflate", "DEFLATE解压", "LZ77+Huffman", "inflate", "raw inflate", "deflate解码", "裸压缩数据"],
   },
 
-  archiveIdentify: {
-    what: "Archive/compressed-stream identification: take a chunk of binary and identify by its opening magic whether it's gzip, zip, rar, 7z, bzip2, or tar — knowing the type is what tells you which tool to use to unpack it.",
-    principle:
-      "Each archive format has a fixed signature at the start: gzip `1F 8B`, zip `50 4B 03 04` (PK), rar `52 61 72 21` (Rar!), 7z `37 7A BC AF 27 1C`, bzip2 `42 5A 68` (BZh), zlib `78`, tar has `ustar` at offset 257. The tool compares these magics and parses the gzip/bzip2 header.",
-    usage: "Paste data; the tool reports the format type and header info.",
-    examples: [
-      { in: "50 4b 03 04 ...", out: "ZIP archive (PK)" },
-      { in: "42 5a 68 39 ...", out: "bzip2 (BZh9)" },
-    ],
-    tips: ["Can't identify a file type? Check the magic first: PK=zip, Rar!=rar, 7z=7-Zip, BZh=bzip2. tar's ustar is at byte 257, not at the start."],
-    aka: ["归档识别", "archive identify", "magic识别", "文件类型识别"],
-  },
-
-  zipList: {
-    what: "ZIP structure parsing: without decompressing, read only the ZIP's internal structure to list which files are inside, what compression method is used, and whether they're encrypted.",
-    principle:
-      "A ZIP consists of several 'local file header (PK\\x03\\x04) + data' segments plus a 'central directory (PK\\x01\\x02)' at the end. The central directory records each file's name, compression method, size, and flags. The tool parses both to list the files; the encryption flag is read from general-purpose bit-flag bit0.",
-    usage: "Paste ZIP data; outputs the contained file names, compression methods, and encryption flags (reads the structure only, does not decrypt encrypted entries).",
-    examples: [
-      { in: "ZIP file bytes", out: "flag.txt (deflate, encrypted), readme.md (stored)" },
-    ],
-    tips: ["Pseudo-encryption challenge: the encryption flag bits in the central directory and the local header disagree; clearing the encryption bit lets it extract normally. See clearly which entries are truly encrypted."],
-    aka: ["zip解析", "zip list", "zip结构", "zip文件列表"],
-  },
-
-  tarList: {
-    what: "TAR header parsing: read the 512-byte block headers of a tar archive to list the file names, sizes, and types inside. tar doesn't compress, it's pure packaging.",
-    principle:
-      "tar aligns each file into 512-byte blocks: first a header block (with file name, octal size/permissions, type flag, `ustar` magic at offset 257), followed by content blocks. The tool reads each header block by block to list the files.",
-    usage: "Paste tar data; outputs the file name / size / type list.",
-    examples: [
-      { in: "tar bytes", out: "./secret.txt (1024 B, regular file)" },
-    ],
-    tips: ["tar is often wrapped with gzip into .tar.gz: gzipCodec first to decompress, then tarList to see the contents. The ustar magic is at byte 257."],
-    aka: ["tar解析", "tar list", "tar头", "ustar"],
-  },
-
   b64CompressedProbe: {
     what: "Base64-embedded compressed-stream probe: scan the text for base64 segments, then auto-decode → identify magic → try gzip/zlib/deflate decompression, an end-to-end pipeline to dig out compressed data hidden inside base64.",
     principle:

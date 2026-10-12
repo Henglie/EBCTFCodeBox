@@ -1,5 +1,5 @@
 /*
- * checksumExt.js — 校验和扩展组（T75，cat:'hash'）。
+ * checksumExt.js — 校验和扩展组（cat:'hash'）。
  *
  * 覆盖：
  * - crcGeneric：通用 CRC（参数化 width/poly/init/refIn/refOut/xorOut），覆盖 CRC-8/16/32
@@ -9,7 +9,7 @@
  * - crc16Xmodem：CRC-16/XMODEM（poly=0x1021, init=0x0000, refIn/out=false, xorOut=0）
  * - fletcher16：Fletcher-16（RFC 905 等）
  * - fletcher32：Fletcher-32（按 16 位字小端，RFC 905）
- * - bsdSum：BSD checksum（4-bit rotated sum，BSD `sum` 命令）
+ * - bsdSum：BSD checksum（16 位寄存器逐字节右旋 1 位后累加，BSD `sum` 命令）
  * - sysvSum：SysV checksum（16-bit sum + 折叠，SysV `sum` 命令）
  *
  * 算法标准：
@@ -27,9 +27,40 @@
 import { register } from "./registry.js";
 
 // ============ 通用工具 ============
-function strToBytes(s) {
- // 允许 hex 输入（0x 前缀或纯 hex），否则 UTF-8
+// hex 严格解析：要求非空、纯 hex、偶数长度，否则抛语义化错误（不静默剥非 hex 字符）。
+function parseHexStrict(t) {
+  if (t.length === 0) {
+    throw new Error("hex 输入为空（去除 0x 前缀后无内容）");
+  }
+  const bad = t.match(/[^0-9a-fA-F]/);
+  if (bad) {
+    throw new Error("hex 输入含非法字符（仅允许 0-9a-fA-F，不允许空格/分隔符）：" + t);
+  }
+  if (t.length % 2 !== 0) {
+    throw new Error("hex 输入长度须为偶数（每字节 2 个 hex 字符），实际长度 " + t.length + "：" + t);
+  }
+  const out = [];
+  for (let i = 0; i < t.length; i += 2) {
+    out.push(parseInt(t.substr(i, 2), 16));
+  }
+  return new Uint8Array(out);
+}
+
+// 输入编码：inputMode ∈ text|hex|auto（默认 auto，与历史行为逐字节一致）。
+//  - auto：纯 hex（0x 前缀，或偶数长度 ≥2 的纯 hex）按字节解，否则 UTF-8（兼容红线，勿改）。
+//  - text：强制按 UTF-8 文本解释（纯 hex 串也当文本）。
+//  - hex：强制按 hex 解；非法输入显式抛错，不静默剥离。
+function strToBytes(s, inputMode) {
+  const mode = inputMode == null ? "auto" : String(inputMode);
   const t = String(s).trim();
+  if (mode === "text") {
+    return new TextEncoder().encode(s);
+  }
+  if (mode === "hex") {
+    const body = /^0[xX]/.test(t) ? t.slice(2) : t;
+    return parseHexStrict(body);
+  }
+ // auto：与旧实现逐字节一致
   if (/^0x[0-9a-fA-F]+$/.test(t)) {
     const hex = t.slice(2);
     const out = [];
@@ -297,10 +328,19 @@ register({
   },
 });
 
+// 输入模式参数（fletcher/bsdSum/sysvSum 共用；默认 auto 保持历史行为）
+const INPUT_MODE_PARAM = {
+  key: "inputMode", label: "输入模式", type: "select", default: "auto", options: [
+    { value: "auto", label: "自动（纯 hex 偶数长度按字节解，否则 UTF-8）" },
+    { value: "text", label: "文本（强制 UTF-8）" },
+    { value: "hex", label: "十六进制（非法则报错）" },
+  ],
+};
+
 // 6. fletcher（16/32 合并）
 register({
   id: "fletcher", cat: "hash", name: "Fletcher",
-  desc: "Fletcher 校验和（位宽可选 8/16/32/64；8 位模 15，16 位按字节流模 255，32 位按 16 位字小端模 65535，64 位按 32 位字小端模 2^32-1）",
+  desc: "Fletcher 校验和（位宽可选 8/16/32/64；8 位模 15，16 位按字节流模 255，32 位按 16 位字小端模 65535，64 位按 32 位字小端模 2^32-1）。输入模式 inputMode：auto（默认，纯 hex 偶数长度按字节解，否则 UTF-8）/ text（强制 UTF-8）/ hex（强制十六进制，非法输入报错）",
   params: [
     { key: "bits", label: "输出位数", type: "select", default: 16, options: [
       { value: 8, label: "8" },
@@ -308,10 +348,15 @@ register({
       { value: 32, label: "32" },
       { value: 64, label: "64" },
     ] },
+    INPUT_MODE_PARAM,
   ],
   run: function (t, p) {
     const bits = Number((p && p.bits != null) ? p.bits : 16);
-    const bytes = strToBytes(t);
+ // 位宽仅 8/16/32/64 合法（与下拉枚举一致）；其余显式报错，不静默回落 16 位
+    if (bits !== 8 && bits !== 16 && bits !== 32 && bits !== 64) {
+      throw new Error("Fletcher 位宽须为 8/16/32/64，得到 " + String(p && p.bits));
+    }
+    const bytes = strToBytes(t, p && p.inputMode);
     if (bits === 8) {
       const v = fletcher8(bytes);
       return toHex(v, 8) + "  // " + v;
@@ -332,10 +377,10 @@ register({
 // 8. bsdSum
 register({
   id: "bsdSum", cat: "hash", name: "BSD checksum",
-  desc: "BSD checksum（4-bit rotated sum，BSD `sum` 命令，输出 16 位）",
-  params: [],
-  run: function (t) {
-    const v = bsdSum(strToBytes(t));
+  desc: "BSD checksum（16 位寄存器逐字节右旋 1 位后累加，BSD `sum` 命令，输出 16 位）。输入模式 inputMode：auto（默认）/ text（强制 UTF-8）/ hex（强制十六进制，非法输入报错）",
+  params: [INPUT_MODE_PARAM],
+  run: function (t, p) {
+    const v = bsdSum(strToBytes(t, p && p.inputMode));
     return toHex(v, 16) + "  // " + v;
   },
 });
@@ -343,10 +388,10 @@ register({
 // 9. sysvSum
 register({
   id: "sysvSum", cat: "hash", name: "SysV checksum",
-  desc: "SysV checksum（16 位累加 + 折叠，SysV `sum` 命令，输出 16 位）",
-  params: [],
-  run: function (t) {
-    const v = sysvSum(strToBytes(t));
+  desc: "SysV checksum（按字节求和后折叠至 16 位，SysV `sum` 命令，输出 16 位）。输入模式 inputMode：auto（默认）/ text（强制 UTF-8）/ hex（强制十六进制，非法输入报错）",
+  params: [INPUT_MODE_PARAM],
+  run: function (t, p) {
+    const v = sysvSum(strToBytes(t, p && p.inputMode));
     return toHex(v, 16) + "  // " + v;
   },
 });

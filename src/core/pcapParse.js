@@ -1,5 +1,5 @@
 /*
- * pcapParse.js — pcap/pcapng 流量结构解析（T298，cat:'analysis'，单向 run）。
+ * pcapParse.js — pcap/pcapng 流量结构解析（cat:'analysis'，单向 run）。
  *
  * 用途：CTF 流量题基础设施——解析 pcap/pcapng 容器格式 + 逐层协议分帧
  * （Ethernet/LinuxSLL → IPv4/IPv6 → TCP/UDP/ICMP → HTTP/DNS），输出包摘要表

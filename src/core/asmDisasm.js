@@ -1,11 +1,11 @@
 /*
- * asmDisasm.js — 机器码反汇编核心（MT73④，供「快速换算 · 机器码&汇编 互转」面板调用，非独立 op）。
+ * asmDisasm.js — 机器码反汇编核心（供「快速换算 · 机器码&汇编互转」面板调用，非独立 op）。
  *
  * 引擎：WASM 反汇编引擎（本地懒加载、零外发、失败明确报错；引擎与许可信息仅存工程文档 PROGRESS.md）。
  * 资产：public/wasm/vendor/ 下 glue + wasm（emscripten MODULARIZE 产物）。
  * 加载：懒加载（单例 promise，不进首屏），零外发（仅本地相对路径 import，绝不 CDN）。
  * 降级：WASM 缺失/加载失败 → 给明确错误消息，不假装成功。
- * ⚠ 鸿蒙原生版不支持 WebAssembly → 本 op 在鸿蒙版不可用（已在 MT79 能力矩阵登记）。
+ * ⚠ 鸿蒙原生版不支持 WebAssembly → 本 op 在鸿蒙版不可用（已在能力矩阵登记）。
   */
 
 const GLUE_URL = "../../public/wasm/vendor/disasm/disasm-glue.js";

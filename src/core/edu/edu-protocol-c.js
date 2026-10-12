@@ -1,6 +1,7 @@
 /*
- * edu-protocol-c.js — T398 批C 协议原语科普卡（Merkle / Pedersen / Feldman / LSAG）。
- * aka 均 ≥10 条真实别名。
+ * edu-protocol-c.js — 协议原语科普卡（Merkle / Pedersen / Feldman / LSAG）。
+ * aka 均 ≥10 条真实别名。Pedersen / Feldman / LSAG 跑在 BLS12-381 G1，
+ * 第二基点/Hash 点由 RFC 9380 hash-to-curve 派生（离散对数不可知）。
  */
 export default {
   merkleProve: {
@@ -36,29 +37,31 @@ export default {
     aka: ["Merkle 证明验证", "merkle verify", "默克尔验证", "Merkle 验证", "哈希树验证", "merkle proof verify", "Merkle 包含验证", "默克尔根比对", "merkle root check", "Merkle 包含", "区块链证明验证", "merkle audit verify", "轻节点验证", "Merkle 路径验证"],
   },
   pedersenCommit: {
-    what: "Pedersen 承诺：对数值 m 生成承诺 $C = m \\cdot G + r \\cdot H$——承诺后 m 无法反推（隐藏性），事后也无法改口（绑定向量）。",
+    what: "Pedersen 承诺：对数值 m 生成承诺 $C = m \\cdot G + r \\cdot H$（BLS12-381 G1）——承诺后 m 无法反推（完美隐藏），事后也无法改口（计算性绑定）。",
     principle:
-      "$C = m \\cdot G + r \\cdot H$（SM2 群点加）：隐藏性来自 r 的随机性（C 均匀分布）；绑定向量来自离散对数——已知 C 想找 m'≠m, r' 使 C=m'G+r'H 等于解椭圆曲线 DLP。\n\n" +
-      "打开 = 公布 (m, r)，验证方重算 $m \\cdot G + r \\cdot H$ 与 C 比对。H 是与 G 无代数关系的第二基点（本工具确定性派生）。",
-    usage: "参数填 m（数字），r 留空随机——输出承诺 C 与 r（⚠ r 必须保存，打开时要用）。勾选验证模式则填 C/m/r 校验打开是否成立。",
+      "$C = m \\cdot G + r \\cdot H$（BLS12-381 G1 点加）：隐藏性来自 r 的均匀随机（C 均匀分布）；绑定性来自离散对数——已知 C 想找 $m' \\neq m,\\ r'$ 使 $C = m'G + r'H$，等价于求出 H 的离散对数。\n\n" +
+      "H 由 RFC 9380 hash-to-curve 从域分隔字符串派生——映射点的离散对数不可知，第二基点不是「公开可算」的点（旧版第二基点离散对数公开、可被双开的根因在此修复）。\n\n" +
+      "打开 = 公布 (m, r)，验证方重算 $m \\cdot G + r \\cdot H$ 与 C 比对。曲线/点运算实现内联 @noble/curves 2.4.0（MIT © 2022 Paul Miller）。",
+    usage: "参数填 m（十进制整数，< 群阶 r），r 留空随机——输出承诺 C（48 字节压缩 G1，96 个 hex 字符）与 r（⚠ r 必须保存，打开时要用）。勾选验证模式则填 C/m/r 校验打开是否成立。",
     examples: [
-      { in: "（无需主输入）", param: "m=42，r 留空随机", out: "C: 04…（130 hex）\\nr: 3f…（保存！）", desc: "验证模式填回 C/m/r → ✓ 通过；m 改成 43 → ✗" },
+      { in: "（无需主输入）", param: "m=42，r 留空随机", out: "C: b2…（48B 压缩 G1，96 hex）\\nr: 3f…（保存！）", desc: "验证模式填回 C/m/r → ✓ 通过；m 改成 43 → ✗" },
     ],
     tips: [
-      " Pedersen 承诺是『加法同态』：$C(m_1) + C(m_2) = C(m_1 + m_2)$——可证明两笔金额之和而不揭开金额（ Confidential Transaction 核心）。",
+      "Pedersen 承诺是『加法同态』：$C(m_1) + C(m_2) = C(m_1 + m_2)$——可证明两笔金额之和而不揭开金额（ Confidential Transaction 核心）。",
       "r 丢了承诺就永远打不开——这是特性不是 bug（r 本质是『保密的钥匙』）。",
-      "承诺阶段 m 要小于曲线阶 n；本工具 m 用数字输入。",
+      "承诺阶段 m 要小于群阶 r；本工具 m 用十进制整数输入。",
     ],
     aka: ["Pedersen 承诺", "pedersen commitment", "密码学承诺", "椭圆曲线承诺", "Pedersen 承诺打开", "承诺方案", "commitment scheme", "Pedersen 打开", "隐藏承诺", "绑定向量承诺", "同态承诺", "pedersen hash 承诺", "CT 承诺", "门罗承诺"],
   },
   feldmanVss: {
-    what: "Feldman 可验证秘密分享（VSS）：把秘密 s 按 Shamir 思想拆成 n 份、门限 t 份恢复——且每份份额可独立验证真伪（伪造份额当场识破）。",
+    what: "Feldman 可验证秘密分享（t-out-of-n，BLS12-381 G1）：把秘密 s 拆成 n 份、门限 t 份恢复——且每份份额可独立验证真伪（伪造份额当场识破）。按 Feldman 1987 原文的门限与群条件做生产级校验。",
     principle:
-      "随机多项式 $f(x) = s + a_1 x + \\cdots + a_{t-1} x^{t-1}$（mod 阶），份额 = (i, f(i))。发布系数承诺 A_j = [a_j]G（点）。\n\n" +
-      "验证份额 i：检查 $[y_i]G \\stackrel{?=} A_0 + i \\cdot A_1 + i^{2} \\cdot A_2 \\cdots$（点运算）——多项式同态让伪造份额过不了这一关，而承诺不泄露 s。",
-    usage: "参数填秘密 s、门限 t、份额数 n → 输出全部份额与承诺 JSON。验证模式：粘 JSON + 待验份额 (i, y) → 有效/无效。",
+      "随机多项式 $f(x) = s + a_1 x + \\cdots + a_{t-1} x^{t-1}$，份额 = $(i, f(i))$；发布系数承诺 $A_j = [a_j]G$（48 字节压缩 G1 点）。\n\n" +
+      "验证份额 i：检查 $[y_i]G \\stackrel{?}{=} A_0 + i \\cdot A_1 + i^{2} \\cdot A_2 \\cdots$（点运算）——多项式同态让伪造份额过不了这一关，而承诺不泄露 s。\n\n" +
+      "秘密按十进制字符串精确解析（无浮点精度损失）；门限须为整数 $t \\ge 1$、$n \\ge t$，越界一律显式报错，不静默扩份额。注意 $A_0 = [s]G$ 公开：低熵秘密（如小数字）可被离线字典猜测——这是方案固有性质，不是实现缺陷。",
+    usage: "参数填秘密 s（十进制整数，< 群阶 r）、门限 t、份额数 n → 输出全部份额与承诺 JSON。验证模式：粘 JSON + 待验份额 (i, y) → 有效/无效。",
     examples: [
-      { in: "（无需主输入）", param: "s=20260905, t=3, n=5", out: "A₀…A₂ 承诺 + 5 份份额 JSON", desc: "任意 3 份可拉格朗日插值恢复 s；每份可独立验证" },
+      { in: "（无需主输入）", param: "s=20260905, t=3, n=5", out: "A₀…A₂ 承诺（48B 压缩 G1）+ 5 份份额 JSON", desc: "任意 3 份可拉格朗日插值恢复 s；每份可独立验证" },
     ],
     tips: [
       "Shamir 分享 + Feldman 承诺 = 『可验证』：拿到份额先验证再保存，防分发方耍赖。",
@@ -68,11 +71,12 @@ export default {
     aka: ["Feldman VSS", "feldman 可验证秘密分享", "秘密分享", "Shamir VSS", "feldman vss", "可验证秘密共享", "门限秘密分享", "secret sharing", "Feldman 承诺", "VSS 可验证", "拉格朗日秘密分享", "秘密拆分验证", "feldman 分享", "门限恢复"],
   },
   lsagSign: {
-    what: "LSAG 环签名：以环中任一成员身份匿名签名——验证者确信签名来自环内，但不知道是谁；同私钥在同环的两次签名会被关联（key image）。",
+    what: "LSAG 环签名（Liu–Wei–Wong 2004，BLS12-381 G1）：以环中任一成员身份匿名签名——验证者确信签名来自环内，但无法定位是谁；同私钥在同环的两次签名会被关联（key image）。",
     principle:
-      "Liu–Wei–Wong 2004（eprint 2004/027）。签名者生成 key image $\\tilde{y} = x_\\pi \\cdot H_p(L)$，然后沿环铺一次性挑战链 $c_{i+1} = H(L, \\tilde{y}, m, s_i \\cdot G + c_i \\cdot y_i,\ s_i \\cdot h + c_i \\cdot \\tilde{y})$，假成员用随机 $s_i$，真成员用自己的私钥解一次方程闭环。\n\n" +
-      "匿名性来自环内 n 选一不可区分；可链接性来自 key image——同私钥再签 ỹ 相同即暴露『同一人签了两次』。",
-    usage: "参数填环公钥列表（每行 04x‖y）、自己的私钥与环中 index；主输入填消息。输出签名 JSON（含 key image）。",
+      "Liu–Wei–Wong 2004（eprint 2004/027）。签名者生成 key image $\\tilde{y} = x_\\pi \\cdot H_p(L)$，然后沿环铺一次性挑战链 $c_{i+1} = H(L, \\tilde{y}, m, s_i \\cdot G + c_i \\cdot y_i,\\ s_i \\cdot H_p + c_i \\cdot \\tilde{y})$，假成员用随机 $s_i$，真成员用自己的私钥解一次方程闭环。\n\n" +
+      "$H_p$ 由 RFC 9380 hash-to-curve 从环列表派生——映射点离散对数不可知，公开值推不出签名者在环中的位置（旧版基点离散对数公开、可定位签名者的根因在此修复）。\n\n" +
+      "匿名性来自环内 n 选一不可区分；可链接性来自 key image——同私钥再签 ỹ 相同即暴露『同一人签了两次』。曲线/点运算实现内联 @noble/curves 2.4.0（MIT © 2022 Paul Miller）。",
+    usage: "参数填环公钥列表（每行 48 字节压缩 G1，96 个 hex 字符）、自己的私钥（hex 32B）与环中 index（0 起）；主输入填消息。输出签名 JSON（含 key image）。",
     examples: [
       { in: "HENG{ring}", param: "环 3 公钥 + sk + index=1", out: "key image + c₀ + s₀…s₂ JSON", desc: "验签只知『环内某人签的』；同环同私钥再签 → key image 相同被关联" },
     ],
@@ -87,9 +91,9 @@ export default {
   lsagVerify: {
     what: "LSAG 环签名验证：确认签名出自环内某个成员（匿名）、消息未被篡改；对比两次签名的 key image 可判断是否同一签者。",
     principle:
-      "验证沿环重算挑战链 $c_{i+1} = H(L, \\tilde{y}, m, s_i \\cdot G + c_i \\cdot y_i,\ s_i \\cdot h + c_i \\cdot \\tilde{y})$，i=0..n-1，最后 $c_n' = c_0$ 则有效。\n\n" +
+      "验证沿环重算挑战链 $c_{i+1} = H(L, \\tilde{y}, m, s_i \\cdot G + c_i \\cdot y_i,\\ s_i \\cdot H_p + c_i \\cdot \\tilde{y})$，i=0..n-1，最后 $c_n' = c_0$ 则有效；$H_p$ 与签名侧同走 RFC 9380 hash-to-curve（BLS12-381 G1）。\n\n" +
       "链的闭环只在真签名者那一步靠私钥成立——伪造者要让链闭合等价于解离散对数。",
-    usage: "主输入填原消息；参数填环公钥列表与签名 JSON（lsagSign 产物）。输出有效/无效。",
+    usage: "主输入填原消息；参数填环公钥列表（每行 48 字节压缩 hex）与签名 JSON（lsagSign 产物）。输出有效/无效。",
     examples: [
       { in: "HENG{ring}", param: "环列表 + 签名 JSON", out: "✓ 环签名有效（匿名）", desc: "对比两次签名的 key image 字段可做链接判定" },
     ],

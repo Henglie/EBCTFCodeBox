@@ -1,5 +1,5 @@
 /*
- * edu-bftools-family.js — bftools 图像变体科普卡（T389：Brainloller / Braincopter 编解码）。
+ * edu-bftools-family.js — bftools 图像变体科普卡（：Brainloller / Braincopter 编解码）。
  * 格式契约见 eduContent.js 头注释：纯数据、无 import、无副作用。
  * aka 均 ≥10 条真实别名（_alias_verify 三件套红线）。
  */

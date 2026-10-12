@@ -38,6 +38,7 @@
  * 已知表（费马因子、梅森表）在启用前须经对拍脚本逐项真跑验证。
  */
 import { isPrimeBigInt, factorBigInt, pollardBrent, smallPrimesList, modPowBig, bitLenOf } from "./bigmath.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 基础工具
@@ -810,8 +811,7 @@ function mersenneFermatInRange(opts) {
  */
 function randomOddBits(bits) {
   const bytes = Math.ceil(bits / 8);
-  const buf = new Uint8Array(bytes);
-  globalThis.crypto.getRandomValues(buf);
+  const buf = randBytes(bytes); // 统一随机源（默认 system 档与原 crypto.getRandomValues 等价）
   let n = 0n;
   for (const b of buf) n = (n << 8n) | BigInt(b);
   n &= (1n << BigInt(bits)) - 1n;

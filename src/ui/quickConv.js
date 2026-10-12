@@ -1,5 +1,5 @@
 /*
- * quickConv.js — 「快速换算」置顶视图（MT81）。
+ * quickConv.js — 「快速换算」置顶视图。
  *
  * 与「配方链」「字符显示器」「编码图鉴」并列的一级视图，不是 op 列表里的条目。
  * 两个子面板：
@@ -22,7 +22,7 @@
  * - **半成品输入不报错**：只打了 "-" / "0x" / "1." 时静默等待，不清空、不弹错。
  *
  * 样式：类名前缀 qc-，样式写在 src/ui/app.css 末尾。
- *   （不新建 quickConv.css 是因为 index.html 属版本冻结文件 MT80，本轮不得改动，
+ * （不新建 quickConv.css 是因为 index.html 属版本冻结文件，本轮不得改动，
  *     无法新增 <link>；发布时若解冻可拆分。）
  */
 import { icon as iconSvg } from "./icons.js";
@@ -30,7 +30,7 @@ import { evalProgExpr } from "../core/progCalc.js";
 import { UNIT_CATS, getCat, convertAll, parseQty } from "../core/unitTables.js";
 import { moneyToCn } from "../core/moneyAmount.js";
 import { dateDiff as dcDateDiff, addDays as dcAddDays, weekday as dcWeekday } from "../core/dateCalc.js";
-// MT73④：机器码&汇编 互转面板核心（WASM 引擎，懒加载，非 op）
+// 机器码&汇编互转面板核心（WASM 引擎，懒加载，非 op）
 import { asmDisasmRun } from "../core/asmDisasm.js";
 import { asmAssembleRun } from "../core/asmAssemble.js";
 
@@ -217,11 +217,11 @@ const S = {
   unitFrom: "m",
   unitQty: "1",
   lastCur: "cur_cny", // 上次选的币种（货币是二级菜单，记住选择省一次点）
-  // 面板 ④ 金额（T367）：大写金额
+  // 面板 ④ 金额（）：大写金额
   money: "",
-  // 面板 ⑤ 日期（T367）
+  // 面板 ⑤ 日期（）
   date: { from: "", to: "", base: "", n: "7", wd: "" },
-  // 面板 ③ 机器码&汇编 互转（MT73④）
+  // 面板 ③ 机器码&汇编互转
   asm: { dir: "disasm", arch: "x86", syntax: "intel", base: 0, enc: "hex", input: "", lastOut: "", lastErr: false },
 };
 
@@ -762,7 +762,7 @@ function fillUnits(cat, fromUnit, rawQty, skipUnit) {
   }
 }
 
-// ============ 面板 ④：金额 → 人民币大写（T367）============
+// ============ 面板 ④：金额 → 人民币大写（）============
 // 算法层：core/moneyAmount.js 的 moneyToCn（纯函数，零算法在本面板）。
 function renderMoneyPanel() {
   $panel.innerHTML = "";
@@ -791,7 +791,7 @@ function renderMoneyPanel() {
   refreshMoney();
 }
 
-// ============ 面板 ⑤：日期计算（T367）============
+// ============ 面板 ⑤：日期计算（）============
 // 算法层：core/dateCalc.js（dateDiff/addDays/weekday），绝无 Date.now。
 function renderDatePanel() {
   $panel.innerHTML = "";
@@ -863,7 +863,7 @@ function renderDatePanel() {
 // 「杂项」tab 曾复用整个单位换算面板（内容 100% 重复，仅默认落点不同），判定冗余后移除。
 // 时间 / 频率 / 角度 / 时间戳纪元 / 油耗等分类仍全部保留在单位换算 tab 的分类条里。
 
-// ============ 面板 ③：机器码&汇编 互转（MT73④） ============
+// ============ 面板 ③：机器码&汇编互转 ============
 // 面板 ③：WASM 引擎懒加载，零外发；引擎与许可信息仅存工程文档 PROGRESS.md。
 // 红线：本面板只做交互，WASM 调用全在 core/asmDisasm.js 与 core/asmAssemble.js。
 const ASM_ARCH_BOTH = ["x86", "x86-64", "arm", "arm-thumb", "arm64", "mips", "mips64", "ppc", "ppc64", "sparc", "systemz", "evm"];

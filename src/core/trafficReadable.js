@@ -117,7 +117,7 @@ const LINKTYPES = {
   228: "Raw IPv4", 229: "Raw IPv6", 249: "USB (USBPcap / usbmon-mmap)", 276: "Linux SLL2",
 };
 // 键 = 首 4 字节按小端读出的值（与 libpcap 惯例一致）：
-//   磁盘字节 d4c3b2a1 → LE 微秒；a1b2c3d4 → BE 微秒；34cdb2a1 → LE 纳秒；a1b2cd34 → BE 纳秒
+//  磁盘字节 d4c3b2a1 → LE 微秒；a1b2c3d4 → BE 微秒；34cdb2a1 → LE 纳秒；a1b2cd34 → BE 纳秒
 const PCAP_MAGICS = {
   "a1b2c3d4": { le: true, nano: false }, "d4c3b2a1": { le: false, nano: false },
   "a1b2cd34": { le: true, nano: true }, "34cdb2a1": { le: false, nano: true },
@@ -618,7 +618,16 @@ export function parseDnsMessage(payload) {
     if (rtype === 1 && rdlen === 4) rdata = fmtIPv4(payload, pos);
     else if (rtype === 28 && rdlen === 16) rdata = fmtIPv6(payload, pos);
     else if (rtype === 5 || rtype === 2 || rtype === 12) rdata = parseDnsName(payload, pos).name;
-    else if (rtype === 16) { const l = payload[pos]; rdata = latin1(payload, pos + 1, Math.min(pos + 1 + l, payload.length)); }
+    else if (rtype === 16) { // TXT：一个或多个 <character-string>，语义为顺序拼接（RFC 1035 §3.3.14）
+      rdata = "";
+      let toff = 0;
+      while (toff < rdlen) {
+        const l = payload[pos + toff];
+        if (toff + 1 + l > rdlen) break; // 长度字节越界：截断如实停止
+        for (let k = 0; k < l; k++) rdata += String.fromCharCode(payload[pos + 1 + toff + k]);
+        toff += 1 + l;
+      }
+    }
     pos += rdlen;
     answers.push({ name, rtype, rtypeName: DNS_TYPES[rtype] || ("type " + rtype), ttl, rdata });
   }

@@ -35,7 +35,7 @@ export function stereogramDiff(rgba, w, h, offset) {
 }
 
 function stereogramSolverOp(text, p = {}) {
-  const img = decodePNG(dataURLToBytes(text));
+  const img = decodePNG(p.rawBytes?.length ? p.rawBytes : dataURLToBytes(text));
   const w = img.width, h = img.height;
   const maxOffset = Math.floor(w / 2);
   const offsetRaw = String(p.offset ?? "").trim();
@@ -44,7 +44,10 @@ function stereogramSolverOp(text, p = {}) {
   if (offsetRaw !== "") {
     const offset = Number(offsetRaw);
     if (!Number.isFinite(offset)) throw new Error("offset 必须是整数（空 = 自动扫描）");
-    const o = Math.max(-maxOffset, Math.min(maxOffset, Math.round(offset)));
+    const o = Math.round(offset);
+    if (Math.abs(o) > maxOffset) {
+      throw new Error("stereogramSolver：offset 越界（须 |offset| ≤ 宽/2=" + maxOffset + "，当前 " + o + "）");
+    }
     const out = stereogramDiff(img.data, w, h, o);
     return rgbaToDataURL(out, w, h);
   }

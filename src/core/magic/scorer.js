@@ -92,7 +92,7 @@ export function freqDist(bytes) {
 
 /**
  * Pearson 卡方统计量（原始分，无 cdf）。
- * 算法等价 CyberChef Magic.mjs _chiSqr（L465-472），但按 T31 卡要求**去掉
+ * 算法等价 CyberChef Magic.mjs _chiSqr（L465-472），但按卡要求**去掉
  * chi-squared npm 的 cdf 调用**，只返回 raw score。
  *
  * 公式：χ² = Σ (observed_i - expected_i)² / expected_i

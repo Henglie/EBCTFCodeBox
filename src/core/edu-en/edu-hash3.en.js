@@ -35,7 +35,7 @@ export default {
     principle: "16-bit CRC with poly=0x8005, init=0xFFFF, refIn/refOut=true (bit reflection), xorOut=0. In the reflected implementation the polynomial is often written as `0xA001`.",
     usage: "Enter data, output the CRC-16/MODBUS check value (hex, one-way run).",
     examples: [
-      { in: "123456789", out: "0x4B37", desc: "CRC-16/MODBUS standard check value" },
+      { in: "123456789", out: "4B37  // 19255", desc: "CRC-16/MODBUS standard check value" },
     ],
     tips: [
       "When the challenge mentions Modbus / RTU / industrial control protocols → it's this preset.",
@@ -49,7 +49,7 @@ export default {
     principle: "16-bit CRC with poly=0x1021, init=0xFFFF, refIn/refOut=false (no reflection), xorOut=0. The polynomial 0x1021 is shared across the CCITT family; the differences lie entirely in the combination of init / reflection / xorOut.",
     usage: "Enter data, output the CRC-16/CCITT-FALSE check value (hex, one-way run).",
     examples: [
-      { in: "123456789", out: "0x29B1", desc: "CRC-16/CCITT-FALSE standard check value" },
+      { in: "123456789", out: "29B1  // 10673", desc: "CRC-16/CCITT-FALSE standard check value" },
     ],
     tips: [
       "The CCITT family (CCITT-FALSE / XMODEM / KERMIT etc.) all use poly=0x1021, indistinguishable by polynomial alone — you must check the init and reflection.",
@@ -62,7 +62,7 @@ export default {
     principle: "16-bit CRC with poly=0x8005, init=0x0000, refIn/refOut=true (bit reflection), xorOut=0. It differs from the MODBUS preset only in init (here 0, MODBUS is 0xFFFF).",
     usage: "Enter data, output the CRC-16/ARC check value (hex, one-way run).",
     examples: [
-      { in: "123456789", out: "0xBB3D", desc: "CRC-16/ARC standard check value" },
+      { in: "123456789", out: "BB3D  // 47933", desc: "CRC-16/ARC standard check value" },
     ],
     tips: [
       "When someone just says 'CRC16' without parameters, in many contexts it defaults to this ARC preset — try it first.",
@@ -75,7 +75,7 @@ export default {
     principle: "16-bit CRC with poly=0x1021, init=0x0000, refIn/refOut=false, xorOut=0. Same polynomial and same no-reflection as CCITT-FALSE, differing only in init (here 0, that preset 0xFFFF).",
     usage: "Enter data, output the CRC-16/XMODEM check value (hex, one-way run).",
     examples: [
-      { in: "123456789", out: "0x31C3", desc: "CRC-16/XMODEM standard check value" },
+      { in: "123456789", out: "31C3  // 12739", desc: "CRC-16/XMODEM standard check value" },
     ],
     tips: [
       "The poly is 0x1021 for both, so XMODEM and CCITT-FALSE differ only in init (0 vs 0xFFFF) — if it doesn't match, switch init first.",

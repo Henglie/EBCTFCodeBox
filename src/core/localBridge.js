@@ -104,7 +104,7 @@ function b64decodeText(b64) {
 // 2026-09-13 桥大清除（产品负责人令）·CLI 桥全线退役：
 // steghide/foremost/snow/jsteg/mp3stego/bkcrack/dtmf2num 七个 *Bridge op 与「本地桥·通用命令行」
 // （exeBridge）已删——现桥协议 /api/run 的产物落盘后无读回通道且 finally rmtree 清场，CLI 型
-// 桥对用户是空壳（T512 复验实锤）；snow/jsteg/bkcrack/dtmf2num/foremost 另有纯 JS/wasm 实现
+// 桥对用户是空壳（复验实锤）；snow/jsteg/bkcrack/dtmf2num/foremost 另有纯 JS/wasm 实现
 // （snow.js/foremostJs.js/bkcrack wasm/dtmfWav）。仅存 5 个 GUI 型 *Launch 桥（exeTools.js，
 // /api/launch 拉窗口，用户在原生窗口操作）。decodeInput/fmtBridgeRun/makeBridgeToolOp
 // 随 CLI 桥一并退役删除。

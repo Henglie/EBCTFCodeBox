@@ -176,7 +176,7 @@ function attachChainDrop(inArea) {
 let _dragFrom = null;
 // 左侧菜单拖 op 进画布用的自定义 MIME（避免与文本拖拽混淆）
 const OP_MIME = "application/x-ebctf-op";
-// 族条目（T395）拖入：携带 family id，drop 时弹出选档菜单（旧口径只能拖进族内第一档）
+// 族条目（）拖入：携带 family id，drop 时弹出选档菜单（旧口径只能拖进族内第一档）
 const FAM_MIME = "application/x-ebctf-family";
 
 // i18n 名回退：优先 window 上主表（若 main.js 暴露），否则用 registry 硬编码
@@ -797,7 +797,7 @@ export function renderRecipe(container) {
     if (!e.dataTransfer || !dtHasOpMime(e.dataTransfer)) return;
     e.preventDefault();
     chain.classList.remove("recipe-drop-active");
-    // 族条目（T395）：先弹选档菜单，选定具体算法再入链
+    // 族条目（）：先弹选档菜单，选定具体算法再入链
     let famId = "";
     try { famId = e.dataTransfer.getData(FAM_MIME) || ""; } catch { /* ignore */ }
     if (famId) { openFamilyPicker(famId, e.clientX, e.clientY, dropIndexFromY(chain, e.clientY)); return; }
@@ -832,7 +832,7 @@ export function addRecipeOpAt(opId, clientX, clientY) {
   return true;
 }
 
-// 供 main.js 触摸拖拽族条目（T395）：命中画布即弹选档菜单
+// 供 main.js 触摸拖拽族条目（）：命中画布即弹选档菜单
 export function addRecipeFamilyAt(familyId, clientX, clientY) {
   const chain = document.getElementById("recipeChain");
   if (!chain) return false;
@@ -846,7 +846,7 @@ export function openRecipeFamilyAtTail(familyId, clientX, clientY) {
   return true;
 }
 
-// ---- 族选档菜单（T395）：族条目拖入画布时选具体算法 ----
+// ---- 族选档菜单（）：族条目拖入画布时选具体算法 ----
 let _famPickMenu = null;
 function closeFamilyPicker() {
   if (_famPickMenu) { _famPickMenu.remove(); _famPickMenu = null; }

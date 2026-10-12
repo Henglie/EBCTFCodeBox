@@ -222,7 +222,7 @@ function formatBmpRecoverReport(buf) {
   const fixed = applyBmpSize(buf, r.width, r.height);
   lines.push(`\n修复后 base64（已写回宽高）：`);
   lines.push(bytesToB64(fixed));
-  return { text: lines.join("\n"), fixed }; // T363b 产物协议 2026-09-02：fixed 字节交 run 包 files
+  return { text: lines.join("\n"), fixed }; // 产物协议 2026-09-02：fixed 字节交 run 包 files
 }
 
 // ============================================================
@@ -348,7 +348,7 @@ function formatPngRecoverReport(buf) {
   const fixed = applyPngSize(buf, r.width, r.height);
   lines.push(`\n修复后 base64（已写回真实宽高，CRC 匹配）：`);
   lines.push(bytesToB64(fixed));
-  return { text: lines.join("\n"), fixed }; // T363b 产物协议 2026-09-02：fixed 字节交 run 包 files
+  return { text: lines.join("\n"), fixed }; // 产物协议 2026-09-02：fixed 字节交 run 包 files
 }
 
 function formatJpegSizeReport(buf) {
@@ -396,7 +396,7 @@ register({
       ? (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes))
       : b64ToBytes(text);
     const r = formatPngRecoverReport(buf);
-    // T363b 产物协议 2026-09-02：修复成功走 files 下载按钮（真文件交付 out.png），text 保留原报告 + base64 行（链式/复制兼容）；错误/无需修复路径仍返回 string。
+    // 产物协议 2026-09-02：修复成功走 files 下载按钮（真文件交付 out.png），text 保留原报告 + base64 行（链式/复制兼容）；错误/无需修复路径仍返回 string。
     if (r.fixed) return { text: r.text, files: [{ name: "out.png", mime: "image/png", bytes: r.fixed }] };
     return r.text;
   },
@@ -415,7 +415,7 @@ register({
       ? (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes))
       : b64ToBytes(text);
     const r = formatBmpRecoverReport(buf);
-    // T363b 产物协议 2026-09-02：修复成功走 files 下载按钮（真文件交付 out.bmp），text 保留原报告 + base64 行；错误/无需修复路径仍返回 string。
+    // 产物协议 2026-09-02：修复成功走 files 下载按钮（真文件交付 out.bmp），text 保留原报告 + base64 行；错误/无需修复路径仍返回 string。
     if (r.fixed) return { text: r.text, files: [{ name: "out.bmp", mime: "image/bmp", bytes: r.fixed }] };
     return r.text;
   },

@@ -1,4 +1,4 @@
-/* pinyinTable.js — 汉字→拼音数据表（T514 拼音首字母搜索兼容层数据源）。
+/* pinyinTable.js — 汉字→拼音数据表（拼音首字母搜索兼容层数据源）。
  * 生成：pypinyin 0.55.0，数据源 mozillazg/pinyin-data（MIT）。
  * 覆盖：GB2312 全部 6763 汉字 + 项目文本增补 4 字；多音字 1816 个（每字至多 2 读音，ü→v）。
  * 平行数组：PINYIN_CHARS[i] ↔ PINYIN_READ 第 i 段（读音逗号分隔多音，空格分隔字）。

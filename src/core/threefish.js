@@ -165,7 +165,9 @@ function threefishRun(text, p, dir) {
   const tweak = hexToWords(twHex, 2);
   const ctx = makeCtx(nwords, key, tweak);
 
-  const dataHex = String(text || "").replace(/[^0-9a-fA-F]/g, "");
+  const rawText = String(text == null ? "" : text);
+  if (/[^0-9a-fA-F\s]/.test(rawText)) throw new Error("Threefish：数据含非十六进制字符（仅允许 0-9a-fA-F）");
+  const dataHex = rawText.replace(/[^0-9a-fA-F]/g, "");
   if (dataHex.length % (nwords * 16) !== 0) {
     throw new Error(`数据须为 ${nwords * 16} hex（${nwords} 字分组）的整数倍（ECB 多块）`);
   }

@@ -1,5 +1,5 @@
 /*
- * token.js — JWT / 令牌解析组（cat:'modern'，T48）。
+ * token.js — JWT / 令牌解析组（cat:'modern'）。
  *
  * 覆盖：
  * - jwt JWT 签发（HS256/384/512）/ 解析（三段拆解 + 声明美化 + 可选验签）
@@ -233,6 +233,7 @@ function pasetoIdentify(token) {
       : "（非标准用途）"));
   let payloadRaw = null;
   try { payloadRaw = b64urlDecodeText(payloadB64); } catch { payloadRaw = null; }
+  if (payloadRaw && typeof payloadRaw !== "string") payloadRaw = payloadRaw.text || ""; // 非文本载荷按 hex 文本展示
   lines.push("Payload(base64url, " + payloadB64.length + " 字符): " +
     (payloadB64 ? payloadB64.slice(0, 40) + (payloadB64.length > 40 ? "…" : "") : "(空)"));
   if (payloadRaw) {
@@ -245,6 +246,7 @@ function pasetoIdentify(token) {
       (footerB64 ? footerB64.slice(0, 40) + (footerB64.length > 40 ? "…" : "") : "(空)"));
     let footerRaw = null;
     try { footerRaw = b64urlDecodeText(footerB64); } catch { footerRaw = null; }
+    if (footerRaw && typeof footerRaw !== "string") footerRaw = footerRaw.text || "";
     if (footerRaw) {
       const fj = parseJsonSafe(footerRaw);
       lines.push("Footer 解码: " + (fj.ok ? prettyJson(fj.value) : footerRaw.slice(0, 60)));

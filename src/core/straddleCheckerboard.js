@@ -1,5 +1,5 @@
 /*
- * straddleCheckerboard.js — 跨界棋盘 Straddling checkerboard（T305，cat:'classic'，双向）。
+ * straddleCheckerboard.js — 跨界棋盘 Straddling checkerboard（cat:'classic'，双向）。
  *
  * 背景：跨界棋盘是一种变长（fractionating）编码棋盘，二战间谍与 VIC 密码常用。
  * 它把 8 个高频字母放在首行、占用单个数字码；两个空列的列头数字作为前缀

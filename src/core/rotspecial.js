@@ -1,5 +1,5 @@
 /*
- * rotspecial.js — ROT 任意位移 + ROT8000（T271，件内自注册两个 op）。
+ * rotspecial.js — ROT 任意位移 + ROT8000（件内自注册两个 op）。
  *
  * op1 rotSpecial (cat:classic) ROT 任意位移密码。可指定任意位移 N（不止 13/5/47）
  * 在选定字母表上循环移位。alphabet: letters(仅A-Z/a-z) / alnum(含0-9) / ascii94(全可打印)。
@@ -30,7 +30,8 @@ const wrap = (idx, shift, n) => (((idx + shift) % n) + n) % n;
  * ascii94 : 全可打印 ASCII 0x21..0x7E(94) 内移（类比 rot47 的任意位移版），其余原样。
  */
 function rotShift(text, shift, alphabet) {
-  const s = Number(shift) || 0;
+  const s = Number(shift);
+  if (!Number.isInteger(s)) throw new Error("位移量须为整数（当前：" + shift + "）");
   if (alphabet === "ascii94") {
     let out = "";
     for (const ch of text) {

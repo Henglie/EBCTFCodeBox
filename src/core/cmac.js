@@ -1,5 +1,5 @@
 /*
- * cmac.js — CMAC / KMAC 消息认证码组（T348 批B3，cat:'hash'）。
+ * cmac.js — CMAC / KMAC 消息认证码组（批B3，cat:'hash'）。
  *
  * op：
  *   - aesCmac   AES-CMAC（RFC 4493，AES-128，子密钥 K1/K2 生成 + MBDW 块处理）

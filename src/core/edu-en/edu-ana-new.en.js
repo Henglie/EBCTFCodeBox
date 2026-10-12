@@ -1,5 +1,5 @@
 /*
- * edu-ana-new.en.js — English edu shard: analysis-class new ops (T307).
+ * edu-ana-new.en.js — English edu shard: analysis-class new ops .
  *
  * Covers 4 genuinely missing analysis-class edu cards:
  * sstiKeyword — SSTI keyword detection (static feature scan for server-side template injection)

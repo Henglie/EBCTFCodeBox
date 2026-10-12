@@ -234,41 +234,87 @@ function pixelJihadDecode(imageData, p = {}) {
 // 经典 Arnold 变换：N×N 图像，每像素 (x,y) → ((x+y) mod N, (x+2y) mod N)
 // 周期 T 后回到原图。encode 跑 iterations 次正向，decode 跑 T-iterations 次（或反向）。
 // 为简化：encode 跑 n 次，decode 跑 period-n 次（需先算 period）。
-// 仅支持正方形图像（width===height），非方形抛错。
+// 矩形 M×N：行模/列模分置（两次剪切 x'=(x+a·y) mod W、y'=(y+b·x') mod H，det=1 双射），
+// 方阵路径与闭式矩阵 [[1,a],[b,ab+1]] mod N 逐字节一致。perChannel：R/G/B 各平面独立置乱、alpha 不动。
 
 function arnoldCatTransform(imageData, p = {}) {
-  const n = imageData.width;
-  if (n !== imageData.height) {
-    throw new Error("Arnold 变换需要正方形图像（当前 " + imageData.width + "x" + imageData.height + "）");
+  const w = imageData.width;
+  const h = imageData.height;
+  if (!Number.isInteger(w) || !Number.isInteger(h) || w <= 0 || h <= 0) {
+    throw new Error("Arnold 变换需要非空图像（当前 " + w + "x" + h + "）");
+  }
+  if (imageData.data.length !== w * h * 4) {
+    throw new Error("Arnold 变换输入像素数据长度与尺寸不符（期望 " + w * h * 4 + " 字节，实际 " + imageData.data.length + "）");
   }
   const iterations = Math.max(1, Number(p.iterations) || 1);
   const decode = !!p.decode;
+  const rowFirst = !!p.rowFirst;
+  const perChannel = !!p.perChannel;
   const a = Number(p.a) || 1;
   const b = Number(p.b) || 1;
   const data = imageData.data;
  // 复制源数据
   const src = new Uint8ClampedArray(data);
+  const n = w;
  // 通用 Arnold 矩阵 [[1,a],[b,ab+1]]（det=1 可逆）。a=b=1 时退化为标准版。
  // 正向：新坐标 = M·(x,y)；反向 = M⁻¹·(x,y)。
  // 与参考实现（参数化猫脸变换）一致：正向 nx=(x+a*y)%N、ny=(b*x+(ab+1)*y)%N，
  // 反向 nx=((ab+1)*x-a*y)%N、ny=(y-b*x)%N。像素写入方向 dst[(ny,nx)] = src[(y,x)]。
+ // 行优先约定：首坐标=行（img[row][col]，Python/参考实现常用）。
+ // 正向 r'=r+b·c、c'=a·r+(ab+1)·c（与参考脚本逐字对齐），换算到本实现（列x,行y）即
+ // x'=a·y+(ab+1)·x、y'=b·x+y；逆矩阵 [[1,-a],[-b,ab+1]]（det=1）。a/b 按参考值原样填，不换序。
+ // 矩形 M×N（w≠h）：矩阵 det=1 分解为两次剪切，行模/列模分置各按本步模数归一——
+ //   列优先：x'=(x+a·y) mod W，y'=(y+b·x') mod H；行优先：r'=(r+b·c) mod H，c'=(c+a·r') mod W。
+ //   每步均为模平移双射，合成无条件双射；方阵时与上面闭式矩阵公式逐字节一致。
+ // perChannel：R/G/B 三平面各自独立跑同一 2D 置乱（对齐流通脚本 img[:,:,i] 逐通道语义），alpha 不动。
   for (let it = 0; it < iterations; it++) {
-    for (let y = 0; y < n; y++) {
-      for (let x = 0; x < n; x++) {
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
         let nx, ny;
-        if (decode) {
-          nx = (((a * b + 1) * x - a * y) % n + n) % n;
-          ny = ((y - b * x) % n + n) % n;
+        if (w === h) {
+          if (rowFirst) {
+            if (decode) {
+              nx = ((x - a * y) % n + n) % n;
+              ny = (((a * b + 1) * y - b * x) % n + n) % n;
+            } else {
+              nx = ((a * y + (a * b + 1) * x) % n + n) % n;
+              ny = ((b * x + y) % n + n) % n;
+            }
+          } else if (decode) {
+            nx = (((a * b + 1) * x - a * y) % n + n) % n;
+            ny = ((y - b * x) % n + n) % n;
+          } else {
+            nx = ((x + a * y) % n + n) % n;
+            ny = ((b * x + (a * b + 1) * y) % n + n) % n;
+          }
+        } else if (rowFirst) {
+          if (decode) {
+            nx = ((x - a * y) % w + w) % w;
+            ny = ((y - b * nx) % h + h) % h;
+          } else {
+            ny = ((y + b * x) % h + h) % h;
+            nx = ((x + a * ny) % w + w) % w;
+          }
+        } else if (decode) {
+          ny = ((y - b * x) % h + h) % h;
+          nx = ((x - a * ny) % w + w) % w;
         } else {
-          nx = ((x + a * y) % n + n) % n;
-          ny = ((b * x + (a * b + 1) * y) % n + n) % n;
+          nx = ((x + a * y) % w + w) % w;
+          ny = ((y + b * nx) % h + h) % h;
         }
-        const srcIdx = (y * n + x) * 4;
-        const dstIdx = (ny * n + nx) * 4;
-        data[dstIdx] = src[srcIdx];
-        data[dstIdx + 1] = src[srcIdx + 1];
-        data[dstIdx + 2] = src[srcIdx + 2];
-        data[dstIdx + 3] = src[srcIdx + 3];
+        const srcIdx = (y * w + x) * 4;
+        const dstIdx = (ny * w + nx) * 4;
+        if (perChannel) {
+ // 逐通道：R/G/B 独立置乱，A 通道原位不动（流通脚本语义）
+          data[dstIdx] = src[srcIdx];
+          data[dstIdx + 1] = src[srcIdx + 1];
+          data[dstIdx + 2] = src[srcIdx + 2];
+        } else {
+          data[dstIdx] = src[srcIdx];
+          data[dstIdx + 1] = src[srcIdx + 1];
+          data[dstIdx + 2] = src[srcIdx + 2];
+          data[dstIdx + 3] = src[srcIdx + 3];
+        }
       }
     }
  // 下次迭代基于本次结果
@@ -279,9 +325,28 @@ function arnoldCatTransform(imageData, p = {}) {
 
 // ============ imageBasic：图像基础操作 ============
 // 单向变换（run），非双向。params.op 选择具体操作。
+// solid 档（纯色图制作）为增强：无需输入图片，imageBasicOp 跳过解码直接出图。
 
 function imageBasicTransform(imageData, p = {}) {
   const op = p.op || "invert";
+  if (op === "solid") {
+ // 纯色图制作（增强，2026-10）：宽×高 + RGBA 色 → 纯色图。无需输入图片，
+ // imageBasicOp 对本档跳过图片解码。出题造载体 / 做对比参照图用。
+    const sw = Number(p.solidW), sh = Number(p.solidH);
+    const cr = Number(p.solidR), cg = Number(p.solidG), cb = Number(p.solidB);
+    if (!Number.isInteger(sw) || !Number.isInteger(sh) || sw < 1 || sh < 1 || sw > 8192 || sh > 8192) {
+      throw new Error("imageBasic：纯色图宽高需为 1-8192 的整数，当前 " + p.solidW + "×" + p.solidH);
+    }
+    if (![cr, cg, cb].every((v) => Number.isInteger(v) && v >= 0 && v <= 255)) {
+      throw new Error("imageBasic：纯色图颜色分量需为 0-255 的整数，当前 R=" + p.solidR +
+        " G=" + p.solidG + " B=" + p.solidB);
+    }
+    const solid = new Uint8ClampedArray(sw * sh * 4);
+    for (let i = 0; i < solid.length; i += 4) {
+      solid[i] = cr; solid[i + 1] = cg; solid[i + 2] = cb; solid[i + 3] = 255;
+    }
+    return { width: sw, height: sh, data: solid };
+  }
   const data = imageData.data;
   switch (op) {
     case "invert": {
@@ -459,12 +524,32 @@ async function _inputImageData(text, p) {
 // arnoldCat/imageBasic/bitplaneSlicing/imageDiff）一行不改。
 
 async function lsbImageEncodeOp(text, p = {}) {
-  const imageData = await _inputImageData(text, p);
   const msg = p && p.message != null ? String(p.message) : "";
   if (!msg) throw new Error("请在「待隐藏文本」参数中填入要隐藏的内容");
-  return imageDataToDataURL(lsbMultiEncode(imageData, msg, p));
+  // 输入：PNG 载体优先纯 JS 解码（stegoPixels.decodePNG），半透明 PNG 的 RGB 低位
+  // 不被 canvas drawImage 预乘破坏；非 PNG（JPG/BMP/GIF）或解码器不支持的 PNG 回退 canvas。
+  let imageData;
+  const bytes = _imageInputBytes(text, p);
+  if (bytes && bytes.length) {
+    try { imageData = decodePNG(bytes); }
+    catch (e) { imageData = await _inputImageData(text, p); }
+  } else {
+    imageData = await _inputImageData(text, p);
+  }
+  const out = lsbMultiEncode(imageData, msg, p);
+  // 输出：纯 JS PNG 编码（mcMap.encodePNG / rgbaToDataURL），绕过 canvas
+  // putImageData→toDataURL 的预乘舍入，alpha 承载的消息位原样落盘（无能力降级）。
+  return rgbaToDataURL(out.data, out.width, out.height);
 }
 async function lsbImageDecodeOp(text, p = {}) {
+  // 解码：PNG 优先纯 JS 解码（decodePNG），绕过 canvas drawImage 预乘舍入，
+  // alpha 通道承载的消息位可被精确读取；非 PNG 或不支持的 PNG 回退 canvas。
+  const bytes = _imageInputBytes(text, p);
+  if (bytes && bytes.length) {
+    try {
+      return lsbMultiDecode(decodePNG(bytes), p);
+    } catch (e) { /* 非 PNG / 解码器不支持 → 回退 canvas */ }
+  }
   const imageData = await _inputImageData(text, p);
   return lsbMultiDecode(imageData, p);
 }
@@ -486,6 +571,12 @@ async function arnoldCatOp(text, p = {}) {
 }
 
 async function imageBasicOp(text, p = {}) {
+  // solid 档（纯色图制作）无需输入图片：跳过解码直接出图。
+  // 输出走纯 JS PNG 编码（rgbaToDataURL），浏览器/Node 双环境一致可对拍。
+  if ((p && p.op) === "solid") {
+    const out = imageBasicTransform(null, p);
+    return rgbaToDataURL(out.data, out.width, out.height);
+  }
   const imageData = await _inputImageData(text, p);
   return imageDataToDataURL(imageBasicTransform(imageData, p));
 }
@@ -553,12 +644,14 @@ register({
 
 register({
   id: "arnoldCat", family: "arnold", familyLabel: "transform", cat: "stegoFile", name: "Arnold 猫脸变换",
-  desc: "Arnold 猫脸变换置乱（正方形图像，参数化矩阵 [[1,a],[b,ab+1]]，a=b=1 为标准版）",
+  desc: "Arnold 猫脸变换置乱（支持正方形与任意矩形 M×N，参数化矩阵 [[1,a],[b,ab+1]]，a=b=1 为标准版；矩形按行模/列模分置可逆）。行优先约定：对齐首坐标=行的参考实现（Python img[row][col] 类），勾选后 a/b 按原值填，无需换序。逐通道置乱：对齐流通脚本 R/G/B 各平面独立跑猫脸的语义，alpha 通道不动",
   params: [
     { key: "iterations", label: "迭代次数", type: "number", default: 1, placeholder: "1-100" },
     { key: "a", label: "参数 a", type: "number", default: 1, placeholder: "矩阵 [[1,a],[b,ab+1]]" },
     { key: "b", label: "参数 b", type: "number", default: 1, placeholder: "矩阵 [[1,a],[b,ab+1]]" },
     { key: "decode", label: "反向还原", type: "bool", default: false },
+    { key: "rowFirst", label: "行优先约定", type: "bool", default: false },
+    { key: "perChannel", label: "逐通道置乱", type: "bool", default: false },
   ],
   run: arnoldCatOp, // 单向（decode 用 decode:true 参数）
   acceptsBytes: true,
@@ -590,6 +683,7 @@ const _BRUTE_GLYPHS = {
   "9": ["111", "101", "111", "001", "111"],
   a: ["111", "101", "111", "101", "101"],
   b: ["110", "101", "110", "101", "110"],
+  r: ["110", "101", "110", "101", "101"],
   t: ["111", "010", "010", "010", "010"],
 };
 
@@ -623,14 +717,15 @@ async function arnoldCatBruteOp(text, p = {}) {
   const bEnd = Math.max(bStart, Number(p.bEnd) || 3);
   const tStart = Math.max(1, Number(p.tStart) || 1);
   const tEnd = Math.max(tStart, Number(p.tEnd) || 5);
-  const total = (aEnd - aStart + 1) * (bEnd - bStart + 1) * (tEnd - tStart + 1);
+  const rowFirstToo = !!p.rowFirstToo; // 约定枚举维：勾选后每个 (a,b,t) 列优先∪行优先各跑一遍
+  const total = (aEnd - aStart + 1) * (bEnd - bStart + 1) * (tEnd - tStart + 1) * (rowFirstToo ? 2 : 1);
   if (total > 2000) {
     throw new Error("候选组合 " + total + " 超过上限 2000，请缩小范围（暴破结果全生成拼图，太多会卡）");
   }
   // 输入解码分流（修复「用户图进不去就崩」）：
   // ① 浏览器优先 Canvas（dataURLToImageData，通吃 JPEG/BMP/隔行 PNG/调色板 PNG）。
-  //    拖入文件时 text 只是占位提示，真字节在 p.rawBytes（acceptsBytes 约定），
-  //    先按魔数包成 data:URL 再喂 <img>。
+  //   拖入文件时 text 只是占位提示，真字节在 p.rawBytes（acceptsBytes 约定），
+  //   先按魔数包成 data:URL 再喂 <img>。
   // ② Canvas 失败或非浏览器 → 纯 JS decodePNG（node 可测，仅支持非隔行 PNG）。
   // ③ 两层都失败 → 把两层原因一起报出（先 Canvas 后纯 JS）。
   const rawBytes = (p && p.rawBytes && p.rawBytes.length)
@@ -692,6 +787,26 @@ async function arnoldCatBruteOp(text, p = {}) {
         }
         thumbs.push(th);
         labels.push("a" + a + "b" + b + "t" + t);
+        if (rowFirstToo) {
+ // 行优先候选（同 a/b/t，反向还原按行优先约定），标签尾 r
+          const candR = arnoldCatTransform(
+            { width: n, height: n, data: new Uint8ClampedArray(src) },
+            { iterations: t, a, b, decode: true, rowFirst: true }
+          );
+          const thR = new Uint8ClampedArray(tw * THUMB_H * 4);
+          for (let y = 0; y < THUMB_H; y++) {
+            const sy = Math.min(n - 1, Math.floor(y / thScale));
+            for (let x = 0; x < tw; x++) {
+              const sx = Math.min(n - 1, Math.floor(x / thScale));
+              const si = (sy * n + sx) * 4;
+              const di = (y * tw + x) * 4;
+              thR[di] = candR.data[si]; thR[di + 1] = candR.data[si + 1];
+              thR[di + 2] = candR.data[si + 2]; thR[di + 3] = candR.data[si + 3];
+            }
+          }
+          thumbs.push(thR);
+          labels.push("a" + a + "b" + b + "t" + t + "r");
+        }
       }
     }
   }
@@ -723,7 +838,7 @@ async function arnoldCatBruteOp(text, p = {}) {
 
 register({
   id: "arnoldCatBrute", family: "arnold", familyLabel: "crack", cat: "stegoFile", name: "Arnold 猫脸暴破",
-  desc: "全参数暴力破解：a/b/迭代次数三维范围遍历反向还原，候选缩略图网格拼图输出（随参数范围增大耗时线性增长）",
+  desc: "全参数暴力破解：a/b/迭代次数三维范围遍历反向还原，候选缩略图网格拼图输出（随参数范围增大耗时线性增长）。可勾「枚举行优先约定」加约定枚举维：列优先∪行优先各跑一遍，行优先候选标签尾带 r",
   params: [
     { key: "aStart", label: "a 起始", type: "number", default: 1 },
     { key: "aEnd", label: "a 结束", type: "number", default: 3 },
@@ -731,6 +846,7 @@ register({
     { key: "bEnd", label: "b 结束", type: "number", default: 3 },
     { key: "tStart", label: "次数起始", type: "number", default: 1 },
     { key: "tEnd", label: "次数结束", type: "number", default: 5 },
+    { key: "rowFirstToo", label: "枚举行优先约定", type: "bool", default: false },
   ],
   run: arnoldCatBruteOp,
   acceptsBytes: true,
@@ -738,7 +854,7 @@ register({
 
 register({
   id: "imageBasic", cat: "image", name: "图像基础操作",
-  desc: "反色/翻转/通道分离/位平面提取等图像基础变换",
+  desc: "反色/翻转/通道分离/位平面提取/纯色图制作等图像基础变换",
   params: [
     { key: "op", label: "操作", type: "select", default: "invert",
       options: [
@@ -749,10 +865,16 @@ register({
         { value: "channelG", label: "只保留 G 通道" },
         { value: "channelB", label: "只保留 B 通道" },
         { value: "bitplane", label: "位平面提取" },
+        { value: "solid", label: "纯色图制作（无需输入图片）" },
       ],
     },
     { key: "channel", label: "位平面通道", type: "number", default: 0, placeholder: "0=R,1=G,2=B" },
     { key: "bit", label: "位序号", type: "number", default: 0, placeholder: "0-7" },
+    { key: "solidW", label: "纯色图宽（像素，仅纯色图档）", type: "number", default: 256 },
+    { key: "solidH", label: "纯色图高（像素，仅纯色图档）", type: "number", default: 256 },
+    { key: "solidR", label: "纯色图 R（0-255）", type: "number", default: 255 },
+    { key: "solidG", label: "纯色图 G（0-255）", type: "number", default: 0 },
+    { key: "solidB", label: "纯色图 B（0-255）", type: "number", default: 0 },
   ],
   run: imageBasicOp,
   acceptsBytes: true,
@@ -1071,7 +1193,7 @@ function pngTextEncode(text, p = {}) {
   out.set(bytes.subarray(0, insertOff), 0);
   out.set(chunk, insertOff);
   out.set(bytes.subarray(insertOff), insertOff + chunk.length);
-  // T363b 产物协议 2026-09-02：写入后的 PNG 字节走 files 下载按钮，text 保留 base64 行（链式/复制兼容）。
+  // 产物协议 2026-09-02：写入后的 PNG 字节走 files 下载按钮，text 保留 base64 行（链式/复制兼容）。
   return { text: _bytesToB64(out), files: [{ name: "out.png", mime: "image/png", bytes: out }] };
 }
 
@@ -1090,7 +1212,7 @@ function pngHeightTransform(text, p = {}) {
   const out = new Uint8Array(bytes);
   _setU32be(out, 20, newH);
   _setU32be(out, 29, _crc32(out, 12, 29)); // 重算 IHDR CRC（type+data = [12,29)）
-  // T363b 产物协议 2026-09-02：改高后的 PNG 字节走 files 下载按钮，text 保留 base64 行（链式/复制兼容）。
+  // 产物协议 2026-09-02：改高后的 PNG 字节走 files 下载按钮，text 保留 base64 行（链式/复制兼容）。
   return { text: _bytesToB64(out), files: [{ name: "out.png", mime: "image/png", bytes: out }] };
 }
 

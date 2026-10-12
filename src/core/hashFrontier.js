@@ -1,5 +1,5 @@
 /*
- * hashFrontier.js — 哈希边界补全三件（T398 · 批B）。
+ * hashFrontier.js — 哈希边界补全三件（· 批B）。
  *
  * 覆盖：Argon2 KDF（RFC 9106，Argon2d/i/id）/ Tiger & Tiger2（192-bit，Anderson-Biham）/
  * Kupyna（乌克兰 DSTU 7564:2014，256/384/512）。全部单向 run，输入 text/hex 可选，输出小写 hex。

@@ -1,4 +1,4 @@
-// workerPool.src.js — Worker 池 + 爆破并行化（T37）
+// workerPool.src.js — Worker 池 + 爆破并行化
 //
 // 设计：
 // - 主线程 API：bruteParallel(taskGen, options) → Promise<results[]>

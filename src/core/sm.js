@@ -1,5 +1,5 @@
 /*
- * sm.js — 国密补全组（T69）。
+ * sm.js — 国密补全组。
  *
  * 覆盖：
  * - ZUC 祖冲之流密码（GB/T 33133.1-2016，前身 GM/T 0001-2012，128 位密钥 + 128 位 IV，完整实现）
@@ -224,7 +224,10 @@ function zucCrypt(data, key, iv) {
 // 编码工具（hex / base64 / utf8）
 // ============================================================
 function hexToBytes(s) {
-  const clean = s.replace(/[^0-9a-fA-F]/g, "");
+  const clean = String(s).replace(/\s+/g, ""); // 仅容忍空白（粘贴换行/空格），其余非法字符显式报错
+  if (/[^0-9a-fA-F]/.test(clean)) {
+    throw new Error("hex 输入含非法字符（仅允许 0-9a-fA-F）：" + s);
+  }
   if (clean.length % 2) throw new Error("hex 长度必须为偶数");
   const out = new Uint8Array(clean.length / 2);
   for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);

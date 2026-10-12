@@ -167,8 +167,11 @@ function separarEnGrupos(texto, digitos) {
 // params: { key } — op 层调用约定（registry params 对象）
 function bazeriesEncrypt(text, params = {}) {
   const key = params.key != null ? params.key : params;
-  const keyInt = parseInt(key, 10);
-  if (isNaN(keyInt)) throw new Error("Bazeries 密钥须为数字");
+  // 逐字符校验：须为纯数字且不含 0（前导零如 052 会被 parseInt 吞掉 0 而绕过守卫，显式拒绝）
+  const keyStr = String(key != null ? key : "").trim();
+  if (!/^[0-9]+$/.test(keyStr)) throw new Error("Bazeries 密钥须为纯数字（当前：" + keyStr + "）");
+  if (keyStr.includes("0")) throw new Error("Bazeries 密钥含数字 0，分组长度不能为 0（前导零亦不允许）");
+  const keyInt = parseInt(keyStr, 10);
  // 去空格 + 转小写
   let texto = text.replace(/ /g, "").toLowerCase();
  // 只保留 alfabeto 内字符（j→i）
@@ -204,8 +207,11 @@ function bazeriesEncrypt(text, params = {}) {
 // params: { key } — op 层调用约定
 function bazeriesDecrypt(text, params = {}) {
   const key = params.key != null ? params.key : params;
-  const keyInt = parseInt(key, 10);
-  if (isNaN(keyInt)) throw new Error("Bazeries 密钥须为数字");
+  // 逐字符校验：须为纯数字且不含 0（前导零如 052 会被 parseInt 吞掉 0 而绕过守卫，显式拒绝）
+  const keyStr = String(key != null ? key : "").trim();
+  if (!/^[0-9]+$/.test(keyStr)) throw new Error("Bazeries 密钥须为纯数字（当前：" + keyStr + "）");
+  if (keyStr.includes("0")) throw new Error("Bazeries 密钥含数字 0，分组长度不能为 0（前导零亦不允许）");
+  const keyInt = parseInt(keyStr, 10);
   const digitos = keyToDigitos(keyInt);
   if (digitos.length === 0 || digitos.every(d => d === 0)) {
     throw new Error("Bazeries 密钥各位全为 0，无法分组");

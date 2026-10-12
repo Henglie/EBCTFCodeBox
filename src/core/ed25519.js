@@ -14,11 +14,12 @@
  * 红线：算法照 RFC 8032，纯 BigInt + 内置纯 JS SHA-512，零外发。core 仅 import registry。
  *       随机私钥用 crypto.getRandomValues。用 RFC 8032 §7.1 官方测试向量验证。
  *
- * 契约：族滑块三档 op（T396-A）：ed25519KeyGen / ed25519Sign / ed25519Verify，
+ * 契约：族滑块三档 op（-A）：ed25519KeyGen / ed25519Sign / ed25519Verify，
  *        family:"ed25519"。
  */
 
 import { register } from "./registry.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 纯 JS 同步 SHA-512（用 BigInt 64-bit 字，仅用于摘要，非机密）
@@ -232,7 +233,7 @@ function hexToBytes(hex) {
   return out;
 }
 function bytesToHex(b) { return Array.from(b).map((x) => x.toString(16).padStart(2, "0")).join(""); }
-function randomKey() { const b = new Uint8Array(32); crypto.getRandomValues(b); return b; }
+function randomKey() { return randBytes(32); }
 function need32(b, label) { if (b.length !== 32) throw new Error(`${label} 必须 32 字节，当前 ${b.length}`); return b; }
 
 // 消息：hex 或 UTF-8 文本
@@ -242,7 +243,7 @@ function msgBytes(text, msgMode) {
 }
 
 // ============================================================
-// Ed25519 三档算法族（T396-A，2026-09-04：同族多操作必须族滑块，废除下拉切模式）
+// Ed25519 三档算法族（-A，2026-09-04：同族多操作必须族滑块，废除下拉切模式）
 // family:"ed25519"（与已有 ed448 族命名区分）+ familyLabel → fam.lbl.*
 // （keygen/sign/verify 三 key 均已在 zh/en 主表）。底层 publicKey/sign/verify
 // 实现原样复用，每个 op 只保留本档参数面。
@@ -263,7 +264,7 @@ register({
     const skRaw = (p && p.priv && String(p.priv).trim());
     const sk = skRaw ? need32(hexToBytes(skRaw), "私钥") : randomKey();
     const pk = publicKey(sk);
-    // T362 产物协议（2026-09-02）：私钥 / 公钥分开交付下载按钮（hex 文本）。
+    // 产物协议（2026-09-02）：私钥 / 公钥分开交付下载按钮（hex 文本）。
     return {
       text: [
         "=== Ed25519 密钥生成 ===",

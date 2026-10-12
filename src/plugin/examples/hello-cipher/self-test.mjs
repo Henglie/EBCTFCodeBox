@@ -1,5 +1,5 @@
 /*
- * hello-cipher 自测（node 直跑）— T358：验证 registerCustomImpl 演示预设。
+ * hello-cipher 自测（node 直跑）— 验证 registerCustomImpl 演示预设。
  * 断言四件事：
  *  1. 两个演示预设的 code 真能往返（encode → decode 复原原文）；
  *  2. 激活插件后 presetsFor("base64") 比加载前多 2 条（1 条绑定 base64 + 1 条全局可见）；

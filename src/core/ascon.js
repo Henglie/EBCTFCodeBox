@@ -27,10 +27,18 @@
  * （Key=000102..0F 全量）+ NIST ACVP 官方向量（含比特级长度与 nonce-masking 组）
  * + ascon 官方 python 参考实现置换核心（模式层按标准 LE 约定重写）。
  *
+ * 产物契约（2026-10-08）：加密模式输出真正的密文字节产物
+ * { text: <密文+tag 的小写 hex>, files: [{ name, mime, bytes }] } —— bytes 是真字节，
+ * text 是该字节的无损 hex 表示（层①：可继续进配方链）。解密模式接受真字节
+ * （acceptsBytes，走 params.rawBytes）或 hex 文本，输出明文字节（合法 UTF-8 出文本，
+ * 否则出 { text: hex, files }），绝不静默替换。四路（产品/参考 交叉）原样字节闭环。
+ *
  * 红线：core 层零 UI 依赖；纯本地零外发；无 emoji。
  * 契约：register({ id, cat, name, desc, params, run })，件内自注册。
  */
 import { register } from "./registry.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
+import { finishBytesDecode } from "./bytesIo.js";
 
 // ============ 基础工具 ============
 
@@ -53,6 +61,14 @@ function hexToBytes(h) {
   const out = new Uint8Array(s.length / 2);
   for (let i = 0; i < out.length; i++) out[i] = parseInt(s.slice(i * 2, i * 2 + 2), 16);
   return out;
+}
+
+/** 取 op 的真字节输入通道（配方链/文件投喂注入的 params.rawBytes）。无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  if (b instanceof Uint8Array) return b;
+  return Uint8Array.from(b);
 }
 
 /** 8 字节 → 64 位字（附录 A.1：首字节为最低有效字节，LE 装载；越界按 0）。 */
@@ -336,13 +352,7 @@ export function asconHash256(message, bitLen) {
 // ============ run 层（UI 驱动） ============
 
 function randomBytes16() {
-  const b = new Uint8Array(16);
-  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
-    crypto.getRandomValues(b);
-  } else {
-    for (let i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
-  }
-  return b;
+  return randBytes(16);
 }
 
 function asconRun(text, p) {
@@ -354,52 +364,54 @@ function asconRun(text, p) {
   if (!Number.isFinite(tagLen)) tagLen = 16;
   if (tagLen < 4 || tagLen > 16) throw new Error("tag 长度须 4..16 字节（§4.2.1：截断下限 32bit）");
 
-  const lines = [];
-  lines.push("=== Ascon-AEAD128（NIST SP 800-232 §4.1）===");
-
   if (mode === "encrypt") {
+    // nonce：留空随机生成（16 字节）；填了则必须恰为 16 字节（非法长度明示报错）
     let nonce = p && p.nonce ? hexToBytes(p.nonce) : new Uint8Array(0);
     let nonceRand = false;
     if (nonce.length === 0) {
       nonce = randomBytes16();
       nonceRand = true;
+    } else if (nonce.length !== 16) {
+      throw new Error(`Ascon-AEAD128 nonce 必须为 16 字节（128 位），当前 ${nonce.length} 字节`);
     }
+    // 明文：优先真字节通道（acceptsBytes），否则按 inputMode 解析主输入
     const inputMode = (p && p.inputMode) || "text";
-    const pt = inputMode === "hex" ? hexToBytes(text) : new TextEncoder().encode(text);
+    const rawPt = rawBytesOf(p);
+    const pt = rawPt || (inputMode === "hex" ? hexToBytes(text) : new TextEncoder().encode(text));
     const { ciphertext, tag } = asconAead128Encrypt(key, nonce, aad, pt);
     const tagCut = tag.slice(0, tagLen);
-    lines.push(`模式: 加密（明文 ${pt.length} 字节，aad ${aad.length} 字节）`);
-    lines.push(`key:   ${bytesToHex(key)}`);
-    lines.push(`nonce: ${bytesToHex(nonce)}${nonceRand ? "（留空已随机生成，请自行保存）" : ""}`);
-    lines.push(`tag:   ${bytesToHex(tagCut)}（${tagLen} 字节${tagLen < 16 ? "，已按 §4.2.1 截断" : ""}）`);
-    lines.push("");
-    lines.push(`密文(hex):        ${bytesToHex(ciphertext)}`);
-    lines.push(`tag(hex):         ${bytesToHex(tagCut)}`);
-    lines.push(`完整密文+tag(hex): ${bytesToHex(ciphertext)}${bytesToHex(tag)}`);
-    return lines.join("\n");
+    // 密文字节产物 = 密文 ‖ tag（真字节；tag 按 §4.2.1 截断到 tagLen）
+    const artifact = new Uint8Array(ciphertext.length + tagCut.length);
+    artifact.set(ciphertext, 0);
+    artifact.set(tagCut, ciphertext.length);
+    return {
+      // 层①：text 是该字节的无损 hex 表示，可原样进配方链；真字节在 files
+      text: bytesToHex(artifact),
+      files: [{
+        // 随机生成的 nonce 无法从密文反推，故写入文件名避免丢失；显式 nonce 用固定名
+        name: nonceRand ? `ascon-ciphertext.nonce-${bytesToHex(nonce)}.bin` : "ascon-ciphertext.bin",
+        mime: "application/octet-stream",
+        bytes: artifact,
+      }],
+    };
   }
 
-  // 解密：输入 = 密文+tag（hex），tag 取末 tagLen 字节
-  const all = hexToBytes(text);
-  if (all.length < tagLen) throw new Error(`输入 hex 至少应含密文+${tagLen} 字节 tag，当前仅 ${all.length} 字节`);
+  // 解密：输入可为真字节（rawBytes，原样喂入）或密文+tag 的 hex 文本；tag 取末 tagLen 字节
+  const all = rawBytesOf(p) || hexToBytes(text);
+  if (all.length < tagLen) throw new Error(`输入至少应含密文+${tagLen} 字节 tag，当前仅 ${all.length} 字节`);
   const nonce = p && p.nonce ? hexToBytes(p.nonce) : new Uint8Array(0);
   if (nonce.length === 0) throw new Error("解密必须提供 nonce（16 字节 hex）");
+  if (nonce.length !== 16) throw new Error(`Ascon-AEAD128 nonce 必须为 16 字节（128 位），当前 ${nonce.length} 字节`);
   const ct = all.subarray(0, all.length - tagLen);
   const tag = all.subarray(all.length - tagLen);
   const pt = asconAead128Decrypt(key, nonce, aad, ct, tag);
-  lines.push(`模式: 解密（密文 ${ct.length} 字节，aad ${aad.length} 字节）`);
-  lines.push(`key:   ${bytesToHex(key)}`);
-  lines.push(`nonce: ${bytesToHex(nonce)}`);
-  lines.push("tag 校验: 通过");
-  lines.push("");
-  lines.push(`明文(hex):  ${bytesToHex(pt)}`);
-  lines.push("明文(text): " + new TextDecoder("utf-8", { fatal: false }).decode(pt));
-  return lines.join("\n");
+  // 明文字节出口：合法 UTF-8 出文本；否则出 { text: hex, files }（绝不静默 U+FFFD 替换）
+  return finishBytesDecode(pt, { textMode: "hex", name: "ascon-plaintext" });
 }
 
 function asconHashRun(text, p) {
   const inputMode = (p && p.inputMode) || "text";
-  const msg = inputMode === "hex" ? hexToBytes(text) : new TextEncoder().encode(text);
+  const msg = rawBytesOf(p) || (inputMode === "hex" ? hexToBytes(text) : new TextEncoder().encode(text));
   const digest = asconHash256(msg);
   let b64 = "";
   try {
@@ -422,7 +434,7 @@ register({
   id: "ascon",
   cat: "modern",
   name: "Ascon-AEAD128",
-  desc: "NIST SP 800-232 轻量级认证加密（2025 标准版）：rate 128bit、初始化/终结 p[12]、数据块 p[8]、IV 0x00001000808c0001、小端字节序（与 v1.2 互不通用）。key/nonce 各 16 字节 hex，nonce 留空加密时随机；解密校验 tag 不符即报错。NIST LWC KAT + ACVP 官方向量验证。",
+  desc: "NIST SP 800-232 轻量级认证加密（2025 标准版）：rate 128bit、初始化/终结 p[12]、数据块 p[8]、IV 0x00001000808c0001、小端字节序（与 v1.2 互不通用）。key/nonce 各 16 字节 hex，nonce 留空加密时随机；加密输出真正的密文字节产物（密文+tag，可下载；text 为其无损 hex），解密可直接吃该字节产物或 hex 文本，tag 不符即报错。NIST LWC KAT + ACVP 官方向量验证。",
   params: [
     {
       key: "mode", label: "模式", type: "select", default: "encrypt",
@@ -451,6 +463,7 @@ register({
     { key: "tagLen", label: "tag 字节数", type: "number", default: 16, placeholder: "4..16，默认 16（§4.2.1 截断）" },
   ],
   run: asconRun,
+  acceptsBytes: true,
 });
 
 register({

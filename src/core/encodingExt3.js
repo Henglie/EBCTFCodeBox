@@ -1,5 +1,5 @@
 /*
- * encodingExt3.js — T508 批二·编码映射组（B1/B2/B7/B8/B9/B10/D1；A8 圣殿骑士 BLOCKED 未实现）。
+ * encodingExt3.js — 批二·编码映射组（B1/B2/B7/B8/B9/B10/D1；A8 圣殿骑士 BLOCKED 未实现）。
  *
  * 7 个 op：crockford32 / alienAlphabet / futhark / countingRods / chuckUnary / wingdings / cardanGrille。
  * 口径来源（逐项，全部 2026-09 抓取/实测核实，未凭记忆编造）：
@@ -24,9 +24,10 @@
  *                   24 符标准序（码位）：ᚠ16A0 ᚢ16A2 ᚦ16A6 ᚨ16A8 ᚱ16B1 ᚲ16B2 ᚷ16B7 ᚹ16B9 ᚺ16BA
  *                   ᚾ16BE ᛁ16C1 ᛃ16C3 ᛇ16C7 ᛈ16C8 ᛉ16C9 ᛊ16CA ᛏ16CF ᛒ16D2 ᛖ16D6 ᛗ16D7 ᛚ16DA
  *                   ᛜ16DC ᛞ16DE ᛟ16DF。
- *   countingRods  — Wikipedia Counting rods：横式 1-9 = U+1D360-1D368、纵式 1-9 = U+1D369-1D371、
- *                   0 = 〇(U+3007)（《孙子算经》「一纵十横」：从右数奇位（个百十万…）用纵式、
- *                   偶位（十千万…）用横式）；官方例 231→𝍪𝍢𝍩、5089→𝍤〇𝍧𝍱、71824→𝍯𝍠𝍰𝍡𝍤。
+ *   countingRods  — Wikipedia Counting rods：纵式（UNIT DIGIT）1-9 = U+1D360-1D368、横式（TENS DIGIT）
+ *                   1-9 = U+1D369-1D371、0 = 〇(U+3007)（《孙子算经》「一纵十横」：从右数第 1、3、5…
+ *                   位（个、百、万…）用纵式、第 2、4、6…位（十、千、十万…）用横式）；
+ *                   维基例（《永乐大典》卷 71824 数码）231→𝍡𝍫𝍠、5089→𝍭〇𝍰𝍨、71824→𝍦𝍩𝍧𝍪𝍣。
  *                   注：dCode code-chinois 页是另一物（scout 木棍密码），与算筹无关。
  *   chuckUnary    — dCode code-chuck-norris：字符→7bit ASCII（可选 8bit）连成位流；
  *                   连续 N 个 1 →「0」+ N 个 0；连续 N 个 0 →「00」+ N 个 0；组间空格，
@@ -283,8 +284,9 @@ register({
 /* ================================================================
  * B8 算筹数字（Wikipedia Counting rods）
  * ================================================================ */
-const ROD_H = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => cp(0x1d35f + d)); // 横式 𝍠-𝍨 = U+1D360-1D368
-const ROD_V = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => cp(0x1d368 + d)); // 纵式 𝍩-𝍱 = U+1D369-1D371
+// Unicode 官方名：U+1D360-1D368 COUNTING ROD UNIT DIGIT = 纵式；U+1D369-1D371 TENS DIGIT = 横式
+const ROD_V = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => cp(0x1d35f + d)); // 纵式 𝍠-𝍨 = U+1D360-1D368
+const ROD_H = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => cp(0x1d368 + d)); // 横式 𝍩-𝍱 = U+1D369-1D371
 const ROD_ZERO = cp(0x3007); // 〇
 const ROD_REV = new Map();
 ROD_H.forEach((ch, i) => ROD_REV.set(ch, String(i + 1)));
@@ -322,7 +324,7 @@ function rodsDecode(text, p) {
     for (const ch of tok) {
       const d = ROD_REV.get(ch);
       if (d === undefined)
-        throw new Error(`算筹数字：字符 "${ch}" 不是算筹数字（横式 𝍠-𝍨 / 纵式 𝍩-𝍱 / 〇）。`);
+        throw new Error(`算筹数字：字符 "${ch}" 不是算筹数字（纵式 𝍠-𝍨 / 横式 𝍩-𝍱 / 〇）。`);
       s += d;
     }
     outs.push(s);
@@ -332,7 +334,7 @@ function rodsDecode(text, p) {
 
 register({
   id: "countingRods", cat: "cn", name: "算筹数字",
-  desc: "中国算筹记数：个百十万位用纵式 𝍩-𝍱、十千万位用横式 𝍠-𝍨（一纵十横），0 用〇；空格分隔多个数，双向",
+  desc: "中国算筹记数：个、百、万位用纵式 𝍠-𝍨，十、千、十万位用横式 𝍩-𝍱（一纵十横，纵横相间），0 用〇；空格分隔多个数，双向",
   params: [],
   encode: rodsEncode,
   decode: rodsDecode,
@@ -344,10 +346,11 @@ register({
 function chuckEncode(text, p) {
   const width = Number((p && p.width) || 7);
   if (width !== 7 && width !== 8) throw new Error("Chuck Norris unary：宽度只支持 7 或 8 位。");
+  const maxCp = width === 7 ? 0x7f : 0xff; // 7 位宽只装得下 7 位字符——超界会造成位流错位
   let bits = "";
   for (const ch of String(text ?? "")) {
     const c = ch.codePointAt(0);
-    if (c > 0xff) throw new Error(`Chuck Norris unary：字符 "${ch}" 超出 ${width} 位 ASCII 范围。`);
+    if (c > maxCp) throw new Error(`Chuck Norris unary：字符 "${ch}" 超出 ${width} 位 ASCII 范围。`);
     bits += c.toString(2).padStart(width, "0");
   }
   const groups = [];

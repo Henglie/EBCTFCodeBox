@@ -14,13 +14,14 @@
 import { register } from "./registry.js";
 import { generatePrime, isProbablePrime } from "./primeGen.js";
 import { modPow } from "./elgamal.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 function randomBig(bits) {
   const bytes = Math.ceil(bits / 8);
   const buf = new Uint8Array(bytes);
   let v;
   do {
-    crypto.getRandomValues(buf);
+    buf.set(randBytes(buf.length));
     v = 0n;
     for (const b of buf) v = (v << 8n) | BigInt(b);
     v |= 1n << BigInt(bits - 1); // 置最高位，保证位长足额
@@ -52,7 +53,10 @@ register({
     { key: "showQ", label: "输出 q 与中间量", type: "bool", default: true },
   ],
   run: (_text, p) => {
-    const bits = Math.max(16, Math.min(1024, Number(p?.bits) || 256));
+    const rawBits = p?.bits;
+    const requestedBits = rawBits == null || String(rawBits).trim() === "" ? 256 : Number(rawBits);
+    if (!Number.isInteger(requestedBits)) throw new Error("ElGamal 位长必须为整数");
+    const bits = Math.max(16, Math.min(1024, requestedBits || 256));
     // 1) 安全素数 p = 2q+1：q 素且 p 素（Miller-Rabin，复用 primeGen 判据）
     let q = 0n, P = 0n;
     for (let tries = 0; ; tries++) {
@@ -79,7 +83,7 @@ register({
       p?.showQ !== false ? `子群阶 q = ${q}` : "",
       "使用：把 p/g/y 填入「ElGamal」op 加密；把 p/x 填入解密（y=g^x 可自查）",
     ].filter(Boolean);
-    // T362 产物协议（2026-09-02）：公钥（p/g/y）/ 私钥（p/x）分开交付下载按钮（十进制文本）。
+    // 产物协议（2026-09-02）：公钥（p/g/y）/ 私钥（p/x）分开交付下载按钮（十进制文本）。
     lines.push("", "公钥 / 私钥已分开生成：私钥 ⚠ 敏感请妥善保管。点击下方按钮下载。");
     return {
       text: lines.join("\n"),

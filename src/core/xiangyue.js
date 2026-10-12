@@ -30,16 +30,17 @@ import { register } from "./registry.js";
 import { argon2id } from "./argon2id.js";
 import { chacha20Poly1305Decrypt, chacha20Poly1305Encrypt } from "./poly1305.js";
 import { aesDecrypt, aesEncrypt } from "./modern.js";
-import { streamDecompress, streamCompress } from "./compress.js"; // v0.1.5：安全流解压（超时+纯JS inflate 兜底）/ T511 加密侧 deflate
+import { streamDecompress, streamCompress } from "./compress.js"; // v0.1.5：安全流解压（超时+纯JS inflate 兜底）/ 加密侧 deflate
 import {
   combinedCharMap, combinedCharMap2, combinedCharMap4, combinedCharMap5, combinedCharMap6,
   ReverseCharSets3, CharSets, CharSets2, CharSets3, CharSets4, CharSets5, CharSets6, XY_ALPHABET,
 } from "./xiangyueMaps.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 const DEFAULT_PASSWORD = "a184f7b849ffed24d266a30298c72ef2f5ad040db73bf37151fac767630728";
 
 const te = (s) => new TextEncoder().encode(s);
-const td = (b) => new TextDecoder("utf-8").decode(b);
+const td = (b) => new TextDecoder("utf-8", { ignoreBOM: true }).decode(b);
 
 // ============ Base64 → 字节（标准表） ============
 function b64ToBytes(s) {
@@ -65,7 +66,7 @@ function charToUnicode(ch) {
   return "U+" + code.toString(16).toUpperCase();
 }
 
-// 源码 extract_emojis 的语义（T511 修复：改按 Unicode 码点切分，对齐 Python 原版）
+// 源码 extract_emojis 的语义（修复：改按 Unicode 码点切分，对齐 Python 原版）
 // 原正则按 UTF-16 码元匹配，星面 emoji（U+1F3xx 等）裂成两个孤立代理项 →
 // charToUnicode 得 U+D83D 类键 → isEmoji 判否，星面密文永远解不开。
 // 码点化后 BMP 区间与原正则等价，星面整码点提取；序列（ZWJ/fe0f）按段提取，
@@ -291,18 +292,16 @@ register({
   },
 });
 
-// ============ 加密方向（T511：严格逆推上方解密链，零新密码学代码） ============
+// ============ 加密方向（：严格逆推上方解密链，零新密码学代码） ============
 // 明文 → zlib deflate（RFC1950，解密 inflateThenUtf8 先试 raw 失败后试 deflate）
 // → AES-CTR → ChaCha20-Poly1305 → salt(16)‖nonce(12)‖ct‖tag(16)（format2）
-//   / seed(16)‖ct‖tag(16)（format1，AAD=seed）→ Base64 → 按 mapId 映射输出。
+//  / seed(16)‖ct‖tag(16)（format1，AAD=seed）→ Base64 → 按 mapId 映射输出。
 // format2 的 chacha 明文前 16B 必须是随机 aesIv（解密 L233 提取），字节序不可换。
 // 映射输出对齐自动识别判定序（zh>jp>kr>pict>emoji>zw>b64），低优先表构造时
 // 排除高优先表的键（防御性，实测各表键零重叠）。
 
 function randomBytes(n) {
-  const b = new Uint8Array(n);
-  crypto.getRandomValues(b);
-  return b;
+  return randBytes(n);
 }
 function concatBytes(...parts) {
   let total = 0;
@@ -330,7 +329,7 @@ const ENC_MAP_DEFS = {
 const ENC_CHARSETS = { zh: CharSets, jp: CharSets4, kr: CharSets5, pict: CharSets6 };
 const _encTableCache = new Map();
 
-// emoji 键候选：T511 已修复 extractEmojis 码点化，星面 emoji 可整码点解码，
+// emoji 键候选：已修复 extractEmojis 码点化，星面 emoji 可整码点解码，
 // 全候选可用（修复前仅 BMP 候选，17/65 键缺口）。
 function emojiCandidates(key) {
   const out = [];
@@ -404,8 +403,7 @@ function b64ToMapped(b64, mapId, variant) {
 }
 function secureIndex(n) {
   if (n <= 1) return 0;
-  const b = new Uint32Array(1);
-  crypto.getRandomValues(b);
+  const b = new Uint32Array(randBytes(4).buffer);
   return b[0] % n; // 候选仅 3-10 个，模偏差可忽略（非密钥材料，仅字符选择）
 }
 
@@ -451,7 +449,7 @@ async function encryptXiangyue(text, password, opts) {
   return b64ToMapped(bytesToB64(data), mapId, variant);
 }
 
-// ============ 注册：加密方向（T511，与解密同族——族滑块「解密/加密」两档） ============
+// ============ 注册：加密方向（与解密同族——族滑块「解密/加密」两档） ============
 register({
   id: "xiangyueEnc",
   cat: "cn",

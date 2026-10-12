@@ -1,5 +1,5 @@
 /*
- * customImplEditor.js — MT72 自定义算法编辑器 UI。
+ * customImplEditor.js — 自定义算法编辑器 UI。
  *
  * 编辑器核心 = CodeMirror 6（CM6）：行号 / 等宽 / Tab 缩进 / 括号自动配对 / 语法高亮
  *   / 撤销重做 / 查找替换 / 自动换行 / 行操作全部由 CM6 原生提供。
@@ -24,8 +24,8 @@ import { icon as iconSvg } from "./icons.js";
 
 // ---- CM6 bundle（单文件 ESM，已真浏览器验证，见 工具/rt_cm_smoke.mjs） ----
 // ⚠ 性能审计 H2：821KB bundle 曾是顶层静态 import，随 main.js 进首屏关键路径——
-//   而「编辑代码」入口多数会话根本不打开。改为首次打开编辑器时动态 import + 模块级缓存；
-//   SW 已预缓存该文件，离线可用性不变。
+//  而「编辑代码」入口多数会话根本不打开。改为首次打开编辑器时动态 import + 模块级缓存；
+//  SW 已预缓存该文件，离线可用性不变。
 let _CM = null;
 async function loadCM() {
   if (!_CM) _CM = await import("../vendor/codemirror.bundle.js");
@@ -91,11 +91,12 @@ const _ZH = {
   "ui.custom.confirmDel": "删除方案「{0}」？",
   "ui.custom.sandboxWorker": "沙箱：独立线程（已移除网络与存储能力，超时可强制终止）",
   "ui.custom.sandboxMain": "降级：主线程执行（无线程隔离，死循环无法中断）",
+  "ui.custom.randWarn": "取随机请用 H.randBytes / H.randHex / H.randInt；不要直接调 crypto.getRandomValues——那是裸系统随机，不受「增强随机性」控制。",
   "ui.custom.reset": "重置为模板",
   "ui.custom.clear": "清除本 op 的自定义实现",
   "ui.custom.errLine": "第 {0} 行",
   "ui.custom.lineCol": "行 {0}，列 {1}",
-  // ---- MT86 新增 ----
+  // ---- 新增（自定义实现编辑器扩充批）----
   "ui.custom.fullscreen": "全屏",
   "ui.custom.exitFull": "退出全屏",
   "ui.custom.zoomIn": "放大字号",
@@ -107,13 +108,13 @@ const _ZH = {
   "ui.custom.builtinLoaded": "已载入内置实现（{0}）",
   "ui.custom.find": "查找",
   "ui.custom.findPh": "查找…",
-  // ---- MT86（T359）新增 ----
+  // ---- 新增（自定义实现编辑器扩充批）----
   "ui.custom.resizeHint": "拖拽调整面板尺寸（窄屏时改高度）",
-  // ---- MT88 编辑智能（自动换行，查找替换已交 CM6 原生面板）新增 ----
+  // ---- 编辑智能（自动换行，查找替换已交 CM6 原生面板）新增 ----
   "ui.custom.wrap": "自动换行",
   "ui.custom.wrapOn": "自动换行：开",
   "ui.custom.wrapOff": "自动换行：关",
-  // ---- 权威实现源码查看（MT89）----
+  // ---- 权威实现源码查看----
   "ui.custom.sourceView": "权威源码",
   "ui.custom.sourceCopy": "复制全文",
   "ui.custom.sourceDownload": "下载源码",
@@ -173,7 +174,7 @@ function ensureCiCss() {
  * 手写层删除清单：.ci-gutter / .ci-code-pre / .ci-textarea / .ci-curline / .ci-brk
  *   / tokenizer 高亮（编辑区）/ 手写查找替换 / 手写行操作 / 手写括号覆盖层。
  * 字号 / 换行 / 深浅主题走 CM6 Compartment 动态配置（EditorView.theme + lineWrapping）。
- * ⚠ 本 CSS 不含 # 十六进制硬编码（除 --ci-hl-* token 色定义行，T359 豁免）。
+ * ⚠ 本 CSS 不含 # 十六进制硬编码（除 --ci-hl-* token 色定义行，豁免）。
  */
 const CI_CSS = `
 /* ============ 开关行编组（产品负责人：开关与「编辑代码」是同一件事的两个入口，整组激活态） ============ */
@@ -306,6 +307,8 @@ const CI_CSS = `
 .ci-panel .ci-psec{overflow:auto;border-bottom:1px solid var(--outline-var);}
 .ci-panel .ci-psec.grow{flex:1;min-height:100px;}
 .ci-panel-filter{position:sticky;top:0;z-index:1;padding:4px 8px;border-bottom:1px solid var(--outline-var);background:var(--surface-1);}
+.ci-randwarn{display:flex;align-items:flex-start;gap:6px;margin:8px 8px 4px;padding:6px 8px;border:1px solid var(--outline-var);border-radius:var(--r-sm);color:var(--warning);font-size:11.5px;line-height:1.6;}
+.ci-randwarn .msym{flex:none;font-size:15px;}
 .ci-panel-filter input{width:100%;box-sizing:border-box;height:32px;background:var(--surface-2);border:1px solid var(--outline-var);border-radius:var(--r-sm);color:var(--on-surface);padding:0 8px;font-size:11.5px;}
 .ci-chip{display:block;width:100%;text-align:start;background:none;border:0;color:var(--on-surface-var);padding:6px 10px;cursor:pointer;font-family:var(--mono,monospace);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:ltr;}
 .ci-chip:hover{background:color-mix(in srgb,var(--primary) 18%,transparent);color:var(--on-primary-container);}
@@ -358,7 +361,7 @@ html[data-theme="light"] .ci-dialog{--ci-hl-kw:#b4501a;--ci-hl-str:#256d47;--ci-
   .ci-dialog .ci-editor-toolbar{margin:var(--sp-1) var(--sp-1) 0;}
 }
 
-/* ---- 低高度（≤640px）：编辑器 min-height 归零，内部滚动接管（T366） ---- */
+/* ---- 低高度（≤640px）：编辑器 min-height 归零，内部滚动接管（） ---- */
 @media (max-height:640px){
   .ci-dialog .ci-editor-wrap{min-height:0;}
   .ci-dialog .ci-left{min-height:0;}
@@ -469,7 +472,7 @@ function builtinTemplate(op, dir) {
     "// 内置实现 · " + op.id + " · " + which,
     "// 改这里就是改本算法的行为。参数从 params 取（与上方参数栏同名）。",
     "// ⚠ 下面这段是主项目源码原样抄出。它若调用了模块内部的辅助函数，",
-    "//   直接运行会报「xxx is not defined」——把那些函数一并粘进来，或换成右侧 H.* 工具。",
+    "//  直接运行会报「xxx is not defined」——把那些函数一并粘进来，或换成右侧 H.* 工具。",
     "const impl = " + src + ";",
     "return impl(input, params, rawBytes);",
     "",
@@ -732,6 +735,9 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   }
   secVars.append(el("h4", {}, t("ui.custom.vars")), ...VAR_CHIPS);
   secHelpers.append(el("h4", {}, t("ui.custom.helpers")), ...HELPER_CHIPS);
+  // 显式警告：取随机必须走 H（恒烈 2026-10-11 指令）。自调 crypto.getRandomValues = 裸系统随机，
+  // 会静默绕过「增强随机性」档位 —— 这类"看起来没问题"的写法正是最该提醒的。
+  secHelpers.append(el("div", { class: "ci-randwarn" }, msym("warning"), el("span", {}, t("ui.custom.randWarn"))));
   panel.append(el("div", { class: "ci-panel-filter" }, sigFilter), secVars, secHelpers);
 
   // ---- 分隔条拖拽（Pointer Events + setPointerCapture，一套代码管鼠标/触屏/笔；宽屏改面板宽，窄屏改面板高） ----
@@ -952,10 +958,10 @@ export async function openCustomImplEditor(opId, ctx = {}) {
 
   // ---- 读写代码（CM6 dispatch 整篇替换，保 undo） ----
   // ⚠ 行尾规范化：CM6 会把 \r\n / \r 规范化成 \n（doc 与 insert 均如此）。
-  //   内置实现来自 Function.prototype.toString()，CRLF 源文件的 btpl 带 \r——
-  //   若 anchor 按原始串长度算（偏大），规范化后文档更短 → dispatch 抛
-  //   "Selection points outside of document" → 「重置为模板后再恢复内置实现」失效（rot13 实锤）。
-  //   故所有落进编辑器的文本先统一规范化，anchor 与文档长度才严格一致。
+  //  内置实现来自 Function.prototype.toString()，CRLF 源文件的 btpl 带 \r——
+  //  若 anchor 按原始串长度算（偏大），规范化后文档更短 → dispatch 抛
+  //  "Selection points outside of document" → 「重置为模板后再恢复内置实现」失效（rot13 实锤）。
+  //  故所有落进编辑器的文本先统一规范化，anchor 与文档长度才严格一致。
   function normCode(c) {
     return String(c).replace(/\r\n?/g, "\n");
   }
@@ -1095,7 +1101,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     }
   }).catch(() => { /* 探测失败不影响使用 */ });
 
-  // ============ 权威源码面板（MT89 改造：编辑区右半，左右对照） ============
+  // ============ 权威源码面板（改造：编辑区右半，左右对照） ============
   /*
    * 展示当前 op 的「权威实现源码」（registry 注入的 op.sourceFile 指向其源模块文件）。
    * 纯只读：可搜索 / 复制全文 / 下载。

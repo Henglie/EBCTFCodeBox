@@ -1,5 +1,5 @@
 /*
- * jwtCrack.js — JWT 弱密钥字典爆破（T348，cat:'modern'，单向 async run）。
+ * jwtCrack.js — JWT 弱密钥字典爆破（cat:'modern'，单向 async run）。
  *
  * 场景：JWT 用 HS256/384/512（HMAC 对称签名）且密钥是弱口令时，可离线爆破——
  * 逐个候选用 HMAC(alg, key, "header.payload") 重算签名与签名段比对，命中即得密钥。

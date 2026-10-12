@@ -1,5 +1,5 @@
 /*
- * gifTiming.js — GIF 帧时序隐写解码（T344，cat:'image'）。
+ * gifTiming.js — GIF 帧时序隐写解码（cat:'image'）。
  *
  * 原理：GIF89a 多帧动画里，每一帧的显示时长藏在「图形控制扩展」
  * （Graphic Control Extension，0x21 0xF9）的 Delay Time 字段，单位厘秒（1/100 秒）。

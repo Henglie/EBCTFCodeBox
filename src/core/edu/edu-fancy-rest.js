@@ -116,7 +116,7 @@ export default {
   brainfuck: {
     what: "Brainfuck，极简指令式编程语言",
     principle: "仅 8 个指令 + - > < . , [ ]，操作一维字节数组与指针，+ 增加当前单元值，. 输出",
-    usage: "encode 生成标准代码，decode 执行代码。ReverseFuck 方言兼容（esolangs.org：-↔+、>↔<、]↔[、,↔. 四对八字符全反转）默认开启，Magic 未传参数时同样开启；显式关闭可保留原执行路径。遇孤儿右括号时按 ReverseFuck 镜像交换并验证括号结构后执行，全程最多 500 万步；与 NoobCTF「WhatThe#」等真实题型互通（T501 对拍 21/21）。",
+    usage: "encode 生成标准代码，decode 执行代码。ReverseFuck 方言兼容（esolangs.org：-↔+、>↔<、]↔[、,↔. 四对八字符全反转）默认开启，Magic 未传参数时同样开启；显式关闭可保留原执行路径。遇孤儿右括号时按 ReverseFuck 镜像交换并验证括号结构后执行，全程最多 500 万步；与 NoobCTF「WhatThe#」等真实题型互通（对拍 21/21）。",
     examples: [{ in: "Hi", param: {}, out: "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.+++++++++++++++++++++++++++++++++.", desc: "72 个 + 输出 H，再加 33 个 + 输出 i" }],
     formulas: [{ tex: "\\text{cell} += 1\\ (\\text{当} +),\\ \\text{output}(\\text{cell})\\ (\\text{当} .)", caption: "+ 增单元，. 输出单元当前值" }],
     tips: ["8 指令：+ - > < . , [ ]", "单元为 8 位字节（0-255），磁带 30000 格，输出按 UTF-8 解码。", "兼容交换为 - 与 +、> 与 <、] 与 [、, 与 .；交换路径的逗号为空操作。不是语言标准，无法自动判断所有无括号换表程序。"],
@@ -310,31 +310,13 @@ export default {
     tips: ["a=21 ... z=94", "2=abc, 3=def, 4=ghi, 5=jkl, 6=mno, 7=pqrs, 8=tuv, 9=wxyz", "区别于 multitap"],
     aka: ["九键", "九宫格输入法", "九键输入", "T9 手机码", "t9Phone", "手机九宫格T9", "T9电话编码", "手机键盘编码", "电话九宫格", "phone keypad", "T9 phone", "手机数字键编码", "九宫格数字码", "键号位序编码", "T9手机键盘"]
   },
-  multitap: {
-    what: "多击编码，重复按键次数表示字母",
-    principle: "2=a, 22=b, 222=c；按键次数对应键上字母顺序，空格分隔",
-    usage: "无参数(2=a 22=b 222=c)，双向 encode/decode",
-    examples: [{ in: "ABC", param: {}, out: "2 22 222", desc: "A=2, B=22, C=222（2 键按 1/2/3 次）" }],
-    formulas: [{ tex: "E(c) = \\text{key}(c)^{\\text{pos}(c)}", caption: "键号重复 pos 次" }],
-    tips: ["老式手机输入法", "按键次数=字母在键上的位置", "字母间需分隔避免歧义"],
-    aka: ["多击输入", "Multitap"]
-  },
-  kbdFullCoord: {
-    what: "键盘全坐标，含数字行的 R.C 格式",
-    principle: "完整键盘（含数字行）4 行布局，每个键映射为 行.列(R.C) 坐标",
-    usage: "无参数(R.C 格式 含数字行)，双向 encode/decode",
-    examples: [{ in: "AB", param: {}, out: "3.1 4.5", desc: "A=第3行第1列=3.1, B=第4行第5列=4.5（含数字行）" }],
-    formulas: [{ tex: "E(c) = (\\text{row}.\\text{col})", caption: "键在含数字行键盘上的行列坐标" }],
-    tips: ["含数字行共 4 行", "格式 行.列", "区别于 3 行 keyboard"],
-    aka: ["键盘全坐标", "KbdFullCoord"]
-  },
   stenoLetter: {
-    what: "速记字母，Plover 和弦表示",
-    principle: "基于 Plover 速记键盘和弦，每个字母映射为速记机的键和弦组合",
-    usage: "无参数(Plover 和弦)，双向 encode/decode",
-    examples: [{ in: "ABC", param: {}, out: "A PW KR", desc: "A=A 和弦, B=PW 和弦, C=KR 和弦" }],
-    formulas: [{ tex: "E(c) = \\text{chord}(c)", caption: "字母映射为 Plover 速记和弦" }],
-    tips: ["基于 Plover 速记系统", "和弦为多键同时按下", "用于速录机输入"],
+    what: "速记字母，Plover 拼写形（fingerspelling）和弦表示",
+    principle: "基于 Plover 速记键盘的拼写形和弦（官方词典 main.json 的 A*=>{>}{&a} … STKPW*=>{>}{&z} 条目），每个字母映射为单 stroke 键和弦；元音 e/i/u 星号在前（*E/*EU/*U），是 Plover 和弦体系的拼写子集",
+    usage: "无参数(Plover 拼写形和弦，空格分词，非字母字符报错)，双向 encode/decode",
+    examples: [{ in: "ABC", param: {}, out: "A* PW* KR*", desc: "A=A* 和弦, B=PW* 和弦, C=KR* 和弦" }],
+    formulas: [{ tex: "E(c) = \\text{chord}(c)", caption: "字母映射为 Plover 拼写形和弦" }],
+    tips: ["基于 Plover 拼写形条目：26 字母 ↔ 26 和弦一一对应", "和弦为多键同时按下，星号键 * 必按（元音 e/i/u 星号在前）", "用于速录机拼写输入"],
     aka: ["速记和弦", "StenoLetter", "stenoLetter", "Steno速记字母", "Plover速记", "速记字母", "速录和弦", "steno chord", "速记键盘", "Plover chord", "速录机编码", "钢速记"]
   },
   arrowKey: {
@@ -465,7 +447,7 @@ export default {
   },
   musicInfo: {
     what: "音符信息查询，输出音名/MIDI/简谱/唱名/频率",
-    principle: "对输入音符输出其多维信息：音名、MIDI 号、简谱、唱名、频率（基于十二平均律）",
+    principle: "对输入音符输出其多维信息：音名、MIDI 号、简谱、唱名、频率（基于十二平均律）。调外半音仍显示音名、MIDI、频率等信息；自然简谱和唱名栏明确标记不在所选调音阶内。",
     usage: "run 单向, params: key, preferFlat",
     examples: [{ in: "60", param: { key: "C", preferFlat: false }, out: "输入类型: midi 音名: C4 MIDI: 60 简谱: 1 唱名: do 频率: 261.63Hz", desc: "MIDI 60 的全部乐理信息" }],
     formulas: [{ tex: "f = 440 \\cdot 2^{(n-69)/12}", caption: "MIDI 号 n 对应频率（A4=69=440Hz）" }],

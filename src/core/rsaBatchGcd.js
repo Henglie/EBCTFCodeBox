@@ -1,5 +1,5 @@
 /*
- * rsaBatchGcd.js — RSA 公共因子分解 / 批量 GCD（T297，cat:'analysis'，单向 run）。
+ * rsaBatchGcd.js — RSA 公共因子分解 / 批量 GCD（cat:'analysis'，单向 run）。
  *
  * 原理：多个 RSA 模数 N_i 两两求 GCD，若 GCD(N_i, N_j) > 1 则找到公共素因子 p
  * 可同时分解 N_i = p·q1 和 N_j = p·q2。CTF 规模 O(k²) 足够。

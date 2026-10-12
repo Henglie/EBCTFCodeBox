@@ -13,7 +13,7 @@
  * 设计：
  * 1. 顶栏所有文字 white-space:nowrap，杜绝换行（标题/版本/按钮名/搜索 placeholder）。
  * 2. 窄屏分级收起——860px 隐藏按钮文字只留图标（与 nav rail 断点对齐）；480px 再隐藏品牌文字只留 brand-icon。
- * 3. 断点 860px 为全站 T365 统一断点（customImplEditor / decodeStrength / recipeView 同用）。
+ * 3. 断点 860px 为全站统一断点（customImplEditor / decodeStrength / recipeView 同用）。
  * 4. 间距令牌取 theme.css 的 --sp-* / --r-* / --fs-*，不引入硬编码。
  */
 
@@ -34,7 +34,7 @@
 
 /* === 2. 窄屏第一档（≤860px）：按钮文字全隐藏，只留 Material Symbols 图标 === */
 /* 8 个按钮带文字在 56px 高的顶栏里 ≤860px（nav rail 60px 已生效）时必挤换行/溢出。
- * 断点 860px 与全站 T365 窄屏断点对齐（topbar-responsive.css 第 4 区 rail 同为 860px）。 */
+ * 断点 860px 与全站窄屏断点对齐（topbar-responsive.css 第 4 区 rail 同为 860px）。 */
 @media (max-width: 860px) {
  /* 隐藏所有按钮文字（含 btnRepo 的 "GitHub"） */
   .icon-btn-label { display: none; }
@@ -67,7 +67,7 @@
  * 窄屏（≤860px）sidenav 从 flex 列转 fixed overlay 抽屉，默认左移隐藏
  * 点顶栏汉堡按钮弹出，点遮罩或选中 op 后收起。
  *
- * 注：断点 860px 与全站 T365 窄屏断点对齐（customImplEditor / decodeStrength / recipeView 同用 860）。
+ * 注：断点 860px 与全站窄屏断点对齐（customImplEditor / decodeStrength / recipeView 同用 860）。
  * 抽屉方案历史上未接线（main.js/index.html 从未实现 btnNavDrawer/navDrawerMask），
  * 故实际行为是：窄屏强制收成 60px rail 图标态（见下方 92 行块），抽屉 CSS 保留注释以防未来启用。
  *

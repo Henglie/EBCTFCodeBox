@@ -1,5 +1,5 @@
 /*
- * edu-exe.en.js — English edu shard, exe/pyc tools (T318).
+ * edu-exe.en.js — English edu shard, exe/pyc tools .
  *
  * Covers 1 op:
  * analysis: pycExeDecompile

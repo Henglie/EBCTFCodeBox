@@ -38,8 +38,11 @@ const LEADING = new Set([0x09, 0x20, 0x2e]);
 function yencEncode(text, p = {}) {
   // 字节直通：yEnc 本是二进制→文本编码，上游真字节直接编。
   const bytes = (p && p.rawBytes) || te(text);
-  let width = parseInt(p && p.width, 10);
-  if (!Number.isFinite(width) || width <= 0) width = 128;
+  const widthRaw = parseInt(p && p.width, 10);
+  if (!Number.isFinite(widthRaw) || widthRaw <= 0) {
+    throw new Error("yenc：行宽 width 须为正整数（当前：" + ((p && p.width) ?? "") + "）");
+  }
+  const width = widthRaw;
 
   const out = [];
   let col = 0;
@@ -77,9 +80,9 @@ function yencDecode(text) {
     for (let i = 0; i < line.length; i++) {
       let c = line.charCodeAt(i) & 0xff;
       if (c === 0x3d) {
-        // 转义：取下一字符
+        // 转义：取下一字符；行尾孤立 '='（转义结构不完整）显式拒绝，不再静默丢弃
         i++;
-        if (i >= line.length) break; // 行尾孤立 '='：忽略
+        if (i >= line.length) throw new Error("yenc：行尾孤立 '='（转义结构不完整，数据可能损坏）");
         const e = (line.charCodeAt(i) - 64) & 0xff;
         bytes.push((e - 42) & 0xff);
       } else {

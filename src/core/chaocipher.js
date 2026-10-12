@@ -1,5 +1,5 @@
 /*
- * chaocipher.js — Chaocipher 双转子置换密码（T304，cat:'classic'，双向）。
+ * chaocipher.js — Chaocipher 双转子置换密码（cat:'classic'，双向）。
  *
  * 背景：John F. Byrne 于 1918 年发明，长期保密，直到 2010 年其遗物捐出后由
  * Moshe Rubin 在《Chaocipher Revealed: The Algorithm》中还原并公开。

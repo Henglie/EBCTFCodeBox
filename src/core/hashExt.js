@@ -1,5 +1,5 @@
 /*
- * hashExt.js — 哈希扩展组（T22 交付）。
+ * hashExt.js — 哈希扩展组（交付）。
  *
  * 覆盖：SM3（国密）/ RIPEMD-160 / BLAKE2b / BLAKE2s —— WebCrypto 没有的纯 JS 哈希。
  * 与 hash.js 解耦（内嵌≠耦合红线），自写工具，不依赖 hash.js 内部函数。
@@ -9,13 +9,13 @@
  * - RIPEMD-160 走 RFC 1320 附录（RIPEMD-160 spec），权威向量验证。
  * - BLAKE2b/s 走 RFC 7693，IV/常量照抄标准，权威向量验证。
  * - 零外发：全部本地纯 JS 计算。
- * - 契约：单向 run(text) → hex 串（T13 契约）。
+ * - 契约：单向 run(text) → hex 串（契约）。
  *
- * 供 T34 后续扩展 + CTF 场景使用。
+ * 供后续扩展 + CTF 场景使用。
  */
 import { register } from "./registry.js";
 
-const te = (s) => new TextEncoder().encode(s);
+const te = (v) => v instanceof Uint8Array ? v : new TextEncoder().encode(v); // 字节直通（rawBytes 契约，与 hash.js 世代一致）
 const toHex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 
 // 32 位循环左移
@@ -469,7 +469,7 @@ function blake2s(text, hashLen = 32) {
 }
 
 // ============================================================
-// T45 哈希扩展补全组
+// 哈希扩展补全组
 // 覆盖：Adler-32 / CRC-8(SMBus) / CRC-8(MAXIM) / CRC-64(ECMA-182) /
 // CRC-32C(Castagnoli) / FNV-1a(32,64) / MurmurHash3(x86_32)
 // 全部纯 JS、零外发。权威向量对拍：
@@ -656,12 +656,12 @@ function murmur3_32Hex(text) { return hexU32be(murmur3_32(te(text))); }
 // ============================================================
 register({
   id: "sm3", cat: "hash", name: "SM3", desc: "国密哈希（GB/T 32905-2016，前身 GM/T 0004-2012，256 位，国内 CTF 高频）",
-  run: (t) => sm3(t),
+  run: (t, p) => sm3(p?.rawBytes ?? t),
 });
 
 register({
   id: "ripemd160", cat: "hash", name: "RIPEMD-160", desc: "RIPEMD-160 消息摘要（160 位，比特币地址用）",
-  run: (t) => ripemd160(t),
+  run: (t, p) => ripemd160(p?.rawBytes ?? t),
 });
 
 register({
@@ -669,7 +669,7 @@ register({
   params: [
     { key: "hashLen", label: "输出字节数", type: "number", default: 64, placeholder: "1-64" },
   ],
-  run: (t, p) => blake2b(t, (p && p.hashLen) || 64),
+  run: (t, p) => blake2b(p?.rawBytes ?? t, (p && p.hashLen) || 64),
 });
 
 register({
@@ -677,10 +677,10 @@ register({
   params: [
     { key: "hashLen", label: "输出字节数", type: "number", default: 32, placeholder: "1-32" },
   ],
-  run: (t, p) => blake2s(t, (p && p.hashLen) || 32),
+  run: (t, p) => blake2s(p?.rawBytes ?? t, (p && p.hashLen) || 32),
 });
 
-// ---- T45 哈希扩展补全组 register ----
+// ---- 哈希扩展补全组 register ----
 register({
   id: "adler32", cat: "hash", name: "Adler-32",
   desc: "Adler-32 校验和（RFC 1950，zlib 用，32 位）",
@@ -737,7 +737,7 @@ export {
   ripemd160, ripemd160Bytes,
   blake2b, blake2bBytes,
   blake2s, blake2sBytes,
- // T45 扩展
+ // 扩展
   adler32, adler32Hex,
   crc8Smbus, crc8SmbusHex,
   crc8Maxim, crc8MaximHex,

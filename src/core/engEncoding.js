@@ -1,5 +1,5 @@
 /*
- * engEncoding.js — T508 批四·工程编码组（E1/E3/E4/E5/E6/E9）。
+ * engEncoding.js — 批四·工程编码组（E1/E3/E4/E5/E6/E9）。
  *
  * 6 个 op：hexdump / modhex / citrixCtx1 / scriptDecoder / rison / unixPerms。
  * 口径来源（逐项，均以本地快照+权威源核实，自研实现、行为对拍）：
@@ -214,10 +214,10 @@ register({
  * E4 Citrix CTX1
  * ================================================================ */
 // CyberChef CitrixCTX1Encode/Decode 语义（Apache-2.0，自研重写）：
-//   编码：明文 → UTF-16LE 字节；temp = b ⊕ 0xA5 ⊕ prevTemp（链式，prevTemp 初值 0）；
-//        每个 temp 输出两个字符：((temp>>>4)&0xF)+0x41 与 (temp&0xF)+0x41（即 A-P）。
-//   解码：两位一组还原 val[j]，b[j] = val[j] ⊕ 0xA5 ⊕ val[j-1]（val[-1]=0），
-//        字节流按 UTF-16LE 还原字符串。密文长度须为 4 的倍数。
+//  编码：明文 → UTF-16LE 字节；temp = b ⊕ 0xA5 ⊕ prevTemp（链式，prevTemp 初值 0）；
+//       每个 temp 输出两个字符：((temp>>>4)&0xF)+0x41 与 (temp&0xF)+0x41（即 A-P）。
+//  解码：两位一组还原 val[j]，b[j] = val[j] ⊕ 0xA5 ⊕ val[j-1]（val[-1]=0），
+//       字节流按 UTF-16LE 还原字符串。密文长度须为 4 的倍数。
 const CTX1_A = 0x41;
 
 function citrixEncode(text) {
@@ -553,7 +553,11 @@ function risonDecodeOp(text, p) {
   let s = t;
   if (mode === "object") s = "(" + s + ")";
   else if (mode === "array") s = "!(" + s + ")";
-  else if (mode === "uri") s = t.replace(/\+/g, " ").replace(/%([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16))); // 宽松反引用
+  else if (mode === "uri") s = t.replace(/\+/g, " ").replace(/(?:%[0-9A-Fa-f]{2})+/g, (m) => { // 宽松反引用（连续 %XX 段按 UTF-8 还原，非法段逐字节回落）
+    const bytes = Uint8Array.from(m.match(/%[0-9A-Fa-f]{2}/g).map((x) => parseInt(x.slice(1), 16)));
+    try { return new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+    catch { return Array.from(bytes, (b) => String.fromCharCode(b)).join(""); }
+  });
   const v = risonParse(s);
   return JSON.stringify(v, null, 2);
 }
@@ -592,7 +596,7 @@ function parseUnixPerms(text) {
     let spec = s.length === 4 ? s : "0" + s;
     return { kind: "octal", digits: [...spec].map((d) => parseInt(d, 8)), type: null };
   }
-  m = /^([dlpcbD-]?)([r-][w-][xsS-])([r-][w-][xsS-])([r-][w-][xtT-])$/.exec(s);
+  m = /^([dlpcbsD-]?)([r-][w-][xsS-])([r-][w-][xsS-])([r-][w-][xtT-])$/.exec(s);
   if (m) {
     const type = m[1] && m[1] !== "-" ? m[1] : null;
     let special = 0;

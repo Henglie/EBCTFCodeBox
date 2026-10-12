@@ -33,11 +33,11 @@ function xorBrute(text, p) {
 
 // ============ freqDist（字符频率分布）============
 // caseMode（大小写统计四档）：
-//   keep   保留原样
-//   upper  仅统计大写字母（其余字符丢弃）
-//   lower  仅统计小写字母
-//   toUpper 全部转大写后统计（大小写合并计数）
-//   toLower 全部转小写后统计
+//  keep   保留原样
+//  upper  仅统计大写字母（其余字符丢弃）
+//  lower  仅统计小写字母
+//  toUpper 全部转大写后统计（大小写合并计数）
+//  toLower 全部转小写后统计
 function freqDist(text, p) {
   const top = Math.max(1, Math.min(50, Number((p && p.top) || 20)));
   const caseMode = (p && p.caseMode) || "keep";
@@ -156,7 +156,7 @@ function debruijn(text, p) {
   const len = Math.max(1, Math.min(100000, Number((p && p.len) || 200)));
   const alphabet = "abcdefghijklmnopqrstuvwxyz";
   const k = alphabet.length;
-  const subLen = 3; // 子串长度 3，序列长度 26^3 + 2 = 17578
+  const subLen = 3; // 子串长度 3，FKM 循环长度 26^3 = 17576（n-1=2 线性扩展未拼接）
  // a 数组长度需 ≥ k*n（Wikipedia 实现），原版长度 4 会导致越界覆盖、序列错乱
   const a = new Array(k * subLen).fill(0);
   const seq = [];

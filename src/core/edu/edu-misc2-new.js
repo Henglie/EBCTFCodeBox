@@ -169,6 +169,44 @@ export default {
       "音频反相", "时间倒放", "音频倒放", "倒放音频", "一阶差分", "阈值位流", "pcm波形"],
   },
 
+  barcodeGen: {
+    what: "条码生成：把文本生成 Code128 / EAN-13 / DataMatrix 三种非 QR 条码的 PNG 图片，可配合扫码功能读回验证。auto 档按内容自动选符号。",
+    principle:
+      "内核是 bwip-js（BWIPP PostScript 条码库的 JS 移植）raw 接口，本工具取其模块几何自绘 PNG：\n\n" +
+      "1. Code128：自动在 A/B/C 三个码表间切换（纯数字段用 C 表两位一码字压密），码字 = 起始符 + 数据 + mod-103 校验 + stop；输出条空宽序列（sbs）\n" +
+      "2. EAN-13：12 位输入自动补 mod-10 校验位；13 位输入先验校验位；护条（两侧加长条）按 BWIPP includetext 的几何延伸\n" +
+      "3. DataMatrix：任意文本（含中文）经 ECC 200 Reed-Solomon 纠错编成模块矩阵，方形从 10×10 起自动扩档\n\n" +
+      "产物 PNG 含静区（quiet zone）：1D 默认 10-11 模块、DM 默认 2 模块——静区不足是扫码失败最常见原因。",
+    usage: "输入条码内容，选符号（auto/code128/ean13/datamatrix）。Code128 仅接受可打印 ASCII；EAN-13 仅数字（12 位自动补位）；DataMatrix 收任意文本。输出 PNG 下载 + 报告（模块宽/码字序列/校验位）。生成后可用「扫码」功能读回对拍。",
+    examples: [
+      { in: "EBCTF{barcode_not_qr}", param: "sym=code128", out: "barcode_code128.png + 码字序列与校验字符" },
+      { in: "211234567890", param: "sym=auto", out: "自动补校验位 0 → barcode_ean13.png" },
+      { in: "中文内容测试123", param: "sym=datamatrix", out: "barcode_datamatrix.png（可被扫码读回）" },
+    ],
+    tips: ["Code128 拒绝非 ASCII 是刻意的：BWIPP 虽能经 FNC4 编 Latin-1，但扫码器兼容性差；中文用 DataMatrix。", "截图裁掉静区、缩放插值发糊，是读不回的两大主因；放大模块宽（modulePx）再生成更稳。", "EAN-13 校验位报错时会提示正确值，去掉末位让工具自动补最省事。"],
+    aka: ["条码生成", "barcode", "barcode generator", "code128", "code 128", "ean13", "ean-13", "datamatrix", "data matrix", "条形码", "商品条码", "矩阵码", "dm码", "ean码生成"],
+  },
+
+  sstv: {
+    what: "SSTV 慢扫描电视 编/解：把 WAV 里的 SSTV 信号（Martin M1 / Robot36）还原成图片—— ham 电台、音频附件、合成音频里藏图的题，拖进来直接出图。也可反向把 RGB 数据合成 SSTV WAV。",
+    principle:
+      "SSTV 把图像逐行「画」进音频：每像素按亮度/色度映射到 1500-2300Hz 的音调，行首加 1200Hz 同步脉冲；开头 300ms 领头音 + VIS 码（7 位模式号 + 奇校验）声明制式。\n\n" +
+      "decode（接收链全自研）：\n" +
+      "1. 正交下变频到复基带 + Hamming 窗复低通 FIR + 多相抽取（≤11025Hz 工作率）\n" +
+      "2. 相位差 FM 鉴频 → 瞬时频率流，5 点中值去尖峰 + 3ms 平滑\n" +
+      "3. VIS 头：1900Hz 领头 → 1100/1300Hz 位流判决，奇校验 + 停止位校验\n" +
+      "4. 逐行再同步：每行在预测位置 ±15ms 内找行同步游程，行间测时钟比 ρ（EMA 平滑）并缩放像素时长——抗收发两端 ±2% 频偏\n" +
+      "5. 像素取值：(f−1500)/800×255；Martin 色序 G,B,R，Robot36 亮度 Y + 偶行 Cr / 奇行 Cb（BT.601 全范围）\n\n" +
+      "encode 按 pySSTV 逐条对齐（频率/时序/色彩系数），与 pySSTV 产物可互换解调。",
+    usage: "decode：拖入 WAV（整数 PCM 8/16/24/32bit，采样率 6k-384k），自动识别 VIS 与模式，输出 PNG + 诊断（时钟比/奇校验/停止位/行同步命中）。encode：输入恰为模式尺寸（320×256 或 320×240）的 RGB hex，选模式/采样率/位深，输出 WAV。Scottie/PD 等其它制式与浮点/压缩 WAV 显式拒绝。",
+    examples: [
+      { in: "（一段 SSTV WAV 附件）", param: "（decode 方向，无需参数）", out: "sstv_decoded.png（图片里藏 flag）+ VIS/行同步诊断" },
+      { in: "（320×256 图像的 RGB hex）", param: "mode=Martin M1 rate=44100", out: "sstv_encoded.wav" },
+    ],
+    tips: ["解码出的图有斜向撕裂通常是时钟频偏大——本解码器带时钟比自适应，残余错位可看诊断里的时钟比是否偏离 1。", "10dB 以下强噪声的 Robot36 色度会花（色度仅 0.1375ms/像素，物理带宽所限），亮度轮廓仍可读。", "只有 Scottie/PD 头会被显式拒绝；遇到时提示换真实制式，本工具不做盲猜。"],
+    aka: ["sstv", "慢扫描电视", "martin m1", "martin", "robot36", "robot 36", "sstv解码", "sstv图片", "慢扫描", "sstv decode", "窄带电视图像", "sstv wav"],
+  },
+
   spectrogram: {
     what: "音频频谱图（STFT）：把 WAV 转成频谱图 PNG，肉眼就能看见画进音频频域的 flag/文字，免装 Audacity。CTF 音频隐写杀器。",
     principle:

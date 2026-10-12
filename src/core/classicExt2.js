@@ -1,7 +1,7 @@
 /*
- * classicExt2.js — 古典密码补全组2（T67，cat:'classic'）。
+ * classicExt2.js — 古典密码补全组2（cat:'classic'）。
  *
- * 任务卡 T67 要求交付：ADFGX/ADFGVX、Bifid、Trifid、Four-square、Hill、Trithemius。
+ * 要求交付：ADFGX/ADFGVX、Bifid、Trifid、Four-square、Hill、Trithemius。
  * 经查重（classic.js），前 5 个已完整实现（encode+decode 双向）：
  * - adfgx (adfgxEnc / adfgxDec) Polybius + 列移位（5×5）
  * - adfgvx (adfgvxEnc / adfgvxDec) Polybius + 列移位（6×6 含数字）

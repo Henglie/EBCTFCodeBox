@@ -575,7 +575,7 @@ function snowEncode(message, opts) {
 	}
 	const useCompress = !!opts.compress;
 
-	// T416 修复：二进制负载（Uint8Array/Buffer）原字节直接入编码管道；
+	// 修复：二进制负载（Uint8Array/Buffer）原字节直接入编码管道；
 	// 字符串仍走 UTF-8（字面 "0,128,255" 是 9 个字符，不猜成字节数组）。
 	// Array.from(视图) 尊重 byteOffset/length 子视图边界，且不修改输入。
 	const msgBytes = message instanceof Uint8Array ? Array.from(message) : utf8ToBytes(String(message));

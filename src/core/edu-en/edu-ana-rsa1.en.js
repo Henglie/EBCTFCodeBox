@@ -43,8 +43,8 @@ export default {
       "The inverse exists if and only if $\\gcd(a,m)=1$. Use the extended Euclidean algorithm to solve for x in $ax+my=1$, then reduce mod m to get the inverse. This tool is self-inverse: taking the inverse of the inverse returns the original number.",
     usage: "Fill in a and m; outputs the inverse of a mod m. encode/decode are mutually inverse (inv(inv(a))=a).",
     examples: [
-      { in: "a=17, m=3120", out: "d=2753", desc: "exactly the private key for e=17 under φ=3120" },
-      { in: "a=3, m=7", out: "5", desc: "3×5=15≡1 (mod 7)" },
+      { in: "", param: "a=17, m=3120", out: "2753", desc: "exactly the private key for e=17 under φ=3120; verbatim from the parameter boxes" },
+      { in: "", param: "a=3, m=7", out: "5", desc: "3×5=15≡1 (mod 7)" },
     ],
     formulas: [
       { tex: "a\\,x \\equiv 1 \\pmod{m} \\;\\Leftrightarrow\\; a x + m y = 1", caption: "the inverse exists iff gcd(a,m)=1" },
@@ -57,9 +57,9 @@ export default {
     what: "Extended Euclidean: while computing the $\\gcd(a,b)$, also produce the Bézout coefficients x, y such that $a \\cdot x + b \\cdot y = \\gcd$. The underlying building block for modular inverse and common-modulus attacks.",
     principle:
       "Plain Euclidean division only yields the gcd; the extended version back-substitutes each step's quotient to additionally solve for the coefficients x, y. When $\\gcd(a,b)=1$, x is the inverse of a modulo b.",
-    usage: "Fill a and b in the input box; outputs the gcd along with integers x, y satisfying ax+by=g.",
+    usage: "Fill in a and b (decimal); outputs the gcd along with integers x, y satisfying ax+by=g.",
     examples: [
-      { in: "a=240, b=46", out: "gcd=2, x=-9, y=47", desc: "240·(-9)+46·47 = 2" },
+      { in: "", param: "a=240, b=46", out: "=== 扩展欧几里得 ===\na = 240\nb = 46\ngcd(a, b) = 2\nx = -9\ny = 47\n\nBézout 等式: a·x + b·y = 2 (应 = g = 2)", desc: "240·(-9)+46·47 = 2; verbatim from the parameter boxes" },
     ],
     formulas: [
       { tex: "a\\,x + b\\,y = \\gcd(a,b)", caption: "Bézout's identity" },
@@ -72,10 +72,10 @@ export default {
     what: "Big-number fast modular exponentiation: compute $\\mathrm{base}^{\\mathrm{exp}} \\bmod m$ for huge exponents. It's the core operation of RSA encryption/decryption ($c = m^{e} \\bmod n$, $m = c^{d} \\bmod n$); computing it directly would blow up, so this is required.",
     principle:
       "Break the exponent into binary and process it bit by bit with 'square-and-multiply': each step squares the base and takes the modulus, and on each 1 bit of the exponent multiplies once more. This way even a dozens-of-digits e needs only dozens of multiplications, and intermediate results stay bounded by mod.",
-    usage: "Fill base, exp, mod in the input box (one per line or comma-separated); outputs $\\mathrm{base}^{\\mathrm{exp}} \\bmod m$.",
+    usage: "Fill in base, exp and mod (decimal); outputs $\\mathrm{base}^{\\mathrm{exp}} \\bmod m$.",
     examples: [
-      { in: "base=65, exp=17, mod=3233", out: "2790", desc: "RSA encryption: m=65 → c=2790" },
-      { in: "base=2790, exp=2753, mod=3233", out: "65", desc: "private-key decryption restores m" },
+      { in: "", param: "base=65, exp=17, mod=3233", out: "=== 大数快速幂 ===\nbase = 65\nexp  = 17\nmod  = 3233\n\n✓ base^exp mod mod = 2790", desc: "RSA encryption: m=65 → c=2790; verbatim from the parameter boxes" },
+      { in: "", param: "base=2790, exp=2753, mod=3233", out: "=== 大数快速幂 ===\nbase = 2790\nexp  = 2753\nmod  = 3233\n\n✓ base^exp mod mod = 65", desc: "private-key decryption restores m" },
     ],
     formulas: [
       { tex: "c = m^e \\bmod n,\\qquad m = c^d \\bmod n", caption: "RSA encryption/decryption is modular exponentiation" },

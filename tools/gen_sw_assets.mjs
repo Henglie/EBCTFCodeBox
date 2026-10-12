@@ -1,7 +1,24 @@
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
+
+// git ls-files 通道：优先同步；当环境阻断 spawnSync（Windows 下曾现 EBUSY，pid=0）时
+// 降级异步 execFile——同一命令、同一输出，仅进程创建通道不同。
+async function gitLsFiles() {
+  const args = ["ls-files", "-z", "--cached", "--others", "--exclude-standard", "src", "public"];
+  try {
+    return execFileSync("git", args, { encoding: "utf8" });
+  } catch (err) {
+    const spawnBlocked = err && err.code === "EBUSY" && err.pid === 0;
+    if (!spawnBlocked) throw err; // git 真实失败（非零退出）不降级，照常抛
+    const { stdout } = await execFileAsync("git", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    return stdout;
+  }
+}
 
 const runtimeExts = new Set([
   ".js", ".css", ".json", ".wasm", ".woff2", ".png", ".webp",
@@ -12,7 +29,7 @@ const runtimeExts = new Set([
 // ⚠ 只用 --cached（默认）会漏掉「已写盘但还没提交」的新模块——而 main.js 是**静态 import**
 //   它们的，漏进清单 = 离线时 main.js 直接加载失败 = 整个 PWA 打不开（不是少个功能而已）。
 //   2026-08-23 实测漏了 radixAll/progCalc/unitConv 三个，故改成 cached ∪ others。
-const tracked = execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard", "src", "public"], { encoding: "utf8" })
+const tracked = (await gitLsFiles())
   .split("\0")
   .filter(Boolean)
   .filter((file) => runtimeExts.has(extname(file).toLowerCase()))
@@ -42,8 +59,8 @@ const EXCLUDE_RULES = [
   // KaTeX：真·懒加载（katexLoader.js 单例 Promise，首次公式渲染才插 script/link；缺失降级为
   // 原始 TeX 文本 <code class="katex-fallback">，不白屏）
   [/^public\/vendor\/katex\//, "KaTeX dist（首次公式渲染才加载）"],
-  // 语言包：i18n/index.js 仅静态 import zh/en（zh.js/en.js 在 locales/ 目录外），
-  // 其余语言全部动态 import(`./locales/${loc}.js`)（i18n/index.js:119），切换语言才加载
+  // 语言包：i18n/index.js 仅静态 import zh；en 已改按需 dynamic import（ensureLoaded/_loadEn，
+  // boot 后 warmEnglish 空闲预热），仍留预缓存保离线切换；其余语言同上下文动态加载
   [/^src\/i18n\/locales\//, "i18n 语言包（切语言才动态 import）"],
   // 英文科普层：main.js:3168 动态 import("./core/eduContent.en.js")，edu-en/ 63 分片全挂其下
   [/^src\/core\/(eduContent\.en\.js|edu-en\/)$|^src\/core\/edu-en\//, "英文 EDU 科普层（切英文才动态 import）"],

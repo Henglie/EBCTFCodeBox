@@ -6,7 +6,7 @@ export default {
     principle:
       "One accumulator `acc` (initial value 0) + 4 instructions: `i` increment, `d` decrement, `s` square, `o` output the current value.\n\n" +
       "The classic boundary rule: after each step, if `acc` becomes -1 or 256, reset it to zero. When decoding, this tool outputs the numeric sequence plus a preview that treats the numbers as character codes.",
-    usage: "Decode: paste an `idso` instruction string; the tool executes it and outputs the value at each `o` plus a character preview. Encode: turn text into an instruction string that prints it (walk i/d to the target code for each character, then o).",
+    usage: "Decode executes an `idso` program and returns the complete numeric report plus character preview, not the original text. Encode prints BMP character codes, using 17²=289 to cross the reset point before adjusting with i/d. Code point 256 (U+0100) immediately resets under the standard and cannot be represented, so it is explicitly rejected. The generated program must fit the execution step limit.",
     examples: [
       { in: "玛卡巴卡轰阿巴雅卡轰伊卡阿卡噢轰", out: "(this is Makka Pakka, not Deadfish)", desc: "Don't confuse them — see makkaPakka below" },
       { in: "iiii...o", out: "corresponding value", desc: "Increment several times, then output" },
@@ -23,7 +23,7 @@ export default {
       "Common instructions: `0-9` push a number, `+ - * / %` arithmetic, `\"` enter/exit string mode (push characters), `. ,` output number/character, `: \\` duplicate/swap the top, `_ |` branch horizontally/vertically on the top of stack. A step limit guards against infinite loops.",
     usage: "Paste Befunge-93 code to run; the tool outputs the result.",
     examples: [
-      { in: '>25*"!dlroW olleH":v\n                 v:,_@\n                 >  ^', out: "Hello World!", desc: "The classic Hello World (structure sketch)" },
+      { in: '>"!dlroW olleH">:#,_@', out: "Hello World!", desc: "Classic one-line Hello World; the trailing @ halts normally" },
     ],
     tips: ["A screen full of `>v<^` direction arrows + a `@` terminator + quoted strings is Befunge.", "It runs by looping the pointer around a 2D plane, so read the code following the arrows, not left to right."],
     aka: ["befunge", "befunge-93", "二维语言", "2d esolang", "befunge93", "Befunge",

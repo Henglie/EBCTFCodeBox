@@ -1070,7 +1070,6 @@ export default {
   "ui.ds.customBadge": "བཟོ་བཅོས་བྱས་པ (རང་བཟོས)",
   "ui.home.strengthBtn": "དྲག་ཚད།",
 
- // ---- 2026-08-26 解冻新增（暂填中文，待外包译文替换）----
   "ui.op.fontDec": "ཡིག་གཟུགས་ཆུང་དུ་གཏོང་བ།",
   "ui.op.fontInc": "ཡིག་གཟུགས་ཆེ་རུ་གཏོང་བ།",
   "ui.exhaust.branchCount": "ཡན་ལག་ {0}",

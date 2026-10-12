@@ -398,7 +398,7 @@ export default {
   "ui.uv.graphemes": "ग्राफीम गुच्छ",
   "ui.uv.splitClusters": "संयोजक अनुक्रम विभाजित करें (प्रत्येक कोड बिंदु अलग सूचीबद्ध करें)",
   "ui.uv.noSegmenter": "(इस परिवेश में ग्राफीम विभाजन असमर्थित; कोड बिंदु दिखाए जा रहे हैं)",
-  // 拼字 / IDS 视图（MT84）
+  // 拼字 / IDS 视图
   "ui.uv.tabIds": "आइडियोग्राफ़ / IDS",
   "ui.uv.idsDesc": "आइडियोग्राफ़िक डिस्क्रिप्शन सीक्वेंस (IDS): किसी अक्षर का विघटन वृक्ष देखें, घटक द्वारा अक्षर खोजें, तथा अक्षरों और IDS स्ट्रिंग्स के बीच परस्पर रूपांतरण करें। पूर्णतः स्थानीय, शून्य अपलोड।",
   "ui.uv.idsLoading": "आइडियोग्राफ़ डेटा लोड हो रहा है…",
@@ -424,7 +424,7 @@ export default {
   "ui.uv.idsNoExact": "कोई सटीक IDS मिलान नहीं; पत्ती घटकों द्वारा खोज:",
   "ui.uv.idsConvHits": "{0} मिलान",
   "ui.uv.idsSrc": "स्रोत",
-  // 快速换算视图（MT81）
+  // 快速换算视图
   "ui.qc.title": "त्वरित रूपांतरण",
   "ui.qc.desc": "प्रोग्रामर आधार और इकाई रूपांतरण कार्यक्षेत्र: किसी भी बॉक्स में लिखें, बाकी तुरंत बदल जाएंगे। पूर्णतः स्थानीय, कोई नेटवर्क नहीं।",
   "ui.qc.tabRadix": "प्रोग्रामर आधार",
@@ -557,6 +557,8 @@ export default {
   "ui.env.syncAccentOk": "सिस्टम एक्सेंट रंग सिंक किया गया",
   "ui.env.syncAccentFail": "सिस्टम एक्सेंट रंग अनुपलब्ध",
   "ui.topbar.font": "फ़ॉन्ट लाइब्रेरी",
+  "ui.pwa.updateBar": "नया संस्करण उपलब्ध है। ऑफ़लाइन संसाधन तैयार हैं",
+  "ui.pwa.updateRefresh": "पुनः लोड करें",
 
  // ---- topbar search ----
   "ui.search.placeholder": "एन्कोडर / सिफर खोजें…",
@@ -775,7 +777,7 @@ export default {
   "op.sshPubkeyParse.name": "SSH Public Key Parser",
   "op.btcAddressIdent.name": "Bitcoin Address Identify",
   "op.ethAddressIdent.name": "Ethereum Address Identify",
- // ---- MT82 new ops (forensic/stego/modern) ----
+ // ---- new ops (forensic/stego/modern) ----
   "op.gifTiming.name": "GIF फ्रेम टाइमिंग स्टेग्नोग्राफी",
   "op.jpgSizeRecover.name": "JPEG आकार पुनर्प्राप्ति",
   "op.zipRepair.name": "ZIP नकली-एन्क्रिप्शन मरम्मत",
@@ -1170,9 +1172,12 @@ export default {
   "ui.ds.customBadge": "बदला गया (कस्टम)",
   "ui.home.strengthBtn": "तीव्रता",
 
- // ---- 2026-08-26 解冻新增（协作代理译文，主控已验）----
   "ui.op.fontDec": "फ़ॉन्ट आकार घटाएँ",
   "ui.op.fontInc": "फ़ॉन्ट आकार बढ़ाएँ",
+  "ui.op.localFonts": "स्थानीय फ़ॉन्ट लोड करें",
+  "ui.op.localFontsDone": "{0} स्थानीय फ़ॉन्ट लोड हुए",
+  "ui.op.localFontsFail": "स्थानीय फ़ॉन्ट लोड करने में विफल: {0}",
+  "ui.op.pickImage": "चित्र चुनें",
   "ui.exhaust.branchCount": "{0} शाखाएँ",
   "ui.exhaust.hitCount": "{0} संभावित हिट",
   "ui.exhaust.defaultParam": "डिफ़ॉल्ट",
@@ -1567,12 +1572,21 @@ export default {
   'fam.lbl.base2048': 'Base2048',
   'fam.lbl.base65536': 'Base65536',
   'fam.lbl.ecoji': 'Ecoji (इमोजी Base64)',
+  'fam.lbl.fields': 'फ़ील्ड निकालना',
+  'fam.lbl.attack': 'नॉन्स k पुनः उपयोग',
+  'fam.lbl.sharedPub': 'सार्वजनिक कुंजी से',
+  'fam.lbl.homAdd': 'होमोमॉर्फ़िक जोड़',
+  'fam.lbl.scan': 'स्कैन',
+  'fam.lbl.formatBrute': 'ब्रूट फ़ोर्स',
+  'fam.lbl.smartReport': 'स्मार्ट रिपोर्ट',
  // ----解冻批回填（外部交付 2026-09-26 + 内部 cat.*）----
   "cat.archive": "संपीड़न / आर्काइव",
   "cat.crack": "पासवर्ड / आर्काइव क्रैकिंग",
   "cat.filefmt": "फ़ाइल फ़ॉर्मैट / संरचना",
   "cat.image": "चित्र / QR कोड",
   "cat.audio": "ऑडियो / ऑडियो और वीडियो",
+  "cat.stegoText": "टेक्स्ट स्टेगनोग्राफ़ी",
+  "cat.stegoFile": "फ़ाइल स्टेगनोग्राफ़ी",
   "ui.recipe.chooseFamilyOp": "रेसिपी श्रृंखला में जोड़ने के लिए ऑपरेशन चुनें",
   "op.base16.desc": "हेक्साडेसिमल एन्कोडिंग: हर बाइट को दो हेक्साडेसिमल वर्णों से दर्शाती है। कस्टम वर्णमाला और बड़े अक्षर / स्पेस से अलग करने का समर्थन है।",
   "op.base32.desc": "RFC 4648 के अनुसार Base32 एन्कोडिंग, 5 बिट के समूहों और कस्टम वर्णमाला के समर्थन के साथ।",

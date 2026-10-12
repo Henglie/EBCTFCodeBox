@@ -1,6 +1,6 @@
 /*
  * csrlparse.js — CSR（PKCS#10 证书请求）+ X.509 CRL（证书吊销列表）解析
- * 任务卡 T357（v0.1.6beta 批A5 补全）。单向 run 解析器（对标 CyberChef ParseCSR / ParseX509CRL）。
+ * （v0.1.6beta 批A5 补全）。单向 run 解析器（对标 CyberChef ParseCSR / ParseX509CRL）。
  *
  * 标准依据（注释随行标注）：
  *   - RFC 2986（PKCS#10 CertificationRequest：§4 ASN.1 结构）
@@ -489,7 +489,7 @@ function csrAttrLines(attrNode, ai) {
   if (oid === "1.2.840.113549.1.9.14") { // extensionRequest（RFC 2985 §5.4.1：请求的证书扩展）
     for (const v of setNode.children) {
       try {
-        const seq = derDecode(v.value); // v 本身是 OCTET? 不——SET 内直接是 Extensions SEQUENCE
+        const seq = v; // Attribute SET contains the complete Extensions SEQUENCE.
         if (seq.tag !== 0x30) throw new Error("非 SEQUENCE");
         lines.push(`      请求扩展（RFC 5280 §4.1）共 ${seq.children.length} 项：`);
         seq.children.forEach((e, ei) => {
@@ -595,7 +595,7 @@ async function csrParseRun(text) {
   }
   out.push(`签名值   : ${sigBytes.length} 字节 BIT STRING`);
   out.push(...wrap64(bytesToHex(sigBytes).toUpperCase()));
-  // T364 产物协议：CSR DER 出 request.der（application/pkcs10，即 .csr 换壳）
+  // 产物协议：CSR DER 出 request.der（application/pkcs10，即 .csr 换壳）
   const files = [{ name: "request.der", mime: "application/pkcs10", bytes: der }];
   out.push("", `产物：1 个文件可下载（${files[0].name}，与输入 DER 逐字节一致）`);
   return { text: out.join("\n"), files };
@@ -807,7 +807,7 @@ function crlParseRun(text) {
   if (sigNode.value[0] !== 0) out.push(`  警告：unused bits = ${sigNode.value[0]}（签名应恒 0）`);
   out.push(`  ${sigBytes.length} 字节：`);
   out.push(...wrap64(bytesToHex(sigBytes).toUpperCase()));
-  // T364 产物协议：CRL DER 出 crl.der（application/pkix-crl）
+  // 产物协议：CRL DER 出 crl.der（application/pkix-crl）
   const files = [{ name: "crl.der", mime: "application/pkix-crl", bytes: der }];
   out.push("", `产物：1 个文件可下载（${files[0].name}，与输入 DER 逐字节一致）`);
   return { text: out.join("\n"), files };

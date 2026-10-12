@@ -1,5 +1,5 @@
 /*
- * cryptanalysis.js — 密码分析工具组（T57，cat:'analysis'，单向 run 输出报告文本）。
+ * cryptanalysis.js — 密码分析工具组（cat:'analysis'，单向 run 输出报告文本）。
  *。
  *
  * 覆盖：

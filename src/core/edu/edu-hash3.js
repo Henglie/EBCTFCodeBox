@@ -35,7 +35,7 @@ export default {
     principle: "16 位 CRC，poly=0x8005、init=0xFFFF、refIn/refOut=true（位反射）、xorOut=0。反射版实现里多项式常写成 `0xA001`。",
     usage: "输入数据，输出 CRC-16/MODBUS 校验值（十六进制，单向 run）。",
     examples: [
-      { in: "123456789", out: "0x4B37", desc: "CRC-16/MODBUS 标准校验值" },
+      { in: "123456789", out: "4B37  // 19255", desc: "CRC-16/MODBUS 标准校验值" },
     ],
     tips: [
       "题面出现 Modbus / RTU / 工控协议 → 就是这一档。",
@@ -49,7 +49,7 @@ export default {
     principle: "16 位 CRC，poly=0x1021、init=0xFFFF、refIn/refOut=false（不反射）、xorOut=0。多项式 0x1021 是 CCITT 系共用的，区别全在 init / 反射 / xorOut 的组合。",
     usage: "输入数据，输出 CRC-16/CCITT-FALSE 校验值（十六进制，单向 run）。",
     examples: [
-      { in: "123456789", out: "0x29B1", desc: "CRC-16/CCITT-FALSE 标准校验值" },
+      { in: "123456789", out: "29B1  // 10673", desc: "CRC-16/CCITT-FALSE 标准校验值" },
     ],
     tips: [
       "CCITT 家族（CCITT-FALSE / XMODEM / KERMIT 等）都用 poly=0x1021，光看多项式分不出，得核对 init 和反射。",
@@ -62,7 +62,7 @@ export default {
     principle: "16 位 CRC，poly=0x8005、init=0x0000、refIn/refOut=true（位反射）、xorOut=0。和 MODBUS 那档只差 init（这里是 0，MODBUS 是 0xFFFF）。",
     usage: "输入数据，输出 CRC-16/ARC 校验值（十六进制，单向 run）。",
     examples: [
-      { in: "123456789", out: "0xBB3D", desc: "CRC-16/ARC 标准校验值" },
+      { in: "123456789", out: "BB3D  // 47933", desc: "CRC-16/ARC 标准校验值" },
     ],
     tips: [
       "别人只说「CRC16」不给参数时，很多场合默认就是 ARC 这档，可先试它。",
@@ -75,7 +75,7 @@ export default {
     principle: "16 位 CRC，poly=0x1021、init=0x0000、refIn/refOut=false、xorOut=0。和 CCITT-FALSE 同多项式、同不反射，只差 init（这里 0，那档 0xFFFF）。",
     usage: "输入数据，输出 CRC-16/XMODEM 校验值（十六进制，单向 run）。",
     examples: [
-      { in: "123456789", out: "0x31C3", desc: "CRC-16/XMODEM 标准校验值" },
+      { in: "123456789", out: "31C3  // 12739", desc: "CRC-16/XMODEM 标准校验值" },
     ],
     tips: [
       "poly 都是 0x1021，XMODEM 与 CCITT-FALSE 的差别只在 init（0 vs 0xFFFF），对不上先换 init 试。",
@@ -87,12 +87,13 @@ export default {
     what: "Fletcher 校验和，靠两个累加器实现，算得比 CRC 快、检错能力接近。它是校验和不是哈希。位宽可选 8/16/32/64（默认 16），位宽越大检错越强。",
     principle:
       "双累加器 sum1、sum2：每读一个单元，sum1 加该单元、sum2 再加 sum1，位置敏感（换顺序结果就变）。16 位：按字节流、两个 8 位累加器对 `255` 取模，输出 `sum2<<8 | sum1`。32 位：按 16 位字（小端），两个 16 位累加器对 `65535` 取模，奇数尾字节补 0，输出 `sum2<<16 | sum1`。分组粒度和模数两档都不同。",
-    usage: "输入数据，选位宽，输出 Fletcher 校验值（十六进制，单向 run）。",
+    usage: "输入数据，选位宽，输出 Fletcher 校验值（十六进制，单向 run）。输入模式可选：auto（默认，纯 hex 偶数长度按字节解，否则 UTF-8）/ text（强制 UTF-8）/ hex（强制十六进制，非法报错）。",
     examples: [
       { in: "abcde", param: "bits=16", out: "C8F0", desc: "维基 Fletcher-16 经典示例（输出另附十进制 51440）" },
       { in: "abcde", param: "bits=32", out: "F04FC729", desc: "维基 Fletcher-32 经典示例" },
       { in: "abcde", param: "bits=8", out: "50", desc: "Fletcher-8：两个 4 位累加器模 15" },
       { in: "abcde", param: "bits=64", out: "C8C6C527646362C6", desc: "Fletcher-64：按 32 位字模 2^32-1" },
+      { in: "12", param: "bits=16, inputMode=text", out: "9463", desc: "纯 hex 串按文本解；默认 auto 会按字节解为 1212" },
     ],
     formulas: [
       { tex: "\\text{sum1} \\mathrel{+}= d_i,\\quad \\text{sum2} \\mathrel{+}= \\text{sum1}\\ (\\bmod\\ M)", caption: "Fletcher 双累加器（16 位 M=255，32 位 M=65535）" },
@@ -100,6 +101,7 @@ export default {
     tips: [
       "和 Adler-32 思路像（都双累加器），区别在模数：Fletcher-16 模 255，Adler 模 65521。",
       "32 位按 16 位字处理，奇数长度数据的补齐方式会影响结果，注意实现约定。",
+      "同一串 `12` 在 auto/hex 下按字节 0x12 解（Fletcher-16=4626），在 text 下按 ASCII 文本解（Fletcher-16=37987，即 0x9463）——纯 hex 串有歧义，按需显式选 inputMode。",
     ],
     aka: ["fletcher-16", "fletcher16", "fletcher-32", "fletcher32", "弗莱彻校验和", "弗莱彻校验和32", "fletcher checksum", "弗莱彻校验", "双累加器校验和", "fletcher algorithm", "弗莱切校验和", "fletcher8"],
   },
@@ -108,12 +110,13 @@ export default {
     what: "老 BSD 系统 `sum` 命令的校验和算法，输出 16 位。核心是「先循环右移再加」，比纯累加更能捕捉字节顺序变化。",
     principle:
       "维护一个 16 位值，每读一字节：先把当前值循环右移 1 位（最低位转到最高位），再加上该字节，对 $2^{16}$ 取模。那个循环旋转让它对字节位置敏感，比单纯求和强。",
-    usage: "输入数据，输出 BSD checksum（十六进制 / 十进制，单向 run）。",
+    usage: "输入数据，输出 BSD checksum（十六进制 / 十进制，单向 run）。输入模式 inputMode：auto（默认）/ text（强制 UTF-8）/ hex（强制十六进制，非法报错）。",
     examples: [
       { in: "任意数据", out: "16 位校验值", desc: "对应 BSD `sum` / `sum -r` 的输出" },
     ],
     tips: [
       "BSD `sum` 和 SysV `sum` 是两套不同算法，同一文件结果不同，别混。",
+      "纯 hex 串（如 `12`）默认 auto 按字节解；要按文本处理请选 inputMode=text。",
     ],
     aka: ["bsd checksum", "bsd sum", "sum -r", "bsd校验和", "bsd sum算法", "循环右移校验和", "unix sum", "bsd sum checksum", "16位bsd校验", "sum命令", "bsd风格校验和"],
   },
@@ -122,12 +125,13 @@ export default {
     what: "System V 系统 `sum` 命令的校验和算法，输出 16 位。做法是「全字节相加再折叠」，比 BSD 那套更简单。",
     principle:
       "先把所有字节直接累加成一个大整数 s；再把它折叠进 16 位：取 `s = (s & 0xFFFF) + (s >> 16)`，可能再折叠一次，最终得到 16 位结果。没有旋转，所以对字节顺序不敏感（换序结果不变）。",
-    usage: "输入数据，输出 SysV checksum（十六进制 / 十进制，单向 run）。",
+    usage: "输入数据，输出 SysV checksum（十六进制 / 十进制，单向 run）。输入模式 inputMode：auto（默认）/ text（强制 UTF-8）/ hex（强制十六进制，非法报错）。",
     examples: [
       { in: "任意数据", out: "16 位校验值", desc: "对应 SysV `sum -s` 的输出" },
     ],
     tips: [
       "纯加法折叠 → 对字节顺序不敏感，这是它和 BSD sum（旋转，敏感）的本质区别。",
+      "纯 hex 串（如 `12`）默认 auto 按字节解；要按文本处理请选 inputMode=text。",
     ],
     aka: ["sysv checksum", "system v sum", "sum -s", "sysv校验和", "system v校验和", "sysv sum算法", "折叠校验和", "unix sysv sum", "16位sysv校验", "sysv sum checksum", "系统v求和"],
   },

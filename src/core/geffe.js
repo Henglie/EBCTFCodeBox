@@ -27,7 +27,7 @@
  * 不写 detect：纯 0/1 串是多 op 公共入口，analysis 类爆破工具不参与
  * magic 自动预筛（对齐 lfsrRecover / nonogram / spiralMatrix / xorAnalyze）。
  *
- * 契约：两个独立 op（T396-A 拆分，不硬凑族）：geffeGenerate / geffeAttack，
+ * 契约：两个独立 op（-A 拆分，不硬凑族）：geffeGenerate / geffeAttack，
  *        cat:'analysis'。
  *
  * 参考：
@@ -81,8 +81,8 @@ function parseInit(text, L) {
       else if (ch === "1") bits.push(1);
     }
     if (bits.length === 0) return null;
-    if (bits.length < L) return null; // 不足 L 位
-    return bits.slice(0, L);
+    if (bits.length !== L) return null; // 初态长度必须恰为 L（过短/过长均拒绝，不再静默截断）
+    return bits;
   }
   // hex 形式（0x... 或纯 hex）
   let hex = s;
@@ -94,6 +94,9 @@ function parseInit(text, L) {
       bits.push((v >> 3) & 1, (v >> 2) & 1, (v >> 1) & 1, v & 1);
     }
     if (bits.length < L) return null;
+    // 超长仅容忍高位全 0 的补零写法；高位含 1（越域）显式拒绝，不再静默取低 L 位
+    const high = bits.slice(0, bits.length - L);
+    if (high.some((b) => b === 1)) return null;
     return bits.slice(bits.length - L); // 取低 L 位
   }
   return null;
@@ -240,7 +243,7 @@ function polyToString(taps) {
 }
 
 // ============================================================
-// 双 op 拆分（T396-A，2026-09-04：废除单 op 多 mode 下拉）
+// 双 op 拆分（-A，2026-09-04：废除单 op 多 mode 下拉）
 // geffeGenerate（生成）/ geffeAttack（相关攻击）拆为两个独立 op，不加 family：
 // 两档输入结构差异大（生成=3 抽头+3 初态+长度；攻击=keystream+3 抽头+bruteL2），
 // 且 cat:'analysis' 无族先例、fam.lbl 现有 key 无 generate/attack 可用，硬凑一族
@@ -297,7 +300,7 @@ register({
     const init2 = parseInit(p && p.lfsr2Init, L2);
     const init3 = parseInit(p && p.lfsr3Init, L3);
     if (!init1 || !init2 || !init3) {
-      lines.push("✗ 初态解析失败。需填 3 个 LFSR 初态（bitstring，长度=级数）。");
+      lines.push("✗ geffeGenerate：初态解析失败。初态长度必须等于级数 L（bitstring 长度=L，如 L=4 填 0001；hex 超长且高位含 1 亦拒绝）。");
       lines.push("  例如 L=4 填 0001；也支持 hex（0x..）。");
       return lines.join("\n");
     }

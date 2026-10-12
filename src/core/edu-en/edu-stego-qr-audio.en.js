@@ -103,21 +103,6 @@ export default {
     aka: ["音频lsb", "audio lsb", "wav隐写", "音频隐写", "音频最低位隐写", "audio steganography", "pcm lsb", "wav lsb提取", "音频最低有效位", "audio lsb extract", "声音隐写"],
   },
 
-  dtmfDecode: {
-    what: "DTMF dual-tone multi-frequency extraction: those 'beep-beep' telephone dialing key tones, each key being two specific frequencies superimposed, detected from a WAV and restored to a key sequence.",
-    principle:
-      "DTMF arranges 12/16 keys in a 4-row × 4-column grid, each key = one row frequency + one column frequency (8 standard frequencies total) superimposed. The Goertzel algorithm (an efficient DFT measuring only these 8 frequencies' energy) detects in a sliding window which two frequencies have the strongest energy, and a lookup table gives the corresponding key.",
-    usage: "Input a WAV PCM containing dial tones, and the tool runs sliding-window Goertzel detection, outputting the key sequence (0-9 A-D * #).",
-    examples: [
-      { in: "WAV with dial tones", out: "key sequence like 1234#" },
-    ],
-    formulas: [
-      { tex: "\\text{key} = (\\text{row freq},\\ \\text{col freq}) \\to \\{697/770/852/941\\} \\times \\{1209/1336/1477/1633\\}", caption: "Row freq × column freq locates the key" },
-    ],
-    tips: ["Audio that sounds like phone dialing/key tones → try DTMF. The decoded digit string may be a password or coordinates."],
-    aka: ["dtmf", "双音多频", "拨号音解码", "goertzel"],
-  },
-
   sstvIdent: {
     what: "SSTV mode identification: amateur radio transmits images via sound (slow-scan television); first identify which SSTV mode the audio uses, paving the way for later demodulation.",
     principle:

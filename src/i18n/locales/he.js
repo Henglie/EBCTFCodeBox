@@ -398,7 +398,7 @@ export default {
   "ui.uv.graphemes": "אשכולות גרפמים",
   "ui.uv.splitClusters": "פיצול רצפים משולבים (הצגת כל נקודת קוד בנפרד)",
   "ui.uv.noSegmenter": "(פילוח גרפמים אינו נתמך כאן; מוצגות נקודות קוד)",
-  // 拼字 / IDS 视图（MT84）
+  // 拼字 / IDS 视图
   "ui.uv.tabIds": "אידיאוגרפים / IDS",
   "ui.uv.idsDesc": "רצפי תיאור אידיאוגרפיים (IDS): חפש את עץ הפירוק של תו, חפש תווים לפי רכיב, והמר בין תווים למחרוזות IDS. מקומי לחלוטין, אפס העלאה.",
   "ui.uv.idsLoading": "טוען נתוני אידיאוגרפים…",
@@ -424,7 +424,7 @@ export default {
   "ui.uv.idsNoExact": "אין התאמת IDS מדויקת; חיפוש לפי רכיבי קצה:",
   "ui.uv.idsConvHits": "{0} התאמות",
   "ui.uv.idsSrc": "מקור",
-  // 快速换算视图（MT81）
+  // 快速换算视图
   "ui.qc.title": "המרה מהירה",
   "ui.qc.desc": "שולחן עבודה להמרת בסיסי ספירה ויחידות: ערכו כל שדה וכל השאר יתעדכנו מיד. מקומי לחלוטין, ללא רשת.",
   "ui.qc.tabRadix": "בסיסי ספירה למתכנת",
@@ -557,6 +557,8 @@ export default {
   "ui.env.syncAccentOk": "צבע ההדגשה של המערכת סונכרן",
   "ui.env.syncAccentFail": "צבע ההדגשה של המערכת אינו זמין",
   "ui.topbar.font": "ספריית גופנים",
+  "ui.pwa.updateBar": "יש גרסה חדשה. המשאבים הלא־מקווים מוכנים",
+  "ui.pwa.updateRefresh": "טעינה מחדש",
 
  // ---- topbar search ----
   "ui.search.placeholder": "חפש מקודדים / שיפרים…",
@@ -775,7 +777,7 @@ export default {
   "op.sshPubkeyParse.name": "SSH Public Key Parser",
   "op.btcAddressIdent.name": "Bitcoin Address Identify",
   "op.ethAddressIdent.name": "Ethereum Address Identify",
- // ---- MT82 new ops (forensic/stego/modern) ----
+ // ---- new ops (forensic/stego/modern) ----
   "op.gifTiming.name": "סטגנוגרפיית תזמון פריימים GIF",
   "op.jpgSizeRecover.name": "שחזור גודל JPEG",
   "op.zipRepair.name": "תיקון הצפנה מזויפת ZIP",
@@ -1170,9 +1172,12 @@ export default {
   "ui.ds.customBadge": "שונה (מותאם)",
   "ui.home.strengthBtn": "עוצמה",
 
- // ---- 2026-08-26 解冻新增（协作代理译文，主控已验）----
   "ui.op.fontDec": "הקטנת גודל גופן",
   "ui.op.fontInc": "הגדלת גודל גופן",
+  "ui.op.localFonts": "טעינת גופנים מקומיים",
+  "ui.op.localFontsDone": "נטענו {0} גופנים מקומיים",
+  "ui.op.localFontsFail": "טעינת הגופנים המקומיים נכשלה: {0}",
+  "ui.op.pickImage": "בחר תמונה",
   "ui.exhaust.branchCount": "{0} ענפים",
   "ui.exhaust.hitCount": "{0} התאמות אפשריות",
   "ui.exhaust.defaultParam": "ברירת מחדל",
@@ -1567,12 +1572,21 @@ export default {
   'fam.lbl.base2048': 'Base2048',
   'fam.lbl.base65536': 'Base65536',
   'fam.lbl.ecoji': 'Ecoji (Base64 באימוג׳י)',
+  'fam.lbl.fields': 'חילוץ שדות',
+  'fam.lbl.attack': 'שימוש חוזר ב-nonce k',
+  'fam.lbl.sharedPub': 'ממפתח ציבורי',
+  'fam.lbl.homAdd': 'חיבור הומומורפי',
+  'fam.lbl.scan': 'סריקה',
+  'fam.lbl.formatBrute': 'כוח גס',
+  'fam.lbl.smartReport': 'דוח חכם',
  // ----解冻批回填（外部交付 2026-09-26 + 内部 cat.*）----
   "cat.archive": "דחיסה / ארכיונים",
   "cat.crack": "סיסמאות / פיצוח ארכיונים",
   "cat.filefmt": "תבניות קבצים / מבנה",
   "cat.image": "תמונות / קודי QR",
   "cat.audio": "שמע / שמע ווידאו",
+  "cat.stegoText": "סטגנוגרפיית טקסט",
+  "cat.stegoFile": "סטגנוגרפיית קבצים",
   "ui.recipe.chooseFamilyOp": "בחירת פעולה להוספה לשרשרת המתכון",
   "op.base16.desc": "קידוד הקסדצימלי: כל בית מיוצג בשני תווים הקסדצימליים. תומך באלפבית מותאם ובאותיות גדולות / הפרדה ברווחים.",
   "op.base32.desc": "קידוד Base32 לפי RFC 4648, בקבוצות של 5 סיביות, עם תמיכה באלפבית מותאם.",

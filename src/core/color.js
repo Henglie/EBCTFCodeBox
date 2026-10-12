@@ -1,5 +1,5 @@
 /* __T72_PATCHED__
- * color.js — 颜色编码组（T72，cat:'radix'）。
+ * color.js — 颜色编码组（cat:'radix'）。
  *
  * 覆盖：
  * - RGB ↔ HSL ↔ HSV ↔ CMYK ↔ 十六进制 ↔ 整数色值 ↔ CSS 颜色名

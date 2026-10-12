@@ -135,7 +135,7 @@ function zipCreateRun(text, p) {
 
   const z = makeZip(data, pp.filename, pp.method);
   const methodName = z.method === 0 ? "Stored" : "Deflated";
-  // T361 产物协议：ZIP 字节走 files 下载按钮（真文件交付），不再倾倒 base64 文本。
+  // 产物协议：ZIP 字节走 files 下载按钮（真文件交付），不再倾倒 base64 文本。
   // 需要文本形态时可用 Base 系列对下载文件再编码；zipRepair/zipPseudoEncrypt 等链式 op 走文件导入。
   const zipName = (z.name && /\.[^./\\]+$/.test(z.name) ? z.name.replace(/\.[^./\\]+$/, "") : (z.name || "out")) + ".zip";
   return {
@@ -192,7 +192,7 @@ function zipCreateRun(text, p) {
     const out = zipCreateRun("4142", { filename: "bin.dat", method: "Deflated", inputEnc: "hex" });
     const outTxt = typeof out === "string" ? out : out.text;
     if (!outTxt.includes("2 字节到「bin.dat」（Deflated）")) throw new Error(`zipCreate 自检⑥失败: ${outTxt}`);
-    // T361 产物协议：ZIP 从 files[0].bytes 拿（旧字符串路径仅兜底兼容）
+    // 产物协议：ZIP 从 files[0].bytes 拿（旧字符串路径仅兜底兼容）
     const zip = (out.files && out.files[0] && out.files[0].bytes instanceof Uint8Array)
       ? out.files[0].bytes
       : (typeof Buffer !== "undefined" ? Uint8Array.from(Buffer.from(out.split("\n").pop(), "base64")) : null);

@@ -10,11 +10,12 @@
  * 红线：算法照 RFC 7748，纯 BigInt 本地，零外发。core 仅 import registry。
  *       随机私钥用 crypto.getRandomValues。
  *
- * 契约：族滑块三档 op（T396-A）：x25519KeyGen / x25519Shared / x25519SharedFromPub，
+ * 契约：族滑块三档 op（-A）：x25519KeyGen / x25519Shared / x25519SharedFromPub，
  *        family:"x25519"。
  */
 
 import { register } from "./registry.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 const P = (1n << 255n) - 19n;
 const A24 = 121665n; // (486662 - 2) / 4
@@ -112,7 +113,7 @@ function hexToBytes(hex) {
   return out;
 }
 function bytesToHex(b) { return Array.from(b).map((x) => x.toString(16).padStart(2, "0")).join(""); }
-function randomKey() { const b = new Uint8Array(32); crypto.getRandomValues(b); return b; }
+function randomKey() { return randBytes(32); }
 
 function need32(bytes, label) {
   if (bytes.length !== 32) throw new Error(`${label} 必须为 32 字节（64 hex 字符），当前 ${bytes.length} 字节`);
@@ -120,7 +121,7 @@ function need32(bytes, label) {
 }
 
 // ============================================================
-// X25519 三档算法族（T396-A，2026-09-04：同族多操作必须族滑块，废除下拉切模式）
+// X25519 三档算法族（-A，2026-09-04：同族多操作必须族滑块，废除下拉切模式）
 // family:"x25519"（与已有 x448 族命名区分）+ familyLabel → fam.lbl.*
 // （keygen/shared 已有主表 key；「私钥+对方公钥」档用 sharedPub——需主控在
 // zh/en i18n 主表新增 fam.lbl.sharedPub）。底层 x25519/scalarBase 实现原样复用，
@@ -143,7 +144,7 @@ register({
     const skRaw = (p && p.priv && String(p.priv).trim());
     const sk = skRaw ? need32(hexToBytes(skRaw), "私钥") : randomKey();
     const pk = scalarBase(sk);
-    // T362 产物协议（2026-09-02）：私钥 / 公钥分开交付下载按钮（hex 文本）。
+    // 产物协议（2026-09-02）：私钥 / 公钥分开交付下载按钮（hex 文本）。
     return {
       text: [
         "=== X25519 密钥生成 ===",

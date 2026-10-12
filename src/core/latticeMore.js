@@ -12,34 +12,30 @@
  * 红线：算法层零 UI 依赖；纯本地；件内自注册。
  */
 import { register } from "./registry.js";
-import { lllReduce } from "./lllAttack.js";
+import { lllReduce, gso, fromInt, fadd, fmul, fdiv } from "./lllAttack.js";
 
 /** Babai 最近平面：LLL 归约格基 B（BigInt 矩阵）找 t 的近似最近格点。 */
 export function babaiCvp(B, t) {
   const m = B.length;
-  const mu = Array.from({ length: m }, () => new Array(m).fill(0n));
-  const Bst = new Array(m).fill(0n);
+  const { bstar, Bn } = gso(B);
   const roundDiv = (num, den) => {
     // round(num/den)（den > 0，负数也正确舍入）
     if (num >= 0n) return (2n * num + den) / (2n * den);
     return -((2n * (-num) + den) / (2n * den));
   };
-  for (let i = 0; i < m; i++) {
-    Bst[i] = dot(B[i], B[i]);
-    for (let j = 0; j < i; j++) {
-      mu[i][j] = roundDiv(dot(B[i], B[j]), Bst[j]);
-    }
-  }
   // t 的 GSO 坐标（自底向上）
   const coords = new Array(m).fill(0n);
   let v = t.slice();
   for (let i = m - 1; i >= 0; i--) {
-    coords[i] = roundDiv(dot(v, B[i]), Bst[i]);
-    for (let j = 0; j < m; j++) v[j] -= coords[i] * B[i][j];
+    let projection = fromInt(0n);
+    for (let j = 0; j < t.length; j++) projection = fadd(projection, fmul(fromInt(v[j]), bstar[i][j]));
+    const ratio = fdiv(projection, Bn[i]);
+    coords[i] = roundDiv(ratio.n, ratio.d);
+    for (let j = 0; j < t.length; j++) v[j] -= coords[i] * B[i][j];
   }
   // 最近点 = Σ coords_i · B_i
-  const nearest = new Array(m).fill(0n);
-  for (let i = 0; i < m; i++) for (let j = 0; j < m; j++) nearest[j] += coords[i] * B[i][j];
+  const nearest = new Array(t.length).fill(0n);
+  for (let i = 0; i < m; i++) for (let j = 0; j < t.length; j++) nearest[j] += coords[i] * B[i][j];
   return nearest;
 }
 function dot(a, b) {
@@ -89,8 +85,11 @@ function babaiOp(text, p = {}) {
   const lines = String(text || "").trim().split("\n").map((l) => l.trim()).filter(Boolean);
   // 输入由 fields 拼接：「格基向量」框每行一个基向量（空格分隔整数），「目标向量」框为目标
   if (lines.length < 2) throw new Error("需在「格基向量」框每行填一个基向量（空格分隔整数），并在「目标向量」框填入目标向量");
-  const B = lines.slice(0, -1).map((l) => l.split(/\s+/).map(BigInt));
-  const t = lines[lines.length - 1].split(/\s+/).map(BigInt);
+  const parseIntBig = (s) => {
+    try { return BigInt(s); } catch { throw new Error("格基/目标向量须为整数（当前：" + s + "）"); }
+  };
+  const B = lines.slice(0, -1).map((l) => l.split(/\s+/).map(parseIntBig));
+  const t = lines[lines.length - 1].split(/\s+/).map(parseIntBig);
   if (B.some((r) => r.length !== t.length)) throw new Error("向量维数不一致");
   const red = lllReduce(B, { n: 99n, d: 100n }, 300);
   const nearest = babaiCvp(red, t);
@@ -104,15 +103,19 @@ function hnpOp(text, p = {}) {
   // 输入格式：每行 "h r s t"（h 哈希、r/s 签名、t nonce 已知部分）
   const lines = String(text || "").trim().split("\n").map((l) => l.trim()).filter(Boolean);
   if (lines.length < 3) throw new Error("输入：每行 `h r s t`（≥3 行），t = nonce 已知部分");
-  const n = BigInt(p.n || 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2fn);
+  const n = BigInt(p.n || 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n);
   const sigs = lines.map((l) => {
     const [h, r, s, t] = l.split(/\s+/).map(BigInt);
     return { h, r, s, t };
   });
-  const res = hnpRecover(sigs, n, Number(p.xBound) || 4096);
+  const xBound = Number(p.xBound) || 4096;
+  if (!Number.isInteger(xBound) || xBound < 1 || xBound > (1 << 24)) {
+    throw new Error("hnpRecover：xBound 须为 1-2^24 的整数（nonce 未知量穷举范围），当前：" + p.xBound);
+  }
+  const res = hnpRecover(sigs, n, xBound);
   if (!res) return "未找到短向量";
   return "HNP 恢复候选（曲线阶 n = " + n.toString(16).slice(0, 16) + "…）：\n" +
-    "x_i（nonce 低位） = [" + res.x.map((v) => v.toString()).join(", ") + "]\n" +
+    "x（共享 nonce 未知量） = " + res.x.toString() + "\n" +
     "候选私钥 d：\n" + res.dCands.map((d) => "  " + d.toString(16)).join("\n");
 }
 

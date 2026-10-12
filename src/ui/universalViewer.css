@@ -214,7 +214,7 @@
   white-space: nowrap;
 }
 
-/* ---- 字素簇切分（MT78）---- */
+/* ---- 字素簇切分---- */
 /* 切分模式开关行：默认按字素簇，勾选后退回逐码位。 */
 .uv-uni-mode {
   display: flex;
@@ -547,7 +547,7 @@
 
 /* --- 文本输出框已整体取消（恒烈 2026-08-26 拍板），各视图结果本身可选中复制 --- */
 
-/* --- MT77①：Unicode 描述编码渲染开关 + 转换结果标记 --- */
+/* --- ：Unicode 描述编码渲染开关 + 转换结果标记 --- */
 .uv-cp-toggle {
   display: inline-flex;
   align-items: center;
@@ -576,7 +576,7 @@
   overflow-y: auto;
   max-width: 100%;
 }
-/* --- T360：渲染结果导出控件行（显示区下方） --- */
+/* --- ：渲染结果导出控件行（显示区下方） --- */
 .uv-export-row {
   display: flex;
   align-items: center;

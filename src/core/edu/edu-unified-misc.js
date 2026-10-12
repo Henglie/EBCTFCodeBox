@@ -1,5 +1,5 @@
 /*
- * edu-unified-misc.js — 归一/杂项科普补缺分片（T317）。
+ * edu-unified-misc.js — 归一/杂项科普补缺分片（）。
  *
  * 覆盖 5 个真实缺失 op 的科普卡：
  * analysis: archiveUnified, cryptoAddrUnified, imageStructUnified

@@ -1,5 +1,5 @@
 /*
- * charset.js — 字符集 / 编码转换组（T62，cat:'text'）。
+ * charset.js — 字符集 / 编码转换组（cat:'text'）。
  *
  * 覆盖：
  * - GBK / GB2312 / GB18030 ↔ UTF-8（含 GB2312 区位码）
@@ -41,11 +41,11 @@ import { decodeUtf8Lossless } from "./bytesIo.js";
 const te = (s) => new TextEncoder().encode(s);
 
 // 字节通道的方向语义（与 base/hash 的样板同口径，按本族方向取反）：
-//   · decode 的输入本质是「目标字符集的字节」（UI 上以 hex / latin1 文本承载）——
-//     上游交来真字节时直接按目标字符集解读（rawBytes 优先，避免文本通道的 hex 表示
-//     与用户 format 参数打架）。
-//   · encode 的输入本质是「待转换文本」——上游真字节先按严格 UTF-8 取回文本；
-//     不是合法 UTF-8 就显式拒绝（字节不是文本，不能当待编码内容）。
+//  · decode 的输入本质是「目标字符集的字节」（UI 上以 hex / latin1 文本承载）——
+//    上游交来真字节时直接按目标字符集解读（rawBytes 优先，避免文本通道的 hex 表示
+//    与用户 format 参数打架）。
+//  · encode 的输入本质是「待转换文本」——上游真字节先按严格 UTF-8 取回文本；
+//    不是合法 UTF-8 就显式拒绝（字节不是文本，不能当待编码内容）。
 function decodeBytesIn(text, p, format) {
   return (p && p.rawBytes) || parseBytes(text, format);
 }
@@ -192,30 +192,92 @@ function makeCodec(label) {
 // GB2312 EUC-CN 字节 0xA1A1..0xFEFE，区位码 = (byte1-0xA0, byte2-0xA0)，各 01..94。
 // "中" = 0xD6D0 → 区54 位48 → "5448"。ASCII 字符在 GB2312 中为单字节 0x00..0x7F
 // encode 时原样透传（区位码仅定义 94×94 网格，不含 ASCII）。
+// 把一段「连续 ASCII」拆成若干组：其中**连续 ≥4 位的数字段逐位拆开**（避免与 4 位区位码同形），
+// 其余字符合并成一组（保持可读）。仅用于 sep=none 触发自动换行分隔时。
+function splitAsciiForNewline(s) {
+  const out = [];
+  let buf = "";
+  let i = 0;
+  while (i < s.length) {
+    const ch = s[i];
+    if (ch >= "0" && ch <= "9") {
+      let j = i;
+      while (j < s.length && s[j] >= "0" && s[j] <= "9") j++;
+      if (j - i >= 4) {
+        if (buf) { out.push(buf); buf = ""; }
+        for (let k = i; k < j; k++) out.push(s[k]); // 逐位
+      } else {
+        buf += s.slice(i, j);
+      }
+      i = j;
+    } else {
+      buf += ch;
+      i++;
+    }
+  }
+  if (buf) out.push(buf);
+  return out;
+}
+
 function quweiEncode(text, p) {
   const sep = (p && p.sep) || "none";
   const sepCh = sep === "space" ? " " : (sep === "newline" ? "\n" : "");
   const bytes = strToBytes("gb2312", text);
   const groups = [];
   let i = 0;
+ // sep=none 时，ASCII 连续 ≥4 位数字与「4 位区位码」在解码侧同形、无法区分（decode 用 /\d{4}/ 解析）。
+ // 此时**自动切换为换行分隔**（并拆开数字段），保证可还原；不再静默产出歧义串。
+  let asciiDigitRun = 0;
+  let autoNewline = false;
+  let lastWasHan = false; // 上一组是否为汉字区位码（4 位数字）
   while (i < bytes.length) {
     const b1 = bytes[i];
     if (b1 >= 0xA1 && b1 <= 0xFE && i + 1 < bytes.length && bytes[i + 1] >= 0xA1 && bytes[i + 1] <= 0xFE) {
       const q = b1 - 0xA0;
       const w = bytes[i + 1] - 0xA0;
       groups.push(q.toString().padStart(2, "0") + w.toString().padStart(2, "0"));
+      // 数字段紧邻汉字区位码时，透传数字与 4 位区位码在解码侧同形拼接（1-3 位数字也歧义，如 "5中"→"55448"），须切换
+      if (sep === "none" && asciiDigitRun > 0) autoNewline = true;
+      asciiDigitRun = 0;
+      lastWasHan = true;
       i += 2;
     } else {
  // ASCII 透传
-      groups.push(String.fromCharCode(b1));
+      const ch = String.fromCharCode(b1);
+      if (ch >= "0" && ch <= "9") {
+        // 汉字区位码后紧跟数字同样拼接歧义（如 中1中 → 544815448）
+        if (sep === "none" && lastWasHan) autoNewline = true;
+        asciiDigitRun += 1;
+        if (sep === "none" && asciiDigitRun >= 4) autoNewline = true;
+      } else {
+        asciiDigitRun = 0;
+      }
+      lastWasHan = false;
+      groups.push(ch);
       i += 1;
     }
+  }
+  if (sep === "none" && autoNewline) {
+ // 自动切换：连续 ASCII 合并成组、≥4 位数字段逐位拆开，组间用换行分隔。
+    const merged = [];
+    let buf = "";
+    for (const g of groups) {
+      if (g.length === 1) { buf += g; continue; } // 单字符组＝ASCII 透传字符
+      if (buf) { for (const x of splitAsciiForNewline(buf)) merged.push(x); buf = ""; }
+      merged.push(g);
+    }
+    if (buf) for (const x of splitAsciiForNewline(buf)) merged.push(x);
+    return merged.join("\n");
   }
   return groups.join(sepCh);
 }
 function quweiDecode(text, p) {
   const sep = (p && p.sep) || "none";
-  const sepSet = sep === "space" ? new Set([" "]) : (sep === "newline" ? new Set(["\n", "\r"]) : null);
+ // sep=none 也要剥离换行：编码端在「含连续 ≥4 位数字」时会**自动切换为换行分隔**，
+ // 故解码端把换行视为分隔符，才能还原自动切换过的密文。
+  const sepSet = sep === "space" ? new Set([" "])
+    : sep === "newline" ? new Set(["\n", "\r"])
+    : new Set(["\n", "\r"]);
   const out = [];
   const re = /\d{4}/g;
   let last = 0;
@@ -271,18 +333,24 @@ for (const [cp, tbl] of Object.entries(EBCDIC_TABLES)) {
   for (const [k, v] of Object.entries(tbl)) EBCDIC_REVERSE[cp][v] = k;
 }
 function ebcdicEncode(text, p) {
-  const cp = (p && p.codepage) || "cp037";
+  const cp = (p && p.codepage) || "cp1047";
   const tbl = EBCDIC_TABLES[cp];
   if (!tbl) throw new Error(`未知 EBCDIC 码页: ${cp}`);
   text = textFromRawBytes(text, p);
   const out = [];
   for (const ch of text) {
-    out.push(ch in tbl ? tbl[ch] : 0x6F); // 未知 → EBCDIC '?'
+    if (ch in tbl) { out.push(tbl[ch]); continue; }
+ // 未知字符**显式报错**（禁静默回落：旧实现静默落 EBCDIC '?' 0x6F，会悄悄丢字符）。
+    const hex = "U+" + ch.codePointAt(0).toString(16).toUpperCase().padStart(4, "0");
+    throw new Error(
+      `EBCDIC(${cp}) 无法表示字符 ${JSON.stringify(ch)}（${hex}）：该码页为单字节 ASCII 码页。` +
+      `请改用可表示的字符，或选择含 []{}^~\\ 的码页 cp1047。`
+    );
   }
   return formatBytes(new Uint8Array(out), (p && p.format) || "hex");
 }
 function ebcdicDecode(text, p) {
-  const cp = (p && p.codepage) || "cp037";
+  const cp = (p && p.codepage) || "cp1047";
   const rev = EBCDIC_REVERSE[cp];
   if (!rev) throw new Error(`未知 EBCDIC 码页: ${cp}`);
   const bytes = decodeBytesIn(text, p, (p && p.format) || "hex");
@@ -403,7 +471,7 @@ register({
 
 register({
   id: "gb2312QuWei", cat: "text", name: "GB2312 区位码",
-  desc: "汉字 ↔ 4 位区位码（区01-94 位01-94，字节=区位+0xA0；ASCII 透传）",
+  desc: "汉字 ↔ 4 位区位码（区01-94 位01-94，字节=区位+0xA0；ASCII 透传）。无分隔符时若含连续 4 位以上数字，会自动改用换行分隔以免与区位码混淆",
   params: [
     { key: "sep", label: "分组分隔", type: "select", default: "none",
       options: [
@@ -471,10 +539,10 @@ register({
 
 register({
   id: "ebcdic", cat: "text", name: "EBCDIC",
-  desc: "IBM EBCDIC ↔ ASCII（内嵌 037/1047 码表，TextDecoder 不支持）",
+  desc: "IBM EBCDIC ↔ ASCII（内嵌 037/1047 码表，默认 cp1047 含 []{}^~\\；不可表示字符显式报错，不静默落 ?）",
   acceptsBytes: true, // decode 吃字节（按 EBCDIC 码页解读）；encode 只吃文本
   params: [
-    { key: "codepage", label: "码页", type: "select", default: "cp037",
+    { key: "codepage", label: "码页", type: "select", default: "cp1047",
       options: [
         { value: "cp037", label: "IBM 037（US/Canada，经典）" },
         { value: "cp1047", label: "IBM 1047（Unix POSIX，含 []{}^~\\）" },

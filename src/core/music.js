@@ -1,5 +1,5 @@
 /*
- * music.js — 音乐 / 乐谱编码组（T73，cat:'audio'）。
+ * music.js — 音乐 / 乐谱编码组（cat:'audio'）。
  *
  * 覆盖：
  * - 音名（Scientific Pitch Notation）：C4, C#4, Db4, B3, ...
@@ -260,8 +260,15 @@ register({
     else if (parsed.type === "jianpu") midi = jianpuToMidi(parsed.value, key);
     else if (parsed.type === "solfeggio") midi = solfeggioToMidi(parsed.value, key);
     const noteName = midiToNoteName(midi, preferFlat);
-    const jianpu = midiToJianpu(midi, key);
-    const solfeggio = midiToSolfeggio(midi, key);
+    let jianpu, solfeggio;
+    try {
+      jianpu = midiToJianpu(midi, key);
+      solfeggio = midiToSolfeggio(midi, key);
+    } catch (e) {
+      if (!String(e.message).includes("调自然音阶内")) throw e;
+      // 调外半音仍有有效的音名、MIDI 与频率；自然简谱/唱名无对应值。
+      jianpu = solfeggio = "不在所选调的自然音阶内";
+    }
     const freq = midiToFreq(midi);
     const octave = Math.floor(midi / 12) - 1;
     const semitone = midi % 12;

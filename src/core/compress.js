@@ -271,7 +271,7 @@ async function streamDecompress(format, bytes) {
   }
 }
 
-/** 纯 JS 压缩兜底（T366 补齐，2026-09-02）：stored 模式 deflate（RFC 1951 BTYPE=00）。
+/** 纯 JS 压缩兜底（补齐，2026-09-02）：stored 模式 deflate（RFC 1951 BTYPE=00）。
  *  正确性 100%（任何解压器可解），不做体积压缩——兜底路径优先正确性，desc 已注明。
  *  权威验证：node zlib.gunzipSync/inflateSync/inflateRawSync 反解逐字节一致（见 rt 测试）。 */
 const _crc32Table = (() => {
@@ -339,11 +339,11 @@ function jsDeflateFallback(format, bytes) {
 }
 /** 压缩：原生流 + 超时（无纯 JS deflate 实现，超时直接报错）。 */
 async function streamCompress(format, bytes) {
-  if (!hasStreams()) return jsDeflateFallback(format, bytes); // T366：无 Streams 也走 stored 兜底
+  if (!hasStreams()) return jsDeflateFallback(format, bytes); // ：无 Streams 也走 stored 兜底
   try {
     return await withTimeout(nativeCompress(format, bytes), TIMEOUT_MS);
   } catch (e) {
-    // T366 补齐（2026-09-02，产品裁决压缩侧不能留尾巴）：超时/失败/无 Streams →
+    // 补齐（2026-09-02，产品裁决压缩侧不能留尾巴）：超时/失败/无 Streams →
     // stored deflate 兜底（合法 deflate 流、任何解压器可解；不压缩体积但 100% 正确）。
     return jsDeflateFallback(format, bytes);
   }
@@ -361,7 +361,7 @@ function bytesToB64(bytes) {
 // decode: 输入（hex/base64/UTF-8 自动识别）→ 字节 → 解压 → 文本（可打印）或 hex
 // ============================================================
 
-// T363a 产物协议（2026-09-02）：encode 压缩后的二进制流走 files 下载通道，
+// 产物协议（2026-09-02）：encode 压缩后的二进制流走 files 下载通道，
 // text 仍为原 base64（配方链兼容）。按 format 映射产物文件名与 MIME。
 const ENCODE_FILE_META = {
   "gzip": { name: "out.gz", mime: "application/gzip" },
@@ -373,7 +373,7 @@ function makeCompressOps(format, label) {
   async function encode(text) {
     const bytes = te(text);
     const zipped = await streamCompress(format, bytes);
-    // T363a 产物协议（2026-09-02）：成功路径返回 {text, files}；text 保持原
+    // 产物协议（2026-09-02）：成功路径返回 {text, files}；text 保持原
     // base64 不变（链式兼容），files 供 main.js 渲染「⬇ 下载」按钮。
     // 压缩失败仍沿 streamCompress 抛错（错误路径形态不变）。
     const meta = ENCODE_FILE_META[format] || { name: "out.bin", mime: "application/octet-stream" };
@@ -393,7 +393,7 @@ function makeCompressOps(format, label) {
     }
     const r = bytesToOutput(out);
     if (p && p.toFile && r.mode !== "text") {
-      // T507 P2：二进制解压产物走 files 协议给下载。默认关——本 op 参与 magic
+      // P2：二进制解压产物走 files 协议给下载。默认关——本 op 参与 magic
       // 一键解码（Worker 路径不认对象返回，registry 红线），仅用户显式开启时
       // 改变返回形态，detect/配方默认路径零变化。
       return {
@@ -953,5 +953,5 @@ export {
   archiveIdentifyRun, zipListRun, tarListRun, b64CompressedProbeRun,
   parseZipStructure, parseTarString, detectArchiveMagic, inputToBytes, bytesToOutput,
   hasStreams, streamCompress, streamDecompress,
-  jsDeflateFallback, deflateStoredRaw, crc32Bytes, adler32Bytes, // T366 压缩兜底（stored deflate）
+  jsDeflateFallback, deflateStoredRaw, crc32Bytes, adler32Bytes, // 压缩兜底（stored deflate）
 };

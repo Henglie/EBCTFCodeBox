@@ -28,11 +28,12 @@
  * - 随机 r / 素数用 crypto 随机源（复用 primeGen）。
  * - 零外发；core 层零 UI 依赖（仅 registry + primeGen）。
  *
- * 契约：族滑块四档 op（T396-A）：paillierKeyGen / paillierEncrypt / paillierDecrypt /
+ * 契约：族滑块四档 op（-A）：paillierKeyGen / paillierEncrypt / paillierDecrypt /
  *        paillierHomAdd，family:"paillier"。
  */
 import { register } from "./registry.js";
 import { generatePrime, modPow } from "./primeGen.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
 // 大整数工具
@@ -70,7 +71,7 @@ function randCoprime(n) {
   const bytes = (n.toString(16).length + 1) >> 1;
   for (let tries = 0; tries < 1000; tries++) {
     const buf = new Uint8Array(bytes);
-    crypto.getRandomValues(buf);
+    buf.set(randBytes(buf.length));
     let r = 0n;
     for (const b of buf) r = (r << 8n) | BigInt(b);
     r = mod(r, n);
@@ -108,7 +109,7 @@ function decrypt(c, n, lambda, mu) {
 }
 
 // ============================================================
-// Paillier 四档算法族（T396-A，2026-09-04：同族多操作必须族滑块，废除下拉切模式）
+// Paillier 四档算法族（-A，2026-09-04：同族多操作必须族滑块，废除下拉切模式）
 // family:"paillier" + familyLabel → fam.lbl.*（keygen/encrypt/decrypt 已有主表 key；
 // 同态加档用 homAdd——需主控在 zh/en i18n 主表新增 fam.lbl.homAdd）。
 // 底层 keygen/encrypt/decrypt 实现原样复用，每个 op 只保留本档参数面。
@@ -127,9 +128,17 @@ register({
     { key: "bits", label: "密钥位数 n", type: "number", default: 256, placeholder: "≥16，演示用小值" },
   ],
   run: (_text, p) => {
-    const bits = Math.max(16, parseInt(p.bits, 10) || 256);
+    const bitsRaw = p && p.bits != null && String(p.bits).trim() !== "" ? String(p.bits).trim() : null;
+    let bits = 256;
+    if (bitsRaw !== null) {
+      bits = parseInt(bitsRaw, 10);
+      if (!Number.isInteger(bits) || bits < 16)
+        throw new Error(`Paillier：密钥位数 bits 须为 ≥16 的整数（拿到 ${bitsRaw}）`);
+      if (bits > 4096)
+        throw new Error(`Paillier：密钥位数 bits 过大（${bits}），须 ≤ 4096`);
+    }
     const k = keygen(bits);
-    // T362 产物协议（2026-09-02）：公钥（n/g）/ 私钥（λ/μ）分开交付下载按钮（十进制文本）。
+    // 产物协议（2026-09-02）：公钥（n/g）/ 私钥（λ/μ）分开交付下载按钮（十进制文本）。
     return {
       text: [
         "=== Paillier 密钥对生成 ===",
@@ -199,6 +208,7 @@ register({
     const lambda = parseBig(p.lambda, "λ");
     const mu = parseBig(p.mu, "μ");
     const c = parseBig(text, "密文 c");
+    if (c < 0n || c >= n * n) throw new Error("Paillier：密文 c 须在 [0, n²) 内");
     const m = decrypt(c, n, lambda, mu);
     return [
       "=== Paillier 解密 ===",

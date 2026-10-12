@@ -26,6 +26,7 @@
 
 import { register } from "./registry.js";
 import { keccak } from "./hash.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ==================== 共用域参数（RFC 8032 Table 2 / RFC 7748 §4.2） ====================
 
@@ -76,7 +77,7 @@ function hexToBytes(hex) {
   return out;
 }
 function bytesToHex(b) { return Array.from(b).map((x) => x.toString(16).padStart(2, "0")).join(""); }
-function randomBytes(n) { const b = new Uint8Array(n); crypto.getRandomValues(b); return b; }
+function randomBytes(n) { return randBytes(n); }
 
 function shake256(bytes, outLen) { return keccak(136, 0x1f, bytes, outLen); }
 

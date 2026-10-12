@@ -1,5 +1,5 @@
 /*
- * edu-fancy-new.js — 科普补缺分片（T309，花式编码）。
+ * edu-fancy-new.js — 科普补缺分片（花式编码）。
  *
  * 覆盖 1 个真实缺失 op 的科普卡：
  * fancy: jjencode

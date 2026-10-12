@@ -110,7 +110,8 @@ function bytesToHex(bytes) {
   return s;
 }
 function hexToBytes(s) {
-  const clean = String(s || "").replace(/[^0-9a-fA-F]/g, "");
+  const clean = String(s || "").replace(/\s+/g, ""); // 仅容忍空白（粘贴换行/空格），其余非法字符显式报错
+  if (/[^0-9a-fA-F]/.test(clean)) throw new Error("vmpc：密文含非十六进制字符（仅允许 0-9a-fA-F）");
   if (clean.length % 2) throw new Error("十六进制密文长度必须为偶数");
   const out = new Uint8Array(clean.length / 2);
   for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);

@@ -76,8 +76,8 @@ function polyDegree(p) { const t = polyTrim(p); return t.length - 1; }
 function generatorPoly(nsym) {
   let g = [1];
   // ⚠ 因子必须是 **(x + α^i)** 而非 (1 + α^i·x)：后者首项系数为 α^i、不是 monic，
-  //   乘出来的生成多项式整体差一个常数因子，用它编码会产生非零校正子。
-  //   低次在前时 (x + α^i) = [α^i, 1]。
+  //  乘出来的生成多项式整体差一个常数因子，用它编码会产生非零校正子。
+  //  低次在前时 (x + α^i) = [α^i, 1]。
   for (let i = 0; i < nsym; i++) g = polyMul(g, [gp(i), 1]);
   return g;                                                     // 低次在前，次数 = nsym，首项为 1
 }
@@ -197,8 +197,8 @@ export function rsDecodeWithErasures(block, nsym, erasures = []) {
     const fsyndFull = new Array(nsym).fill(0);
     for (let i = 0; i < Math.min(nsym, prod.length); i++) fsyndFull[i] = prod[i];
     // ⚠ BM 的输入必须**从 x^e 起**取（长度 nsym−e）：前 e 项是擦除因子 Λ_e 引入的
-    //   dummy 系数，把它们喂给 BM 会让 Λ 度数虚高（实测 e=6,v=5,nsym=16 时算出 14
-    //   而非正确的 11），Chien 根数与次数必然对不上。
+    //  dummy 系数，把它们喂给 BM 会让 Λ 度数虚高（实测 e=6,v=5,nsym=16 时算出 14
+    //  而非正确的 11），Chien 根数与次数必然对不上。
     const fsynd = [];
     for (let i = e; i < nsym; i++) fsynd.push(fsyndFull[i]);
     const Lerr = berlekampMassey(fsynd);

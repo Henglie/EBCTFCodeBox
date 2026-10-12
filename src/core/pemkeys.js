@@ -1,5 +1,5 @@
 /*
- * pemkeys.js — PEM / JWK / DER 密钥格式互转层（T350 批A4，cat:'crypto'）
+ * pemkeys.js — PEM / JWK / DER 密钥格式互转层（批A4，cat:'crypto'）
  *
  * 标准依据（照标准实现，不编造）：
  * - PEM 文法 = RFC 7468 (2015-04)
@@ -28,6 +28,7 @@
  * 零 UI 依赖，node 可直跑。DER 编解码全走 rsagen.js 导出，不另造轮子。
  */
 import { register } from "./registry.js";
+import { decodeUtf8Lossless } from "./bytesIo.js";
 import {
   derEncode, derDecode, derInt, derSeq, derOid, derOctetString, derBitString,
   derBytesToBigint, bytesToBase64, derToPem,
@@ -288,8 +289,8 @@ function ecPublicFromPrivate(d, curveKey) {
 
 // ============================================================
 // 统一密钥中间表示
-//   RSA: {kty:"RSA", n,e, d?,p?,q?,dp?,dq?,qinv?, src...}
-//   EC : {kty:"EC", curve(表项), d?, x?, y?, src...}
+//  RSA: {kty:"RSA", n,e, d?,p?,q?,dp?,dq?,qinv?, src...}
+//  EC : {kty:"EC", curve(表项), d?, x?, y?, src...}
 // ============================================================
 
 /** 校验 DER 节点是期望 tag（结构化/原始均可），否则中文报错 */
@@ -612,8 +613,8 @@ const KIND_DESC = {
 };
 
 // ============================================================
-// T364 产物协议（2026-09-02）：run 返回 { text, files }（main.js renderOutFiles
-// 渲染下载按钮）。文件名 <算法>_<内容>_<参数>.<ext>，风格同 T362 的
+// 产物协议（2026-09-02）：run 返回 { text, files }（main.js renderOutFiles
+// 渲染下载按钮）。文件名 <算法>_<内容>_<参数>.<ext>，风格沿用统一命名规则
 // rsa_private_2048.pem；text 报告保留完整，产物是增量。
 // ============================================================
 
@@ -637,6 +638,7 @@ function artifactLine(files, sensitive) {
 
 register({
   id: "pemToHex", cat: "asym", name: "PEM → DER",
+  acceptsBytes: true,
   desc: "PEM（任意 BEGIN/END 标签）提取 DER 原始字节：base64 解码 + RFC 7468 §6 宽松清洗（剥空白、丢注脚行、跳过 EC PARAMETERS 参数块）。输出 DER hex 或 16 字节 hexdump。对拍可用 openssl asn1parse / xxd -r -p。附带规范 base64 与识别出的标签。不解析 DER 结构（解析见 PEM→JWK）",
   params: [
     { key: "output", label: "输出格式", type: "select", default: "hex", options: [
@@ -645,6 +647,12 @@ register({
     ] },
   ],
   run: (text, p = {}) => {
+    const rawBytes = p?.rawBytes ?? (text instanceof Uint8Array ? text : null);
+    if (rawBytes != null) {
+      const decoded = decodeUtf8Lossless(rawBytes);
+      if (!decoded.ok) throw new Error("PEM 输入不是合法 UTF-8 文本");
+      text = decoded.text;
+    }
     const { label, der, dropped } = parsePem(text);
     const lines = [];
     lines.push(`PEM 标签：${label}`);
@@ -658,7 +666,7 @@ register({
     }
     lines.push("");
     lines.push(`规范 base64：${bytesToBase64(der)}`);
-    // T364：DER 原始字节出 .der 产物（hex 报告保留文本）
+    // ：DER 原始字节出 .der 产物（hex 报告保留文本）
     const files = [{ name: `${labelTag(label)}.der`, mime: "application/octet-stream", bytes: der }];
     lines.push(...artifactLine(files, /PRIVATE KEY/.test(label)));
     return { text: lines.join("\n"), files };
@@ -667,6 +675,7 @@ register({
 
 register({
   id: "hexToPem", cat: "asym", name: "DER → PEM",
+  acceptsBytes: true,
   desc: "DER（hex 或 base64）封装为 PEM：RFC 7468 §5.2 格式，64 字符折行。标签可选 RSA PRIVATE KEY / PRIVATE KEY / PUBLIC KEY / EC PRIVATE KEY / CERTIFICATE 或自定义。hex/base64 自动判别（auto 下全 hex 字符按 hex 处理）。附带尝试 DER 顶层解析提示（不强制合法 DER）",
   params: [
     { key: "input", label: "输入编码", type: "select", default: "auto", options: [
@@ -685,11 +694,15 @@ register({
     { key: "customLabel", label: "自定义标签", type: "text", default: "", placeholder: "仅 label 选自定义时生效，如 CERTIFICATE REQUEST" },
   ],
   run: (text, p = {}) => {
+    const rawBytes = p?.rawBytes ?? (text instanceof Uint8Array ? text : null);
     const raw = String(text).replace(/\s+/g, "");
-    if (!raw) throw new Error("输入为空");
+    if (rawBytes == null && !raw) throw new Error("输入为空");
     let der;
     const mode = String(p?.input ?? "auto");
-    if (mode === "hex" || (mode === "auto" && /^[0-9a-fA-F]+$/.test(raw) && raw.length % 2 === 0)) {
+    if (rawBytes != null) {
+      der = rawBytes instanceof Uint8Array ? rawBytes : new Uint8Array(rawBytes);
+      if (!der.length) throw new Error("输入为空");
+    } else if (mode === "hex" || (mode === "auto" && /^[0-9a-fA-F]+$/.test(raw) && raw.length % 2 === 0)) {
       der = hexToBytes(raw);
     } else if (mode === "base64" || (mode === "auto" && /^[A-Za-z0-9+/_=-]+$/.test(raw))) {
       der = base64Decode(raw);
@@ -714,7 +727,7 @@ register({
     const pem = derToPem(label, der);
     lines.push(pem);
     if (note) lines.push("", note);
-    // T364：PEM 结果出 .pem 产物（文本报告保留）
+    // ：PEM 结果出 .pem 产物（文本报告保留）
     const files = [{ name: `${labelTag(label)}.pem`, mime: "application/x-pem-file", bytes: encodeText(pem + "\n") }];
     lines.push(...artifactLine(files, /PRIVATE KEY/.test(label)));
     return { text: lines.join("\n"), files };
@@ -754,7 +767,7 @@ register({
       lines.push(`y hex = ${bytesToHex(padBytes(k.y, bl, "y"))}`);
     }
     lines.push("字段编码：RFC 7518 §6，base64url 无 padding（RFC 4648 §5）");
-    // T364：JWK JSON 出 .jwk 产物（参数 = RSA 位长 / EC 曲线名）
+    // ：JWK JSON 出 .jwk 产物（参数 = RSA 位长 / EC 曲线名）
     const isPrivJwk = k.d != null;
     const tag = k.kty === "RSA" ? `${k.n.toString(2).length}` : crvTag(k.curve.crv);
     const files = [{
@@ -773,7 +786,7 @@ register({
   run: (text) => {
     const k = parseKeyText(text);
     const lines = [];
-    // T364：PEM 各块拆成独立 .pem 产物（RSA 私钥 = PKCS#1 + PKCS#8 两文件；
+    // ：PEM 各块拆成独立 .pem 产物（RSA 私钥 = PKCS#1 + PKCS#8 两文件；
     // EC 私钥 = SEC1 + PKCS#8 两文件；公钥 = SPKI 单文件）
     const pems = [];
     if (k.kty === "RSA") {
@@ -830,7 +843,7 @@ register({
   run: (text) => {
     const k = parseKeyText(text);
     const lines = [];
-    // T364：公钥双产物 = SPKI .pem + JWK .jwk（公钥可公开，无敏感提示）
+    // ：公钥双产物 = SPKI .pem + JWK .jwk（公钥可公开，无敏感提示）
     const files = [];
     lines.push(`输入解析：${k.srcKind in KIND_DESC ? KIND_DESC[k.srcKind] : k.srcKind} · ${k.srcAlg}`);
     if (k.kty === "RSA") {

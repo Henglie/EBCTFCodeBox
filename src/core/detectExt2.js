@@ -1,5 +1,5 @@
 /*
- * detectExt2.js — T99 编码自动检测大表补强（detectExt.js 续）。
+ * detectExt2.js — 编码自动检测大表补强（detectExt.js 续）。
  *
  * 职责：为 detectExt.js 未覆盖的 op 补全 detect 识别函数，提升 oneClickDecode
  * （一把梭）识别命中率。与 detectExt.js 互补：两者都 monkey-patch OPS，只给
@@ -391,6 +391,8 @@ const DETECTORS2 = {
 // ============ monkey-patch：给 detectExt.js 未覆盖的 op 补 detect ============
 let patched = 0;
 const patchedIds = [];
+// 惰载重放入口：循环幂等（缺 detect 才补），lazyCore 每批文件落地后调用
+export function applyDetectPatches() {
 for (const op of OPS) {
   if (typeof op.detect !== "function" && typeof op.decode === "function" && DETECTORS2[op.id]) {
     op.detect = DETECTORS2[op.id];
@@ -398,6 +400,8 @@ for (const op of OPS) {
     patchedIds.push(op.id);
   }
 }
+}
+applyDetectPatches();
 
 // ============ 诊断导出（供测试/审计）============
 export const DETECT2_PATCHED = patchedIds;

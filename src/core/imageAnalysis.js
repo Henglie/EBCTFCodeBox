@@ -171,7 +171,7 @@ function trimUniformEdgesWH(mat, W, H) {
 
 // 最近邻重采样到 L×L（有界候选，配合 finder/格式/纠错校验淘汰错解）。
 // R 为超采样倍数：先重采样到 (L·R)×(L·R) 再 R×R 多数降采样——非整数节距
-// 拉伸下最近邻单采样会踩模块边缘，4x 超采样实测可归零错位（T425）。
+// 拉伸下最近邻单采样会踩模块边缘，4x 超采样实测可归零错位（）。
 function resampleSquareNN(mat, W, H, L, R = 1) {
   const N = L * R;
   const hi = new Array(N);

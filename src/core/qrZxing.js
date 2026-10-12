@@ -79,11 +79,11 @@ export function qrZxingStatus() { return _status; }
 // 默认读码参数
 // ============================================================
 // 取向：**召回优先**。CTF 里「没扫出来」远贵于「多扫几个候选」，故：
-//   tryHarder      穷举更多二值化与网格假设
-//   tryRotate      任意旋转（含 90° 整数倍与任意角）
-//   tryInvert      反色（白码黑底，CTF 常见）
-//   tryDownscale   多尺度（大图小符号 / 小图大符号都覆盖）
-//   maxNumberOfSymbols 多符号平铺（一张图里十几枚码时逐个报出）
+//  tryHarder      穷举更多二值化与网格假设
+//  tryRotate      任意旋转（含 90° 整数倍与任意角）
+//  tryInvert      反色（白码黑底，CTF 常见）
+//  tryDownscale   多尺度（大图小符号 / 小图大符号都覆盖）
+//  maxNumberOfSymbols 多符号平铺（一张图里十几枚码时逐个报出）
 export const QRZX_DEFAULT_OPTIONS = Object.freeze({
   formats: ["QRCode"],
   tryHarder: true,

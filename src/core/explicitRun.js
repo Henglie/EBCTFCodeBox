@@ -55,6 +55,27 @@ export function isExplicitRunOp(id) {
 }
 
 /**
+ * 惰执行 op（图像 canvas 重算系）：拖入/参数改动等**自动路径一律不跑**，
+ * 等用户点「转换」才执行（恒烈 2026-10-12：「拖进去不直接执行？点击按钮才执行」）。
+ * 与 EXPLICIT_RUN_OPS 的差异：这批是 encode 型（无 run），不走 Worker 通道，
+ * 拦截点在 main 的 triggerConvert 与 convert("param")——点按钮的显式路径照常执行。
+ */
+export const LAZY_RUN_OPS = [
+  "imageCompress", "imageGray", "imagePixelate", "imageFrosted",
+  "imageSketch", "imageToText", "spriteSheet",
+];
+
+/** 某 op 是否惰执行（拖入/参数改动不自动跑，点按钮才执行）。 */
+export function isLazyRunOp(id) {
+  return LAZY_RUN_OPS.includes(id);
+}
+
+/** 惰执行 op 自动路径被拦截时输出区显示的占位文案。 */
+export function lazyRunHint(name) {
+  return `【${name}】已就绪，未自动执行。\n点击下方「转换」按钮即开始处理。`;
+}
+
+/**
  * 自动路径被拦截时输出区显示的占位文案。
  * 默认中文兜底；开发方接线时可挪进 i18n（建议键 ui.crypto.explicitHint，带 opName 插值）。
  * @param {string} name op 显示名

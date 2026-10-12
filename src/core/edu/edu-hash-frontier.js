@@ -1,4 +1,4 @@
-// 科普内容分片：hash 前沿补全三件（argon2/tiger/kupyna，T398 批B）。纯数据，无 import 无副作用。
+// 科普内容分片：hash 前沿补全三件（argon2/tiger/kupyna，PQC 批B）。纯数据，无 import 无副作用。
 export default {
   argon2: {
     what: "目前最强的口令哈希 / 密钥派生函数（KDF），2015 年密码哈希竞赛（PHC）冠军，RFC 9106 标准。GPU 和专用矿机挖它非常不划算，所以存密码首选它。",

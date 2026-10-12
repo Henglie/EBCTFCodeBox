@@ -1,5 +1,5 @@
 /*
- * jpgSizeRecover.js — JPEG 宽高修复（T345，cat:'image'）。
+ * jpgSizeRecover.js — JPEG 宽高修复（cat:'image'）。
  *
  * 场景：CTF 经典「改高度藏图」的 JPEG 版 —— SOF 段声明的宽高被改小，
  * 查看器按声明值裁掉下方内容。JPEG 的 SOF 没有校验和（不像 PNG IHDR 有 CRC32），
@@ -320,7 +320,7 @@ function jpgSizeRecoverRun(text, p) {
     lines.push("");
     lines.push("修复后 base64（已写回 SOF）：");
     lines.push(bytesToB64(fixed));
-    // T363b 产物协议 2026-09-02：修复后的 JPEG 字节走 files 下载按钮，text 保留原报告 + base64 行（链式/复制兼容）。
+    // 产物协议 2026-09-02：修复后的 JPEG 字节走 files 下载按钮，text 保留原报告 + base64 行（链式/复制兼容）。
     return { text: lines.join("\n"), files: [{ name: "out.jpg", mime: "image/jpeg", bytes: fixed }] };
   }
 
@@ -347,7 +347,7 @@ function jpgSizeRecoverRun(text, p) {
   lines.push("");
   lines.push("修复后 base64（已写回 SOF 高度）：");
   lines.push(bytesToB64(fixed));
-  // T363b 产物协议 2026-09-02：修复后的 JPEG 字节走 files 下载按钮，text 保留原报告 + base64 行（链式/复制兼容）。
+  // 产物协议 2026-09-02：修复后的 JPEG 字节走 files 下载按钮，text 保留原报告 + base64 行（链式/复制兼容）。
   return { text: lines.join("\n"), files: [{ name: "out.jpg", mime: "image/jpeg", bytes: fixed }] };
 }
 
@@ -395,7 +395,7 @@ function tamperHeight(jpeg, fakeH) {
 // ============ 加载期自检（import 即跑） ============
 
 (() => {
-  // T363b 产物协议 2026-09-02：run 可返回 { text, files }，自检统一取 text；
+  // 产物协议 2026-09-02：run 可返回 { text, files }，自检统一取 text；
   // 产物字节优先从 files[0].bytes 拿（旧字符串路径仅兜底兼容）。
   const asText = (o) => (typeof o === "string" ? o : o.text);
   const asBytes = (o) => (o && o.files && o.files[0] && o.files[0].bytes instanceof Uint8Array)
@@ -429,7 +429,7 @@ function tamperHeight(jpeg, fakeH) {
   if (!asText(out).includes("真实高度 16")) throw new Error(`jpgSizeRecover 自检⑤失败：\n${asText(out)}`);
 
   // ⑥ 采样因子路径：2 分量（0x21 采样 + 0x11），每 MCU 3 块 6bit
-  //    W=64 → mcusPerRow = ceil(64/16) = 4，H=8 → 1 行 4 MCU = 24bit = 3 字节
+  //   W=64 → mcusPerRow = ceil(64/16) = 4，H=8 → 1 行 4 MCU = 24bit = 3 字节
   const multi = (() => {
     const parts = [];
     const push = (...bs) => { for (const b of bs) parts.push(b & 0xFF); };
@@ -466,10 +466,10 @@ function tamperHeight(jpeg, fakeH) {
   if (!out.includes("渐进式") || !out.includes("手动")) throw new Error(`jpgSizeRecover 自检⑦失败：\n${out}`);
 
   // ⑧ FF00 去填充路径：扫描数据里塞一个字节 0xFF 需写成 FF00。
-  //    构造：8×40（5 MCU，10bit 数据流手动混入 stuffed FF）——直接手工拼扫描段：
-  //    bits: 00 00 00 00 00（5 MCU 各 '00'）= 10 bit + pad111111 → 字节 0x00 0x3F。
-  //    把 0x3F 换成含 FF 的：改用「每 MCU 2bit」，第 9-16 bit 造 FF00 不可行（全 0 码流），
-  //    此处改为验证 BitReader 层：读 stuffed FF00 应得 0xFF 且不停。
+  //   构造：8×40（5 MCU，10bit 数据流手动混入 stuffed FF）——直接手工拼扫描段：
+  //   bits: 00 00 00 00 00（5 MCU 各 '00'）= 10 bit + pad111111 → 字节 0x00 0x3F。
+  //   把 0x3F 换成含 FF 的：改用「每 MCU 2bit」，第 9-16 bit 造 FF00 不可行（全 0 码流），
+  //   此处改为验证 BitReader 层：读 stuffed FF00 应得 0xFF 且不停。
   const br = new BitReader(new Uint8Array([0xFF, 0x00, 0xFF, 0x00, 0xFF, 0xD9]), 0);
   const byte1 = br.nextByte();
   const byte2 = br.nextByte();

@@ -1,5 +1,5 @@
 /*
- * edu-t508-b3.js — T508 批三·压缩校验卡科普卡（compressExt2.js）。
+ * edu-t508-b3.js — 批三·压缩校验卡科普卡（compressExt2.js）。
  * rle / lzw / elias / verhoeff / lz4Dec / bzip2Dec
  * 示例输出全部来自实跑（test.mjs 同口径），无编造。
  */

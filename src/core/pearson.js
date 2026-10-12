@@ -55,7 +55,8 @@ function bytesToHex(bytes) {
 }
 
 function hexToBytes(s) {
-  const clean = s.replace(/[^0-9a-fA-F]/g, "");
+  const clean = String(s || "").replace(/\s+/g, ""); // 仅容忍空白，其余非法字符显式报错
+  if (/[^0-9a-fA-F]/.test(clean)) throw new Error("Pearson：hex 输入含非十六进制字符（仅允许 0-9a-fA-F）");
   if (clean.length % 2) throw new Error("hex 长度须为偶数");
   const out = new Uint8Array(clean.length / 2);
   for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);
@@ -85,8 +86,9 @@ function pearsonRun(text, p = {}) {
   if (inputMode === "hex") input = hexToBytes(String(text || ""));
   else input = new TextEncoder().encode(String(text || ""));
 
-  let n = parseInt((p && p.bytes) || 8, 10);
-  if (!Number.isFinite(n) || n < 1) n = 8;
+  const bytesRaw = p && p.bytes != null && String(p.bytes).trim() !== "" ? String(p.bytes).trim() : null;
+  let n = bytesRaw !== null ? parseInt(bytesRaw, 10) : 8;
+  if (bytesRaw !== null && (!Number.isInteger(n) || n < 1)) throw new Error("Pearson：输出字节数须为 1..32 的整数");
   if (n > 32) n = 32;
 
   const digest = pearson(input, n);

@@ -65,7 +65,7 @@ export default {
       "A 初值 1（不是 0），这是它的一个小细节。",
     usage: "输入数据，输出 Adler-32 校验值（十六进制，单向 run）。",
     examples: [
-      { in: "Wikipedia", out: "0x11E60398", desc: "维基条目里的经典示例" },
+      { in: "Wikipedia", out: "11e60398", desc: "维基条目里的经典示例" },
     ],
     formulas: [
       { tex: "A = 1 + \\textstyle\\sum d_i \\bmod 65521,\\quad B = \\textstyle\\sum A_i \\bmod 65521", caption: "Adler-32 双累加器" },

@@ -171,7 +171,11 @@ function bytesToHex(bytes) {
   return s;
 }
 function hexToBytes(s) {
-  const clean = String(s || "").replace(/[^0-9a-fA-F]/g, "");
+  // 仅容忍空白；非 hex 字符显式报错（不再静默剥离）
+  const clean = String(s || "").replace(/\s+/g, "");
+  if (/[^0-9a-fA-F]/.test(clean)) {
+    throw new Error("spritz：密文须为偶数位十六进制（含非法字符：" + String(s).trim().slice(0, 40) + "）");
+  }
   if (clean.length % 2) throw new Error("十六进制密文长度必须为偶数");
   const out = new Uint8Array(clean.length / 2);
   for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);

@@ -31,6 +31,7 @@ export function randuSeq(x0, n) {
  * （首个输出的前驱状态，含真种子）。
  */
 export function truncatedLcgRecover(truncated, a, c, k) {
+  if ((a >>> 0) % 2 === 0) throw new Error("乘数 a 必须为奇数，才能模 2^32 回退种子");
   if (k < 1 || k > 32) throw new Error("k 须 1-32（已知高位位数）");
   const unknown = 32 - k;
   if (unknown > 24) throw new Error("未知低位过多（≤24 位，2^24 穷举）");
@@ -81,7 +82,11 @@ function truncOp(text, p = {}) {
   if (lines.length < 2 || lines.some((v) => !Number.isFinite(v))) throw new Error("输入：连续截断输出（空格分隔，至少 2 项）");
   const a = Number(p.a ?? 1664525) >>> 0;
   const c = Number(p.c ?? 1013904223) >>> 0;
-  const k = Math.max(1, Math.min(32, Number(p.k ?? 24)));
+  const kRaw = Number(p.k ?? 24);
+  if (!Number.isInteger(kRaw) || kRaw < 1 || kRaw > 32) {
+    throw new Error("truncLcgRecover：k 须为 1-32 的整数（已知高位位数），当前：" + p.k);
+  }
+  const k = kRaw;
   const t0 = Date.now();
   const found = truncatedLcgRecover(lines, a, c, k);
   const ms = Date.now() - t0;

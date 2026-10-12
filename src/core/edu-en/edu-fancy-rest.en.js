@@ -115,7 +115,7 @@ export default {
   brainfuck: {
     what: "Brainfuck — a minimalist imperative programming language.",
     principle: "Just 8 instructions + - > < . , [ ] operate on a one-dimensional byte array and a pointer. + increments the current cell, . outputs it.",
-    usage: "Encode generates standard code; decode executes it. ReverseFuck dialect compatibility (esolangs.org: -<->+, ><-><, ]<->[, ,<->. — all four pairs mirrored) is enabled by default, including Magic calls without parameters; set swapRerun=false to keep the plain path. An orphan closing bracket triggers the mirrored swap plus bracket-structure validation within one five-million-step budget; verified against real CTF challenges such as NoobCTF 'WhatThe#' (T501, 21/21).",
+    usage: "Encode generates standard code; decode executes it. ReverseFuck dialect compatibility (esolangs.org: -<->+, ><-><, ]<->[, ,<->. — all four pairs mirrored) is enabled by default, including Magic calls without parameters; set swapRerun=false to keep the plain path. An orphan closing bracket triggers the mirrored swap plus bracket-structure validation within one five-million-step budget; verified against real CTF challenges such as NoobCTF 'WhatThe#' (21/21).",
     examples: [{ in: "Hi", param: {}, out: "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++.+++++++++++++++++++++++++++++++++.", desc: "72 pluses output H; 33 more pluses output i." }],
     formulas: [{ tex: "\\text{cell} += 1\\ (\\text{当} +),\\ \\text{output}(\\text{cell})\\ (\\text{当} .)", caption: "+ increments the cell, . outputs the cell's current value." }],
     tips: ["8 instructions: + - > < . , [ ]", "30,000 wrapping 8-bit cells; output is decoded as UTF-8.", "Compatibility swaps -/+ , >/< , ]/[ and comma/dot. Commas on the swapped path are no-ops. This is not standard Brainfuck and cannot identify every bracket-free substituted program."],
@@ -309,31 +309,13 @@ export default {
     tips: ["a=21 ... z=94.", "2=abc, 3=def, 4=ghi, 5=jkl, 6=mno, 7=pqrs, 8=tuv, 9=wxyz.", "Distinct from multitap."],
     aka: ["九键", "九宫格输入法", "九键输入", "T9 手机码", "t9Phone", "手机九宫格T9", "T9电话编码", "手机键盘编码", "电话九宫格", "phone keypad", "T9 phone", "手机数字键编码", "九宫格数字码", "键号位序编码", "T9手机键盘"]
   },
-  multitap: {
-    what: "Multitap encoding — number of key presses represents a letter.",
-    principle: "2=a, 22=b, 222=c; the press count corresponds to the letter's order on the key, separated by spaces.",
-    usage: "No parameters (2=a 22=b 222=c). Bidirectional encode/decode.",
-    examples: [{ in: "ABC", param: {}, out: "2 22 222", desc: "A=2, B=22, C=222 (pressing the 2 key 1/2/3 times)." }],
-    formulas: [{ tex: "E(c) = \\text{key}(c)^{\\text{pos}(c)}", caption: "The key number repeated pos times." }],
-    tips: ["Old-style mobile phone input method.", "Press count = the letter's position on the key.", "Letters must be separated to avoid ambiguity."],
-    aka: ["多击输入", "Multitap"]
-  },
-  kbdFullCoord: {
-    what: "Full keyboard coordinates — R.C format including the number row.",
-    principle: "A full 4-row keyboard layout (including the number row); each key maps to a row.column (R.C) coordinate.",
-    usage: "No parameters (R.C format, includes number row). Bidirectional encode/decode.",
-    examples: [{ in: "AB", param: {}, out: "3.1 4.5", desc: "A = row 3, col 1 = 3.1; B = row 4, col 5 = 4.5 (including the number row)." }],
-    formulas: [{ tex: "E(c) = (\\text{row}.\\text{col})", caption: "The key's row/column coordinate on the number-row-inclusive keyboard." }],
-    tips: ["4 rows total, including the number row.", "Format is row.column.", "Distinct from the 3-row keyboard op."],
-    aka: ["键盘全坐标", "KbdFullCoord"]
-  },
   stenoLetter: {
-    what: "Steno letters — Plover chord representation.",
-    principle: "Based on the Plover steno keyboard chords, each letter maps to a stenotype key chord combination.",
-    usage: "No parameters (Plover chords). Bidirectional encode/decode.",
-    examples: [{ in: "ABC", param: {}, out: "A PW KR", desc: "A=A chord, B=PW chord, C=KR chord." }],
-    formulas: [{ tex: "E(c) = \\text{chord}(c)", caption: "Letters map to Plover steno chords." }],
-    tips: ["Based on the Plover steno system.", "A chord is multiple keys pressed at once.", "Used for stenotype machine input."],
+    what: "Steno letters — Plover fingerspelling chord representation.",
+    principle: "Based on Plover's fingerspelling chords (the official dictionary main.json entries A*=>{>}{&a} through STKPW*=>{>}{&z}), each letter maps to a single-stroke key chord; vowels e/i/u place the star first (*E/*EU/*U). This is the fingerspelling subset of the Plover chord system.",
+    usage: "No parameters (Plover fingerspelling chords, space-separated; non-letter characters raise an error). Bidirectional encode/decode.",
+    examples: [{ in: "ABC", param: {}, out: "A* PW* KR*", desc: "A=A* chord, B=PW* chord, C=KR* chord." }],
+    formulas: [{ tex: "E(c) = \\text{chord}(c)", caption: "Letters map to Plover fingerspelling chords." }],
+    tips: ["Based on Plover fingerspelling entries: 26 letters ↔ 26 chords, one-to-one.", "A chord is multiple keys pressed at once; the star key * is always pressed (vowels e/i/u put the star first).", "Used for stenotype fingerspelling input."],
     aka: ["速记和弦", "StenoLetter", "stenoLetter", "Steno速记字母", "Plover速记", "速记字母", "速录和弦", "steno chord", "速记键盘", "Plover chord", "速录机编码", "钢速记"]
   },
   arrowKey: {
@@ -464,7 +446,7 @@ export default {
   },
   musicInfo: {
     what: "Note information lookup — outputs note name / MIDI / jianpu / solfege / frequency.",
-    principle: "For a given note, outputs its multi-dimensional info: note name, MIDI number, jianpu, solfege, and frequency (based on 12-tone equal temperament).",
+    principle: "For a given note, outputs its note name, MIDI number, jianpu, solfege and frequency (12-tone equal temperament). Chromatic notes outside the selected major scale still show their note name, MIDI number and frequency; the natural-scale jianpu and solfege fields explicitly indicate that no scale degree applies.",
     usage: "run one-way, params: key, preferFlat.",
     examples: [{ in: "60", param: { key: "C", preferFlat: false }, out: "输入类型: midi 音名: C4 MIDI: 60 简谱: 1 唱名: do 频率: 261.63Hz", desc: "All music-theory information for MIDI 60." }],
     formulas: [{ tex: "f = 440 \\cdot 2^{(n-69)/12}", caption: "MIDI number n corresponds to a frequency (A4=69=440Hz)." }],

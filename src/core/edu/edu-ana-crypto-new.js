@@ -52,7 +52,7 @@ export default {
       "输出的 $L$ 即 LFSR 级数，$c(x)$ 中次数 ≥1 的非零项即抽头位置。若 $L$ 接近 $N/2$ 通常说明不是简单 LFSR。",
     usage: "输入一串 0/1（容忍空格/换行/逗号分隔）。analyze 模式输出 L / 反馈多项式 / 抽头 / 初始状态 + 重现校验；predict 模式额外外推 predictN 个比特。",
     examples: [
-      { in: "0011101", out: "L=3, 反馈多项式 x^3 + x^2 + 1", desc: "3 级 LFSR" },
+      { in: "0011101", out: "L=3, 连接多项式 c(x)=x^3+x+1（抽头 [1,3]）", desc: "3 级 LFSR；其互反多项式（特征多项式）即 x^3+x^2+1——两种教科书口径同族，工具按连接多项式输出" },
     ],
     formulas: [
       { tex: "s_n = \\bigoplus_{i=1}^{L} c_i\\, s_{n-i} \\pmod 2", caption: "Fibonacci LFSR 反馈递推（GF(2)）" },
@@ -75,7 +75,7 @@ export default {
       "不做整盘 DFS 回溯，所以多解或需要猜测的盘面只给部分解。尺寸上限 40×40，单线组合数超 20 万则跳过。",
     usage: "输入两段，用一行 `---` 分隔：上段每行一组行约束（连续块长度，空格分隔），下段每行一组列约束。可自定义实心/空格字符。",
     examples: [
-      { in: "2\n1 1\n3\n---\n1\n1 1 1\n2", out: "3×3 点阵解", desc: "行约束 / 列约束各一段" },
+      { in: "1\n3\n1\n---\n1\n3\n1", out: "=== 数织 / Nonogram 求解 ===\n\n盘面: 3 行 × 3 列\n\n--- 解 ---\n·█·\n███\n·█·\n\n✓ 唯一解，全部确定。", desc: "十字图案：行/列线索和 ≤ 对边格数（自证），唯一解实跑原文" },
     ],
     tips: [
       "空行（或 0）表示该行/列全空。",
@@ -205,28 +205,6 @@ export default {
  // ============================================================
  // crypto 类（7）
  // ============================================================
-  dsa: {
-    what: "DSA 数字签名（FIPS 186）：签名、验签，以及 CTF 高频的「重用 k(nonce) 攻击」——两条签名用了同一随机数 k 就能恢复私钥 x。纯 BigInt 本地计算。",
-    principle:
-      "DSA 参数：素数 $p$、$q$（$q\\mid p-1$）、阶为 $q$ 的生成元 $g$，私钥 $x$、公钥 $y=g^x\\bmod p$。\n\n" +
-      "**签名**（消息 hash 记 $z$）：选每消息唯一随机 $k$，$r=(g^k\\bmod p)\\bmod q$，$s=k^{-1}(z+xr)\\bmod q$，签名 $(r,s)$。\n\n" +
-      "**验签**：$w=s^{-1}$，$u_1=zw$，$u_2=rw$，$v=((g^{u_1}y^{u_2})\\bmod p)\\bmod q$，通过 $\\Leftrightarrow v=r$。\n\n" +
-      "**重用 k 攻击**：两条消息用同一 $k$（表现为 $r_1=r_2$），由 $s_1-s_2=k^{-1}(z_1-z_2)$ 解出 $k=(z_1-z_2)(s_1-s_2)^{-1}\\bmod q$，再 $x=(s_1k-z_1)r^{-1}\\bmod q$。",
-    usage: "选模式：sign（私钥 x → r,s）/ verify（公钥 y + r,s）/ attack_reuse_k（同 r 的两签名恢复 x）。hash 支持直接填整数 H(m) 或对文本做 SHA-1。攻击模式填 r/s1/s2/z1/z2/q。",
-    examples: [
-      { in: "z1,s1,z2,s2,r,q（同 k 两签名）", param: "mode=attack_reuse_k", out: "恢复 k 和私钥 x", desc: "nonce reuse 恢复私钥" },
-    ],
-    formulas: [
-      { tex: "k=(z_1-z_2)(s_1-s_2)^{-1}\\bmod q,\\quad x=(s_1 k - z_1)\\,r^{-1}\\bmod q", caption: "重用 k 攻击恢复 nonce 与私钥" },
-    ],
-    tips: [
-      "签名里 k 必须每次唯一且保密——复用或泄露 k 直接暴露私钥。",
-      "两条签名 r 相同就是 k 重用的信号，立刻上攻击模式。",
-      "ECDSA（如比特币）的 nonce 复用同理可恢复私钥（原理一致）。",
-    ],
-    aka: ["dsa", "数字签名算法", "digital signature algorithm", "fips 186", "dsa签名", "dsa验签", "nonce重用", "k重用攻击", "nonce reuse", "dsa攻击", "签名验签", "dsa私钥恢复", "重用随机数攻击", "dsa破解"],
-  },
-
   hashLengthExtension: {
     what: "哈希长度扩展攻击：给定 H(secret) 和 secret 的字节长度，不需要知道 secret 就能算出 H(secret‖padding‖append)。MD5/SHA1/SHA256 等 Merkle-Damgård 结构哈希的固有弱点，CTF web/crypto 高频。",
     principle:
@@ -295,7 +273,7 @@ export default {
       "本 op 对输入的所有模数做 $O(k^2)$ 两两 GCD（CTF 规模足够；真实海量密钥用 Bernstein 的乘积树批量 GCD $O(k\\log^2 k)$）。找到公因子即输出 p、q1、q2 并校验。",
     usage: "输入多个 RSA 模数 N（每行一个或逗号分隔，至少 2 个）。输出所有共享素因子的模数对及其分解。",
     examples: [
-      { in: "N1=91\nN2=143", out: "gcd=13, N1=13×7, N2=13×11", desc: "两模数共享素因子 13" },
+      { in: "91\n143", out: "=== RSA 公共因子分解（批量 GCD）===\n模数数量 = 2\n\n✓ 发现 1 对公共因子：\n\n[0] & [1]:\n  N1 = 91\n  N2 = 143\n  p  = 13  (公共因子)\n  q1 = N1/p = 7\n  q2 = N2/p = 11\n  校验: p·q1 = 91 (应 = N1) ✓\n  校验: p·q2 = 143 (应 = N2) ✓\n", desc: "两模数共享素因子 13，实跑原文" },
     ],
     formulas: [
       { tex: "\\gcd(N_i, N_j) = p > 1 \\;\\Rightarrow\\; N_i = p\\cdot\\frac{N_i}{p},\\ N_j = p\\cdot\\frac{N_j}{p}", caption: "共享素因子一次 GCD 双分解" },

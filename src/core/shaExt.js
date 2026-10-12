@@ -100,7 +100,7 @@ export function sha256Hex(bytes) {
 
 // ============ 填充/分块（公共） ============
 function padMessage(lenBytes, blockSize) {
-  const padLen = (blockSize - ((lenBytes + 8) % blockSize)) % blockSize;
+  const padLen = (blockSize - ((lenBytes + 9) % blockSize)) % blockSize + 1;
   const pad = new Uint8Array(padLen + 8);
   pad[0] = 0x80;
   const bits = BigInt(lenBytes) * 8n;
@@ -139,7 +139,7 @@ export function sha1LengthExtension(origHashHex, origLenBytes, appendData) {
   // （origHash 即其压缩后状态），攻击者从该状态继续压缩 append + victim 填充。
   const padOrig = padMessage(origLenBytes, 64);
   const totalLen = origLenBytes + padOrig.length + appendBytes.length;
-  const padLen = (64 - ((totalLen + 8) % 64)) % 64 + 8;
+  const padLen = (64 - ((totalLen + 9) % 64)) % 64 + 9;
   const pad2 = new Uint8Array(padLen);
   pad2[0] = 0x80;
   const bits = BigInt(totalLen) * 8n;
@@ -155,7 +155,7 @@ export function sha256LengthExtension(origHashHex, origLenBytes, appendData) {
   const appendBytes = te.encode(appendData);
   const padOrig = padMessage(origLenBytes, 64);
   const totalLen = origLenBytes + padOrig.length + appendBytes.length;
-  const padLen = (64 - ((totalLen + 8) % 64)) % 64 + 8;
+  const padLen = (64 - ((totalLen + 9) % 64)) % 64 + 9;
   const pad2 = new Uint8Array(padLen);
   pad2[0] = 0x80;
   const bits = BigInt(totalLen) * 8n;
@@ -168,12 +168,11 @@ export function sha256LengthExtension(origHashHex, origLenBytes, appendData) {
 /** 生日碰撞演示：bitLen 位截断哈希，随机输入找碰撞（期望 n≈2^(b/2) 次尝试）。 */
 export function birthdayCollision(bitLen, maxTries = 500000) {
   const b = Math.max(8, Math.min(40, bitLen));
-  const mask = b >= 32 ? 0xffffffff : (1 << b) - 1;
   const seen = new Map();
   let nonce = 0;
   while (nonce < maxTries) {
     const input = "x" + nonce;
-    const h = parseInt(sha256Hex(te.encode(input)).slice(0, 8), 16) & mask;
+    const h = BigInt("0x" + sha256Hex(te.encode(input)).slice(0, 10)) >> BigInt(40 - b);
     const prev = seen.get(h);
     if (prev !== undefined && prev !== input) {
       return { a: prev, b: input, hash: h.toString(16).padStart(Math.ceil(b / 4), "0"), tries: nonce };
@@ -191,6 +190,9 @@ function shaExtOp(text, p = {}) {
   if (parts.length < 3) throw new Error("输入：原始哈希 空格 原消息字节数 空格 追加内容");
   const origHash = parts[0].toLowerCase();
   const origLen = parseInt(parts[1], 10);
+  if (!Number.isInteger(origLen) || origLen < 0) {
+    throw new Error("shaLengthExtend：原消息字节数须为非负整数，当前：" + parts[1]);
+  }
   const append = parts.slice(2).join(" ");
   if (!/^[0-9a-f]{40}$/.test(origHash) && !/^[0-9a-f]{64}$/.test(origHash)) throw new Error("哈希须 40（SHA-1）或 64（SHA-256）位 hex");
   if (algo === "sha1") {
@@ -203,7 +205,11 @@ function shaExtOp(text, p = {}) {
 }
 
 function birthdayOp(text, p = {}) {
-  const bitLen = Math.max(8, Math.min(40, Number((p && p.bitLen) || 24)));
+  if (p?.bitLen != null && p.bitLen !== "" && !Number.isInteger(Number(p.bitLen))) throw new Error("bitLen 必须为有限整数");
+  const bitLen = Number((p && p.bitLen) || 24);
+  if (!Number.isInteger(bitLen) || bitLen < 8 || bitLen > 40) {
+    throw new Error("birthdayCollision：bitLen 须为 8-40 的整数（截断位数），当前：" + p.bitLen);
+  }
   const res = birthdayCollision(bitLen);
   if (!res) return "未找到碰撞（" + bitLen + " 位，尝试上限内）";
   return "找到碰撞（" + bitLen + " 位截断 SHA-256）：\n" +

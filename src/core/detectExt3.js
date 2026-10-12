@@ -155,6 +155,8 @@ const DETECTORS3 = {
 let patched = 0;
 const patchedIds = [];
 const skippedIds = [];   // 已有 detect（多为 detectExt2 早注册组已 patch）或 op 不存在
+// 惰载重放入口：循环幂等（缺 detect 才补），lazyCore 每批文件落地后调用
+export function applyDetectPatches() {
 for (const id of Object.keys(DETECTORS3)) {
   const op = getOp(id);
   if (!op) {
@@ -173,6 +175,8 @@ for (const id of Object.keys(DETECTORS3)) {
   patched++;
   patchedIds.push(id);
 }
+}
+applyDetectPatches();
 
 // ============ 诊断导出（供测试/审计）============
 export const DETECT3_PATCHED = patchedIds;

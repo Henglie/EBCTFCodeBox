@@ -82,8 +82,8 @@ function toU8(x) {
 
 // ============ WAV 解析（自包含最小实现） ============
 // 支持：整数 PCM 8/16/24/32 位、IEEE float 32/64 位、µ-law 8 位；
-//       单声道到 8 声道（多声道取各声道算术平均，兼容「只在一侧声道」的素材）；
-//       任意采样率；WAVE_FORMAT_EXTENSIBLE(0xFFFE) 取 SubFormat 真实编码。
+//      单声道到 8 声道（多声道取各声道算术平均，兼容「只在一侧声道」的素材）；
+//      任意采样率；WAVE_FORMAT_EXTENSIBLE(0xFFFE) 取 SubFormat 真实编码。
 // 输出统一归一化 Float64 单声道波形 + 去直流。
 function parseWavPcm(input) {
   const bytes = toU8(input);

@@ -1,5 +1,5 @@
 /*
- * recipes.js — recipe 预设配方库（T84）
+ * recipes.js — recipe 预设配方库
  *
  * 依赖 recipe.js（topoSort）+ registry.js（getOp）。
  * 件内自注册：无（纯数据 + 工具函数，无加载副作用）。
@@ -229,7 +229,7 @@ export const PRESETS = [
       edges: [],
     },
   },
- // ---- 链头文件通道卡片（T84 扩展：链头吃真字节，见 resolveRecipeHead）----
+ // ---- 链头文件通道卡片（扩展：链头吃真字节，见 resolveRecipeHead）----
  // 这三张卡此前做不出来，是因为配方链头只吃 inputText，而这三个 op 都声明 acceptsBytes
  // （要 p.rawBytes 真字节）。补上链头通道后，直接把文件拖到配方输入框即可一把梭。
   {

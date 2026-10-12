@@ -74,7 +74,7 @@ register({
   id: "mirrorLetters",
   cat: "fancy",
   name: "镜像字母",
-  desc: "拉丁字母 ↔ 水平镜像 Unicode 字形（A↔A、b↔d、a→ɒ、E→Ǝ…；()[]{}<>/\\ 五对为 Unicode 官方 Bidi_Mirrored 对；数字不映射），双向严格互逆",
+  desc: "拉丁字母 ↔ 水平镜像 Unicode 字形（A↔A、b↔d、a→ɒ、E→Ǝ…；()[]{}<>/\\ 五对为本工具约定的水平镜像对，非 Unicode Bidi_Mirrored 属性；数字不映射），双向严格互逆",
   params: [],
   encode: mirrorEncode,
   decode: mirrorDecode,

@@ -192,12 +192,25 @@ function looksPrintable(bytes) {
   return true;
 }
 
+// encode 文本入口：BinHex 本是二进制→文本编码。全部字符 ≤ 0xFF 时按 Latin-1 逐字符
+// 取字节（≥0x80 字节不再经 UTF-8 转写，与官方工具/独立解码器二进制互通）；
+// 含非 Latin-1 字符（如中文）才整串按 UTF-8 编码。
+function binhexTextToBytes(text) {
+  const s = String(text || "");
+  for (const ch of s) {
+    if (ch.codePointAt(0) > 0xff) return te(s);
+  }
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i) & 0xff;
+  return out;
+}
+
 // ============================================================
 // encode：文本 → BinHex 4.0
 // ============================================================
 function binhexEncode(text, p = {}) {
   // 字节直通：BinHex 本是二进制→文本编码，上游真字节直接封进数据叉。
-  const data = Array.from((p && p.rawBytes) || te(text));
+  const data = Array.from((p && p.rawBytes) || binhexTextToBytes(text));
   let fname = (p && p.filename != null && String(p.filename).trim()) ? String(p.filename).trim() : "file.txt";
   const fnameBytes = Array.from(te(fname)).slice(0, 63); // 文件名长度 1 字节
   const type = te("TEXT"); // 4CC

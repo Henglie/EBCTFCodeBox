@@ -64,9 +64,8 @@ const INCLUDE_FILES = [
   "bridge.py",
   "HenglieICO.png",
   // 2026-09-27 恒烈指缺补录：各平台双击启动器（v0.1.8-beta 首包漏收）
-  "32位Windows点我启动.exe",
-  "64位Windows点我启动.exe",
-  "ARM64版Windows点我启动.exe",
+  // 2026-10-11 恒烈裁定：Windows 只发 32 位一个（x86 兼容 x64/ARM64），三合一改名
+  "Windows点我启动.exe",
   "Linux点我启动.sh",
   "macOS点我启动.command",
 ];
@@ -80,6 +79,10 @@ const INCLUDE_DIRS = ["src", "public", "tools", "mcp", "skills", "bin"];
 // rel 为相对项目根的 posix 路径（目录本身也会被问询，rel 形如 "src" / ""）。
 const DIR_EXCLUDE = (rel) =>
   rel.split("/").includes("__pycache__") || rel.endsWith(".pyc") ||
+  // 工程残留防复发（MT717 2026-10-12）：.d.ts 类型标注 / .js.map sourcemap / .orig 补丁冲突
+  // 残留 / .bak* 备份——运行时零引用（material-color vendor 的 TS 标注与 map 共 90 个 ≈ -864KB）。
+  rel.endsWith(".d.ts") || rel.endsWith(".js.map") ||
+  rel.endsWith(".orig") || /\.bak(-\d{8,12})?$/.test(rel) ||
   // tools/ 在发行包里只带 exe/（bridge.py 的 EXE_BASE，运行时必需）。
   // 构建期脚本（subset_fonts.py 字体切分 / build_bkcrack.* / gen_*.mjs /
   // pack_release.mjs 本体）只留 git 仓库供复现构建，
@@ -138,6 +141,7 @@ const PUBLIC_KEY_B64 =
 
 // ==================== 版本号六处（version / verify 共用） ====================
 // [文件, 提取正则]；正则第一捕获组 = 版本号。
+// 2026-10-11 曾补录启动器两处；2026-10-12 verify 实测「原生启动器/」目录不进发行包（stage 读不到→?），且启动器版本已改为构建期动态注入，故回归产品六处。
 const VERSION_SOURCES = [
   ["src/core/version.js", /APP_VERSION\s*=\s*"([^"]+)"/],
   ["sw.js", /APP_VERSION\s*=\s*"([^"]+)"/],
@@ -145,6 +149,9 @@ const VERSION_SOURCES = [
   ["README.md", /当前版本\s*\*\*v([\d.]+(?:-beta\d*)?)\*\*/],
   ["CHANGELOG.md", /^## v([\d.]+(?:-beta\d*)?)/m],
   ["mcp/README.md", /server 版本 `([\d.]+(?:-beta\d*)?)`/],
+  // 注：原生启动器版本不在本表 —— 「原生启动器/」目录不进发行包（exe 走根目录白名单），
+  // 其版本由 CMake 构建期从 src/core/version.js 动态注入（launcher_version.h 为生成物），
+  // 同步性由构建后 ebctf-launcher --version 实测兜底。2026-10-12 verify 实测教训。
 ];
 
 // ==================== 基础工具 ====================
@@ -265,7 +272,7 @@ function cmdVersion() {
     console.log(`\n✓ 六处一致：${value}`);
     return 0;
   }
-  console.log("\n× 六处不一致，禁止发布（改版本只动 version.js 和 sw.js，其余四处随发布流程同步）");
+  console.log("\n× 六处不一致，禁止发布（改版本只动 src/core/version.js —— 启动器/README/CHANGELOG/mcp 随发布流程同步）");
   return 1;
 }
 

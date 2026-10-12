@@ -398,7 +398,7 @@ export default {
   "ui.uv.graphemes": "عناقيد المحارف",
   "ui.uv.splitClusters": "تقسيم تسلسلات الدمج (سرد كل نقطة ترميز على حدة)",
   "ui.uv.noSegmenter": "(تقسيم العناقيد غير مدعوم هنا؛ يتم العرض بنقاط الترميز)",
-  // 拼字 / IDS 视图（MT84）
+  // 拼字 / IDS 视图
   "ui.uv.tabIds": "الإيديوغرافات / IDS",
   "ui.uv.idsDesc": "تسلسلات الوصف الإيديوغرافي (IDS): ابحث عن شجرة تفكيك محرف، وابحث عن محارف حسب المكوّن، وحوّل بين المحارف وسلاسل IDS. محلي بالكامل دون رفع.",
   "ui.uv.idsLoading": "جارٍ تحميل بيانات الإيديوغرافات…",
@@ -424,7 +424,7 @@ export default {
   "ui.uv.idsNoExact": "لا توجد مطابقة دقيقة لـ IDS؛ البحث حسب المكوّنات الطرفية:",
   "ui.uv.idsConvHits": "{0} مطابقة",
   "ui.uv.idsSrc": "المصدر",
-  // 快速换算视图（MT81）
+  // 快速换算视图
   "ui.qc.title": "تحويل سريع",
   "ui.qc.desc": "منضدة تحويل الأنظمة العددية والوحدات: عدّل أي حقل وستتحدّث البقية فورًا. محلي بالكامل، دون اتصال بالشبكة.",
   "ui.qc.tabRadix": "أنظمة المبرمج العددية",
@@ -557,6 +557,8 @@ export default {
   "ui.env.syncAccentOk": "تمت مزامنة لون تمييز النظام",
   "ui.env.syncAccentFail": "لون تمييز النظام غير متاح",
   "ui.topbar.font": "مكتبة الخطوط",
+  "ui.pwa.updateBar": "يتوفر إصدار جديد. الموارد غير المتصلة جاهزة",
+  "ui.pwa.updateRefresh": "إعادة تحميل",
 
  // ---- topbar search ----
   "ui.search.placeholder": "ابحث عن المُرمّزات / الشيفرات…",
@@ -775,7 +777,7 @@ export default {
   "op.sshPubkeyParse.name": "SSH Public Key Parser",
   "op.btcAddressIdent.name": "Bitcoin Address Identify",
   "op.ethAddressIdent.name": "Ethereum Address Identify",
- // ---- MT82 new ops (forensic/stego/modern) ----
+ // ---- new ops (forensic/stego/modern) ----
   "op.gifTiming.name": "إخفاء توقيت إطارات GIF",
   "op.jpgSizeRecover.name": "استعادة حجم JPEG",
   "op.zipRepair.name": "إصلاح التشفير الوهمي ZIP",
@@ -1170,9 +1172,12 @@ export default {
   "ui.ds.customBadge": "مُعدَّل (مخصص)",
   "ui.home.strengthBtn": "القوة",
 
- // ---- 2026-08-26 解冻新增（协作代理译文，主控已验）----
   "ui.op.fontDec": "تصغير حجم الخط",
   "ui.op.fontInc": "تكبير حجم الخط",
+  "ui.op.localFonts": "تحميل الخطوط المحلية",
+  "ui.op.localFontsDone": "تم تحميل {0} خطًا محليًا",
+  "ui.op.localFontsFail": "فشل تحميل الخطوط المحلية: {0}",
+  "ui.op.pickImage": "اختر صورة",
   "ui.exhaust.branchCount": "{0} فروع",
   "ui.exhaust.hitCount": "{0} نتيجة مطابقة محتملة",
   "ui.exhaust.defaultParam": "افتراضي",
@@ -1567,12 +1572,21 @@ export default {
   'fam.lbl.base2048': 'Base2048',
   'fam.lbl.base65536': 'Base65536',
   'fam.lbl.ecoji': 'Ecoji (Base64 بالرموز التعبيرية)',
+  'fam.lbl.fields': 'استخراج الحقول',
+  'fam.lbl.attack': 'إعادة استخدام الـ nonce k',
+  'fam.lbl.sharedPub': 'من المفتاح العام',
+  'fam.lbl.homAdd': 'جمع متجانس',
+  'fam.lbl.scan': 'فحص',
+  'fam.lbl.formatBrute': 'القوة الغاشمة',
+  'fam.lbl.smartReport': 'تقرير ذكي',
  // ----解冻批回填（外部交付 2026-09-26 + 内部 cat.*）----
   "cat.archive": "الضغط / الأرشفة",
   "cat.crack": "كلمات المرور / كسر حماية الأرشيفات",
   "cat.filefmt": "تنسيقات الملفات / البنية",
   "cat.image": "الصور / رموز QR",
   "cat.audio": "الصوت / الصوت والفيديو",
+  "cat.stegoText": "إخفاء النص",
+  "cat.stegoFile": "إخفاء الملفات",
   "ui.recipe.chooseFamilyOp": "اختيار عملية لإضافتها إلى سلسلة الوصفة",
   "op.base16.desc": "ترميز سداسي عشري: يمثل كل بايت بمحرفين بالنظام السداسي عشري. يدعم جدول محارف مخصصًا والأحرف الكبيرة / الفصل بمسافات.",
   "op.base32.desc": "ترميز Base32 وفق RFC 4648، بمجموعات من 5 بتات، مع دعم جدول محارف مخصص.",

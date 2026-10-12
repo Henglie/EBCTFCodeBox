@@ -1,5 +1,5 @@
 /*
- * classicExt4.js — T508 批一·古典补充组（A1-A7，A8 圣殿骑士缓）。
+ * classicExt4.js — 批一·古典补充组（A1-A7，A8 圣殿骑士缓）。
  *
  * 7 个 op：homophonic / doubleTrans / pollux / morbit / bookCipher / turningGrille / kenny。
  * 口径来源（逐项）：

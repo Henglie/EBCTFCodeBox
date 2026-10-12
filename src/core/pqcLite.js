@@ -67,22 +67,30 @@ function polyInv(f, q, n) {
   }
   return null;
 }
+function scalarPoly(v, n) {
+  const a = new Array(n).fill(0n);
+  a[0] = v;
+  return a;
+}
 export function ntruSetup(q = 257n, p = 3n, n = 8) {
-  // f = 3（常数，逆 = 3⁻¹ mod q；教学简化，避免非常数逆的枚举）
+  // f = 2（常数，与 p=3 互素；f⁻¹ mod q = 129）。注意 f=1+x 在 Z_q[x]/(x^n-1) 不可逆
+  // （x=-1 是 x^n-1 的根），故教学玩具取常数 f。
   const f = new Array(n).fill(0n);
-  f[0] = 2n; // f 须与 p 互素（2 mod 3 ≠ 0）
+  f[0] = 2n;
   const fq = polyInv(f, q, n);
   if (!fq) throw new Error("f 不可逆（换参数）");
   const g = new Array(n).fill(0n);
   g[0] = 1n; g[1] = 0n; g[2] = 1n; // 1 + x²
-  const h = polyMul(polyMul(new Array(n).fill(p), fq, q, q), g, q, q);
+  // 公钥 h = p·f_q·g mod q（p 为标量，非全 p 系数多项式）
+  const h = polyMul(polyMul(scalarPoly(p, n), fq, q, q), g, q, q);
   return { q, p, n, f, fq, g, h };
 }
 export function ntruEncrypt(msgPoly, pub) {
   const { q, p, n, h } = pub;
   const r = new Array(n).fill(0n);
   r[0] = 1n; // r = 1
-  const c = polyMul(polyMul(new Array(n).fill(p), h, q, q), r, q, q).map((v, i) => (v + msgPoly[i]) % q);
+  // c = p·h·r + m mod q（p 为标量）
+  const c = polyMul(polyMul(scalarPoly(p, n), h, q, q), r, q, q).map((v, i) => (v + msgPoly[i]) % q);
   return c;
 }
 export function ntruDecrypt(c, priv) {
@@ -94,8 +102,12 @@ export function ntruDecrypt(c, priv) {
 
 function lweOp(text, p = {}) {
   const q = 257n, n = 8;
+  const raw = String((text && String(text).trim()) || (p && p.bits) || "").trim();
+  if (!raw) throw new Error("请输入比特串（0/1，长度 1-8）");
+  if (!/^[01]+$/.test(raw)) throw new Error("比特串只能含 0/1（当前：" + raw + "）");
+  if (raw.length > 8) throw new Error("比特串最长 8 位（当前 " + raw.length + " 位）");
   const setup = lweSetup(q, n);
-  const bits = (String(text || "").trim() || "1010").split("").map((c) => (c === "1" ? 1 : 0)).slice(0, 8);
+  const bits = raw.split("").map((c) => (c === "1" ? 1 : 0));
   const res = bits.map((bit) => {
     const ct = lweEncrypt(bit, setup, 99 + bit * 7);
     const dec = lweDecrypt(ct, setup);
@@ -112,13 +124,20 @@ function lweOp(text, p = {}) {
 
 function ntruOp(text, p = {}) {
   const setup = ntruSetup();
-  const msg = (String(text || "").trim() || "1 0 1 0 0 0 0 0").split(/\s+/).map((s) => BigInt(s) % setup.p).slice(0, 8);
+  const raw = String(text || "").trim() || "1 0 1 0 0 0 0 0";
+  const msg = raw.split(/\s+/).map((s) => {
+    let v;
+    try { v = BigInt(s); } catch { throw new Error("ntruToy：消息系数须为整数 0.." + (setup.p - 1n) + "（当前：" + s + "）"); }
+    if (v < 0n || v >= setup.p) throw new Error("ntruToy：消息系数须在 0.." + (setup.p - 1n) + "（mod p）内，当前：" + s);
+    return v;
+  });
+  if (msg.length > 8) throw new Error("ntruToy：消息多项式最多 8 项（n=8），当前 " + msg.length + " 项");
   while (msg.length < 8) msg.push(0n);
   const c = ntruEncrypt(msg, setup);
   const m2 = ntruDecrypt(c, setup);
   const ok = msg.every((v, i) => v === m2[i]);
   return (
-    "NTRU 玩具加解密（Z_257[x]/(x^8-1)，p=3，f=1+x）：\n" +
+    "NTRU 玩具加解密（Z_257[x]/(x^8-1)，p=3，f=2 常数；1+x 在该环不可逆）：\n" +
     "  明文 m = [" + msg.join(", ") + "]\n" +
     "  密文 c = [" + c.join(", ") + "]\n" +
     "  解密 m' = [" + m2.join(", ") + "]\n" +

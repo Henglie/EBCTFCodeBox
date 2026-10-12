@@ -16,11 +16,12 @@
  * [高层 API] aesEncrypt/aesDecrypt、desEncrypt/desDecrypt、rc4、xorCrypt、fernet*、rsa*
  * [register] 编码解析（key/iv/data 的 hex|base64|utf8）+ 双向注册
  *
- * 供 T34「密钥+密文一键尝试」复用高层 API（makeAes / aesEncrypt / desEncrypt / rc4 / xorCrypt）。
+ * 供「密钥+密文一键尝试」复用高层 API（makeAes / aesEncrypt / desEncrypt / rc4 / xorCrypt）。
  */
 import { register } from "./registry.js";
 import { finishBytesDecode } from "./bytesIo.js";
 import { bytesToBits as _bytesToBitsStd, bitsToBytes as _bitsToBytesStd } from "./bitsource.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 const te = (s) => new TextEncoder().encode(s);
 // 本文件的 decode 出口已改为 finishBytesDecode（见 ./bytesIo.js）——不再有本地有损解码。
@@ -321,7 +322,7 @@ function invMixColumns(s) {
 }
 
 // ============================================================
-// AES 高层 API（给 register 层 + T34 密钥一把梭复用）
+// AES 高层 API（给 register 层 + 密钥一把梭复用）
 // ============================================================
 /** 由密钥构造 AES 块加/解密闭包。keyBytes 长 16/24/32。 */
 export function makeAes(keyBytes) {
@@ -539,6 +540,7 @@ export function des3Decrypt(data, key, { mode = "CBC", iv, pad = true } = {}) { 
 // RC4（流密码，自反）
 // ============================================================
 export function rc4(data, key) {
+  if (!key || key.length === 0) throw new Error("RC4 密钥不能为空");
   const S = new Uint8Array(256);
   for (let i = 0; i < 256; i++) S[i] = i;
   let j = 0;
@@ -597,7 +599,7 @@ function fernetSplitKey(keyText) {
 /** Fernet 加密。返回 base64url 令牌。ts 省略取当前秒；iv 省略随机。 */
 export async function fernetEncrypt(dataBytes, keyText, { ts, iv } = {}) {
   const { signKey, encKey } = fernetSplitKey(keyText);
-  const ivv = iv || crypto.getRandomValues(new Uint8Array(16));
+  const ivv = iv || randBytes(16);
   const now = ts != null ? BigInt(ts) : BigInt(Math.floor(Date.now() / 1000));
   const tsBytes = new Uint8Array(8);
   { let v = now; for (let i = 7; i >= 0; i--) { tsBytes[i] = Number(v & 0xffn); v >>= 8n; } }

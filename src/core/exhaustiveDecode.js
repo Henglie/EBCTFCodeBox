@@ -21,7 +21,7 @@ import { candidateSignals, literalMatcher } from "./magic/smartCandidates.js";
  */
 import { OPS, defaultParams, CATEGORIES } from "./registry.js";
 import { domainAdmit, isAutoCandidateExcluded } from "./magic/domain.js";
-import { runOpOffThread } from "./opRunClient.js"; // T608/S1：op 执行走常驻 Worker（见 exhaustiveDecode 内说明）
+import { runOpOffThread } from "./opRunClient.js"; // op 执行走常驻 Worker（见 exhaustiveDecode 内说明）
 
 // 可打印占比阈值：>= 此值视为「像明文」，UI 默认展开高亮，否则折叠为乱码。
 const PRINTABLE_THRESHOLD = 0.85;
@@ -299,7 +299,7 @@ export async function exhaustiveDecode(input, opts = {}) {
  // 混进穷举会触发 bridge 调用，破坏一键解码的自动化。
  // noAuto 的 op 排除：单次运行代价过高（如 Argon2id 64MiB 派生约 8-10 秒）或必须由用户
  // 显式提供口令/参数，自动穷举既无意义又会阻塞进度。仅在用户主动选择该 op 时运行。
- // excludeOps（MT72）：用户启用自定义实现的 op 也不进穷举（同 magic.js 口径）。
+ // excludeOps：用户启用自定义实现的 op 也不进穷举（同 magic.js 口径）。
   const _excludeSet = opts.excludeOps == null ? null : (opts.excludeOps instanceof Set ? opts.excludeOps : new Set(opts.excludeOps));
   const excluded = (opId) => _excludeSet !== null && _excludeSet.has(opId);
   const targets = OPS.filter((op) => (typeof op.decode === "function" || typeof op.run === "function") && !isAutoCandidateExcluded(op) && !excluded(op.id));
@@ -340,7 +340,7 @@ export async function exhaustiveDecode(input, opts = {}) {
 
  // 失败降级为 error 项（不 throw、不阻塞其他）。
  // 参数扫描 op 每组参数产生一条独立候选（opId 形如 caesar(shift=3)）。
- // T608/S1：执行端改走 opRunClient 常驻 Worker——此前同步 CPU 型 op 直接在主线程跑
+ // 执行端改走 opRunClient 常驻 Worker——此前同步 CPU 型 op 直接在主线程跑
  // （即便批间已让出，单个病理级 op 仍可把主线程整块卡死十几秒，进度条/输入/CDP 全失联）。
  // 串行执行：单 Worker 天然串行，且超时 terminate 会连坐取消全部在途任务（cancelOpRun
  // 清空 _pending 表）——并发批次会被一个超时 op 整批报废，串行让超时只波及该 op 本身。
@@ -392,7 +392,7 @@ export async function exhaustiveDecode(input, opts = {}) {
   let _pp = 0;
   for (const s of settled) {
     if (s.status === "rejected") continue; // tasks 内部已 try/catch，防御
-    if (++_pp % 128 === 0) await yieldToMain(); // T608/S1：后处理（candidateSignals/打分）也分批让出，防长任务
+    if (++_pp % 128 === 0) await yieldToMain(); // 后处理（candidateSignals/打分）也分批让出，防长任务
     const { op, params, out, error } = s.value;
     const opId = params ? formatParamTag(op.id, params) : op.id;
     const paramTag = formatParamsOnly(params); // 分组内单条分支的参数标签（如 shift=3）

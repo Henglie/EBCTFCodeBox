@@ -1,5 +1,5 @@
 /*
- * crc32collision.js — CRC32 短明文爆破 / 碰撞（T270，cat:'analysis'，单向 run）。
+ * crc32collision.js — CRC32 短明文爆破 / 碰撞（cat:'analysis'，单向 run）。
  *
  * 场景：CTF misc 里 ZIP 存了极小文件（1-6 字节），无法/懒得解压但知道 CRC32
  * 直接对目标 CRC32 穷举短明文反查原文。

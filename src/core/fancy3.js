@@ -21,19 +21,19 @@ const td = (b) => new TextDecoder("utf-8").decode(new Uint8Array(b));
 
 // 替换旧版自创映射（旧版把 NTT 当结束、STS 当 swap、算术错位、跳转只消费不跳）。
 // IMP（指令类别前缀）：
-//   S  = Stack Manipulation（栈操作）
-//   TS = Arithmetic（算术）      TT = Heap access（堆）
-//   TN = I/O（输入输出）         N  = Flow control（流控）
+//  S  = Stack Manipulation（栈操作）
+//  TS = Arithmetic（算术）      TT = Heap access（堆）
+//  TN = I/O（输入输出）         N  = Flow control（流控）
 // 栈操作（IMP S 后）：SS<n> push / SNS dup / SNT swap / SNN drop
-//   STS<n> copy nth（v0.3 扩展）/ STN<n> slide n（v0.3 扩展）
+//  STS<n> copy nth（v0.3 扩展）/ STN<n> slide n（v0.3 扩展）
 // 算术（IMP TS 后）：TSSS add / TSST sub / TSSN mul / TSTS div / TSTT mod
-//   （div/mod 用 floor 语义，同原始 Haskell 参考实现 wspace 的 div/mod；
-//    正数场景与 trunc 一致；a == b*floor(a/b) + mod(a,b) 恒成立）
+//  （div/mod 用 floor 语义，同原始 Haskell 参考实现 wspace 的 div/mod；
+//   正数场景与 trunc 一致；a == b*floor(a/b) + mod(a,b) 恒成立）
 // 堆（IMP TT 后）：TTS store（先 push 地址再 push 值）/ TTT retrieve（官方 [Space]=store / [Tab]=retrieve）
 // 流控（IMP N 后）：NSS<l> 标记 / NST<l> call 子程序 / NSN<l> 无条件跳
-//   NTS<l> jz（pop，为 0 跳）/ NTT<l> jn（pop，为负跳）/ NTN ret / NNN 结束
+//  NTS<l> jz（pop，为 0 跳）/ NTT<l> jn（pop，为负跳）/ NTN ret / NNN 结束
 // I/O（IMP TN 后）：TNSS 输出字符 / TNST 输出数字
-//   TNTS 读字符存堆 / TNTT 读数字存堆（输入源 = params.stdin；EOF 存 -1）
+//  TNTS 读字符存堆 / TNTT 读数字存堆（输入源 = params.stdin；EOF 存 -1）
 // number 编码：[符号 S=+/T=-][二进制 S=0/T=1][NL 结束]
 // label 编码：纯二进制（S/T）+ NL 结束（无符号位，空 label 合法）
 const WS_S = " ", WS_T = "\t", WS_N = "\n";

@@ -10,16 +10,30 @@
 import { register } from "./registry.js";
 import { md5Bytes } from "./hash.js";
 
-/** 截断 MD5 生日碰撞：返回 {a, b, hash, tries} 或 null。 */
+/** 字节 → 小写 hex（浏览器安全，不用 Node Buffer）。 */
+function bytesToHexStr(bytes) {
+  let s = "";
+  for (const b of bytes) s += b.toString(16).padStart(2, "0");
+  return s;
+}
+function md5HexOf(input) {
+  return bytesToHexStr(md5Bytes(new TextEncoder().encode(input)));
+}
+
+/** 截断 MD5 生日碰撞（bit-exact）：返回 {a, b, hash, tries} 或 null。 */
 export function md5TruncCollision(bitLen, maxTries = 300000) {
-  const b = Math.max(16, Math.min(48, bitLen));
-  const hexLen = Math.ceil(b / 4); // 截断 hex 字符数（避免 32 位移位溢出）
+  const b = Math.floor(Number(bitLen));
+  if (!Number.isInteger(b) || b < 16 || b > 48) {
+    throw new Error("截断位数须为 16-48 的整数（当前 " + bitLen + "）");
+  }
+  const hexWidth = Math.ceil(b / 4);
   const seen = new Map();
   let nonce = 0;
   while (nonce < maxTries) {
     const input = "coll" + nonce;
-    const md = Buffer.from(md5Bytes(new TextEncoder().encode(input))).toString("hex");
-    const key = md.slice(0, hexLen);
+    const md = md5HexOf(input);
+    // 取 MD5 最左 b 位：128 位整型右移 (128-b) 位（不按 nibble 取整）
+    const key = (BigInt("0x" + md) >> BigInt(128 - b)).toString(16).padStart(hexWidth, "0");
     const prev = seen.get(key);
     if (prev !== undefined && prev !== input) {
       return { a: prev, b: input, hash: key, tries: nonce };
@@ -31,7 +45,11 @@ export function md5TruncCollision(bitLen, maxTries = 300000) {
 }
 
 function md5CollisionOp(text, p = {}) {
-  const bitLen = Math.max(16, Math.min(48, Number((p && p.bitLen) || 32)));
+  const raw = (p && p.bitLen != null && String(p.bitLen).trim() !== "") ? p.bitLen : 32;
+  const bitLen = Number(raw);
+  if (!Number.isInteger(bitLen) || bitLen < 16 || bitLen > 48) {
+    throw new Error("截断位数须为 16-48 的整数（当前 " + raw + "）");
+  }
   const res = md5TruncCollision(bitLen);
   if (!res) return "未找到碰撞（" + bitLen + " 位截断，尝试上限内）";
   return (
@@ -46,9 +64,9 @@ function md5CollisionOp(text, p = {}) {
 
 register({
   id: "md5CollisionShow", cat: "analysis", name: "MD5 截断碰撞演示",
-  desc: "教学演示：截断 MD5（默认 32 位）生日法找碰撞对（不同输入同截断哈希），展示哈希碰撞本质",
+  desc: "教学演示：截断 MD5（默认 32 位，16-48 整数）生日法找碰撞对（不同输入同截断哈希），按位精确截断（非整 nibble），展示哈希碰撞本质",
   params: [
-    { key: "bitLen", label: "截断位数", type: "number", default: 32, placeholder: "16-48" },
+    { key: "bitLen", label: "截断位数（16-48 整数）", type: "number", default: 32, placeholder: "16-48" },
   ],
   run: md5CollisionOp,
 });

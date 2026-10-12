@@ -96,12 +96,16 @@ const SUPPLEMENT = {
 // ============ 副作用补丁：仅当目标 op 存在且缺 detect 时赋值 ============
 let _patched = 0;
 const _skipped = [];
+// 惰载重放入口：循环幂等（缺 detect 才补），lazyCore 每批文件落地后调用
+export function applyDetectPatches() {
 for (const [id, det] of Object.entries(SUPPLEMENT)) {
   const op = getOp(id);
   if (!op) { _skipped.push(id + "(未注册)"); continue; }
   if (op.detect) { _skipped.push(id + "(已有detect)"); continue; }
   op.detect = det;
   _patched++;
+}
+
 }
 
 if (typeof console !== "undefined" && console.debug) {

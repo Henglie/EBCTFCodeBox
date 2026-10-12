@@ -1,5 +1,5 @@
 /*
- * timecodecExt.js — 时间戳扩展组（T94，cat:'radix'）。
+ * timecodecExt.js — 时间戳扩展组（cat:'radix'）。
  *
  * 覆盖：
  * - julianDate 儒略日 / 简化儒略日 ↔ ISO8601（含时间小数）
@@ -8,8 +8,8 @@
  * - snowflakeId Twitter/Discord 雪花 ID 解析（run 单向，输出多行报告）
  *
  * 红线：
- * - 不碰 timecodec.js（T50），仅 import 其 parseIso/formatIso 复用。
- * - 查重：T50 已有 unixTime/filetime/hfsTime/cocoaTime/dosDateTime/chineseDate/tzConvert
+ * - 不碰 timecodec.js，仅 import 其 parseIso/formatIso 复用。
+ * - 查重：已有 unixTime/filetime/hfsTime/cocoaTime/dosDateTime/chineseDate/tzConvert
  * radixExt.js 有 timestamp；本组 4 个新 id 全无冲突。
  * - Chrome 时间用 BigInt（现代日期微秒值 > 2^53，超 Number.MAX_SAFE_INTEGER）。
  * - Excel 1900 闰年 bug（1900-02-29 幻影日）：1900-03-01 起公式精确，1900-01/02 月差 1 天，已在 desc 注明。
@@ -150,7 +150,7 @@ register({
 // ============ 3. Google/Chrome 时间 ↔ ISO8601 ============
 // Chrome/Webkit 时间：自 1601-01-01 00:00:00 UT 的微秒数（BigInt）。
 // 1601→1970 = 11644473600 秒 = 11644473600000000 微秒。
-// 注：FILETIME（T50）是 1601 纪元 100ns，Chrome 是微秒 = FILETIME/10，单位不同故独立 op。
+// 注：FILETIME 是 1601 纪元 100ns，Chrome 是微秒 = FILETIME/10，单位不同故独立 op。
 const CHROME_EPOCH_US = 11644473600000000n; // 1601-01-01 → 1970-01-01 的微秒数
 const CHROME_EPOCH_MS_BIG = 11644473600000n; // 同上的毫秒数
 
@@ -182,6 +182,11 @@ const SNOWFLAKE_EPOCHS = {
 
 function parseSnowflake(idStr, epochMs) {
   const big = BigInt(String(idStr).trim());
+ // 雪花 ID 为 63 位非负整数（最高位符号位恒 0）；负数越域显式报错，
+ // 不做位拆分（负数照拆会产出 0x-5、时间戳 -1 等无意义垃圾字段）。
+  if (big < 0n || big >= (1n << 63n)) {
+    throw new Error("雪花 ID 须为非负 64 位整数（最高位为符号位，恒 0），得到 " + big.toString());
+  }
   const tsOffset = big >> 22n;
   const datacenter = (big >> 17n) & 0x1Fn;
   const worker = (big >> 12n) & 0x1Fn;

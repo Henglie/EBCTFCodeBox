@@ -43,20 +43,6 @@ export default {
     aka: ["字节序反转", "byte swap", "大小端转换", "endian", "端序转换", "字节交换", "byte order swap", "大端小端", "big endian little endian", "字节反序", "bswap", "字节序转换", "endianness swap", "byte order reversal"],
   },
 
-  grayCodeBytes: {
-    what: "Applies the Gray code transform ($g = b \\oplus (b\\gg1)$) to each byte independently. Unlike the numeric grayNum, this processes a byte stream one byte at a time.",
-    principle:
-      "Per byte: `g = b ^ (b>>1)` to encode; to decode, accumulate XOR downward bit by bit (`g ^= g>>1; g ^= g>>2; g ^= g>>4`) to restore.\n\n" +
-      "Text is converted to UTF-8 bytes, done per byte, and output as Gray Hex.",
-    usage: "encode turns text into per-byte Gray-code Hex, decode reverses it. No parameters.",
-    examples: [
-      { in: "A", out: "61", desc: "0x41=01000001 → 01100001=0x61" },
-      { in: "61", param: "Decode", out: "A" },
-    ],
-    tips: ["Distinguish from grayNum: grayNum treats a whole decimal number as one integer, this one operates on each byte independently and targets byte data.", "Image/signal data is sometimes Gray-coded per byte to reduce adjacent noise; watch for it when reverse-engineering data streams."],
-    aka: ["字节级格雷码", "gray code bytes", "逐字节格雷码", "字节格雷", "per-byte gray code", "byte-wise gray code"],
-  },
-
   bitPlaneExtract: {
     what: "Pulls a specified bit (bit k) out of each byte and concatenates that bit from all bytes into one bit string. It's a lossy, one-way operation.",
     principle:

@@ -12,10 +12,11 @@
  *
  * 复用：CFB 读取链（parseCfbHeader/readFat/readStream/parseDirEntry/readMiniFat/
  * readMiniStream/followChain）来自 john_office.js（本卡补导出，单一事实源）。
+ * VBA 阶段二：dir 流记录解析 + MS-OVBA 压缩容器解压由 vbaOvba.js 承担（同为静态只读）。
  *
- * 边界（如实）：v3/v4 均支持；不解析 VBA dir 记录与 MS-OVBA 压缩容器（分阶段，
- * 本阶段输出 vbaProject.bin 原始流供下一步）；不校验目录树红黑平衡（只读遍历
- * 带环保护）；超时/超大文件由统一文件入口护栏控制。
+ * 边界（如实）：v3/v4 均支持；VBA 侧只处理 CFB 内 <storage>/VBA/dir 形态——
+ * PowerPoint 把 VBA 放在 "PowerPoint Document" 流的 PPT 记录内（需先解 PPT 记录），
+ * 不在本 op 范围；未知代码页不猜、只导出原始字节；不解析 PerformanceCache。
  *
  * 自检：独立生成器夹具（MS-CFB 直构 + oracle 事实表）逐字段对拍。
  */
@@ -24,6 +25,7 @@ import {
   parseCfbHeader, readFat, readStream, parseDirEntry,
   readMiniFat, readMiniStream, followChain, isCfbMagic, ENDOFCHAIN,
 } from "./john_office.js";
+import { extractVbaProject } from "./vbaOvba.js";
 
 /* ================= 目录遍历 ================= */
 
@@ -119,6 +121,75 @@ export function parseOle(data, shaFn = null) {
   return { ok: true, sectorSize: header.sectorSize, majorVersion: header.majorVersion, rootClsid, entries, streams };
 }
 
+/* ================= VBA 阶段二（dir 记录 + 模块源码，静态只读） ================= */
+
+const VBA_INLINE_CAP = 20000;      // 内联展示的源码总字符上限，超出则提示看下载产物
+
+function buildVbaSection(parsed, budget) {
+  const lines = [];
+  const files = [];
+  const notes = (parsed.notes || []).slice();
+  const p = parsed.project;
+  lines.push("", "VBA 宏工程（静态只读，绝不执行宏）：");
+  lines.push(`  dir 流 ${parsed.dirPath}（压缩 ${parsed.dirCompressedLength} → 记录 ${parsed.dirLength} 字节）`);
+  const cpNote = parsed.codepageLabel
+    ? `代码页 ${p.codepage}（${parsed.codepageLabel}）`
+    : `代码页 ${p.codepage}（无标准解码器）`;
+  lines.push(`  工程「${p.name || ""}」${cpNote}  版本 ${p.versionMajor}.${p.versionMinor}  引用 ${parsed.references.length} 个`);
+  lines.push(`  模块 ${parsed.modules.length} 个：`);
+  for (const m of parsed.modules) {
+    const kind = m.type === "document" ? "文档/类" : "过程";
+    const attrs = [m.readOnly ? "只读" : null, m.private ? "私有" : null].filter(Boolean).join("/");
+    if (m.error) {
+      lines.push(`    [${kind}] ${m.name}  ✗ ${m.error}`);
+      continue;
+    }
+    lines.push(`    [${kind}] ${m.name}  ${m.codeLength} 字节${attrs ? "  " + attrs : ""}`
+      + `${m.docString ? "  说明：" + m.docString : ""}`
+      + `${m.warning ? "  ⚠ " + m.warning : ""}`);
+  }
+
+  let inlineBudget = VBA_INLINE_CAP;
+  let truncated = 0;
+  for (const m of parsed.modules) {
+    if (m.error) continue;
+    const fileName = `${m.streamName}.${m.extension}`;
+    if (m.text != null) {
+      const bytes = new TextEncoder().encode(m.text);
+      if (budget.total + bytes.length <= budget.max) {
+        files.push({ name: fileName, mime: "text/plain;charset=utf-8", bytes });
+        budget.total += bytes.length;
+      } else {
+        budget.skipped++;
+      }
+      if (inlineBudget > 0) {
+        const chunk = m.text.length > inlineBudget ? m.text.slice(0, inlineBudget) : m.text;
+        inlineBudget -= chunk.length;
+        lines.push("", `  ── 模块源码 ${fileName} ──`, chunk);
+        if (chunk.length < m.text.length) truncated++;
+      } else {
+        truncated++;
+      }
+    } else {
+      // 无可用解码器：导出原始字节，绝不按错误码页输出文本
+      if (budget.total + m.codeBytes.length <= budget.max) {
+        files.push({ name: `${m.streamName}.bin`, mime: "application/octet-stream", bytes: m.codeBytes });
+        budget.total += m.codeBytes.length;
+      } else {
+        budget.skipped++;
+      }
+    }
+  }
+  if (truncated) {
+    lines.push("", `（另有 ${truncated} 个模块源码未内联展示或超出展示上限，完整内容见下载产物）`);
+  }
+  if (notes.length) {
+    lines.push("");
+    for (const n of notes) lines.push("  注：" + n);
+  }
+  return { lines, files };
+}
+
 /* ================= op（只读提取，单向） ================= */
 
 function oleExtractRun(text, p) {
@@ -142,30 +213,45 @@ function oleExtractRun(text, p) {
   lines.push(`共 ${r.entries.length} 个对象：`);
   lines.push("");
   const files = [];
-  let totalOut = 0;
-  let skipped = 0;
+  const budget = { total: 0, max: maxBytes, skipped: 0 };
   for (const en of r.entries) {
     const tag = en.type === "storage" ? "[目录] " : "[流]   ";
     const extra = en.type === "stream" ? `  ${en.size} 字节${en.sha256 ? "  SHA-256 " + en.sha256.slice(0, 16) + "…" : ""}` : "";
     lines.push(`  ${tag}${en.path}${extra}`);
     if (en.type === "stream" && r.streams.has(en.path)) {
-      if (totalOut + en.size <= maxBytes) {
+      if (budget.total + en.size <= budget.max) {
         const bytes = r.streams.get(en.path);
         files.push({ name: en.path.replace(/[/\\]/g, "__"), mime: "application/octet-stream", bytes });
-        totalOut += en.size;
+        budget.total += en.size;
       } else {
-        skipped++;
+        budget.skipped++;
       }
     }
   }
-  if (skipped) lines.push("", `（另有 ${skipped} 个流超出提取上限 ${maxMB}MB，仅列出未附产物）`);
-  lines.push("", "静态只读提取完成——未执行任何宏或文档代码。vbaProject.bin 流可另接 VBA 阶段解析。");
+  if (budget.skipped) lines.push("", `（另有 ${budget.skipped} 个流超出提取上限 ${maxMB}MB，仅列出未附产物）`);
+
+  // VBA 阶段二：仅在确实存在 <storage>/VBA/dir 时展开；任何违约都显式说明
+  let vba = null;
+  try {
+    vba = extractVbaProject(r.streams, r.entries.map((e) => e.path));
+  } catch (err) {
+    lines.push("", "VBA 工程解析异常：" + (err && err.message ? err.message : String(err)));
+  }
+  if (vba && vba.ok) {
+    const section = buildVbaSection(vba, budget);
+    lines.push(...section.lines);
+    files.push(...section.files);
+  } else if (vba && vba.reason !== "none") {
+    lines.push("", "检测到 VBA 存储但未能展开：" + vba.reason);
+  }
+
+  lines.push("", "静态只读提取完成——未执行任何宏或文档代码。");
   return { text: lines.join("\n"), files };
 }
 
 register({
   id: "oleExtract", cat: "forensic", name: "OLE/CFB 容器静态提取",
-  desc: "OLE2/Compound File Binary 容器只读解析：目录树（storage/stream）、FAT 与 MiniFAT 双通道取流、Root CLSID、流字节 SHA-256 并附下载产物。适用于 .doc/.xls/.ppt/.msi/vbaProject.bin 等 Office 97-2003 与安装包容器。静态只读，绝不执行宏或文档内代码",
+  desc: "OLE2/Compound File Binary 容器只读解析：目录树（storage/stream）、FAT 与 MiniFAT 双通道取流、Root CLSID、流字节 SHA-256 并附下载产物；若含 VBA 存储则进一步解析 dir 记录（模块名/类型/属性/偏移）并按 MS-OVBA 解压模块源码文本。适用于 .doc/.xls/.ppt/.msi/vbaProject.bin 等 Office 97-2003 与安装包容器。静态只读，绝不执行宏或文档内代码",
   params: [
     { key: "maxMB", label: "产物总提取上限（MB）", type: "number", default: 32 },
   ],
@@ -173,4 +259,4 @@ register({
   acceptsBytes: true,
 });
 
-export { oleExtractRun, readDirSlots, fmtClsid };
+export { oleExtractRun, readDirSlots, fmtClsid, buildVbaSection };

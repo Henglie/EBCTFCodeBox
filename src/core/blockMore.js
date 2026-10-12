@@ -1,5 +1,5 @@
 /*
- * blockMore.js — 对称查漏分组密码（cat:'block'，双向，ECB/CBC 两模式）。T374 批B，件内自注册。
+ * blockMore.js — 对称查漏分组密码（cat:'block'，双向，ECB/CBC 两模式）。批B，件内自注册。
  *
  * op（均 encode=加密 / decode=解密，hex 输入输出，ECB 不填充，CBC 需 iv hex）：
  *   - noekeon   Noekeon（NESSIE 提名，128 位分组/128 位密钥，16 轮 SPN，direct 轮序）

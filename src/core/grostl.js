@@ -299,6 +299,8 @@ function grostlHex(bytes, hashbitlen) {
 
 function grostlRun(text, p = {}) {
   const variant = (p && p.variant) || "512";
+  if (variant !== "256" && variant !== "512")
+    throw new Error(`Grøstl：未知变体 "${variant}"（仅支持 256 / 512）`);
   const hbl = variant === "256" ? 256 : 512;
   const inputMode = (p && p.inputMode) || "text";
   const input = inputMode === "hex"

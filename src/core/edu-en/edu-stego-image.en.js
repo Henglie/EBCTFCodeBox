@@ -13,18 +13,22 @@ export default {
   },
 
   arnoldCat: {
-    what: "Arnold's cat map: a permutation that 'scrambles' the pixels of a square image; scrambling enough times magically restores the original (it's periodic). Used in CTF to scramble/restore hidden images.",
+    what: "Arnold's cat map: an invertible permutation that 'scrambles' image pixels; iterating enough times magically restores the original (it's periodic). Supports square and arbitrary M×N rectangular images, with an optional per-channel mode. Used in CTF to scramble/restore hidden images.",
     principle:
-      "For an N×N image, each pixel coordinate undergoes the linear transform $(x,y)\\to(2x+y,\\ x+y)\\bmod N$, moving the pixel to a new position. This map is a bijection with period T — after T iterations every pixel returns to its origin and the image is restored.",
-    usage: "Input a square image and an iteration count: forward iterations scramble the image; continuing to period T restores it.",
+      "Each pixel coordinate undergoes the linear transform $(x,y)\\to(x+ay,\\ bx+(ab+1)y)\\bmod N$ (generalized matrix $[[1,a],[b,ab+1]]$; $a=b=1$ degrades to the classic form; det=1, hence invertible), moving the pixel to a new position. This map is a bijection with period T — after T iterations every pixel returns to its origin and the image is restored. For M×N rectangles the row/column moduli are split: first $x'=(x+ay)\\bmod W$, then $y'=(y+b x')\\bmod H$ (two shears of the det-1 matrix; each step is a modular translation, hence bijective; on squares it coincides with the closed-form matrix). Convention note: this tool is column-first by default; Python img[row][col]-style reference implementations are usually row-first — enable Row-first to align, no need to swap a/b. Per-channel mode matches circulating scripts that scramble img[:,:,i] independently (R/G/B each, alpha untouched).",
+    usage: "Input an image (square or any M×N rectangle) and an iteration count: forward iterations scramble the image; iterate to period T or tick Decode to restore. For output of Python/MATLAB scripts, pick the convention (row/column-first) and per-channel mode to match the source.",
     examples: [
       { in: "N×N image", param: "iterate k times", out: "scrambled image", desc: "Iterate T−k more times to restore" },
+      { in: "N×N image scrambled by a row-first reference", param: "Row-first + decode, original a/b, 1 iteration", out: "original restored", desc: "Convention aligned, parameters unchanged" },
+      { in: "300×500 rectangle", param: "decode, row/column moduli split by width/height", out: "original restored", desc: "Rectangles use the two-shear construction — bijective and invertible" },
+      { in: "color image scrambled per channel by a MATLAB/GitHub experiment script", param: "tick per-channel, fill a/b/convention from the script", out: "original restored", desc: "R/G/B planes scrambled independently, alpha untouched" },
     ],
     formulas: [
       { tex: "\\begin{pmatrix}x'\\\\y'\\end{pmatrix}=\\begin{pmatrix}2&1\\\\1&1\\end{pmatrix}\\begin{pmatrix}x\\\\y\\end{pmatrix}\\bmod N", caption: "Arnold cat map matrix" },
+      { tex: "x'=(x+ay)\\bmod W,\\ y'=(y+b x')\\bmod H", caption: "M×N rectangle: row/column moduli split (two shears)" },
     ],
-    tips: ["An image obviously block-scrambled and square → try Arnold. If you don't know the iteration count, just keep iterating; the moment it suddenly looks clear is the restore point."],
-    aka: ["arnold变换", "猫脸变换", "arnold cat map", "图像置乱", "Arnold Cat Map", "阿诺德变换", "猫映射", "arnold scrambling", "像素置乱", "图像还原变换"],
+    tips: ["An image obviously block-scrambled and square → try Arnold. If you don't know the iteration count, just keep iterating; the moment it suddenly looks clear is the restore point.", "Scrambled by a Python cat-map script and this tool cannot restore it? Likely a row/column convention mismatch: enable Row-first, fill a/b as-is and decode once — no swapping, no need to iterate to the period.", "Rectangles work too: the cat map is not limited to squares — row/column moduli split by width/height. Circulating scripts often support squares only; for rectangular scrambles suspect a generalized cat map.", "GitHub/MATLAB image-encryption experiments often scramble per channel (img[:,:,i] each pass) — tick Per-channel to match (the alpha channel does not take part)."],
+    aka: ["arnold变换", "猫脸变换", "arnold cat map", "图像置乱", "Arnold Cat Map", "阿诺德变换", "猫映射", "arnold scrambling", "像素置乱", "图像还原变换", "行优先约定", "arnold行优先", "逐通道置乱", "arnold逐通道", "矩形猫脸变换", "arnold矩形图像"],
   },
 
   imageBasic: {
@@ -136,18 +140,19 @@ export default {
   },
 
   arnoldCatBrute: {
-    what: "Arnold Cat Map brute-force: when you don't know the Arnold parameters (a/b/iterations), exhaustively try every combination in reverse and tile the candidates into a grid image — scan the grid and spot the restored image.",
+    what: "Arnold Cat Map brute-force: when you don't know the Arnold parameters (a/b/iterations), exhaustively try every combination in reverse and tile the candidates into a grid image — scan the grid and spot the restored image. Can scan both conventions (column-first ∪ row-first).",
     principle:
-      "The parameterized Arnold matrix is $\\begin{pmatrix}1&a\\\\b&ab+1\\end{pmatrix}\\bmod N$ (determinant 1, hence invertible). Forward: $\\begin{pmatrix}x'\\\\y'\\end{pmatrix}=M\\begin{pmatrix}x\\\\y\\end{pmatrix}$; inverse uses $M^{-1}=\\begin{pmatrix}ab+1&-a\\\\-b&1\\end{pmatrix}$. Brute force nests loops over a, b and iteration count, inverts the image for each combination and tiles thumbnails into a grid.",
-    usage: "Upload a square image, set start/end ranges for a/b/iterations (default a:1-3, b:1-3, times:1-5 = 45 combos), output the candidate grid. Cap is 2000 combos.",
+      "The parameterized Arnold matrix is $\\begin{pmatrix}1&a\\\\b&ab+1\\end{pmatrix}\\bmod N$ (determinant 1, hence invertible). Forward: $\\begin{pmatrix}x'\\\\y'\\end{pmatrix}=M\\begin{pmatrix}x\\\\y\\end{pmatrix}$; inverse uses $M^{-1}=\\begin{pmatrix}ab+1&-a\\\\-b&1\\end{pmatrix}$. Brute force nests loops over a, b and iteration count, inverts the image for each combination and tiles thumbnails into a grid. Convention axis: column-first (first coordinate = column) and row-first (first coordinate = row) are decoded separately; row-first candidates carry an r suffix in their labels.",
+    usage: "Upload a square image, set start/end ranges for a/b/iterations (default a:1-3, b:1-3, times:1-5 = 45 combos), output the candidate grid. If the convention is suspect, tick Enumerate row-first to run each (a,b,t) combo under row-first too. Cap is 2000 combos.",
     examples: [
       { in: "scrambled image", param: "a:1-3 b:1-3 times:1-5", out: "45-cell candidate grid", desc: "the restored image is one cell" },
+      { in: "image scrambled by a row-first script", param: "default range + Enumerate row-first", out: "grid with r-suffixed labels", desc: "both conventions in one scan" },
     ],
     formulas: [
       { tex: "M=\\begin{pmatrix}1&a\\\\b&ab+1\\end{pmatrix},\\ M^{-1}=\\begin{pmatrix}ab+1&-a\\\\-b&1\\end{pmatrix}\\pmod N", caption: "parameterized Arnold matrix and inverse" },
     ],
-    tips: ["Challenge gives only the image → scan the default range first; cells with clean straight edges are candidates. a=b=1 is the classic cat map (degenerate case). Image must be square."],
-    aka: ["arnold暴破", "猫脸暴破", "arnold brute force", "猫脸破解", "arnold参数破解", "猫脸暴力破解", "arnold穷举", "猫脸穷举", "arnold crack", "猫脸还原"],
+    tips: ["Challenge gives only the image → scan the default range first; cells with clean straight edges are candidates. a=b=1 is the classic cat map (degenerate case). Image must be square.", "No candidate and the convention is suspect (Python reference scripts are usually row-first) → tick Enumerate row-first to scan both; a trailing r marks row-first candidates."],
+    aka: ["arnold暴破", "猫脸暴破", "arnold brute force", "猫脸破解", "arnold参数破解", "猫脸暴力破解", "arnold穷举", "猫脸穷举", "arnold crack", "猫脸还原", "arnold约定枚举", "猫脸暴破行优先"],
   },
 
   stegpy: {

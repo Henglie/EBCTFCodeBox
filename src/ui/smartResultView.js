@@ -5,7 +5,7 @@ import { icon as iconSvg } from "./icons.js";
 import { getLocale } from "../i18n/index.js";
 import { createRegexEngine, DEFAULT_LIMITS } from "./targetRegexEngine.js";
 
-// ============ 真实有界正则引擎接入（T576 /接线）============
+// ============ 真实有界正则引擎接入（/接线）============
 // 引擎在专用 Worker 内真执行，父级 budgetMs 到点 terminate 真杀（非同线程伪超时）。
 const STORE_KEY = "ebctf.targets.v2";
 const PREVIEW_KEY = "mt575.preview.targets.v2";
@@ -213,7 +213,7 @@ export function renderCandidateRow(c, { search = {}, copied = () => {} } = {}) {
   return row;
 }
 
-/* T608/S5：document 级菜单关闭监听改为进程级单例多路复用。此前 createTargetEditor 每次
+/* document 级菜单关闭监听改为进程级单例多路复用。此前 createTargetEditor 每次
  * 渲染都往 document 挂 click+keydown 且永不摘除（两个消费方 main.js/exhaustiveView.js 均不
  * 调 dispose，且旧 dispose 本身也漏摘 keydown），首页↔op 往返每轮 +2 监听 + 闭包链保留的
  * 离树节点。现在：常驻恰好一对 document 监听多路转发给存活编辑器；hashchange / 任意
@@ -241,7 +241,7 @@ function _wireMenuChannel() {
 export function createTargetEditor() {
   /*/：同 token 整体框 + 框内 chips + 8px 圆角 + .* 只读前缀 + 全局「字面 | .* 正则」开关
    * + 展开按钮弹出 exp-dialog/exp-overlay 通用弹层 + 右上角 exp-close + html:not(.reduce-motion) 动画口径。
-   * 正则执行=真实有界引擎（T576 内核，专用 Worker，父级真终止）。存储键 ebctf.targets.v2（迁移：preview→v1→种子）。
+   * 正则执行=真实有界引擎（内核，专用 Worker，父级真终止）。存储键 ebctf.targets.v2（迁移：preview→v1→种子）。
    */
   ensureExpStyles();
 
@@ -459,7 +459,7 @@ html:not(.reduce-motion) .exp-overlay.exp-closing.mt575-anim .exp-dialog { anima
   /* ---- 右键菜单（编辑/删除/启停） ---- */
   let menu = null;
   const closeMenu = () => { if (menu) { menu.remove(); menu = null; } };
- // T608/S5：不再直接挂 document（改经 _wireMenuChannel 单例多路复用，见文件头说明）
+ // 不再直接挂 document（改经 _wireMenuChannel 单例多路复用，见文件头说明）
   _wireMenuChannel();
   const _reg = { root, closeMenu, seen: false };
   _liveEditors.add(_reg);

@@ -3,7 +3,7 @@
 //
 // 两块内容：
 // 1. 插件：列已加载插件（op/解码贡献/AI 提供方计数）+ 停用/卸载；从 URL 加载新插件；
-//    内置参考插件一键启用；配置导出 / 导入（已启用插件源清单 JSON）。
+//   内置参考插件一键启用；配置导出 / 导入（已启用插件源清单 JSON）。
 // 2. MCP：导出工具箱能力清单（tools/resources JSON），供外部 MCP 客户端 / AI 接入。
 //
 // 零外发红线：MCP 只在本地 stdio/回调内跑，不自建监听；配置 JSON 只在本地读写。
@@ -161,6 +161,59 @@ function sectionMcp() {
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
       toast(T("ui.plugin.mcpExported"));
     } }, T("ui.plugin.mcpExport")),
+  );
+
+ // 使用方法：本地 stdio 型（无网址=正常、离线可用、零外发）+ 三步接入 + 各客户端配置文件位置。
+  box.append(
+    el("div", { class: "plugin-how" },
+      el("h5", {}, T("ui.plugin.mcpHowTitle")),
+      el("p", { class: "plugin-how-intro" }, T("ui.plugin.mcpHowIntro")),
+      el("ol", { class: "plugin-how-steps" },
+        el("li", {}, T("ui.plugin.mcpHowStep1")),
+        el("li", {}, T("ui.plugin.mcpHowStep2")),
+        el("li", {}, T("ui.plugin.mcpHowStep3")),
+      ),
+      el("p", { class: "plugin-how-clients" }, T("ui.plugin.mcpHowClients")),
+    ),
+  );
+
+ // 最简提示词：一键复制给任何 AI，照做即完成接入。
+ // 安装目录运行时取（用户填一次存 localStorage），文案不写死任何本机路径。
+  const DIR_KEY = "ebctf:mcpInstallDir";
+  const dirInput = el("input", { class: "plugin-input", type: "text",
+    placeholder: T("ui.plugin.mcpPromptPathPh"), spellcheck: "false" });
+  try { dirInput.value = localStorage.getItem(DIR_KEY) || ""; } catch { /* 隐私模式忽略 */ }
+  const promptTa = el("textarea", { class: "plugin-prompt", rows: "10",
+    readonly: "readonly", spellcheck: "false", "aria-label": T("ui.plugin.mcpPromptTitle") });
+  const buildPrompt = () => {
+    const dir = dirInput.value.trim();
+    promptTa.value = T("ui.plugin.mcpPromptHead") + "\n"
+      + (dir ? T("ui.plugin.mcpPromptDirFilled", dir) : T("ui.plugin.mcpPromptDirAuto")) + "\n"
+      + T("ui.plugin.mcpPromptRest");
+  };
+  dirInput.addEventListener("input", () => {
+    const v = dirInput.value.trim();
+    try {
+      if (v) localStorage.setItem(DIR_KEY, v);
+      else localStorage.removeItem(DIR_KEY);
+    } catch { /* 隐私模式忽略 */ }
+    buildPrompt();
+  });
+  buildPrompt();
+  box.append(
+    el("div", { class: "plugin-how" },
+      el("h5", {}, T("ui.plugin.mcpPromptTitle")),
+      el("div", { class: "plugin-load-row" },
+        dirInput,
+        el("button", { class: "chip-btn primary", onclick: async () => {
+          const txt = promptTa.value;
+          try { await navigator.clipboard.writeText(txt); }
+          catch { promptTa.select(); document.execCommand("copy"); }
+          toast(T("ui.plugin.mcpPromptCopied"));
+        } }, T("ui.plugin.mcpPromptCopy")),
+      ),
+      promptTa,
+    ),
   );
   return box;
 }

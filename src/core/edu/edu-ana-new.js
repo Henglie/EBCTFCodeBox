@@ -1,5 +1,5 @@
 /*
- * edu-ana-new.js — 科普补缺分片：analysis 类新 op（T307）。
+ * edu-ana-new.js — 科普补缺分片：analysis 类新 op（）。
  *
  * 覆盖 4 个真实缺失的 analysis 类 op 科普卡：
  * sstiKeyword — SSTI 关键字识别（服务端模板注入静态特征扫描）

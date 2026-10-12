@@ -401,7 +401,7 @@ export default {
   "ui.uv.graphemes": "grafem kümeleri",
   "ui.uv.splitClusters": "Birleşik dizileri ayır (her kod noktasını ayrı listele)",
   "ui.uv.noSegmenter": "(Grafem bölümleme burada desteklenmiyor; kod noktaları gösteriliyor)",
-  // 拼字 / IDS 视图（MT84）
+  // 拼字 / IDS 视图
   "ui.uv.tabIds": "İdeograflar / IDS",
   "ui.uv.idsDesc": "İdeografik Tanım Dizileri (IDS): bir karakterin ayrıştırma ağacını arayın, bileşenlere göre karakter arayın ve karakterler ile IDS dizeleri arasında dönüştürün. Tamamen yerel, sıfır yükleme.",
   "ui.uv.idsLoading": "İdeograf verileri yükleniyor…",
@@ -427,7 +427,7 @@ export default {
   "ui.uv.idsNoExact": "Tam IDS eşleşmesi yok; yaprak bileşenlere göre aranıyor:",
   "ui.uv.idsConvHits": "{0} eşleşme",
   "ui.uv.idsSrc": "kaynak",
-  // 快速换算视图（MT81）
+  // 快速换算视图
   "ui.qc.title": "Hızlı dönüştürme",
   "ui.qc.desc": "Programcı taban ve birim dönüştürme tezgâhı: herhangi bir alanı düzenleyin, diğerleri anında güncellenir. Tamamen yerel, ağ yok.",
   "ui.qc.tabRadix": "Programcı tabanları",
@@ -557,6 +557,8 @@ export default {
   "ui.env.syncAccentOk": "Sistem vurgu rengi eşitlendi",
   "ui.env.syncAccentFail": "Sistem vurgu rengi kullanılamıyor",
   "ui.topbar.font": "Yazı Tipi Kütüphanesi",
+  "ui.pwa.updateBar": "Yeni bir sürüm var. Çevrimdışı kaynaklar hazır",
+  "ui.pwa.updateRefresh": "Yenile",
 
  // ---- topbar search ----
   "ui.search.placeholder": "Kodlayıcı / şifre ara…",
@@ -775,7 +777,7 @@ export default {
   "op.sshPubkeyParse.name": "SSH Public Key Parser",
   "op.btcAddressIdent.name": "Bitcoin Address Identify",
   "op.ethAddressIdent.name": "Ethereum Address Identify",
- // ---- MT82 new ops (forensic/stego/modern) ----
+ // ---- new ops (forensic/stego/modern) ----
   "op.gifTiming.name": "GIF Kare Zamanlama Steganografisi",
   "op.jpgSizeRecover.name": "JPEG Boyut Kurtarma",
   "op.zipRepair.name": "ZIP Sahte Şifreleme Onarımı",
@@ -1177,9 +1179,12 @@ export default {
   "ui.ds.customBadge": "Değiştirildi (özel)",
   "ui.home.strengthBtn": "Güç",
 
- // ---- 2026-08-26 解冻新增（协作代理译文，主控已验）----
   "ui.op.fontDec": "Yazı boyutunu küçült",
   "ui.op.fontInc": "Yazı boyutunu büyüt",
+  "ui.op.localFonts": "Yerel yazı tiplerini yükle",
+  "ui.op.localFontsDone": "{0} yerel yazı tipi yüklendi",
+  "ui.op.localFontsFail": "Yerel yazı tipleri yüklenemedi: {0}",
+  "ui.op.pickImage": "Görsel seç",
   "ui.exhaust.branchCount": "{0} dal",
   "ui.exhaust.hitCount": "{0} olası isabet",
   "ui.exhaust.defaultParam": "varsayılan",
@@ -1437,6 +1442,8 @@ export default {
   'op.csrParse.name': 'CSR ayrıştırıcı (PKCS#10)',
   'op.crlParse.name': 'X.509 CRL ayrıştırıcı',
   'cat.esolang': 'Ezoterik programlama dilleri',
+  'cat.stegoText': 'Metin steganografisi',
+  'cat.stegoFile': 'Dosya steganografisi',
   'ui.about.contribSmile1110': 'ECC ve modern kriptografi kapsamının genişletilmesini önerdi.',
   'ui.about.contribLamian': 'Hata bildirimleri ve öneriler: özgün araçlarla uyumluluk, Unicode ve boşluk karakteri uç durumları, ezoterik diller, açıklamalar, kategoriler ve parametreler.',
   'ui.edu.aka': 'Diğer adlar (tümü aranabilir)',
@@ -1573,6 +1580,13 @@ export default {
   'fam.lbl.base2048': 'Base2048',
   'fam.lbl.base65536': 'Base65536',
   'fam.lbl.ecoji': 'Ecoji (emoji Base64)',
+  'fam.lbl.fields': 'Alan çıkarma',
+  'fam.lbl.attack': 'Nonce k yeniden kullanımı',
+  'fam.lbl.sharedPub': 'Açık anahtardan türetme',
+  'fam.lbl.homAdd': 'Homomorfik toplama',
+  'fam.lbl.scan': 'Tarama',
+  'fam.lbl.formatBrute': 'Kaba kuvvet',
+  'fam.lbl.smartReport': 'Akıllı rapor',
  // ----解冻批回填（外部交付 2026-09-26 + 内部 cat.*）----
   "ui.recipe.chooseFamilyOp": "Tarif zincirine eklenecek işlemi seçme",
   "op.base16.desc": "Onaltılık kodlama: her baytı iki onaltılık karakterle gösterir. Özel alfabe ve büyük harf / boşlukla ayırma desteği sunar.",

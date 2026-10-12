@@ -1,5 +1,5 @@
 /*
- * rsatool.js — 数论 / RSA 攻击工具组（T60，cat:'analysis'）。
+ * rsatool.js — 数论 / RSA 攻击工具组（cat:'analysis'）。
  *
  * 覆盖：
  * - rsaParams RSA 参数计算（p,q,e → n,φ,d,dp,dq,qinv）
@@ -17,7 +17,7 @@
  * - 只新建本文件，不碰任何现有 core/*.js。
  * - 大数一律 BigInt；modInverse / rsaPow 复用 modern.js 已导出的纯函数（import，不重造）。
  * - 攻击类用 run 单向；参数计算类如可逆则 encode+decode（rsaModinv 自反双向）。
- * - 注册契约：register({id, cat:"asym"|"crypto", name, desc, params, run?})——数学工具类（rsaParams/Modinv/Egcd/Crt/Modpow）cat:"asym"（T384 挪入），真攻击类（SmallE/CommonModulus/Wiener/Fermat/Pollard）cat:"crypto" 留守。
+ * - 注册契约：register({id, cat:"asym"|"crypto", name, desc, params, run?})——数学工具类（rsaParams/Modinv/Egcd/Crt/Modpow）cat:"asym"（挪入），真攻击类（SmallE/CommonModulus/Wiener/Fermat/Pollard）cat:"crypto" 留守。
  *
  * 输入约定：大数十进制字符串；多值按换行或逗号分隔（parseBigInts）。
  * 主待处理数据（密文/待分解数/待求逆值）走输入框 text，结构化参数走 params。
@@ -340,6 +340,11 @@ function pollardRho(n, maxIter) {
 
 function rsaPollardReport(text, p) {
   const n = BigInt(String(text).trim());
+ // Pollard rho 定义域：n 须为 ≥3 的整数（奇合数为典型输入）。
+ // n=0/1/2 或负数不在定义域（n=0 时 factor·cofactor=0 与「应 = n」校验自相矛盾却标成功）。
+  if (n < 3n) {
+    throw new Error("Pollard rho 分解需 n ≥ 3（待分解的合数，典型为奇合数），得到 n = " + n);
+  }
   const maxIter = Math.max(100, Math.min(100000000, Number((p && p.maxIter) || 1000000)));
   const r = pollardRho(n, maxIter);
   const lines = [];

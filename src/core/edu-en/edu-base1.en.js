@@ -168,13 +168,12 @@ export default {
   },
 
   base85ipv6: {
-    what: "A compact 20-character textual representation of IPv6 addresses defined in RFC 1924, using base85.",
-    principle:
-      "An IPv6 address is 128 bits = 16 bytes. Treat as a 128-bit integer, encode in base85 with the RFC 1924 alphabet.\n\n" +
-      "Result is exactly 20 printable characters — shorter than the standard colon-hex notation.",
-    usage: "Paste a 20-char base85 IPv6 string to expand to standard colon notation, or paste an IPv6 address to compress.",
+    what: "The RFC 1924 Base85 variant, originally a compact form for IPv6 addresses (now deprecated); its alphabet differs from Z85.",
+    principle: "RFC 1924 §5: treat the 16 bytes (a whole IPv6 address) as one 128-bit big integer, repeatedly divide by 85 and read the remainders in reverse — NOT 4-byte chunking (85^5 ≠ 2^32, the two are not equivalent). Alphabet is `0-9A-Za-z` plus a set of symbols in an order unlike Z85; output uses the minimum number of digits (the official example happens to be 20 chars). Decoding still accepts legacy chunked forms of length divisible by 5.",
+    usage: "Paste variant text to decode; the encode direction requires exactly 16 bytes (e.g. a 16-char text, or bytes of a 32-digit hex). Custom 85-char alphabets supported.",
     examples: [
-      { in: "4)+k&C#VzJ4br>0wv%Yp", out: "2001:db8::1", desc: "20-char base85 → IPv6" },
+      { in: "4)+k&C#VzJ4br>0wv%Yp", out: "108000000000000000080800200c417a" },
+      { in: "0123456789abcdef", out: "E47Ksq(HC#PPcsf0yN<H" },
     ],
     tips: [
       "Exactly 20 printable characters from the RFC 1924 alphabet → likely base85 IPv6.",

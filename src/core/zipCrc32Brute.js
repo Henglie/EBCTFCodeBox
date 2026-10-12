@@ -1,5 +1,5 @@
 /*
- * zipCrc32Brute.js — ZIP CRC32 小文件内容爆破（T287，cat:'analysis'，单向 run）。
+ * zipCrc32Brute.js — ZIP CRC32 小文件内容爆破（cat:'analysis'，单向 run）。
  *
  * 场景：CTF misc 里 ZIP 存了 Stored（method=0，未压缩）的极小文件，已知其 CRC32
  * 反查文件内容。对长度 ≤6 的所有可能内容穷举 CRC32，命中即输出。

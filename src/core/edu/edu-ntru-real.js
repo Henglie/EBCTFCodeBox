@@ -1,5 +1,5 @@
 /*
- * edu-ntru-real.js — 真 NTRU（EESS/NTRU Encrypt 产品式口径）三档科普卡（T398 批A）。
+ * edu-ntru-real.js — 真 NTRU（EESS/NTRU Encrypt 产品式口径）三档科普卡（批A）。
  * 格式契约见 eduContent.js 头注释：纯数据、无 import、无副作用。
  * 键 = op id：ntruKeyGen / ntruEncrypt / ntruDecrypt（src/core/ntruReal.js）。
  * aka 均 ≥10 条真实别名。

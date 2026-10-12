@@ -1,5 +1,5 @@
 /*
- * edu-sm9-family.js — SM9 五档算法族科普卡（T397 批1：标识密码完整运算，双线性对内核）。
+ * edu-sm9-family.js — SM9 五档算法族科普卡（批1：标识密码完整运算，双线性对内核）。
  * 格式契约见 eduContent.js 头注释：纯数据、无 import、无副作用。
  * aka 均 ≥10 条真实别名（_alias_verify 三件套红线）。
  */

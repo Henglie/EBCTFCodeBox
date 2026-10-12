@@ -10,7 +10,9 @@
  * keyCode 表按 W3C UI Events KeyboardEvent.keyCode 值。
  *
  * 契约：与 fancy.js 已有 keyboard（QWERTY 行列坐标）/tapcode 不重复。
- * - keyCode/keyword9/keyboardSurround/qweAbc 单向 run 返报告文本
+ * - keyCode 单向 run 返报告文本（键名→码反向不唯一，见 KEYCODE_DICT 同名多码）
+ * - keyword9/keyboardSurround/qweAbc 双向：解码返识别报告（原 run 输出不变），
+ *   编码按参数做反向映射
  * - shiftKey 自反，双向 encode=decode
  */
 import { register } from "./registry.js";
@@ -167,6 +169,47 @@ function keyword9Run(text) {
   return `识别: ${modeDesc}\n结果: ${fruit}`;
 }
 
+// 编码方向反查表（首见优先；KW9_0 原表不含 u-z 的编码项，q 特例为 0\）
+const KW9_0_REV = (() => {
+  const m = {};
+  for (const [k, v] of Object.entries(KW9_0)) {
+    if (!m.hasOwnProperty(v)) m[v] = k;
+  }
+  return m;
+})();
+
+// 编码方向：按参数在「数字+\|/」与「字母+长度」两模式间反向生成
+function keyword9Encode(text, p) {
+  const mode = p && p.mode ? p.mode : "slash";
+  if (mode === "length") {
+ // 字母+长度：字母 → 顶行键位字母 ×（组内序+1）；空格作分词原样保留
+    let out = "";
+    for (const ch of text) {
+      if (/\s/.test(ch)) { out += ch; continue; }
+      let done = false;
+      for (let s = 2; s < KW9_T9.length; s++) {
+        const idx = KW9_T9[s].indexOf(ch);
+        if (idx >= 0) {
+          if (out && !/\s$/.test(out)) out += " ";
+          out += KW9_BASE[s].repeat(idx + 1);
+          done = true;
+          break;
+        }
+      }
+      if (!done) throw new Error("keyword9 字母+长度编码仅支持小写字母 a-z，得到 “" + ch + "”");
+    }
+    return out;
+  }
+ // 数字+\|/：查反表逐字生成，空白作分隔；表外字符显式报错
+  const out = [];
+  for (const ch of text) {
+    if (/\s/.test(ch)) continue;
+    if (KW9_0_REV.hasOwnProperty(ch)) out.push(KW9_0_REV[ch]);
+    else throw new Error("keyword9 数字+\\|/ 编码无 “" + ch + "” 的编码项（原表仅覆盖部分字母）");
+  }
+  return out.join(" ");
+}
+
 // ============ keyboardSurround（nliqwerty_dec）============
 // 每个键 → 周围键集合
 const KB_SURROUND = {
@@ -221,6 +264,39 @@ function keyboardSurroundRun(text) {
   return `识别: ${mode}\n结果: ${result}`;
 }
 
+// 数字坐标反查表（KB_COORD 值互异：空格 + A-Z）
+const KB_COORD_REV = (() => {
+  const m = {};
+  for (const [k, v] of Object.entries(KB_COORD)) {
+    if (!m.hasOwnProperty(v)) m[v] = k;
+  }
+  return m;
+})();
+
+// 编码方向：中心键 → 相邻键集合，或 字符 → 数字坐标（空格分隔，与解码分词口径一致）
+function keyboardSurroundEncode(text, p) {
+  const mode = p && p.mode ? p.mode : "surround";
+  if (mode === "coord") {
+    const out = [];
+    for (const ch of text) {
+      if (KB_COORD_REV.hasOwnProperty(ch)) out.push(KB_COORD_REV[ch]);
+      else throw new Error("keyboardSurround 数字坐标编码仅支持空格与 A-Z，得到 “" + ch + "”");
+    }
+    return out.join(" ");
+  }
+  let out = "";
+  for (const ch of text) {
+    if (/\s/.test(ch)) { out += ch; continue; }
+    const key = KB_SURROUND.hasOwnProperty(ch) ? ch : ch.toUpperCase();
+    if (!KB_SURROUND.hasOwnProperty(key)) {
+      throw new Error("keyboardSurround 包围键编码无 “" + ch + "” 的相邻键集合");
+    }
+    if (out && !/\s$/.test(out)) out += " ";
+    out += KB_SURROUND[key];
+  }
+  return out;
+}
+
 // ============ qweAbc ============
 // QWERTY/QWERTZ/AZERTY 三套键盘 → ABC 标准字母表
 const QWERTY_LAYOUT = "QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm";
@@ -246,6 +322,19 @@ function qweAbcRun(text) {
   ].join("\n");
 }
 
+// 编码方向：ABC 标准字母表 → 按参数选定的键盘布局；非表字符原样保留
+function qweAbcEncode(text, p) {
+  const layout = p && p.layout ? p.layout : "qwerty";
+  const table = { qwerty: QWERTY_LAYOUT, qwertz: QWERTZ_LAYOUT, azerty: AZERTY_LAYOUT }[layout];
+  if (!table) throw new Error("qweAbc 未知布局: " + layout);
+  let out = "";
+  for (const c of text) {
+    const idx = ABC_LAYOUT.indexOf(c);
+    out += idx >= 0 ? table[idx] : c;
+  }
+  return out;
+}
+
 // ============ 注册 ============
 register({
   id: "keyCode", cat: "fancy", name: "JS keyCode 表",
@@ -264,29 +353,54 @@ register({
 
 register({
   id: "keyword9", cat: "fancy", name: "T9 九宫格",
-  desc: "手机 T9 键盘四模式：二位数字 / 重复数字 / 数字+\\|/ / 字母+长度",
-  params: [],
-  run: keyword9Run,
+  desc: "手机 T9 键盘四模式：二位数字 / 重复数字 / 数字+\\|/ / 字母+长度；编码支持后两模式",
+  params: [
+    { key: "mode", label: "编码模式", type: "select", default: "slash",
+      options: [
+        { value: "slash", label: "数字+\\|/（表内字母）" },
+        { value: "length", label: "字母+长度（a-z）" },
+      ],
+    },
+  ],
+  decode: keyword9Run,
+  encode: keyword9Encode,
 });
 
 register({
   id: "keyboardSurround", cat: "fancy", name: "键盘包围键",
-  desc: "相邻键集合→中心键 或 数字坐标→字符（nliqwerty）",
-  params: [],
-  run: keyboardSurroundRun,
+  desc: "相邻键集合→中心键 或 数字坐标→字符（nliqwerty）；编码反向：中心键→相邻键集合 / 字符→坐标",
+  params: [
+    { key: "mode", label: "编码模式", type: "select", default: "surround",
+      options: [
+        { value: "surround", label: "中心键 → 相邻键集合" },
+        { value: "coord", label: "字符 → 数字坐标" },
+      ],
+    },
+  ],
+  decode: keyboardSurroundRun,
+  encode: keyboardSurroundEncode,
 });
 
 register({
   id: "qweAbc", cat: "fancy", name: "QWERTY→ABC",
-  desc: "QWERTY/QWERTZ/AZERTY 键盘 → ABC 标准字母表",
-  params: [],
-  run: qweAbcRun,
+  desc: "QWERTY/QWERTZ/AZERTY 键盘 ↔ ABC 标准字母表（解码逐布局出对照，编码按目标布局）",
+  params: [
+    { key: "layout", label: "编码目标布局", type: "select", default: "qwerty",
+      options: [
+        { value: "qwerty", label: "QWERTY" },
+        { value: "qwertz", label: "QWERTZ" },
+        { value: "azerty", label: "AZERTY" },
+      ],
+    },
+  ],
+  decode: qweAbcRun,
+  encode: qweAbcEncode,
 });
 
 export {
   keyCodeRun, KEYCODE_DICT,
   shiftKeyConvert, SHIFT_KEY_MAP, SHIFT_KEY_REVERSE,
-  keyword9Run, KW9_1, KW9_2, KW9_0,
-  keyboardSurroundRun, KB_SURROUND, KB_COORD,
-  qweAbcRun, QWERTY_LAYOUT, QWERTZ_LAYOUT, AZERTY_LAYOUT, ABC_LAYOUT,
+  keyword9Run, keyword9Encode, KW9_1, KW9_2, KW9_0, KW9_0_REV,
+  keyboardSurroundRun, keyboardSurroundEncode, KB_SURROUND, KB_COORD, KB_COORD_REV,
+  qweAbcRun, qweAbcEncode, QWERTY_LAYOUT, QWERTZ_LAYOUT, AZERTY_LAYOUT, ABC_LAYOUT,
 };

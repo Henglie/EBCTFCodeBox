@@ -1,5 +1,5 @@
 /*
- * progCalc.js — 程序员计算器（cat:'radix'，run 报告型，T338）。
+ * progCalc.js — 程序员计算器（cat:'radix'，run 报告型）。
  *
  * 位运算表达式求值 + 多视图输出。运算符（优先级同 C/JS，从低到高）：
  *   |   →  ^  →  &  →  << >> >>>  →  + -  →  * / %  →  **  →  ~ -(+) 一元
@@ -23,7 +23,7 @@
  * 负移位数报错；rotl/rotr 的 n 负值按数学等价处理（mod 字宽）。
  * ** 负指数报错（整数计算器）；快速幂 mod 2^w，防大指数爆内存。
  *
- * 与 T337 radixAll 的边界：radixAll 是单数值的多进制对照视图（无运算），
+ * 与 radixAll 的边界：radixAll 是单数值的多进制对照视图（无运算），
  * 本 op 是表达式求值器（有运算），负数补码多宽度展示归 radixAll。
  *
  * 红线：core 层零 UI 依赖（仅 registry）；纯本地零外发。
@@ -145,7 +145,7 @@ function evalProgExpr(src, opts = {}) {
   const width = opts.width === undefined || opts.width === null || opts.width === ""
     ? 32
     : Number(opts.width);
-  // 字宽：常用 8/16/32/64 之外还收**任意位宽** 1–512（MT81 产品裁决「几个 bit」——
+  // 字宽：常用 8/16/32/64 之外还收**任意位宽** 1–512（产品裁决「几个 bit」——
   // 逆向里 12 位地址总线、位域、24 位色深都不是 2 的幂）。op 的下拉仍只给四档，
   // 这里放宽的是纯函数入口，向后兼容。
   if (!Number.isInteger(width) || width < 1 || width > 512) {

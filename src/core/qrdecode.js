@@ -1,5 +1,5 @@
 /*
- * qrdecode.js — QR 真解码组（T77，cat:'image'）。
+ * qrdecode.js — QR 真解码组（cat:'image'）。
  *
  * 收录：
  * qrDecode QR 码解码（decode）：0/1 矩阵 → 原文（数字/字母/字节模式）
@@ -269,7 +269,7 @@ function buildFunctionMap(size, version) {
   const markRect = (x0, y0, x1, y1) => {
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) mark(x, y);
   };
- // finder + 分隔符 + 格式信息区： // T77-FIX-FNMAP
+ // finder + 分隔符 + 格式信息区： //
  // 左上 9×9（finder 8×8 + 格式信息 L 形 + timing 交叉点）全为功能模块；
  // 右上 8×9（finder 8×8 + 行 8 格式信息），左边界 size-8（分隔符），非 size-9（数据模块）；
  // 左下 9×8（finder 8×8 + 列 8 格式信息 + 固定暗），上边界 size-8（分隔符），非 size-9（数据模块）。

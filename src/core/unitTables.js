@@ -1,8 +1,8 @@
 /*
- * unitTables.js — 单位换算分类总表（MT81「快速换算」视图的算法层）。
+ * unitTables.js — 单位换算分类总表（「快速换算」视图的算法层）。
  *
  * 定位：**纯数据 + 纯函数，不注册 op**（不进 registry，不计入 op 数）。
- * T339 的 unitConv.js 是「一次性出报告」的 op；本文件是「按分类实时互转」的
+ * 的 unitConv.js 是「一次性出报告」的 op；本文件是「按分类实时互转」的
  * 数据源与换算引擎，供 ui/quickConv.js 调用。
  *
  * 与 unitConv.js 的关系（红线：绝不抄第二份系数）：
@@ -373,13 +373,13 @@ const CURRENCY_SETS = [
 // ============ 分类总表 ============
 // 中文名补表：unitConv 的时间/频率/角度三组表只有符号没有中文名，在此补。
 // ⚠ 必须声明在 UNIT_CATS **之前**——UNIT_CATS 的初始化器会立即读这三个 const，
-//   放到后面就是顶层 TDZ，整个模块直接崩（见记忆 module-top-level-tdz-crash）。
+//  放到后面就是顶层 TDZ，整个模块直接崩（见记忆 module-top-level-tdz-crash）。
 const TIME_ZH = { d: "天", h: "小时", min: "分钟", s: "秒", ms: "毫秒", "μs": "微秒", ns: "纳秒" };
 const FREQ_ZH = { GHz: "吉赫", MHz: "兆赫", kHz: "千赫", Hz: "赫兹" };
 const ANGLE_ZH = { deg: "度", rad: "弧度", gon: "梯度" };
 
 // kind: "ratio"（纯比例，有理数）| "affine"（仿射，温度）| "float"（含无理因子，角度）
-//     | "epoch"（时间戳纪元，走 unitConv 的 TS_EPOCHS）
+//    | "epoch"（时间戳纪元，走 unitConv 的 TS_EPOCHS）
 // 顺序按「CTF/逆向/工程相关 > 日常生活」排（北极星：不做成通用换算大全）。
 const UNIT_CATS = [
   { id: "dataSize", zh: "数据量", icon: "memory", kind: "ratio", base: "B", units: DATA_SIZE.map((x) => ({ u: x.u, zh: x.sys === "IEC" ? "IEC 1024 制" : "SI 1000 制", k: x.k })), note: "SI 1000 制与 IEC 1024 制并列——两者不等，是最常被搞混的一组。" },

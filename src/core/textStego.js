@@ -1,5 +1,5 @@
 /*
- * textStego.js — 文本隐写入口（T278，cat:'stego'）。
+ * textStego.js — 文本隐写入口（cat:'stego'）。
  *
  * 定位：通用「明文里藏明文」类文本隐写，区别于：
  * - zeroWidth/zwVarSel/zwTags（零宽字符隐写，用不可见字符承载）

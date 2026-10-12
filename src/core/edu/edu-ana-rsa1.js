@@ -43,8 +43,8 @@ export default {
       "逆元存在的充要条件是 $\\gcd(a,m)=1$。用扩展欧几里得算法求出 $ax+my=1$ 里的 x，再取模 m 就是逆元。本工具自反：对逆元再求一次逆元还原回原数。",
     usage: "填 a 和 m，输出 a 模 m 的逆元。encode/decode 互逆（inv(inv(a))=a）。",
     examples: [
-      { in: "a=17, m=3120", out: "d=2753", desc: "正是 e=17 在 φ=3120 下的私钥" },
-      { in: "a=3, m=7", out: "5", desc: "3×5=15≡1 (mod 7)" },
+      { in: "", param: "a=17, m=3120", out: "2753", desc: "e=17 在 φ=3120 下的私钥；参数框实跑原文" },
+      { in: "", param: "a=3, m=7", out: "5", desc: "3×5=15≡1 (mod 7)" },
     ],
     formulas: [
       { tex: "a\\,x \\equiv 1 \\pmod{m} \\;\\Leftrightarrow\\; a x + m y = 1", caption: "逆元存在当且仅当 gcd(a,m)=1" },
@@ -57,9 +57,9 @@ export default {
     what: "扩展欧几里得：在求最大公约数 $\\gcd(a,b)$ 的同时，还给出 Bézout 系数 x、y，使 $a \\cdot x + b \\cdot y = \\gcd$。求模逆、共模攻击的底层零件。",
     principle:
       "普通欧几里得辗转相除只得 gcd；扩展版把每步的商回代，额外解出系数 x、y。当 $\\gcd(a,b)=1$ 时，x 就是 a 模 b 的逆元。",
-    usage: "输入框填 a 和 b，输出 gcd 以及满足 ax+by=g 的整数 x、y。",
+    usage: "参数框填 a 和 b（十进制），输出 gcd 以及满足 ax+by=g 的整数 x、y。",
     examples: [
-      { in: "a=240, b=46", out: "gcd=2, x=-9, y=47", desc: "240·(-9)+46·47 = 2" },
+      { in: "", param: "a=240, b=46", out: "=== 扩展欧几里得 ===\na = 240\nb = 46\ngcd(a, b) = 2\nx = -9\ny = 47\n\nBézout 等式: a·x + b·y = 2 (应 = g = 2)", desc: "240·(-9)+46·47 = 2；参数框实跑原文" },
     ],
     formulas: [
       { tex: "a\\,x + b\\,y = \\gcd(a,b)", caption: "Bézout 恒等式" },
@@ -72,10 +72,10 @@ export default {
     what: "大数快速幂：算 $\\mathrm{base}^{\\mathrm{exp}} \\bmod m$ 这种超大指数的模幂。RSA 加解密（$c = m^{e} \\bmod n$、$m = c^{d} \\bmod n$）的核心运算，直接算会爆掉，必须用它。",
     principle:
       "把指数拆成二进制，用「平方-乘」逐位处理：每一步都对底数平方并取模，遇到指数的 1 位就额外乘一次。这样 e 有几十位也只需几十次乘法，且中间结果始终被 mod 压在范围内。",
-    usage: "输入框填 base、exp、mod（每行一个或逗号分隔），输出 $\\mathrm{base}^{\\mathrm{exp}} \\bmod m$。",
+    usage: "参数框填 base、exp、mod（十进制），输出 $\\mathrm{base}^{\\mathrm{exp}} \\bmod m$。",
     examples: [
-      { in: "base=65, exp=17, mod=3233", out: "2790", desc: "RSA 加密：m=65 → c=2790" },
-      { in: "base=2790, exp=2753, mod=3233", out: "65", desc: "私钥解密还原 m" },
+      { in: "", param: "base=65, exp=17, mod=3233", out: "=== 大数快速幂 ===\nbase = 65\nexp  = 17\nmod  = 3233\n\n✓ base^exp mod mod = 2790", desc: "RSA 加密：m=65 → c=2790；参数框实跑原文" },
+      { in: "", param: "base=2790, exp=2753, mod=3233", out: "=== 大数快速幂 ===\nbase = 2790\nexp  = 2753\nmod  = 3233\n\n✓ base^exp mod mod = 65", desc: "私钥解密还原 m" },
     ],
     formulas: [
       { tex: "c = m^e \\bmod n,\\qquad m = c^d \\bmod n", caption: "RSA 加解密即模幂" },
