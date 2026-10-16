@@ -1,9 +1,9 @@
-// BUILD-STAMP: 4d6fd83388746bda
+// BUILD-STAMP: b4b447ad73b11e30
 importScripts("./sw-assets.js");
 
 // The asset generator synchronizes BUILD-STAMP with the resource revision.
 
-const APP_VERSION = "0.1.9";
+const APP_VERSION = "0.1.10";
 const CACHE_PREFIX = "ebctf-shell-";
 const CACHE_NAME = `${CACHE_PREFIX}${APP_VERSION}-${self.__EBCTF_ASSET_REV}`;
 const ASSETS = self.__EBCTF_ASSETS;

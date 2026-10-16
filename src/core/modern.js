@@ -665,8 +665,14 @@ export function bytesToBigInt(bytes) {
 /** BigInt → 字节（大端，I2OSP，len 省略取最小长度）。 */
 export function bigIntToBytes(n, len) {
   const out = [];
-  let v = n;
-  while (v > 0n) { out.unshift(Number(v & 0xffn)); v >>= 8n; }
+  if (n > 0n) {
+    // 大端字节直出：toString(16) 对 2 的幂基数为近线性，替代逐字节 &/>> 的 O(n²)
+    const hex = n.toString(16);
+    out.length = (hex.length + 1) >> 1;
+    let j = out.length - 1;
+    for (let off = hex.length - 2; off >= 0; off -= 2, j--) out[j] = parseInt(hex.slice(off, off + 2), 16);
+    if (hex.length & 1) out[0] = parseInt(hex[0], 16);
+  }
   if (len != null) { while (out.length < len) out.unshift(0); }
   return new Uint8Array(out);
 }

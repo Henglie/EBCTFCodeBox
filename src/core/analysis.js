@@ -212,7 +212,14 @@ function intToText(text) {
   if (!s) return "（无有效数字）";
   let n = BigInt(s);
   const bytes = [];
-  while (n > 0n) { bytes.unshift(Number(n & 0xffn)); n >>= 8n; }
+  if (n > 0n) {
+    // 大端字节直出：toString(16) 对 2 的幂基数为近线性，替代逐字节 &/>> 的 O(n²)
+    const hex = n.toString(16);
+    bytes.length = (hex.length + 1) >> 1;
+    let j = bytes.length - 1;
+    for (let off = hex.length - 2; off >= 0; off -= 2, j--) bytes[j] = parseInt(hex.slice(off, off + 2), 16);
+    if (hex.length & 1) bytes[0] = parseInt(hex[0], 16);
+  }
   return new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(bytes));
 }
 function textIntConverter(text, p) {

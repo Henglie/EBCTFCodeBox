@@ -23,16 +23,14 @@ import { productFileEntries } from "./core/productResult.js";
 import { magicFilterReset, filterMagicCands, filterBruteCands, magicFilterBar } from "./ui/resultFilter.js";
 import { magicDecode } from "./core/magic/magic.js";
 import { runMagic, cancelMagic } from "./core/magic/magicClient.js"; // 真多线程调度（Worker 优先，降级主线程）+ 中断接管
-import { analyzeFile } from "./core/fileAnalysis.js";
-import { analyzeImage, analyzeImageAsync } from "./core/imageAnalysis.js";
-import { analyzeAudio } from "./core/audioAnalysis.js";
+// fileAnalysis / imageAnalysis / audioAnalysis（智能分析三链，含 QR·pcap·inflate·音频子树）已改懒载，见 ensureAnalysisChains()
 import { loadLicense, OPENSOURCE_LICENSE } from "./core/license.js";
 import { analyze7zFile } from "./core/sevenzip.js"; // 7z 拖入文件真列表/解压（wasm 缺失降级）
 import { cryptoTryAll } from "./core/cryptoTryAll.js";
 import { bridgeHealth } from "./core/localBridge.js";
 import { icon as iconSvg } from "./ui/icons.js";
 import { HLSpring } from "./ui/spring.js"; // 弹簧动效内核（总开关 ebctf.springMotion）
-import { pinyinKeys } from "./ui/pinyinSearch.js"; // 拼音全拼/首字母搜索兼容层（ksmm=凯撒密码）
+// pinyinSearch（拼音全拼/首字母搜索兼容层，含 58KB 数据表）已改懒载，见 ensurePinyinSearch()，首屏闭包 -29KB gz
 import { FONT_PLANES, loadFontPlane, fontStatus, onFontStatusChange, humanSize, preloadAllPlanes } from "./ui/fontLoader.js";
 import { CTF_HOT, CTF_HOT_META } from "./core/ctfPresets.js";
 import { eduContentReady, getEduSync, eduAliasesSync } from "./core/eduContent.defer.js"; // 科普数据懒加载门面（zh 分片 1.4MB 退出首屏关键路径）
@@ -1533,15 +1531,35 @@ function isTextFile(bytes, name = "") {
   }
 }
 
+// ---- 智能分析三链懒载（fileAnalysis/imageAnalysis/audioAnalysis，含 QR·pcap·inflate·音频子树，退出首屏闭包）----
+// 触发：首次拖入文件分析时（handleFile 内 await）+ 启动后空闲预热；失败允许下次重试。
+let _analysisChains = null;
+let _analysisChainsLoading = null;
+function ensureAnalysisChains() {
+  if (_analysisChains) return Promise.resolve(_analysisChains);
+  if (!_analysisChainsLoading) {
+    _analysisChainsLoading = Promise.all([
+      import("./core/fileAnalysis.js"),
+      import("./core/imageAnalysis.js"),
+      import("./core/audioAnalysis.js"),
+    ]).then(([fa, ia, aa]) => {
+      _analysisChains = { analyzeFile: fa.analyzeFile, analyzeImageAsync: ia.analyzeImageAsync, analyzeAudio: aa.analyzeAudio };
+      return _analysisChains;
+    }).catch((e) => { _analysisChainsLoading = null; throw e; });
+  }
+  return _analysisChainsLoading;
+}
+
 // ---- 文件分析报告渲染 ----
 async function handleFile(file, outWrap) {
   try { await ensureAll(); } catch { /* 加载尽力而为，缺 op 由各分析器自行降级 */ } // 文件分析走全量 op 面（惰载）
   outWrap.innerHTML = "";
   outWrap.append(el("div", { class: "file-report-loading" }, t("ui.file.loading", file.name)));
   try {
+    const chains = await ensureAnalysisChains(); // 三链懒载（首次拖入触发；失败进 catch 显示错误）
     const buf = await file.arrayBuffer();
     const bytes = new Uint8Array(buf);
-    const report = await analyzeFile(bytes, file.name);
+    const report = await chains.analyzeFile(bytes, file.name);
  // 补充分析器（独立模块，按类型分派）：图片(PNG/BMP)像素级 / 音频(WAV)频谱级。
  // 各返回 { sections }，追加到主报告末尾（补充信息，排主报告 alert>warn>info 之后合理）。
     try {
@@ -1549,9 +1567,9 @@ async function handleFile(file, outWrap) {
       const mime = report.detected || "";
       let extra = null;
       if (ext === "png" || ext === "bmp" || ext === "jpg" || ext === "jpeg" || ext === "gif" || /png|bmp|jpe?g|gif/i.test(mime)) {
-        extra = await analyzeImageAsync(bytes, file.name, report.detected);
+        extra = await chains.analyzeImageAsync(bytes, file.name, report.detected);
       } else if (ext === "wav" || /wav|audio/i.test(mime)) {
-        extra = analyzeAudio(bytes, file.name, report.detected);
+        extra = chains.analyzeAudio(bytes, file.name, report.detected);
       } else if (ext === "7z" || bytes.length >= 6 && bytes[0] === 0x37 && bytes[1] === 0x7a && bytes[2] === 0xbc && bytes[3] === 0xaf && bytes[4] === 0x27 && bytes[5] === 0x1c) {
         extra = await analyze7zFile(bytes);
       } else if (ext === "pyc" || ext === "exe" || (bytes.length >= 2 && bytes[0] === 0x4d && bytes[1] === 0x5a)) {
@@ -3247,6 +3265,19 @@ function attachTouchDragToRecipe(node, getOpId, getFamilyId) {
 // ---- 顶栏搜索：名称/别名/描述/id 实时过滤，下拉候选，点选跳转；候选可拖入配方链 ----
 // 索引在首次用时构建；语言切换后清空重建（opName/opDesc 随语言变）。
 let _searchIndex = null;
+// pinyinSearch 懒载（拼音数据表 58KB 退出首屏闭包）：首次搜索键入触发 + 空闲预热；
+// 未就绪期间索引退化为纯名称/别名匹配，就绪后清缓存并按需重算当前查询。
+let _pinyinKeysFn = null;
+let _pinyinLoading = null;
+let _pinyinRerender = null;
+function ensurePinyinSearch() {
+  if (_pinyinKeysFn || _pinyinLoading) return;
+  _pinyinLoading = import("./ui/pinyinSearch.js").then((m) => {
+    _pinyinKeysFn = m.pinyinKeys;
+    _searchIndex = null;
+    if (_pinyinRerender) _pinyinRerender();
+  }).catch(() => { _pinyinLoading = null; });
+}
 eduContentReady().then(() => { _searchIndex = null; }); // 科普别名就绪后清缓存，下次搜索重建含 aka 的索引
 function buildSearchIndex() {
   const aliases = eduAliasesSync() || {}; // 科普懒加载未就绪时无别名，索引照建（就绪后清缓存重建）
@@ -3268,7 +3299,7 @@ function buildSearchIndex() {
  // 拼一条可小写匹配的检索串：名称 + 别名 + 描述 + id + 分类 + 族名 + 档名
  // ：中文名/中文别名的拼音全拼+首字母序列并入（ksmm/kaisamima 命中凯撒密码）；
  // 派生序列不回写 aka（双轨），非中文串返回空集零开销。
-    const pyKeys = pinyinKeys(nm, aka);
+    const pyKeys = _pinyinKeysFn ? _pinyinKeysFn(nm, aka) : [];
     const hay = [nm, ...aka, ds, op.id, op.cat, famName, famLbl, ...pyKeys].join("").toLowerCase();
  // name 保持 op 原名：评分（名称前缀命中）与短名优先 tie-break 不受族名影响，保守零回归；
  // 族显示名只用于结果渲染（r.famName → 「族名 - op名」）与所属族标注。
@@ -3424,6 +3455,7 @@ function initOpSearch() {
   };
 
   input.addEventListener("input", () => {
+    ensurePinyinSearch(); // 首次键入触发拼音表懒载（就绪后经 _pinyinRerender 重算当前输入）
     const results = searchOps(input.value);
     if (!input.value.trim()) { closePanel(); return; }
     renderResults(results);
@@ -3458,6 +3490,10 @@ function initOpSearch() {
   });
  // 语言切换后索引失效
   onLocaleChange(() => { _searchIndex = null; });
+ // 拼音就绪后重算当前查询（懒载完成回调）；空闲预热让键入前通常已就绪（同 edu defer 门控手法）
+  _pinyinRerender = () => { if (input.value.trim()) renderResults(searchOps(input.value)); };
+  if (typeof requestIdleCallback === "function") requestIdleCallback(ensurePinyinSearch, { timeout: 3000 });
+  else setTimeout(ensurePinyinSearch, 1500);
 }
 // 按分类 id 取本地化分类名（搜索候选右侧标签用）
 function catNameById(catId) {
@@ -3636,6 +3672,7 @@ function renderAbout(host) {
     { name: "smile1110", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribSmile1110" },
     { name: "拉面", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribLamian" },
     { name: "qinling072", tierKey: "ui.about.tierContributor", note: String(getLocale()).toLowerCase().startsWith("zh") ? "提出补充 OutGuess 等图像隐写算法" : "Proposed adding OutGuess and other image-steganography algorithms" },
+    { name: "cnui6", tierKey: "ui.about.tierContributor", note: String(getLocale()).toLowerCase().startsWith("zh") ? "提出 Rabbit 兼容性修复（Legacy 变体与口令支持）" : "Proposed the Rabbit compatibility fix (Legacy variant + passphrase support)" },
   ];
   for (const c of OTHER_CONTRIBUTORS) {
     const cap = el("span", { class: c.avatar ? "about-capsule about-capsule-founder" : "about-capsule" });
@@ -4000,6 +4037,9 @@ async function detectRuntimeAndPreload() {
     initSystemAccent();   // 仅本地版且用户未选色时，用系统强调色做默认动态取色（失败静默降级）
   }
   restorePlugins();       // 后台恢复上次启用的插件（动态 import，不进主 bundle、不拖首屏）
+ // 智能分析三链空闲预热（同 edu 门控手法：不与首屏抢带宽；失败静默，首次拖入时还会再试）
+  const idleChain = typeof requestIdleCallback === "function" ? (cb) => requestIdleCallback(cb, { timeout: 5000 }) : (cb) => setTimeout(cb, 2500);
+  idleChain(() => { ensureAnalysisChains().catch(() => {}); });
 }
 
 // 插件系统：动态 import 宿主，恢复用户上次启用的插件。宿主/插件全按需加载

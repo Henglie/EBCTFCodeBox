@@ -16,6 +16,7 @@
  * classic4 / text9 / stego5 / analysis2 / modern1 / 颜色地理键盘等归入对应组）。
  */
 import { OPS } from "./registry.js";
+import { debugLog } from "./debugLog.js";
 
 // ============ 通用工具 ============
 const trim = (t) => (t || "").trim();
@@ -416,4 +417,4 @@ export function detectAuditStats2() {
   };
 }
 
-console.log(`[detectExt2] patched ${patched} ops: ${patchedIds.join(", ")}`);
+debugLog(`[detectExt2] patched ${patched} ops: ${patchedIds.join(", ")}`);

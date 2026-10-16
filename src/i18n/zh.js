@@ -2015,7 +2015,7 @@ export default {
   "op.chiSquareAnalysis.desc": "密文 vs 英语字母频率的卡方检验（字母级观测/期望对比表）",
   "op.subCipherSolver.desc": "N-gram 适应度爬山（迭代局部搜索）自动破解单表替换密码，可锁定已知映射加速",
   "op.caesarBrute.desc": "对 0-25 位移逐一打分（卡方 + 四元组），自动找最佳位移并输出排名 + ROT47",
-  "op.rabbit.desc": "RFC 4503 Rabbit 流密码（128-bit key + 64-bit IV）。encode: 文本→Hex 密文；decode: Hex→文本。对称可逆。RFC4503 §3 测试向量（全 0 key/IV）已验证。",
+  "op.rabbit.desc": "RFC 4503 Rabbit 流密码。变体三档：CryptoJS Legacy（旧版在线工具默认，推荐）/ CryptoJS 标准 / RFC 4503 文档方向（0.1.9 及更早行为）。密钥填 32 位 hex 直用（IV 可选）；填口令或留空则按 CryptoJS OpenSSL 封装（Salted base64）加解密。decode 对 CryptoJS 密文（U2FsdGVkX1 开头）自动带空口令与常见口令尝试。",
   "op.godzillaPhpXorBase64.desc": "Godzilla webshell PHP_XOR_BASE64 流量解密（base64 + XOR，偏移 key[(i+1)&15]）。key 默认 3c6e0b8a9c15224a（密钥「key」派生）",
   "op.behinderAesEcb.desc": "Behinder(冰蝎) v3 默认 AES-128-ECB 流量解密（base64 + AES-ECB）。key 默认 e45e329feb5d925b（密码「rebeyond」派生）",
   "op.qrScanImage.desc": "二维码一个入口全包：粘贴图片自动扫描，粘贴文本矩阵自动解析。图片（PNG/JPEG/GIF/BMP/WebP）解出内容；0/1 矩阵或 ASCII art 给出版本/纠错级/掩码/finder 体检。定位符被抹掉或遮挡也能解（网格重建 + 穷举 + 擦除纠错）。「读码范围」放开后可一并读出图中的条码（Code128/EAN/UPC/ITF 等）与 DataMatrix/PDF417/Aztec，多枚符号在诊断报告里逐个列出；勾「诊断报告」失败时给出卡在哪一步与建议。全程本地计算。",

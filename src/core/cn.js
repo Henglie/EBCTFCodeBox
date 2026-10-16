@@ -38,12 +38,13 @@ function stemBranchEncode(text) {
   for (const b of bytes) num = (num << 8n) | BigInt(b);
   if (num === 0n) return STEM_BRANCH[0]; // 全 0 字节 → 甲子（最小位）
   const radix = 60n;
-  let out = "";
+  const parts = [];
   while (num > 0n) {
-    out = STEM_BRANCH[Number(num % radix)] + out;
+    parts.push(STEM_BRANCH[Number(num % radix)]);
     num /= radix;
   }
-  return out;
+  parts.reverse();
+  return parts.join("");
 }
 
 function stemBranchDecode(text) {
@@ -52,15 +53,28 @@ function stemBranchDecode(text) {
   if (clean.length % 2 !== 0) throw new Error("天干地支输入长度须为偶数");
   const tokens = [];
   for (let i = 0; i + 2 <= clean.length; i += 2) tokens.push(clean.slice(i, i + 2));
-  const radix = BigInt(STEM_BRANCH.length);
+  // 分块累积：每 K 位用 Number 攒成小块再一次并入 BigInt（K 取 60^K ≤ 2^53 的最大值）
+  const radixNum = STEM_BRANCH.length;
+  let K = 1, safe = radixNum;
+  while (safe * radixNum <= Number.MAX_SAFE_INTEGER) { safe *= radixNum; K++; }
   let num = 0n;
+  let acc = 0, cnt = 0;
   for (const tk of tokens) {
     const idx = STEM_BRANCH.indexOf(tk);
     if (idx === -1) throw new Error("非法天干地支 token: " + tk);
-    num = num * radix + BigInt(idx);
+    acc = acc * radixNum + idx;
+    if (++cnt === K) { num = num * BigInt(safe) + BigInt(acc); acc = 0; cnt = 0; }
   }
+  if (cnt > 0) { let pw = 1; for (let t = 0; t < cnt; t++) pw *= radixNum; num = num * BigInt(pw) + BigInt(acc); }
   const bytes = [];
-  while (num > 0n) { bytes.unshift(Number(num & 0xffn)); num >>= 8n; }
+  if (num > 0n) {
+    // 大端字节直出：toString(16) 对 2 的幂基数为近线性，替代逐字节 &/>> 的 O(n²)
+    const hex = num.toString(16);
+    bytes.length = (hex.length + 1) >> 1;
+    let j = bytes.length - 1;
+    for (let off = hex.length - 2; off >= 0; off -= 2, j--) bytes[j] = parseInt(hex.slice(off, off + 2), 16);
+    if (hex.length & 1) bytes[0] = parseInt(hex[0], 16);
+  }
   return td(bytes);
 }
 

@@ -58,6 +58,7 @@ const INCLUDE_FILES = [
   "sw.js",
   "sw-assets.js",
   "README.md",
+  "README_EN.md",
   "CHANGELOG.md",
   "LICENSE",
   "通用点我启动.py",

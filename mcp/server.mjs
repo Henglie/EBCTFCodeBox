@@ -7,21 +7,17 @@
 // 自测：
 //   echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | node mcp/server.mjs
 //
-// ⚠ MCP stdio 协议要求 stdout 只承载 JSON-RPC 消息。core 的 detectExt 等模块加载时
-//   会往 stdout 打日志（console.log/debug 等，污染协议流）。故在加载 core 期间直接劫持
-//   process.stdout.write 转 stderr（无论用哪种 console 方法都拦得住），加载完恢复。
-//   用动态 import 保证「先劫持、后加载 core」的顺序（静态 import 会提升先执行）。
+// ⚠ MCP stdio 协议要求 stdout 只承载 JSON-RPC 消息。core 加载期的诊断输出已统一走
+//   src/core/debugLog.js（默认静默；设 EBCTF_DEBUG=1 输出到 stderr），stdout 全程干净，
+//   这里不再需要劫持 process.stdout.write。
 import { createInterface } from "node:readline";
-
-const realStdoutWrite = process.stdout.write.bind(process.stdout);
-// 加载 core 期间：stdout 全部改道 stderr，杜绝启动日志污染协议流。
-process.stdout.write = (chunk, ...rest) => process.stderr.write(chunk, ...rest);
 
 const { callMcpTool, MCP_TOOLS, listMcpResources, readMcpResourceContents } = await import("./ebctf-core-adapter.mjs");
 const { APP_VERSION } = await import("../src/core/version.js");
+const realStdoutWrite = process.stdout.write.bind(process.stdout);
 
-// core 加载完毕，恢复真实 stdout，之后只走 send() 写 JSON-RPC。
-process.stdout.write = realStdoutWrite;
+// 支持的 MCP 协议版本（本实现只用基础 tools/resources 面，这三版兼容；协商见 initialize）。
+const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const send = (msg) => realStdoutWrite(JSON.stringify(msg) + "\n");
 const rl = createInterface({ input: process.stdin });
@@ -37,10 +33,15 @@ rl.on("line", async (line) => {
 
   try {
     if (method === "initialize") {
+      // 协议版本协商（MCP 规范）：客户端请求的版本在支持列表内 → 回同一版本；否则回基准版本。
+      const reqVersion = params && params.protocolVersion;
+      const protocolVersion = SUPPORTED_PROTOCOL_VERSIONS.includes(reqVersion) ? reqVersion : "2024-11-05";
       return ok({
-        protocolVersion: "2024-11-05",
+        protocolVersion,
         capabilities: { tools: {}, resources: {} },
-        serverInfo: { name: "ebctf-codebox", version: APP_VERSION },
+        serverInfo: { name: "ebctf-codebox", title: "恒烈 CTF 编码工具箱", version: APP_VERSION },
+        instructions:
+          "恒烈 CTF 编码工具箱：本地编解码 / 密码学算法集（全在本地运行、零外发）。推荐路径：ebctf_detect 先识别编码类型 → ebctf_magic_decode 一键解码（多层链式用 maxDepth:3）→ 不够再用 ebctf_list_ops / ebctf_op_schema 下钻、ebctf_run_op 精确执行。资源 ebctf://guide 是同一引导的常驻版本，适合直接挂进对话。",
       });
     }
     if (method === "notifications/initialized") return; // 通知无需回应

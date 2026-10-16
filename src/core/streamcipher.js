@@ -8,12 +8,15 @@
  * 约束：
  * - ChaCha20 照 RFC 8439（quarter round + 20 轮 + little-endian 序列化）。
  * - Rabbit 照 RFC 4503（g 函数 + 计数器进位 + 8 状态变量）。
+ *   0.1.10 起 op 层提供三变体：CryptoJS Legacy / CryptoJS 标准 / RFC 4503 文档方向，
+ *   换算为纯输入重排，见下方「Rabbit 兼容层」；核心状态机不变。
  * - 往返测试 + RFC 测试向量必过。
  * - 零外发：纯本地计算。
  *
  * 参考：
  * - RFC 8439 "ChaCha20 and Poly1305 for IETF Protocols"（2018）
  * - RFC 4503 "The Rabbit Stream Cipher Algorithm Specification"（2006）
+ * - crypto-js 4.2.0 test/rabbit-test.js、test/rabbit-legacy-test.js（eSTREAM 向量）
  *
  * 契约：register({id, cat:"modern", name, desc, params, encode, decode})。
  * encode(text, p): text → UTF-8 bytes → XOR keystream → hex 大写
@@ -21,6 +24,9 @@
  * 流密码对称：decode(encode(x, p), p) === x
  */
 import { register } from "./registry.js";
+import { md5Bytes } from "./hash.js";
+import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（口令模式盐；默认档 system 逐字节零回归）
+import { isPrintableRatio } from "./magic/scorer.js"; // 爆破「可读文本」判定（与 magic 同口径）
 
 // ============================================================
 // 通用工具
@@ -335,32 +341,225 @@ class RabbitCipher {
   }
 }
 
-function rabbitCheckParams(p) {
-  const key = hexToBytes((p && p.key) || "");
-  const iv = hexToBytes((p && p.iv) || "");
-  if (key.length !== 16) throw new Error("Rabbit key 须 16 字节（32 hex），实为 " + key.length);
-  if (iv.length !== 8) throw new Error("Rabbit IV 须 8 字节（16 hex），实为 " + iv.length);
-  return { key, iv };
-}
+// ============================================================
+// 2b. Rabbit 兼容层（0.1.10）——CryptoJS Legacy / CryptoJS 标准 / RFC 文档方向
+// ============================================================
+// 背景：Rabbit 的「字节串 ↔ 内部状态」存在两套等价约定。经与 crypto-js 4.2.0
+// 逐字节对拍确认，同一核心状态机下，两套约定的换算为纯输入重排：
+//   - CryptoJS Legacy（旧版在线工具默认）：key = 4 字节组序反转（组内不变）、
+//     iv = 整串反转；crypto-js 官方 rabbit-legacy-test.js 全向量与本层实测逐字节一致。
+//   - CryptoJS 标准：key = 整串反转、iv = 整串反转；
+//     crypto-js 官方 rabbit-test.js（eSTREAM 向量）全向量与本层实测逐字节一致。
+//   - RFC 4503 文档方向 = 本文件 0.1.9 及更早的原始行为（直接吃文档八位组串）；
+//     内部状态数值与 RFC 附录 B 调试向量逐字一致。
+// 口令模式复刻 CryptoJS OpenSSL 封装：EVP_BytesToKey(MD5, count=1) 派生 key/iv，
+// 密文格式 base64("Salted__" + salt(8) + ct)（U2FsdGVkX1 开头）。
+// 参考：crypto-js 4.2.0 test/rabbit-test.js、test/rabbit-legacy-test.js、RFC 4503 附录 A/B。
 
-function rabbitCrypt(bytes, key, iv) {
+const RABBIT_VARIANTS = ["legacy", "standard", "rfc"];
+const RABBIT_HEX32 = /^[0-9a-fA-F]{32}$/;
+
+function revBytes(b) {
+  return Uint8Array.from(b).reverse();
+}
+// 4 字节组序反转（组内字节不动；仅对 16 字节 key 有意义）
+function wordrev4(b) {
+  const a = Uint8Array.from(b);
+  if (a.length !== 16) return a;
+  return Uint8Array.from([...a.slice(12, 16), ...a.slice(8, 12), ...a.slice(4, 8), ...a.slice(0, 4)]);
+}
+function rabbitPermuteKey(keyBytes, variant) {
+  if (variant === "legacy") return wordrev4(keyBytes);
+  if (variant === "standard") return revBytes(keyBytes);
+  return Uint8Array.from(keyBytes);
+}
+function rabbitPermuteIv(ivBytes, variant) {
+  if (!ivBytes || ivBytes.length === 0) return ivBytes;
+  return variant === "rfc" ? Uint8Array.from(ivBytes) : revBytes(ivBytes);
+}
+// 按变体预置换后走核心（变体换算的唯一入口；rabbitCrypt 即 rfc 档）。iv 空 = 无 IV 模式。
+function rabbitCryptVariant(bytes, keyBytes, ivBytes, variant) {
   const cipher = new RabbitCipher();
-  cipher.keySetup(key);
-  cipher.ivSetup(iv);
+  cipher.keySetup(rabbitPermuteKey(keyBytes, variant));
+  const v2 = rabbitPermuteIv(ivBytes, variant);
+  if (v2 && v2.length) cipher.ivSetup(v2);
   const ks = cipher.keystream(bytes.length);
   const out = new Uint8Array(bytes.length);
   for (let i = 0; i < bytes.length; i++) out[i] = bytes[i] ^ ks[i];
   return out;
 }
-
-function rabbitEncode(text, p) {
-  const { key, iv } = rabbitCheckParams(p);
-  return bytesToHex(rabbitCrypt(strToBytes(text), key, iv));
+function rabbitCrypt(bytes, key, iv) {
+  return rabbitCryptVariant(bytes, key, iv, "rfc");
 }
 
-function rabbitDecode(hex, p) {
-  const { key, iv } = rabbitCheckParams(p);
-  return bytesToStr(rabbitCrypt(hexToBytes(hex), key, iv));
+// ---- CryptoJS OpenSSL 全链（口令模式）----
+// D1 = MD5(pass||salt)（16 字节 = key）；D2 = MD5(D1||pass||salt)（前 8 字节 = iv）
+function rabbitKdf(passBytes, salt) {
+  const cat1 = new Uint8Array(passBytes.length + salt.length);
+  cat1.set(passBytes, 0);
+  cat1.set(salt, passBytes.length);
+  const d1 = md5Bytes(cat1);
+  const cat2 = new Uint8Array(d1.length + passBytes.length + salt.length);
+  cat2.set(d1, 0);
+  cat2.set(passBytes, d1.length);
+  cat2.set(salt, d1.length + passBytes.length);
+  const d2 = md5Bytes(cat2);
+  return { key: d1, iv: d2.subarray(0, 8) };
+}
+function rabbitB64Enc(bytes) {
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+function rabbitB64Dec(str) {
+  let s = String(str).replace(/\s+/g, "");
+  const pad = (4 - (s.length % 4)) % 4;
+  if (pad) s += "=".repeat(pad);
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+// 识别 CryptoJS「Salted__」封装（base64）；非该格式返回 null
+function rabbitTryParseSalted(text) {
+  const s = String(text).replace(/\s+/g, "");
+  if (!s) return null;
+  let bytes;
+  try { bytes = rabbitB64Dec(s); } catch { return null; }
+  if (bytes.length < 16) return null;
+  const H = [0x53, 0x61, 0x6c, 0x74, 0x65, 0x64, 0x5f, 0x5f]; // "Salted__"
+  for (let i = 0; i < 8; i++) if (bytes[i] !== H[i]) return null;
+  return { salt: bytes.subarray(8, 16), ct: bytes.subarray(16) };
+}
+
+// ---- 口令爆破（仅 CryptoJS 封装输入；空口令与内置常见口令始终参与）----
+// 内置常见口令（CTF 与弱口令场景；用户候选由 crackList 参数追加）
+const RABBIT_COMMON_PASSWORDS = [
+  "123456", "12345678", "123456789", "1234567890", "12345", "1234", "111111", "000000",
+  "123123", "654321", "666666", "888888", "5201314", "password", "passwd", "p@ssw0rd",
+  "admin", "admin123", "admin888", "root", "root123", "toor", "guest", "test", "test123",
+  "letmein", "qwerty", "abc123", "1q2w3e4r", "qazwsx", "iloveyou", "monkey", "dragon",
+  "master", "hello", "hello123", "welcome", "sunshine", "princess", "football", "baseball",
+  "secret", "default", "changeme", "crypto", "Crypto", "ctf", "CTF", "flag", "Flag",
+  "FLAG", "rabbit", "Rabbit", "rabbit123", "ctf123", "flag123", "nice", "guess", "challenge", "key",
+];
+function rabbitParseCrackList(s) {
+  return String(s || "").split(/[\r\n,，;；]+/).map((x) => x.trim()).filter(Boolean);
+}
+// 解出的字节 → 可读文本（严格 UTF-8 成功 + 可打印占比 ≥0.9；不合格返回 null）
+function rabbitAsReadable(bytes) {
+  let s;
+  try { s = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { return null; }
+  if (!s.trim()) return null;
+  return isPrintableRatio(s) >= 0.9 ? s : null;
+}
+function rabbitBuildCandidates(keyRaw, crackList) {
+  const out = [];
+  const seen = new Set();
+  const push = (pass, kind) => {
+    if (seen.has(pass)) return;
+    seen.add(pass);
+    out.push({ pass, kind });
+  };
+  if (keyRaw) push(keyRaw, "self"); // 用户显式口令
+  push("", "empty"); // 空口令始终参与
+  for (const b of RABBIT_COMMON_PASSWORDS) push(b, "builtin");
+  for (const u of crackList) push(u, "user");
+  return out;
+}
+// 口令模式加密：随机盐 + KDF + 变体加密 → base64("Salted__"+salt+ct)
+function rabbitEncryptSalted(data, passBytes, variant) {
+  const salt = randBytes(8);
+  const { key, iv } = rabbitKdf(passBytes, salt);
+  const ct = rabbitCryptVariant(data, key, iv, variant);
+  const out = new Uint8Array(16 + ct.length);
+  out.set([0x53, 0x61, 0x6c, 0x74, 0x65, 0x64, 0x5f, 0x5f], 0);
+  out.set(salt, 8);
+  out.set(ct, 16);
+  return rabbitB64Enc(out);
+}
+// 口令模式解密：候选序 = 用户口令 → 空口令 → 内置 → 追加候选；每候选并试两变体，只列可读
+function rabbitDecryptSalted(salted, keyRaw, crackListText) {
+  const crackList = rabbitParseCrackList(crackListText);
+  const listMode = crackList.length > 0; // 显式爆破模式：一律列表输出
+  const candidates = rabbitBuildCandidates(keyRaw, crackList);
+  const hits = [];
+  for (const c of candidates) {
+    const passBytes = strToBytes(c.pass);
+    for (const v of ["legacy", "standard"]) {
+      const { key, iv } = rabbitKdf(passBytes, salted.salt);
+      const pt = rabbitAsReadable(rabbitCryptVariant(salted.ct, key, iv, v));
+      if (pt === null) continue;
+      // 自动命中直出：用户口令命中，或（用户未填口令且空口令命中）——issue 场景裸露明文
+      if (!listMode && (c.kind === "self" || (c.kind === "empty" && !keyRaw))) return pt;
+      hits.push({ pass: c.pass, kind: c.kind, variant: v, text: pt });
+    }
+  }
+  if (hits.length) {
+    return hits
+      .map((h) => {
+        const label = h.kind === "empty" ? "（空口令）" : `口令 "${h.pass}"`;
+        const vn = h.variant === "legacy" ? "Legacy" : "标准";
+        return `${label}（${vn}）→ ${h.text}`;
+      })
+      .join("\n");
+  }
+  return `未命中：已尝试 ${candidates.length} 个口令 × 2 种变体，均未得到可读文本；可补充爆破候选口令，或检查密文完整性。`;
+}
+
+function rabbitEncode(text, p) {
+  const variant = RABBIT_VARIANTS.includes(p && p.variant) ? p.variant : "legacy";
+  const keyRaw = String((p && p.key) || "").trim();
+  const ivRaw = String((p && p.iv) || "").trim();
+  const data = strToBytes(text);
+
+  if (RABBIT_HEX32.test(keyRaw)) {
+    // 密钥模式：32 位 hex key（+ 可选 16 位 hex IV；IV 留空 = 无 IV 模式）
+    const key = hexToBytes(keyRaw);
+    let iv = null;
+    if (ivRaw) {
+      iv = hexToBytes(ivRaw);
+      if (iv.length !== 8) throw new Error("Rabbit IV 须 8 字节（16 hex），实为 " + iv.length + " 字节");
+    }
+    return bytesToHex(rabbitCryptVariant(data, key, iv, variant));
+  }
+  // 口令模式：复刻 CryptoJS OpenSSL 封装（随机盐；每次密文不同）。
+  // 空 key = 空口令加密（与 decode 端空口令自动尝试对称，对齐 CryptoJS 行为）。
+  if (ivRaw) throw new Error("口令模式不使用 IV 参数（密文自含随机盐）；如需手填 IV，请使用 32 位 hex 密钥");
+  if (variant === "rfc") throw new Error("口令模式仅支持 CryptoJS Legacy / 标准两种变体");
+  return rabbitEncryptSalted(data, strToBytes(keyRaw), variant);
+}
+
+function rabbitDecode(text, p) {
+  const variant = RABBIT_VARIANTS.includes(p && p.variant) ? p.variant : "legacy";
+  const keyRaw = String((p && p.key) || "").trim();
+  const ivRaw = String((p && p.iv) || "").trim();
+  const raw = String(text).trim();
+  const rawNoWs = raw.replace(/\s+/g, "");
+
+  // ① CryptoJS 封装（base64「Salted__」）→ 口令全链（两变体并试 + 候选爆破）
+  const salted = rabbitTryParseSalted(raw);
+  if (salted) return rabbitDecryptSalted(salted, keyRaw, (p && p.crackList) || "");
+
+  // ② 原始 hex 密文（密钥模式）
+  if (rawNoWs && /^[0-9a-fA-F]+$/.test(rawNoWs) && rawNoWs.length % 2 === 0) {
+    if (!RABBIT_HEX32.test(keyRaw)) {
+      throw new Error("原始模式须填 32 位 hex 密钥；口令模式请粘贴 CryptoJS 密文（U2FsdGVkX1 开头）");
+    }
+    const key = hexToBytes(keyRaw);
+    let iv = null;
+    if (ivRaw) {
+      iv = hexToBytes(ivRaw);
+      if (iv.length !== 8) throw new Error("Rabbit IV 须 8 字节（16 hex），实为 " + iv.length + " 字节");
+    }
+    return bytesToStr(rabbitCryptVariant(hexToBytes(rawNoWs), key, iv, variant));
+  }
+
+  // ③ 识别失败
+  if (/^U2FsdGVkX1/.test(rawNoWs)) {
+    throw new Error("CryptoJS 密文解析失败（base64 损坏或被截断）");
+  }
+  throw new Error("无法识别输入：须为 hex 密文，或 CryptoJS base64 密文（U2FsdGVkX1 开头）");
 }
 
 // ============================================================
@@ -373,10 +572,18 @@ register({
   id: "rabbit",
   cat: "stream",
   name: "Rabbit 流密码",
-  desc: "RFC 4503 Rabbit 流密码（128-bit key + 64-bit IV）。encode: 文本→Hex 密文；decode: Hex→文本。对称可逆。RFC4503 §3 测试向量（全 0 key/IV）已验证。",
+  desc: "RFC 4503 Rabbit 流密码。变体三档：CryptoJS Legacy（旧版在线工具默认，推荐）/ CryptoJS 标准 / RFC 4503 文档方向（0.1.9 及更早行为）。密钥填 32 位 hex 直用（IV 可选）；填口令或留空则按 CryptoJS OpenSSL 封装（Salted base64）加解密。decode 对 CryptoJS 密文（U2FsdGVkX1 开头）自动带空口令与常见口令尝试。",
   params: [
-    { key: "key", label: "key (hex, 16 字节 / 32 位)", type: "text", default: "", placeholder: "如 00000000000000000000000000000000" },
-    { key: "iv", label: "IV (hex, 8 字节 / 16 位)", type: "text", default: "", placeholder: "如 0000000000000000" },
+    { key: "variant", label: "算法变体", type: "select", default: "legacy",
+      options: [
+        { value: "legacy", label: "CryptoJS Legacy（旧版在线工具，推荐）" },
+        { value: "standard", label: "CryptoJS 标准" },
+        { value: "rfc", label: "RFC 4503 文档方向（0.1.9 及更早）" },
+      ] },
+    { key: "key", label: "密钥 / 口令", type: "text", default: "", placeholder: "32 位 hex 密钥；其他内容按口令（CryptoJS 封装）处理" },
+    { key: "iv", label: "IV（hex，8 字节，可留空）", type: "text", default: "", placeholder: "仅密钥模式使用；留空 = 无 IV" },
+    { key: "crackList", label: "口令爆破候选（可选）", type: "textarea", default: "", rows: 3,
+      placeholder: "每行一条（或逗号分隔）。输入为 CryptoJS 密文且未直接命中时，连同内置常见口令逐条尝试，只列出可读结果" },
   ],
   encode: rabbitEncode,
   decode: rabbitDecode,
@@ -389,4 +596,6 @@ export {
   strToBytes, bytesToStr, bytesToHex, hexToBytes, rotl32, le32,
   chachaQR, chachaBlock, chacha20Crypt, chacha20CheckParams, chacha20Encode, chacha20Decode,
   rabbitG, RabbitCipher, rabbitCrypt,
+  // 0.1.10 兼容层（供测试 / 一键尝试 / 后续复用）
+  rabbitEncode, rabbitDecode, rabbitCryptVariant, rabbitKdf,
 };

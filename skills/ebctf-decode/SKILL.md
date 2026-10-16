@@ -15,6 +15,10 @@ description: 用恒烈CTF编码工具箱对疑似编码/加密文本做一键智
 - 需要先判断「这是什么编码」再决定怎么解
 - CTF 解题中遇到不认识的编码串
 
+## 资源面（面向自写 MCP 客户端）
+
+底层同一能力面还暴露三个 MCP 资源：`ebctf://ops`（全量 op 清单）、`ebctf://categories`（分类概览）、`ebctf://guide`（解题引导：detect → magic → list/schema/run 的推荐路径）。本 CLI 聚焦六个子命令；自己写 MCP 客户端时建议把 `ebctf://guide` 挂进对话常驻，比反复 list 省往返。
+
 ## 六个子命令
 
 结果走 stdout，未知命令/缺参打印用法到 stderr 并 exit 1。

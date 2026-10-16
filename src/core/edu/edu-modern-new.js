@@ -14,24 +14,27 @@
 export default {
  // ============ modern: Rabbit 流密码 ============
   rabbit: {
-    what: "Rabbit 流密码——RFC 4503 定义的高速对称流密码，用 128 位密钥 + 64 位 IV 生成密钥流，再和明文异或。",
+    what: "Rabbit 流密码——RFC 4503 定义的高速对称流密码，用 128 位密钥 + 64 位 IV 生成密钥流，再和明文异或。业界工具（CryptoJS 等）与 RFC 文档的字节约定不同，本工具提供 CryptoJS Legacy（旧工具默认，推荐）/ CryptoJS 标准 / RFC 文档方向三档变体。",
     principle:
       "核心是 8 个 32 位状态量 X[0..7] 和 8 个计数器 C[0..7]，外加 1 位进位 b。\n\n" +
       "密钥装载：把 16 字节密钥拆成 8 个 16 位子密钥 K[0..7]，按 even/odd 不同公式初始化 X 和 C，再迭代 4 次 nextState 后把 C 与 X 交叉异或。\n\n" +
       "IV 装载：把 8 字节 IV 拆成 4 个 16 位片段，按 RFC 4503 §2.4 混入 C，再迭代 4 次 nextState。\n\n" +
       "nextState：先更新计数器（带进位链），再用 g 函数 $g(u) = \\text{low}_{32}(u^2) \\oplus \\text{high}_{32}(u^2)$ 算出 G[0..7]，最后按旋转加法公式更新 X。提取密钥流时把 X 的 16 位半字异或输出 16 字节块。\n\n" +
-      "加解密同形：密文 = 明文 $\\oplus$ 密钥流，解密用同样的 key/IV 再异或一次即还原。",
-    usage: "输入框填文本，参数 key 填 32 位 hex（16 字节），iv 填 16 位 hex（8 字节）。编码输出 hex 密文；解码填同样的 key/iv 即可还原文本。",
+      "加解密同形：密文 = 明文 $\\oplus$ 密钥流，解密用同样的 key/IV 再异或一次即还原。\n\n" +
+      "变体换算：不同生态（CryptoJS / RFC 文档）对密钥、IV 字节串如何装入状态的约定不同，换算只是字节重排，不影响安全性；本工具三档变体即对应三套约定。",
+    usage: "输入框填文本或密文。密钥填 32 位 hex（16 字节）为原始模式（IV 填 16 位 hex 或留空 = 无 IV）；密钥填其他内容或留空则按 CryptoJS 口令封装（base64 Salted__ 密文）加解密——解码 U2FsdGVkX1 开头的密文会自动带空口令与常见口令尝试。",
     examples: [
-      { in: "Hello", param: "key=00000000000000000000000000000000, iv=0000000000000000", out: "A5D2690B58", desc: "全 0 key/IV：密钥流取 RFC 4503 §3.2 的 S[0]=edb70567… 前 5 字节与 Hello 异或" },
+      { in: "Hello", param: "key=00000000000000000000000000000000, iv=0000000000000000", out: "A5D2690B58", desc: "全 0 key/IV：密钥流取 RFC 4503 附录 A.2 首条向量的实现字节序（edb70567…），前 5 字节与 Hello 异或" },
     ],
     formulas: [
       { tex: "g(u) = \\text{lo}_{32}(u^2) \\oplus \\text{hi}_{32}(u^2)", caption: "Rabbit 的 g 函数：平方后高低 32 位异或" },
     ],
     tips: [
-      "Rabbit 的 key 必须 16 字节（32 hex），IV 必须 8 字节（16 hex），少了会报错。",
+      "密钥填 32 位 hex 为原始模式（IV 可留空 = 无 IV）；填其他内容或留空 = CryptoJS 口令封装模式。",
+      "遇到 U2FsdGVkX1 开头的密文：先试【口令留空 + Legacy 变体】，再用爆破候选碰常见口令（内置常见口令自动参与）。",
+      "变体三档：CryptoJS Legacy（旧版在线工具默认，推荐）/ CryptoJS 标准 / RFC 4503 文档方向；crypto-js 官方 14 条向量与 RFC 附录向量已全部逐字节对齐。",
       "流密码特征：加解密用同一套 key+IV，密文 = 明文 $\\oplus$ 密钥流。",
-      "CTF 里题目给 Rabbit 参数和密文，直接填 key/iv 解码即可。",
+      "CTF 题目一般给 key/IV 与密文直接填；只给一串 base64 密文时多半是 CryptoJS 封装（口令未知就用爆破）。",
     ],
     aka: ["rabbit", "rabbit流密码", "rfc 4503", "Rabbit", "Rabbit cipher", "兔子流密码", "Rabbit stream cipher", "eSTREAM", "高速流密码", "对称流密码", "Rabbit加密", "128位流密码"],
   },

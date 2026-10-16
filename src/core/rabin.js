@@ -51,7 +51,14 @@ function bytesToBig(bytes) { let x = 0n; for (const b of bytes) x = (x << 8n) | 
 function bigToBytes(x) {
   if (x === 0n) return new Uint8Array([0]);
   const out = [];
-  while (x > 0n) { out.unshift(Number(x & 0xffn)); x >>= 8n; }
+  if (x > 0n) {
+    // 大端字节直出：toString(16) 对 2 的幂基数为近线性，替代逐字节 &/>> 的 O(n²)
+    const hex = x.toString(16);
+    out.length = (hex.length + 1) >> 1;
+    let j = out.length - 1;
+    for (let off = hex.length - 2; off >= 0; off -= 2, j--) out[j] = parseInt(hex.slice(off, off + 2), 16);
+    if (hex.length & 1) out[0] = parseInt(hex[0], 16);
+  }
   return new Uint8Array(out);
 }
 function toHex(x) { return "0x" + x.toString(16); }

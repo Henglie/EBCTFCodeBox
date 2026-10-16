@@ -36,24 +36,27 @@ export default {
 
  // ============ modern: Rabbit stream cipher ============
   rabbit: {
-    what: "Rabbit stream cipher — a high-speed symmetric stream cipher defined in RFC 4503, using a 128-bit key + 64-bit IV to generate a keystream, then XORing it with the plaintext.",
+    what: "Rabbit stream cipher — a high-speed symmetric stream cipher defined in RFC 4503, using a 128-bit key + 64-bit IV to generate a keystream, then XORing it with the plaintext. Industry tools (CryptoJS and others) and the RFC document use different byte conventions, so this tool offers three variants: CryptoJS Legacy (default in older tools; recommended) / CryptoJS standard / RFC document orientation.",
     principle:
       "The core is 8 32-bit state variables X[0..7] and 8 counters C[0..7], plus a 1-bit carry b.\n\n" +
       "Key setup: split the 16-byte key into 8 16-bit subkeys K[0..7], initialize X and C by different formulas for even/odd indices, iterate nextState 4 times, then cross-XOR C with X.\n\n" +
       "IV setup: split the 8-byte IV into 4 16-bit fragments, mix them into C per RFC 4503 §2.4, then iterate nextState 4 times.\n\n" +
       "nextState: first update the counters (with a carry chain), then use the g function $g(u) = \\text{low}_{32}(u^2) \\oplus \\text{high}_{32}(u^2)$ to compute G[0..7], finally update X by rotate-and-add formulas. To extract keystream, XOR the 16-bit half-words of X to output a 16-byte block.\n\n" +
-      "Encryption and decryption are identical: ciphertext = plaintext $\\oplus$ keystream, and decryption XORs again with the same key/IV to recover it.",
-    usage: "Enter text in the input box; for parameters, key is 32 hex digits (16 bytes) and iv is 16 hex digits (8 bytes). Encode outputs hex ciphertext; decode with the same key/iv recovers the text.",
+      "Encryption and decryption are identical: ciphertext = plaintext $\\oplus$ keystream, and decryption XORs again with the same key/IV to recover it.\n\n" +
+      "Variant conversion: different ecosystems (CryptoJS / the RFC document) disagree on how the key and IV byte strings map into the state; the conversion is pure byte reordering and does not affect security — the three variants correspond to the three conventions.",
+    usage: "Enter text or ciphertext. A 32-hex (16-byte) key engages raw mode (IV: 16 hex digits, or leave it empty for no IV); any other value or an empty key is treated as a passphrase via the CryptoJS OpenSSL envelope (base64 Salted__ ciphertext) — when decoding ciphertext that starts with U2FsdGVkX1, the empty passphrase and common passwords are tried automatically.",
     examples: [
-      { in: "Hello", param: "key=00000000000000000000000000000000, iv=0000000000000000", out: "(hex ciphertext)", desc: "the all-zero key/IV RFC 4503 §3 test-vector scenario; encode/decode are symmetric and reversible" },
+      { in: "Hello", param: "key=00000000000000000000000000000000, iv=0000000000000000", out: "(hex ciphertext)", desc: "all-zero key/IV: keystream follows RFC 4503 Appendix A.2 first vector in implementation byte order (edb70567…), XORed with the first 5 bytes of Hello" },
     ],
     formulas: [
       { tex: "g(u) = \\text{lo}_{32}(u^2) \\oplus \\text{hi}_{32}(u^2)", caption: "Rabbit's g function: square, then XOR the high and low 32 bits" },
     ],
     tips: [
-      "Rabbit's key must be 16 bytes (32 hex) and the IV must be 8 bytes (16 hex); anything shorter errors out.",
+      "A 32-hex key engages raw mode (IV empty = no IV); any other value or an empty key = the CryptoJS passphrase envelope mode.",
+      "For ciphertext starting with U2FsdGVkX1: first try [empty passphrase + Legacy variant], then use cracking candidates for common passwords (built-in common passwords are included automatically).",
+      "Three variants: CryptoJS Legacy (default in older tools; recommended) / CryptoJS standard / RFC 4503 document orientation; all 14 official crypto-js vectors plus the RFC Appendix vectors are byte-for-byte aligned.",
       "Stream-cipher trait: encryption and decryption use the same key+IV, ciphertext = plaintext $\\oplus$ keystream.",
-      "In CTF, when a challenge gives Rabbit parameters and ciphertext, just fill in the key/iv and decode.",
+      "CTF challenges usually give key/IV plus ciphertext for direct decoding; a lone base64 blob is most likely the CryptoJS envelope (crack it if the passphrase is unknown).",
     ],
     aka: ["rabbit", "rabbit流密码", "rfc 4503", "Rabbit", "Rabbit cipher", "兔子流密码", "Rabbit stream cipher", "eSTREAM", "高速流密码", "对称流密码", "Rabbit加密", "128位流密码"],
   },

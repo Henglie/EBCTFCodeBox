@@ -3,6 +3,7 @@
 // 红线：不改开发方源码文件，运行时 monkey-patch 给 op 对象加 detect 字段。detect 只读不写。
 // 置信度策略：固定变换/字符集明确 0.3-0.5；需密钥/参数 0.1-0.2（兜底）；自反变换 0.1（防误报）。
 import { OPS } from "./registry.js";
+import { debugLog } from "./debugLog.js";
 
 // 通用 detect 工厂：正则 + 最小长度 → 置信度
 const cs = (re, minLen, conf) => (t) => {
@@ -190,4 +191,4 @@ export function detectAuditStats() {
   return { total: OPS.length, withDetect: withDetect.length, decodableWithoutDetect: without.map((o) => o.id) };
 }
 
-console.log(`[detectExt] patched ${patched} ops: ${patchedIds.join(", ")}`);
+debugLog(`[detectExt] patched ${patched} ops: ${patchedIds.join(", ")}`);

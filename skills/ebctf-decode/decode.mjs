@@ -9,12 +9,9 @@
 //   node skills/ebctf-decode/decode.mjs run <opId> "<输入>" [encode|decode|run] [--params='{"shift":3}']
 //   node skills/ebctf-decode/decode.mjs magic "<文本>" [--crib=xxx] [--depth=N] [--intensive]
 //
-// ⚠ core 加载时有模块直接 console.log 到 stdout（detectExt 等），会污染 CLI 输出。
-//   故加载 core 期间劫持 process.stdout.write 转 stderr，加载完恢复——只让结果走 stdout。
-const _realStdoutWrite = process.stdout.write.bind(process.stdout);
-process.stdout.write = (chunk, enc, cb) => process.stderr.write(chunk, enc, cb);
+// core 加载期的诊断输出已统一走 src/core/debugLog.js（默认静默；EBCTF_DEBUG=1 输出到 stderr），
+// stdout 只承载结果，无需劫持 process.stdout.write。
 const { callMcpTool } = await import("../../mcp/ebctf-core-adapter.mjs");
-process.stdout.write = _realStdoutWrite;
 
 const USAGE = `用法：
   cats                                              列分类（含每类 op 数）
@@ -47,7 +44,7 @@ for (const a of rawArgs) {
 
 // 打结果到 stdout；isError 也照打（让用户看到错误文本），并以 exit 1 收场。
 const out = (r) => {
-  _realStdoutWrite((r.content?.[0]?.text ?? "") + "\n");
+  process.stdout.write((r.content?.[0]?.text ?? "") + "\n");
   if (r.isError) process.exit(1);
 };
 

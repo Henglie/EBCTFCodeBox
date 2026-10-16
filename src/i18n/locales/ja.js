@@ -2307,7 +2307,7 @@ export default {
   "op.qrFormatBrute.desc": "形式情報が破損した QR の救出：全32組（誤り訂正レベル×マスク）でデータ取得・逆インターリーブ・RS 誤り訂正を行い、復号可能な全組と原文を表示（ISO/IEC 18004、QRazyBox 相当の能力）",
   "op.qrGen.desc": "純 JS QR エンコード（数字／英数字／バイトモード+L/M/Q/H 誤り訂正）。スキャン可能な QR PNG（クワイエットゾーン込み）+0/1行列 JSON を出力。コアは Nayuki (MIT) から移植",
   "op.qrScanImage.desc": "QR の統合入口：画像貼り付けで自動スキャン、テキスト行列貼り付けで自動解析。画像（PNG/JPEG/GIF/BMP/WebP）は内容を復号、0/1行列や ASCII art はバージョン／訂正レベル／マスク／finder を診断。位置検出模様が消去・隠蔽されても復号（グリッド再構築+総当たり+消失訂正）。「読み取り範囲」を広げるとバーコード（Code128/EAN/UPC/ITF など）と DataMatrix/PDF417/Aztec も読み、複数記号を診断レポートに列挙。「診断レポート」選択時は失敗工程と対処案を表示。すべてローカル計算",
-  "op.rabbit.desc": "RFC 4503 Rabbit ストリーム暗号（128-bit key + 64-bit IV）。encode：テキスト→Hex 暗号文、decode：Hex→テキスト。対称で可逆。RFC4503 §3 ベクトル（key/IV 全0）で検証済み",
+  "op.rabbit.desc": "RFC 4503 Rabbit ストリーム暗号。変種は 3 つ：CryptoJS Legacy（旧オンラインツールの既定、推奨）/ CryptoJS 標準 / RFC 4503 ドキュメント方向（0.1.9 以前の挙動）。32 桁の hex 鍵はそのまま使用（IV は任意）；それ以外の値や空欄は CryptoJS の OpenSSL 封筒（Salted base64）として処理します。decode は CryptoJS 暗号文（U2FsdGVkX1 で始まる）に対し、空のパスフレーズとよくあるパスワードを自動で試行します。",
   "op.rabin.desc": "Rabin 公開鍵暗号（p≡q≡3 mod4）：暗号化 c=m² mod n、復号は CRT で4平方根を求め、末尾 magic で曖昧さを解消。純 BigInt のローカル計算",
   "op.rainbowQuery.desc": "約300件の弱パスワードを内蔵するローカル小規模デモ表（MD5/NTLM は O(1)事前構築、SHA 系は都度検索）。一般的な弱パスワードを即座に検証。本物のレインボーテーブルは公開サイト CrackStation（https://crackstation.net）または rcracki-mt と公開表（https://github.com/iphelix/rcracki-mt）を使用。本ツールはレインボーテーブルを内蔵・ダウンロードしない",
   "op.randu.desc": "RANDU（x=65539·x mod 2^31）の教材デモ：数列生成+周期性の説明。3次元の点が15平面に載る古典的な弱い乱数",

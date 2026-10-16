@@ -1169,7 +1169,7 @@ export default {
   "op.lzstring.name": "LZString (LZW)",
   "op.lzstring.desc": "Standard-LZW-Komprimierung nach dem Ansatz von pieroxy/lz-string. encode erzeugt ein JSON-Zahlenarray, decode dekomprimiert es. Nur Latin-1-Zeichen von 0-255; Chinesisch und andere Mehrbytezeichen zuvor in UTF-8 kodieren. LZ4 wird wegen des hohen Aufwands der Blockformatanpassung ausgelassen.",
   "op.rabbit.name": "Rabbit-Stromchiffre",
-  "op.rabbit.desc": "Rabbit-Stromchiffre nach RFC 4503 mit 128-bit key und 64-bit IV. encode: Text→Hex-Geheimtext; decode: Hex→Text. Symmetrisch und umkehrbar. An Testvektoren aus RFC4503 §3 mit vollständig nullgesetztem key/IV geprüft.",
+  "op.rabbit.desc": "Rabbit-Stromchiffre nach RFC 4503. Drei Varianten: CryptoJS Legacy (Standard älterer Werkzeuge; empfohlen) / CryptoJS-Standard / RFC 4503 Dokumentrichtung (Verhalten von 0.1.9 und früher). Ein 32-stelliger Hex-Schlüssel wird direkt verwendet (IV optional); jeder andere Wert oder ein leerer Wert wird als Passphrase über die CryptoJS-OpenSSL-Hülle (Base64 Salted) behandelt. decode probiert bei CryptoJS-Geheimtexten (Beginn U2FsdGVkX1) automatisch die leere Passphrase und gängige Passwörter.",
   "op.flashSwirl.name": "FlashSwirl",
   "op.flashSwirl.desc": "Symmetrische ARX-Stromchiffre von „风之暇想“ mit 256-bit key, 192-bit nonce und 8/20 Runden. encode: Text→Hex-Geheimtext; decode: Hex→Text. Symmetrisch und umkehrbar; an den offiziellen stream-Testvektoren geprüft.",
   "op.sevenZipExtract.name": "7z-Archiv parsen / extrahieren",

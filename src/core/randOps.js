@@ -33,7 +33,7 @@ export const RAND_OPS = Object.freeze(new Set([
   "hqcEncrypt", "mlkemEncaps", "ntruEncrypt", "paillierEncrypt", "xwingEncaps",
   "x25519Shared", "lsagSign", "pedersenCommit", "feldmanVss", "jweEncrypt",
   // —— 分组 / 流密码与对称封装（随机 IV / salt）——
-  "ascon", "fernet", "emojiAes", "yueChang", "dxBase64",
+  "ascon", "fernet", "emojiAes", "yueChang", "dxBase64", "rabbit",
   // —— 口令 / 派生 / 隐写 / 共享（随机 salt / 系数）——
   "bcrypt", "shamir", "stegpy", "txtmoji", "fuyouyue", "tianshu",
   // —— 随机数工具本体 ——

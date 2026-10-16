@@ -1177,7 +1177,7 @@ export default {
   "op.lzstring.name": "LZString (LZW)",
   "op.lzstring.desc": "Compression LZW standard (d'après l'algorithme pieroxy/lz-string). encode compresse en tableau de nombres JSON ; decode restaure. Caractères Latin-1 (0-255) seulement — encodez d'abord en UTF-8 le chinois et les autres caractères multi-octets. LZ4 sauté (le coût d'alignement du format bloc est élevé).",
   "op.rabbit.name": "Chiffre de Flux Rabbit",
-  "op.rabbit.desc": "Chiffrement de flux Rabbit RFC 4503 (key 128-bit + IV 64-bit). encode : texte → chiffré Hex ; decode : Hex → texte. Symétrique, réversible. Vecteurs de test RFC4503 §3 (key/IV tout 0) vérifiés.",
+  "op.rabbit.desc": "Chiffrement de flux Rabbit RFC 4503. Trois variantes : CryptoJS Legacy (défaut des anciens outils ; recommandé) / CryptoJS standard / orientation document RFC 4503 (comportement de la version 0.1.9 et antérieure). Une clé hex de 32 caractères est utilisée telle quelle (IV facultatif) ; toute autre valeur ou une valeur vide est traitée comme phrase secrète via l'enveloppe OpenSSL de CryptoJS (base64 Salted). decode essaie automatiquement la phrase vide et les mots de passe courants pour les chiffrés CryptoJS (commençant par U2FsdGVkX1).",
   "op.flashSwirl.name": "FlashSwirl",
   "op.flashSwirl.desc": "Chiffrement de flux symétrique ARX de l'auteur « 风之暇想 » (key 256-bit + nonce 192-bit, 8/20 tours). encode : texte → chiffré Hex ; decode : Hex → texte. Symétrique et réversible ; vecteurs de test officiels stream vérifiés.",
   "op.sevenZipExtract.name": "Analyse / Extraction d'Archive 7z",

@@ -23,7 +23,7 @@ import { register } from "./registry.js";
 import { aesDecrypt, desDecrypt, des3Decrypt, rc4, xorCrypt, fernetDecrypt } from "./modern.js";
 import { entropy, isPrintableRatio } from "./magic/scorer.js";
 import { md5, md5Bytes } from "./hash.js";
-import { rabbitCrypt } from "./streamcipher.js";
+import { rabbitCryptVariant } from "./streamcipher.js";
 
 const ENCODINGS = ["utf8", "hex", "base64", "latin1"];
 const BLOCK_MODES = ["ECB", "CBC", "CFB", "OFB", "CTR"];
@@ -213,22 +213,25 @@ export async function cryptoTryAll(input, opts = {}) {
         if (r) results.push(r);
       }
 
- // Rabbit（RFC 4503 流密码，key 须 16B、IV 须 8B）。枚举 IV 编码；无 IV 时用全0 IV。
+ // Rabbit（RFC 4503 流密码，key 须 16B、IV 须 8B）。变体三档都试——CTF 密文多由
+ // CryptoJS 系工具生成（Legacy/标准），RFC 文档方向兜底。枚举 IV 编码；无 IV 时用全0 IV。
       if (algos.includes("Rabbit") && keyBytes.length === 16) {
-        for (const ivVar of ivVariants) {
-          if (overBudget()) return finalize(results);
-          attempts++;
-          let ivBytes;
-          if (ivVar.ivText) {
-            try { ivBytes = decodeBytes(ivVar.ivText, ivVar.ivEnc); } catch { continue; }
-            if (ivBytes.length !== 8) continue;
-          } else {
-            ivBytes = new Uint8Array(8); // 全0 IV
+        for (const [variant, algoName] of [["legacy", "Rabbit(Legacy)"], ["standard", "Rabbit(标准)"], ["rfc", "Rabbit(RFC)"]]) {
+          for (const ivVar of ivVariants) {
+            if (overBudget()) return finalize(results);
+            attempts++;
+            let ivBytes;
+            if (ivVar.ivText) {
+              try { ivBytes = decodeBytes(ivVar.ivText, ivVar.ivEnc); } catch { continue; }
+              if (ivBytes.length !== 8) continue;
+            } else {
+              ivBytes = new Uint8Array(8); // 全0 IV
+            }
+            const r = tryOne(() => rabbitCryptVariant(cipherBytes, keyBytes, ivBytes, variant),
+              { algo: algoName, keyEnc, cipherEnc, ivEnc: ivVar.ivText ? ivVar.ivEnc : "zero" },
+              crib, minConfidence);
+            if (r) results.push(r);
           }
-          const r = tryOne(() => rabbitCrypt(cipherBytes, keyBytes, ivBytes),
-            { algo: "Rabbit", keyEnc, cipherEnc, ivEnc: ivVar.ivText ? ivVar.ivEnc : "zero" },
-            crib, minConfidence);
-          if (r) results.push(r);
         }
       }
 

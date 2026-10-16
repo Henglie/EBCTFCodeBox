@@ -2305,7 +2305,7 @@ export default {
   "op.qrFormatBrute.desc": "형식 정보 영역이 손상된 QR 복구: 전체 32개 (오류 정정 수준×마스크) 조합을 열거하여 조합별로 데이터 추출·디인터리빙·RS 오류 정정 디코딩, 디코딩 가능한 모든 조합과 원문 표시(ISO/IEC 18004, QRazyBox와 동등한 기능)",
   "op.qrGen.desc": "순수 JS QR 인코딩(숫자/영숫자/바이트 모드 + L/M/Q/H 오류 정정), 스캔 가능한 QR PNG(여백 포함) + 0/1 행렬 JSON 출력. 코어는 Nayuki(MIT)에서 이식",
   "op.qrScanImage.desc": "QR 기능 통합 진입점: 이미지를 붙여넣으면 자동 스캔, 텍스트 행렬을 붙여넣으면 자동 파싱. 이미지(PNG/JPEG/GIF/BMP/WebP)는 내용을 디코딩하고, 0/1 행렬이나 ASCII art는 버전/오류 정정 수준/마스크/finder 상태를 검사합니다. 위치 탐지 패턴이 지워지거나 가려져도 디코딩 가능(격자 재구성 + 전수 조사 + 소거 오류 정정). '읽기 범위'를 넓히면 이미지의 바코드(Code128/EAN/UPC/ITF 등)와 DataMatrix/PDF417/Aztec도 읽으며 여러 심볼은 진단 보고서에 각각 표시합니다. '진단 보고서'를 선택하면 실패 시 막힌 단계와 제안을 제공합니다. 모든 계산은 로컬에서 수행합니다.",
-  "op.rabbit.desc": "RFC 4503 Rabbit 스트림 암호(128-bit key + 64-bit IV). encode: 텍스트→Hex 암호문. decode: Hex→텍스트. 대칭이며 가역적입니다. RFC4503 §3 테스트 벡터(전부 0 key/IV) 검증 완료.",
+  "op.rabbit.desc": "RFC 4503 Rabbit 스트림 암호. 변종은 세 가지: CryptoJS Legacy(구형 온라인 도구 기본값, 권장) / CryptoJS 표준 / RFC 4503 문서 방향(0.1.9 이전 동작). 32자리 hex 키는 그대로 사용(IV 선택 사항); 그 밖의 값이거나 빈 값이면 CryptoJS OpenSSL 봉투(Salted base64)로 처리합니다. decode는 CryptoJS 암호문(U2FsdGVkX1로 시작)에 대해 빈 패스프레이즈와 흔한 비밀번호를 자동으로 시도합니다.",
   "op.rabin.desc": "Rabin 공개 키 암호(p≡q≡3 mod4): 암호화 c=m² mod n, 복호화는 CRT로 제곱근 4개를 구한 뒤 끝의 매직 값으로 구별합니다. 순수 BigInt 로컬 계산.",
   "op.rainbowQuery.desc": "취약 비밀번호 약 300개의 로컬 내장 데모 소형 표(MD5/NTLM 사전 구성 O(1), SHA 계열 실시간 조회). 일반 취약 비밀번호를 즉시 확인합니다. 실제 레인보 테이블은 공개 사이트 CrackStation(https://crackstation.net ) 또는 오프라인 도구 rcracki-mt와 공개 표(https://github.com/iphelix/rcracki-mt )를 사용하세요. 이 도구는 레인보 테이블 데이터를 내장하거나 다운로드하지 않습니다",
   "op.randu.desc": "RANDU(x=65539·x mod 2^31) 교육용 데모: 수열 생성 + 주기성 설명, 3차원 공간에서 점이 15개 평면에 놓이는 고전적인 취약 난수 생성기",

@@ -148,6 +148,13 @@ function keyedAttackParams(opId, key) {
     list.push({ params: { key, checkMac: false }, tag: "fernet" });
     return list;
   }
+ // Rabbit：key 32hex 走原始模式、其他走 CryptoJS 口令封装；变体三档都试（CTF 密文多来自 CryptoJS 系工具）
+  if (opId === "rabbit") {
+    for (const variant of ["legacy", "standard", "rfc"]) {
+      list.push({ params: { key, variant }, tag: `Rabbit:${variant}` });
+    }
+    return list;
+  }
  // txtmoji：口令参数名是 password（非 key），CTF 常为标题十进制。单参。
   if (opId === "txtmoji") {
     list.push({ params: { password: key }, tag: "pw" });

@@ -1,4 +1,8 @@
 <p align="center">
+  <b>简体中文</b> · <a href="./README_EN.md">English</a>
+</p>
+
+<p align="center">
   <img src="./public/icons/logo.png" width="120" height="120" alt="恒烈 CTF 编码工具箱" />
 </p>
 <h1 align="center">
@@ -42,9 +46,29 @@
 | 百度网盘 | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
 | 夸克网盘 | https://pan.quark.cn/s/3b7e573b19c0 | 无 |
 
-当前版本 **v0.1.9**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
+当前版本 **v0.1.10**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
 
 ## 更新日志
+
+## v0.1.10
+
+### 新增功能
+
+- Rabbit 增设三档变体
+- Rabbit 支持口令与爆破
+- 新增英文 README
+
+### 修复
+
+- 修复 Rabbit 跨工具不兼容
+- 修复文档旧计数
+
+### 优化
+
+- 一键尝试支持 Rabbit 三档
+- MCP 资源文档补全
+- MCP 支持协议版本协商
+- 加载诊断默认静默
 
 ## v0.1.9
 
@@ -110,7 +134,7 @@
 
 - **本地优先 · 零外发**：原生 ES module，无框架、无构建步骤。核心编解码在浏览器本地执行，不上传用户输入；「外链」只生成 URL。PWA 更新仅下载本站资源，本地桥只访问 `127.0.0.1`，外部 AI 仅在用户主动配置 endpoint 后启用。
 - **一把梭智能解码**：粘贴或拖入内容，自动识别可能的编码链并给出候选解码结果，支持 crib 目标特征过滤与深度爆破。
-- **788 个注册操作 · 23 分类**：覆盖 Base、文本传输、花式 CTF、深奥编程语言、中文本土、古典密码、现代加密（分组 / 流 / 非对称 / 其他）、哈希校验、进制字符集（含素数判定与筛选）、分析爆破、密码攻击、压缩归档、口令与归档破解、取证流量、文件格式结构、数据结构、图像与二维码、音频音视频、隐写及 4 个可选 Windows GUI 桥入口。完整清单由 registry 自动生成。
+- **810 个注册操作 · 23 分类**：覆盖 Base、文本传输、花式 CTF、深奥编程语言、中文本土、古典密码、现代加密（分组 / 流 / 非对称 / 其他）、哈希校验、进制字符集（含素数判定与筛选）、分析爆破、密码攻击、压缩归档、口令与归档破解、取证流量、文件格式结构、数据结构、图像与二维码、音频音视频、隐写及 4 个可选 Windows GUI 桥入口。完整清单由 registry 自动生成。
 - **解码强度四件套**（v0.1.2）：强度档位 + 自定义算法池 + **暴力爆破独立通道**（XOR/凯撒/字典/彩虹表/HMAC/PBE/Playfair/ZIP/CRC32/bkcrack，结果单独归组展示不污染主排序）+ **解析层数 1~3 选择**。
 - **宽松判定模式**（v0.1.2）：增强/极强/最强/自定义档只按字符种类数放行算法，变体编码题（「喵呜」表 0/1、emoji 表二进制）也能参与解码；默认/快速档保持严格定义域识别。
 - **密钥+密文一键尝试**：给定密文与密钥，自动枚举 AES/DES/3DES/RC4/XOR/Fernet × 多种模式 × 多种编码组合。
@@ -263,7 +287,7 @@ src/
 public/
   icons/            Material Symbols Rounded 图标（SVG）
   fonts/th/         天珩首屏子集 + 4 平面 WOFF2
-参考/              算法码表核对资料 + 研究成果
+资料/              算法码表核对资料 + 研究成果（开发资料，不随发行包分发）
 ```
 
 ## 编解码全清单（810 ops · 23 分类）
@@ -595,7 +619,7 @@ public/
 |---|---|---|
 | rc4 | RC4 | RC4 流密码（自反，key 任意长） |
 | xor | XOR | 重复密钥异或（自反，CTF 最常用；单字节爆破见分析类 xorBrute） |
-| rabbit | Rabbit 流密码 | RFC 4503 Rabbit 流密码（128-bit key + 64-bit IV）。encode: 文本→Hex 密文；decode: Hex→文本。对称可逆。RFC4503 §3 测试向量（全 0 key/IV）已验证。 |
+| rabbit | Rabbit 流密码 | RFC 4503 Rabbit 流密码。三变体：CryptoJS Legacy（旧版在线工具默认，推荐）/ CryptoJS 标准 / RFC 4503 文档方向；32 位 hex 密钥直用（IV 可留空），口令按 CryptoJS 封装（Salted base64）加解密，decode 自动试空口令与常见口令。 |
 | salsa20 | Salsa20 |  |
 | chacha20 | ChaCha20 |  |
 | flashSwirl | FlashSwirl 闪旋 |  |
@@ -1208,7 +1232,7 @@ public/
 
 ### 给外部 AI 用（MCP / Skills）
 
-工具箱的能力面可暴露给支持 MCP 的 AI 客户端或 Agent，全程本地进程、零外发。能力面单一事实源在 `src/plugin/mcpBridge.js`，对外提供 6 个 MCP 工具：列分类、列 op、查 op 参数 schema、智能识别编码、跑指定 op、一键智能解码。浏览器内 AI 面板、Node stdio server、CLI Skill 三端复用同一份定义。
+工具箱的能力面可暴露给支持 MCP 的 AI 客户端或 Agent，全程本地进程、零外发。能力面单一事实源在 `src/plugin/mcpBridge.js`，对外提供 6 个 MCP 工具（列分类、列 op、查 op 参数 schema、智能识别编码、跑指定 op、一键智能解码）与 3 个 MCP 资源（`ebctf://ops` 全量 op 清单、`ebctf://categories` 分类概览、`ebctf://guide` 解题引导）。浏览器内 AI 面板、Node stdio server、CLI Skill 三端复用同一份定义。
 
 - MCP server（Claude Desktop 等接入）：[`mcp/README.md`](./mcp/README.md)
 - Skill（Claude Code / CLI Agent）：[`skills/ebctf-decode/`](./skills/ebctf-decode/)
@@ -1239,6 +1263,7 @@ AI 的联网出口只有可选的 `aiClient`，且必须用户自备 endpoint + 
 - smile1110 — 提出 ECC 等现代密码算法扩充提议（v0.1.6 密钥生命周期与签名扩充方向即由此推进）。
 - 拉面：反馈千千秀字、佛曰、SNOW 的原版兼容性，Unicode 与 Twin-Hex 空白边界，以及 Whitespace 执行、Malbolge 识别问题；提出 Scytale 双密钥形式、零宽隐写字符集与格式扩充、科普和工具分类纠正、Brainfuck 非标准变体功能取舍建议。
 - qinling072：提出补充 OutGuess 等图像隐写算法。
+- cnui6：提出 Rabbit 兼容性修复，促成 CryptoJS 生态互解与口令支持。
 
 ## Community
 

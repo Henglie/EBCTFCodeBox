@@ -20,6 +20,7 @@
  * 早于 detectExt2 已被其 patch，本文件 guard 自动跳过）。
  */
 import { getOp } from "./registry.js";
+import { debugLog } from "./debugLog.js";
 
 // ============ 通用工具（与 detectExt2.js 同语义）============
 const trim = (t) => (t || "").trim();
@@ -182,5 +183,5 @@ applyDetectPatches();
 export const DETECT3_PATCHED = patchedIds;
 export const DETECT3_SKIPPED = skippedIds;
 
-console.log(`[detectExt3] patched ${patched} ops: ${patchedIds.join(", ")}`);
-if (skippedIds.length) console.log(`[detectExt3] skipped: ${skippedIds.join(", ")}`);
+debugLog(`[detectExt3] patched ${patched} ops: ${patchedIds.join(", ")}`);
+if (skippedIds.length) debugLog(`[detectExt3] skipped: ${skippedIds.join(", ")}`);

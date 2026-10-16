@@ -744,14 +744,28 @@ function base58Decode(s) {
   if (!clean) throw new Error("空地址");
   let zeros = 0;
   while (zeros < clean.length && clean[zeros] === "1") zeros++;
+  // 分块累积：每 K 位用 Number 攒成小块再一次并入 BigInt（K 取 58^K ≤ 2^53 的最大值）
+  const radixNum = 58;
+  let K = 1, safe = radixNum;
+  while (safe * radixNum <= Number.MAX_SAFE_INTEGER) { safe *= radixNum; K++; }
   let num = 0n;
+  let acc = 0, cnt = 0;
   for (const ch of clean) {
     const idx = B58_DICT.indexOf(ch);
     if (idx === -1) throw new Error("非法 Base58 字符: " + ch);
-    num = num * 58n + BigInt(idx);
+    acc = acc * radixNum + idx;
+    if (++cnt === K) { num = num * BigInt(safe) + BigInt(acc); acc = 0; cnt = 0; }
   }
+  if (cnt > 0) { let pw = 1; for (let t = 0; t < cnt; t++) pw *= radixNum; num = num * BigInt(pw) + BigInt(acc); }
   const bytes = [];
-  while (num > 0n) { bytes.unshift(Number(num & 0xffn)); num >>= 8n; }
+  if (num > 0n) {
+    // 大端字节直出：toString(16) 对 2 的幂基数为近线性，替代逐字节 &/>> 的 O(n²)
+    const hex = num.toString(16);
+    bytes.length = (hex.length + 1) >> 1;
+    let j = bytes.length - 1;
+    for (let off = hex.length - 2; off >= 0; off -= 2, j--) bytes[j] = parseInt(hex.slice(off, off + 2), 16);
+    if (hex.length & 1) bytes[0] = parseInt(hex[0], 16);
+  }
   return new Uint8Array([...new Array(zeros).fill(0), ...bytes]);
 }
 

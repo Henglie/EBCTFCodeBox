@@ -20,6 +20,7 @@
  * （本文件顶层依赖目标 op 已完成 register，早于其注册则 getOp 返回 undefined 静默跳过）
  */
 import { getOp } from "./registry.js";
+import { debugLog } from "./debugLog.js";
 
 // ============ 专用常量（照抄各 op 定义源，不改动）============
 
@@ -108,9 +109,7 @@ for (const [id, det] of Object.entries(SUPPLEMENT)) {
 
 }
 
-if (typeof console !== "undefined" && console.debug) {
-  console.debug("[detectSupplement] patched " + _patched + " ops"
-    + (_skipped.length ? "; skipped: " + _skipped.join(", ") : ""));
-}
+debugLog("[detectSupplement] patched " + _patched + " ops"
+  + (_skipped.length ? "; skipped: " + _skipped.join(", ") : ""));
 
 export const DETECT_SUPPLEMENT_IDS = Object.keys(SUPPLEMENT);

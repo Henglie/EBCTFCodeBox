@@ -1,4 +1,4 @@
-self.__EBCTF_ASSET_REV = "4d6fd83388746bda";
+self.__EBCTF_ASSET_REV = "b4b447ad73b11e30";
 self.__EBCTF_ASSETS = [
   "./",
   "./index.html",
@@ -181,6 +181,7 @@ self.__EBCTF_ASSETS = [
   "./src/core/dancingMen.js",
   "./src/core/dataToImage.js",
   "./src/core/dateCalc.js",
+  "./src/core/debugLog.js",
   "./src/core/decodeProfile.js",
   "./src/core/deepsoundExtract.js",
   "./src/core/des2Mitm.js",
