@@ -28,7 +28,7 @@ function u32be(b, o) {
 
 /**
  * 纯 JS PNG 解码 → RGBA 像素。字节序/过滤全部按 PNG 规范实现，
- * 与 PIL numpy 版（随波逐流参照系）逐像素等价。
+ * 与 PIL/numpy 参照实现逐像素等价。
  */
 export function decodePNG(bytes) {
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);

@@ -16,7 +16,8 @@
  * 或 Buffer（node 测试）双兼容。
  */
 import { register } from "./registry.js";
-import { finishBytesDecode } from "./bytesIo.js";
+import { finishBytesDecode, sniffMagic, bytesToEscapedText, decodeUtf8Lossless } from "./bytesIo.js";
+import { decodeDataUri, encodeDataUriBytes, encodeDataUriText } from "./dataUri.js";
 
 // ============ base64 双环境兼容（浏览器 atob/btoa + node Buffer） ============
 function b64encodeBytes(bytes) {
@@ -132,44 +133,65 @@ function basicAuthDecode(text) {
 }
 
 // ============ 4. data URI 解析/构造 ============
+// 归一化 MIME 比较：image/jpg 与 image/jpeg 是同一格式的两种写法（RFC 2046 只认 jpeg）。
+function normMime(m) {
+  const s = String(m || "").toLowerCase().split(";")[0].trim();
+  return s === "image/jpg" ? "image/jpeg" : s;
+}
+
+// data URI 的 data 段是字节。图片/音频/压缩包等二进制载荷必须走字节通道，
+// 不能把 finishBytesDecode 返回的 {text, files} 对象拼进字符串（旧版会输出 [object Object]）。
 function parseDataUri(text) {
-  const s = String(text).trim();
-  const m = s.match(/^data:([^,]*),([\s\S]*)$/i);
-  if (!m) throw new Error("非法 data URI（需 data:[<mime>][;base64],<data>）");
-  const meta = m[1];
-  const data = m[2];
-  const metaParts = meta.split(";").filter(Boolean);
-  let mime = "";
-  let isBase64 = false;
-  const attrs = [];
-  for (const p of metaParts) {
-    if (p.toLowerCase() === "base64") isBase64 = true;
-    else if (p.includes("=")) attrs.push(p);
-    else if (!mime) mime = p;
-    else attrs.push(p);
-  }
-  if (!mime) mime = "text/plain";
-  let decoded;
-  if (isBase64) {
-    try { decoded = b64decodeStr(data); } catch (e) { decoded = "(base64 解码失败: " + (e && e.message) + ")"; }
-  } else {
-    try { decoded = decodeURIComponent(data); } catch { decoded = data; }
-  }
+  const d = decodeDataUri(text);
+  const magic = sniffMagic(d.bytes);
+  const declared = normMime(d.mime);
+  const actual = magic ? normMime(magic.mime) : "";
   const lines = [
-    "MIME 类型:   " + mime,
-    "编码方式:   " + (isBase64 ? "base64" : "URL 编码/明文"),
+    "MIME 类型:   " + d.mime,
+    "编码方式:   " + (d.base64 ? "base64" : "URL 编码/明文"),
+    "数据长度:   " + d.bytes.length + " 字节",
   ];
-  if (attrs.length) lines.push("附加参数:   " + attrs.join("; "));
-  lines.push("--- 内容 ---");
-  lines.push(decoded);
-  return lines.join("\n");
+  if (d.attrs.length) lines.push("附加参数:   " + d.attrs.join("; "));
+  if (magic) {
+    lines.push("文件头识别: " + magic.name + "（" + magic.mime + "，依据 " + magic.src + "）");
+    if (declared && actual && declared !== actual) {
+      lines.push("⚠ MIME 不符：声明 " + d.mime + "，文件头实际为 " + magic.mime +
+        " —— 常见 CTF 伪装点，以下按真实字节处理。");
+    }
+  }
+
+  const isMedia = /^(image|audio|video|font)\//.test(declared) ||
+    /^(image|audio|video|font)\//.test(actual);
+  // SVG 是文本型图片：按文本展示才有意义，不能走二进制转义。
+  const isTextualMedia = declared === "image/svg+xml" || declared === "image/svg";
+  const mediaFile = {
+    name: "datauri." + (magic ? magic.ext : isTextualMedia ? "svg" : "bin"),
+    mime: magic ? magic.mime : (declared || "application/octet-stream"),
+    bytes: d.bytes,
+  };
+  let body;
+  let files = null;
+  if (isMedia && !isTextualMedia) {
+    const head = bytesToEscapedText(d.bytes.subarray(0, Math.min(256, d.bytes.length)));
+    body = head + (d.bytes.length > 256 ? "\n…（预览截断，完整内容见下方下载文件）" : "");
+    files = [mediaFile];
+  } else {
+    const loss = decodeUtf8Lossless(d.bytes);
+    if (loss.ok) {
+      body = loss.text;
+      // SVG 虽然是文本，也交回原字节，UI 才能出图预览/下载。
+      if (isTextualMedia) files = [mediaFile];
+    } else {
+      body = bytesToEscapedText(d.bytes);
+      files = [mediaFile];
+    }
+  }
+
+  const out = lines.concat(["--- 内容 ---", body]).join("\n");
+  return files ? { text: out, files } : out;
 }
 function buildDataUri(text, mime, useBase64) {
-  mime = mime || "text/plain";
-  if (useBase64) {
-    return "data:" + mime + ";base64," + b64encodeStr(text);
-  }
-  return "data:" + mime + "," + encodeURIComponent(text);
+  return encodeDataUriText(text, mime || "text/plain", !!useBase64);
 }
 
 // ============ 5. magnet 链接解析 ============
@@ -261,7 +283,7 @@ register({
   id: "dataUriParse", cat: "text", name: "Data URI 解析",
   // encode 方向吃字节（把字节封成 data: URI）；decode 输入是 URI 文本，不吃字节。
   acceptsBytes: true,
-  desc: "data URI 双向：encode 把文本按所选 MIME + 编码方式构造成 data: URI；decode 解析 data: URI 输出 MIME + 内容。",
+  desc: "data URI 双向（文本级协议）：encode 把文本按所选 MIME + 编码方式构造成 data: URI；decode 解析 data: URI 输出 MIME + 内容（二进制/图片自动交回文件）。图片文件还原用「Base64/dataURI 转图片」，通用 Base64 用「Base64」。",
   params: [
     { key: "mime", label: "MIME 类型（encode 用）", type: "text", default: "text/plain", placeholder: "text/plain" },
     { key: "base64", label: "用 base64 编码（encode 用）", type: "bool", default: false },
@@ -270,15 +292,7 @@ register({
     // 字节直通：把上游真字节封成 data: URI（内容→表示方向才吃字节）。
     const raw = p && p.rawBytes;
     if (raw) {
-      const mime = (p && p.mime) || "text/plain";
-      if (p && p.base64) return "data:" + mime + ";base64," + b64encodeBytes(raw);
-      const keep = /[A-Za-z0-9_.!~*'()-]/; // 与 encodeURIComponent 保留集一致
-      let s = "";
-      for (const b of raw) {
-        const c = String.fromCharCode(b);
-        s += keep.test(c) ? c : "%" + b.toString(16).toUpperCase().padStart(2, "0");
-      }
-      return "data:" + mime + "," + s;
+      return encodeDataUriBytes(raw, (p && p.mime) || "text/plain", !!(p && p.base64));
     }
     return buildDataUri(t, (p && p.mime) || "text/plain", !!(p && p.base64));
   },

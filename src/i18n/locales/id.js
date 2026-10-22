@@ -580,7 +580,7 @@ export default {
   "ui.about.depTianhengLic": "Non-komersial",
   "ui.about.depMsym": "Ikon UI (SVG inline)",
   "ui.about.foot": "Dibangun untuk pemain CTF dan penggemar keamanan. Semua dependensi dibundel lokal; tanpa keluar saat runtime.",
-  "ui.about.intro": "Kotak alat codec, kriptografi, dan steganografi CTF murni front-end — lebih dari 500 operasi di seluruh enkode / sandi klasik & modern / hashing / stego / forensik / analisis. Semuanya berjalan lokal di peramban Anda: tanpa jaringan, tanpa unggah, tanpa jejak. Terapkan dengan membuka index.html langsung, menjalankan server lokal, atau menghostingnya sebagai situs statis.",
+  "ui.about.intro": "Kotak alat codec, kriptografi, dan steganografi CTF murni front-end — lebih dari 500 operasi di seluruh enkode / sandi klasik & modern / hashing / stego / forensik / analisis. Semuanya berjalan lokal di peramban Anda: tanpa jaringan, tanpa unggah, tanpa jejak. Jalankan peluncur bawaan (server lokal) atau host sebagai situs statis — modul ES dan WASM memerlukan lingkungan http(s), sehingga membuka index.html secara langsung diblokir oleh kebijakan keamanan peramban.",
   "ui.about.thanks": "Ucapan Terima Kasih",
   "ui.about.thanksVal": "Terima kasih kepada setiap proyek dan penulis sumber terbuka yang dirujuk atau dipinjam, serta kepada komunitas CTF yang berbagi skema enkode dan write-up.",
   "ui.about.regTitle": "Registrasi",

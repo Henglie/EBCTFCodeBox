@@ -93,7 +93,7 @@ export default {
       { in: "hi", out: "熊曰：呕… (bear-speak characters)", desc: "Fixed prefix; body is compressed + base91" },
     ],
     tips: ["A leading 「熊曰：呕」 plus a run of characters like 「食性很雜哞嗄哈」 means XiongYue.", "「呕」 is the header marker and must be the first character after the prefix; missing it throws 「缺失标头」 (missing header)."],
-    aka: ["熊曰", "xiongyue", "熊曰编码", "熊语", "随波逐流熊曰", "zbXiongYue", "xiong yue",
+    aka: ["熊曰", "xiongyue", "熊曰编码", "熊语", "zbXiongYue", "xiong yue",
       "熊语编码", "base91熊曰", "熊曰密码", "呕编码", "熊曰：呕", "熊话编码",
       "bear-speak encoding"],
   },

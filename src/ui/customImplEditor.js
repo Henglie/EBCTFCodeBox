@@ -25,7 +25,7 @@ import { icon as iconSvg } from "./icons.js";
 // ---- CM6 bundle（单文件 ESM，已真浏览器验证，见 工具/rt_cm_smoke.mjs） ----
 // ⚠ 性能审计 H2：821KB bundle 曾是顶层静态 import，随 main.js 进首屏关键路径——
 //  而「编辑代码」入口多数会话根本不打开。改为首次打开编辑器时动态 import + 模块级缓存；
-//  SW 已预缓存该文件，离线可用性不变。
+//  SW 不预缓存该文件：首次在线打开编辑器时拉取，之后由 runtime cache 回填，离线可用。
 let _CM = null;
 async function loadCM() {
   if (!_CM) _CM = await import("../vendor/codemirror.bundle.js");
@@ -89,7 +89,7 @@ const _ZH = {
   "ui.custom.exported": "已复制方案 JSON 到剪贴板",
   "ui.custom.schemeSaved": "方案「{0}」已保存",
   "ui.custom.confirmDel": "删除方案「{0}」？",
-  "ui.custom.sandboxWorker": "沙箱：独立线程（已移除网络与存储能力，超时可强制终止）",
+  "ui.custom.sandboxWorker": "沙箱：独立线程（网络可用，外发与否由你的代码决定；超时可强制终止）",
   "ui.custom.sandboxMain": "降级：主线程执行（无线程隔离，死循环无法中断）",
   "ui.custom.randWarn": "取随机请用 H.randBytes / H.randHex / H.randInt；不要直接调 crypto.getRandomValues——那是裸系统随机，不受「增强随机性」控制。",
   "ui.custom.reset": "重置为模板",
@@ -102,10 +102,22 @@ const _ZH = {
   "ui.custom.zoomIn": "放大字号",
   "ui.custom.zoomOut": "缩小字号",
   "ui.custom.builtin": "当前算法实现",
-  "ui.custom.loadBuiltin": "恢复内置实现",
-  "ui.custom.builtinNote": "本算法内置实现已默认载入编辑区，可直接在上面改。若它调用了模块内部的辅助函数，运行会报「未定义」——把那些函数一并内联，或改用右侧 H.* 工具。按钮可随时恢复内置原版。",
+  "ui.custom.loadBuiltin": "仅载入入口",
+  "ui.custom.loadFull": "载入完整实现（含依赖）",
+  "ui.custom.syncUpstream": "同步上游",
+  "ui.custom.builtinNote": "默认已自动载入「完整实现」：入口 + 它引用的函数/常量 + 跨文件 import 全部内联，打开就能运行和修改。完整实现是源码快照，上游更新后点「同步上游」重新生成；想保留薄壳入口就点「仅载入入口」。",
+  "ui.custom.srcLocate": "定位到算法本体",
+  "ui.custom.srcLocated": "已定位到算法本体：{0}",
   "ui.custom.noBuiltin": "本算法无可读源码（原生实现或桥接算法）",
-  "ui.custom.builtinLoaded": "已载入内置实现（{0}）",
+  "ui.custom.builtinLoaded": "已载入入口（{0} 行，依赖未内联）",
+  "ui.custom.building": "正在收集依赖源码…",
+  "ui.custom.fullLoaded": "已载入完整实现：{0} 个文件 / {1} 个声明",
+  "ui.custom.fullFailed": "完整实现生成失败：{0}",
+  "ui.custom.fullMissing": "未解析依赖：{0}（运行可能报未定义）",
+  "ui.custom.fullWarn": "注意：{0}",
+  "ui.custom.autoFull": "已自动载入完整算法源码（{0} 个文件 / {1} 个声明）",
+  "ui.custom.overwrite": "编辑区已有代码，载入完整实现会覆盖它。继续？",
+  "ui.custom.fullUnavailable": "该 op 没有可解析的源码入口，已保留薄壳模板",
   "ui.custom.find": "查找",
   "ui.custom.findPh": "查找…",
   // ---- 新增（自定义实现编辑器扩充批）----
@@ -463,7 +475,7 @@ function builtinSource(op, dir) {
   return src;
 }
 
-/** 生成「以内置实现为起点」的可编辑代码文本。 */
+/** 生成「以内置实现为起点」的可编辑代码文本（仅入口，不含依赖；完整版的兜底）。 */
 function builtinTemplate(op, dir) {
   const src = builtinSource(op, dir);
   if (!src) return null;
@@ -472,9 +484,14 @@ function builtinTemplate(op, dir) {
     "// 内置实现 · " + op.id + " · " + which,
     "// 改这里就是改本算法的行为。参数从 params 取（与上方参数栏同名）。",
     "// ⚠ 下面这段是主项目源码原样抄出。它若调用了模块内部的辅助函数，",
-    "//  直接运行会报「xxx is not defined」——把那些函数一并粘进来，或换成右侧 H.* 工具。",
+    "//  直接运行会报「xxx is not defined」——点上方「载入完整实现（含依赖）」自动内联。",
     "const impl = " + src + ";",
-    "return impl(input, params, rawBytes);",
+    "const __p = Object.assign({}, params || {});",
+    "if (rawBytes) {",
+    "  __p.rawBytes = rawBytes;",
+    "  __p.rawFileName = (params && params.rawFileName) || \"input.bin\";",
+    "}",
+    "return impl(input, __p, __p.rawBytes || null);",
     "",
   ].join("\n");
 }
@@ -503,7 +520,9 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   const dir = ctx.dir || "encode";
   const saved = getCustomImpl(opId) || { enabled: false, code: "" };
   const presets = presetsFor(opId);
-  // 默认载入当前算法实现（内置源码），用户直接在当前算法上改；拿不到可读源码才回退通用模板。
+  // 默认只载入「入口」（薄壳，几行）：不把整模块复制进用户代码 —— 那等于给每个 op 造一份
+  // 与上游脱钩的快照（doRun 会自动 doSave，点一次「运行」就落库），上游修 bug 再也到不了用户。
+  // 「看真算法」由右侧实时源码面板承担（永远最新）；「改真算法」是用户显式点「载入完整实现」。
   const btpl = builtinTemplate(op, dir);
   const initialCode = saved.code || btpl || CUSTOM_TEMPLATE;
 
@@ -587,6 +606,9 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   // ---- 权威源码面板（右半，独立 CM6 只读实例）----
   let fileText = "";
   let _sourceLoaded = false;
+  let _sourcePromise = null;
+  const _modCache = new Map();   // url → {url,text}，跨文件依赖闭包用
+  let _fullBuilding = false;
   // 右侧独立的字号档位与 Compartment（与左侧互不干扰）
   const SRC_FONT_STEPS = [[10, 15], [11.5, 17], [13.5, 20], [15, 23], [17, 26], [19, 29]];
   let srcFontIdx = 1;
@@ -617,12 +639,47 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     onclick: () => { srcWrapOn = !srcWrapOn; applySrcWrap(true); },
   }, msym("text_fields"));
   const sPanel = el("div", { class: "ci-spanel" });
+  /* 在实时源文件里跳到本 op 的**算法本体**（不是它的注册块）。
+   * 「看真算法」靠这里，不靠把源码复制进编辑区 —— 副本会与上游脱钩，实时原文不会。
+   * 解析：op.encode 正文里调用的标识符 → 取第一个在本文档有声明的那个（实测 801/810 可命中）。
+   */
+  function locateOp() {
+    if (!srcView || !fileText) return;
+    let idx = -1;
+    let label = "";
+    const entry = builtinSource(op, dir);
+    if (entry) {
+      const called = [];
+      for (const m of entry.matchAll(/(^|[^.\w$])([A-Za-z_$][\w$]*)\s*\(/g)) {
+        const n = m[2];
+        if (n === "if" || n === "for" || n === "while" || n === "switch" || n === "return" || n === "typeof") continue;
+        if (n === "String" || n === "Number" || n === "Uint8Array" || n === "Array" || n === "Object") continue;
+        called.push(n);
+      }
+      for (const n of called) {
+        const re = new RegExp("\\b(?:function|const|let|var|class)\\s+" + n + "\\b");
+        const m = re.exec(fileText);
+        if (m) { idx = m.index; label = n; break; }
+      }
+    }
+    if (idx < 0) { // 兜底：退到注册块
+      idx = fileText.indexOf('"' + opId + '"');
+      if (idx < 0) idx = fileText.indexOf("'" + opId + "'");
+    }
+    if (idx < 0) { setStatus(t("ui.custom.sourceNoFile"), "err"); return; }
+    try {
+      srcView.dispatch({ selection: { anchor: idx }, effects: EditorView.scrollIntoView(idx, { y: "center" }) });
+      srcView.focus();
+      setStatus(label ? t("ui.custom.srcLocated", label) : t("ui.custom.srcLocate"), "ok");
+    } catch { /* 定位失败不影响阅读 */ }
+  }
   const sToolbar = el("div", { class: "ci-spanel-toolbar" },
     el("span", { class: "ci-src-title" }, t("ui.custom.srcToggle") + " · " + opId),
     el("button", { type: "button", class: "btn btn-icon", onclick: () => { if (srcFontIdx > 0) { srcFontIdx--; applySrcFont(); } }, title: t("ui.custom.zoomOut") }, msym("text_decrease")),
     el("button", { type: "button", class: "btn btn-icon", onclick: () => { if (srcFontIdx < SRC_FONT_STEPS.length - 1) { srcFontIdx++; applySrcFont(); } }, title: t("ui.custom.zoomIn") }, msym("text_increase")),
     srcWrapBtn,
     el("button", { type: "button", class: "btn btn-icon", onclick: () => { if (srcView) openSearchPanel(srcView); }, title: t("ui.custom.find") }, msym("search")),
+    el("button", { type: "button", class: "btn btn-icon", onclick: locateOp, title: t("ui.custom.srcLocate") }, msym("my_location")),
     el("button", { type: "button", class: "btn btn-icon", onclick: copyWhole, title: t("ui.custom.sourceCopy") }, msym("select_all")),
     el("button", { type: "button", class: "btn btn-icon", onclick: () => downloadText(fileText || "", opId + "-src.js", "text/javascript"), title: t("ui.custom.sourceDownload") }, msym("download")),
     el("button", { type: "button", class: "btn btn-icon", onclick: toggleSource, title: t("ui.custom.srcClose") }, msym("close")),
@@ -699,17 +756,25 @@ export async function openCustomImplEditor(opId, ctx = {}) {
 
   const panel = el("div", { class: "ci-panel" });
 
-  // 内置实现区：让用户能直接在当前算法上改，而不是对着空模板从零写
+  // 内置实现区：默认自动内联完整依赖闭包，用户打开就是可直接运行/修改的真算法。
   const builtinBox = el("div", { class: "ci-builtin" });
   builtinBox.append(el("h4", {}, msym("code_blocks"), t("ui.custom.builtin")));
   if (btpl) {
     builtinBox.append(el("div", { class: "ci-bi-note" }, t("ui.custom.builtinNote")));
-    builtinBox.append(el("button", {
+    const fullBtn = el("button", {
+      type: "button", class: "btn btn-filled",
+      onclick: () => loadFullImplementation({ auto: false }),
+    }, msym("account_tree"), t("ui.custom.loadFull"));
+    const entryBtn = el("button", {
       type: "button", class: "btn", onclick: () => {
         setCode(btpl);
-        setStatus(t("ui.custom.builtinLoaded", String(btpl.split("\n").length) + " 行"), "ok");
+        setStatus(t("ui.custom.builtinLoaded", String(btpl.split("\n").length)), "ok");
       },
-    }, msym("download"), t("ui.custom.loadBuiltin")));
+    }, msym("download"), t("ui.custom.loadBuiltin"));
+    const syncBtn = el("button", {
+      type: "button", class: "btn", onclick: () => loadFullImplementation({ auto: false, sync: true }),
+    }, msym("sync"), t("ui.custom.syncUpstream"));
+    builtinBox.append(el("div", { class: "ci-bi-actions", style: "display:flex;flex-wrap:wrap;gap:6px" }, fullBtn, syncBtn, entryBtn));
   } else {
     builtinBox.append(el("div", { class: "ci-bi-note" }, t("ui.custom.noBuiltin")));
   }
@@ -1026,6 +1091,8 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     if (view) { try { view.destroy(); } catch { /* ignore */ } }
     // 右侧只读源码实例同样必须销毁（CM6 view 持有 DOM 监听；不销毁则反复开关编辑器累积泄漏）
     if (srcView) { try { srcView.destroy(); } catch { /* ignore */ } srcView = null; fileText = ""; _sourceLoaded = false; }
+    _sourcePromise = null;
+    _modCache.clear();
     mask.remove();
     _editors.delete(opId);
   }
@@ -1048,7 +1115,10 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     if (typeof ctx.onTest !== "function") { setStatus(t("ui.custom.runErr"), "err"); return; }
     ctx.onTest(getCode(), (res) => {
       if (res && res.ok) {
-        setStatus(t("ui.custom.runOk", String((res.out || "").length)) + "  " + firstLine(res.out), "ok");
+        const outText = res.out && typeof res.out === "object" ? String(res.out.text ?? "") : String(res.out ?? "");
+        const files = res.out && typeof res.out === "object" && Array.isArray(res.out.files) ? res.out.files.length : 0;
+        setStatus(t("ui.custom.runOk", String(outText.length)) + (files ? ` + ${files} 个文件产物` : "") +
+          "  " + firstLine(outText), "ok");
         return;
       }
       const head = res && res.timedOut ? t("ui.custom.timeout") : t("ui.custom.runErr");
@@ -1090,6 +1160,17 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   // 默认展开权威源码（左右对照）；无 sourceFile 也走防御提示
   if (!_sourceLoaded) { _sourceLoaded = true; loadSource(); }
 
+  // 打开即见真算法：没有用户已保存代码时，后台生成完整依赖闭包并替换薄壳入口。
+  // 只在编辑区仍等于初始内容时替换（用户手快开始编辑就绝不覆盖）。
+  if (!saved.code && btpl && op && op.sourceFile) {
+    const autoBaseline = normCode(initialCode);
+    setTimeout(() => {
+      if (!mask.isConnected) return;
+      if (getCode() !== autoBaseline) return;
+      loadFullImplementation({ auto: true, baseline: autoBaseline });
+    }, 30);
+  }
+
   // 沙箱形态如实展示（降级到主线程时必须让用户知道）
   probeSandbox().then((info) => {
     const worker = info && info.mode === "worker";
@@ -1112,12 +1193,13 @@ export async function openCustomImplEditor(opId, ctx = {}) {
    */
   function loadSource() {
     const url = op && op.sourceFile;
-    if (!url) return;
-    fetch(url).then((r) => {
+    if (!url) return Promise.resolve("");
+    if (_sourcePromise) return _sourcePromise;
+    _sourcePromise = fetch(url).then((r) => {
       if (!r.ok) throw new Error(r.status + " " + r.statusText);
       return r.text();
     }).then((text) => {
-      if (!sPre.isConnected) return; // 编辑器已关闭（fetch 在途时 close）——别在孤儿节点上建实例（性能审计 M2）
+      if (!sPre.isConnected) return text; // 编辑器已关闭（fetch 在途时 close）——别在孤儿节点上建实例（性能审计 M2）
       fileText = text;
       // 首次加载：创建 CM6 只读 view（复用左侧高亮/主题/字号配置）
       if (!srcView) {
@@ -1139,8 +1221,10 @@ export async function openCustomImplEditor(opId, ctx = {}) {
       } else {
         srcView.dispatch({ changes: { from: 0, to: srcView.state.doc.length, insert: text } });
       }
+      return text;
     }).catch((err) => {
       _sourceLoaded = false; // 回滚：重新展开 / 点重试会再拉
+      _sourcePromise = null;
       sPre.innerHTML = "";
       sPre.append(el("div", { class: "ci-src-err" },
         msym("cloud_off"),
@@ -1150,8 +1234,87 @@ export async function openCustomImplEditor(opId, ctx = {}) {
           onclick: () => { sPre.innerHTML = ""; _sourceLoaded = true; loadSource(); },
         }, msym("refresh"), t("ui.custom.retry")),
       ));
+      return "";
     });
+    return _sourcePromise;
   }
+
+  /** 依赖模块加载：只允许同源（或同为 file://），避免把插件 op 的 sourceFile 变成任意外发通道。 */
+  async function fetchSourceModule(url) {
+    if (_modCache.has(url)) return _modCache.get(url);
+    let u;
+    try { u = new URL(url, location.href); } catch { throw new Error("依赖路径非法：" + url); }
+    if (u.protocol !== "file:" && u.origin !== location.origin) {
+      throw new Error("拒绝跨域加载依赖：" + url);
+    }
+    const r = await fetch(u.href, { cache: "no-cache" });
+    if (!r.ok) throw new Error(r.status + " " + r.statusText);
+    const rec = { url: u.href, text: await r.text() };
+    _modCache.set(url, rec);
+    _modCache.set(u.href, rec);
+    return rec;
+  }
+
+  /**
+   * 载入「完整实现」：入口 + 同文件依赖 + 相对 import 依赖全部内联成可直接运行的源码。
+   * auto=true 时只在用户未改动编辑区时自动替换（打开编辑器即看到真算法，但不覆盖已有编辑）。
+   * 生成失败不破坏现有代码，状态条显式报错。
+   */
+  async function loadFullImplementation({ auto = false, sync = false, baseline: base0 = null } = {}) {
+    if (_fullBuilding) return false;
+    if (!op || !op.sourceFile || !btpl) {
+      if (!auto) setStatus(t("ui.custom.fullUnavailable"), "err");
+      return false;
+    }
+    const baseline = base0 != null ? base0 : getCode();
+    if (!auto) {
+      const untouched = !baseline.trim() || baseline === normCode(btpl) || baseline === normCode(CUSTOM_TEMPLATE);
+      if (!untouched && !window.confirm(t("ui.custom.overwrite"))) return false;
+    }
+    _fullBuilding = true;
+    setStatus(t("ui.custom.building"));
+    try {
+      const text = await loadSource();
+      if (!text) throw new Error(t("ui.custom.sourceNoFile"));
+      const { buildSourceBundle } = await import("../core/customImplSource.js");
+      const bundle = await buildSourceBundle({
+        fileText: text,
+        fileUrl: op.sourceFile,
+        opId,
+        dir,
+        op,
+        loadModule: fetchSourceModule,
+      });
+      if (!bundle.ok) throw new Error((bundle.errors || []).join("；") || "未知错误");
+      if (auto && getCode() !== baseline) return false; // 用户已开始编辑 → 不覆盖
+      const missing = (bundle.missing || []).filter(Boolean);
+      // 自动模式只接受「依赖闭包完整」的结果；有未解析依赖时保留薄壳入口，避免把能跑的
+      // 内置实现换成半成品（手动点「载入完整实现」仍允许，状态条会列出缺失项）。
+      if (auto && missing.length) {
+        // 自动模式遇到闭包不完整：保留薄壳入口，用中性提示，不把正常可用的 op 标红。
+        setStatus(t("ui.custom.fullMissing", missing.slice(0, 8).join(", ")), "");
+        return false;
+      }
+      setCode(bundle.code);
+      let msg = t("ui.custom.fullLoaded", String(bundle.files.length), String(bundle.decls));
+      if (bundle.warnings && bundle.warnings.length) {
+        msg += "\n" + t("ui.custom.fullWarn", bundle.warnings.slice(0, 3).join("；"));
+      }
+      if (missing.length) {
+        msg += "\n" + t("ui.custom.fullMissing", missing.slice(0, 8).join(", "));
+      }
+      setStatus(msg, missing.length ? "err" : "ok");
+      if (auto) toast(t("ui.custom.autoFull", String(bundle.files.length), String(bundle.decls)));
+      return true;
+    } catch (e) {
+      setStatus(t("ui.custom.fullFailed", (e && e.message) || String(e)), auto ? "" : "err");
+      if (auto && !sync) toast(t("ui.custom.fullUnavailable"));
+      return false;
+    } finally {
+      _fullBuilding = false;
+    }
+  }
+
   function copyWhole() {
     if (!fileText) { toast(t("ui.custom.sourceNoFile")); return; }
     navigator.clipboard.writeText(fileText).then(() => toast(t("ui.custom.sourceCopied"))).catch(() => downloadText(fileText, opId + "-src.js", "text/javascript"));

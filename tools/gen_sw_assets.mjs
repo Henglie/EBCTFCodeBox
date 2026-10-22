@@ -59,6 +59,11 @@ const EXCLUDE_RULES = [
   // KaTeX：真·懒加载（katexLoader.js 单例 Promise，首次公式渲染才插 script/link；缺失降级为
   // 原始 TeX 文本 <code class="katex-fallback">，不白屏）
   [/^public\/vendor\/katex\//, "KaTeX dist（首次公式渲染才加载）"],
+  // 编辑器 / PGP / 条码内核：三者都是「打开对应功能才 dynamic import」
+  // （customImplEditor.js / pgp.js / barcodeGen.js），缺失时各自降级或显式报错。
+  // 首次在线使用后由 SW runtime cache 回填，此后离线可用——与 sw.js 的
+  // RUNTIME_CACHE_FIRST "/src/vendor/" 两处保持同步。两份许可 .txt 仍留预缓存。
+  [/^src\/vendor\/(codemirror\.bundle\.js|openpgp\.min\.js|bwip-js\.js|bwipp\.js)$/, "编辑器/PGP/条码内核（按功能懒加载）"],
   // 语言包：i18n/index.js 仅静态 import zh；en 已改按需 dynamic import（ensureLoaded/_loadEn，
   // boot 后 warmEnglish 空闲预热），仍留预缓存保离线切换；其余语言同上下文动态加载
   [/^src\/i18n\/locales\//, "i18n 语言包（切语言才动态 import）"],
@@ -91,6 +96,13 @@ const swWithoutStamp = swSource.replace(/^\/\/ BUILD-STAMP:.*\r?\n/m, "");
 for (const file of ["index.html", "manifest.json", "sw.js", ...kept]) {
   hash.update(file);
   hash.update(file === "sw.js" ? swWithoutStamp : await readFile(file));
+}
+// 按需资产（EXCLUDE_RULES）不进预缓存，但**必须进 revision**：否则 WASM/KaTeX/语言包
+// 更新后 ASSET_REV 不变，老用户 SW 不会换缓存名，按需资产会一直命中旧缓存（安全审计 2026-10）。
+// 只哈希内容、不加入 assets 清单，预缓存体积不变。
+for (const file of dropped) {
+  hash.update(file);
+  hash.update(await readFile(file));
 }
 const revision = hash.digest("hex").slice(0, 16);
 const source = `self.__EBCTF_ASSET_REV = ${JSON.stringify(revision)};\nself.__EBCTF_ASSETS = ${JSON.stringify(assets, null, 2)};\n`;

@@ -88,6 +88,8 @@ import "./checkdigit.js"; // 条码/校验位组
 import "./morseExt.js"; // 摩斯/声光编码扩展组
 import "./fancy3.js"; // 花式趣味编码补全组（Whitespace/Pigpen/键盘漂移/Malbolge 识别）
 import "./compress.js"; // 压缩/归档识别组（gzip/zlib/deflate 解压 + zip/tar 结构 + magic 识别）
+import "./memeCodecs.js"; // 迷因编码三件套（哦齁/仙子曰、哈基米三进制、杂鱼 Base8；cn，双向）
+import "./zakoOfficial.js"; // 杂鱼密语官网闭源版复刻（PBKDF2+AES-GCM+不可见变体选择器；cn，双向）
 import "./hashCrack.js"; // 哈希爆破/彩虹表组（哈希类型识别 + 字典爆破 + 彩虹表 + HMAC 爆破）
 import "./cryptanalysis.js"; // 密码分析工具组（频率分析/IC/Kasiski/卡方/单表替换求解/凯撒求位移）
 import "./cryptanalysis2.js"; // 密码分析扩展（维吉尼亚全自动/Hill已知明文/Playfair爬山）

@@ -73,7 +73,7 @@ export default {
       { in: "Hi", param: "hex 编码", out: "x48 x69" },
     ],
     tips: ["看到 `b.../x.../o.../d...` 混排的码串，就是这种带进制前缀的编码。", "混合进制解码，CTF 里偶尔当障眼法。"],
-    aka: ["混合进制", "hybrid code", "前缀进制", "bxod", "混合进制解码", "带前缀进制", "进制前缀混合", "随波逐流混合进制", "多进制混合", "prefix radix", "bxod编码", "混合进制编码"],
+    aka: ["混合进制", "hybrid code", "前缀进制", "bxod", "混合进制解码", "带前缀进制", "进制前缀混合", "多进制混合", "prefix radix", "bxod编码", "混合进制编码"],
   },
 
   separationAscii: {

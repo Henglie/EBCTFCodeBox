@@ -31,6 +31,7 @@ import { register } from "./registry.js";
 import {
   detectArchiveMagic, inputToBytes, bytesToOutput,
   parseZipStructure, streamDecompress,
+  zipEncryptionScan, zipEncryptionLines, zipEncryptionTag,
 } from "./compress.js";
 import {
   is7z, parse7zHeader, run7zWasm, sevenZipWasmAvailable,
@@ -137,11 +138,15 @@ function renderZipStructure(bytes) {
   lines.push("");
   lines.push("--- 文件清单（" + list.length + " 项）---");
   lines.push("序号\t文件名\t压缩方式\t压缩大小\t原始大小\t加密\t来源");
+  // 加密真伪：加密位只是声明 → 逐条按声明方式实测数据（伪加密=数据仍是明文）
+  const scan = zipEncryptionScan(bytes);
   let idx = 1;
   let encCount = 0;
   for (const e of list) {
     const methodDesc = ZIP_COMPRESS_METHODS[e.method] || ("未知(" + e.method + ")");
-    const enc = e.encrypted ? "是" : "否";
+    const tag = e.source === "CDH" ? zipEncryptionTag(scan, e.offset) : "";
+    let enc = e.encrypted ? "是" : "否";
+    if (tag) enc = "是(" + tag + ")";
     if (e.encrypted) encCount++;
     lines.push(
       idx + "\t" +
@@ -154,19 +159,9 @@ function renderZipStructure(bytes) {
     );
     idx++;
   }
- // 伪加密检测：CDH 加密位 = 1 但 LFH 加密位 = 0
-  const cdhEnc = entries.filter((e) => e.source === "CDH" && e.encrypted);
-  const lfhEnc = entries.filter((e) => e.source === "LFH" && e.encrypted);
-  if (cdhEnc.length > 0 && lfhEnc.length === 0) {
+  if ((scan.ok ? scan.encrypted : encCount) > 0) {
     lines.push("");
-    lines.push("⚠ 疑似伪加密：Central Directory 标记加密 " + cdhEnc.length +
-      " 项，但 Local File Header 全部未加密（解 CD 加密位即可正常解压）");
-  } else if (lfhEnc.length > 0) {
-    lines.push("");
-    lines.push("⚠ 真加密：" + lfhEnc.length + " 项 Local File Header 标记加密（需密码，本工具不解压加密项）");
-  } else if (encCount > 0) {
-    lines.push("");
-    lines.push("加密项: " + encCount + "（仅列元信息，不解压）");
+    lines.push(...zipEncryptionLines(scan));
   }
   return lines;
 }

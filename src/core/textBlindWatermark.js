@@ -2,8 +2,8 @@
  * textBlindWatermark.js — 文本盲水印 v1（guofei9987/text_blind_watermark 的 JS 版格式）。
  *
  * 算法来源：github.com/guofei9987/text_blind_watermark（PyPI: text-blind-watermark，MIT）。
- * 对拍基准 = 随波逐流打包的 v1 JS 移植页（CTFReBoxESS「文本隐水印.htm」，页内自述
- * 「作者 郭飞（guofei9987）」），逐步骤 1:1 行为复刻（str2bin/embed/extract/bin2str）。
+ * 对拍基准 = 公开的 v1 JS 移植实现（页内自述作者 郭飞（guofei9987）），逐步骤 1:1 行为复刻
+ * （str2bin/embed/extract/bin2str）。
  *
  * v1 格式（与 Python 原库 v2+ 多字符格式、本项目 zeroWidth（Misawa radix-4）均不兼容）：
  *   encode: 水印逐字符 charCodeAt().toString(2) 变长不补零，字符间以单空格分隔、

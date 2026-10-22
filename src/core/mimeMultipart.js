@@ -156,7 +156,7 @@ register({
   params: [
     { key: "boundary", label: "boundary（encode 用）", type: "text", default: "", placeholder: "encode 方向自定义分隔串" },
   ],
-  run: mimeMultipartOp,
+  decode: mimeMultipartOp,
   encode: mimeMultipartEncode,
 });
 

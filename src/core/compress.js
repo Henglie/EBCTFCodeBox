@@ -544,6 +544,20 @@ const ZIP_COMPRESS_METHODS = {
   98: "PPMd", 99: "AES 加密",
 };
 
+/** ZIP 条目名解码：通用位标志 bit11=1 声明文件名为 UTF-8（APPNOTE §4.4.4），
+ *  否则沿用历史口径逐字节映射。UTF-8 严格解码失败时退回逐字节映射（不产 U+FFFD）。 */
+function zipDecodeName(bytes, start, len, flag) {
+  if (len <= 0 || start < 0 || start >= bytes.length) return "";
+  const n = Math.min(len, bytes.length - start);
+  if ((flag & 0x0800) !== 0) {
+    const r = decodeUtf8Lossless(bytes.subarray(start, start + n));
+    if (r.ok) return r.text;
+  }
+  let s = "";
+  for (let i = 0; i < n; i++) s += String.fromCharCode(bytes[start + i]);
+  return s;
+}
+
 function parseZipStructure(bytes) {
   const entries = [];
   let lfhCount = 0, cdhCount = 0, eocdOffset = -1;
@@ -563,8 +577,7 @@ function parseZipStructure(bytes) {
       const extraLen = u16le(bytes, i + 28);
       const nameStart = i + 30;
       if (nameStart + nameLen > bytes.length) continue;
-      let name = "";
-      for (let k = 0; k < nameLen; k++) name += String.fromCharCode(bytes[nameStart + k]);
+      const name = zipDecodeName(bytes, nameStart, nameLen, flag);
       const dataStart = nameStart + nameLen + extraLen;
       entries.push({
         source: "LFH", offset: i, name, flag, method, compSize, uncompSize,
@@ -585,8 +598,7 @@ function parseZipStructure(bytes) {
       const lfhOffset = u32le(bytes, i + 42);
       const nameStart = i + 46;
       if (nameStart + nameLen > bytes.length) continue;
-      let name = "";
-      for (let k = 0; k < nameLen; k++) name += String.fromCharCode(bytes[nameStart + k]);
+      const name = zipDecodeName(bytes, nameStart, nameLen, flag);
       entries.push({
         source: "CDH", offset: i, name, flag, method, compSize, uncompSize,
         encrypted: (flag & 1) === 1, lfhOffset,
@@ -597,6 +609,251 @@ function parseZipStructure(bytes) {
     }
   }
   return { entries, lfhCount, cdhCount, eocdOffset };
+}
+
+// ============================================================
+// ZIP 加密「真伪」实测（加密位只是声明，不等于数据真被加密）
+//
+// 判别原理（PKWARE APPNOTE 6.3.x §4.4.4：通用位标志 bit0=加密）：
+//   bit0=1 只说明「作者声称加密」。伪加密把该位改成 1 而数据原样保留，因此
+//   按条目声明的压缩方式把数据真解一次即可区分，不依赖任何阈值/启发式：
+//     · 解得出，且解出长度、CRC32 与头部声明一致 → 数据是明文 → 伪加密（位在撒谎）
+//     · 解不出，或长度/CRC 不符 → 数据不是明文 → 真加密（ZipCrypto 密文前 12 字节
+//       是加密头，Stored 时压缩大小必为原始大小+12）或数据损坏
+//     · AES（method 99 / extra 0x9901）无口令必解不出 → 直接判真加密
+//   明文解错还能撞对 CRC32 的概率 2^-32，可忽略；反之伪加密的 CRC 必然吻合。
+// 体积/条数上限：避免 zip 炸弹与超大条目把主线程拖死，超限如实报「无法实测」。
+// ============================================================
+const ZIP_SIG_EOCD = 0x06054b50;
+const ZIP_SIG_CDH = 0x02014b50;
+const ZIP_SIG_LFH = 0x04034b50;
+const ZIP_PROBE_MAX_COMP = 8 * 1024 * 1024;
+const ZIP_PROBE_MAX_UNCOMP = 8 * 1024 * 1024;
+const ZIP_PROBE_MAX_ENTRIES = 8;
+
+/** 在 off 处读本地文件头（签名必须吻合），返回关键字段与数据起点。 */
+function zipReadLfh(bytes, off) {
+  if (!(off >= 0) || off + 30 > bytes.length) return null;
+  if (u32le(bytes, off) !== ZIP_SIG_LFH) return null;
+  const nameLen = u16le(bytes, off + 26), extraLen = u16le(bytes, off + 28);
+  return {
+    flag: u16le(bytes, off + 6),
+    method: u16le(bytes, off + 8),
+    crc: u32le(bytes, off + 14),
+    compSize: u32le(bytes, off + 18),
+    uncompSize: u32le(bytes, off + 22),
+    dataOffset: off + 30 + nameLen + extraLen,
+  };
+}
+
+/** extra 字段里是否有 AES 标记（0x9901，WinZip AES）。 */
+function zipExtraHasAes(bytes, start, len) {
+  const end = Math.min(bytes.length, start + len);
+  let p = start;
+  while (p + 4 <= end) {
+    const id = u16le(bytes, p), sz = u16le(bytes, p + 2);
+    if (id === 0x9901) return true;
+    p += 4 + sz;
+  }
+  return false;
+}
+
+/**
+ * EOCD → 中央目录精确遍历（不逐字节扫签名：压缩数据里可能恰好出现 PK 签名）。
+ * 拼接文件（前缀垃圾/SFX）按「中央目录紧贴 EOCD 之前」反推真实位置并给出 delta。
+ * @returns {{ok:boolean, error?:string, eocd?:number, cdOffset?:number, cdSize?:number,
+ *   count?:number, delta?:number, entries?:Array}}
+ */
+function parseZipCentralDirectory(bytes) {
+  if (bytes.length < 22) return { ok: false, error: "文件 < 22 字节，无 EOCD" };
+  let eocd = -1;
+  const floor = Math.max(0, bytes.length - 22 - 65535);
+  for (let i = bytes.length - 22; i >= floor; i--) {
+    if (u32le(bytes, i) === ZIP_SIG_EOCD) { eocd = i; break; }
+  }
+  if (eocd < 0) return { ok: false, error: "未找到 EOCD（文件截断或非 ZIP）" };
+  const count = u16le(bytes, eocd + 10);
+  const cdSize = u32le(bytes, eocd + 12);
+  const cdOff = u32le(bytes, eocd + 16);
+  if (count === 0xffff || cdOff === 0xffffffff) {
+    return { ok: false, error: "ZIP64（条目数/偏移顶格），未展开" };
+  }
+  let delta = 0, cur = cdOff;
+  if (cur + 46 > bytes.length || u32le(bytes, cur) !== ZIP_SIG_CDH) {
+    const actual = eocd - cdSize;
+    if (actual > 0 && actual + 46 <= bytes.length && u32le(bytes, actual) === ZIP_SIG_CDH) {
+      delta = actual - cdOff;
+      cur = actual;
+    }
+  }
+  const entries = [];
+  for (let i = 0; i < count; i++) {
+    if (cur + 46 > bytes.length || u32le(bytes, cur) !== ZIP_SIG_CDH) {
+      return { ok: false, error: "中央目录第 " + (i + 1) + " 条解析失败（ZIP64 或损坏）", entries };
+    }
+    const flag = u16le(bytes, cur + 8);
+    const method = u16le(bytes, cur + 10);
+    const nameLen = u16le(bytes, cur + 28);
+    const extraLen = u16le(bytes, cur + 30);
+    const commentLen = u16le(bytes, cur + 32);
+    const nameStart = cur + 46;
+    const name = zipDecodeName(bytes, nameStart, nameLen, flag);
+    entries.push({
+      name,
+      flag,
+      method,
+      crc: u32le(bytes, cur + 16),
+      compSize: u32le(bytes, cur + 20),
+      uncompSize: u32le(bytes, cur + 24),
+      cdhOffset: cur,
+      lfhOffset: u32le(bytes, cur + 42) + delta,
+      aes: method === 99 || zipExtraHasAes(bytes, nameStart + nameLen, extraLen),
+    });
+    cur += 46 + nameLen + extraLen + commentLen;
+  }
+  return { ok: true, eocd, cdOffset: cdOff + delta, cdSize, count, delta, entries };
+}
+
+/**
+ * 单条目「数据是否明文」实测。
+ * @returns {{plain:true|false|null, why:string}} true=解出且与头部吻合（伪加密证据）；
+ *   false=解不出/不吻合（真加密或损坏证据）；null=无法判定（目录/空/超限/结构不全）
+ */
+function zipEntryPlainProbe(bytes, e) {
+  if (!e) return { plain: null, why: "条目缺失" };
+  if (e.name.endsWith("/")) return { plain: null, why: "目录条目（无数据）" };
+  const lfh = zipReadLfh(bytes, e.lfhOffset);
+  if (!lfh) return { plain: null, why: "Local File Header 缺失或签名不符" };
+  const compSize = e.compSize || lfh.compSize;
+  const uncompSize = e.uncompSize || lfh.uncompSize;
+  const crc = e.crc || lfh.crc;
+  if (compSize === 0) {
+    if (uncompSize === 0 && crc === 0) return { plain: true, why: "空文件（0 字节，无数据可加密）" };
+    return { plain: null, why: "压缩大小为 0（需数据描述符或未回填），无法定位数据" };
+  }
+  if (compSize > ZIP_PROBE_MAX_COMP || uncompSize > ZIP_PROBE_MAX_UNCOMP) {
+    return { plain: null, why: "体积超实测上限（压缩 " + compSize + "B / 原始 " + uncompSize + "B）" };
+  }
+  if (lfh.dataOffset + compSize > bytes.length) {
+    return { plain: null, why: "数据区越界（文件截断）" };
+  }
+  if (e.method !== 0 && e.method !== 8) {
+    return { plain: null, why: "压缩方式 " + e.method + " 非 Stored/Deflate，无法实测" };
+  }
+  const raw = bytes.subarray(lfh.dataOffset, lfh.dataOffset + compSize);
+  let out;
+  try {
+    out = e.method === 0 ? raw : new Uint8Array(inflateRaw(raw));
+  } catch (err) {
+    return { plain: false, why: "按声明方式 inflate 失败（" + (err && err.message ? err.message : err) + "）" };
+  }
+  if (uncompSize && out.length !== uncompSize) {
+    return { plain: false, why: "解出 " + out.length + "B ≠ 头声明 " + uncompSize + "B（密文头/填充特征）" };
+  }
+  const c = crc32Bytes(out) >>> 0;
+  if (crc && c !== (crc >>> 0)) {
+    return { plain: false, why: "CRC32 不符（算 0x" + c.toString(16) + " / 头 0x" + (crc >>> 0).toString(16) + "）" };
+  }
+  return { plain: true, why: "明文可解（" + out.length + "B，CRC32 0x" + c.toString(16) + " 与头部一致）" };
+}
+
+/**
+ * 归档级加密真伪判定（加密位=1 的条目逐条实测）。
+ * @returns {{ok:boolean, error:string, entries:number, encrypted:number, probed:number,
+ *   plain:number, real:number, unknown:number, aes:number,
+ *   verdict:"none"|"pseudo"|"real"|"mixed"|"unknown", items:Array, notes:string[]}}
+ */
+function zipEncryptionScan(bytes) {
+  const cd = parseZipCentralDirectory(bytes);
+  const scan = {
+    ok: !!cd.ok, error: cd.error || "", entries: 0, encrypted: 0, probed: 0,
+    plain: 0, real: 0, unknown: 0, aes: 0, verdict: "unknown", items: [], notes: [],
+  };
+  if (!cd.ok) return scan;
+  scan.entries = cd.entries.length;
+  // 加密位可能只被改在其中一个头（CDH 或 LFH），两处都看，避免「只改 LFH」漏判
+  const enc = cd.entries.filter((e) => {
+    if ((e.flag & 1) === 1) return true;
+    const lfh = zipReadLfh(bytes, e.lfhOffset);
+    return !!(lfh && (lfh.flag & 1));
+  });
+  scan.encrypted = enc.length;
+  if (enc.length === 0) { scan.verdict = "none"; return scan; }
+  let budget = ZIP_PROBE_MAX_ENTRIES;
+  for (const e of enc) {
+    const lfh0 = zipReadLfh(bytes, e.lfhOffset);
+    const item = {
+      name: e.name, cdhOffset: e.cdhOffset, lfhOffset: e.lfhOffset,
+      flag: e.flag, flagLfh: lfh0 ? lfh0.flag : null,
+      method: e.method, aes: !!e.aes, verdict: "unknown", why: "",
+    };
+    if (e.aes) {
+      item.verdict = "real";
+      item.why = e.method === 99 ? "AES 加密（method 99）" : "AES 加密（extra 0x9901）";
+      scan.aes++; scan.real++;
+    } else if (budget <= 0) {
+      item.why = "超出单份归档实测上限（" + ZIP_PROBE_MAX_ENTRIES + " 条），未实测";
+      scan.unknown++;
+    } else {
+      budget--;
+      const pr = zipEntryPlainProbe(bytes, e);
+      scan.probed++;
+      item.why = pr.why;
+      if (pr.plain === true) { item.verdict = "plain"; scan.plain++; }
+      else if (pr.plain === false) { item.verdict = "real"; scan.real++; }
+      else scan.unknown++;
+    }
+    scan.items.push(item);
+  }
+  if (scan.plain > 0 && scan.real === 0) scan.verdict = "pseudo";
+  else if (scan.real > 0 && scan.plain === 0) scan.verdict = "real";
+  else if (scan.plain > 0 && scan.real > 0) scan.verdict = "mixed";
+  else scan.verdict = "unknown";
+  return scan;
+}
+
+/** 加密真伪判定的报告行（archiveUnified / zipList 共用同一份口径）。 */
+function zipEncryptionLines(scan) {
+  const L = [];
+  if (!scan.ok) {
+    L.push("加密判定: 无法实测（" + (scan.error || "中央目录解析失败") + "），不能仅凭标志位断定真加密");
+    return L;
+  }
+  if (scan.verdict === "none") {
+    L.push("加密位: 全部为 0（" + scan.entries + " 项，未加密）");
+    return L;
+  }
+  const pick = (v) => scan.items.filter((it) => it.verdict === v);
+  const brief = (arr, n) => arr.slice(0, n).map((it) => "    · " + (it.name || "(空名)") + " → " + it.why).join("\n");
+  if (scan.verdict === "pseudo") {
+    L.push("⚠ 伪加密（实测确认）：" + scan.encrypted + " 项加密位=1，但数据按声明压缩方式可解且长度/CRC32 与头部一致");
+    L.push("   即：标志位在撒谎，数据本身没加密 → 用「ZIP 伪加密修复」清位即可正常解压（LFH/CDH 都置位也一样）");
+    if (scan.plain) L.push(brief(pick("plain"), 3));
+    if (scan.unknown) L.push("   （另有 " + scan.unknown + " 项无法实测：" + pick("unknown")[0].why + "）");
+  } else if (scan.verdict === "real") {
+    L.push("⚠ 真加密（实测）：" + scan.encrypted + " 项加密位=1 且数据解不开 → 不是伪加密，清位无效，需密码");
+    if (scan.aes) L.push("   AES 加密项: " + scan.aes + "（WinZip AES，无口令必解不出）");
+    if (scan.real) L.push(brief(pick("real"), 3));
+    if (scan.unknown) L.push("   （另有 " + scan.unknown + " 项无法实测：" + pick("unknown")[0].why + "）");
+    L.push("   处理：ZIP 弱口令爆破 / 已知明文；伪加密修复对真加密无效");
+  } else if (scan.verdict === "mixed") {
+    L.push("⚠ 混合：" + scan.plain + " 项实测为明文（伪加密），" + scan.real + " 项解不开（真加密）——逐条判定如下");
+    L.push(brief(pick("plain").concat(pick("real")), 6));
+  } else {
+    L.push("加密位=1 共 " + scan.encrypted + " 项，但均无法实测（" + (scan.items[0] ? scan.items[0].why : "未知") + "）");
+    L.push("   不能据此断定真加密：先试「ZIP 伪加密修复」，清位后仍报密码错才是真加密");
+  }
+  return L;
+}
+
+/** 条目级判定短标签（文件清单「加密」列用）：伪 / 真 / ?。 */
+function zipEncryptionTag(scan, cdhOffset) {
+  if (!scan || !scan.ok) return "";
+  const it = scan.items.find((x) => x.cdhOffset === cdhOffset);
+  if (!it) return "";
+  if (it.verdict === "plain") return "伪";
+  if (it.verdict === "real") return "真";
+  return "?";
 }
 
 function zipListRun(text, p) {
@@ -623,11 +880,15 @@ function zipListRun(text, p) {
   lines.push("");
   lines.push("--- 文件清单（" + list.length + " 项）---");
   lines.push("序号\t文件名\t\t压缩方式\t压缩大小\t原始大小\t加密\t来源");
+  // 加密真伪：加密位只是声明 → 逐条按声明方式实测数据（伪加密=数据仍是明文）
+  const scan = zipEncryptionScan(bytes);
   let idx = 1;
   let encCount = 0;
   for (const e of list) {
     const methodDesc = ZIP_COMPRESS_METHODS[e.method] || ("未知(" + e.method + ")");
-    const enc = e.encrypted ? "是" : "否";
+    const tag = e.source === "CDH" ? zipEncryptionTag(scan, e.offset) : "";
+    let enc = e.encrypted ? "是" : "否";
+    if (tag) enc = "是(" + tag + ")";
     if (e.encrypted) encCount++;
     lines.push(
       idx + "\t" +
@@ -640,19 +901,9 @@ function zipListRun(text, p) {
     );
     idx++;
   }
- // 伪加密检测：CDH 加密位 = 1 但对应 LFH 加密位 = 0
-  const cdhEnc = entries.filter((e) => e.source === "CDH" && e.encrypted);
-  const lfhEnc = entries.filter((e) => e.source === "LFH" && e.encrypted);
-  if (cdhEnc.length > 0 && lfhEnc.length === 0) {
+  if ((scan.ok ? scan.encrypted : encCount) > 0) {
     lines.push("");
-    lines.push("⚠ 疑似伪加密：Central Directory 标记加密 " + cdhEnc.length +
-      " 项，但 Local File Header 全部未加密（解 CD 加密位即可正常解压）");
-  } else if (lfhEnc.length > 0) {
-    lines.push("");
-    lines.push("⚠ 真加密：" + lfhEnc.length + " 项 Local File Header 标记加密（需密码，本工具不解压加密项）");
-  } else if (encCount > 0) {
-    lines.push("");
-    lines.push("加密项: " + encCount + "（仅列元信息，不解压）");
+    lines.push(...zipEncryptionLines(scan));
   }
   return lines.join("\n");
 }
@@ -952,6 +1203,7 @@ export {
   gzipOps, zlibOps, deflateRawOps,
   archiveIdentifyRun, zipListRun, tarListRun, b64CompressedProbeRun,
   parseZipStructure, parseTarString, detectArchiveMagic, inputToBytes, bytesToOutput,
+  parseZipCentralDirectory, zipEntryPlainProbe, zipEncryptionScan, zipEncryptionLines, zipEncryptionTag,
   hasStreams, streamCompress, streamDecompress,
   jsDeflateFallback, deflateStoredRaw, crc32Bytes, adler32Bytes, // 压缩兜底（stored deflate）
 };

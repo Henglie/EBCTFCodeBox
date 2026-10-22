@@ -48,6 +48,7 @@ import {
 } from "../exhaustiveDecode.js";
 // 字节统计编码识别模型（纯 JS 前向推理，提名用；加载失败静默降级纯规则）。
 import { loadByteStatWeights, byteStatPredict } from "./byteStatCnn.js";
+import { CTF_HOT_META } from "../ctfPresets.js";
 
 // ============ 字节统计模型提名 ============
 // 模型只做「输入属于哪类编码」的提名，绝不硬过滤——最终判据仍是下方各 op 能否严格
@@ -334,6 +335,91 @@ function isEchoOfInput(result, input) {
   return a.length > 0 && a === echoNormalize(input);
 }
 
+// ---- 近似回声：字符二元组 Dice 相似度 ----
+// 精确回声只抓「归一化后完全相同」；但只删一个字符、只改个别字母的候选仍会把原文搬回来
+// （如「只剥掉一个不可见字符」「只做一次近似替换」）。这类候选卡方低、字面好看，会挤占
+// 真正的解。这里用 bigram Dice 做有界近似判定，并配三道放行条件（见 finalizeResults）：
+// 出现新 flag 结构 / 命中 crib / 命中用户目标时不降权。
+// 只对归一化后长度 ≥16 的输入启用，短串过容易被判近似，宁可放过。
+const NEAR_ECHO_MIN_LEN = 16;
+const NEAR_ECHO_MIN_DICE = 0.85;
+const NEAR_ECHO_MAX_SCAN = 4000;
+function bigramDice(a, b) {
+  const A = a.length > NEAR_ECHO_MAX_SCAN ? a.slice(0, NEAR_ECHO_MAX_SCAN) : a;
+  const B = b.length > NEAR_ECHO_MAX_SCAN ? b.slice(0, NEAR_ECHO_MAX_SCAN) : b;
+  if (A.length < 2 || B.length < 2) return A === B ? 1 : 0;
+  const freq = new Map();
+  for (let i = 0; i < A.length - 1; i++) {
+    const g = A.slice(i, i + 2);
+    freq.set(g, (freq.get(g) || 0) + 1);
+  }
+  let overlap = 0;
+  for (let i = 0; i < B.length - 1; i++) {
+    const g = B.slice(i, i + 2);
+    const n = freq.get(g) || 0;
+    if (n > 0) { overlap++; freq.set(g, n - 1); }
+  }
+  return (2 * overlap) / (A.length - 1 + B.length - 1);
+}
+function nearEchoSimilarity(result, input) {
+  if (!input || !result) return 0;
+  const a = echoNormalize(result), b = echoNormalize(input);
+  if (a.length < NEAR_ECHO_MIN_LEN || b.length < NEAR_ECHO_MIN_LEN) return 0;
+  const ratio = Math.min(a.length, b.length) / Math.max(a.length, b.length);
+  if (ratio < 0.85) return 0;
+  const dice = bigramDice(a, b);
+  return dice >= NEAR_ECHO_MIN_DICE ? dice : 0;
+}
+
+// 换位回声：railFence/scytale/columnar/caesarBox/everyN 等只重排字符，字符多重集与输入几乎
+// 相同（bigram 相似度可能很低，抓不到）。判据：字符袋 Dice ≥0.99。是否降权仍看「结果是否
+// 比输入更像人话」——真栅栏解密会把乱码变明文（meaningfulTextBonus 明显下降），放行；
+// 把一段已像人话的输入打乱只会更差，降权。
+function charBagDice(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 0;
+  const A = a.length > NEAR_ECHO_MAX_SCAN ? a.slice(0, NEAR_ECHO_MAX_SCAN) : a;
+  const B = b.length > NEAR_ECHO_MAX_SCAN ? b.slice(0, NEAR_ECHO_MAX_SCAN) : b;
+  const freq = new Map();
+  for (const ch of A) freq.set(ch, (freq.get(ch) || 0) + 1);
+  let overlap = 0;
+  for (const ch of B) {
+    const n = freq.get(ch) || 0;
+    if (n > 0) { overlap++; freq.set(ch, n - 1); }
+  }
+  return (2 * overlap) / (A.length + B.length || 1);
+}
+function isAnagramEcho(result, input) {
+  if (!input || !result) return false;
+  const a = echoNormalize(result), b = echoNormalize(input);
+  if (a.length < NEAR_ECHO_MIN_LEN || b.length < NEAR_ECHO_MIN_LEN) return false;
+  return charBagDice(a, b) >= 0.99;
+}
+// 近似回声降权比精确回声温和：精确回声保留 30% 成绩且封顶 50%，近似回声保留 55%、封顶 65%。
+const NEAR_ECHO_KEEP_RATIO = 0.55;
+const NEAR_ECHO_CONF_CAP = 0.65;
+function nearEchoPenalizedScore(score) {
+  return confidenceToScore(Math.min(scoreToConfidence(score) * NEAR_ECHO_KEEP_RATIO, NEAR_ECHO_CONF_CAP));
+}
+
+// ---- CTF 热度：把 ctfPresets 的 rank 接进最终排序 ----
+// rank1 = -16、rank2 = -8；参数扫描/带密钥分支（chain 形如 caesar(shift=3) / xor:5）
+// 只吃 1/3 权重——避免 25 条凯撒位移一起抬升把核心解码器挤出前排。
+// 只奖励「可打印结果」：乱码即使算法热门也不该提前；该奖励远小于 flag(-40)/crib/有意义文本(-120)。
+function ctfHotBonus(chain, result) {
+  if (!chain || !chain.length) return 0;
+  if (isPrintableRatio(result) < 0.8) return 0;
+  let best = 9;
+  for (const step of chain) {
+    const id = String(step).split(/[(:]/)[0];
+    const meta = CTF_HOT_META[id];
+    if (meta && meta.rank < best) best = meta.rank;
+  }
+  if (best > 2) return 0;
+  const base = best === 1 ? 16 : 8;
+  const isSweep = chain.some((s) => /[(:]/.test(String(s)));
+  return -(isSweep ? base / 3 : base) / Math.max(1, chain.length);
+}
+
 // flag 关键词族（与 signals.js 的关键词同族）+ 完整 flag 结构。按**原样串**取证，
 // 不预先归一化——这样「输入里本来就有 flag」判的是用户肉眼所见。
 const _FLAG_KW_SRC = "flag|ctf|key|pass";
@@ -437,6 +523,7 @@ function compositeScore(result, chainLength, matchesCrib, chain) {
  // 有意义文本奖励：解码结果是真英文句子/中文词语（非 flag 字样也算正解）。
  // CTF 正解常是普通单词串/句子，本项补足「只认 flag 关键词」的盲区（产品裁决4）。
   score += meaningfulTextBonus(result);          // 命中真实词表：最高 -120（净奖励）
+  score += ctfHotBonus(chain, result);            // CTF 高频算法轻量置顶（不压 flag/crib/有意义文本）
   return score;
 }
 
@@ -478,6 +565,9 @@ function outputCheckPasses(text, check) {
 // 原因：这些网格/暴力对长输入是同步长任务，timeBudget 的让出检查点无法中断它们，
 // 用户 force 一键解码跑 100KB+ 输入会卡死主线程。detect 解码（base64 等）无此问题。
 const BIG_INPUT_LIMIT = 100000;
+// 单条候选结果长度上限：RLE 等解码器对短输入可产出数百万字符（实测 hex 串 → rle 6.2MB），
+// 后续信号/词表/相似度扫描会把 finalize 拖死，UI 也展示不了。超限候选直接不记录。
+const MAGIC_MAX_RESULT_LEN = 200000;
 
 export async function magicDecode(input, opts = {}) {
   const o = { ...DEFAULTS, ...opts };
@@ -871,6 +961,7 @@ function finalizeResults(results, o) {
  // 共享信号有限加权：基于原始基础分计算，重复 partial/final 不累计。
  // 这里不再删非命中候选，保证纯文本 / 无 flag 场景仍出正常候选——对齐同类实现
  // 「全部列出 + flag 高亮」而非「只留 flag」。UI 靠 matchesCrib 标记高亮。
+  const inputMeaning = o._input ? meaningfulTextBonus(o._input) : 0;
   let filtered = results.map(c => {
     const signal = candidateSignals(c.result, o);
     const info = analyzeInfoSignals(c.result);
@@ -887,10 +978,26 @@ function finalizeResults(results, o) {
     // 回声候选（结果 ≈ 输入）降权：只惩罚没真正解开的候选——成绩降 70% 且不破 50%。
     // 放行条件：结果里出现输入原样中没有的 flag 关键词/结构（真触发 flag 才允许破 50%）。
     const echo = isEchoOfInput(c.result, o._input);
-    const echoPenalized = echo && !hasNewFlagToken(c.result, o._input);
+    // 近似回声：只改个别字符/只删一个字符的候选同样没真正解开，温和降权。
+    // 放行：出现新 flag 结构、命中 crib 或用户目标时不降权（那是真解）。
+    const signalReleased = signal.signals.some((s) => s.kind === "flagStrong" || s.kind === "target");
+    const newFlag = hasNewFlagToken(c.result, o._input);
+    // 结果比输入明显更像人话 → 放行（真换位/替换解出明文时属此类，不能误伤）。
+    const meaningReleased = meaningfulTextBonus(c.result) < inputMeaning - 10;
+    const similarity = echo || signalReleased || newFlag ? 0 : nearEchoSimilarity(c.result, o._input);
+    const anagram = echo || signalReleased || newFlag || meaningReleased ? false : isAnagramEcho(c.result, o._input);
+    const nearEcho = similarity > 0 || anagram;
+    const echoPenalized = echo && !newFlag && !signalReleased;
+    const nearEchoPenalized = nearEcho && !signalReleased && !meaningReleased;
     if (echoPenalized) score = echoPenalizedScore(score);
+    else if (nearEchoPenalized) score = nearEchoPenalizedScore(score);
+    // flag 优先：含强 flag 结构（flag/ctf/key/pass…{）且不是回声的候选，排序时整组置前。
+    // 仅影响排序，不额外改分——展示置信度仍由综合分决定。
+    const flagPriority = !echoPenalized && !nearEchoPenalized
+      && isPrintableRatio(c.result) >= 0.8
+      && FLAG_STRONG_RE.test(c.result);
     return { ...c, baseScore: c.score, score, confidence: scoreToConfidence(score),
-      echo, echoPenalized,
+      echo, echoPenalized, nearEcho, nearEchoSimilarity: similarity, flagPriority,
       signals: signal.signals, signalAdjust: strongAdjust + ordinaryAdjust, signalsTruncated: signal.truncated };
   });
 
@@ -926,8 +1033,10 @@ function finalizeResults(results, o) {
   }
   filtered = [...bestByResult.values()];
 
- // 综合分升序（分低=优）
-  filtered.sort((a, b) => a.score - b.score);
+ // 排序：强 flag 候选整组置前（含 KEY{...}），组内再按综合分升序（分低=优）。
+ // flagPriority 只看「不是回声且可打印」的真 flag 结构，避免把原文自带的 flag 搬回来置顶。
+  const candOrder = (a, b) => (Number(b.flagPriority) - Number(a.flagPriority)) || (a.score - b.score);
+  filtered.sort(candOrder);
 
  // 全列（产品裁决）：有限可枚举的**单层候选**——参数扫描分支（caesar 25 位移 /
  // affine / rotSpecial…）、base 家族、单 op 解码——只要命中字符集定义域产出结果就**全部保留**，
@@ -939,7 +1048,7 @@ function finalizeResults(results, o) {
   const SINGLE_CAP = 800;
   const singleLayer = filtered.filter((c) => c.chain.length <= 1).slice(0, SINGLE_CAP);
   const multiLayer = filtered.filter((c) => c.chain.length > 1).slice(0, o.maxCandidates);
-  return [...singleLayer, ...multiLayer].sort((a, b) => a.score - b.score);
+  return [...singleLayer, ...multiLayer].sort(candOrder);
 }
 
 /**
@@ -997,6 +1106,7 @@ function _parseStepLabel(label) {
   return { opId, params, paramLabel, source };
 }
 function _record(text, cur, opId, detectScore, results, seen, cribRe, queue, byteStatHint, source = null) {
+  if (typeof text !== "string" || text.length > MAGIC_MAX_RESULT_LEN) return;
   const newChain = [...cur.chain, opId];
   const matchesCrib = cribRe ? cribRe.test(text) : false;
 

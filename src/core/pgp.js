@@ -1,8 +1,8 @@
 /*
- * pgp.js — PGP/GPG 全家（openpgp.js v5.11.2 封装，cat:'crypto'）。
+ * pgp.js — PGP/GPG 全家（openpgp.js v5.11.3 封装，cat:'crypto'）。
  *
- * vendor：src/vendor/openpgp.min.js（OpenPGP.js v5.11.2，LGPL，UMD 尾部经 export default ESM 化；
- * 来源 https://cdn.jsdelivr.net/npm/openpgp@5.11.2/dist/openpgp.min.js）。动态 import() 懒加载，
+ * vendor：src/vendor/openpgp.min.js（OpenPGP.js v5.11.3，LGPL，UMD 尾部经 export default ESM 化；
+ * 来源 https://cdn.jsdelivr.net/npm/openpgp@5.11.3/dist/openpgp.min.js）。动态 import() 懒加载，
  * 首次使用 PGP 功能才载入 ~550KB，不拖慢首屏。
  *
  * 8 op 对标 CyberChef PGP 分类（RFC 4880/6637/4880bis ECC）：
@@ -63,7 +63,7 @@ async function readPriv(armored, passphrase) {
 register({
   id: "pgpGenKeyPair", cat: "asym",
   family: "pgp", familyLabel: "keygen", name: "PGP 密钥对生成",
-  desc: "PGP 密钥对生成（RFC 4880，openpgp.js v5.11.2）：Curve25519（默认）或 RSA-3072，可选口令保护私钥。输出 ASCII Armor 公/私钥块，公/私钥分开下载（私钥 ⚠ 敏感）",
+  desc: "PGP 密钥对生成（RFC 4880，openpgp.js v5.11.3）：Curve25519（默认）或 RSA-3072，可选口令保护私钥。输出 ASCII Armor 公/私钥块，公/私钥分开下载（私钥 ⚠ 敏感）",
   params: [
     { key: "name", label: "用户名", type: "text", default: "EBCTFCodeBox" },
     { key: "email", label: "邮箱", type: "text", default: "user@local.dev" },

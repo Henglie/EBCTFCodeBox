@@ -43,6 +43,9 @@ const CLS = {
 export const DOMAIN = {
   // Text auto-decode accepts standard Morse tokens only; direct decoder compatibility is unchanged.
   morse: { participant: /[.\-]/, separator: /[\s/|x]/ },
+  // 童子军木棍密码：参与字符只有 | 与 -；空白/斜杠分词；转义反斜杠与标点透传，
+  // 字母/数字出现即类外（普通文章不会被当成木棍密码）。
+  scoutStick: { participant: /[|\-]/, separator: /[\s/]/, passthrough: /[^\w\s|/\\-]|\\/ },
   // ---- 参数扫描：字母类换位/替换密码 ----
   // 参与者=字母；数字与标点原样透传（凯撒/维吉尼亚等不碰非字母）。
   caesar: { participant: CLS.letters, separator: CLS.ws, passthrough: /[^A-Za-z\s]/ },
@@ -52,6 +55,11 @@ export const DOMAIN = {
   // rotSpecial 三档字母表（letters/alnum/ascii94）—— 取可打印 ASCII 为参与者上界，
   // 非 ASCII 透传。不做字母限缩，否则 alnum/ascii94 两档会被误排。
   rotSpecial: { participant: CLS.printableAscii, separator: CLS.ws, passthrough: /[^\x20-\x7e\s]/ },
+  // A1Z26：输入是 1-26 的十进制数字，逗号/点/横线只是分词，字母出现即类外。
+  a1z26: { participant: /[0-9]/, separator: /[\s,.\-]/ },
+  // 字符↔进制 ASCII：参与字符为 0-9a-fA-F（各进制是其子集），空白分词，容忍 0x 前缀。
+  // 十进制/八进制输入同样被此上界覆盖；g-z 等非法字母一律判类外，避免在文本上跑数值解码。
+  asciiRadix: { participant: CLS.base16, separator: CLS.ws, passthrough: /[xX]/ },
 
   // ---- 高噪声 Base 系：参与者=该 base 的完整字母表；空白为分隔符 ----
   base16: { participant: CLS.base16, separator: CLS.ws, passthrough: /[xX]/ },

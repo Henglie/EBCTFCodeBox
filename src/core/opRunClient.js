@@ -82,7 +82,7 @@ export function runOpOffThread(opId, input, params = {}, opts = {}) {
   if (!w) {
     // 降级：无 Worker 环境，主线程同步跑（承诺不变：结果形态与 Worker 一致）
     const op = getOp(opId);
-    const fn = op && (op.run || (dir === "encode" ? op.encode : op.decode));
+    const fn = op && ((dir === "encode" ? op.encode : dir === "decode" ? op.decode : null) || op.run);
     if (typeof fn !== "function") return Promise.reject(new Error("op 不可执行: " + opId));
     return Promise.resolve().then(() => fn.call(op, input, params));
   }

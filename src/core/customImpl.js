@@ -20,9 +20,13 @@
  *  复现同源取数（沙箱隔离不受影响）；主线程降级路径直接注入 randSource.randomBytes。
  *
  * ── 沙箱说明（诚实版，别把它当安全边界宣传）───────────────────────────────
+ *  产品口径（恒烈 2026-10-22）：程序的「零外发」指**程序自身不主动外发**；
+ *  用户显式编写的自定义代码可以使用 JS 原生网络能力外发（用户自己要发的数据），
+ *  发生在本机前端；部署到服务器的后端不得代用户外发。
+ *
  *  三层防护，强度递减：
- *   1. Worker realm 隔离（真隔离）：Worker 里没有 DOM，且启动即删掉 fetch/XHR/WebSocket/
- *      EventSource/importScripts/eval 等，该 realm 内**根本不存在**这些能力 → 零外发红线在此落地。
+ *   1. Worker realm 隔离：Worker 里没有 DOM；存储/派生线程仍被移除；网络能力**保留**，
+ *      由用户代码自行决定是否使用（用户授权外发）。
  *   2. 超时硬杀（真防护）：主线程 terminate 死循环 Worker，页面不冻。
  *   3. 词法遮蔽（防手滑，不防恶意）：编译时把危险全局名当形参注入 undefined。
  *      ⚠ 同 realm 内 JS 无法真沙箱——`(()=>{}).constructor("return globalThis")()` 可绕过遮蔽。
@@ -244,7 +248,7 @@ function crc32(bytes) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-/** 构建用户代码可见的白名单工具对象（纯函数，不给 DOM/网络/存储）。
+/** 构建用户代码可见的白名单工具对象（纯函数；不提供 DOM/存储；需要网络请直接用 JS 原生 fetch 等，用户授权外发）。
  *  randProvider：可选，n → Uint8Array。省略时用本 realm 的 crypto.getRandomValues（system 档等价）。
  *  主线程调用方传入 randSource.randomBytes，即可让 H.randBytes 跟随「增强随机性」当前档位。 */
 export function buildHelpers(randProvider) {
@@ -330,13 +334,14 @@ export const CUSTOM_HELPER_SIGNATURES = [
 // ============ 沙箱：危险全局的词法遮蔽 ============
 
 /*
- * 编译时把这些名字当形参注入 undefined，用户代码里写 fetch(...) 拿到的是 undefined。
- * ⚠ 只防手滑不防恶意（constructor 链可绕过）；真隔离靠 Worker realm 删全局，见 customImplWorker.js。
+ * 编译时把这些名字当形参注入 undefined，防止手滑读到 DOM/存储/派生线程。
+ * 网络能力（fetch/XHR/WebSocket/EventSource/sendBeacon）**不在此表**：按产品口径，
+ * 用户自定义代码可以主动外发自己指定的数据，发生在本机前端；后端不代用户外发。
+ * ⚠ 只防手滑不防恶意（constructor 链可绕过）；真隔离靠 Worker realm，见 customImplWorker.js。
  * ⚠ 严格模式下 `eval` / `arguments` 不能作形参名（SyntaxError），故不入表——它们由 Worker 端删除处理。
  */
 export const SANDBOX_SHADOW = [
-  "fetch", "XMLHttpRequest", "WebSocket", "EventSource", "importScripts", "sendBeacon",
-  "navigator", "location", "document", "window", "self", "globalThis", "parent", "top", "frames",
+  "document", "window", "self", "globalThis", "parent", "top", "frames",
   "localStorage", "sessionStorage", "indexedDB", "caches", "cookieStore",
   "Worker", "SharedWorker", "ServiceWorker", "BroadcastChannel", "MessageChannel",
   "postMessage", "close", "open", "alert", "confirm", "prompt",
@@ -478,13 +483,15 @@ export function compileUserFn(code) {
 /**
  * 执行用户代码。
  * @param {{code:string, dir:string, input:string, params:object, rawBytes:?Uint8Array, helpers:?object}} req
- * @returns {{ok:true, out:string}|{ok:false, error:string, line:?number, phase:string}}
+ * @returns {Promise<{ok:true, out:(string|{text:string,files?:Array})}|{ok:false, error:string, line:?number, phase:string}>}
  */
-export function runCustomImpl({ code, dir, input, params, rawBytes, helpers }) {
+export async function runCustomImpl({ code, dir, input, params, rawBytes, helpers }) {
   const c = compileUserFn(code);
   if (c.error) return { ok: false, error: c.error, line: c.line, phase: "compile", reason: c.reason };
   try {
-    const out = c.fn(
+    // await：完整算法源码里大量入口是 async（二维码扫描、PGP、压缩等）。
+    // 以前直接 normalizeOut(Promise) 会得到 "{}"，等于把异步算法判死。
+    const out = await c.fn(
       input == null ? "" : String(input),
       rawBytes && rawBytes.length ? rawBytes : null,
       params || {},
@@ -505,6 +512,13 @@ export function runCustomImpl({ code, dir, input, params, rawBytes, helpers }) {
  */
 function normalizeOut(out) {
   if (out == null) return "";
+  // 产物协议直通：完整算法源码（出图/出文件）返回 {text, files} 时保留 files，
+  // 主线程的 convert() 会渲染预览与下载按钮；不能 JSON.stringify 成字符串。
+  if (typeof out === "object" && !Array.isArray(out) && !(out instanceof Uint8Array) &&
+      !ArrayBuffer.isView(out) && !(out instanceof ArrayBuffer) &&
+      ("text" in out || "files" in out)) {
+    return { text: String(out.text ?? ""), ...(Array.isArray(out.files) ? { files: out.files } : {}) };
+  }
   if (out instanceof Uint8Array) return bytesToText(out);
   if (ArrayBuffer.isView(out)) return bytesToText(new Uint8Array(out.buffer, out.byteOffset, out.byteLength));
   if (out instanceof ArrayBuffer) return bytesToText(new Uint8Array(out));

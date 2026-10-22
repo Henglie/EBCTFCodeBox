@@ -22,6 +22,7 @@ import { modPow } from "./primeGen.js";
 import { derDecode, derBytesToBigint } from "./rsagen.js";
 import { md5Bytes } from "./hash.js";
 import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
+import { assertUsableRsaExponent, rsaKeyWarnings } from "./rsaKeyCheck.js";
 
 // ============================================================
 // 基础字节工具
@@ -556,6 +557,8 @@ register({
       e = decToBigint(p.e ?? "65537", "公钥指数 e");
     }
     if (n < 3n || e <= 0n || e >= n) throw new Error("n/e 参数不合法（需 n ≥ 3 且 0 < e < n）");
+    e = assertUsableRsaExponent(e);
+    const keyWarnings = rsaKeyWarnings(n, e);
     const msg = messageBytes(text, p.msgEnc || "text");
 
     const sigBytes = (p.sigEnc || "hex") === "dec"
@@ -570,6 +573,7 @@ register({
       r.ok ? "验签结果：合法 ✓" : `验签结果：不合法 ×`,
       `原因：${r.reason}`,
       "",
+      ...(keyWarnings.length ? ["", "---- 公钥提示 ----", ...keyWarnings] : []),
       "---- 中间量 ----",
       `恢复的 EM (hex) = ${r.em ? toHex(r.em) : "(未恢复)"}`,
     ];

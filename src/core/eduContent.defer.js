@@ -19,7 +19,7 @@
 let _mod = null;
 let _resolveReady = null;
 const _ready = new Promise((res) => { _resolveReady = res; });
-// 闲时再拉科普数据（MT717 2026-10-12：1.4MB zh 分片不再与首屏关键资源抢带宽；
+// 闲时再拉科普数据（1.4MB zh 分片不再与首屏关键资源抢带宽；
 // 首访 SW 未接管时收益最明显，已装 SW 用户走缓存无感）。requestIdleCallback 不可用
 // 时退 setTimeout 兜底；门面契约不变——就绪前 getEduSync()=undefined / eduAliasesSync()=null。
 {

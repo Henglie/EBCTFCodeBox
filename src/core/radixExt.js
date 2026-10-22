@@ -199,6 +199,80 @@ function binaryComplement(text) {
   return `10 进制数：${dec}\n位宽：${bits} bit\n原码：${orig}\n反码：${inv}\n补码：${comp}`;
 }
 
+// ============ 反向：任意进制浮点 → 十进制 / 位串 → 原反补码 ============
+
+function parseBaseFloat(text, base, precision) {
+  let s = String(text == null ? "" : text).trim().replace(/\s+/g, "");
+  if (!s) throw new Error("空输入");
+  let sign = 1;
+  if (s[0] === "-" || s[0] === "+") { if (s[0] === "-") sign = -1; s = s.slice(1); }
+  // 前缀只在「与所选进制匹配」时剥离：base16 的 0BEEF 是合法十六进制数（0/B/E/E/F），
+  // 不能当成 0b 二进制前缀；base10 的 0x10 应报非法字符而不是悄悄按 16 进制算。
+  const pm = /^0([bBoOxX])/.exec(s);
+  if (pm) {
+    const want = base === 2 ? "b" : base === 8 ? "o" : base === 16 ? "x" : "";
+    if (want && pm[1].toLowerCase() === want) s = s.slice(2);
+  }
+  const DIG = "0123456789abcdefghijklmnopqrstuvwxyz";
+  const parts = s.split(".");
+  if (parts.length > 2) throw new Error("非法数字：小数点过多");
+  const intPart = parts[0] || "0";
+  const fracPart = parts[1] || "";
+  let val = 0;
+  for (const ch of intPart) {
+    const d = DIG.indexOf(ch.toLowerCase());
+    if (d < 0 || d >= base) throw new Error(`非法 ${base} 进制字符: ${ch}`);
+    val = val * base + d;
+  }
+  let place = 1 / base;
+  for (const ch of fracPart) {
+    const d = DIG.indexOf(ch.toLowerCase());
+    if (d < 0 || d >= base) throw new Error(`非法 ${base} 进制字符: ${ch}`);
+    val += d * place;
+    place /= base;
+  }
+  const p = Math.max(0, Math.min(64, Number(precision) || 16));
+  return sign * val;
+}
+
+function floatToDecimalRun(text, p = {}) {
+  const base = Number(p.base || 10);
+  if (![2, 8, 10, 16].includes(base)) throw new Error("进制仅支持 2 / 8 / 10 / 16");
+  const value = parseBaseFloat(text, base, p.precision);
+  if (!Number.isFinite(value)) throw new Error("解析结果不是有限数");
+  const prec = Math.max(0, Math.min(64, Number(p.precision) || 16));
+  let shown = value.toFixed(prec);
+  if (shown.includes(".")) shown = shown.replace(/0+$/, "").replace(/\.$/, "");
+  return `${base} 进制浮点: ${String(text).trim()}\n十进制: ${shown}\n精度: ${prec} 位小数`;
+}
+
+function complementToDecRun(text, p = {}) {
+  let s = String(text == null ? "" : text).trim().replace(/\s+/g, "");
+  if (!/^[01]+$/.test(s)) throw new Error("需要二进制位串（仅 0/1）");
+  const bits = Math.max(1, Math.min(64, Number(p.bits) || s.length));
+  if (s.length > bits) throw new Error(`位串长度 ${s.length} 超过指定位宽 ${bits}`);
+  s = s.padStart(bits, "0");
+  const width = BigInt(bits);
+  const raw = BigInt("0b" + s);
+  const sign = (raw >> (width - 1n)) & 1n;
+  const magMask = (1n << (width - 1n)) - 1n;
+  const mag = raw & magMask;
+  const full = 1n << width;
+  // 原码/反码存在 -0：BigInt 的 -0n 会归一成 0n，必须手工保留负号再拼接。
+  const orig = sign ? "-" + mag : String(raw);
+  const inv = sign ? "-" + ((1n << (width - 1n)) - 1n - mag) : String(raw);
+  const comp = String(sign ? raw - full : raw);
+  return [
+    `位串: ${s}`,
+    `位宽: ${bits} bit（最高位 ${sign ? 1 : 0} = ${sign ? "负" : "正"}）`,
+    `按原码解释: ${orig}`,
+    `按反码解释: ${inv}`,
+    `按补码解释: ${comp}`,
+    "",
+    "三种编码只在负数时不同；正数三者相同。CTF 中给出位串未说明编码时，优先看题目语境或逐个试。",
+  ].join("\n");
+}
+
 // ============ completion（补 0 对齐，参考实现）============
 function completionEncode(text, p) {
   const target = Number((p && p.bits) || 0);
@@ -715,6 +789,28 @@ register({
   desc: "十进制数→原码/反码/补码（8/16/32 位自适应）",
   params: [],
   run: binaryComplement,
+});
+
+register({
+  id: "floatToDecimal", cat: "radix", name: "任意进制浮点转十进制",
+  desc: "「十进制转任意进制浮点」的反向：输入 2/8/10/16 进制浮点串（可带 0b/0o/0x 前缀与负号），输出十进制值。用于还原题目给出的非十进制浮点",
+  params: [
+    { key: "base", label: "输入进制", type: "select", default: "2", options: [
+      { value: "2", label: "2 进制" }, { value: "8", label: "8 进制" },
+      { value: "10", label: "10 进制" }, { value: "16", label: "16 进制" },
+    ] },
+    { key: "precision", label: "输出小数位数", type: "number", default: 16 },
+  ],
+  run: floatToDecimalRun,
+});
+
+register({
+  id: "complementToDec", cat: "radix", name: "原反补码转十进制",
+  desc: "「原码反码补码」的反向：给定位串，分别按原码/反码/补码三种约定解释为十进制负数或正数。位宽留空按串长；负数三种编码的差异一并列出",
+  params: [
+    { key: "bits", label: "位宽（0=按输入长度）", type: "number", default: 0 },
+  ],
+  run: complementToDecRun,
 });
 
 register({

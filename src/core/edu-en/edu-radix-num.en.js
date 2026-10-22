@@ -73,7 +73,7 @@ export default {
       { in: "Hi", param: "hex encode", out: "x48 x69" },
     ],
     tips: ["Seeing a code string mixing `b.../x.../o.../d...` means this radix-prefixed encoding.", "Mixed-radix decoding, occasionally used as a red herring in CTFs."],
-    aka: ["混合进制", "hybrid code", "前缀进制", "bxod", "混合进制解码", "带前缀进制", "进制前缀混合", "随波逐流混合进制", "多进制混合", "prefix radix", "bxod编码", "混合进制编码"],
+    aka: ["混合进制", "hybrid code", "前缀进制", "bxod", "混合进制解码", "带前缀进制", "进制前缀混合", "多进制混合", "prefix radix", "bxod编码", "混合进制编码"],
   },
 
   separationAscii: {

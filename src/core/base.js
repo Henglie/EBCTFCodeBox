@@ -524,7 +524,7 @@ register({
   detect: (t) => (/^[0-9A-Za-z]+$/.test(t.trim()) && t.trim().length >= 6 ? 0.35 : 0),
 });
 register({
-  id: "base64", cat: "base", name: "Base64", desc: "标准 / URL-safe（含 base64url，可选 padding）/ 自定义码表",
+  id: "base64", cat: "base", name: "Base64", desc: "通用字节/文本 Base64：标准 / URL-safe（含 base64url，可选 padding）/ 自定义码表。图片转 dataURI 请用「图片转 Base64/dataURI」（自动嗅探 MIME）；data URI 协议解析用「Data URI 解析」",
   family: "base64", familyLabel: "base64",
   params: [
     { key: "urlsafe", label: "URL-safe（+/ → -_）", type: "bool", default: false },

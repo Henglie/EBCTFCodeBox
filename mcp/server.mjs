@@ -16,6 +16,22 @@ const { callMcpTool, MCP_TOOLS, listMcpResources, readMcpResourceContents } = aw
 const { APP_VERSION } = await import("../src/core/version.js");
 const realStdoutWrite = process.stdout.write.bind(process.stdout);
 
+// Node 运行时安全提示（stdout 只能走 JSON-RPC，提示一律 stderr）。
+// 2026-07 安全版：26.5.1 / 24.18.1 / 22.23.2 起修复权限模型越权、HTTP/2 UAF 等。
+(function nodeSecurityNotice() {
+  const [maj, min, pat] = process.versions.node.split(".").map(Number);
+  const vulnerable =
+    (maj === 26 && (min < 5 || (min === 5 && pat < 1))) ||
+    (maj === 24 && (min < 18 || (min === 18 && pat < 1))) ||
+    (maj === 22 && (min < 23 || (min === 23 && pat < 2)));
+  if (!vulnerable) return;
+  console.error(
+    `[ebctf] 安全提示：当前 Node.js ${process.versions.node} 命中 2026-07 安全公告` +
+    "（CVE-2026-58043 / CVE-2026-58044 / CVE-2026-56848）。MCP 只走 stdio，不触发 HTTP/2 漏洞，但仍建议升级到 " +
+    "Node ≥ 26.5.1（或 24.18.1 / 22.23.2）。"
+  );
+})();
+
 // 支持的 MCP 协议版本（本实现只用基础 tools/resources 面，这三版兼容；协商见 initialize）。
 const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 

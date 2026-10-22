@@ -587,7 +587,7 @@ export default {
   "ui.about.depTianhengLic": "Ticari olmayan",
   "ui.about.depMsym": "UI simgeleri (satır içi SVG)",
   "ui.about.foot": "CTF oyuncuları ve güvenlik meraklıları için yapıldı. Tüm bağımlılıklar yerel olarak paketlenmiştir; çalışma zamanında sıfır dışa aktarım.",
-  "ui.about.intro": "Saf ön uç bir CTF kod çözme, kriptografi ve steganografi araç kutusu — kodlama / klasik ve modern şifreler / karma / steganografi / adli analiz genelinde 500'den fazla işlem. Her şey tarayıcınızda yerel olarak çalışır: ağ yok, yükleme yok, iz yok. index.html dosyasını doğrudan açarak, yerel bir sunucu çalıştırarak veya statik site olarak barındırarak dağıtın.",
+  "ui.about.intro": "Saf ön uç bir CTF kod çözme, kriptografi ve steganografi araç kutusu — kodlama / klasik ve modern şifreler / karma / steganografi / adli analiz genelinde 500'den fazla işlem. Her şey tarayıcınızda yerel olarak çalışır: ağ yok, yükleme yok, iz yok. Dahili başlatıcıyı (yerel sunucu) çalıştırarak veya statik site olarak barındırarak dağıtın — ES modülleri ve WASM bir http(s) ortamı gerektirdiğinden tarayıcı, index.html dosyasını doğrudan açmayı güvenlik ilkesiyle engeller.",
   "ui.about.thanks": "Teşekkürler",
   "ui.about.thanksVal": "Referans alınan veya yararlanılan her açık kaynak projeye ve yazara, ayrıca kodlama şemalarını ve write-up'ları paylaşan CTF topluluğuna teşekkürler.",
   "ui.about.regTitle": "Lisans Bilgisi",

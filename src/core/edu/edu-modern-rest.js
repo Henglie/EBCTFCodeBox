@@ -115,7 +115,7 @@ export default {
       "自反：用相同密钥再跑一次 decode 就还原。",
       "两段不等长数据做循环异或。",
     ],
-    aka: ["XOR循环补齐", "xor_strings", "循环异或", "XOR extend", "循环补齐异或", "xor strings", "等长循环异或", "cyclic xor", "随波逐流xor_strings", "双串循环异或"],
+    aka: ["XOR循环补齐", "xor_strings", "循环异或", "XOR extend", "循环补齐异或", "xor strings", "等长循环异或", "cyclic xor", "循环密钥异或", "双串循环异或"],
   },
 
   cast5: {

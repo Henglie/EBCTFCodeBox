@@ -100,6 +100,7 @@ import E_EN_RANDOM_SECURE from "./edu-en/edu-randomSecure.en.js"; // Enhanced Ra
 import E_EN_RAND_BEACON from "./edu-en/edu-randBeacon.en.js"; // Public randomness beacon verify 1（drand / NIST）
 import E_EN_EDU_T359 from "./edu-en/edu-t359.en.js"; // RSA sign (rsaSign) 1 — partial shard, incl. the eNFS deployment tip
 import E_EN_EDU_IMAGE_TOOLBOX from "./edu-en/edu-imageToolbox.en.js"; // image toolbox batch 8（imageCompress/imageGray/imagePixelate/imageFrosted/imageSketch/imageToText/gifCompose/img2dataURI）
+import EDU_EN_BATCH7_NEW from "./edu-en/edu-batch7-new.en.js"; // v0.1.11 迷因四件套 + 图片/进制反向 9 op（xianzi/hajimi/zako×2/dataURIToImage/img2bits/imageToData/floatToDecimal/complementToDec）
 
 const EDU_EN = Object.assign(
   {},
@@ -184,6 +185,7 @@ const EDU_EN = Object.assign(
   E_EN_RAND_BEACON,
   E_EN_EDU_T359,
   E_EN_EDU_IMAGE_TOOLBOX,
+  EDU_EN_BATCH7_NEW,
 );
 
 import { EN as INTEGRATED, HASH_VECTORS, BASE_NOTES, EXTRA_ALIASES, CRC_PARAMS } from "./edu/edu-integrated.js";

@@ -24,7 +24,9 @@ import { productFileEntries, productBytesBase64 } from "../core/productResult.js
 const SERVER_VERSION = APP_VERSION;
 
 // 虚拟/不宜对外单独暴露的 op（cryptoTryAll 是 UI 聚合入口，非独立算法）。统一口径，各处复用。
-const HIDDEN_OP_IDS = new Set(["cryptoTryAll"]);
+// jsfuck/jjencode 的 decode 会用 new Function 执行输入里的 JS：MCP 主进程无沙箱，
+// AI 提示注入可借此执行任意 Node 代码，故不对 MCP 暴露（浏览器 UI 仍可手动使用）。
+const HIDDEN_OP_IDS = new Set(["cryptoTryAll", "jsfuck", "jjencode"]);
 
 /** op 支持的方向数组（encode/decode/run）。 */
 function opDirections(op) {

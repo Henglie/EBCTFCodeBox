@@ -13,7 +13,7 @@
  * 6. 零宽字符检测（U+200B/200C/200D/FEFF/2060 的 UTF-8 字节模式）
  * 7. 图内嵌 base64 提取（40+ 连续 [A-Za-z0-9+/=]，解码成功且可打印 → 报告）
  * 8. 熵分析（复用 scorer：整体熵 + 分块熵 + 最高熵块定位）
- * 9. ZIP 伪加密检测（Local File Header vs Central Directory 的加密标志位）
+ * 9. ZIP 加密真伪检测（按声明压缩方式实测数据 + CRC32，区分伪加密 / 真加密）
  *
  * 输出 report：{ name, size, mime, ext, extConsistent, sections: [{id, title, level, body, raw?}] }
  * level: 'info' | 'warn' | 'alert'
@@ -37,6 +37,8 @@ const _trafficChain = () => import("./trafficReadable.js");
 import { scan as invScan, strip as invStrip, countByType as invCountByType } from "./invisibles.js";
 import { zwScan } from "./stegoText.js";
 import { decodeUtf8Lossless } from "./bytesIo.js";
+// ZIP 加密真伪实测内核（与「压缩/归档归一分析」同源，单向 import 不改 compress.js 行为）
+import { zipEncryptionScan, parseZipCentralDirectory } from "./compress.js";
 
 // BOM 保真的严格 UTF-8 解码（bytesIo 单一源）：非法序列抛 TypeError（同旧 fatal TextDecoder 语义），
 // 唯一行为差异是合法 BOM（U+FEFF 开头）不再被静默吞掉。
@@ -537,50 +539,49 @@ function analyzeEntropy(bytes) {
 }
 
 // ============================================================
-// ZIP 伪加密检测
-// Local File Header (offset 0, sig 504B0304) 偏移 6 处 2 字节 General Purpose Flag
-// Central Directory (sig 504B0102) 偏移 8 处 2 字节 General Purpose Flag
-// 伪加密：CD 标志位第 0 位（加密）= 1，但 LFH 对应项 = 0
+// ZIP 加密真伪检测
+// 加密位（通用位标志 bit0）只是「作者声称加密」，不能证明数据真被加密：
+// 伪加密把位改成 1 而数据原样保留，因此按声明压缩方式实测一次数据，
+// 长度 + CRC32 与头部吻合 ⇒ 明文（伪加密）；解不出 ⇒ 真加密或损坏。
+// 内核在 compress.js（zipEncryptionScan），与「压缩/归档归一分析」同一口径。
 // ============================================================
 function checkZipPseudoEnc(bytes, detected) {
   if (!detected || (detected.ext !== "zip" && detected.container !== "zip")) return null;
- // 找所有 Local File Header
-  const LFH_SIG = [0x50, 0x4B, 0x03, 0x04];
-  const CDH_SIG = [0x50, 0x4B, 0x01, 0x02];
-  const lfhFlags = [];
-  const cdhFlags = [];
-  for (let i = 0; i <= bytes.length - 4; i++) {
-    if (bytes[i] === 0x50 && bytes[i + 1] === 0x4B && bytes[i + 2] === 0x03 && bytes[i + 3] === 0x04) {
-      if (i + 6 + 2 <= bytes.length) lfhFlags.push({ offset: i, flag: u16le(bytes, i + 6) });
-    } else if (bytes[i] === 0x50 && bytes[i + 1] === 0x4B && bytes[i + 2] === 0x01 && bytes[i + 3] === 0x02) {
-      if (i + 8 + 2 <= bytes.length) cdhFlags.push({ offset: i, flag: u16le(bytes, i + 8) });
-    }
+  const scan = zipEncryptionScan(bytes);
+  if (!scan.ok) {
+    return { msg: "ZIP 结构异常：" + scan.error + "（无法实测加密真伪，不能仅凭标志位断定）" };
   }
-  if (lfhFlags.length === 0 && cdhFlags.length === 0) {
-    return { msg: "ZIP 结构异常：未找到 Local File Header / Central Directory" };
+  if (scan.verdict === "none") {
+    return { isPseudo: false, msg: "ZIP 未加密（" + scan.entries + " 项，加密位全 0）" };
   }
-  const lfhEncCount = lfhFlags.filter((f) => (f.flag & 1) === 1).length;
-  const cdhEncCount = cdhFlags.filter((f) => (f.flag & 1) === 1).length;
-  if (cdhEncCount > 0 && lfhEncCount === 0) {
+  if (scan.verdict === "pseudo") {
     return {
       isPseudo: true,
-      msg: "疑似伪加密：Central Directory 标记加密 " + cdhEncCount + " 项，但 Local File Header 全部未加密（解 CD 加密位即可正常解压）",
-      lfhCount: lfhFlags.length, cdhCount: cdhFlags.length,
-      lfhEncCount, cdhEncCount,
+      msg: "伪加密（实测确认）：" + scan.encrypted + " 项加密位=1，但数据按声明压缩方式可解且长度/CRC32 与头部一致 → 数据本身没加密，清位即可正常解压",
+      encryptedCount: scan.encrypted, plainCount: scan.plain, realCount: scan.real,
     };
   }
-  if (lfhEncCount > 0) {
+  if (scan.verdict === "real") {
     return {
       isPseudo: false, isRealEnc: true,
-      msg: "真加密：Local File Header 标记加密 " + lfhEncCount + " 项（需密码）",
-      lfhCount: lfhFlags.length, cdhCount: cdhFlags.length,
-      lfhEncCount, cdhEncCount,
+      msg: "真加密（实测）：" + scan.encrypted + " 项加密位=1 且数据解不开（" +
+        (scan.aes ? "AES 加密 " + scan.aes + " 项" : "按声明方式 inflate 失败/长度或 CRC 不符") +
+        "）→ 需密码，清位无效",
+      encryptedCount: scan.encrypted, plainCount: scan.plain, realCount: scan.real,
+    };
+  }
+  if (scan.verdict === "mixed") {
+    return {
+      isPseudo: false, isRealEnc: true,
+      msg: "混合加密：" + scan.plain + " 项实测为明文（伪加密），" + scan.real + " 项解不开（真加密）→ 清位只能救前者",
+      encryptedCount: scan.encrypted, plainCount: scan.plain, realCount: scan.real,
     };
   }
   return {
     isPseudo: false,
-    msg: "ZIP 未加密（LFH " + lfhFlags.length + " 项 / CD " + cdhFlags.length + " 项，加密位全 0）",
-    lfhCount: lfhFlags.length, cdhCount: cdhFlags.length,
+    msg: "加密位=1 共 " + scan.encrypted + " 项，但均无法实测（" + (scan.items[0] ? scan.items[0].why : "未知") +
+      "）→ 不能断定真加密；可先试「ZIP 伪加密修复」，清位后仍报密码错才是真加密",
+    encryptedCount: scan.encrypted, plainCount: scan.plain, realCount: scan.real,
   };
 }
 
@@ -1069,17 +1070,22 @@ function trailerFileType(tailBytes) {
   return { ext: "bin", mime: "application/octet-stream", name: null, desc: null };
 }
 
-// 清除 ZIP 伪加密：把每个 Central Directory 头 (504B0102) 的通用标志位
-// (CD header offset+8 处 2 字节 LE) 的 bit0（加密位）清零，返回修正后完整字节副本
+// 清除 ZIP 伪加密：沿 EOCD → 中央目录 → 本地文件头精确路径，把两处通用位标志的
+// bit0（加密位）都清掉。只清 CDH 是不够的：解压器（如 7-Zip）会以 LFH 为准，
+// 两个头都置位的伪加密若只清 CDH，仍会报「Wrong password」（已实测）。
+// 返回修正后完整字节副本；不改动压缩数据。
 function clearZipPseudoEnc(bytes) {
   const out = bytes instanceof Uint8Array ? bytes.slice() : new Uint8Array(bytes);
+  const cd = parseZipCentralDirectory(out);
+  if (!cd.ok) return { bytes: out, cleared: 0, error: cd.error };
   let cleared = 0;
-  for (let i = 0; i <= out.length - 4; i++) {
-    if (out[i] === 0x50 && out[i + 1] === 0x4B && out[i + 2] === 0x01 && out[i + 3] === 0x02) {
-      if (i + 9 < out.length && (out[i + 8] & 1) === 1) {
-        out[i + 8] &= 0xFE; // 清 bit0（加密位在标志位低字节）
-        cleared++;
-      }
+  for (const e of cd.entries) {
+    if (out[e.cdhOffset + 8] & 1) { out[e.cdhOffset + 8] &= 0xFE; cleared++; }
+    const lo = e.lfhOffset;
+    if (lo >= 0 && lo + 8 <= out.length && out[lo] === 0x50 && out[lo + 1] === 0x4B &&
+        out[lo + 2] === 0x03 && out[lo + 3] === 0x04 && (out[lo + 6] & 1)) {
+      out[lo + 6] &= 0xFE;
+      cleared++;
     }
   }
   return { bytes: out, cleared };

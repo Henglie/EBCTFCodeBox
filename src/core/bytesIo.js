@@ -136,6 +136,7 @@ const MAGIC = [
   { name: "GIF 图像", mime: "image/gif", ext: "gif", sig: [0x47, 0x49, 0x46, 0x38, 0x39, 0x61], src: "GIF89a" },
   { name: "GIF 图像", mime: "image/gif", ext: "gif", sig: [0x47, 0x49, 0x46, 0x38, 0x37, 0x61], src: "GIF87a" },
   { name: "BMP 图像", mime: "image/bmp", ext: "bmp", sig: [0x42, 0x4d], src: "Microsoft 位图格式" },
+  { name: "ICO 图标", mime: "image/x-icon", ext: "ico", sig: [0x00, 0x00, 0x01, 0x00], src: "Microsoft ICO 格式" },
   { name: "ZIP 归档", mime: "application/zip", ext: "zip", sig: [0x50, 0x4b, 0x03, 0x04], src: "APPNOTE.TXT" },
   { name: "ZIP 归档（空）", mime: "application/zip", ext: "zip", sig: [0x50, 0x4b, 0x05, 0x06], src: "APPNOTE.TXT" },
   { name: "GZIP 流", mime: "application/gzip", ext: "gz", sig: [0x1f, 0x8b], src: "RFC 1952" },
@@ -155,6 +156,11 @@ const MAGIC = [
 /** 按魔数识别字节流类型。返回 null 表示未命中已知格式（不猜）。 */
 export function sniffMagic(bytes) {
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+  // WebP 是 RIFF 容器的一种，签名在偏移 8（RIFF....WEBP），不能靠前缀表匹配。
+  if (b.length >= 12 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
+      b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) {
+    return { name: "WebP 图像", mime: "image/webp", ext: "webp", src: "RIFF/WEBP" };
+  }
   for (const m of MAGIC) {
     if (b.length < m.sig.length) continue;
     let hit = true;

@@ -31,7 +31,7 @@ self.onmessage = async (e) => {
     self.postMessage({ type: "error", runId, message: "op 未注册: " + opId });
     return;
   }
-  const fn = op.run || (dir === "encode" ? op.encode : op.decode);
+  const fn = (dir === "encode" ? op.encode : dir === "decode" ? op.decode : null) || op.run;
   if (typeof fn !== "function") {
     self.postMessage({ type: "error", runId, message: "op 不可执行: " + opId });
     return;

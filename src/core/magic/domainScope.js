@@ -222,6 +222,8 @@ export const SMALL_ALPHABET_OPS = new Set([
   // 位串族（输入即位流）
   "manchester", "diffManchester", "nrzi", "miller", "fourB5B", "pwmPpm",
   "bcd", "binPad", "graycode", "bitReverse", "bitRotate",
+  // 两符号结构码：| 与 -（木棍密码）
+  "scoutStick",
   // 双符号/点划解释
   "morse", "bacon",
   // 对串本身做可见结构变换（换位/逐字移位/通用替换——保字母表，动位置或映射）

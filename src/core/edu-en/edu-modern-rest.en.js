@@ -116,7 +116,7 @@ export default {
       "Self-inverse: run decode again with the same key to restore.",
       "Cyclic XOR of two unequal-length data segments.",
     ],
-    aka: ["XOR循环补齐", "xor_strings", "循环异或", "XOR extend", "循环补齐异或", "xor strings", "等长循环异或", "cyclic xor", "随波逐流xor_strings", "双串循环异或"],
+    aka: ["XOR循环补齐", "xor_strings", "循环异或", "XOR extend", "循环补齐异或", "xor strings", "等长循环异或", "cyclic xor", "循环密钥异或", "双串循环异或"],
   },
 
   cast5: {

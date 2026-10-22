@@ -1094,7 +1094,7 @@ export default {
   "ui.ci.cat.flag": "Linguagem de bandeiras e de sinais",
   "ui.ci.cat.barcode": "Códigos de barras",
   "ui.ci.cat.other": "Outros",
-  "ui.about.intro": "Uma caixa de ferramentas CTF de codificação, criptografia e esteganografia totalmente front-end — mais de 500 operações abrangendo codificação / cifras clássicas e modernas / hash / esteganografia / forense / análise. Tudo é executado localmente no seu navegador: sem rede, sem envio, sem rastros. Faça a implantação abrindo o index.html diretamente, executando um servidor local ou hospedando como site estático.",
+  "ui.about.intro": "Uma caixa de ferramentas CTF de codificação, criptografia e esteganografia totalmente front-end — mais de 500 operações abrangendo codificação / cifras clássicas e modernas / hash / esteganografia / forense / análise. Tudo é executado localmente no seu navegador: sem rede, sem envio, sem rastros. Execute o lançador incluído (servidor local) ou hospede como site estático — os módulos ES e o WASM exigem um ambiente http(s), portanto o navegador bloqueia abrir o index.html diretamente.",
   "ui.about.thanks": "Agradecimentos",
   "ui.about.thanksVal": "Obrigado a cada projeto de código aberto e autor referenciado ou de quem tomamos emprestado, e à comunidade CTF por compartilhar esquemas de codificação e write-ups.",
   "ui.about.regTitle": "Informações de licença",

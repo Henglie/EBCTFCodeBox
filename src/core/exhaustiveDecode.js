@@ -349,17 +349,19 @@ export async function exhaustiveDecode(input, opts = {}) {
  // Worker 不可用环境由 opRunClient 原样回落主线程同步执行（与旧行为一致，如实降级）。
   const opTimeoutMs = opts.opTimeoutMs ?? 5000;
   const isDual = (op) => typeof op.run === "function" && typeof op.decode === "function";
+  // 产物协议 {text, files} → 候选只取 text；直接 String(obj) 会产出 "[object Object]"。
+  const outTextOf = (out) => (out && typeof out === "object" ? String(out.text ?? "") : out == null ? "" : String(out));
   const runOne = async (op, params) => {
     const p = params ?? defaultParams(op);
     const direct = async () => {
       const fn = op.decode || op.run;
       const out = await fn.call(op, text, p);
-      return { op, params: params ?? null, out: out == null ? "" : String(out), error: null };
+      return { op, params: params ?? null, out: outTextOf(out), error: null };
     };
     if (isDual(op)) return direct();
     try {
       const out = await runOpOffThread(op.id, text, p, { dir: op.decode ? "decode" : "run", timeoutMs: opTimeoutMs });
-      return { op, params: params ?? null, out: out == null ? "" : String(out), error: null };
+      return { op, params: params ?? null, out: outTextOf(out), error: null };
     } catch (e) {
       const raw = (e && e.message) || String(e);
       if (raw === "timeout") return { op, params: params ?? null, out: "", error: "op 超时中止（> " + opTimeoutMs + "ms）" };

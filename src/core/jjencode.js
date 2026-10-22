@@ -197,6 +197,8 @@ register({
   ],
   encode: jjEncode,
   decode: jjDecode,
+  // decode 会 new Function 执行输入里的 JS：不参与一键解码自动池（手动运行仍可）。
+  noAuto: true,
   detect(s) {
     if (typeof s !== "string" || s.length < 40) return 0;
     var t = s.trim();

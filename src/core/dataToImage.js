@@ -25,6 +25,7 @@
 
 import { encodePNG } from "./mcMap.js";
 import { register } from "./registry.js";
+import { imageInputBytes, decodeImageToRgba } from "./imageBytes.js";
 
 // ------------------------------------------------------------
 // 通用数值解析：把「一堆数字的文本」变成 rows（每行一个数字数组）
@@ -57,6 +58,10 @@ export function parseBitString(text) {
 // ------------------------------------------------------------
 // 题型判定：只输出「结论 + 依据」，不做任何渲染。
 // ------------------------------------------------------------
+// 大数组求极值：不能用 Math.min(...arr)（15 万元素即爆调用栈），逐元素扫。
+function minOf(arr) { let m = Infinity; for (let i = 0; i < arr.length; i++) if (arr[i] < m) m = arr[i]; return m; }
+function maxOf(arr) { let m = -Infinity; for (let i = 0; i < arr.length; i++) if (arr[i] > m) m = arr[i]; return m; }
+
 export function detectKind(parsed) {
   const { rows, maxCols } = parsed;
   if (!rows.length) return { kind: null, reason: "没有解析到任何数字行" };
@@ -66,8 +71,8 @@ export function detectKind(parsed) {
 
   if (maxCols === 2 && all) {
     const xs = rows.map((r) => r[0]), ys = rows.map((r) => r[1]);
-    const spanX = Math.max(...xs) - Math.min(...xs);
-    const spanY = Math.max(...ys) - Math.min(...ys);
+    const spanX = maxOf(xs) - minOf(xs);
+    const spanY = maxOf(ys) - minOf(ys);
     if ((spanX > 1 || spanY > 1) && flat.every(Number.isInteger))
       return { kind: "points", reason: `每行 2 个整数、跨度为 ${spanX}×${spanY} → 坐标点集` };
     if (inRange(0, 1))
@@ -167,8 +172,8 @@ export function renderPoints(points, layout) {
   const bg = L.background || [255, 255, 255];
 
   const xs = points.map((p) => p[0]), ys = points.map((p) => p[1]);
-  const minX = Math.min(...xs), maxX = Math.max(...xs);
-  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const minX = minOf(xs), maxX = maxOf(xs);
+  const minY = minOf(ys), maxY = maxOf(ys);
   const gw = maxX - minX + 1 + pad * 2;
   const gh = maxY - minY + 1 + pad * 2;
   const ow = gw * scale, oh = gh * scale;
@@ -283,6 +288,75 @@ export function toPngResult(rendered, meta) {
 export default { parseNumberRows, parseBitString, detectKind, inferWidth, renderChannels, renderPoints, toPngResult };
 
 // ------------------------------------------------------------
+// 反向：图片 → 数值行（dataToImage 的逆过程，用于从渲染图还原像素数据）
+// 诚实边界：有损格式、放大/归一化/调色板等不可逆步骤无法还原原始数值，
+// 只能给出「按当前图像像素采样」的结果；参数需与出图时一致。
+// ------------------------------------------------------------
+async function imageToDataRun(text, p = {}) {
+  const bytes = imageInputBytes(text, p, "图片还原数值");
+  const img = await decodeImageToRgba(bytes, "图片还原数值");
+  const { width, height, data } = img;
+  const scale = Math.max(1, Math.floor(Number(p.scale || 1)));
+  const off = Math.floor(scale / 2);
+  const scan = p.scan === "column" ? "column" : "row";
+  const order = p.order === "bgr" ? "bgr" : "rgb";
+  const fmt = p.format === "space" ? " " : p.format === "tab" ? "\t" : ",";
+  let channels = Math.floor(Number(p.channels || 0));
+  if (channels === 0) {
+    channels = 3;
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] !== 255) { channels = 4; break; }
+    }
+  }
+  channels = Math.max(1, Math.min(4, channels));
+  const total = Math.ceil(width / scale) * Math.ceil(height / scale);
+  if (total > 4_000_000) {
+    throw new Error(`采样点 ${total} 个，超过 400 万上限；请调大 scale（当前 ${scale}）或先缩小图片`);
+  }
+  const lines = [];
+  const push = (x, y) => {
+    const i = (y * width + x) * 4;
+    const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+    if (channels === 1) {
+      lines.push(String(Math.round(0.299 * r + 0.587 * g + 0.114 * b)));
+    } else {
+      const px = order === "bgr" ? [b, g, r] : [r, g, b];
+      const vals = channels === 4 ? [...px, a] : px;
+      lines.push(vals.join(fmt));
+    }
+  };
+  if (scan === "column") {
+    for (let x = off; x < width; x += scale) for (let y = off; y < height; y += scale) push(x, y);
+  } else {
+    for (let y = off; y < height; y += scale) for (let x = off; x < width; x += scale) push(x, y);
+  }
+  return lines.join("\n");
+}
+
+register({
+  id: "imageToData",
+  cat: "image",
+  name: "图片还原数值数据",
+  desc: "「数值数据渲染成图」的反向：把图片按像素采样还原成一行一个的 RGB/RGBA/灰度数值。scale 与出图时的放大倍数一致（放大 N 倍就填 N），scan/order 与出图参数一致。有损/归一化/调色板渲染无法精确逆推，只还原当前像素值",
+  params: [
+    { key: "channels", label: "通道数", type: "select", default: "0", options: [
+      { value: "0", label: "自动（有 alpha 用 4，否则 3）" },
+      { value: "3", label: "RGB" }, { value: "4", label: "RGBA" },
+      { value: "1", label: "灰度" },
+    ] },
+    { key: "order", label: "通道顺序", type: "select", default: "rgb",
+      options: [{ value: "rgb", label: "RGB" }, { value: "bgr", label: "BGR" }] },
+    { key: "scan", label: "扫描序", type: "select", default: "row",
+      options: [{ value: "row", label: "行主序（先横后纵）" }, { value: "column", label: "列主序（先纵后横）" }] },
+    { key: "scale", label: "采样步长（与出图放大倍数一致）", type: "number", default: 1 },
+    { key: "format", label: "数值分隔符", type: "select", default: "comma",
+      options: [{ value: "comma", label: "逗号" }, { value: "space", label: "空格" }, { value: "tab", label: "制表符" }] },
+  ],
+  acceptsBytes: true,
+  run: imageToDataRun,
+});
+
+// ------------------------------------------------------------
 // op 入口：自动判形态 → 渲染 → 出可下载 PNG
 // 形态判定结果**写进报告**（显式声明，不静默猜），用户可据此改参数。
 // ------------------------------------------------------------
@@ -339,7 +413,7 @@ export function dataToImageRun(text, p) {
   } else {
     // grid：标量归一化上色（灰度）
     const flat = parsed.rows.flat();
-    const min = Math.min(...flat), max = Math.max(...flat);
+    const min = minOf(flat), max = maxOf(flat);
     const norm = o.normalize === false ? null : (max > min ? [min, max] : null);
     data = flat.map((v) => (norm ? ((v - min) / (max - min)) * 255 : v));
     channels = 1;

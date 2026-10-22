@@ -36,14 +36,15 @@
   - 说明：网传的「llvm 链接例外」在官方仓库根未见独立文件，本项目未采信任何链接例外，以上游仓库原文为准。
 - **如何自行获取对应源码**：`https://github.com/keystone-engine/keystone`（commit `dc7932e`）＋ `https://github.com/CzBiX/disasm-web` `packages/keystone/build-lib.sh`（emscripten 构建脚本）＋ npm `keystone-wasm@1.0.4` tarball（SHA-1 `951783444ae14333968108b07d033bbca06e8e9c`）。⚠ 该 wasm 是否能从 `dc7932e` 逐字节复现未验证（上游包无构建清单）——「源码渠道」承诺以此两级仓库 URL 为准，不承诺字节级复现。
 
-### A3. OpenPGP.js v5.11.2（LGPL-3.0-or-later）— PGP/GPG 功能库
+### A3. OpenPGP.js v5.11.3（LGPL-3.0-or-later）— PGP/GPG 功能库
 
 - **用途**：PGP 全家 8 op（生成/加密/解密/签名/验签/加密并签名/解密并验签/解析）。调用方 `src/core/pgp.js`（动态 import 懒加载）。
-- **随包文件**：`src/vendor/openpgp.min.js`（553,086 B，SHA256 `8dd3e721276ce1fef258ee2963177067f2f3730c7bdba0e1b3015a51113cd4c8`）。头注逐字：`/*! OpenPGP.js v5.11.2 - 2024-06-19 - this is LGPL licensed code, see LICENSE/our website https://openpgpjs.org/ for more information. */`。
-- **与官方 dist 的差异（已实测逐字节定位，共 2 处补丁）**：基线为 `https://cdn.jsdelivr.net/npm/openpgp@5.11.2/dist/openpgp.min.js`（SHA256 `b1dea0c61f3c0256a03934015571b808d365068a05d1a3c559d9389129552ed5`）；①偏移 18091 处 `new TextDecoder("utf-8")` → `new TextDecoder("utf-8",{ignoreBOM:!0})`（BOM 保真补丁，+15 B）；②尾部追加 153 B 的 ESM 化注释 + `export default openpgp;`。库本体逻辑零改动。**因存在改动，对应源码渠道须含本补丁说明**（补丁全文两行，随本通知即可复现：官方 dist + 上述两处差异）。
-- **上游**：https://openpgpjs.org/ ，仓库 https://github.com/openpgpjs/openpgpjs （tag `v5.11.2`），npm `openpgp@5.11.2`（license 字段 `LGPL-3.0+`）。
-- **许可证**：LGPL-3.0-or-later（v5.11.2 仓库 `LICENSE` 全文＝`LICENSE-openpgpjs.txt`，SHA256 `e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118`）。⚠ LGPL-3.0 第 4b/4d0 条要求随对象码同时提供 GPL-3.0 文本与最小对应源码——随包建议同时附 `LICENSE-GPL-3.0.txt`（gnu.org 官方文本，SHA256 `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`）。
-- **如何自行获取对应源码**：`https://github.com/openpgpjs/openpgpjs/tree/v5.11.2`（官方源码）＋本文件上段记录的 2 处补丁即完整对应源码；或 npm `openpgp@5.11.2` 包（含 src/）。
+- **安全更新**：v5.11.2 → v5.11.3 修复 CVE-2025-47934（内联签名/加密签名可伪造，High）。随包版本已升级，勿回退。
+- **随包文件**：`src/vendor/openpgp.min.js`（553,034 B，SHA256 `b675cff4b487e8c2436e5b47c19dde7775459a51bd10ebfc7dadb362ae1fb5f5`）。头注逐字：`/*! OpenPGP.js v5.11.3 - 2025-05-19 - this is LGPL licensed code, see LICENSE/our website https://openpgpjs.org/ for more information. */`。
+- **与官方 dist 的差异（已实测逐字节定位，共 2 处补丁）**：基线为 `https://unpkg.com/openpgp@5.11.3/dist/openpgp.min.js`（SHA256 `89ae4b15e830e08096a125003218bdc7b5c39a4075437dc8d6d4a4e3bdc9a550`）；①偏移 18068 处 `new TextDecoder("utf-8")` → `new TextDecoder("utf-8",{ignoreBOM:!0})`（BOM 保真补丁，+15 B）；②尾部追加 154 B 的 ESM 化注释 + `export default openpgp;`。库本体逻辑零改动。**因存在改动，对应源码渠道须含本补丁说明**（补丁全文两行，随本通知即可复现：官方 dist + 上述两处差异）。
+- **上游**：https://openpgpjs.org/ ，仓库 https://github.com/openpgpjs/openpgpjs （tag `v5.11.3`），npm `openpgp@5.11.3`（license 字段 `LGPL-3.0+`）。
+- **许可证**：LGPL-3.0-or-later（`LICENSE-openpgpjs.txt`，SHA256 `e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118`）。⚠ LGPL-3.0 第 4b/4d0 条要求随对象码同时提供 GPL-3.0 文本与最小对应源码——随包建议同时附 `LICENSE-GPL-3.0.txt`（gnu.org 官方文本，SHA256 `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`）。
+- **如何自行获取对应源码**：`https://github.com/openpgpjs/openpgpjs/tree/v5.11.3`（官方源码）＋本文件上段记录的 2 处补丁即完整对应源码；或 npm `openpgp@5.11.3` 包（含 src/）。
 
 ---
 
@@ -57,12 +58,14 @@
 | zxing-wasm | © 2023 Ze-Zheng Wu（随附 LICENSE 实测 MIT；上游 ZXing-C++ 为 Apache-2.0 但未随包） | MIT | `public/wasm/zxing/`（含 LICENSE） | https://github.com/Sec-ant/zxing-wasm （上游内核 https://github.com/zxing-cpp/zxing-cpp ，Apache-2.0） |
 | CodeMirror 6 | 6.x bundle | MIT | `src/vendor/codemirror.bundle.js`（bundle 内无许可串——随包建议补本通知署名） | https://github.com/codemirror/dev （codemirror.net） |
 | KaTeX | 0.16.11（katex.min.js `version:"0.16.11"` 实测） | MIT（字体 OFL） | `public/vendor/katex/` | https://github.com/KaTeX/KaTeX |
-| 7-Zip（7zz WASM） | — | LGPL + unRAR restriction | `public/wasm/7zz.*` + `License.txt` + `unRarLicense.txt` | https://www.7-zip.org/ |
+| 7-Zip（7zz WASM） | 24.09（头注实测） | LGPL + unRAR restriction | `public/wasm/7zz.*` + `License.txt` + `unRarLicense.txt` | https://www.7-zip.org/ |
 | bkcrack | 1.8.1（CHANGELOG 实测） | zlib/libpng（随包头注逐字：`Copyright (c) 2016-2026 Joachim Hotonnier`） | `public/wasm/bkcrack.*` + `bkcrack.license.txt` | https://github.com/kimci86/bkcrack |
 | OutGuess 0.4 | commit 24810e14 | BSD-4-Clause + IJG | `public/wasm/outguess/`（NOTICE.txt + 两 LICENSE） | https://github.com/resurrecting-open-source-projects/outguess |
 | Capstone（反汇编 WASM） | capstone-wasm@1.0.3 线 | BSD-3-Clause | `public/wasm/vendor/disasm/` | https://www.capstone-engine.org/ 、https://github.com/capstone-engine/capstone |
 | Material Symbols | svg-400 | Apache-2.0 | `src/ui/icons.js` 内联 | https://fonts.google.com/icons |
 | 天珩全字库 | V5.0.0（2025-09-25 编译） | 非商用（版权人沈天珩声明，详见 README 字体节） | `public/fonts/th/` | http://cheonhyeong.com/index.html |
+
+> **安全提示（2026-10）**：7-Zip 24.09 位于 CVE-2025-11001 / CVE-2025-11002（目录穿越 RCE，25.00 修复）影响范围。本项目仅在本地 Emscripten MEMFS 中解压用户主动选择的 CTF 文件，不暴露网络服务；升级到 7-Zip ≥25.00 已列入后续项。OpenPGP.js 已于 2026-10 升级至 5.11.3（CVE-2025-47934 修复），详见 A3。
 
 ---
 

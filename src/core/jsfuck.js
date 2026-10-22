@@ -325,6 +325,8 @@ register({
   id: "jsfuck", cat: "text", name: "JSFuck", desc: "六字符 []()!+ 构造的 JS（双向：编码出求值即原文的表达式，解码走 Function 沙箱）",
   encode: jsFuckEncode,
   decode: jsFuckDecode,
+  // decode 会 new Function 执行输入里的 JS：不参与一键解码自动池（手动运行仍可）。
+  noAuto: true,
   detect: (t) => (/^[\[\]()!+]+$/.test(t.trim()) && t.length >= 10 ? 0.6 : 0),
 });
 

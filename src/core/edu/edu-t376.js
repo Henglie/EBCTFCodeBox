@@ -204,14 +204,14 @@ export default {
   },
 
   pgpGenKeyPair: {
-    what: "生成一对 PGP 密钥：公钥发给别人加密，私钥自己留着解密。基于 openpgp.js v5.11.2（RFC 4880），支持 Curve25519 或 RSA-3072。",
+    what: "生成一对 PGP 密钥：公钥发给别人加密，私钥自己留着解密。基于 openpgp.js v5.11.3（RFC 4880），支持 Curve25519 或 RSA-3072。",
     principle:
       "PGP/OpenPGP（RFC 4880）密钥不是单密钥，是一串可扩展的密钥包：主钥（签名）通常带一个子钥（加密），字符 ID（userID）形如 \"姓名 <邮箱>\"。\n\n" +
-      "本工具用 openpgp.js v5.11.2 的 generateKey：Curve25519 模式出一对 ECDH + EdDSA 钥（主钥 EdDSA 签名、子钥 ECDH 加密），RSA-3072 模式出 RSA 主/子钥。私钥可选口令保护（passphrase），输出为 ASCII Armor 带 `-----BEGIN PGP PUBLIC/PRIVATE KEY BLOCK-----` 壳。\n\n" +
+      "本工具用 openpgp.js v5.11.3 的 generateKey：Curve25519 模式出一对 ECDH + EdDSA 钥（主钥 EdDSA 签名、子钥 ECDH 加密），RSA-3072 模式出 RSA 主/子钥。私钥可选口令保护（passphrase），输出为 ASCII Armor 带 `-----BEGIN PGP PUBLIC/PRIVATE KEY BLOCK-----` 壳。\n\n" +
       "公钥可分发，私钥是敏感产物（带口令则需口令才能导出用）。指纹/KeyID 用于识别密钥身份。",
     usage: "填用户名（默认 EBCTFCodeBox）、邮箱（默认 user@local.dev）、私钥口令（可空）、算法（ecc 默认 / rsa3072）。",
     examples: [
-      { in: "（空输入，直接运行）", param: "ecc, name=EBCTFCodeBox, email=user@local.dev", out: "算法: Curve25519（ECDH+EdDSA）/ 创建: 2026-09-03… / 指纹: F879 49EF A41C 8B34 FF60 D96F 0117 0A7F C504 E626 + BEGIN PGP PUBLIC/PRIVATE KEY BLOCK", desc: "node 直跑真实输出；KeyID 字段在 v5.11.2 里显示 undefined（库未暴露），指纹正常" },
+      { in: "（空输入，直接运行）", param: "ecc, name=EBCTFCodeBox, email=user@local.dev", out: "算法: Curve25519（ECDH+EdDSA）/ 创建: 2026-09-03… / 指纹: F879 49EF A41C 8B34 FF60 D96F 0117 0A7F C504 E626 + BEGIN PGP PUBLIC/PRIVATE KEY BLOCK", desc: "node 直跑真实输出；KeyID 字段在 v5.11.3 里显示 undefined（库未暴露），指纹正常" },
     ],
     tips: [
       "PGP 密钥只该生成一次并备份私钥——公钥能随时从私钥推，私钥丢了签名/解密都完蛋。",
@@ -283,7 +283,7 @@ export default {
       "验签结果的可靠性取决于你手里的公钥确实是发送者本人的——公钥信任链（Web of Trust）是 OpenPGP 的另一层话题。",
     usage: "签名文本/分离签名块进主输入框，粘贴签名者公钥块。",
     examples: [
-      { in: "-----BEGIN PGP SIGNED MESSAGE-----…（pgpSign cleartext 产物）", param: "pubKey=（签名者公钥块）", out: "✓ 签名有效（KeyID undefined）\n原文：\nattack at dawn", desc: "node 直跑真实输出；KeyID 在 v5.11.2 显示 undefined，验签结论正常" },
+      { in: "-----BEGIN PGP SIGNED MESSAGE-----…（pgpSign cleartext 产物）", param: "pubKey=（签名者公钥块）", out: "✓ 签名有效（KeyID undefined）\n原文：\nattack at dawn", desc: "node 直跑真实输出；KeyID 在 v5.11.3 显示 undefined，验签结论正常" },
     ],
     tips: [
       "「✓ 签名有效」只代表签名与 (消息, 公钥) 匹配——公钥是否属于本人要靠 Web of Trust 或指纹比对。",
@@ -333,11 +333,11 @@ export default {
     what: "解析 PGP 公钥/私钥块：用户 ID、主钥与子钥的 KeyID/算法/创建时间/能力/指纹、子钥数量全列出。",
     principle:
       "OpenPGP 密钥（RFC 4880）由多个密钥包构成：主钥（primary key，负责签名）+ 若干子钥（subkey，负责加密等）。ASCII Armor 块 decoded 后按包解析。\n\n" +
-      "openpgp.js 的 readKey 给出 getUserIDs()、getKeyID()、getAlgorithmInfo()、getCreationTime()、getFingerprint() 与 subkeys。能力标志（加密/签名）在 v5.11.2 里无法直接调 canEncrypt/canSign（实测方法缺失），工具按算法名正则推断（eddsa→签名、ecdh→加密、rsa→双能）。\n\n" +
+      "openpgp.js 的 readKey 给出 getUserIDs()、getKeyID()、getAlgorithmInfo()、getCreationTime()、getFingerprint() 与 subkeys。能力标志（加密/签名）在 v5.11.3 里无法直接调 canEncrypt/canSign（实测方法缺失），工具按算法名正则推断（eddsa→签名、ecdh→加密、rsa→双能）。\n\n" +
       "指纹是完整密钥 ID，KeyID 是其短 8 位。输出区分公钥/私钥（isPrivate）。",
     usage: "粘贴公钥或私钥块（ASCII Armor），运行。",
     examples: [
-      { in: "-----BEGIN PGP PUBLIC KEY BLOCK-----…（密钥对生成产物）", param: "armored=公钥块", out: "用户ID: EBCTFCodeBox <user@local.dev> / 主钥: KeyID undefined, 算法 eddsa, 创建 …, 能力 签名, 指纹 35D0…AC4 / 子钥 1 个: [1] ecdh … 能力 加密", desc: "node 直跑真实输出；v5.11.2 KeyID 显示 undefined，指纹/算法正常" },
+      { in: "-----BEGIN PGP PUBLIC KEY BLOCK-----…（密钥对生成产物）", param: "armored=公钥块", out: "用户ID: EBCTFCodeBox <user@local.dev> / 主钥: KeyID undefined, 算法 eddsa, 创建 …, 能力 签名, 指纹 35D0…AC4 / 子钥 1 个: [1] ecdh … 能力 加密", desc: "node 直跑真实输出；v5.11.3 KeyID 显示 undefined，指纹/算法正常" },
     ],
     tips: [
       "解析私钥块也能看公钥信息（私钥内含公钥材料），常用于核对身份。",

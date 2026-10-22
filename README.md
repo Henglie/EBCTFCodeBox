@@ -9,7 +9,7 @@
   <span>恒烈 CTF 编码工具箱 · EBCTFCodeBox</span>
 </h1>
 <p align="center">
-  <span align="center">本地优先、零外发的编解码 / 加解密 / 隐写分析工具箱：810 个注册操作覆盖 23 类能力，绝大多数在浏览器本地运行，Windows 另可启用本地桥能力，macOS / Linux 提供双击启动器。</span>
+  <span align="center">本地优先、零外发的编解码 / 加解密 / 隐写分析工具箱：820 个注册操作覆盖 23 类能力，绝大多数在浏览器本地运行，Windows 另可启用本地桥能力，macOS / Linux 提供双击启动器。</span>
 </p>
 
 <p align="center">
@@ -33,9 +33,10 @@
 - [项目简介](#项目简介)　　　　[特点](#特点)
 - [界面预览](#界面预览)　　　　[运行](#运行)
 - [平台兼容性](#平台兼容性)　　[性能要求](#性能要求)
-- [目录结构](#目录结构)　　　　[编解码全清单](#编解码全清单810-ops--23-分类)
+- [目录结构](#目录结构)　　　　[编解码全清单](#编解码全清单820-ops--23-分类)
 - [插件与 AI 接入](#插件与-ai-接入)　[开源协议](#开源协议)
 - [第三方资源与许可](#第三方资源与许可)　[隐私](#隐私)
+- [关键词 / Keywords](#关键词--keywords)
 
 ## 快速下载
 
@@ -46,77 +47,51 @@
 | 百度网盘 | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
 | 夸克网盘 | https://pan.quark.cn/s/3b7e573b19c0 | 无 |
 
-当前版本 **v0.1.10**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
+当前版本 **v0.1.11**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
 
 ## 更新日志
 
-## v0.1.10
+## v0.1.11
 
 ### 新增功能
 
-- Rabbit 增设三档变体
-- Rabbit 支持口令与爆破
-- 新增英文 README
+- 新增哦齁编码（仙子曰）
+- 新增哈基米加密（三进制）
+- 新增杂鱼密语（官方闭源版复刻）＋ Base8 开源变体
+- 新增 Base64/dataURI 转图片
+- 新增图片转二进制点阵
+- 新增图片还原数值数据
+- 新增任意进制浮点转十进制
+- 新增原反补码转十进制
+- 自定义实现自动内联完整依赖闭包
+- 自定义实现支持 async 与文件产物
+- 搜索支持图像/视频/音频等同义词
 
 ### 修复
 
-- 修复 Rabbit 跨工具不兼容
-- 修复文档旧计数
+- 修复 Data URI 解析二进制图片丢文件
+- 修复 Data URI 声明 MIME 与真实格式不符无提示
+- 修复单向 op 按钮方向文案错误
+- 修复 run 优先级导致 MIME multipart 编码不可达
+- 修复穷举解码对象产物显示 [object Object]
+- 修复 ZIP 伪加密被误判真加密（改为按声明方式实测数据判定）
+- 修复任意进制浮点前缀与进制不匹配时解析错误
+- 修复自定义实现完整源码漏收集模板插值里的依赖
+- 修复点阵图 / 数值转图在大输入下的越界与爆栈
 
-### 优化
+### 安全与优化
 
-- 智能分析三链懒载
-- 拼音搜索表懒载
-- radixN 大输入提速
-- 首屏闭包瘦身三成
-- 一键尝试支持 Rabbit 三档
-- MCP 资源文档补全
-- MCP 支持协议版本协商
-- 加载诊断默认静默
+- 自定义沙箱保留网络能力（用户授权外发）
+- 零外发口径澄清：程序自身不主动外发
+- OpenPGP.js 升级 5.11.3（修复 CVE-2025-47934）
+- MCP 隐藏 JSFuck / JJEncode 执行面
+- RSA 公钥指数合法性校验与弱参数告警
+- 杂鱼密语 / 杂鱼编码大数据输入性能大幅提升（O(n²) → O(n)）
+- MCP 启动提示 Node 安全版本
+- 按需资产纳入 SW revision
+- README 补充 2026-10 安全说明
 
-## v0.1.9
-
-### 新增功能
-
-- 新增操作十余个
-- 新增安全随机数四档
-- 新增随机信标拉取
-- 新增联网熵服务器模式
-- 新增鼠标熵采集可叠加各档
-- 自定义代码可取增强随机数
-- BLS 全族升级新曲线
-- 新增德语法语界面
-- 新增日韩俄语界面
-- 新增图像工具八件
-- 凯撒新增全字符位移档
-- 新增精灵图序列帧互转
-- 图像重处理改按钮执行
-
-### 修复
-
-- 修复静默报错三十余处
-- 更正 jsfuck 编码方向
-- 更正键盘坐标编码方向
-- 去掉取数量原生增减箭头
-- 修复英文界面科普回落中文
-- 修复区位码含数字不往返
-- 修复 EBCDIC 静默丢字符
-
-### 优化
-
-- 首屏资源大幅瘦身
-- 补充古典密码图示
-- 界面细节多处统一
-- 关于页显示语言进度
-- 启动器合并为单个
-- 增强随机开关只挂取随机算法
-- 增强随机档位与环境面板统一
-- 增强随机性对内置库来源作说明
-- 补充 RSA 裸预言机安全提示
-- 补充 RSA 英文科普
-- 线路码默认档解码还原文本
-- EBCDIC 默认码页改 cp1047
-
+更早版本的完整变更记录见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 项目简介
 
@@ -138,12 +113,13 @@
 
 - **本地优先 · 零外发**：原生 ES module，无框架、无构建步骤。核心编解码在浏览器本地执行，不上传用户输入；「外链」只生成 URL。PWA 更新仅下载本站资源，本地桥只访问 `127.0.0.1`，外部 AI 仅在用户主动配置 endpoint 后启用。
 - **一把梭智能解码**：粘贴或拖入内容，自动识别可能的编码链并给出候选解码结果，支持 crib 目标特征过滤与深度爆破。
-- **810 个注册操作 · 23 分类**：覆盖 Base、文本传输、花式 CTF、深奥编程语言、中文本土、古典密码、现代加密（分组 / 流 / 非对称 / 其他）、哈希校验、进制字符集（含素数判定与筛选）、分析爆破、密码攻击、压缩归档、口令与归档破解、取证流量、文件格式结构、数据结构、图像与二维码、音频音视频、隐写及 4 个可选 Windows GUI 桥入口。完整清单由 registry 自动生成。
+- **820 个注册操作 · 23 分类**：覆盖 Base、文本传输、花式 CTF、深奥编程语言、中文本土、古典密码、现代加密（分组 / 流 / 非对称 / 其他）、哈希校验、进制字符集（含素数判定与筛选）、分析爆破、密码攻击、压缩归档、口令与归档破解、取证流量、文件格式结构、数据结构、图像与二维码、音频音视频、隐写及 4 个可选 Windows GUI 桥入口。完整清单由 registry 自动生成。
 - **解码强度四件套**（v0.1.2）：强度档位 + 自定义算法池 + **暴力爆破独立通道**（XOR/凯撒/字典/彩虹表/HMAC/PBE/Playfair/ZIP/CRC32/bkcrack，结果单独归组展示不污染主排序）+ **解析层数 1~3 选择**。
 - **宽松判定模式**（v0.1.2）：增强/极强/最强/自定义档只按字符种类数放行算法，变体编码题（「喵呜」表 0/1、emoji 表二进制）也能参与解码；默认/快速档保持严格定义域识别。
 - **密钥+密文一键尝试**：给定密文与密钥，自动枚举 AES/DES/3DES/RC4/XOR/Fernet × 多种模式 × 多种编码组合。
 - **文件拖入分析**：拖入文件自动检测类型、附加数据、图像宽高异常等。
 - **全 Unicode 显示**：内置天珩全字库，按 Unicode 平面按需加载，生僻字、古文字、Emoji 均可正常显示。
+- **科普卡算法互链**：科普正文提到本工具已有的算法时，自动链到对应 op 页（新标签页打开）；只认高置信名称/别名，跳过书名、代码、公式与泛词。
 - **Material 3 温和红主题**，暗/亮色切换，20 种语言。
 
 > 想看完整的功能介绍与场景演示，见 [`介绍文章.md`](./介绍文章.md)。
@@ -294,7 +270,7 @@ public/
 资料/              算法码表核对资料 + 研究成果（开发资料，不随发行包分发）
 ```
 
-## 编解码全清单（810 ops · 23 分类）
+## 编解码全清单（820 ops · 23 分类）
 
 > 本节由 `node tools/gen_readme_ops.mjs` 从主入口真实 import 闭包生成；opId 即注册表唯一标识。
 
@@ -377,7 +353,7 @@ public/
 | yenc | yEnc 编 / 解码 |  |
 | binhex | BinHex 4.0 编 / 解码 |  |
 
-### 花式 / CTF 编码（77 ops）
+### 花式 / CTF 编码（78 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -389,6 +365,7 @@ public/
 | rot47 | ROT47 |  |
 | atbash | Atbash |  |
 | a1z26 | A1Z26 |  |
+| scoutStick | 童子军木棍密码 | dCode Code Chinois / Samurai |
 | dna | DNA 编码 |  |
 | keyboard | 键盘坐标 |  |
 | ook | Ook! |  |
@@ -479,7 +456,7 @@ public/
 | braincopterDecode | Braincopter 解码 |  |
 | braincopterEncode | Braincopter 编码 |  |
 
-### 中文 / 本土编码（20 ops）
+### 中文 / 本土编码（24 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -503,6 +480,10 @@ public/
 | xiangyue | 想曰 XiangYue |  |
 | xiangyueEnc | 想曰 XiangYue 加密 |  |
 | yueChang | 曰唱 |  |
+| xianziCode | 哦齁编码（仙子曰） |  |
+| hajimiCode | 哈基米加密（三进制） |  |
+| zakoCode | 杂鱼编码（Base8 开源版） |  |
+| zakoMystery | 杂鱼密语（官方版） |  |
 
 ### 古典密码（71 ops）
 
@@ -858,7 +839,7 @@ public/
 | xxhash | xxHash 极速哈希 |  |
 | cityhash | CityHash 非加密哈希 |  |
 
-### 进制 / 字符集（80 ops）
+### 进制 / 字符集（82 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -916,6 +897,8 @@ public/
 | geoHash | Geohash 编码 |  |
 | geoPlusCode | Plus Code / OLC |  |
 | geoMaidenhead | Maidenhead 网格 |  |
+| floatToDecimal | 任意进制浮点转十进制 |  |
+| complementToDec | 原反补码转十进制 |  |
 | geoUtm | UTM 坐标 |  |
 | color | 颜色编码互转 |  |
 | colorInfo | 颜色全息信息 |  |
@@ -1122,7 +1105,7 @@ public/
 | huffmanCodec | 哈夫曼编解码（通用） |  |
 | unitConv | 单位换算 | 数据量 B/KB/MB/GB/TB/PB 与 KiB/MiB/GiB/TiB/PiB 两制并列（SI 1000 制 vs IEC 60027-2 1024 制，系数全部可溯源）；速率 bps/Kbps/Mbps/Gbps ↔ B/s/KB/s/MB/s（bit×8）；时间 ns~d；纯数字触发时间戳纪元对照（Unix 秒/毫秒、FILETIME、Cocoa、Chrome μs、DOS 打包，数量级自动嗅探）；频率 Hz~GHz；角度 deg/rad/gon。数据量全程 BigInt 有理数，PB 级零精度损失，精确小数与截断位明确标注。 |
 
-### 图像 / 二维码（33 ops）
+### 图像 / 二维码（37 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1148,8 +1131,11 @@ public/
 | barcodeGen | 条码生成（Code128/EAN-13/DataMatrix） |  |
 | imageStructUnified | 图像结构分析（归一） |  |
 | bin2img | 二进制转图片 |  |
+| img2bits | 图片转二进制点阵 |  |
 | img2dataURI | 图片转 Base64/dataURI |  |
+| dataURIToImage | Base64/dataURI 转图片 |  |
 | dataToImage | 数值数据渲染成图 |  |
+| imageToData | 图片还原数值数据 |  |
 | bmpPalette | BMP 调色板隐写分析 |  |
 | gifTiming | GIF 帧时序隐写 |  |
 | imageCompress | 图片压缩 |  |
@@ -1268,6 +1254,7 @@ AI 的联网出口只有可选的 `aiClient`，且必须用户自备 endpoint + 
 - 拉面：反馈千千秀字、佛曰、SNOW 的原版兼容性，Unicode 与 Twin-Hex 空白边界，以及 Whitespace 执行、Malbolge 识别问题；提出 Scytale 双密钥形式、零宽隐写字符集与格式扩充、科普和工具分类纠正、Brainfuck 非标准变体功能取舍建议。
 - qinling072：提出补充 OutGuess 等图像隐写算法。
 - cnui6：提出 Rabbit 兼容性修复，促成 CryptoJS 生态互解与口令支持。
+- 二月犬：提出补充哦齁编码（仙子曰）、哈基米加密（三进制）与杂鱼密语（官方版及 Base8 变体）。
 
 ## Community
 
@@ -1308,4 +1295,31 @@ AI 的联网出口只有可选的 `aiClient`，且必须用户自备 endpoint + 
 
 ## 隐私
 
-零外发是本工具的招牌：核心算法默认不上传用户输入；PWA 与检查更新只下载本站资源；本地桥只访问 `127.0.0.1`；外部 AI 仅在用户主动配置 endpoint 与密钥后直连该地址，主项目不做中转或记录。
+零外发是本工具的招牌，准确含义是**程序自身不主动外发**：核心算法默认不上传用户输入；PWA 与检查更新只下载本站资源；本地桥只访问 `127.0.0.1`；外部 AI 仅在用户主动配置 endpoint 与密钥后直连该地址，主项目不做中转或记录。
+
+用户显式启用的「随机数服务器」、以及在「自定义实现」里自行编写的 `fetch` / `XMLHttpRequest` / `WebSocket` 等网络调用，属于**用户授权外发**：数据由用户决定，全部在本机浏览器里发出，主项目不代发、不中转。部署到服务器上的后端（MCP / 本地桥）不代用户外发，也不应作为公网多用户服务暴露。
+
+## 安全说明（2026-10）
+
+- **运行时面**：本体是纯前端，不依赖 PHP / Java / Go / Rust；MCP stdio 服务器用 Node。Node 26.4.0 命中 2026-07 安全公告（CVE-2026-58043 / 58044 / 56848：权限模型越权、HTTP/2 UAF 等），MCP 启动时对受影响版本在 stderr 提示；建议 Node ≥ 26.5.1（或 24.18.1 / 22.23.2）。MCP 只走 stdio，不监听 HTTP/2。
+- **OpenPGP.js**：已从 5.11.2 升级到 5.11.3，修复 CVE-2025-47934（内联签名/加密签名可伪造，High）。
+- **JSFuck / JJEncode**：解码会用 `new Function` 执行输入里的 JS。已从 MCP 工具面隐藏，并从一键解码自动池排除（`noAuto`）；仍可在浏览器 UI 手动运行。
+- **RSA 弱参数**：验签/参数计算统一拒绝 e<3 或偶数 e；证书/CSR 解析对 e=3、小模数给出警告。证书解析只做结构展示，不验证签名/信任链。
+- **7-Zip WASM**：随包 7zz 24.09 在 CVE-2025-11001 / 11002（目录穿越 RCE，修复 25.00）版本范围内；本工具只在本地 Emscripten MEMFS 解压用户主动选择的 CTF 文件，不暴露网络服务，风险受限；升级到 7-Zip ≥25.00 已列入后续项。
+- **eMudhra 事件**：2026-10 印度 CA eMudhra 的中间 CA 使用极小 ECDSA 私钥标量（媒体称“私钥为 4”），Chrome / Firefox / Apple / Microsoft 已阻断。本项目不内置 CA 信任库、不引用 eMudhra，证书验证交给浏览器/系统信任库，不受该事件直接影响。
+- **PWA 缓存**：`tools/gen_sw_assets.mjs` 的 revision 现已覆盖按需资产（WASM / KaTeX / 语言包等）内容哈希，旧库不会因缓存名不变而长期滞留。
+
+## 关键词 / Keywords
+
+> 以下为多语言检索关键词，方便不同语言的用户搜到本项目。关键词仅用于检索，不代表界面语言清单（界面语言以应用内「语言」页为准）。
+
+| 语言 | 关键词 |
+|---|---|
+| 简体中文 | CTF 工具箱、CTF 编码工具箱、在线编解码、加解密工具、密码学工具、古典密码、现代密码、一键解码、隐写分析、二维码识别、哈希校验、进制转换、Base64 解码、离线工具、本地优先、零外发 |
+| English | CTF toolbox, encoder decoder, cipher identifier, cryptography toolkit, classical ciphers, modern ciphers, one-click decode, steganography analysis, QR code reader, hash calculator, base64 decode, offline tool, local-first, no upload |
+| 日本語 | CTF ツール、エンコード・デコード、暗号化・復号、古典暗号、現代暗号、暗号解析、ステガノグラフィ、QR コード読み取り、ハッシュ計算、基数変換、オフライン |
+| 한국어 | CTF 도구, 인코딩 디코딩, 암호화 복호화, 고전 암호, 현대 암호, 암호 분석, 스테가노그래피, QR 코드 인식, 해시 계산, 진법 변환, 오프라인 |
+| Русский | CTF инструменты, кодирование и декодирование, шифрование и дешифрование, классические шифры, современные шифры, криптоанализ, стеганография, распознавание QR-кодов, хеширование, системы счисления, офлайн |
+| Français | boîte à outils CTF, encodage et décodage, chiffrement et déchiffrement, chiffres classiques, chiffres modernes, cryptanalyse, stéganographie, lecture de QR code, calcul de hachage, conversion de base, hors ligne |
+| Deutsch | CTF-Werkzeug, Kodierung und Dekodierung, Ver- und Entschlüsselung, klassische Chiffren, moderne Chiffren, Kryptoanalyse, Steganographie, QR-Code lesen, Hash berechnen, Zahlensysteme, offline |
+| Español | herramientas CTF, codificación y decodificación, cifrado y descifrado, cifrados clásicos, cifrados modernos, criptoanálisis, esteganografía, lector de códigos QR, cálculo de hash, conversión de base, sin conexión |

@@ -1,7 +1,7 @@
 /*
  * fancy.js — 花式 / CTF 编码 A 组（cat:'fancy'）。
  * 摩斯电码、培根密码（24/26 字母）、栅栏密码（W 型）、凯撒、ROT13/5/18/47
- * Atbash、A1Z26、DNA、敲击码 TapCode、键盘坐标。
+ * Atbash、A1Z26、童子军木棍密码（dCode Code Chinois/Samurai）、DNA、敲击码 TapCode、键盘坐标。
  *
  * 算法来源：复刻自 WhatsInYourClipboard 的 ciphers.js / classicalGrid.js /
  * encodedText.js（ISC License，鸣谢 Leon406/ToolsFx）。编码表照抄源码，不许编造。
@@ -244,6 +244,121 @@ function a1z26Decode(text) {
     }).join("");
 }
 
+// ============ 童子军木棍密码（dCode Code Chinois / Samurai） ============
+// 规则（dCode.fr/code-chinois FAQ）：经典中国码把字母拆成「元音序号 + 该元音之后的辅音序号」。
+// 元音序：A=1 E=2 I=3 O=4 U=5 Y=6；横线=元音序号，竖线=辅音序号。例：C = A 后第 2 个辅音
+// → 1 横 + 2 竖；L = I 后第 3 个辅音 → 3 横 + 3 竖。dCode 展示例 DCODE = `|||- ||- ---- |||- --`
+// （竖线在前）。Samurai 变体把横/竖的角色对调。Y 按元音处理，Z 是 Y 后第 1 个辅音。
+const SCOUT_VOWELS = ["A", "E", "I", "O", "U", "Y"];
+const SCOUT_AFTER = SCOUT_VOWELS.map((v, i) => {
+  const start = v.charCodeAt(0), end = i + 1 < SCOUT_VOWELS.length ? SCOUT_VOWELS[i + 1].charCodeAt(0) : 91;
+  const arr = [];
+  for (let c = start + 1; c < end; c++) arr.push(String.fromCharCode(c));
+  return arr;
+});
+
+function scoutLetterInfo(ch) {
+  const up = String(ch || "").toUpperCase();
+  if (!/^[A-Z]$/.test(up)) return null;
+  const vi = SCOUT_VOWELS.indexOf(up);
+  if (vi >= 0) return { vowel: vi + 1, cons: 0 };
+  let prev = -1;
+  for (let i = 0; i < SCOUT_VOWELS.length; i++) {
+    if (SCOUT_VOWELS[i].charCodeAt(0) < up.charCodeAt(0)) prev = i;
+  }
+  if (prev < 0) return null;
+  return { vowel: prev + 1, cons: up.charCodeAt(0) - SCOUT_VOWELS[prev].charCodeAt(0) };
+}
+
+function scoutEncode(text, p = {}) {
+  const variant = String(p.variant || "classic");
+  const order = String(p.order || "vh");
+  if (!["classic", "samurai"].includes(variant)) throw new Error("童子军木棍密码：variant 需为 classic/samurai");
+  if (!["vh", "hv"].includes(order)) throw new Error("童子军木棍密码：order 需为 vh/hv");
+  const out = [];
+  for (const ch of String(text == null ? "" : text)) {
+    const info = scoutLetterInfo(ch);
+    if (info) {
+      let h = info.vowel, v = info.cons;
+      if (variant === "samurai") { const t = h; h = v; v = t; }
+      const bars = order === "vh" ? "|".repeat(v) + "-".repeat(h) : "-".repeat(h) + "|".repeat(v);
+      out.push(bars);
+      continue;
+    }
+    if (/\s/.test(ch)) { out.push("/"); continue; }
+    // 非字母透传；与 bar/分隔符冲突的字符用反斜杠转义，保证可逆。
+    out.push(/[|/\\-]/.test(ch) ? "\\" + ch : ch);
+  }
+  return out.join(" ");
+}
+
+function scoutGlyphToLetter(shape, variant, order) {
+  if (!/^[|\-]+$/.test(shape)) throw new Error("童子军木棍密码：非法字形 " + JSON.stringify(shape));
+  let vCount = 0, hCount = 0;
+  if (order === "vh") {
+    const m = /^(\|*)(-*)$/.exec(shape);
+    if (!m) throw new Error("童子军木棍密码：字形顺序应为「竖线在前、横线在后」：" + JSON.stringify(shape));
+    vCount = m[1].length; hCount = m[2].length;
+  } else {
+    const m = /^(-*)(\|*)$/.exec(shape);
+    if (!m) throw new Error("童子军木棍密码：字形顺序应为「横线在前、竖线在后」：" + JSON.stringify(shape));
+    hCount = m[1].length; vCount = m[2].length;
+  }
+  const vowelIndex = variant === "samurai" ? vCount : hCount;
+  const consIndex = variant === "samurai" ? hCount : vCount;
+  if (vowelIndex < 1 || vowelIndex > 6) {
+    throw new Error(`童子军木棍密码：元音序号 ${vowelIndex} 越界（1-6）`);
+  }
+  if (consIndex === 0) return SCOUT_VOWELS[vowelIndex - 1];
+  const after = SCOUT_AFTER[vowelIndex - 1];
+  if (consIndex > after.length) {
+    throw new Error(`童子军木棍密码：${SCOUT_VOWELS[vowelIndex - 1]} 后只有 ${after.length} 个辅音，收到 ${consIndex}`);
+  }
+  return after[consIndex - 1];
+}
+
+function scoutDecode(text, p = {}) {
+  const variant = String(p.variant || "classic");
+  const order = String(p.order || "vh");
+  if (!["classic", "samurai"].includes(variant)) throw new Error("童子军木棍密码：variant 需为 classic/samurai");
+  if (!["vh", "hv"].includes(order)) throw new Error("童子军木棍密码：order 需为 vh/hv");
+  const s = String(text == null ? "" : text).trim();
+  if (!s) return "";
+  const out = [];
+  for (const tok of s.split(/\s+/).filter(Boolean)) {
+    if (/^\/+$/.test(tok)) { out.push(" ".repeat(tok.length)); continue; }
+    if (tok.startsWith("\\")) { out.push(tok.slice(1)); continue; }
+    if (/^[|\-]+$/.test(tok)) { out.push(scoutGlyphToLetter(tok, variant, order)); continue; }
+    out.push(tok);
+  }
+  return out.join("");
+}
+
+register({
+  id: "scoutStick",
+  cat: "fancy",
+  name: "童子军木棍密码",
+  desc: "dCode 的 Code Chinois（又称 Samurai/武士码）：横线=元音序号（A/E/I/O/U/Y=1-6），竖线=该元音之后的辅音序号；例 DCODE = `|||- ||- ---- |||- --`（竖线在前）。可切 Samurai 反置与横线在前写法；非字母原样透传",
+  params: [
+    { key: "variant", label: "变体", type: "select", default: "classic", options: [
+      { value: "classic", label: "经典中国码（横=元音，竖=辅音）" },
+      { value: "samurai", label: "Samurai 反置（横=辅音，竖=元音）" },
+    ] },
+    { key: "order", label: "书写顺序", type: "select", default: "vh", options: [
+      { value: "vh", label: "竖线在前（dCode 示例）" },
+      { value: "hv", label: "横线在前" },
+    ] },
+  ],
+  encode: scoutEncode,
+  decode: scoutDecode,
+  detect: (t) => {
+    const s = String(t == null ? "" : t).trim();
+    if (!s || !/^[|\-\s/\\]+$/.test(s)) return 0;
+    const glyphs = s.split(/\s+/).filter((x) => /^[|\-]+$/.test(x));
+    return glyphs.length >= 2 ? 0.45 : 0;
+  },
+});
+
 // ============ DNA 编码（3 字母密码子 ↔ 字符） ============
 // 码表照抄 WhatsInYourClipboard ctfCiphers.js
 const DNA_MAP = {
@@ -451,6 +566,7 @@ export {
   railFenceEncode, railFenceDecode,
   caesarShift, rot13, rot5, rot18, rot47, atbash,
   a1z26Encode, a1z26Decode,
+  scoutEncode, scoutDecode, SCOUT_VOWELS, SCOUT_AFTER,
   dnaEncode, dnaDecode, DNA_MAP, DNA_REV,
   keyboardEncode, keyboardDecode, KBD_ROWS,
 };

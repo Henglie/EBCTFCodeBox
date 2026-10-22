@@ -185,6 +185,7 @@ import EDU_OBJECT_ID_TIME from "./edu/edu_objectIdTime.js";
 import EDU_RC4_DROP from "./edu/edu_rc4Drop.js";
 import EDU_XSALSA20 from "./edu/edu_xsalsa20.js";
 import EDU_DATA_TO_IMAGE from "./edu/edu_dataToImage.js";
+import EDU_BATCH7_NEW from "./edu/edu-batch7-new.js"; // v0.1.11 迷因四件套 + 图片/进制反向 9 op
 
 // 合并所有分片。后者不覆盖前者（分区不重叠）；重叠时以后者为准，构建期应避免。
 const EDU = Object.assign(
@@ -330,6 +331,7 @@ const EDU = Object.assign(
   EDU_RANDOM_SECURE,
   EDU_RAND_BEACON,
   EDU_IMAGE_TOOLBOX,
+  EDU_BATCH7_NEW,
 );
 
 import { ZH as INTEGRATED, HASH_VECTORS, BASE_NOTES, EXTRA_ALIASES, CRC_PARAMS } from "./edu/edu-integrated.js";

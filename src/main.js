@@ -103,7 +103,7 @@ import "./core/detectExt2.js"; // detect 大表补强（82 op 补 detect，提�
 
 import { renderRecipe, rState as recipeState, addRecipeOpAt, addRecipeFamilyAt, appendRecipeOpToTail, openRecipeFamilyAtTail } from "./ui/recipeView.js"; // 配方链 UI
 import { renderExhaustive } from "./ui/exhaustiveView.js"; // 穷举全解视图（一键全解码器穷举）
-// —— inspect / quickconv 两视图懒载（MT717 2026-10-12：两子树 12 文件退出首屏闭包，约 -108KB gz）——
+// —— inspect / quickconv 两视图懒载（两子树 12 文件退出首屏闭包，约 -108KB gz）——
 // 首次切入对应视图才动态 import（视图切换=用户手势）；文件仍在 SW 预缓存（不匹配 EXCLUDE_RULES），离线可用。
 // dispose 未加载时为 no-op（切走时 _inspectMod 尚未 resolve → 模块无 DOM 实例，无需清理）。
 let _inspectMod = null, _quickConvMod = null;
@@ -117,6 +117,7 @@ function disposeInspectView() {
   if (_inspectMod) _inspectMod.then((m) => m.disposeUniversalViewer()).catch(() => {});
 }
 import { renderCodeImageViewer } from "./ui/codeImageViewer.js"; // 编码图鉴查询器（图形编码对照图）
+import { synonymsOf, expandAliases } from "./ui/searchSynonyms.js"; // 图像/视频/编码等同义词检索（只改检索，不改 op 名）
 import { exhaustiveDecode } from "./core/exhaustiveDecode.js"; // 穷举全解并入首页智能解码（末尾追加可折叠区）
 import { expandableInput, ensureExpStyles, openExpandModal } from "./ui/expandableInput.js";
 import { attachModalLifecycle } from "./ui/modalLifecycle.js"; // 密钥/IV/crib 可展开输入框 + 弹层样式注入
@@ -847,7 +848,7 @@ function renderWorkspaceInner() {
   if (state.view === "recipe") return renderRecipe($ws);
   if (state.view === "exhaust") return renderExhaustive($ws);
   if (state.view === "inspect") {
- // 懒载（MT717）：首次切入才 import；import 完成时已切走则不渲染（竞态保护）
+ // 懒载：首次切入才 import；import 完成时已切走则不渲染（竞态保护）
     return loadInspectView()
       .then((m) => { if (state.view === "inspect") m.renderUniversalViewer($ws); })
       .catch((e) => { console.error("[inspect] 视图懒载失败：", e); });
@@ -1235,10 +1236,15 @@ function renderBruteResults(outWrap, q, results) {
   renderOneKeySnapshot(outWrap);
 }
 
+// 强 flag 结构（与 core/magic/magic.js 的 FLAG_STRONG_RE 同口径）：用于决定默认展开。
+const _STRONG_FLAG_UI_RE = /(^|[^a-z])(flag|ctf|key|pass|hgame|moectf)[a-z0-9_]*[\{:=_]/i;
+function textHasStrongFlag(s) { return _STRONG_FLAG_UI_RE.test(String(s == null ? "" : s)); }
+
 function appendBruteResults(outWrap, results) {
   if (!results.length) return;
   const sec = el("details", { class: "onekey-brute" });
-  sec.open = true;
+  // 爆破默认折叠，让核心解码候选先露头；仅当某条爆破真命中 flag 时才展开。
+  sec.open = results.some((r) => textHasStrongFlag(r && r.output));
   sec.append(el("summary", { class: "onekey-brute-sum" },
     msym("bolt"),
     el("span", {}, t("ui.home.bruteTitle", results.length)),
@@ -1388,7 +1394,11 @@ function renderCandCard(c, search = {}) {
 // 展开见其余分支。任一分支 crib 命中则整卡高亮。每条分支点击复制自己的结果。
 function renderBruteGroupCard(g, search = {}) {
   const op = getOp(g.base);
-  const box = el("details", { class: "onekey-card onekey-brute", open: "" });
+  // 参数扫描组默认折叠；仅当组内某分支命中 flag/crib 且分支数不大时自动展开。
+  // 仿射 311 分支这类大组即使命中也不整组摊开——顶部摘要卡已展示 flag 解，
+  // 整组展开只会把其余候选推到屏幕外。小参数组（凯撒 25 等）命中则展开。
+  const hasHit = g.items.some((c) => c.flagPriority || c.matchesCrib);
+  const box = el("details", { class: "onekey-card onekey-brute", open: hasHit && g.items.length <= 32 ? "" : null });
   box.append(el("summary", { class: "ok-name" }, t("ui.home.bruteGroup", op ? opNameBi(op) : g.base, g.items.length)));
   for (const c of g.items) box.append(renderCandidateRow(c, { search, copied: () => toast(t("ui.toast.copiedResult")) }));
   return box;
@@ -1440,7 +1450,8 @@ async function appendExhaustSection(outWrap, q, crib, token) {
  // 进度条不直接 append 到 outWrap 末尾（会被上方原始卡+magic候选卡挤到整个输出流最底）
  // 改为先建穷举区容器 box、把进度条放在区头部（summary 之后），使进度条出现在穷举结果区顶部。
  // 结果落在同一 box 内；异常/过期/空结果则移除 box。
-  const box = el("details", { class: "onekey-exhaust", open: "" });
+  // 穷举区默认折叠；跑完后仅在有 flag/crib 命中时自动展开。
+  const box = el("details", { class: "onekey-exhaust" });
   const summary = el("summary", { class: "onekey-exhaust-head" }, t("ui.home.exhaustTitle"));
   box.append(summary);
   const prog = el("div", { class: "onekey-progress" },
@@ -1471,6 +1482,8 @@ async function appendExhaustSection(outWrap, q, crib, token) {
     return;
   }
   if (!r.total) { box.remove(); return; }       // 无变化项，撤掉空区
+  // 默认折叠；仅当穷举命中 flag/crib 时自动展开，让命中一眼可见。
+  box.open = r.hits > 0;
 
   summary.append(el("span", { class: "onekey-exhaust-stat" }, t("ui.exhaust.stat", r.total, r.hits)));
   for (const g of r.groups) {
@@ -1875,7 +1888,165 @@ function opDescEl(op) {
   return div;
 }
 
-function parseInline(text, plainMath) {
+// ---- 科普卡内「算法名 → 对应 op 页」自动链接 ----
+// 只链高置信的算法名/别名：经典名称、aka、带数字/专名的长别名；泛词（编码/加密/哈希/图片…）
+// 一律不链。同一段正文里每个 op 只链第一次，避免链接刷屏；代码段、公式、已有 <a> 内不链。
+const ALGO_LINK_DENY = new Set([
+  "编码", "解码", "加密", "解密", "密码", "哈希", "散列", "校验", "压缩", "解压", "隐写",
+  "图片", "图像", "文本", "文件", "数据", "分析", "工具", "算法", "进制", "字符", "字符串",
+  "密钥", "公钥", "私钥", "二维码", "条码", "音频", "视频", "编码器", "解码器", "转换",
+  "替换", "移位", "爆破", "破解", "攻击", "检测", "提取", "解析", "生成", "计算",
+  "base", "code", "cipher", "encode", "decode", "encrypt", "decrypt", "hash", "checksum",
+  "compress", "image", "text", "file", "data", "tool", "algorithm", "key", "secret",
+  "public key", "private key", "url", "hex", "unicode", "ascii", "utf-8", "utf8", "flag", "ctf",
+  // 书名/典籍名不是算法（如 rsaCrt 的 aka 里带「孙子算经」）；《》内的文字另有硬跳过。
+  "孙子算经", "九章算术", "永乐大典", "说文解字", "几何原本",
+  // 同时是日常词的算法别名：宁可少链，不把 "bacon/hill/des" 之类误链成算法。
+  "bacon", "hill", "route", "skip", "every", "case", "word", "clock", "time", "date", "color", "colour",
+]);
+// 允许链接的三字母算法缩写；其余 ASCII 触发词要求 ≥4 字符，避免误链常见短词。
+const ALGO_LINK_ACRONYMS = new Set(["aes", "des", "rsa", "rc4", "md5", "jwt", "xor", "sm2", "sm4", "ecc", "pem", "crc"]);
+let _algoLinkIndex = null;
+let _algoLinkIndexKey = "";
+
+function normAlgoTrigger(s) {
+  return String(s == null ? "" : s).trim().replace(/\s+/g, " ").toLowerCase();
+}
+function algoTriggerOk(raw) {
+  const t = normAlgoTrigger(raw);
+  if (t.length < 2 || ALGO_LINK_DENY.has(t)) return "";
+  const han = (t.match(/\p{Script=Han}/gu) || []).length;
+  if (han === 0) {
+    if (t.length < 4 && !ALGO_LINK_ACRONYMS.has(t)) return "";
+    if (!/[a-z]/.test(t)) return "";
+  }
+  return t;
+}
+function buildAlgoLinkIndex(locale) {
+  const owners = new Map(); // trigger -> Set(opId)
+  const exactNames = new Map(); // normalized name -> Set(opId)
+  const add = (raw, opId, isName) => {
+    const t = algoTriggerOk(raw);
+    if (!t) return;
+    let set = owners.get(t);
+    if (!set) { set = new Set(); owners.set(t, set); }
+    set.add(opId);
+    if (isName) {
+      let ns = exactNames.get(t);
+      if (!ns) { ns = new Set(); exactNames.set(t, ns); }
+      ns.add(opId);
+    }
+  };
+  for (const op of OPS) {
+    add(op.name, op.id, true);
+    const localized = opName(op);
+    if (localized && localized !== op.name && !localized.startsWith("op.")) add(localized, op.id, true);
+    const aliases = (eduAliasesSync() || {})[op.id] || [];
+    for (const a of aliases) add(a, op.id, false);
+  }
+  const chosen = new Map();
+  for (const [trigger, ids] of owners) {
+    if (ids.size === 1) { chosen.set(trigger, [...ids][0]); continue; }
+    const exact = exactNames.get(trigger);
+    if (exact && exact.size === 1) chosen.set(trigger, [...exact][0]);
+  }
+  const buckets = new Map();
+  for (const [trigger, opId] of chosen) {
+    const first = trigger[0];
+    let arr = buckets.get(first);
+    if (!arr) { arr = []; buckets.set(first, arr); }
+    arr.push({ trigger, opId });
+  }
+  for (const arr of buckets.values()) arr.sort((a, b) => b.trigger.length - a.trigger.length);
+  return { buckets, locale };
+}
+function getAlgoLinkIndex() {
+  const locale = getLocale();
+  const key = locale + "|" + (eduAliasesSync() ? "1" : "0");
+  if (!_algoLinkIndex || _algoLinkIndexKey !== key) {
+    _algoLinkIndex = buildAlgoLinkIndex(locale);
+    _algoLinkIndexKey = key;
+  }
+  return _algoLinkIndex;
+}
+function algoLinkBoundaryOk(trigger, text, start, end) {
+  const before = start > 0 ? text[start - 1] : "";
+  const after = end < text.length ? text[end] : "";
+  if (/[a-z0-9]/i.test(trigger[0]) && /[a-z0-9]/i.test(before)) return false;
+  if (/[a-z0-9]/i.test(trigger[trigger.length - 1]) && /[a-z0-9]/i.test(after)) return false;
+  return true;
+}
+function insideUrlToken(text, start) {
+  let ws = start - 1;
+  while (ws >= 0 && !/\s/.test(text[ws])) ws--;
+  const token = text.slice(ws + 1, start + 1);
+  return /^(?:https?|ftp):\/\//i.test(token);
+}
+// 书名号内（《孙子算经》等）是文献名，不是算法本体，跳过。
+function insideBookTitle(text, start) {
+  const open = text.lastIndexOf("《", start);
+  if (open < 0) return false;
+  const close = text.lastIndexOf("》", start);
+  return open > close && text.indexOf("》", start) !== -1;
+}
+function linkifyAlgoText(text, opts) {
+  const frag = document.createDocumentFragment();
+  const idx = opts && opts.index ? opts.index : getAlgoLinkIndex();
+  if (!idx || !text) { frag.append(document.createTextNode(text || "")); return { frag, links: 0 }; }
+  const lower = text.toLowerCase();
+  const seen = new Set();
+  let last = 0, links = 0, i = 0;
+  const maxLinks = opts && opts.maxLinks ? opts.maxLinks : 8;
+  while (i < text.length && links < maxLinks) {
+    const bucket = idx.buckets.get(lower[i]);
+    let hit = null;
+    if (bucket) {
+      for (const cand of bucket) {
+        const t = cand.trigger;
+        if (!lower.startsWith(t, i)) continue;
+        if (cand.opId === opts.selfId || seen.has(cand.opId)) continue;
+        // 三字母缩写（AES/DES/RSA/MD5…）只认大写原文，避免法语 "des"、普通小写词误链。
+        if (ALGO_LINK_ACRONYMS.has(t) && text.slice(i, i + t.length) !== t.toUpperCase()) continue;
+        if (!algoLinkBoundaryOk(t, text, i, i + t.length)) continue;
+        if (insideUrlToken(text, i)) continue;
+        if (insideBookTitle(text, i)) continue;
+        hit = cand;
+        break;
+      }
+    }
+    if (!hit) { i++; continue; }
+    const end = i + hit.trigger.length;
+    if (i > last) frag.append(document.createTextNode(text.slice(last, i)));
+    const op = getOp(hit.opId);
+    const a = el("a", {
+      class: "edu-op-link",
+      href: location.href.split("#")[0] + "#/op/" + encodeURIComponent(hit.opId),
+      target: "_blank",
+      rel: "noopener noreferrer",
+      title: op ? opName(op) : hit.opId,
+    }, text.slice(i, end));
+    frag.append(a);
+    seen.add(hit.opId);
+    links++;
+    last = end;
+    i = end;
+  }
+  if (last < text.length) frag.append(document.createTextNode(text.slice(last)));
+  return { frag, links };
+}
+function linkifyDomTextNodes(root, opts) {
+  if (!root) return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    if (node.parentElement && node.parentElement.closest("a, code, pre, script, style")) continue;
+    const { frag, links } = linkifyAlgoText(node.nodeValue || "", opts);
+    if (links) node.replaceWith(frag);
+  }
+}
+
+function parseInline(text, plainMath, opts) {
   const frag = document.createDocumentFragment();
   const pushPlain = (s) => {
     if (!s) return;
@@ -1886,7 +2057,10 @@ function parseInline(text, plainMath) {
     if (/<[a-z][\s\S]*?>/i.test(bolded)) {
       const span = el("span", { class: "edu-rich" });
       span.innerHTML = bolded;
+      if (opts && opts.linkAlgos) linkifyDomTextNodes(span, opts);
       frag.append(span);
+    } else if (opts && opts.linkAlgos) {
+      frag.append(linkifyAlgoText(bolded, opts).frag);
     } else frag.append(document.createTextNode(bolded));
   };
   // 非码段内再按 $...$ 切公式
@@ -2113,7 +2287,9 @@ function renderOp() {
   });
 
  // 转换动作条：显式「转换/一键解码」按钮，不监听 input 实时跑。
-  const actLabel = op.run ? t("ui.op.convert") : (isDual ? t("ui.op.convert") : t("ui.op.decode"));
+  // encode-only 的按钮此前一律写「解码」（qrGen 实际在编码），按真实方向取文案。
+  const actLabel = isDual || op.run ? t("ui.op.convert")
+    : (op.decode ? t("ui.op.decode") : t("ui.op.encode"));
   const runAct = el("button", { class: "act-btn primary" }, msym(isDual ? "sync_alt" : "bolt"), " " + actLabel);
   runAct.addEventListener("click", async () => {
     runAct.classList.remove("pending-run"); // 惰执行 pending 高亮：用户已显式执行，撤掉呼吸提示
@@ -2350,6 +2526,9 @@ function renderEduCard(opId) {
     msym("menu_book", "edu-glyph"),
     el("span", { class: "edu-card-title" }, t("ui.edu.title")),
   ));
+  // 科普正文里的算法名 → 对应 op 页（新标签页）；当前 op 自身不链。
+  const linkOpts = { linkAlgos: true, selfId: opId };
+  const parse = (s) => parseInline(s, false, linkOpts);
 
  // 行内标记解析：$...$ → KaTeX 行内公式占位；`...` → 等宽小块。
  // 返回 DocumentFragment，供多段文本拼接。
@@ -2364,6 +2543,7 @@ function renderEduCard(opId) {
       if (/^\s*<(table|ul|ol|pre|div|figure|blockquote)\b/i.test(seg)) {
         const block = el("div", { class: "edu-rich-block" });
         block.innerHTML = seg;
+        linkifyDomTextNodes(block, linkOpts);
         wrap.append(block);
         continue;
       }
@@ -2371,7 +2551,7 @@ function renderEduCard(opId) {
  // 段内单换行保留为 <br>
       const lines = seg.split(/\n/);
       lines.forEach((ln, i) => {
-        p.append(parseInline(ln));
+        p.append(parse(ln));
         if (i < lines.length - 1) p.append(el("br"));
       });
       wrap.append(p);
@@ -2416,7 +2596,11 @@ function renderEduCard(opId) {
       m.setAttribute("data-tex", f.tex);
       m.setAttribute("data-display", "1");
       row.append(m);
-      if (f.caption) row.append(el("div", { class: "edu-formula-cap" }, f.caption));
+      if (f.caption) {
+        const cap = el("div", { class: "edu-formula-cap" });
+        cap.append(parse(f.caption));
+        row.append(cap);
+      }
       fwrap.append(row);
     }
     section("ui.edu.formula", fwrap);
@@ -2447,7 +2631,7 @@ function renderEduCard(opId) {
           el("code", { class: "edu-ex-val edu-ex-val-out" }, ex.out),
         ),
       );
-      if (ex.desc) { const exd = el("div", { class: "edu-ex-desc" }); exd.append(parseInline(ex.desc)); row.append(exd); }
+      if (ex.desc) { const exd = el("div", { class: "edu-ex-desc" }); exd.append(parse(ex.desc)); row.append(exd); }
       exWrap.append(row);
     }
     section("ui.edu.example", exWrap);
@@ -2458,7 +2642,7 @@ function renderEduCard(opId) {
     const ul = el("ul", { class: "edu-tips" });
     for (const tip of edu.tips) {
       const li = el("li", { class: "edu-tip" });
-      li.append(parseInline(tip));
+      li.append(parse(tip));
       ul.append(li);
     }
     section("ui.edu.tips", ul);
@@ -2798,7 +2982,8 @@ async function convert(src) {
         if (!r.ok) throw new Error(r.error + (r.line ? `（第 ${r.line} 行）` : ""));
         return r.out;
       })
-    : (op.run || (operationDir === "encode" ? op.encode : op.decode));
+    // 方向函数优先于 run：此前 op.run 永远压过 encode/decode，mimeMultipart 的 encode 实际不可达。
+    : ((operationDir === "encode" ? op.encode : op.decode) || op.run);
  // 原始字节透传：op 声明 acceptsBytes 且输入框有拖入的真字节时
  // 通过 params.rawBytes 传给执行层（如 PNG 等需要真字节而非 hex 文本的 op）。
  // 未声明的 op 完全不受影响，params 里不注入 rawBytes。
@@ -3278,7 +3463,7 @@ function ensurePinyinSearch() {
     if (_pinyinRerender) _pinyinRerender();
   }).catch(() => { _pinyinLoading = null; });
 }
-eduContentReady().then(() => { _searchIndex = null; }); // 科普别名就绪后清缓存，下次搜索重建含 aka 的索引
+eduContentReady().then(() => { _searchIndex = null; _algoLinkIndex = null; }); // 科普别名就绪后清缓存，下次搜索重建含 aka 的索引
 function buildSearchIndex() {
   const aliases = eduAliasesSync() || {}; // 科普懒加载未就绪时无别名，索引照建（就绪后清缓存重建）
   const idx = [];
@@ -3286,7 +3471,9 @@ function buildSearchIndex() {
     if (op.id === "cryptoTryAll") continue; // 虚拟 op 不进搜索
     const nm = opName(op);
     const ds = opDesc(op);
-    const aka = aliases[op.id] || [];
+    const catNameText = catNameById(op.cat);
+    // 只做检索别名注入：op 名不变；强特征词命中才注入整组，避免「片段」等弱词误扩。
+    const aka = expandAliases([nm, ds, catNameText, ...(aliases[op.id] || [])].join(" "), aliases[op.id] || []);
  // 算法族（）：族显示名 + 档位短名并入可检索文本，让「pgp 加密」「ML-KEM 密钥」
  // 这类「族名+档名」组合词能命中族内 op。family 字段缺失时 famName 为空串，行为同旧。
     const famName = op.family ? (FAMILY_NAMES[op.family] || "") : "";
@@ -3300,7 +3487,7 @@ function buildSearchIndex() {
  // ：中文名/中文别名的拼音全拼+首字母序列并入（ksmm/kaisamima 命中凯撒密码）；
  // 派生序列不回写 aka（双轨），非中文串返回空集零开销。
     const pyKeys = _pinyinKeysFn ? _pinyinKeysFn(nm, aka) : [];
-    const hay = [nm, ...aka, ds, op.id, op.cat, famName, famLbl, ...pyKeys].join("").toLowerCase();
+    const hay = [nm, ...aka, ds, op.id, op.cat, catNameText, famName, famLbl, ...pyKeys].join("").toLowerCase();
  // name 保持 op 原名：评分（名称前缀命中）与短名优先 tie-break 不受族名影响，保守零回归；
  // 族显示名只用于结果渲染（r.famName → 「族名 - op名」）与所属族标注。
     idx.push({ id: op.id, name: nm, desc: ds, cat: op.cat, aka, famName, hay, py: pyKeys });
@@ -3309,7 +3496,11 @@ function buildSearchIndex() {
 }
 function searchOps(q) {
   if (!_searchIndex) _searchIndex = buildSearchIndex();
-  const query = q.trim().toLowerCase();
+  // 中英/中数混写断开：图片base64 → 图片 base64；base64解码 → base64 解码。
+  // 否则整串会被当成一个 term，与「图片转 Base64」里的空格对不上。
+  const query = q.trim().toLowerCase()
+    .replace(/([一-鿿])([a-z0-9])/g, "$1 $2")
+    .replace(/([a-z0-9])([一-鿿])/g, "$1 $2");
   if (!query) return [];
  // 支持空格分词：全部词都命中才算（AND）
  // P0：剥离查询中的动作词（「3DES 解密」「JWT 伪造」「base58解码」→ 算法本体）。
@@ -3326,17 +3517,27 @@ function searchOps(q) {
     let ok = true;
     let score = 0;
     for (const term of terms) {
-      const pos = e.hay.indexOf(term);
-      if (pos < 0) { ok = false; break; }
+      // 同义词扩展：组内 OR，词间仍 AND；取组内最高命中分，不改原词优先级。
+      const alts = synonymsOf(term);
+      let best = -1;
+      for (const alt of alts) {
+        if (!alt) continue;
+        const pos = e.hay.indexOf(alt);
+        if (pos < 0) continue;
  // 名称开头命中给高分，别名/描述命中给低分
  // ：拼音键前缀命中（ksmm/ksm m 这类首字母查询的本体命中）介于别名与兜底之间，
  // 让「想曰 xy」强于恰好在中段含 xy 的无关 op；键中段命中仍走 hay 兜底 +10。
-      const nmPos = e.name.toLowerCase().indexOf(term);
-      if (nmPos === 0) score += 100;
-      else if (nmPos > 0) score += 40;
-      else if (e.aka.some((a) => a.toLowerCase().includes(term))) score += 30;
-      else if (e.py && e.py.some((k) => k.startsWith(term))) score += 20;
-      else score += 10;
+        const nmPos = e.name.toLowerCase().indexOf(alt);
+        let s;
+        if (nmPos === 0) s = 100;
+        else if (nmPos > 0) s = 40;
+        else if (e.aka.some((a) => a.toLowerCase().includes(alt))) s = 30;
+        else if (e.py && e.py.some((k) => k.startsWith(alt))) s = 20;
+        else s = 10;
+        if (s > best) best = s;
+      }
+      if (best < 0) { ok = false; break; }
+      score += best;
     }
     if (ok) {
  // 产品负责人 2026-09-02：常用 op（CTF_HOT）搜索加权——修「RSA 密钥对生成」被注册序靠前的
@@ -3489,7 +3690,7 @@ function initOpSearch() {
     if (!document.getElementById("topbarSearch")?.contains(ev.target)) closePanel();
   });
  // 语言切换后索引失效
-  onLocaleChange(() => { _searchIndex = null; });
+  onLocaleChange(() => { _searchIndex = null; _algoLinkIndex = null; });
  // 拼音就绪后重算当前查询（懒载完成回调）；空闲预热让键入前通常已就绪（同 edu defer 门控手法）
   _pinyinRerender = () => { if (input.value.trim()) renderResults(searchOps(input.value)); };
   if (typeof requestIdleCallback === "function") requestIdleCallback(ensurePinyinSearch, { timeout: 3000 });
@@ -3673,6 +3874,7 @@ function renderAbout(host) {
     { name: "拉面", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribLamian" },
     { name: "qinling072", tierKey: "ui.about.tierContributor", note: String(getLocale()).toLowerCase().startsWith("zh") ? "提出补充 OutGuess 等图像隐写算法" : "Proposed adding OutGuess and other image-steganography algorithms" },
     { name: "cnui6", tierKey: "ui.about.tierContributor", note: String(getLocale()).toLowerCase().startsWith("zh") ? "提出 Rabbit 兼容性修复（Legacy 变体与口令支持）" : "Proposed the Rabbit compatibility fix (Legacy variant + passphrase support)" },
+    { name: "二月犬", tierKey: "ui.about.tierContributor", note: String(getLocale()).toLowerCase().startsWith("zh") ? "提出哦齁编码、哈基米加密与杂鱼密语" : "Suggested the Ohou, Hakimi and Zako meme codecs" },
   ];
   for (const c of OTHER_CONTRIBUTORS) {
     const cap = el("span", { class: c.avatar ? "about-capsule about-capsule-founder" : "about-capsule" });

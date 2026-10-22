@@ -25,6 +25,7 @@
 
 import { register } from "./registry.js";
 import { modInverse, rsaPow } from "./modern.js";
+import { assertUsableRsaExponent } from "./rsaKeyCheck.js";
 
 // ============================================================
 // 通用数论工具
@@ -105,7 +106,7 @@ function rsaParamsReport(text, p) {
   const qStr = String((p && p.q) || "").trim();
   if (!pStr || !qStr) throw new Error("需在参数框填入 p 和 q（十进制，主输入框不再使用）");
   const pp = BigInt(pStr), qq = BigInt(qStr);
-  const e = BigInt(String((p && p.e) || "65537").trim());
+  const e = assertUsableRsaExponent(BigInt(String((p && p.e) || "65537").trim()));
   const n = pp * qq;
   const phi = (pp - 1n) * (qq - 1n);
   const d = modInverse(e, phi);

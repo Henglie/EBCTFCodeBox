@@ -2,7 +2,8 @@
  * customImplClient.js — 自定义算法主线程调度端（照 magicClient 的三层防护模式）。
  *
  * 执行策略（红线：沙箱 + 超时，防死循环冻页面）：
- *  1. Worker 优先：module Worker 独立 realm 跑用户代码（realm 内已抹掉网络/存储能力），主线程零阻塞；
+ *  1. Worker 优先：module Worker 独立 realm 跑用户代码（隔离 DOM/存储/派生线程；网络能力保留，
+ *     用户代码可主动外发自己指定的数据），主线程零阻塞；
  *  2. 超时硬杀：CUSTOM_TIMEOUT_MS 到点 terminate 该 Worker，页面不冻（下次调用惰性重建干净实例）；
  *  3. 降级主线程：环境无 Worker / 模块 Worker 不可用（老浏览器、file:// 限制、CSP）→ 主线程同步执行。
  *     ⚠ 降级路径只有词法遮蔽，没有 realm 隔离，也无法硬杀死循环。返回值里带 sandbox:"main"，
@@ -79,9 +80,9 @@ function killWorker() {
 }
 
 /** 主线程直跑（降级路径 / Worker 不可用 / 增强随机性生效时）。 */
-function runOnMainThread(req) {
+async function runOnMainThread(req) {
   // 主线程直连统一随机源 → H.randBytes 跟随「增强随机性」当前档位。
-  const res = runCustomImpl({ ...req, helpers: buildHelpers(_mainRandProvider) });
+  const res = await runCustomImpl({ ...req, helpers: buildHelpers(_mainRandProvider) });
   return res.ok
     ? { ok: true, out: res.out, sandbox: "main" }
     : { ok: false, error: res.error, line: res.line ?? null, phase: res.phase || null, reason: res.reason || null, sandbox: "main" };
@@ -90,7 +91,7 @@ function runOnMainThread(req) {
 /**
  * 执行用户自定义实现，带超时看门狗。
  * @param {{code:string, dir:string, input:string, params:object, rawBytes:?Uint8Array, timeoutMs:?number}} req
- * @returns {Promise<{ok:true,out:string,sandbox:string}|{ok:false,error:string,line:?number,timedOut?:boolean,sandbox:string}>}
+ * @returns {Promise<{ok:true,out:(string|{text:string,files?:Array}),sandbox:string}|{ok:false,error:string,line:?number,timedOut?:boolean,sandbox:string}>}
  */
 export function runCustomWithTimeout(req) {
   // The shared Worker cannot start a second job until the first settles.
@@ -112,14 +113,29 @@ export function runCustomWithTimeout(req) {
   return new Promise((resolve) => {
     const runId = ++_seq;
     let settled = false;
+    let retryStarted = false;
     const finish = (res) => {
       if (settled) return;
+      // res === null 表示 Worker 挂了，请求还没跑完 → 主线程补跑一次（真降级，不是只报错）。
+      // 主线程执行现在是 async（完整算法源码可能是 async 入口），必须等它真正结束再 resolve，
+      // 否则 _running 会提前放开、允许第二个任务并发进入共享沙箱。
+      if (res === null) {
+        if (retryStarted) return;
+        retryStarted = true;
+        clearTimeout(timer);
+        _pending.delete(runId);
+        runOnMainThread(plain).then((r) => {
+          settled = true;
+          _running = false;
+          resolve(r);
+        });
+        return;
+      }
       settled = true;
       _running = false;
       clearTimeout(timer);
       _pending.delete(runId);
-      // res === null 表示 Worker 挂了，请求还没跑完 → 主线程补跑一次（真降级，不是只报错）
-      resolve(res === null ? runOnMainThread(plain) : res);
+      resolve(res);
     };
     const timer = setTimeout(() => {
       killWorker();                        // 硬杀：连同死循环一起清掉
@@ -137,7 +153,7 @@ export function runCustomWithTimeout(req) {
       // Uint8Array 走结构化克隆，Worker 端拿到仍是 Uint8Array
       worker.postMessage({ type: "run", runId, ...plain });
     } catch {
-      finish(runOnMainThread(plain));      // 消息发不出去（不可克隆的 params 等）→ 主线程兜底
+      finish(null);                        // 消息发不出去（不可克隆的 params 等）→ 主线程兜底
     }
   });
 }

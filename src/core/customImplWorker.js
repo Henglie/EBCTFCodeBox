@@ -1,9 +1,9 @@
 /*
  * customImplWorker.js — 自定义算法执行端（module Worker）。
  *
- * 这里是沙箱的**真防线**：Worker 是独立 realm，天然无 DOM；启动时再把网络/存储/派生线程
- * 这几类能力从本 realm 抹掉，用户代码即使绕过词法遮蔽（constructor 链）也拿不到它们。
- * 零外发红线在此落地——不是"约定不用"，是"这个 realm 里根本没有"。
+ * 沙箱目标（恒烈 2026-10-22 口径）：隔离 DOM / 存储 / 派生线程，保留网络能力。
+ * 程序的「零外发」指程序自身不主动外发；用户自定义代码可以用 JS 原生网络函数
+ * 外发用户自己要发的数据（本机前端，用户授权）。后端不代用户外发。
  *
  * 死循环由主线程 terminate 硬杀（见 customImplClient.js 的看门狗）。
  */
@@ -21,12 +21,12 @@ const post = inWorker ? self.postMessage.bind(self) : () => {};
  * 可从原型对象绕过实例遮蔽直取原函数（WebIDL 属性都挂在原型上，这是真实的绕过面）。
  * postMessage / onmessage 不动（Worker 自身通信要用），它们在用户代码里由词法遮蔽挡住。
  */
+// 网络能力（fetch/XHR/WebSocket/EventSource/importScripts/Request/Response/...）刻意保留：
+// 用户自定义代码可主动外发（用户授权），见文件头。存储与派生线程仍隔离。
 const BANNED = [
-  "fetch", "XMLHttpRequest", "WebSocket", "EventSource", "importScripts",
-  "Request", "Response", "Headers", "FormData", "navigator", "sendBeacon",
   "caches", "indexedDB", "localStorage", "sessionStorage", "cookieStore",
   "Worker", "SharedWorker", "BroadcastChannel", "MessageChannel", "MessagePort",
-  "eval", "location",
+  "eval",
 ];
 
 const stripped = [];
@@ -49,7 +49,7 @@ if (inWorker) {
     if (self[name] === undefined && (!proto || proto[name] === undefined)) stripped.push(name); else kept.push(name);
   }
 
-  self.onmessage = (e) => {
+  self.onmessage = async (e) => {
     const m = e.data || {};
     if (m.type === "ping") {
       // 环境自述：主线程据此在 UI 上如实标注沙箱强度（哪些能力没抹掉）
@@ -77,7 +77,7 @@ if (inWorker) {
         return;
       }
     }
-    const res = runCustomImpl({
+    const res = await runCustomImpl({
       code: m.code,
       dir: m.dir,
       input: m.input,

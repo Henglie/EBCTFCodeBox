@@ -9,7 +9,7 @@
   <span>EternalBlaze CTF Codebox · EBCTFCodeBox</span>
 </h1>
 <p align="center">
-  <span align="center">A local-first, zero-upload codec / cryptography / steganalysis toolbox: 810 registered operations across 23 categories, most running entirely in your browser; Windows can additionally enable local-bridge capabilities, while macOS / Linux ship with double-click launchers.</span>
+  <span align="center">A local-first, zero-upload codec / cryptography / steganalysis toolbox: 820 registered operations across 23 categories, most running entirely in your browser; Windows can additionally enable local-bridge capabilities, while macOS / Linux ship with double-click launchers.</span>
 </p>
 
 <p align="center">
@@ -33,9 +33,10 @@
 - [Introduction](#introduction)　　　　[Features](#features)
 - [Screenshots](#screenshots)　　　　[Running](#running)
 - [Platform Compatibility](#platform-compatibility)　　[Performance Requirements](#performance-requirements)
-- [Directory Structure](#directory-structure)　　　　[Full Codec List](#full-codec-list-810-ops--23-categories)
+- [Directory Structure](#directory-structure)　　　　[Full Codec List](#full-codec-list-820-ops--23-categories)
 - [Plugins & AI Access](#plugins--ai-access)　　[License](#license)
 - [Third-party Resources & Licenses](#third-party-resources--licenses)　　[Privacy](#privacy)
+- [Keywords](#keywords)
 
 ## Quick Download
 
@@ -46,28 +47,48 @@
 | Baidu Netdisk | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
 | Quark | https://pan.quark.cn/s/3b7e573b19c0 | none |
 
-Current version **v0.1.10**. The source of truth is always the GitHub repository: [github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox).
+Current version **v0.1.11**. The source of truth is always the GitHub repository: [github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox).
 
 ## Changelog
 
-## v0.1.10
+## v0.1.11
 
 ### New
 
-- Rabbit gains three variants
-- Rabbit passphrase mode and cracking
+- Ohou codec (Xianzi)
+- Hakimi cipher (ternary)
+- Zako codec (official closed-source algorithm reproduced) + open-source Base8 variant
+- Base64/dataURI to image
+- Image to binary bit-stream
+- Image to numeric pixel data
+- Base-N float to decimal
+- Sign/magnitude, ones' and twos' complement to decimal
+- Custom implementations now inline the full dependency closure
+- Custom implementations support async and file products
+- Synonym-aware search (image/video/audio, etc.)
 
 ### Fixed
 
-- Rabbit interop with other tools fixed
-- Stale counts in docs fixed
+- Data URI parsing no longer loses binary image files
+- Data URI MIME/actual-format mismatch is now reported
+- One-way op buttons no longer show the wrong direction
+- Run-priority bug that made MIME multipart encoding unreachable
+- Exhaustive decode no longer shows [object Object] for product objects
+- ZIP pseudo-encryption no longer reported as real encryption (verified against the actual entry data)
+- Base-N float parsing no longer strips a prefix that does not match the selected base
+- Custom implementation source bundles no longer miss dependencies used inside template interpolations
+- Bitmap / numeric-data image ops no longer overflow or crash on large inputs
 
-### Improvements
+### Security & Improvements
 
-- One-shot attack covers all Rabbit variants
-- MCP resource docs completed
-- MCP protocol version negotiation
-- Load-time diagnostics silent by default
+- Custom sandbox keeps network access (user-authorised transfers)
+- Zero-upload wording clarified: the program itself never initiates transfers
+- OpenPGP.js upgraded to 5.11.3 (CVE-2025-47934)
+- JSFuck / JJEncode hidden from the MCP execution surface
+- RSA public-exponent validation and weak-key warnings
+- MCP warns about vulnerable Node versions
+- On-demand assets included in the SW revision
+- README security notes for October 2026
 
 ## Introduction
 
@@ -89,12 +110,13 @@ Core design:
 
 - **Local-first · zero upload**: Native ES modules, no framework, no build step. Core codecs run in-browser and never upload your input; "external link" ops only generate URLs. PWA updates fetch site assets only, the local bridge only talks to `127.0.0.1`, and external AI is only used after you configure an endpoint yourself.
 - **One-shot smart decoding**: Paste or drop content; it detects possible encoding chains and returns ranked decode candidates, with crib-based filtering and deep brute force.
-- **810 registered operations · 23 categories**: covering Base, text / transfer encodings, fancy CTF encodings, esoteric programming languages, Chinese / domestic encodings, classical ciphers, modern crypto (block / stream / asymmetric / other), hashes & checksums, radix & charsets (incl. primality testing and sieving), analysis / brute force, password attacks, compression & archives, password / archive cracking, forensics & traffic, file-format structures, data structures, images & QR codes, audio & video, steganography, plus 4 optional Windows GUI bridge entries. The complete list is generated automatically from the registry.
+- **820 registered operations · 23 categories**: covering Base, text / transfer encodings, fancy CTF encodings, esoteric programming languages, Chinese / domestic encodings, classical ciphers, modern crypto (block / stream / asymmetric / other), hashes & checksums, radix & charsets (incl. primality testing and sieving), analysis / brute force, password attacks, compression & archives, password / archive cracking, forensics & traffic, file-format structures, data structures, images & QR codes, audio & video, steganography, plus 4 optional Windows GUI bridge entries. The complete list is generated automatically from the registry.
 - **Decoding-strength quartet** (v0.1.2): strength levels + custom algorithm pool + a **separate brute-force channel** (XOR / Caesar / dictionary / rainbow-table / HMAC / PBE / Playfair / ZIP / CRC32 / bkcrack — results are grouped separately so they don't pollute the main ranking) + **decode depth 1–3**.
 - **Lenient matching mode** (v0.1.2): at the Enhanced / Very Strong / Maximum / Custom levels, algorithms are admitted by character-class count alone, so variant-encoding challenges (a "meow" table for 0/1, emoji-as-binary) also participate; Default / Fast keep strict domain detection.
 - **Key + ciphertext one-shot attack**: given ciphertext and a key, automatically enumerates AES / DES / 3DES / RC4 / XOR / Fernet × cipher modes × encoding combinations.
 - **Drag-in file analysis**: dropping a file auto-detects its type, appended data, anomalous image dimensions, and more.
 - **Full Unicode display**: bundled Cheonhyeong full-font library, loaded per Unicode plane on demand — rare characters, ancient scripts, and emoji all render correctly.
+- **Cross-linked explainer cards**: when an explainer mentions an algorithm this toolbox implements, the name links to that op page in a new tab; only high-confidence names/aliases qualify, and book titles, code, formulas, and generic words are skipped.
 - **Material 3 warm-red theme**, light / dark toggle, 20 languages.
 
 > For the full feature walkthrough and scenario demos, see [`介绍文章.md`](./介绍文章.md) (Chinese).
@@ -245,7 +267,7 @@ public/
 资料/               algorithm cross-check tables + research artifacts (dev-only; not shipped in release packages)
 ```
 
-## Full Codec List (810 ops · 23 categories)
+## Full Codec List (820 ops · 23 categories)
 
 > This section is generated by `node tools/gen_readme_ops.mjs` from the real import closure of the main entry; opId is the unique registry identifier.
 
@@ -328,7 +350,7 @@ public/
 | yenc | yEnc encode / decode |  |
 | binhex | BinHex 4.0 encode / decode |  |
 
-### Fancy / CTF Encodings (77 ops)
+### Fancy / CTF Encodings (78 ops)
 
 | opId | Name | Notes |
 |---|---|---|
@@ -340,6 +362,7 @@ public/
 | rot47 | ROT47 |  |
 | atbash | Atbash |  |
 | a1z26 | A1Z26 |  |
+| scoutStick | Scout Stick Cipher | dCode Code Chinois / Samurai |
 | dna | DNA encoding |  |
 | keyboard | Keyboard coordinates |  |
 | ook | Ook! |  |
@@ -430,7 +453,7 @@ public/
 | braincopterDecode | Braincopter decode |  |
 | braincopterEncode | Braincopter encode |  |
 
-### Chinese / Domestic Encodings (20 ops)
+### Chinese / Domestic Encodings (24 ops)
 
 | opId | Name | Notes |
 |---|---|---|
@@ -454,6 +477,10 @@ public/
 | xiangyue | XiangYue |  |
 | xiangyueEnc | XiangYue encryption |  |
 | yueChang | Yuechang |  |
+| xianziCode | Ohou Codec (Xianzi) |  |
+| hajimiCode | Hakimi Cipher (ternary) |  |
+| zakoCode | Zako Codec (Base8, open-source) |  |
+| zakoMystery | Zako Whisper (official) |  |
 
 ### Classical Ciphers (71 ops)
 
@@ -805,7 +832,7 @@ public/
 | jh | JH |  |
 | xxhash | xxHash (fast non-crypto hash) |  |
 | cityhash | CityHash (non-crypto hash) |  |
-### Radix / Charsets (80 ops)
+### Radix / Charsets (82 ops)
 
 | opId | Name | Notes |
 |---|---|---|
@@ -863,6 +890,8 @@ public/
 | geoHash | Geohash |  |
 | geoPlusCode | Plus Code / OLC |  |
 | geoMaidenhead | Maidenhead grid |  |
+| floatToDecimal | Base-N float to decimal |  |
+| complementToDec | Sign/magnitude, ones' and twos' complement to decimal |  |
 | geoUtm | UTM coordinates |  |
 | color | Colour code conversion |  |
 | colorInfo | Colour full info |  |
@@ -1067,7 +1096,7 @@ public/
 | cryptoAddrUnified | Cryptocurrency address parsing |  |
 | huffmanCodec | Huffman coding (generic) |  |
 | unitConv | Unit conversion | data sizes B/KB/MB/GB/TB/PB vs KiB/MiB/GiB/TiB/PiB side by side (SI 1000 vs IEC 60027-2 1024; all factors traceable); rates bps/Kbps/Mbps/Gbps ↔ B/s/KB/s/MB/s (bit×8); time ns–d; plain numbers trigger timestamp-epoch comparisons (Unix s/ms, FILETIME, Cocoa, Chrome µs, DOS packed; magnitude auto-sniffed); frequency Hz–GHz; angles deg/rad/gon. Data sizes run on BigInt rationals throughout — zero precision loss at PB scale; exact decimals and truncation bits are labelled. |
-### Image / QR (33 ops)
+### Image / QR (37 ops)
 
 | opId | Name | Notes |
 |---|---|---|
@@ -1093,8 +1122,11 @@ public/
 | barcodeGen | Barcode generation (Code128/EAN-13/DataMatrix) |  |
 | imageStructUnified | Image structure analysis (unified) |  |
 | bin2img | Binary to image |  |
+| img2bits | Image to binary bit-stream |  |
 | img2dataURI | Image to Base64/dataURI |  |
+| dataURIToImage | Base64/dataURI to image |  |
 | dataToImage | Render numeric data as an image |  |
+| imageToData | Image to numeric pixel data |  |
 | bmpPalette | BMP palette steganography analysis |  |
 | gifTiming | GIF frame-timing steganography |  |
 | imageCompress | Image compression |  |
@@ -1212,6 +1244,7 @@ The list below matches the "Authors & Contributors" section of the in-app About 
 - 拉面: feedback on original-version compatibility for Qianqian Xiuzi, Foyu, and SNOW; Unicode and Twin-Hex whitespace boundaries; Whitespace execution and Malbolge identification issues; proposed the Scytale dual-key form, zero-width stego charset & format expansion, edu and tool-category corrections, and trade-off suggestions for non-standard Brainfuck variants.
 - qinling072: proposed adding OutGuess and other image-steganography algorithms.
 - cnui6: proposed the Rabbit compatibility fix, enabling CryptoJS interop and passphrase support.
+- 二月犬 (Eryuequan): suggested the Ohou (Xianzi) codec, Hakimi ternary cipher and the Zako Whisper (official + Base8 variant).
 
 ## Community
 
@@ -1252,4 +1285,31 @@ The project's own code is licensed under Apache License 2.0. Third-party resourc
 
 ## Privacy
 
-Zero upload is this tool's signature: core algorithms never upload your input; the PWA and update checks download site assets only; the local bridge only talks to `127.0.0.1`; external AI connects directly to the endpoint and key you configure yourself, with no relay or logging by the main project.
+Zero upload is this tool's signature — precisely: **the program itself never initiates outbound transfers**. Core algorithms never upload your input; the PWA and update checks download site assets only; the local bridge only talks to `127.0.0.1`; external AI connects directly to the endpoint and key you configure yourself, with no relay or logging by the main project.
+
+User-enabled features are explicit exceptions: the opt-in randomness server, and `fetch` / `XMLHttpRequest` / `WebSocket` calls you write inside a custom implementation, are **user-authorised transfers**. You choose the data; they originate from your local browser, and the main project neither relays nor initiates them. Server-deployed backends (MCP / local bridge) must not transfer data on the user's behalf and must not be exposed as public multi-user services.
+
+## Security Notes (2026-10)
+
+- **Runtime surface**: the app itself is pure frontend and does not depend on PHP / Java / Go / Rust; only the MCP stdio server uses Node. Node 26.4.0 is affected by the July 2026 advisory (CVE-2026-58043 / 58044 / 56848: permission-model bypass, HTTP/2 UAF, etc.); the MCP server prints a stderr warning for vulnerable versions. Prefer Node ≥ 26.5.1 (or 24.18.1 / 22.23.2). MCP uses stdio only and does not expose HTTP/2.
+- **OpenPGP.js**: upgraded from 5.11.2 to 5.11.3, fixing CVE-2025-47934 (forgery of inline signed/encrypted signed messages, High).
+- **JSFuck / JJEncode**: decoding executes input JS via `new Function`. These ops are hidden from the MCP tool surface and excluded from the one-click auto-decode pool (`noAuto`); they remain manually available in the browser UI.
+- **Weak RSA parameters**: verification/parameter ops reject e<3 or even e; certificate/CSR parsing warns about e=3 and short moduli. Certificate parsing is structural only — it does not verify signatures or trust chains.
+- **7-Zip WASM**: the bundled 7zz 24.09 falls in the CVE-2025-11001 / 11002 range (directory-traversal RCE, fixed in 25.00). This tool only extracts user-selected CTF archives inside a local Emscripten MEMFS and exposes no network service, limiting exposure; upgrading to 7-Zip ≥25.00 is on the follow-up list.
+- **eMudhra incident**: in October 2026 several eMudhra intermediate CAs were found to use extremely small ECDSA private scalars (reported as "the private key was 4"); Chrome / Firefox / Apple / Microsoft have blocked them. This project ships no CA trust store and does not reference eMudhra — certificate trust is delegated to the browser/system store, so it is not directly affected.
+- **PWA cache**: the revision produced by `tools/gen_sw_assets.mjs` now covers on-demand assets (WASM / KaTeX / locales, etc.) as content hashes, so stale libraries cannot linger behind an unchanged cache name.
+
+## Keywords
+
+> Multilingual search keywords, so users searching in different languages can find this project. Keywords are for search only and are not a statement about the in-app interface language list (see the in-app "Language" page).
+
+| Language | Keywords |
+|---|---|
+| 简体中文 | CTF 工具箱、CTF 编码工具箱、在线编解码、加解密工具、密码学工具、古典密码、现代密码、一键解码、隐写分析、二维码识别、哈希校验、进制转换、Base64 解码、离线工具、本地优先、零外发 |
+| English | CTF toolbox, encoder decoder, cipher identifier, cryptography toolkit, classical ciphers, modern ciphers, one-click decode, steganography analysis, QR code reader, hash calculator, base64 decode, offline tool, local-first, no upload |
+| 日本語 | CTF ツール、エンコード・デコード、暗号化・復号、古典暗号、現代暗号、暗号解析、ステガノグラフィ、QR コード読み取り、ハッシュ計算、基数変換、オフライン |
+| 한국어 | CTF 도구, 인코딩 디코딩, 암호화 복호화, 고전 암호, 현대 암호, 암호 분석, 스테가노그래피, QR 코드 인식, 해시 계산, 진법 변환, 오프라인 |
+| Русский | CTF инструменты, кодирование и декодирование, шифрование и дешифрование, классические шифры, современные шифры, криптоанализ, стеганография, распознавание QR-кодов, хеширование, системы счисления, офлайн |
+| Français | boîte à outils CTF, encodage et décodage, chiffrement et déchiffrement, chiffres classiques, chiffres modernes, cryptanalyse, stéganographie, lecture de QR code, calcul de hachage, conversion de base, hors ligne |
+| Deutsch | CTF-Werkzeug, Kodierung und Dekodierung, Ver- und Entschlüsselung, klassische Chiffren, moderne Chiffren, Kryptoanalyse, Steganographie, QR-Code lesen, Hash berechnen, Zahlensysteme, offline |
+| Español | herramientas CTF, codificación y decodificación, cifrado y descifrado, cifrados clásicos, cifrados modernos, criptoanálisis, esteganografía, lector de códigos QR, cálculo de hash, conversión de base, sin conexión |

@@ -312,7 +312,8 @@ register({
 register({
   id: "quotedPrintable", cat: "text", name: "Quoted-Printable", desc: "RFC 2045（=XX 转义，软换行折叠）",
   // encode 方向吃字节（=XX 定义在字节上）；decode 的输入本来就是 QP 文本，不吃字节。
-  acceptsBytes: true,
+  // textTransit：文本中转编码，仍参与一键解码（acceptsBytes 只影响输入通道，不应把它排除）。
+  acceptsBytes: true, textTransit: true,
   encode: qpEncode, decode: qpDecode,
   detect: (t) => (/=[0-9a-fA-F]{2}/.test(t) || /=\r?\n/.test(t) ? 0.4 : 0),
 });
@@ -323,7 +324,7 @@ register({
     { key: "compat", label: "兼容模式（仅数据行，0 值用反引号）", type: "bool", default: false },
   ],
   // encode 方向吃字节（UU 本是二进制→文本编码）；decode 输入是 UU 文本，不吃字节。
-  acceptsBytes: true,
+  acceptsBytes: true, textTransit: true,
   encode: uuEncode, decode: uuDecode,
   detect: (t) => (/^begin\s+\d+\s+\S+/m.test(t) ? 0.7 : 0),
 });

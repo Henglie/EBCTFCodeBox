@@ -534,7 +534,7 @@ export default {
   "ui.about.depTianhengLic": "Mbouj dwg sanghyez",
   "ui.about.depMsym": "UI dohbiuh (ndaw SVG)",
   "ui.about.foot": "Guh hawj biujsai CTF caeuq vunz aeu ansuenz. Cenzbu yihlai daeuz bonjdei; mbouj fahat youq yinzhingz.",
-  "ui.about.intro": "Aen gunghgisiang CTF bienh-geijmah, mimahyoz caeuq yinjse cenz-cienduenh — gvaq 500 caocoz ndaw bienhmah / gudienh & yendaiz mimah / hash / yinjse / cijcengq / fwnhsik. Cenzbu yinzhingz bonjdei ndaw liujlanzgi: mbouj miz vangj, mbouj fahat, mbouj miz lailai. Hoi cizcej index.html, yinzhingz bonjdei fuzvuduenh, roxnaeuz an baenz dinghtaic vangjcangh couh bujsu.",
+  "ui.about.intro": "Aen gunghgisiang CTF bienh-geijmah, mimahyoz caeuq yinjse cenz-cienduenh — gvaq 500 caocoz ndaw bienhmah / gudienh & yendaiz mimah / hash / yinjse / cijcengq / fwnhsik. Cenzbu yinzhingz bonjdei ndaw liujlanzgi: mbouj miz vangj, mbouj fahat, mbouj miz lailai. 用自带的启动脚本起本地服务器、或部署为静态站点即可使用（ES module 与 WASM 需 http(s) 环境，直接双击 index.html 会被浏览器安全策略拦截）。",
   "ui.about.thanks": "Gamjsiaq",
   "ui.about.thanksVal": "Gamjsiaq moix aen hanghmug kaihyenz caeuq cozceiq canghkauj, caeuq sehkih CTF fwnhiengj bienhmah fueng'an caeuq writeup.",
   "ui.about.regTitle": "Xijgoj Sinhsik",

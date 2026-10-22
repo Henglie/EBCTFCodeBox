@@ -1138,6 +1138,9 @@ label.switch,
 .edu-rich-block ul, .edu-rich-block ol { margin: var(--sp-1) 0 var(--sp-1) var(--sp-5); }
 .edu-para li, .edu-rich li, .edu-rich-block li { margin: 3px 0; }
 .edu-para a, .edu-rich a, .edu-rich-block a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+/* 科普正文里自动识别出的「算法 → op 页」链接：虚线下划线，和外部资料链接区分 */
+.edu-op-link { text-decoration-style: dotted; }
+.edu-formula-cap a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
 .edu-para table, .edu-rich table, .edu-rich-block table {
   border-collapse: collapse;
   margin: var(--sp-2) 0;

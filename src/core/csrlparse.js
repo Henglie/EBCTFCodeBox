@@ -21,6 +21,7 @@ import { register } from "./registry.js";
 import { derDecode, derBytesToBigint } from "./rsagen.js";
 import { parsePem, oidString } from "./pemkeys.js";
 import { md5Bytes } from "./hash.js";
+import { assertUsableRsaExponent, rsaKeyWarnings } from "./rsaKeyCheck.js";
 
 // ============================================================
 // 通用小工具（与 certparse.js 同思路，本文件独立实现）
@@ -389,6 +390,7 @@ function parseSpki(spkiNode) {
     const e = derBytesToBigint(inner.children[1].value);
     lines.push(`n 位长 : ${n.toString(2).length} bit`);
     lines.push(`e      : ${e}（0x${e.toString(16).toUpperCase()}）`);
+    for (const w of rsaKeyWarnings(n, e)) lines.push(`  ⚠ ${w}`);
     Object.assign(info, { kind: "RSA", n, e, bits: n.toString(2).length });
     return { info, lines };
   }
@@ -422,6 +424,11 @@ function parseSpki(spkiNode) {
 /** RSA PKCS#1 v1.5 验签（RFC 8017 §8.2.2）：
  *  EM = 0x00 ‖ 0x01 ‖ PS(FF×≥8) ‖ 0x00 ‖ DigestInfo(HASH(cri))，与 sig^e mod n 全等比对 */
 async function rsaVerifyPkcs1(n, e, sig, hashAlg, tbsBytes) {
+  try {
+    assertUsableRsaExponent(e);
+  } catch (err) {
+    return { ok: false, why: err.message + "（拒绝用非法指数验签）" };
+  }
   const k = (n.toString(2).length + 7) >> 3;
   if (sig.length !== k) return { ok: false, why: `签名长度 ${sig.length} 字节 ≠ 模数长度 ${k} 字节（RFC 8017 §8.2.2）` };
   const prefix = DIGEST_INFO_PREFIX[hashAlg];

@@ -18,6 +18,7 @@ import { register } from "./registry.js";
 import { derDecode, derEncode, derBytesToBigint, bytesToBase64 } from "./rsagen.js";
 import { parsePem, oidString, base64Decode } from "./pemkeys.js";
 import { md5Bytes } from "./hash.js";
+import { rsaKeyWarnings } from "./rsaKeyCheck.js";
 
 // ============================================================
 // 通用小工具
@@ -462,6 +463,8 @@ function spkiLines(spkiNode) {
     lines.push(`n 位长 : ${n.toString(2).length} bit`);
     lines.push(`e      : ${e}（0x${e.toString(16).toUpperCase()}）`);
     lines.push(`n(hex) : ${bigintToHexUpper(n)}`);
+    for (const w of rsaKeyWarnings(n, e)) lines.push(`  ⚠ ${w}`);
+    lines.push("  说明：本 op 只解析证书结构，不验证签名/信任链；弱参数告警不代替验签。");
     lines.push(`  对拍：openssl x509 -noout -modulus`);
     return lines;
   }
