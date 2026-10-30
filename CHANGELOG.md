@@ -19,6 +19,7 @@
 
 ### 修复
 
+- 发行包不再包含 `.gz` 预压缩伴生文件和项目残留 `.zodeignore`；stage 清单与压缩包一致。
 - 修复语言完成度虚高：移除英文 fallback 伪翻译；完成度按实际翻译键统计。
 - 语言支持固定中文第一、English 第二；弹窗切换路由自动关闭。
 - 云影解码对 0/000 等无有效字母段显式报错。
@@ -39,7 +40,7 @@
 - 题库 110 题 / 153 文件；云影四路 30/30；KNN 336 行 A=180/B=156。
 - pyc 747/747；F5 f5stegojs 往返、imageDiff alpha、StegSolve PNG/XOR 回归通过。
 - i18n：zh/en/fr/ja/ko/ru 100%；de 96.1%；其余按真实覆盖显示。
-- sw-assets 853 files / REV 12218f8bc0d37098；stage 白名单 1630 / 清单 2634；未打 RAR、未推送、未发布。
+- sw-assets 853 files / REV 12218f8bc0d37098；stage 白名单 1630 / 清单 1630；未打 RAR、未推送、未发布。
 
 ## v0.1.11
 
