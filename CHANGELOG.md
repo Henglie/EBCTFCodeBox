@@ -55,6 +55,9 @@
 
 ### 修复
 
+- 关于页语言支持弹窗在路由切换时自动关闭，避免遮挡后续 op 页面。
+- 语言支持固定顺序：中文第一、English 第二，其余按完成度降序；修复日语因 100% 覆盖排在中文前。
+- 云影密码解码对全分隔符/无有效字母段（如 `0`、`000`）显式报错，不再静默返回空串。
 - 修复关于页语言完成度虚高：移除 v0.1.12 批量补入的英文 fallback 伪翻译，完成度只统计各语言实际写入的键；中文/英/法/日/韩/俄仍 100%，德 96.1%，其余按真实覆盖显示。
 - pyc：补 Python 2.x `STRINGREF('R')` 解析与 `LOAD_CONST/BUILD_LIST` 有序常量提取，真题 pyc 747/747 字节全解；本地反编增加 pycdc 兜底并防同名工具误判。
 - bkcrack：无 COOP/COEP 时明确给可操作错误；`jobs` 默认 1，避免多线程 wasm 卡死；真实 known-plaintext 恢复密钥实测通过。
@@ -104,7 +107,7 @@
 - 智能解码 36 pass / 0 fail / 1 knownGap；排序专项 9/9
 - op 闭包 870 / 全遍历 870 / 孤儿 0
 - 随机源审计：白名单漏项 0、直连原生随机 0（`hajimiCode` 已改走 randSource；`rsaOaepEnc`/`hpkeSeal` 已登记）；`rt_meme_4way` 55/55
-- sw-assets 853 files / REV `27f5faf887e4399e` 双跑幂等；版本六处 0.1.12
+- sw-assets 853 files / REV `eeed97cc6a004c0a` 双跑幂等；版本六处 0.1.12
 - 自定义预设 33/33（23 个预设）；真浏览器冒烟：四角/五笔 86/98/电码/仓颉页面解码正常，仅 8181 本地桥探测噪声
 - P0/T682 汇编：Node 57/0 + Chromium 8/0（5 架构、Intel/AT&T、错误架构报错、console 0）
 - P0/T683 字库：Python 33/0 + Chromium 20/0（p1 ExtG/H/J 实字、p16 plane16 PUA、p0 plane14、四平面 loaded）

@@ -538,6 +538,7 @@ function yunyingDecode(text) {
     if (n < 1 || n > 26) throw new Error(`云影密码段「${part}」数字和 ${n} 超出 A-Z（1-26）`);
     out.push(A_UP[n - 1]);
   }
+  if (!out.length) throw new Error("云影密码没有有效字母段（0 只是分隔符）");
   return out.join("");
 }
 

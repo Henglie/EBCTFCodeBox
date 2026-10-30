@@ -4816,16 +4816,23 @@ function openAboutLangModal() {
   overlay.append(dialog);
   document.body.append(overlay);
   const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
+  const onHash = () => close();
   close = () => {
     document.removeEventListener("keydown", onKey);
+    window.removeEventListener("hashchange", onHash);
     overlay.remove();
     try { previousFocus && previousFocus.focus && previousFocus.focus(); } catch { /* ignore */ }
   };
   document.addEventListener("keydown", onKey);
+  window.addEventListener("hashchange", onHash);
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   localeCoverage().then((rows) => {
     if (!overlay.isConnected) return;
-    const sorted = [...rows].sort((a, b) => b.pct - a.pct || a.name.localeCompare(b.name));
+    const sorted = [...rows].sort((a, b) => {
+      const ra = a.loc === "zh" ? 0 : a.loc === "en" ? 1 : 2;
+      const rb = b.loc === "zh" ? 0 : b.loc === "en" ? 1 : 2;
+      return ra - rb || b.pct - a.pct || a.name.localeCompare(b.name);
+    });
     for (const r of sorted) {
       list.append(el("div", { class: "about-lang-row" },
         el("span", { class: "about-lang-name" }, r.name),
