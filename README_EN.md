@@ -70,7 +70,7 @@ Current version **v0.1.12**. The source of truth is always the GitHub repository
 
 ### Verification
 
-878 main ops; 408 plugin ops; 110 challenges / 153 files; stage 1630 / manifest 1630; not pushed or released. See [CHANGELOG.md](./CHANGELOG.md).
+878 main ops; 408 plugin ops; 110 challenges / 153 files; stage 1630 / manifest 1630. See [CHANGELOG.md](./CHANGELOG.md).
 
 ## Introduction
 

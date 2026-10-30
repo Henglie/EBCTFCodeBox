@@ -70,7 +70,7 @@
 
 ### 验证
 
-878 主 op；408 插件 op；题库 110 题/153 文件；stage 白名单 1630、清单 1630；未推送、未发布。详见 [CHANGELOG.md](./CHANGELOG.md)。
+878 主 op；408 插件 op；题库 110 题/153 文件；stage 白名单 1630、清单 1630。详见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 项目简介
 
