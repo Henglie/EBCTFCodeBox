@@ -2,6 +2,113 @@
 
 > 本文档记录完整更新历史。README.md「更新日志」仅保留最新版本变更。
 
+## v0.1.12
+
+### 新增功能
+
+- 插件页支持同源 addons/ 目录自动发现：无 official.json 时也能识别带 export manifest 的本地插件，并与官方白名单去重。
+- 新增云影密码（01248）双向 op：0 分隔、1/2/4/8 数字和映射 A-Z，严格校验非法字符与 1-26 越界。
+- 新增 knnClassify KNN A/B 分类 op：训练集 CSV 参数 + 待检测 CSV 输入，欧氏/曼哈顿距离、k 投票和平票策略；题库新能源车 CSV 实测 336 行。
+- 插件页新增官方插件自动列表（addons/official.json）：dcode 扩展默认不启用，点击启用后加载 408 op（97 + 311 自动批次）。
+- 新增 4 个文件隐写 op：`lsbDeep`（全通道/位平面/行列/位序/偏移深度扫描）、`rasterStego`（光栅逐相位拆图，产物下载）、`mp3stego`（纯 JS -X -P 解码）、`imageThumb`（JPEG APP0/APP1 + PNG eXIf 缩略图提取）
+- 文件分析新增 alpha 条带 3-bit 解码（Image_Steganography 自动出 UUID/flag）与 foremost 内嵌文件分离卡（列出/预览/下载内嵌 JPEG/PNG/ZIP/RAR）
+- 真题结论库补充 Image_Steganography、Bugku foremost、Bugku 大象 EXIF 文件包含的复现结论与 flag
+- 文件分析隐写自动尝试新增光栅拆图（PNG/BMP，前 8 张预览 + 全部 ZIP 下载）、MP3Stego（首页密钥框口令）与 Piet 执行；mp3 文件进入自动分析
+- 新增结果类型识别与动作层：URL / 邮箱 / WiFi / 电话 / geo / vCard / JSON / JWT / flag / base64 / IPv4 / IPv6 / magnet / 纯文本；URL 与地图打开二次确认，WiFi 分 SSID 与口令复制，密码字段不进 DOM
+- 智能解码候选卡与二维码结果卡接入结果动作行；二维码卡按行识别并最多渲染 4 组动作
+- EXIF/JFIF/PNG eXIf 缩略图提取新增空输入与非 JPEG/PNG 的明确诊断
+- 新增真题基准 `工具/rt_realtest_bench.mjs`、真值 `资料/测试基准/truth/*.json` 与摘要 `资料/测试基准/真题基准.md`（49 项：36 pass / 0 fail / 7 known-gap / 6 skipped）
+- 新增真题结论模块 `src/core/stegoResearch.js`：XMP/F5/嵌套 zip/rbkcrack RAR 已复现，两张图未解并记录失败边界
+- 栅栏密码新增「模式」下拉框：W 型（锯齿 zigzag，默认，兼容旧行为）与 Z 型（传统分栏：按列写入、按行读出）
+- W 型新增「偏移量」档（0..64，dCode「Use an offset of +N characters」口径：轨迹先空 N 格再落字；按周期 2(r−1) 取模；Z 型填非 0 显式报错）
+- 一键解码的参数扫描同时覆盖栅栏 W 型与 Z 型（栏数 ≥3 时两种走法都试；栏数 2 时两者等价，不重复出候选）
+- 新增五笔字型（wubi）：86/98 双版本、20,902 字全码；连写自动最长匹配；同码多字按词频列候选；参数 version/pick/all
+- 新增中文电码（cnTelegraph）：7,099 字，四位定长、前导零保留；Unihan kMainlandTelegraph 为主表，node-ctc（MIT）补缺
+- 新增郑码（zhengma）：27,492 字，合并 BSD-2-Clause 字表与 Apache-2.0 Rime 单字表；全码优先、短码可解
+- 新增四角号码（fourCorner）：16,720 字，支持 5 位附号、4 位主码与 4022.7 点分写法；默认列出全部同码候选
+- 新增仓颉码（cangjie）：27,525 字，1–5 码、A–Y 字母表、难字键 X；同码多字按词频列候选
+- 五种编码均补齐 aka≥10、中文/英文科普卡、zh/en/de/fr/ja/ko/ru 文案与四项往返 harness
+- 新增 `tools/gen_cn_lookup_data.mjs` 码表生成器（固定上游 URL/SHA256，产物无时间戳、可复现）
+- 新增 AEAD 补口：`chacha20Poly1305`（RFC 8439）、`poly1305`、`ghash`（NIST SP 800-38D）、`aeadNonceReuse`（ChaCha20-Poly1305 已知明文密钥流恢复；GCM forbidden attack 未实现）
+- 新增 PQC 格式工具：`pqcBlobParse`（ML-KEM/ML-DSA/SLH-DSA 长度/OID 分类，raw 长度匹配标歧义）、`ntruPack`/`ntruUnpack`（EESS 系数 11-bit q / 2-bit ternary 打包）
+- 新增 ZIP 条目工具：`zipEntries`（中央目录列表 + 路径穿越标记）、`zipExtract`（Stored/Deflate 真解压 + CRC 校验 + ZipCrypto 口令 + 伪加密识别；WinZip AES 明确不支持）
+- 进制小数升级：`decimalToFloat`/`floatToDecimal` 支持 2–36 进制 BigInt 有理数、循环节检测、精确分数；`base=0` 保留旧 2/8/10/16 报告
+- 新增 T690 封装族：`ecdhP`（secp256k1/P-256/P-384/P-521）、`rsaOaepEnc`/`rsaOaepDec`（RFC 8017，SHA-1/SHA-256）、`hpkeSeal`/`hpkeOpen`（RFC 9180 Base，X25519+ChaCha20-Poly1305）
+- 新增 T693 结构解析：`machoParse`（Mach-O/fat）、`wasmParse`（WASM sections/types/imports/exports）
+- 新增 T694 字符集：`gb18030`（严格四字节，WHATWG 同源）、`utf32`（LE/BE，BOM 识别，严格错误）
+- 新增 T703 哈希：`sha224`（FIPS 180-4 纯 JS）、`cshake`（NIST SP 800-185 可定制 XOF）
+- 随发行包新增官方插件 `dcode-extras-2026-10`（408 op / 6 分类：数学工具 / 记数系统 / 文本变换 / 谜题求解 / 符号字母 / 古典密码），**默认不启用**，在插件页用 `./addons/dcode-extras-2026-10/index.js` 加载；不进主 op 计数与 SW 预缓存，首次在线加载后离线可用
+- 新增 X.509 证书链验签（RFC 5280）：RSA/ECDSA/Ed25519、逐级链验签、自备信任锚/指纹、有效期/CA/pathLen，不联网
+- 新增 OpenSSH SSHSIG 验签：Ed25519/RSA/ECDSA、armored/binary、namespace/hash_algorithm、authorized_keys/指纹信任
+- 新增统一验签入口：自动分诊 JWT/JWS、PGP、SSHSIG、X.509、CMS 并统一报告
+- 新增教学线三件（均为 statevector/代数级演示，输出与文案都写明「教学演示，非生产级」及其参数边界）：`bfvToy`（BFV 同态加密，负循环卷积环 + 噪声账本，乘法越界显式失败）、`mpcToy`（三方加法分享 + Beaver 乘法三元组；1-of-2 OT 为确定性 PRF 模拟，公开 seed 可解两条）、`quantumToy`（Grover 逐轮概率与理论最优轮数对拍；Shor 仅 N=15/21 的顺序查找切片）
+- 新增通用正则提取 / 替换（`regexTool`）：extract 按整段(0)/第 n 组(1..n)/全部组(all)取值，可去重与仅首个，结果按 sep 连接；replace 展开 `$1..$9`/`$&`/`$$`，未知 `$x` 原样保留；**编译前结构白名单**拒绝反向引用、危险嵌套量词（内层变长 + 外层无界）、后行断言、可空匹配与非标准扩展，而 `([0-9a-f]{2})+`、`(\d{1,3}\.){3}` 这类定长/有界嵌套正常放行；空模式、非法正则、零匹配一律显式报错
+- 新增 CMS / PKCS#7 SignedData 验签（RFC 5652）：DER/BER、attached/detached、多签名者、signedAttrs contentType/messageDigest、RSA PKCS#1 v1.5 / ECDSA P-256/384/521
+- 新增 17 个密码学 op：Falcon 公钥解析/验签、Poseidon/Poseidon2、KZG 验证/承诺/blob 解析、OpenSSH 私钥、PKCS#12/PFX、JWK OKP 导入导出、GCM nonce 重用攻击、NTRU CCA-2 加解密、Xoodyak Hash/AEAD、ECDH 小子群/无效曲线攻击
+- 五种中文查字码表（五笔/电码/郑码/四角/仓颉）从 JS 模块迁到 `public/data/cn/*.tsv` 纯文本按需加载，主代码不再内嵌约 1 MB 词典数据；插件词典同样改为 `data/lexicon-{en,fr}.txt` 纯文本，插件激活时一次载入
+- 智能解码支持输入框点击/拖入文件：图片自动跑 LSB（bit0–2）扫描，命中 base64/flag/token 载荷时自动回填并继续解码（如 `secret.png` → `VmF1MXRfSzN5XzIwMjY=` → `Vau1t_K3y_2026`）
+- 条码生成扩展为 8 符号：Code128 / EAN-13 / UPC-A / Code39 / ITF-14 / DataMatrix / PDF417 / Aztec（自动补/验校验位，输出 PNG），ZXing 每格式 2 样例回读 16/16
+- 二维码扫描入口改名「二维码 / 条形码扫描解析」，默认读全部格式（QR / 1D / DataMatrix / PDF417 / Aztec）；此前默认仅 QR，条码扫描能力被隐藏
+- 智能解码候选新增四态裁决（confirmed / likely / ambiguous / normal）与证据 chips（flag/target/keyword/structure/echo/meaningful/printable/chain），摘要与普通卡展示依据
+- 配方链新增命名保存、自动草稿、启动恢复与分享 URL（deflate-raw 压入 hash；输入过长自动降级只带配方；修复 #/recipe? 被路由到首页）
+- 智能解码排序：常见编码单层解出可打印结果的强可信加成；Leet 等明文样式变换重罚沉底；哈希/无 key 流密码不再进入自动候选；参数扫描无意义分支与不透明 hex/转义字节结果降权；摘要仅在 flag/crib 或置信度 ≥15% 时展示，高光只标真命中
+
+### 修复
+
+- 修复关于页语言完成度虚高：移除 v0.1.12 批量补入的英文 fallback 伪翻译，完成度只统计各语言实际写入的键；中文/英/法/日/韩/俄仍 100%，德 96.1%，其余按真实覆盖显示。
+- pyc：补 Python 2.x `STRINGREF('R')` 解析与 `LOAD_CONST/BUILD_LIST` 有序常量提取，真题 pyc 747/747 字节全解；本地反编增加 pycdc 兜底并防同名工具误判。
+- bkcrack：无 COOP/COEP 时明确给可操作错误；`jobs` 默认 1，避免多线程 wasm 卡死；真实 known-plaintext 恢复密钥实测通过。
+- dcode 官方插件从 97 op 扩到 408 op：988 个工具全量入账（490 implemented / 319 mapped / 179 blocked），blocked 逐条列在 coverage-all.json；剩余缺口见插件内 COVERAGE.md。
+- 关于页语言支持改为按钮+弹窗，按当前语言方向统一展示各语言百分比，不再在列表中混排 LTR/RTL，也不再直接显示进度条。
+- 修复 Phantom_QR 两张图触发 ZXing/legacy QR 病态路径导致页面卡死：ZXing 改 Worker + 6s 超时终止，大图跳过 legacy 回退；正常二维码路径回归通过。
+- 修复结果目录在 op/about 等非一键页面继续悬浮并保留上一轮结果：首页路由切换时销毁所有 `.home-hero` 目录实例。
+- 修复一键解码运行条“暂停/终止”图标与文字垂直未对齐：按钮统一 inline-flex + center + gap。
+- 文件一把梭改为流式插卡：结构分析每识别一段、图像/隐写每完成一个算法立即落卡，最终统一排序；暂停/终止保留已得结果。
+- 修复文件分析并发与生命周期：拖入新文件/文本时旧报告不再复活，内嵌 dataURI 伪分析不再抢占主文件令牌，慢读文件不乱序，单次拖入不再重复读盘，清空后不残留卡片引用；结构分析接入暂停/终止。
+- 修复结果目录流式刷新丢高亮/滚动、爆破结果归错组、最后一张结果不高亮、20+ 色点被 flex 压扁；强度弹窗不再显示 noAuto 的“勾了也不跑”假开关。
+- 文件/图像分析隐写自动尝试移除 F5 与 jsteg：F5 误报率高、jsteg 耗时且占空间，两者改为仅手动选择；文件分析保留暂停/继续/终止与阶段进度。
+- 结果目录扩展为文本 + 图像/文件分析共用：文件报告分段入目录，收起态为右侧色点竖线，恢复纵向滚动；页面滚动联动高亮当前色点，并加层级与间距防止高亮圆圈被下一颗圆点遮挡。
+- StegSolve 独立为 op 页面：42 变换 / Data Extract / Frame Browser / Image Combiner / Stereogram / 格式报告，入口不再占首页工具栏。
+- 看图工具改为底部图标+文字快捷栏，旋转/裁剪/颜色筛选前移，缩放等改为 M3 圆形控件。
+- 补齐 Material Symbols Rounded 图标并接入运行条、强度弹窗、StegSolve、看图工具和结果目录；修复 QR 未识别时复制空内容。
+- 修复结果目录列表 flex 子项被压缩导致无滚动条；修复 Piet 强度门槛、强度档勾选不刷新、文件分析暂停标签与旧任务取消。
+
+- 修复栅栏密码文案自相矛盾：简介写「W 型」、科普原理写「Z 字形」，实际只实现 W 型且没有 Z 型入口
+- 修复盲文科普卡写「无参数」但实际有 mapping 档（auto/nabcc/raw），示例改为 nabcc 与 raw 双档对照
+- 修复键盘坐标、T9 手机九宫格科普卡写「无参数」但实际各有 layout / mode 参数
+- 修复点数记数（骰面解码）示例多写一位数字（6152431 → 652431）
+- 修复童子军木棍密码示例尾串多一个空格
+- 撤销自定义实现中与正式 op 重复的「栅栏变体」预设（W/Z 已并入 railFence；Redefence 是行序变体，保留为独立 op）
+- 修复五笔 98 源表 7 条首字母大写异常码（我=Qtrny、为=Oyeyi、有=Edef 等，已按标准码修正）
+- 修复四角号码 5 位输入在字表只有 4 位主码时解不出（如 36780 → 识，末位 0 自动回退）
+- 修复汇编/反汇编架构“假覆盖”：下拉由 13/16 项收窄到随包 wasm 实测可用的 x86/x64/ARM/Thumb/ARM64；移除 RISC-V 假入口（引用了 glue 中不存在的 `CS_ARCH_RISCV`）与未验证的 MIPS/PPC/SPARC/SystemZ/Hexagon/EVM；错误架构明确报错
+- 修复天珩字库平面 `unicode-range` 与真实 cmap 不符：p1 补 CJK ExtG/H/J（U+30000–U+33479），p16 改为第 16 平面 PUA（不再冒充 ExtG/H），p0 补第 14 平面；ExtG/H/J 不再掉系统字体，改由 TH-Tshyn-P1 出字
+- 修复 `decimalToFloat` 名实不符：原实现只输出 2/8/10/16 且用 Number 近似，现为 2–36 BigInt 精确换基 + 循环节；`floatToDecimal` 同步支持 2–36 与前缀/循环节
+- 修复 ZIP 只有列表/验密、没有“命中后直接取条目”的缺口：新增 `zipEntries`/`zipExtract`，加密/伪加密/AES 都有明确口径
+- 修复 `hajimiCode` 直连 `crypto.getRandomValues`：改走统一 `randSource`，并把 `hajimiCode`/`rsaOaepEnc`/`hpkeSeal` 登记随机性白名单
+- 修复插件「从 URL 加载」的相对路径解析：`./addons/…` 原按插件宿主模块（`src/plugin/`）解析而 404，现统一按页面 `document.baseURI` 解析；持久化仍存原串，根路径与 GitHub Pages 子路径部署均可用
+- 修复 AES/DES CTR 计数器回绕：`incCounter` 对 Uint8Array 元素做 `++` 时回绕值 256 不触发进位，导致低字节首次回绕后的 keystream 全错（新增 `rt_ctr_wrap` 对拍 node:crypto）
+- 修复 LSB 扫描对零填充文本载荷的评分：解码文本先截到首个 NUL 再评分，base64/flag/token 形态加权，避免真实载荷被短乱码压过
+
+### 验证
+
+- 栅栏密码四步验收 949/949（权威向量 10 / 独立参考对拍 360 / 异常面 18 / 闭环 561）
+- 中文查字编码四项验收 25/25（NSSCTF 2155 五行真题复原 → 24 字短语 → MD5 `BE29981639FCE3A4B719E4347FED9E43`）
+- 一键解码实测：NSSCTF 2155 五条线全部 rank #1（四角用 magicParams 首候选打分，op 页仍默认列全部候选）
+- 全 op 科普/别名检查：870 op，noEdu 0，aka<10 为 0
+- P0 算法验收：T684 AEAD 58/0、T685 PQC/NTRU 194/0、T686 ZIP 67/0、T687 进制小数 95/0；`rt_newops_4way` 75/75
+- 教学三件验收：交付 harness 33/0 + M 独立探针（产品路径）42/0（含 Python 独立 statevector 对拍 Grover 概率、BFV 噪声耗尽显式失败、Shor 15/21 因子自证）
+- 通用正则（regexTool）验收：M 独立探针 44/0（5 条常用模式可用性 + 5 条危险模式拒绝 + group/flags/超限边界），交付 harness 73/0
+- 外部交付验收：T690 ECDH/RSA-OAEP/HPKE 177/0、T693 Mach-O/WASM 43/0、T694 UTF-32/GB18030 40/0、T703 SHA-224/cSHAKE 34/0；全部接线为 845 官方集；2026-10-26 批再并入 Falcon/Poseidon/KZG/SSH·PKCS#12·JWK/GCM·NTRU-CCA2/Xoodyak/ECC 共 17 op，官方集 866
+- i18n：zh/fr/ja/ko/ru 缺失 0；de 历史缺口 105（非本版引入）
+- 智能解码 36 pass / 0 fail / 1 knownGap；排序专项 9/9
+- op 闭包 870 / 全遍历 870 / 孤儿 0
+- 随机源审计：白名单漏项 0、直连原生随机 0（`hajimiCode` 已改走 randSource；`rsaOaepEnc`/`hpkeSeal` 已登记）；`rt_meme_4way` 55/55
+- sw-assets 853 files / REV `27f5faf887e4399e` 双跑幂等；版本六处 0.1.12
+- 自定义预设 33/33（23 个预设）；真浏览器冒烟：四角/五笔 86/98/电码/仓颉页面解码正常，仅 8181 本地桥探测噪声
+- P0/T682 汇编：Node 57/0 + Chromium 8/0（5 架构、Intel/AT&T、错误架构报错、console 0）
+- P0/T683 字库：Python 33/0 + Chromium 20/0（p1 ExtG/H/J 实字、p16 plane16 PUA、p0 plane14、四平面 loaded）
+
 ## v0.1.11
 
 ### 新增功能
@@ -537,3 +644,4 @@
 - **首个公开发布版本**。
 - 518 op 智能解码 + 插件 / MCP 体系 + 18 语言 i18n。
 - 发布前基线全绿：op 520 / dup false / failed·orphan 0 / i18n 866 同构 / MCP 6 tools / 插件 18/18 / 真浏览器 magic 7·0 / node magic 35·0·1knownGap / 全路由页面加载 pageError 0。
+

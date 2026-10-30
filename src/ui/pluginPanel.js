@@ -69,6 +69,108 @@ export function renderPluginsPage(host) {
 }
 
 // ---- 1. 插件区 ----
+const OFFICIAL_FALLBACK = [{
+  id: "dcode-extras-2026-10",
+  name: "dCode 扩展包 · 2026-10 · 408 op",
+  version: "2026.10.3",
+  description: "dCode.fr 风格纯 JS 算法扩展包：988 个工具全量入账，当前 408 op；覆盖缺口见 COVERAGE.md。默认不启用。",
+  url: "./addons/dcode-extras-2026-10/index.js",
+  official: true,
+}];
+async function discoverAddonManifests() {
+  let roots;
+  try {
+    const r = await fetch(new URL("addons/", document.baseURI), { cache: "no-store" });
+    if (!r.ok) return [];
+    const doc = new DOMParser().parseFromString(await r.text(), "text/html");
+    roots = [...doc.querySelectorAll("a[href]")]
+      .map((a) => (a.getAttribute("href") || "").split("?")[0].split("#")[0])
+      .filter((h) => h.endsWith("/") && !h.startsWith("..") && !h.startsWith("/"))
+      .map((h) => decodeURIComponent(h.replace(/\/+$/, "").split("/").filter(Boolean).pop()))
+      .filter((id) => /^[A-Za-z0-9._-]+$/.test(id));
+  } catch {
+    return [];
+  }
+  const out = [];
+  for (const id of [...new Set(roots)]) {
+    try {
+      const url = new URL("addons/" + id + "/index.js", document.baseURI);
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) continue;
+      const src = await r.text();
+      const body = src.match(/export\s+const\s+manifest\s*=\s*\{([\s\S]*?)\n\};/);
+      if (!body) continue;
+      const field = (key) => {
+        const m = body[1].match(new RegExp(key + "\\s*:\\s*['\"]([^'\"]*)['\"]"));
+        return m ? m[1] : "";
+      };
+      const mid = field("id");
+      if (mid !== id) continue;
+      out.push({
+        id: mid,
+        name: field("name") || mid,
+        version: field("version") || "?",
+        description: field("description") || "",
+        url: "./addons/" + id + "/index.js",
+        official: true,
+      });
+    } catch {
+    }
+  }
+  return out;
+}
+let _officialPromise = null;
+function officialPlugins() {
+  if (_officialPromise) return _officialPromise;
+  _officialPromise = fetch(new URL("addons/official.json", document.baseURI))
+    .then((r) => r.ok ? r.json() : null)
+    .catch(() => null)
+    .then(async (j) => {
+      const declared = j && Array.isArray(j.plugins) && j.plugins.length ? j.plugins : OFFICIAL_FALLBACK;
+      const extra = await discoverAddonManifests();
+      const seen = new Set(declared.map((p) => p && p.id).filter(Boolean));
+      return [...declared, ...extra.filter((p) => !seen.has(p.id))];
+    });
+  return _officialPromise;
+}
+
+function renderOfficial(host, installed, rerender) {
+  host.textContent = "";
+  host.append(el("h4", {}, T("ui.plugin.official")),
+    el("p", { class: "plugin-page-note" }, T("ui.plugin.officialNote")));
+  officialPlugins().then((all) => {
+    if (!host.isConnected) return;
+    const active = new Set(installed.map((p) => p.id));
+    const off = all.filter((p) => p && p.id && !active.has(p.id));
+    if (!off.length) {
+      host.append(el("p", { class: "plugin-empty" }, T("ui.plugin.officialEmpty")));
+      return;
+    }
+    for (const p of off) {
+      const btn = el("button", { class: "chip-btn primary" }, T("ui.plugin.enable"));
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        try {
+          await loadFromUrl(p.url || `./addons/${p.id}/index.js`);
+          toast(T("ui.plugin.loaded"));
+          rerender();
+        } catch (e) {
+          btn.disabled = false;
+          toast(T("ui.plugin.loadErr", e && e.message ? e.message : e));
+        }
+      });
+      host.append(el("div", { class: "plugin-item" },
+        el("div", { class: "plugin-item-main" },
+          el("span", { class: "plugin-item-name" }, `${p.name || p.id} `),
+          el("span", { class: "plugin-item-ver" }, `v${p.version || "?"}`),
+          el("div", { class: "plugin-item-meta" }, p.description || p.id),
+        ),
+        el("div", { class: "plugin-item-actions" }, btn),
+      ));
+    }
+  });
+}
+
 function sectionPlugins(rerender) {
   const list = listPlugins();
   const box = el("div", { class: "plugin-sect" },
@@ -95,6 +197,10 @@ function sectionPlugins(rerender) {
   }
 
  // 从 URL 加载
+  const officialBox = el("div", { class: "plugin-official" });
+  box.append(officialBox);
+  renderOfficial(officialBox, list, rerender);
+
   const urlInput = el("input", { class: "plugin-input", type: "text", placeholder: T("ui.plugin.urlPh"), spellcheck: "false" });
   box.append(
     el("div", { class: "plugin-load-row" },

@@ -60,7 +60,23 @@
   padding: var(--sp-2) var(--sp-3);
   background: var(--surface-2);
   border-bottom: 1px solid var(--outline-var);
+  cursor: pointer;
+  list-style: none;
 }
+.exhaust-cat-head::-webkit-details-marker { display: none; }
+.exhaust-cat-head::before {
+  content: "";
+  width: 0; height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  color: var(--on-surface-var);
+  margin-inline-end: var(--sp-2);
+  transition: transform var(--dur-short) var(--ease);
+}
+.exhaust-cat[open] > .exhaust-cat-head::before { transform: rotate(90deg); }
+.exhaust-cat-head .exhaust-cat-name { flex: 1; }
+.exhaust-cat-head:hover { background: var(--surface-hi); }
 .exhaust-cat-name {
   font-size: var(--fs-sm);
   font-weight: 600;

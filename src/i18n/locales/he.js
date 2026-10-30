@@ -1658,4 +1658,8 @@ export default {
   "op.a1z26.desc": "קידוד A1Z26: המרה חד־חד־ערכית בשני הכיוונים בין אותיות למספרים 1-26.",
   "op.dna.desc": "קידוד DNA: המרה דו־כיוונית בין קודונים בני 3 אותיות (A/C/G/T) לתווים.",
   "op.keyboard.desc": "קידוד קואורדינטות מקלדת: ייצוג אותיות לפי מיקום השורה והעמודה במקלדת QWERTY, למשל Q=11.",
+  "op.plausibaer.name": "Coordinate Formula Solver (Plausibär)",
+  "op.plausibaer.desc": "Enumerate unknown variables/formulas in coordinates; outputs every valid lat/lon, decimal coordinate and map link (local reimplementation of guballa.de Plausibär)",
+  "op.stegSolve.name": "StegSolve Image Analysis",
+  "op.stegSolve.desc": "Standalone StegSolve 1.4 page: 42 channel/bit-plane/colour transforms, Data Extract, Stereogram Solver, Frame Browser, Image Combiner and file-format report.",
 };

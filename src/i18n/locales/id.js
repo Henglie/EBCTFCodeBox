@@ -1661,4 +1661,8 @@ export default {
   "op.a1z26.desc": "Enkode A1Z26: konversi satu-ke-satu antara huruf dan angka 1-26.",
   "op.dna.desc": "Enkode DNA: konversi dua arah antara kodon 3 huruf (A/C/G/T) dan karakter.",
   "op.keyboard.desc": "Enkode koordinat papan ketik: menyatakan huruf sebagai posisi baris dan kolom pada papan ketik QWERTY, misalnya Q=11.",
+  "op.plausibaer.name": "Coordinate Formula Solver (Plausibär)",
+  "op.plausibaer.desc": "Enumerate unknown variables/formulas in coordinates; outputs every valid lat/lon, decimal coordinate and map link (local reimplementation of guballa.de Plausibär)",
+  "op.stegSolve.name": "StegSolve Image Analysis",
+  "op.stegSolve.desc": "Standalone StegSolve 1.4 page: 42 channel/bit-plane/colour transforms, Data Extract, Stereogram Solver, Frame Browser, Image Combiner and file-format report.",
 };

@@ -43,8 +43,12 @@ export const EXPLICIT_RUN_OPS = [
   "des2Mitm",
   // crack：归档/口令/碰撞
   "zipBrute", "zipCrc32Brute", "crc32Collision", "bkcrackAttack",
+  // analysis：KNN 训练集可达百万行，避免改参数时自动重跑
+  "knnClassify",
   // asym：纯 JS 素数搜索型密钥生成
   "rsaGenKeyPair", "elgamalKeyGen", "dsaParamGen", "paillierKeyGen",
+  // asym：KZG/EIP-4844（4096 点 MSM，blob 大输入逐键自动跑会冻结主线程）
+  "kzgCommit", "kzgVerify",
   // 作者已标注 noAuto 的重 op（工具页同样要显式触发）
   "qrFormatBrute", "xiangyue", "xiangyueEnc", "adsTool",
 ];

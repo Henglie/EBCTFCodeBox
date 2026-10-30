@@ -541,7 +541,7 @@ function bytesToText(bytes) {
 
 // ============ CTF 常用预设魔改（模板，用户可在此基础上改） ============
 
-// EXTRA_PRESETS 扩充 24 个魔改预设（Base58 换表 / 凯撒多档 / TEA·XXTEA 自定义轮数 /
+// EXTRA_PRESETS 扩充 23 个魔改预设（Base58 换表 / 凯撒多档 / TEA·XXTEA 自定义轮数 /
 // Hill 加密 / 按位反码 / baseWidthBits 宽基底等）。依赖 zero 循环、自包含，Worker 与主线程均可用。
 import { EXTRA_PRESETS } from "./customPresetsExtra.js";
 import { decodeUtf8Lossless } from "./bytesIo.js";

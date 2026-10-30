@@ -90,7 +90,7 @@ export const EXTRA_ALIASES = {
   shzyhxjzg: ["24字", "24个字", "价值观编码", "core values", "社会主义核心价值观编码", "价值观24字"],
   lsbImage: ["图片隐写", "图片lsb隐写", "图像LSB隐写", "lsb pixels"],
   natoAlphabet: ["字母解释法", "北约字母", "北约音标", "icao字母", "nato phonetic"],
-  railFence: ["Rail Fence cipher", "zigzag transposition", "W型栅栏", "栅栏转置", "rail fence rails"],
+  railFence: ["Rail Fence cipher", "zigzag transposition", "W型栅栏", "Z型栅栏", "传统栅栏", "普通栅栏", "分栏密码", "栅栏转置", "rail fence rails"],
   scytale: ["Scytale cipher", "Spartan scytale", "斯巴达密码棒", "每栏字数", "scytale column count"],
   whitespace: ["Whitespace language", "Whitespace interpreter", "空白编程语言", "Whitespace栈机", "Whitespace程序执行", "Edwin Brady Chris Morris"],
   malbolge: ["Malbolge language", "Ben Olmstead", "Malbolge装载检查", "Malbolge source validation"],

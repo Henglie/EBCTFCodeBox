@@ -1,10 +1,9 @@
 /*
  * fontLoader.js — 天珩全字库按平面主动加载 + 状态查询。
  *
- * fonts.css 里的 @font-face 已让浏览器「按需」拉平面（出现该平面字符才下载）。
- * 本模块补的是「主动预载 + 可视化」：顶栏「字库」面板列出 4 个平面
- * 用户可手动点「加载」把某平面整个拉进来（new FontFace.load）
- * 之后该平面所有字符即刻可显示，无需等首次出现触发。
+ * fonts.css 只挂首屏子集（th-ctf-subset.woff2，不写 unicode-range）；全量平面由本模块
+ * 用 FontFace + unicode-range 主动加载：出现该平面字符才下载，用户也可在「字库」面板
+ * 手动点「加载」把某平面整个拉进来（new FontFace.load），之后该平面所有字符即刻可显示。
  *
  * 零外发：全部 url 指向本地 public/fonts/th/*.woff2，绝不挂 CDN。
  *
@@ -15,49 +14,60 @@
  * 拉进 document.fonts，补齐子集外的冷僻字。全程本地文件、零外发、不阻塞 UI。
  * - 面板：顶栏「字库」列 4 平面加载状态，用户也可手动点加载/重试。
  * 全量 4 平面已由 ttf 无损转 woff2（brotli），相对原 ttf 砍 64%。
+ *
+ * unicode-range 必须按各文件实际 cmap 拆成多段，不能按「平面号」想当然：
+ * p1 除了第 1 平面，还装了 CJK 扩展 G/H/J（U+30000–U+33479）；
+ * p16 是第 16 平面 PUA（U+100000–U+10C7B7），不含 ExtG/H；
+ * p0 还带第 14 平面 Tags/变体选择符（U+E0000–U+E01EF）。
+ * 声明错了会让浏览器把字符派给没有字形的 face，整字掉回系统字体。
  */
 
-// 平面元数据。unicode-range 与全量 woff2 一一对应；bytes 为 woff2 字节数（面板显示）。
+// 平面元数据。ranges 是该文件 cmap 的声明覆盖段（可多段；段间互不重叠，避免同族 face 抢字）；
+// bytes 为 woff2 字节数（面板显示）。
 export const FONT_PLANES = [
   {
     id: "p0",
     file: "public/fonts/th/th-p0.woff2",
-    range: [0x0000, 0xFFFF],
-    label: "平面 0 · BMP",
-    labelEn: "Plane 0 · BMP",
-    desc: "拉丁/符号/CJK 基本+扩A/谚文/假名（日常主力）",
-    descEn: "Latin, symbols, CJK basic+ExtA, Hangul, Kana (daily use)",
+    // 主体 BMP + 第 14 平面 Tags / 变体选择符（cmap 实测 U+E0001、U+E0020–E007F、U+E0100–E01EF）
+    ranges: [[0x0000, 0xFFFF], [0xE0000, 0xE01EF]],
+    label: "平面 0/14 · BMP + 符号",
+    labelEn: "Planes 0/14 · BMP + symbols",
+    desc: "拉丁/符号/CJK 基本+扩A/谚文/假名 + 第 14 平面变体选择符",
+    descEn: "Latin, symbols, CJK basic+ExtA, Hangul, Kana + Plane 14 variation selectors",
     bytes: 5821788,
   },
   {
     id: "p1",
     file: "public/fonts/th/th-p1.woff2",
-    range: [0x10000, 0x1FFFF],
-    label: "平面 1 · SMP",
-    labelEn: "Plane 1 · SMP",
-    desc: "古文字/Emoji/数学字母/音乐符号",
-    descEn: "Ancient scripts, emoji, math alphanumerics, music",
+    // 第 1 平面 + CJK 扩展 G/H/J（cmap 实测 U+30000–U+33479，ExtJ 到 U+33479）
+    ranges: [[0x10000, 0x1FFFF], [0x30000, 0x33479]],
+    label: "平面 1/3 · SMP + ExtG/H/J",
+    labelEn: "Planes 1/3 · SMP + ExtG/H/J",
+    desc: "古文字/Emoji/数学字母/音乐符号 + CJK 扩展 G/H/J",
+    descEn: "Ancient scripts, emoji, math alphanumerics, music + CJK Ext G/H/J",
     bytes: 7873912,
   },
   {
     id: "p2",
     file: "public/fonts/th/th-p2.woff2",
-    range: [0x20000, 0x2FFFF],
+    // 第 2 平面 SIP：ExtB–F + ExtI（U+2EBF0–U+2EE5D）+ 兼容表意字补充
+    ranges: [[0x20000, 0x2FFFF]],
     label: "平面 2 · SIP",
     labelEn: "Plane 2 · SIP",
-    desc: "CJK 扩展 B–F 生僻字大片",
-    descEn: "CJK Ext B–F rare characters",
-    bytes: 9563000,
+    desc: "CJK 扩展 B–F、I 与兼容表意字（SIP）",
+    descEn: "CJK Ext B–F, Ext I and compatibility ideographs (SIP)",
+    bytes: 9566312,
   },
   {
     id: "p16",
     file: "public/fonts/th/th-p16.woff2",
-    range: [0x30000, 0x10FFFF],
-    label: "平面 3+ · TIP",
-    labelEn: "Plane 3+ · TIP",
-    desc: "CJK 扩展 G/H/I 等最冷僻码位",
-    descEn: "CJK Ext G/H/I, most rarely used",
-    bytes: 9416000,
+    // 第 16 平面私用区（cmap 实测 46626 个 PUA 码位，U+100000–U+10C7B7）；不含 ExtG/H
+    ranges: [[0x100000, 0x10FFFF]],
+    label: "平面 16 · PUA",
+    labelEn: "Plane 16 · PUA",
+    desc: "Unicode 第 16 平面私用区（PUA）46626 码位，不含 CJK 扩展 G/H",
+    descEn: "Plane 16 Private Use Area (PUA), 46,626 code points; no CJK Ext G/H",
+    bytes: 9419376,
   },
 ];
 
@@ -101,8 +111,12 @@ export async function loadFontPlane(id) {
   try {
  // 相对页面根的 url。FontFace 的 family 与 fonts.css @font-face 同名，命中同一族。
     const desc = { style: "normal", weight: "400", display: "swap" };
- // 子集单文件不限码位；若某条目带 range 才设 unicodeRange。
-    if (plane.range) desc.unicodeRange = `U+${plane.range[0].toString(16)}-${plane.range[1].toString(16)}`;
+ // 子集单文件不限码位；全量平面按 FONT_PLANES.ranges 声明多段 unicode-range。
+    if (plane.ranges && plane.ranges.length) {
+      desc.unicodeRange = plane.ranges
+        .map(([lo, hi]) => `U+${lo.toString(16).toUpperCase()}-${hi.toString(16).toUpperCase()}`)
+        .join(", ");
+    }
     // 绝对化：部署在子路径（GitHub Pages /仓库名/）或 hash 路由深层时，
     // 页面相对 url 会解析到错误基址 → 404 → 状态转 error（按钮变「重试」再失败，
     // 看起来像点不动）。对齐 katexLoader/dynamicColor 的 new URL(..., document.baseURI) 模式。

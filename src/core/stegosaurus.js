@@ -173,16 +173,32 @@ function parseHeader(bytes) {
 // '0' NULL 'N' None 'F' False 'T' True 'S' StopIter '.' Ellipsis
 // 'i' int4 'I' int64 'f' float(str) 'g' binary float 'x'/'y' complex
 // 'l' long(变长) 's' string(4字节长+数据) 't' interned string
+// 'R' STRINGREF(4字节索引，仅 Python 2.x：指向已读 interned 字符串表)
 // 'a' ascii 'A' ascii interned 'z' short ascii 'Z' short ascii interned
 // 'u' unicode 'r' ref(4字节索引)
 // '(' tuple ')' small tuple(1字节n) '[' list '{' dict '<' set '>' frozenset
 // 'c' code object
+//
+// 注：0x52 ('R') 不是未知类型/伪同步——CPython 2.x Python/marshal.c 定义了
+// TYPE_STRINGREF = 'R'（interned 字符串复用，读 4 字节索引进 p->strings 表）。
+// Python 3.4+ 才改用 FLAG_REF + TYPE_REF('r')。因此 2.7 pyc 必须实现 'R'，
+// 否则会在第一个复用函数名处（如本例偏移 684）中断。
 // ============================================================
 const FLAG_REF = 0x80;
+
+// 常见类型码 → 人类可读名（只用于错误信息，不参与解析）
+const MARSHAL_TYPE_NAMES = {
+  R: "STRINGREF（Python 2.x interned 字符串引用）",
+  r: "REF（对象引用）",
+  s: "STRING", t: "INTERNED", a: "ASCII", A: "ASCII_INTERNED",
+  z: "SHORT_ASCII", Z: "SHORT_ASCII_INTERNED", u: "UNICODE",
+  c: "CODE", l: "LONG", i: "INT", I: "INT64",
+};
 
 function makeMarshalReader(data, layout, sink) {
   let pos = 0;
   const refs = [];
+  const interned = []; // Python 2.x 'R' 的目标表（按 't' 读取顺序追加）
   let nodeCount = 0;
   const MAX_NODES = 200000;
 
@@ -242,9 +258,26 @@ function makeMarshalReader(data, layout, sink) {
         readBytes(digits * 2);
         return null;
       }
-      case "s": case "t": {                                              // string / interned（4 字节长）
+      case "s": {                                                        // string（4 字节长）
         const n = rU32();
-        return mkStr(t === "t" ? "interned" : "string", readBytes(n));
+        return mkStr("string", readBytes(n));
+      }
+      case "t": {                                                        // interned（4 字节长，Python 2.x 可被 'R' 引用）
+        const n = rU32();
+        const s = mkStr("interned", readBytes(n));
+        interned.push(s);
+        return s;
+      }
+      case "R": {                                                        // STRINGREF（Python 2.x）：索引 interned 表
+        const at = pos;
+        const idx = rU32();
+        const s = interned[idx];
+        if (!s) {
+          throw new Error("marshal STRINGREF 索引越界（索引 " + idx + "，interned 表 " + interned.length +
+            " 项）@偏移 " + at + "；0x52='R' 在 Python 2.x 是字符串引用，若 magic 为 3.x 则说明字节流错位/伪装 pyc" +
+            "（已解出 " + sink.codes.length + " 个 code object / " + sink.strings.length + " 个字符串，结果保留）");
+        }
+        return s;
       }
       case "a": case "A": {                                              // ascii / ascii interned（4 字节长）
         const n = rU32();
@@ -277,8 +310,13 @@ function makeMarshalReader(data, layout, sink) {
         return out;
       }
       case "c": return readCode(depth);                                  // code object
-      default:
-        throw new Error("未知 marshal 类型码 0x" + (t.charCodeAt(0)).toString(16) + " ('" + t + "') @偏移 " + (pos - 1));
+      default: {
+        const code = t.charCodeAt(0);
+        const name = MARSHAL_TYPE_NAMES[t] || "未登记类型";
+        throw new Error("未知 marshal 类型码 0x" + code.toString(16) + " ('" + t + "'，" + name +
+          ") @偏移 " + (pos - 1) + "（已解出 " + sink.codes.length + " 个 code object / " +
+          sink.strings.length + " 个字符串，结果保留）");
+      }
     }
   }
 
@@ -427,6 +465,32 @@ function stringsScan(bytes, minLen) {
   return out;
 }
 
+// ============================================================
+// Python 2.x 字节码：抽取「连续 LOAD_CONST → BUILD_LIST/TUPLE」形成的常量数组。
+// 2.x 指令宽度：opcode < HAVE_ARGUMENT(90) 为 1 字节，否则 3 字节（op + 2 字节 arg）。
+// 只在 layout='27' 时调用；越界/异常一律返回空数组，不影响主解析。
+// ============================================================
+function extractConstSequences27(codeBytes, consts) {
+  const out = [];
+  if (!codeBytes || !Array.isArray(consts)) return out;
+  const b = codeBytes;
+  let run = [];
+  for (let i = 0; i + 2 < b.length;) {
+    const op = b[i];
+    if (op < 90) { run = []; i += 1; continue; }
+    const arg = b[i + 1] | (b[i + 2] << 8);
+    i += 3;
+    if (op === 0x64) { // LOAD_CONST
+      const v = consts[arg];
+      if (v && v.__str) { run.push(v.text); continue; }
+    } else if ((op === 0x67 || op === 0x66) && run.length >= 4 && arg === run.length) {
+      out.push(run); // BUILD_LIST(0x67) / BUILD_TUPLE(0x66)
+    }
+    run = [];
+  }
+  return out;
+}
+
 // flag 正则：flag{}/ctf{}/key{}/pass{} 等常见格式 + 通用 word{...}
 const FLAG_RE = /(?:flag|ctf|key|pass|secret)\s*\{[^}\n]{0,200}\}/gi;
 const GENERIC_BRACE_RE = /[A-Za-z][A-Za-z0-9_]{1,20}\{[^}\n]{1,200}\}/g;
@@ -526,6 +590,27 @@ function stegosaurusRun(text, p) {
         "  stacksize=" + co.stacksize + "  " + tbl + "=" + lnLen + "B" +
         "  code=" + (co.codeBytes ? co.codeBytes.length : 0) + "B" +
         (co.filename ? "  file=" + co.filename : ""));
+    }
+    L.push("");
+  }
+
+ // ---- 2c. 有序字符串常量数组（CTF 常见：密文以十进制字符串常量数组编译进 pyc） ----
+ // 直接读 Python 2.x 字节码里连续的 LOAD_CONST … BUILD_LIST，保留重复项（同值常量
+ // 在 consts 池里只存一份、由 LOAD_CONST 多次引用，故不能只看 consts 顺序）。
+  const constSeqs = [];
+  if (layout === "27") {
+    for (const co of sink.codes) {
+      for (const seq of extractConstSequences27(co.codeBytes, co.consts)) {
+        if (seq.length >= 4 && seq.every((s) => /^\d{1,6}$/.test(s))) {
+          constSeqs.push({ name: co.name, vals: seq });
+        }
+      }
+    }
+  }
+  if (constSeqs.length) {
+    L.push("--- 有序数字字符串常量数组（按 LOAD_CONST/BUILD_LIST 顺序；若题目对常量做逐位运算，可据此逆推） ---");
+    for (const g of constSeqs) {
+      L.push("  ● <" + (g.name || "?") + "> [" + g.vals.join(", ") + "]");
     }
     L.push("");
   }

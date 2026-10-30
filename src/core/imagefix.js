@@ -23,12 +23,6 @@ function b64ToBytes(s) {
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
 }
-function bytesToB64(b) {
-  let bin = "";
-  for (const x of b) bin += String.fromCharCode(x);
-  return btoa(bin);
-}
-
 // 读大端/小端
 const u32be = (b, o) => ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
 const u16be = (b, o) => ((b[o] << 8) | b[o + 1]) >>> 0;
@@ -220,8 +214,7 @@ function formatBmpRecoverReport(buf) {
   }
   lines.push(`恢复成功 [模式: ${r.mode}]：真实宽高 = ${r.width} × ${r.height}`);
   const fixed = applyBmpSize(buf, r.width, r.height);
-  lines.push(`\n修复后 base64（已写回宽高）：`);
-  lines.push(bytesToB64(fixed));
+  lines.push(`\n已生成修复后的文件（out.bmp），用下载按钮保存。`);
   return { text: lines.join("\n"), fixed }; // 产物协议 2026-09-02：fixed 字节交 run 包 files
 }
 
@@ -346,8 +339,7 @@ function formatPngRecoverReport(buf) {
   }
   lines.push(`恢复成功 [模式: ${r.mode}]：真实宽高 = ${r.width} × ${r.height}`);
   const fixed = applyPngSize(buf, r.width, r.height);
-  lines.push(`\n修复后 base64（已写回真实宽高，CRC 匹配）：`);
-  lines.push(bytesToB64(fixed));
+  lines.push(`\n已生成修复后的文件（out.png），用下载按钮保存。`);
   return { text: lines.join("\n"), fixed }; // 产物协议 2026-09-02：fixed 字节交 run 包 files
 }
 
@@ -388,7 +380,7 @@ register({
   id: "pngSizeRecover", family: "png", familyLabel: "sizerecover",
   cat: "image",
   name: "PNG 宽高爆破恢复",
-  desc: "检测 PNG IHDR CRC 篡改 + 爆破恢复真实宽高（CTF 改高度藏图经典；先只爆高度 O(N) 秒出，再爆宽度，最后双爆兜底；输出修复后 base64）",
+  desc: "检测 PNG IHDR CRC 篡改 + 爆破恢复真实宽高（CTF 改高度藏图经典；先只爆高度 O(N) 秒出，再爆宽度，最后双爆兜底；输出报告与修复后文件）",
   params: [],
   run: (text, p) => {
  // 拖入文件走 rawBytes 通道（acceptsBytes 约定）：真字节优先，跳过 base64 文本解析。
@@ -408,7 +400,7 @@ register({
   id: "bmpSizeRecover", family: "bmp", familyLabel: "sizerecover",
   cat: "image",
   name: "BMP 宽高修复",
-  desc: "检测 BMP 宽高与像素数据量不一致 + 反推真实宽高（BMP 无 CRC，用像素字节数整除 rowSize 反推；CTF 改 BMP 宽高藏图；输出修复后 base64）",
+  desc: "检测 BMP 宽高与像素数据量不一致 + 反推真实宽高（BMP 无 CRC，用像素字节数整除 rowSize 反推；CTF 改 BMP 宽高藏图；输出报告与修复后文件）",
   params: [],
   run: (text, p) => {
     const buf = (p && p.rawBytes && p.rawBytes.length)
@@ -425,6 +417,7 @@ register({
 // C7-C14 合并：jpegSizeRead/gifSizeRead 已被 imageStructUnified（analysis「图像结构分析(归一)」）
 // 完整覆盖——它用同一 readJpegSize/readGifSize，输出字段一致且是超集。此处删 register
 // 函数 readJpegSize/readGifSize + formatJpegSizeReport/formatGifSizeReport 保留（imageStructUnified
-// 仍 import）。pngSizeRecover 不删：唯一产出「修复后 base64」，imageStructUnified 只给宽高文字建议。
+// 仍 import）。pngSizeRecover 不删：唯一产出「修复后文件」，imageStructUnified 只给宽高文字建议。
 
 export { isPng, readPngSize, isPngTampered, recoverPngSize, applyPngSize, readJpegSize, readGifSize, crc32 };
+

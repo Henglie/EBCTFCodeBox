@@ -83,14 +83,15 @@ export function qrZxingStatus() { return _status; }
 //  tryRotate      任意旋转（含 90° 整数倍与任意角）
 //  tryInvert      反色（白码黑底，CTF 常见）
 //  tryDownscale   多尺度（大图小符号 / 小图大符号都覆盖）
-//  maxNumberOfSymbols 多符号平铺（一张图里十几枚码时逐个报出）
+//  maxNumberOfSymbols 多符号平铺（一张图里十几枚码时逐个报出；0.png 实测 15 个，
+//                      上限必须高于实际符号数，否则尾部符号会被引擎静默截掉）
 export const QRZX_DEFAULT_OPTIONS = Object.freeze({
   formats: ["QRCode"],
   tryHarder: true,
   tryRotate: true,
   tryInvert: true,
   tryDownscale: true,
-  maxNumberOfSymbols: 12,
+  maxNumberOfSymbols: 64,
 });
 
 /**

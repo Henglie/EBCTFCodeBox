@@ -5,7 +5,8 @@
  * - hybridCode（混合进制解码）
  * - separationAscii（数字串贪婪分割 ASCII）
  * - asciiOffset（ASCII 偏移带 key/穷举）
- * - decimalToFloat（10 进制转任意进制浮点）
+ * - decimalToFloat（10 进制转 2-36 进制小数，BigInt 有理数 / 循环节检测）
+ * - floatToDecimal（2-36 进制小数转十进制，支持前缀与循环节）
  * - binaryComplement（原码/反码/补码）
  * - completion（补 0 对齐）
  * - splitHex（N 位分割）
@@ -132,43 +133,267 @@ function asciiOffsetBrute(text) {
   return lines.join("\n");
 }
 
-// ============ decimalToFloat（10 进制转任意进制浮点，参考实现）============
+// ============ decimalToFloat（10 进制转 2-36 进制小数，BigInt 有理数）============
+// 旧实现用 Number 逐位乘基，只有 2/8/10/16 且 0.1 一类会被双精度污染。现改为
+// 「输入 → 精确分数 p/q → 任意 base 长除」，余数重复即检测到循环节；
+// 精度只限制最多输出多少位，不再用 Number 冒充精确。
+const FLOAT_DIGITS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const FLOAT_PRECISION_MAX = 2048;
+const FLOAT_INPUT_MAX = 4096;
+const FLOAT_BASE_MIN = 2;
+const FLOAT_BASE_MAX = 36;
+
+function assertFloatBase(base, label = "进制") {
+  const b = Number(base);
+  if (!Number.isInteger(b) || b < FLOAT_BASE_MIN) {
+    throw new Error(`${label}须为 2-36 的整数（收到 ${base}）`);
+  }
+  if (b > FLOAT_BASE_MAX) {
+    if (b <= 95) {
+      throw new Error(`${label} ${b} 超出当前浮点支持范围：小数换基仅支持 2-36。37-95 的可见 ASCII 表含 . ( ) + - 等语法字符，直接套用会与小数点/循环节/正负号冲突，故不冒充支持；整数 37-95 请用「任意进制 radixN」。`);
+    }
+    throw new Error(`${label} ${b} 超出范围：仅支持 2-36（37-95 未提供无歧义小数位字符表）。`);
+  }
+  return b;
+}
+
+function clampFloatPrecision(value, dflt, min = 1) {
+  if (value === undefined || value === null || String(value).trim() === "") return dflt;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return dflt;
+  return Math.max(min, Math.min(FLOAT_PRECISION_MAX, Math.trunc(n)));
+}
+
+function floatGcd(a, b) {
+  a = a < 0n ? -a : a;
+  b = b < 0n ? -b : b;
+  while (b) { [a, b] = [b, a % b]; }
+  return a;
+}
+
+function normalizeRational(num, den) {
+  if (den === 0n) throw new Error("分母不能为 0");
+  if (den < 0n) { num = -num; den = -den; }
+  if (num === 0n) return { num: 0n, den: 1n };
+  const g = floatGcd(num, den);
+  return { num: num / g, den: den / g };
+}
+
+function floatDigitValue(ch, base) {
+  const v = FLOAT_DIGITS.indexOf(String(ch).toUpperCase());
+  if (v < 0 || v >= base) {
+    const range = base <= 10 ? `0-${base - 1}` : `0-9 / A-${FLOAT_DIGITS[base - 1]}`;
+    throw new Error(`非法 ${base} 进制字符: ${ch}（可用 ${range}）`);
+  }
+  return v;
+}
+
+function powBase(base, n) {
+  if (n < 0) throw new Error("内部错误：负指数");
+  return BigInt(base) ** BigInt(n);
+}
+
+/**
+ * 解析 base 进制浮点串为精确有理数。
+ * 支持：正负号、匹配进制的 0b/0o/0d/0x 前缀、小数点、循环节 0.(3)/0.1(6)。
+ * @returns {{num:bigint, den:bigint}}
+ */
+function parseRadixRational(text, base) {
+  base = assertFloatBase(base, "输入进制");
+  let s = String(text == null ? "" : text).trim().replace(/\s+/g, "");
+  if (!s) throw new Error("空输入");
+  if (s.length > FLOAT_INPUT_MAX) throw new Error(`输入过长（${s.length} 字符，上限 ${FLOAT_INPUT_MAX}）`);
+  let neg = false;
+  if (s[0] === "-" || s[0] === "+") { neg = s[0] === "-"; s = s.slice(1); }
+  if (!s) throw new Error("只有正负号，缺少数字");
+  const pm = /^0([bBoOxXdD])/.exec(s);
+  if (pm) {
+    const want = base === 2 ? "b" : base === 8 ? "o" : base === 16 ? "x" : base === 10 ? "d" : "";
+    // 仅剥离与所选进制匹配的前缀；base16 的 0BEEF 是合法十六进制数，不能误判成 0b
+    if (want && pm[1].toLowerCase() === want) s = s.slice(2);
+  }
+  if (!s) throw new Error("只有进制前缀，缺少数字");
+
+  let repeat = null;
+  const open = s.indexOf("(");
+  if (open >= 0) {
+    if (s[s.length - 1] !== ")" || s.indexOf("(", open + 1) >= 0 || s.indexOf(")") !== s.length - 1) {
+      throw new Error("循环节格式错误：只允许末尾一个括号，如 0.(3) / 0.1(6)");
+    }
+    repeat = s.slice(open + 1, -1);
+    s = s.slice(0, open);
+    if (!repeat) throw new Error("循环节不能为空");
+    if (repeat.includes(".")) throw new Error("循环节内不能再有小数点");
+  }
+
+  const dot = s.indexOf(".");
+  if (dot !== s.lastIndexOf(".")) throw new Error("非法数字：小数点过多");
+  const intPart = dot >= 0 ? s.slice(0, dot) : s;
+  const fracPart = dot >= 0 ? s.slice(dot + 1) : "";
+  if (!intPart && !fracPart && !repeat) throw new Error("缺少数字");
+
+  let num = 0n;
+  for (const ch of intPart) num = num * BigInt(base) + BigInt(floatDigitValue(ch, base));
+  let den = 1n;
+  if (fracPart) {
+    let f = 0n;
+    for (const ch of fracPart) f = f * BigInt(base) + BigInt(floatDigitValue(ch, base));
+    den = powBase(base, fracPart.length);
+    num = num * den + f;
+  }
+  if (repeat) {
+    let r = 0n;
+    for (const ch of repeat) r = r * BigInt(base) + BigInt(floatDigitValue(ch, base));
+    const p = powBase(base, fracPart.length);
+    const repDen = powBase(base, repeat.length) - 1n;
+    const addDen = p * repDen;
+    num = num * addDen + r * den;
+    den = den * addDen;
+  }
+  return normalizeRational(neg ? -num : num, den);
+}
+
+/** 十进制精确解析：整数/小数/科学计数法/分数 a/b/循环小数 0.(3)。 */
+function parseDecimalRational(text) {
+  let s = String(text == null ? "" : text).trim().replace(/\s+/g, "");
+  if (!s) throw new Error("空输入");
+  if (s.length > FLOAT_INPUT_MAX) throw new Error(`输入过长（${s.length} 字符，上限 ${FLOAT_INPUT_MAX}）`);
+  let neg = false;
+  if (s[0] === "-" || s[0] === "+") { neg = s[0] === "-"; s = s.slice(1); }
+  if (!s) throw new Error("只有正负号，缺少数字");
+  if (s.includes("/")) {
+    const parts = s.split("/");
+    if (parts.length !== 2 || !parts[0] || !parts[1]) throw new Error("分数格式应为 a/b，且分母不能为空");
+    const a = parseDecimalRational(parts[0]);
+    const b = parseDecimalRational(parts[1]);
+    if (b.num === 0n) throw new Error("分母不能为 0");
+    const num = a.num * b.den;
+    const den = a.den * b.num;
+    return normalizeRational(neg ? -num : num, den);
+  }
+  let r;
+  const sci = /^([0-9]*\.?[0-9]*)[eE]([+-]?\d+)$/.exec(s);
+  if (sci) {
+    if (!sci[1] || sci[1] === ".") throw new Error("科学计数法格式错误，应形如 1.25e-3");
+    r = parseDecimalRational(sci[1]);
+    const e = Number(sci[2]);
+    if (!Number.isSafeInteger(e) || Math.abs(e) > FLOAT_INPUT_MAX) throw new Error(`指数 ${sci[2]} 超出范围（±${FLOAT_INPUT_MAX}）`);
+    if (e >= 0) r = normalizeRational(r.num * powBase(10, e), r.den);
+    else r = normalizeRational(r.num, r.den * powBase(10, -e));
+  } else {
+    r = parseRadixRational(s, 10);
+  }
+  return normalizeRational(neg ? -r.num : r.num, r.den);
+}
+
+/**
+ * 有理数 → base 进制小数字符串。
+ * 余数重复 → 循环节；达到 precision 仍未终止/未循环 → truncated=true。
+ */
+function convertRationalToBase(rat, base, precision) {
+  base = assertFloatBase(base, "目标进制");
+  const pv = (precision === undefined || precision === null || String(precision).trim() === "")
+    ? NaN : Number(precision);
+  const cap = Number.isFinite(pv)
+    ? Math.max(0, Math.min(FLOAT_PRECISION_MAX, Math.trunc(pv)))
+    : 64;
+  const norm = normalizeRational(rat.num, rat.den);
+  let num = norm.num;
+  const neg = num < 0n;
+  if (neg) num = -num;
+  const den = norm.den;
+  const baseBig = BigInt(base);
+
+  const intPart = num / den;
+  let rem = num % den;
+  let intStr = "0";
+  if (intPart > 0n) {
+    const ds = [];
+    let n = intPart;
+    while (n > 0n) { ds.push(Number(n % baseBig)); n /= baseBig; }
+    intStr = ds.reverse().map((d) => FLOAT_DIGITS[d]).join("");
+  }
+
+  const digits = [];
+  const seen = new Map();
+  let cycleStart = -1;
+  let truncated = false;
+  while (rem !== 0n) {
+    if (seen.has(rem)) { cycleStart = seen.get(rem); break; }
+    if (digits.length >= cap) { truncated = true; break; }
+    seen.set(rem, digits.length);
+    rem *= baseBig;
+    const d = rem / den;
+    rem %= den;
+    digits.push(Number(d));
+  }
+
+  const prefix = cycleStart >= 0 ? digits.slice(0, cycleStart) : digits;
+  const cycle = cycleStart >= 0 ? digits.slice(cycleStart) : [];
+  const digitStr = (arr) => arr.map((d) => FLOAT_DIGITS[d]).join("");
+  let out = intStr;
+  if (cycleStart >= 0) {
+    out += "." + digitStr(prefix) + "(" + digitStr(cycle) + ")";
+  } else if (digits.length > 0) {
+    out += "." + digitStr(digits);
+  }
+  if (neg && (intPart > 0n || digits.length > 0)) out = "-" + out;
+  return {
+    text: out,
+    cycle: digitStr(cycle),
+    cycleStart,
+    cycleLen: cycle.length,
+    truncated,
+    cap,
+    intStr,
+    fracDigits: digitStr(digits),
+    neg,
+  };
+}
+
+function conversionNote(conv) {
+  if (conv.cycleStart >= 0) {
+    return `（循环节 ${conv.cycle}，从第 ${conv.cycleStart + 1} 位小数开始，节长 ${conv.cycleLen}）`;
+  }
+  if (conv.truncated) return `（已截断到 ${conv.cap} 位，未检出循环）`;
+  return "";
+}
+
 function decimalToFloat(num, base, precision = 64) {
+  base = Number(base);
   if (base === 1) {
-    const intPart = Math.floor(num);
-    const decPart = Math.round((num - intPart) * Math.pow(base, precision));
+    const n = Number(num);
+    const intPart = Math.floor(n);
+    const decPart = Math.round((n - intPart) * Math.pow(base, precision));
     return decPart > 0 ? "1".repeat(intPart) + "." + "1".repeat(decPart) : "1".repeat(intPart);
   }
-  if (base < 2 || base > 36) throw new Error("进制须在 2-36");
-  const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  let intPartChars = "";
-  let intPart = Math.floor(Math.abs(num));
-  while (intPart > 0) {
-    intPartChars = chars[intPart % base] + intPartChars;
-    intPart = Math.floor(intPart / base);
-  }
-  if (!intPartChars) intPartChars = "0";
-  let decPartChars = "";
-  let decPart = Math.abs(num) % 1;
-  while (decPartChars.length < precision) {
-    decPart *= base;
-    const d = Math.floor(decPart);
-    decPartChars += chars[d];
-    decPart -= d;
-  }
- // 先去掉小数部分尾部 0，再决定是否还有小数部分（避免 "FF." 末尾点残留）
-  decPartChars = decPartChars.replace(/0+$/, "");
-  let res = decPartChars.length > 0 ? intPartChars + "." + decPartChars : intPartChars;
-  if (num < 0) res = "-" + res;
-  return res;
+  const prec = clampFloatPrecision(precision, 64, 1);
+  const rat = parseDecimalRational(String(num));
+  return convertRationalToBase(rat, base, prec).text;
 }
+
 function decimalToFloatRun(text, p) {
-  const n = Number(text.trim());
-  if (isNaN(n)) throw new Error("无效数字: " + text);
-  const prec = Math.max(1, Math.min(64, Number((p && p.precision) || 16)));
-  const bases = [2, 8, 10, 16];
-  const lines = bases.map((b) => b + " 进制: " + decimalToFloat(n, b, prec));
-  return `输入: ${text.trim()}\n精度: ${prec} 位小数\n` + lines.join("\n");
+  const raw = String(text == null ? "" : text).trim();
+  if (!raw) throw new Error("空输入");
+  const rat = parseDecimalRational(raw);
+  const prec = clampFloatPrecision(p && p.precision, 16, 1);
+  const baseRaw = Number((p && p.base) || 0);
+  let bases;
+  if (baseRaw === 0) {
+    bases = [2, 8, 10, 16]; // 旧四档报告保持兼容
+  } else {
+    bases = [assertFloatBase(baseRaw, "目标进制")];
+  }
+  const lines = [
+    `输入: ${raw}`,
+    `精度: ${prec} 位小数（上限 ${FLOAT_PRECISION_MAX}）`,
+  ];
+  if (rat.den !== 1n) lines.push(`精确分数: ${rat.num}/${rat.den}（BigInt 有理数，无浮点误差）`);
+  for (const b of bases) {
+    const conv = convertRationalToBase(rat, b, prec);
+    lines.push(`${b} 进制: ${conv.text}${conversionNote(conv)}`);
+  }
+  return lines.join("\n");
 }
 
 // ============ binaryComplement（原码/反码/补码，参考实现）============
@@ -201,49 +426,21 @@ function binaryComplement(text) {
 
 // ============ 反向：任意进制浮点 → 十进制 / 位串 → 原反补码 ============
 
-function parseBaseFloat(text, base, precision) {
-  let s = String(text == null ? "" : text).trim().replace(/\s+/g, "");
-  if (!s) throw new Error("空输入");
-  let sign = 1;
-  if (s[0] === "-" || s[0] === "+") { if (s[0] === "-") sign = -1; s = s.slice(1); }
-  // 前缀只在「与所选进制匹配」时剥离：base16 的 0BEEF 是合法十六进制数（0/B/E/E/F），
-  // 不能当成 0b 二进制前缀；base10 的 0x10 应报非法字符而不是悄悄按 16 进制算。
-  const pm = /^0([bBoOxX])/.exec(s);
-  if (pm) {
-    const want = base === 2 ? "b" : base === 8 ? "o" : base === 16 ? "x" : "";
-    if (want && pm[1].toLowerCase() === want) s = s.slice(2);
-  }
-  const DIG = "0123456789abcdefghijklmnopqrstuvwxyz";
-  const parts = s.split(".");
-  if (parts.length > 2) throw new Error("非法数字：小数点过多");
-  const intPart = parts[0] || "0";
-  const fracPart = parts[1] || "";
-  let val = 0;
-  for (const ch of intPart) {
-    const d = DIG.indexOf(ch.toLowerCase());
-    if (d < 0 || d >= base) throw new Error(`非法 ${base} 进制字符: ${ch}`);
-    val = val * base + d;
-  }
-  let place = 1 / base;
-  for (const ch of fracPart) {
-    const d = DIG.indexOf(ch.toLowerCase());
-    if (d < 0 || d >= base) throw new Error(`非法 ${base} 进制字符: ${ch}`);
-    val += d * place;
-    place /= base;
-  }
-  const p = Math.max(0, Math.min(64, Number(precision) || 16));
-  return sign * val;
-}
-
 function floatToDecimalRun(text, p = {}) {
-  const base = Number(p.base || 10);
-  if (![2, 8, 10, 16].includes(base)) throw new Error("进制仅支持 2 / 8 / 10 / 16");
-  const value = parseBaseFloat(text, base, p.precision);
-  if (!Number.isFinite(value)) throw new Error("解析结果不是有限数");
-  const prec = Math.max(0, Math.min(64, Number(p.precision) || 16));
-  let shown = value.toFixed(prec);
-  if (shown.includes(".")) shown = shown.replace(/0+$/, "").replace(/\.$/, "");
-  return `${base} 进制浮点: ${String(text).trim()}\n十进制: ${shown}\n精度: ${prec} 位小数`;
+  const raw = String(text == null ? "" : text).trim();
+  if (!raw) throw new Error("空输入");
+  const baseRaw = (p && p.base != null && p.base !== "") ? Number(p.base) : 10;
+  const base = assertFloatBase(baseRaw, "输入进制");
+  const prec = clampFloatPrecision(p && p.precision, 16, 0);
+  const rat = parseRadixRational(raw, base);
+  const conv = convertRationalToBase(rat, 10, prec);
+  const lines = [
+    `${base} 进制浮点: ${raw}`,
+    `十进制: ${conv.text}${conversionNote(conv)}`,
+    `精度: ${prec} 位小数（上限 ${FLOAT_PRECISION_MAX}）`,
+  ];
+  if (rat.den !== 1n) lines.push(`精确分数: ${rat.num}/${rat.den}（BigInt 有理数，无浮点误差）`);
+  return lines.join("\n");
 }
 
 function complementToDecRun(text, p = {}) {
@@ -777,9 +974,10 @@ register({
 
 register({
   id: "decimalToFloat", cat: "radix", name: "十进制转任意进制浮点",
-  desc: "十进制数转 2/8/10/16 进制浮点表示",
+  desc: "十进制数/分数转 2-36 进制小数：支持指定目标进制、精度上限与循环节检测（如 0.1₂=0.0(0011)），用 BigInt 有理数精确换基，不用 Number 冒充精确；base=0 仍输出 2/8/10/16 四档",
   params: [
-    { key: "precision", label: "小数精度", type: "number", default: 16 },
+    { key: "base", label: "目标进制（0=四档 2/8/10/16）", type: "number", default: 0 },
+    { key: "precision", label: "小数精度上限（1-2048）", type: "number", default: 16 },
   ],
   run: decimalToFloatRun,
 });
@@ -793,13 +991,10 @@ register({
 
 register({
   id: "floatToDecimal", cat: "radix", name: "任意进制浮点转十进制",
-  desc: "「十进制转任意进制浮点」的反向：输入 2/8/10/16 进制浮点串（可带 0b/0o/0x 前缀与负号），输出十进制值。用于还原题目给出的非十进制浮点",
+  desc: "「十进制转任意进制浮点」的反向：输入 2-36 进制浮点串（可带正负号、匹配进制的 0b/0o/0d/0x 前缀、循环节 0.(3)），按 BigInt 有理数精确展开为十进制，循环节与截断都明确标注。用于还原题目给出的非十进制浮点",
   params: [
-    { key: "base", label: "输入进制", type: "select", default: "2", options: [
-      { value: "2", label: "2 进制" }, { value: "8", label: "8 进制" },
-      { value: "10", label: "10 进制" }, { value: "16", label: "16 进制" },
-    ] },
-    { key: "precision", label: "输出小数位数", type: "number", default: 16 },
+    { key: "base", label: "输入进制（2-36）", type: "number", default: 2 },
+    { key: "precision", label: "输出小数位数（0-2048）", type: "number", default: 16 },
   ],
   run: floatToDecimalRun,
 });
@@ -953,6 +1148,9 @@ export {
   separationAscii, separationOneScale,
   asciiOffset, asciiOffsetBrute,
   decimalToFloat, decimalToFloatRun,
+  floatToDecimalRun,
+  parseRadixRational, parseDecimalRational, convertRationalToBase,
+  normalizeRational, assertFloatBase, FLOAT_PRECISION_MAX,
   binaryComplement,
   completionEncode, completionDecode,
   splitHex,

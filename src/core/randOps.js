@@ -32,6 +32,7 @@ export const RAND_OPS = Object.freeze(new Set([
   "schnorrSign", "slhdsaSign", "sm2Sign", "sm2Encrypt", "sm2KeyExchange",
   "hqcEncrypt", "mlkemEncaps", "ntruEncrypt", "paillierEncrypt", "xwingEncaps",
   "x25519Shared", "lsagSign", "pedersenCommit", "feldmanVss", "jweEncrypt",
+  "rsaOaepEnc", "hpkeSeal",
   // —— 分组 / 流密码与对称封装（随机 IV / salt）——
   "ascon", "fernet", "emojiAes", "yueChang", "dxBase64", "rabbit",
   // —— 口令 / 派生 / 隐写 / 共享（随机 salt / 系数）——
@@ -39,7 +40,7 @@ export const RAND_OPS = Object.freeze(new Set([
   // —— 随机数工具本体 ——
   "randomSeed",
   // —— 自研 / 复古编码 / 分析工具中带随机成分（2026-10-11 已统一接入 randSource）——
-  "elgamal", "knapsack", "xiangyueEnc", "foyu", "bigCalc", "bb84Qkd", "primeInspector",
+  "elgamal", "knapsack", "xiangyueEnc", "foyu", "bigCalc", "bb84Qkd", "primeInspector", "hajimiCode",
 ]));
 
 /**

@@ -62,6 +62,33 @@ const TAR_TYPEFLAGS = {
   "5": "目录", "6": "FIFO", "7": "保留", "L": "GNU 长名", "x": "PAX 扩展",
 };
 
+const MIME_BY_EXT = {
+  txt: "text/plain", log: "text/plain", md: "text/markdown", json: "application/json",
+  xml: "application/xml", csv: "text/csv", html: "text/html", htm: "text/html",
+  png: "image/png", gif: "image/gif", jpg: "image/jpeg", jpeg: "image/jpeg",
+  webp: "image/webp", bmp: "image/bmp", svg: "image/svg+xml",
+  zip: "application/zip", pdf: "application/pdf", bin: "application/octet-stream",
+};
+
+/** 7z-wasm 解出的条目 → 注册表产物协议 files[]（真实字节，可直接下载）。 */
+function toProductFiles(entries) {
+  return (entries || []).map((f, i) => {
+    const name = f.name || `file_${i + 1}`;
+    const ext = String(name).split(".").pop().toLowerCase();
+    return {
+      name,
+      mime: MIME_BY_EXT[ext] || "application/octet-stream",
+      bytes: f.bytes instanceof Uint8Array ? f.bytes : new Uint8Array(f.bytes || []),
+    };
+  });
+}
+
+/** 有解出文件时返回 {text, files}，没有则保持旧的纯文本协议。 */
+function withProductFiles(lines, files) {
+  const text = lines.join("\n");
+  return files && files.length ? { text, files } : text;
+}
+
 function parseOctal(bytes, start, len) {
   let s = "";
   for (let i = start; i < start + len; i++) {
@@ -243,7 +270,7 @@ async function render7zWasmTry(bytes, p, lines, fmtLabel) {
     lines.push("--- " + fmtLabel + " 列表 / 解压能力 ---");
     lines.push("⚠ 7z 解压引擎（wasm）未随包或加载失败，已降级为纯识别。");
     lines.push("  要启用真列表/解压，请放置 wasm：public/wasm/7zz.js + 7zz.wasm（本地随包，零外发）。");
-    return;
+    return [];
   }
   lines.push("");
   lines.push("--- " + fmtLabel + " " + (mode === "extract" ? "解压 (x)" : "列表 (l)") + "（7z-wasm）---");
@@ -251,17 +278,22 @@ async function render7zWasmTry(bytes, p, lines, fmtLabel) {
     lines.push("✗ 7z 报告失败（退出码 " + res.code + "；加密包请填密码，坏头/截断包如实失败）：");
     const tail = (res.stdout || "").split("\n").filter((l) => l && !/^\s*$/.test(l)).slice(-8);
     for (const l of tail) lines.push("  " + l);
-    return;
+    return [];
   }
   if (res.stdout) lines.push(res.stdout);
-  if (mode === "extract") {
-    lines.push("");
-    lines.push("解出文件: " + res.files.length + " 个" + (res.files.length >= 200 ? "（达 200 上限，截断）" : ""));
-    for (const f of res.files) {
-      const r = bytesToOutput(f.bytes);
-      lines.push("· " + f.name + "  (" + f.bytes.length + " 字节, " + r.mode + ")");
-    }
+  if (mode !== "extract") return [];
+  const files = toProductFiles(res.files);
+  lines.push("");
+  lines.push("解出文件: " + files.length + " 个" + (files.length >= 200 ? "（达 200 上限，截断）" : ""));
+  for (const f of files) {
+    const r = bytesToOutput(f.bytes);
+    lines.push("· " + f.name + "  (" + f.bytes.length + " 字节, " + r.mode + ")");
   }
+  if (files.length) {
+    lines.push("");
+    lines.push("下载: 已按条目生成下载按钮（见输出区下方），字节直接取自 7z-wasm 解包结果。");
+  }
+  return files;
 }
 
 // ============================================================
@@ -365,12 +397,15 @@ async function archiveUnifiedReport(text, p) {
      // 纯 JS 失败（如非标准流）再试 7z-wasm
       const res = await run7zWasm(bytes, { extract: true, name: "in.bz2" });
       if (res && res.ok && res.files.length) {
+        const files = toProductFiles(res.files);
         lines.push("");
         lines.push("--- 7z-wasm 兜底解压 ---");
-        for (const f of res.files) {
+        for (const f of files) {
           const r = bytesToOutput(f.bytes);
           lines.push("· " + f.name + "  (" + f.bytes.length + " 字节, " + r.mode + ")");
         }
+        lines.push("下载: 已按条目生成下载按钮（见输出区下方）。");
+        return withProductFiles(lines, files);
       } else {
         lines.push("提示: bzip2 解压失败（纯 JS 与 7z-wasm 均未成功），可在外部工具解压后贴回。");
       }
@@ -387,8 +422,8 @@ async function archiveUnifiedReport(text, p) {
     lines.push("  magic: FD 37 7A 58 5A 00");
     lines.push("  Stream Flags: 0x" + (streamFlags >>> 0).toString(16).padStart(4, "0") + "（校验 " + checkName + "）");
     lines.push("");
-    await render7zWasmTry(bytes, p, lines, "XZ");
-    return lines.join("\n");
+    const files = await render7zWasmTry(bytes, p, lines, "XZ");
+    return withProductFiles(lines, files);
   }
 
   if (name === "zip") {
@@ -402,15 +437,15 @@ async function archiveUnifiedReport(text, p) {
     lines.push("");
     lines.push("--- TAR 头解析 ---");
     lines.push(...renderTarStructure(bytes));
-    await render7zWasmTry(bytes, p, lines, "TAR");
-    return lines.join("\n");
+    const files = await render7zWasmTry(bytes, p, lines, "TAR");
+    return withProductFiles(lines, files);
   }
 
   if (name === "rar") {
     lines.push("");
     lines.push("提示: RAR 为专有格式，纯 JS 无解码器；列表/解压经 7z-wasm（内置 unRAR 代码，仅解包、只读）。");
-    await render7zWasmTry(bytes, p, lines, "RAR");
-    return lines.join("\n");
+    const files = await render7zWasmTry(bytes, p, lines, "RAR");
+    return withProductFiles(lines, files);
   }
 
   if (name === "7z") {
@@ -442,6 +477,7 @@ async function archiveUnifiedReport(text, p) {
     const mode = (p && p.sevenZipMode) || "list";
     const password = (p && p.password) || "";
     const res = await run7zWasm(bytes, { extract: mode === "extract", password });
+    let files = [];
     if (res === null) {
  // wasm 缺失降级
       lines.push("⚠ 7z 解压引擎（wasm）未随包或加载失败，已降级为纯头解析。");
@@ -454,15 +490,17 @@ async function archiveUnifiedReport(text, p) {
       lines.push("✓ 7z-wasm " + (mode === "extract" ? "解压 (x)" : "列表 (l)") + " 结果：");
       if (res.stdout) lines.push(res.stdout);
       if (mode === "extract" && res.files.length > 0) {
+        files = toProductFiles(res.files);
         lines.push("");
-        lines.push("解出文件: " + res.files.length + " 个");
-        for (const f of res.files) {
+        lines.push("解出文件: " + files.length + " 个");
+        for (const f of files) {
           const r = bytesToOutput(f.bytes);
           lines.push("· " + f.name + "  (" + f.bytes.length + " 字节, " + r.mode + ")");
         }
+        lines.push("下载: 已按条目生成下载按钮（见输出区下方）。");
       }
     }
-    return lines.join("\n");
+    return withProductFiles(lines, files);
   }
 
  // 兜底（理论不可达）

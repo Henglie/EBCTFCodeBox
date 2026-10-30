@@ -1,5 +1,7 @@
 import { literalMatcher, groupSingleCandidates } from "./core/magic/smartCandidates.js";
 import { createTargetEditor, renderCandidateRow, highlightResult } from "./ui/smartResultView.js";
+import { classifyResult } from "./core/resultTypes.js";
+import { renderResultActions } from "./ui/resultActions.js";
 import { resultSearchState } from "./ui/resultFilter.js";
 import { loadTargetConfig } from "./core/magic/signals.js";
 /*
@@ -22,7 +24,8 @@ import { downloadBytes, cloudWarnGate, fmtByteSize, isCloudDeploy } from "./ui/d
 import { productFileEntries } from "./core/productResult.js";
 import { magicFilterReset, filterMagicCands, filterBruteCands, magicFilterBar } from "./ui/resultFilter.js";
 import { magicDecode } from "./core/magic/magic.js";
-import { runMagic, cancelMagic } from "./core/magic/magicClient.js"; // 真多线程调度（Worker 优先，降级主线程）+ 中断接管
+import { runMagic, cancelMagic, pauseMagic, resumeMagic } from "./core/magic/magicClient.js"; // 真多线程调度（Worker 优先，降级主线程）+ 中断/暂停接管
+import { createResultToc } from "./ui/resultToc.js"; // 一键解码结果右侧浮动缩略目录
 // fileAnalysis / imageAnalysis / audioAnalysis（智能分析三链，含 QR·pcap·inflate·音频子树）已改懒载，见 ensureAnalysisChains()
 import { loadLicense, OPENSOURCE_LICENSE } from "./core/license.js";
 import { analyze7zFile } from "./core/sevenzip.js"; // 7z 拖入文件真列表/解压（wasm 缺失降级）
@@ -106,15 +109,32 @@ import { renderExhaustive } from "./ui/exhaustiveView.js"; // 穷举全解视图
 // —— inspect / quickconv 两视图懒载（两子树 12 文件退出首屏闭包，约 -108KB gz）——
 // 首次切入对应视图才动态 import（视图切换=用户手势）；文件仍在 SW 预缓存（不匹配 EXCLUDE_RULES），离线可用。
 // dispose 未加载时为 no-op（切走时 _inspectMod 尚未 resolve → 模块无 DOM 实例，无需清理）。
-let _inspectMod = null, _quickConvMod = null;
+let _inspectMod = null, _quickConvMod = null, _stegSolveMod = null, _stegSolveModLoaded = null;
 function loadInspectView() {
   return _inspectMod || (_inspectMod = import("./ui/universalViewer.js").catch((e) => { _inspectMod = null; throw e; }));
 }
 function loadQuickConvView() {
   return _quickConvMod || (_quickConvMod = import("./ui/quickConv.js").catch((e) => { _quickConvMod = null; throw e; }));
 }
+function loadStegSolvePage() {
+  return _stegSolveMod || (_stegSolveMod = import("./ui/stegSolvePage.js")
+    .then((m) => { _stegSolveModLoaded = m; return m; })
+    .catch((e) => { _stegSolveMod = null; _stegSolveModLoaded = null; throw e; }));
+}
 function disposeInspectView() {
   if (_inspectMod) _inspectMod.then((m) => m.disposeUniversalViewer()).catch(() => {});
+}
+function disposeStegSolveView() {
+  const stillOnPage = () => state.view === "op" && state.opId === "stegSolve";
+  if (_stegSolveModLoaded) {
+    if (!stillOnPage()) {
+      try { _stegSolveModLoaded.disposeStegSolvePage(); } catch { /* ignore */ }
+    }
+    return;
+  }
+  if (_stegSolveMod) {
+    _stegSolveMod.then((m) => { if (!stillOnPage()) m.disposeStegSolvePage(); }).catch(() => {});
+  }
 }
 import { renderCodeImageViewer } from "./ui/codeImageViewer.js"; // 编码图鉴查询器（图形编码对照图）
 import { synonymsOf, expandAliases } from "./ui/searchSynonyms.js"; // 图像/视频/编码等同义词检索（只改检索，不改 op 名）
@@ -304,8 +324,81 @@ function exportTextAsFile(text, fname) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch { /* 忽略 */ }
 }
-// 给 io-area 挂记事本快捷键：Ctrl+A 全选（div 形态浏览器默认可能越界选到全页，显式接管）
-// Ctrl+S 导出为 txt（拦截浏览器保存网页）。Ctrl+Z 撤销走浏览器/contenteditable 原生，不干预。
+
+/*
+ * 操作报告导出（MD + 内嵌 JSON）。
+ * 只记录**本次真实运行**的输入/输出/参数与错误文本，不推断、不补全未验证结论：
+ * 输出区以 ✗ 开头即记 status=error 并原样保留错误信息。
+ * 报告可能含敏感数据，下载前走 cloudWarnGate 同款提示（云端部署时）。
+ */
+function buildOpReport(op) {
+  const inEl = document.getElementById("ioIn");
+  const outEl = document.getElementById("ioOut");
+  let input = "";
+  if (inEl) input = inEl.value;
+  else if (Array.isArray(op.fields)) {
+    input = op.fields.map((f) => (document.getElementById("fld_" + f.key)?.value ?? "")).join(op.fieldsJoin ?? "\n");
+  }
+  const output = outEl ? outEl.value : "";
+  const failed = /^✗/.test(output);
+  const paramRows = (op.params || [])
+    .map((d) => [d.key, state.params[d.key]])
+    .filter(([, v]) => v !== undefined && v !== null && String(v) !== "")
+    .map(([k, v]) => [k, String(v)]);
+  const catName = (CATEGORIES.find((c) => c.id === op.cat) || {}).name || op.cat;
+  const dirLabel = op.run ? "run" : (state.dir === "encode" ? "encode" : "decode");
+  const ts = new Date().toISOString();
+  const json = {
+    app: "EBCTF CodeBox",
+    version: APP_VERSION,
+    generatedAt: ts,
+    op: { id: op.id, name: op.name, cat: op.cat, catName, direction: dirLabel },
+    params: Object.fromEntries(paramRows),
+    input: { length: input.length, text: input },
+    output: { length: output.length, status: failed ? "error" : "ok", text: output },
+  };
+  const fence = (s) => {
+    // 围栏长度按内容里最长的连续反引号 +1，避免内容自带 ``` 破坏 Markdown
+    const longest = (s.match(/`+/g) || []).reduce((m, r) => Math.max(m, r.length), 0);
+    return "`".repeat(Math.max(3, longest + 1));
+  };
+  const fIn = fence(input), fOut = fence(output), fJson = fence(JSON.stringify(json, null, 2));
+  const md = [
+    "# 操作报告 · " + op.name + "（" + op.id + "）",
+    "",
+    "- 生成时间：" + ts,
+    "- 工具箱版本：v" + APP_VERSION,
+    "- 操作：" + op.name + "（`" + op.id + "`）",
+    "- 分类：" + catName + "（`" + op.cat + "`）",
+    "- 方向：" + dirLabel,
+    "- 参数：" + (paramRows.length ? paramRows.map(([k, v]) => "`" + k + "`=" + v).join("，") : "（无）"),
+    "- 结果：" + (failed ? "失败（见输出区错误文本）" : "成功"),
+    "",
+    "## 输入（" + input.length + " 字符）",
+    "",
+    fIn + "text",
+    input,
+    fIn,
+    "",
+    "## 输出（" + output.length + " 字符）",
+    "",
+    fOut + "text",
+    output,
+    fOut,
+    "",
+    "## 机器可读",
+    "",
+    fJson + "json",
+    JSON.stringify(json, null, 2),
+    fJson,
+    "",
+    "> 本报告只记录本次实际运行的输入、输出与参数；未对结果做正确性判定，也不包含任何未验证的推断。",
+    "",
+  ].join("\n");
+  return { md, name: "ebctf-report-" + op.id + "-" + ts.replace(/[:.]/g, "-").slice(0, 19) + ".md" };
+}
+
+// 给 io-area 挂记事本快捷键：Ctrl+A 全选（div 形态浏览器默认可能越界选到全页，显式接管）// Ctrl+S 导出为 txt（拦截浏览器保存网页）。Ctrl+Z 撤销走浏览器/contenteditable 原生，不干预。
 function attachEditorShortcuts(area, opts = {}) {
   area.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
@@ -323,6 +416,151 @@ function toast(msg) {
   document.body.append(t);
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => t.remove(), 2000);
+}
+
+// ---- 一键解码结果卡通用件（复制 / 可编辑 / 出处 / 目录着色）----
+function copyPlainText(text, okMsg) {
+  const s = String(text == null ? "" : text);
+  const done = () => toast(okMsg || t("ui.toast.copiedResult"));
+  const fallback = () => {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = s;
+      ta.style.cssText = "position:fixed;left:-9999px;top:0";
+      document.body.append(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+      done();
+    } catch { toast("复制失败：浏览器未授予剪贴板权限"); }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(s).then(done, fallback);
+  } else fallback();
+}
+
+function copyBtn(getText, label) {
+  return el("button", {
+    type: "button", class: "ok-copy-btn", title: label || t("ui.common.clickCopy"),
+    onclick: (e) => { e.stopPropagation(); copyPlainText(getText(), t("ui.toast.copiedResult")); },
+  }, msym("content_copy"), el("span", {}, label || "复制"));
+}
+
+// 可编辑结果值：默认展示截断文本，聚焦时自动换成全文；复制按钮取当前编辑后的内容。
+function editableResultValue(text, { limit = 500, className = "" } = {}) {
+  const full = String(text == null ? "" : text);
+  const wrap = el("div", { class: "ok-val-wrap" });
+  const val = el("div", {
+    class: "ok-val ok-edit " + className,
+    contenteditable: "true",
+    spellcheck: "false",
+    role: "textbox",
+    "aria-multiline": "true",
+    title: "可直接编辑；复制按钮取编辑后的内容",
+  });
+  const truncated = full.length > limit;
+  val.textContent = truncated ? full.slice(0, limit) + " …" : full;
+  let expanded = !truncated;
+  val.addEventListener("focus", () => {
+    if (!expanded) { expanded = true; val.textContent = full; }
+  });
+  wrap.append(val);
+  if (truncated) {
+    const btn = el("span", { class: "ok-expand" }, t("ui.common.expand", full.length));
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      expanded = !expanded;
+      if (expanded) { val.textContent = full; btn.textContent = t("ui.common.collapse"); }
+      else { val.textContent = full.slice(0, limit) + " …"; btn.textContent = t("ui.common.expand", full.length); }
+    });
+    wrap.append(btn);
+  }
+  return { wrap, val, getText: () => val.textContent, full };
+}
+
+let _tocCardSeq = 0;
+function markTocCard(node, { title, color, badge, group } = {}) {
+  node.id = node.id || "ok-toc-card-" + (++_tocCardSeq);
+  node.dataset.tocTitle = title || "结果";
+  node.dataset.tocColor = color || "var(--outline-var)";
+  if (badge) node.dataset.tocBadge = badge;
+  if (group) node.dataset.tocGroup = group;
+  return node;
+}
+
+function verdictColor(v) {
+  if (v === "confirmed") return "var(--success)";
+  if (v === "likely") return "var(--primary)";
+  if (v === "ambiguous") return "var(--warning)";
+  return "var(--outline-var)";
+}
+
+// 卡片“出处”行：算法链 + 置信度 + 当前编辑内容可复制。
+function resultSourceLine(c, chainLabel) {
+  const bits = [];
+  if (chainLabel) bits.push(el("span", { class: "ok-source-chain" }, "出处：" + chainLabel));
+  if (Number.isFinite(c.confidence)) bits.push(el("span", { class: "ok-source-conf" }, `${t("ui.home.confidence")} ${(c.confidence * 100).toFixed(0)}%`));
+  if (c.paramLabel) bits.push(el("span", { class: "ok-source-param" }, c.paramLabel));
+  return el("div", { class: "ok-source" }, ...bits);
+}
+
+// 结果目录：文本一把梭与文件/图像分析共用同一个浮动目录（挂在 .home-hero 上）。
+function resultsTocHost(container) {
+  if (!container) return null;
+  return container.closest?.(".home-hero") || container;
+}
+
+function refreshResultToc(container) {
+  if (!container || !container.isConnected) return;
+  const host = resultsTocHost(container);
+  if (!host) return;
+  let toc = host.__toc;
+  if (!toc) {
+    toc = createResultToc();
+    host.__toc = toc;
+  }
+  const items = [];
+  // DOM 顺序 = 文件报告在上、文本解码结果在下；目录顺序与页面一致。
+  for (const node of host.querySelectorAll("[data-toc-title]")) {
+    if (!node.isConnected || !node.id) continue;
+    const badge = node.dataset.tocBadge || "";
+    const group = node.dataset.tocGroup || (
+      /原文/.test(badge) ? "原文"
+        : /爆破/.test(badge) ? "爆破参数"
+          : /摘要/.test(badge) ? "最佳结果"
+            : "候选结果"
+    );
+    items.push({
+      id: node.id,
+      title: node.dataset.tocTitle,
+      color: node.dataset.tocColor,
+      badge,
+      group,
+    });
+  }
+  toc.update(items, { open: host.__tocAutoOpen === true });
+  host.__tocAutoOpen = false;
+}
+
+function destroyResultToc(container) {
+  const host = resultsTocHost(container);
+  if (host && host.__toc) {
+    try { host.__toc.destroy(); } catch { /* ignore */ }
+    host.__toc = null;
+  }
+}
+
+function clearOneKeyOutput(outWrap) {
+  if (!outWrap) return;
+  destroyResultToc(outWrap);
+  if (outWrap.__runbar) {
+    try { outWrap.__runbar.dispose(); } catch { /* ignore */ }
+    outWrap.__runbar = null;
+  }
+  outWrap.innerHTML = "";
+  outWrap.__rf_magic = null;
+  outWrap.__rf_brute = null;
+  outWrap.__rf_rerender = null;
 }
 
 // Bounded click arbitration, not the OS double-click setting (unavailable on the Web).
@@ -711,8 +949,13 @@ function goHome() {
 function selectOp(id) {
   const op = getOp(id);
   if (!op) return;
- // 惰载：stub 未落地时先按需加载算法文件，就绪后重入（列表/搜索等元数据面不受影响）
-  if (op.__stub) { ensureOp(id).then(() => selectOp(id)).catch((e) => toast(String((e && e.message) || e))); return; }
+ // 惰载：stub 未落地时先按需加载算法文件，就绪后重入（列表/搜索等元数据面不受影响）。
+  // 先写 hash 表明意图；加载期间用户切走/选别的 op 时，旧续体不得把页面抢回来。
+  if (op.__stub) {
+    writeHash("#/op/" + id);
+    ensureOp(id).then(() => { if (location.hash === "#/op/" + id) selectOp(id); }).catch((e) => toast(String((e && e.message) || e)));
+    return;
+  }
   state.view = "op";
   state.opId = id;
   state.params = defaultParams(op);
@@ -745,7 +988,7 @@ function writeHash(h) {
 function applyRoute() {
   const h = location.hash || "";
   const m = h.match(/^#\/op\/(.+)$/);
-  if (h === "#/recipe") {
+  if (h === "#/recipe" || h.startsWith("#/recipe?")) {
     state.view = "recipe";
     state.opId = null;
     state.expandedCats = [];
@@ -812,8 +1055,11 @@ function applyRoute() {
 function selectOpFromRoute(id) {
   const op = getOp(id);
   if (!op) return;
- // 惰载：深链直达未加载 op 时先按需加载，就绪后重入
-  if (op.__stub) { ensureOp(id).then(() => selectOpFromRoute(id)).catch((e) => toast(String((e && e.message) || e))); return; }
+  // 惰载：深链直达未加载 op 时先按需加载，就绪后重入；期间 hash 已变则不再抢回
+  if (op.__stub) {
+    ensureOp(id).then(() => { if (location.hash === "#/op/" + id) selectOpFromRoute(id); }).catch((e) => toast(String((e && e.message) || e)));
+    return;
+  }
   state.view = "op";
   state.opId = id;
   state.params = defaultParams(op);
@@ -834,14 +1080,27 @@ function renderWorkspaceInner() {
   // 离开字符显示器视图：释放 _rerender 闭包对旧视图 DOM 的引用（性能审计 H3，
   // hex 满载可达 13.9 万节点，不释放则逛其他视图的整段时间不可回收）
   if (state.view !== "inspect") disposeInspectView();
+  if (!(state.view === "op" && state.opId === "stegSolve")) disposeStegSolveView();
  // 真实视图切换（含 op→op）即取消在途重运算——此前取消仅运行卡按钮一处调用点，
  // 切页后结果无处落地但 Worker 继续满载至自然结束（Worker 池常驻复用，terminate 后惰性
  // 重建，无破坏性）。仅在 view/opId 变化时取消：视图内重渲染（edu 懒加载/语言切换等
  // 同 view 重渲）不触发，避免误杀。
   if (state.view !== _wsView || state.opId !== _wsOpId) {
     if (opRunBusy()) cancelOpRun();
+    if (state.view !== "home" && _activeFileCtrl) { _activeFileCtrl.cancelled = true; _activeFileCtrl = null; }
     _wsView = state.view;
     _wsOpId = state.opId;
+  }
+  // 结果目录挂在 body 上，不随 $ws.innerHTML 清空；离开首页/重渲染前必须显式销毁，
+  // 否则旧目录会悬浮在别的页面上，且每次回首页都会多叠一个。
+  {
+    const oldOut = $ws.querySelector(".onekey-out");
+    if (oldOut && oldOut.__toc) destroyResultToc(oldOut);
+    // 文件报告/文本目录的 host 是 .home-hero；离开首页时旧宿主会被 innerHTML 清掉，
+    // 但 body 上的 .rtoc 不会自动消失，必须在这里显式销毁，否则会带到 op/about 页。
+    for (const host of document.querySelectorAll(".home-hero")) {
+      if (host.__toc) destroyResultToc(host);
+    }
   }
   $ws.innerHTML = "";
   if (state.view === "home") return renderHome();
@@ -976,6 +1235,9 @@ function renderHome() {
   if (state.homeStrength === undefined) {
     state.homeStrength = loadLastConfig("text") || { level: "normal", customIds: [] };
   }
+  if (state.fileStrength === undefined) {
+    state.fileStrength = loadLastConfig("file") || { level: "normal", customIds: [] };
+  }
   const strengthBtn = el("button", { class: "act-btn magic-strength-btn", type: "button" },
     msym("tune"), el("span", { class: "magic-strength-text" }, ""));
   const syncStrengthBtn = () => {
@@ -988,16 +1250,23 @@ function renderHome() {
   syncStrengthBtn();
   strengthBtn.addEventListener("click", () => {
     openDecodeStrength({
-      cfg: { text: state.homeStrength },    // 弹窗仍接受 text 键名（兼容旧形状的 src = cfg.text）
+      cfg: { text: state.homeStrength, file: state.fileStrength },
       onApply: (cfg) => {
-        state.homeStrength = cfg;            // cfg 现在是 {level, customIds} 单层
-        saveLastConfig(cfg, "text");
+        state.homeStrength = (cfg && cfg.text) || cfg;
+        state.fileStrength = (cfg && cfg.file) || state.fileStrength;
+        saveLastConfig(state.homeStrength, "text");
+        saveLastConfig(state.fileStrength, "file");
         syncStrengthBtn();
       },
     });
   });
   const runBtn = el("button", { class: "act-btn primary magic-run" },
     msym("bolt"), el("span", {}, t("ui.home.runBtn")));
+  let filePicker = null;
+  const uploadBtn = el("button", {
+    class: "chip-btn", type: "button", title: t("ui.home.uploadFile"),
+    onclick: () => { if (filePicker) filePicker.click(); },
+  }, msym("attach_file"), el("span", {}, t("ui.home.uploadFile")));
   const toolbar = el("div", { class: "magic-toolbar" },
  // 第一行：目标特征
     el("div", { class: "magic-row" },
@@ -1007,9 +1276,10 @@ function renderHome() {
     el("div", { class: "magic-row" },
       el("label", { class: "magic-crib-label" }, t("ui.home.keyLabel"), keyInput),
     ),
- // 第三行：解码强度 + 一键解码按钮
+ // 第三行：解码强度 + 上传文件 + 一键解码按钮
     el("div", { class: "magic-row magic-row-actions" },
       strengthBtn,
+      uploadBtn,
       runBtn,
     ),
   );
@@ -1021,6 +1291,15 @@ function renderHome() {
   input.value = state.homeInput || "";              // 恢复上次输入，切菜单再回来进度不丢
   const fileReport = el("div", { class: "file-report" });
   const outWrap = el("div", { class: "onekey-out" });
+  // 文件报告里的「送入智能解码」按钮走这个回调（QR/字符串/流量明文复用）。
+  outWrap.__sendToHome = (text) => {
+    if (!text) return;
+    input.value = String(text);
+    state.homeInput = input.value;
+    forceTrigger();
+    try { input.focus(); } catch { /* ignore */ }
+  };
+  fileReport.__sendToHome = outWrap.__sendToHome;
  // 超长横幅放在输入框「上面」（原在 outWrap 里=输入框下方，看不见）。独立容器，插在 input 前。
   const topBanner = el("div", { class: "onekey-topbanner" });
 
@@ -1035,7 +1314,9 @@ function renderHome() {
    // 文件结果立即清除——否则后续文本解码时文件卡片仍挂在 outWrap 上方，
    // 且清空工具条只清输入框，文件结果没有任何入口可清（产品负责人 09-25 报告的残留 bug）。
    // 横幅同理（上一轮的超长提示与本次输入无关）。
-    fileReport.innerHTML = "";
+    clearFileReportView(fileReport);
+    if (_activeFileCtrl) { _activeFileCtrl.cancelled = true; _activeFileCtrl = null; }
+    refreshResultToc(outWrap);
     if (topBanner) topBanner.innerHTML = "";
   });
   keyInput.addEventListener("input", () => { state.homeKey = keyInput.value; });
@@ -1049,38 +1330,61 @@ function renderHome() {
  // 回到首页时若有上次解码结果的输入，恢复渲染一次（不丢上次分析；一次性非逐字，不卡）。
   if ((state.homeInput || "").trim()) setTimeout(forceTrigger, 0);
 
- // 同一框接收拖放：文本文件读进框跑解码，二进制文件跑文件分析
+ // 同一入口处理拖入/点选文件：文本文件读进框跑解码，二进制文件跑文件分析；
+ // 图片若扫出 LSB 文本载荷，自动填回输入框并继续智能解码（用户 2026-10-26 反馈）。
+  const processFile = async (f) => {
+ // 读文件前先清空输入框 + 缓存 + 旧文件报告 + 旧解码卡片 + 旧横幅。
+ // 否则框里已有文本时再拖文件，会「旧文本 + 新文件内容」各跑一遍 → 解码两次；
+ // 且上一轮 outWrap 里的解码卡片不清会残留在本轮文件卡片下方（fileReport 在 outWrap 上方）。
+    input.value = "";
+    state.homeInput = "";
+    clearFileReportView(fileReport);
+    clearOneKeyOutput(outWrap);
+    if (topBanner) topBanner.innerHTML = "";
+ // 令牌 +1：作废上一轮 runOneKey 的过期异步（穷举/magic 回来的迟到结果不再往 outWrap 写）。
+    runOneKey._token = (runOneKey._token || 0) + 1;
+    // 先认领本轮文件令牌、立刻取消旧分析，再读文件：避免慢读的旧文件反过来覆盖新文件。
+    const token = ++_fileRunSeq;
+    if (_activeFileCtrl) _activeFileCtrl.cancelled = true;
+    const ctrl = { paused: false, cancelled: false };
+    _activeFileCtrl = ctrl;
+    const buf = await f.arrayBuffer();
+    if (ctrl.cancelled || token !== _fileRunSeq) return;
+    const bytes = new Uint8Array(buf);
+ // 判定文本 vs 二进制：改用「UTF-8 能否无损解码」而非高位字节占比。
+ // 旧法 high/n<0.30 会把中文 UTF-8 文本（高位占比远超 30%）误判成二进制转 hex。
+    if (isTextFile(bytes, f.name)) {
+      if (_activeFileCtrl === ctrl) _activeFileCtrl = null;
+      input.value = new TextDecoder("utf-8").decode(bytes);
+      state.homeInput = input.value;
+      forceTrigger();   // 拖入/上传文本文件 = 明确意图，直接解码一次（非逐字，不卡）
+      return;
+    }
+    const info = await handleFile(f, fileReport, state.fileStrength, ctrl, token, { bytes });
+    if (_activeFileCtrl === ctrl) _activeFileCtrl = null;
+    if (info && info.lsbText) {
+      input.value = info.lsbText;
+      state.homeInput = info.lsbText;
+      forceTrigger();
+    }
+  };
   input.addEventListener("dragover", (e) => { e.preventDefault(); input.classList.add("dragover"); });
   input.addEventListener("dragleave", () => input.classList.remove("dragover"));
   input.addEventListener("drop", async (e) => {
     e.preventDefault();
     input.classList.remove("dragover");
     const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (!f) return;
- // 读文件前先清空输入框 + 缓存 + 旧文件报告 + 旧解码卡片 + 旧横幅。
- // 否则框里已有文本时再拖文件，会「旧文本 + 新文件内容」各跑一遍 → 解码两次；
- // 且上一轮 outWrap 里的解码卡片不清会残留在本轮文件卡片下方（fileReport 在 outWrap 上方）。
-    input.value = "";
-    state.homeInput = "";
-    fileReport.innerHTML = "";
-    outWrap.innerHTML = "";
-    if (topBanner) topBanner.innerHTML = "";
- // 令牌 +1：作废上一轮 runOneKey 的过期异步（穷举/magic 回来的迟到结果不再往 outWrap 写）。
-    runOneKey._token = (runOneKey._token || 0) + 1;
-    const buf = await f.arrayBuffer();
-    const bytes = new Uint8Array(buf);
- // 判定文本 vs 二进制：改用「UTF-8 能否无损解码」而非高位字节占比。
- // 旧法 high/n<0.30 会把中文 UTF-8 文本（高位占比远超 30%）误判成二进制转 hex。
-    if (isTextFile(bytes, f.name)) {
-      input.value = new TextDecoder("utf-8").decode(bytes);
-      state.homeInput = input.value;
-      forceTrigger();   // 拖入文本文件 = 明确意图，直接解码一次（非逐字，不卡）
-    } else {
-      await handleFile(f, fileReport);
-    }
+    if (f) await processFile(f);
   });
-
- // 首页一把梭输入框接通用编辑框工具条（粘贴/清空/复制/全选/导出/字号 + Ctrl+A/S）。
+  filePicker = el("input", {
+    type: "file", style: "display:none",
+    onchange: async (e) => {
+      const f = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (f) await processFile(f);
+    },
+  });
+  // 首页一把梭输入框接通用编辑框工具条（粘贴/清空/复制/全选/导出/字号 + Ctrl+A/S）。
  // onChange 只存 state 不自动解码——解码统一由「一键解码」按钮触发（与逐字输入一致，不卡）。
   const homeToolbar = attachEditorToolbar(input, {
     onChange: () => {
@@ -1088,21 +1392,115 @@ function renderHome() {
      // 工具条「清空」= 完整清场：输入 + 文件分析报告 + 解码卡片 + 横幅全部归零，
      // 不再只清输入框（文件结果/解码卡片残留且无法清理的另一半根因）。
       if (!input.value.trim()) {
-        fileReport.innerHTML = "";
-        outWrap.innerHTML = "";
+        clearFileReportView(fileReport);
+        clearOneKeyOutput(outWrap);
         if (topBanner) topBanner.innerHTML = "";
       }
     },
     exportName: "onekey-input.txt",
   });
 
-  wrap.append(toolbar, topBanner, homeToolbar, input, fileReport, outWrap);
+  wrap.append(toolbar, topBanner, homeToolbar, input, filePicker, fileReport, outWrap);
   $ws.append(wrap);
   input.focus();
 }
 
 // 看门狗软死线（毫秒）：到点先渲染已得结果 + 倒计时读到此值，之后 Worker 后台继续。
 const SOFT_DEADLINE_MS = 5000;
+
+// 一键解码运行条：当前算法 + 总进度 + 暂停/继续/终止。
+// 放在 outWrap 内但由 renderOneKeySnapshot 每次重建时保留（见 __runbar）。
+const PHASE_LABEL = {
+  detect: "识别算法",
+  param: "参数扫描",
+  plain: "单层解码",
+  keyed: "密钥尝试",
+  bfs: "多层链式",
+  file: "文件分析",
+  done: "完成",
+};
+function createRunBar(outWrap, opts = {}) {
+  const title = el("span", { class: "onekey-runbar-algo" }, "准备中…");
+  const pct = el("span", { class: "onekey-runbar-pct" }, "0%");
+  const pauseText = el("span", {}, "暂停");
+  const pause = el("button", { type: "button", class: "onekey-runbar-btn" }, msym("pause"), pauseText);
+  const stop = el("button", { type: "button", class: "onekey-runbar-btn danger" }, msym("stop"), el("span", {}, "终止"));
+  const fill = el("div", { class: "onekey-progress-fill" });
+  const bar = el("div", { class: "onekey-runbar", role: "status", "aria-live": "polite" },
+    el("div", { class: "onekey-runbar-head" },
+      msym("bolt", "onekey-runbar-glyph"),
+      el("span", { class: "onekey-runbar-title" }, opts.title || "一键解码"),
+      title,
+      pct,
+      pause,
+      stop,
+    ),
+    el("div", { class: "onekey-progress-bar" }, fill),
+  );
+  let paused = false;
+  let stopped = false;
+  let lastPercent = 0;
+  const api = {
+    element: bar,
+    isPaused: () => paused,
+    isStopped: () => stopped,
+    setProgress(p) {
+      if (stopped || paused) return;   // 暂停期间冻结进度，别把「已暂停」覆盖成算法名
+      const percent = Math.max(lastPercent, Math.min(100, Math.round(Number(p && p.percent) || 0)));
+      lastPercent = percent;
+      fill.style.width = percent + "%";
+      pct.textContent = percent + "%";
+      const phase = PHASE_LABEL[p && p.phase] || (p && p.phase) || "解码中";
+      const label = (p && (p.opId || p.label)) || "";
+      title.textContent = label ? `${phase} · ${label}` : phase;
+    },
+    setLabel(txt) { if (!stopped) title.textContent = txt; },
+    setPaused(on) {
+      paused = !!on;
+      pauseText.textContent = paused ? "继续" : "暂停";
+      const ico = pause.querySelector(".msym");
+      if (ico) ico.innerHTML = iconSvg(paused ? "play_arrow" : "pause");
+      pause.classList.toggle("active", paused);
+      if (!stopped) title.textContent = paused ? "已暂停 · 可滚动查看已得结果" : "继续中…";
+      bar.classList.toggle("paused", paused);
+    },
+    setDone(n) {
+      if (stopped) return;
+      paused = false;
+      pause.disabled = true;
+      stop.disabled = true;
+      fill.style.width = "100%";
+      pct.textContent = "100%";
+      title.textContent = opts.doneText ? opts.doneText(n) : `完成 · ${n} 个候选`;
+      bar.classList.add("done");
+    },
+    setStopped() {
+      stopped = true;
+      paused = false;
+      pause.disabled = true;
+      stop.disabled = true;
+      title.textContent = opts.stoppedText || "已终止 · 保留已得结果";
+      bar.classList.add("stopped");
+    },
+    dispose() { bar.remove(); },
+  };
+  pause.addEventListener("click", () => {
+    if (stopped) return;
+    if (paused) {
+      if (opts.onResume) opts.onResume(); else resumeMagic();
+      api.setPaused(false);
+    } else {
+      if (opts.onPause) opts.onPause(); else pauseMagic();
+      api.setPaused(true);
+    }
+  });
+  stop.addEventListener("click", () => {
+    if (stopped) return;
+    api.setStopped();
+    if (opts.onStop) opts.onStop(); else cancelMagic();
+  });
+  return api;
+}
 
 // 收集「启用了自定义实现」的 opId 集合（magic / 穷举排除用）。
 // 直接问 store 要（一次读取），不逐个 op 查 localStorage——608 个 op 那样查会拖慢每次一键解码。
@@ -1117,6 +1515,8 @@ async function runOneKey(text, outWrap, crib, strengthCfg, force = false, topBan
   outWrap.__rf_magic = null;
   outWrap.__rf_brute = null;
   outWrap.__rf_rerender = null;
+  destroyResultToc(outWrap);
+  if (outWrap.__runbar) { try { outWrap.__runbar.dispose(); } catch { /* ignore */ } outWrap.__runbar = null; }
   outWrap.innerHTML = "";
   if (topBanner) topBanner.innerHTML = "";   // 横幅容器每次运行先清空
   const q = text.trim();          // 注意：不要用 t，会遮蔽 i18n 的 t()
@@ -1185,13 +1585,20 @@ async function runOneKey(text, outWrap, crib, strengthCfg, force = false, topBan
  // 用户启用了自定义实现的 op 不进一键解码（原版结果误导 + 不跑用户代码）
   const _ciIds = activeCustomImplIds();
   if (_ciIds.length) opts.excludeOps = _ciIds;
+ // 流式结果：R3 的 onPartial 每 ~150ms 回传一次快照；先画运行条，候选逐算法出现。
+  const runBar = createRunBar(outWrap);
+  outWrap.__runbar = runBar;
   opts.onPartial = (parts) => {
     if (token !== runOneKey._token) return;  // 已被新输入接管，弃
     renderMagicCands(outWrap, q, parts, crib);
   };
+  opts.onProgress = (p) => {
+    if (token !== runOneKey._token) return;
+    runBar.setProgress(p);
+  };
 
- // 立即画原始输入卡占位（不等解码/软死线）——否则慢输入下 outWrap 已清空、5s 内画面全空，
- // 用户以为坏了。解码有结果后 renderMagicCands 整体重渲染覆盖此占位（幂等）。
+ // 立即画运行条 + 原始输入卡占位（不等解码）——慢输入下也能看到在跑什么。
+  outWrap.append(runBar.element);
   appendRawCard(outWrap, q);
 
   startCountdown();
@@ -1199,14 +1606,29 @@ async function runOneKey(text, outWrap, crib, strengthCfg, force = false, topBan
   try {
     cands = await runMagic(q, opts);
   } catch (e) {
- // { cancelled:true } = 被新输入 / 中断接管 → 静默退出，不渲染（新任务会自己渲染）。
-    if (e && e.cancelled) { clearCountdown(); return; }
+ // { cancelled:true} = 被新输入 / 用户终止 → 静默退出。
+ // 用户点「终止」时 runBar 已标记 stopped，保留已得结果与进度条；新输入接管则清理。
+    if (e && e.cancelled) {
+      clearCountdown();
+      if (!runBar.isStopped()) {
+        try { runBar.dispose(); } catch { /* ignore */ }
+        if (outWrap.__runbar === runBar) outWrap.__runbar = null;
+      }
+      return;
+    }
     cands = [];  // 真异常降级为空结果，走「无候选」提示
   }
   clearCountdown();
   if (token !== runOneKey._token) return;  // 已有更新的输入，弃
 
   renderMagicCands(outWrap, q, cands, crib);
+  runBar.setDone(cands.length);
+  setTimeout(() => {
+    if (!runBar.isStopped() && outWrap.__runbar === runBar) {
+      runBar.dispose();
+      outWrap.__runbar = null;
+    }
+  }, 2500);
 
  // 暴力爆破独立通道（decodeProfile 独立池勾选的 op）：主排序之外单独归组跑，
  // 结果追加在候选区末尾、不参与 magic 综合分排序。每个 op 30s 兜底超时。
@@ -1227,6 +1649,105 @@ async function runOneKey(text, outWrap, crib, strengthCfg, force = false, topBan
     }
     if (token === runOneKey._token && results.length) renderBruteResults(outWrap, q, results);
   }
+
+  // 固定头/固定形态触发器：data:image 内嵌图、RGB 数值文本、带密钥 SNOW。
+  // 这些不是普通文本编码，magic 的 decode 候选覆盖不到；单独补一段仍算「一键」。
+  try { await appendSpecialTextSections(outWrap, q, token, key); } catch { /* 特殊通道失败不影响主结果 */ }
+}
+
+// 固定头/固定形态补充卡片（在 magic/爆破结果之后追加；不参与主排序）。
+async function appendSpecialTextSections(outWrap, q, token, key) {
+  if (token !== runOneKey._token) return;
+  const sp = await import("./core/specialInput.js");
+  const imgs = sp.findDataUriImages(q);
+  for (let i = 0; i < imgs.length; i++) {
+    if (token !== runOneKey._token) return;
+    const img = imgs[i];
+    const host = el("div", { class: "onekey-card onekey-special" },
+      el("div", { class: "ok-name" },
+        el("span", { class: "ok-verdict" }, "内嵌图"),
+        el("span", {}, `检测到 data:image 固定头（声明 ${img.declaredMime || img.mime}，实际 ${img.mime}）`),
+      ),
+    );
+    const body = el("div", { class: "onekey-special-body" });
+    host.append(body);
+    outWrap.append(markTocCard(host, { title: "内嵌图片分析 " + (i + 1), color: "var(--primary)", badge: "data:image" }));
+    const pseudo = {
+      name: "embedded_datauri_" + (i + 1) + "." + img.ext,
+      size: img.bytes.length,
+      arrayBuffer: async () => img.bytes.slice().buffer,
+    };
+    await handleFile(pseudo, body, null, null, 0, { isolated: true });
+    if (token !== runOneKey._token) return;
+  }
+
+  if (!imgs.length && sp.looksNumericImage(q)) {
+    const op = getOp("dataToImage");
+    if (op && typeof op.run === "function") {
+      let out;
+      try { out = await op.run(q, defaultParams(op)); } catch (e) { out = null; }
+      if (out && typeof out === "object" && Array.isArray(out.files) && out.files.length) {
+        const card = el("div", { class: "onekey-card onekey-special" },
+          el("div", { class: "ok-name" },
+            el("span", { class: "ok-verdict" }, "数值成图"),
+            el("span", {}, "检测到 RGB(A)/网格数值文本 → 数值数据渲染成图"),
+          ),
+        );
+        const txt = el("div", { class: "file-section-body" }, out.text || "");
+        card.append(txt);
+        const bar = el("div", { class: "file-section-actions" });
+        for (const ent of productFileEntries(out)) {
+          const url = URL.createObjectURL(new Blob([ent.bytes], { type: ent.mime || "image/png" }));
+          setTimeout(() => { try { URL.revokeObjectURL(url); } catch { /* ignore */ } }, 120000);
+          if ((ent.mime || "").startsWith("image/")) {
+            const im = el("img", {
+              class: "io-out-file-preview", src: url, alt: ent.name,
+              style: "max-width:min(100%,520px);max-height:420px;border-radius:6px;cursor:zoom-in;background:#fff;border:1px solid var(--outline);margin-top:8px;image-rendering:pixelated",
+            });
+            im.addEventListener("click", (e) => { e.stopPropagation(); openImagePreview(url, ent.name, ent.bytes); });
+            card.append(im);
+          }
+          bar.append(el("button", {
+            class: "file-section-act",
+            onclick: (e) => { e.stopPropagation(); downloadBytes(ent.bytes, ent.name, ent.mime); },
+          }, msym("download", "file-act-glyph"), el("span", {}, `下载 ${ent.name}`)));
+        }
+        if (bar.children.length) card.append(bar);
+        outWrap.append(markTocCard(card, { title: "数值数据渲染成图", color: "var(--primary)", badge: "成图" }));
+      }
+    }
+  }
+
+  if (key && sp.looksSnowText(q)) {
+    const op = getOp("snow");
+    if (op && typeof op.decode === "function") {
+      let r = null;
+      try { r = await op.decode(q, { password: key }); } catch { r = null; }
+      if (r && (typeof r === "string" || (r && r.text))) {
+        const text = typeof r === "string" ? r : r.text;
+        const card = el("div", { class: "onekey-card onekey-special" },
+          el("div", { class: "ok-name" },
+            el("span", { class: "ok-verdict ok-verdict-confirmed" }, "SNOW"),
+            el("span", {}, "行尾空白隐写（使用工具栏密钥）"),
+          ),
+        );
+        const { wrap } = editableResultValue(text, { limit: 2000 });
+        card.append(wrap);
+        if (r && Array.isArray(r.files)) {
+          const bar = el("div", { class: "file-section-actions" });
+          for (const ent of productFileEntries(r)) {
+            bar.append(el("button", {
+              class: "file-section-act",
+              onclick: (e) => { e.stopPropagation(); downloadBytes(ent.bytes, ent.name, ent.mime); },
+            }, msym("download", "file-act-glyph"), el("span", {}, `下载 ${ent.name}`)));
+          }
+          card.append(bar);
+        }
+        outWrap.append(markTocCard(card, { title: "SNOW 空白隐写", color: "var(--success)", badge: "命中" }));
+      }
+    }
+  }
+  refreshResultToc(outWrap);
 }
 
 // 渲染暴力爆破结果（独立通道）：追加在魔法候选区末尾，单独一个折叠区。
@@ -1243,8 +1764,8 @@ function textHasStrongFlag(s) { return _STRONG_FLAG_UI_RE.test(String(s == null 
 function appendBruteResults(outWrap, results) {
   if (!results.length) return;
   const sec = el("details", { class: "onekey-brute" });
-  // 爆破默认折叠，让核心解码候选先露头；仅当某条爆破真命中 flag 时才展开。
-  sec.open = results.some((r) => textHasStrongFlag(r && r.output));
+  // 爆破结果一律默认折叠（含凯撒 25 位移）：用户 2026-10-26 明确要求爆破参数不自动展开。
+  sec.open = false;
   sec.append(el("summary", { class: "onekey-brute-sum" },
     msym("bolt"),
     el("span", {}, t("ui.home.bruteTitle", results.length)),
@@ -1261,7 +1782,7 @@ function appendBruteResults(outWrap, results) {
     list.append(item);
   }
   sec.append(list);
-  outWrap.append(sec);
+  outWrap.append(markTocCard(sec, { title: t("ui.home.bruteTitle", results.length), color: "var(--warning)", badge: String(results.length), group: "爆破参数" }));
 }
 
 // 渲染 magic 候选（供 onPartial 部分结果 + 最终结果两处复用；每次全量重渲染 outWrap）。
@@ -1280,6 +1801,7 @@ function renderOneKeySnapshot(outWrap) {
   const brute = outWrap.__rf_brute ? outWrap.__rf_brute.results : [];
 
   outWrap.innerHTML = "";
+  if (outWrap.__runbar) outWrap.append(outWrap.__runbar.element);
   appendRawCard(outWrap, q);
 
   // Leet 假命中标记与原排序规则保持不变；筛选只取保序子集。
@@ -1302,12 +1824,16 @@ function renderOneKeySnapshot(outWrap) {
       t("ui.home.empty"),
       el("div", { class: "onekey-hint" }, t("ui.home.emptyHint")),
     ));
+    refreshResultToc(outWrap);
     return;
   }
 
   // 摘要也来自筛选后的保序子集；不匹配时不展示全量候选的摘要。
-  if (shown.length && shown[0].chain.length > 0) {
-    outWrap.append(renderSummaryCard(shown[0], resultSearchState(outWrap)));
+  // 只有「可信」的最高分候选才做摘要：命中 flag/crib、置信度 ≥15%，否则不吹「最佳」。
+  const top = shown[0];
+  const topCredible = top && (top._cribHit || top.flagPriority || top.confidence >= 0.15);
+  if (topCredible && top.chain.length > 0) {
+    outWrap.append(renderSummaryCard(top, resultSearchState(outWrap)));
   }
 
   const groups = groupSweepCands(shown);
@@ -1316,6 +1842,7 @@ function renderOneKeySnapshot(outWrap) {
     else outWrap.append(renderCandCard(g.items[0], resultSearchState(outWrap)));
   }
   appendBruteResults(outWrap, shownBrute);
+  refreshResultToc(outWrap);
 }
 
 // 把 magic 候选按「爆破基算法」分组。参数扫描候选 chain 是单元素、形如
@@ -1324,24 +1851,65 @@ function renderOneKeySnapshot(outWrap) {
 // 分组保序：以每个 base 首次出现位置为组序，组内保 magic 综合分原顺序（最优在前）。
 function groupSweepCands(cands) { return groupSingleCandidates(cands); }
 
+// T700：证据等级 + 信号 chips。四态/信号键在 magic.finalizeResults 里生成，这里只做展示。
+function renderEvidenceChips(c) {
+  const row = el("div", { class: "ok-evidence" });
+  for (const k of c.chips || []) {
+    row.append(el("span", { class: "ok-chip ok-chip-" + k }, t("ui.magic.chip." + k)));
+  }
+  if (c.verdictReason) {
+    row.append(el("span", { class: "ok-verdict-reason" }, t("ui.magic.reason." + c.verdictReason)));
+  }
+  return row;
+}
+
+// 结果卡工具条：复制（取当前编辑内容）+ 编辑/完成切换。
+function attachCardTools(card, valEl, fullText) {
+  const tools = el("div", { class: "ok-card-tools" });
+  let editing = false;
+  const editBtn = el("button", { type: "button", class: "ok-copy-btn", title: "编辑结果" }, msym("edit"), el("span", {}, "编辑"));
+  editBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    editing = !editing;
+    if (editing) {
+      valEl.textContent = fullText;
+      valEl.setAttribute("contenteditable", "true");
+      valEl.classList.add("ok-editing");
+      valEl.focus();
+      editBtn.querySelector("span").textContent = "完成";
+    } else {
+      valEl.setAttribute("contenteditable", "false");
+      valEl.classList.remove("ok-editing");
+      editBtn.querySelector("span").textContent = "编辑";
+    }
+  });
+  tools.append(copyBtn(() => valEl.textContent), editBtn);
+  card.append(tools);
+  return tools;
+}
+
 // 三元组摘要行——置顶展示 magic 最优候选。
 // 格式：[解码N次] 明文（截断） + 混合解码结果: op1 › op2 › op3。
-// 复用 onekey-card 样式，点击复制明文。crib 命中则高亮。
+// 复用 onekey-card 样式；结果可直接编辑，复制按钮取编辑后内容。
 function renderSummaryCard(c, search = {}) {
   const chainLabel = c.chain
     .map((id) => { const o = getOp(id); return o ? opNameBi(o) : id; })
     .join(" › ");
   const isLong = c.result.length > 500;
   const valEl = el("div", { class: "ok-val" }, isLong ? c.result.slice(0, 500) + " …" : c.result);
-  highlightResult(valEl, c.result, c.signals, typeof search === "undefined" ? {} : search);
+  valEl.setAttribute("contenteditable", "false");
+ // 高光只在「真命中 flag/crib」或用户主动搜索时出现：普通 token 里的 key/ctf
+ // 子串不再染色（用户 2026-10-26 反馈高光误导）。
+  const marks = (c._cribHit || c.flagPriority || (search && search.query)) ? c.signals : [];
+  highlightResult(valEl, c.result, marks, typeof search === "undefined" ? {} : search);
   const card = el("div",
-    { class: "onekey-card onekey-summary" + (c._cribHit ? " crib-hit" : ""),
-      title: t("ui.common.clickCopy"),
-      onclick: () => { navigator.clipboard?.writeText(c.result); toast(t("ui.toast.copiedResult")); } },
+    { class: "onekey-card onekey-summary" + (c._cribHit ? " crib-hit" : "") },
     el("div", { class: "ok-name" },
+      el("span", { class: "ok-verdict ok-verdict-" + c.verdict }, t("ui.magic.verdict." + c.verdict)),
       el("span", { class: "onekey-summary-tag" }, t("ui.home.summaryDecoded", c.chain.length)),
       el("span", { class: "onekey-summary-title" }, t("ui.home.summaryTitle"))),
     valEl,
+    renderEvidenceChips(c),
     el("div", { class: "onekey-summary-chain" },
       el("span", { class: "onekey-summary-chain-label" }, t("ui.home.summaryChain") + ":"),
       el("span", { class: "onekey-summary-chain-vals" }, chainLabel)),
@@ -1357,10 +1925,54 @@ function renderSummaryCard(c, search = {}) {
     });
     card.append(expandBtn);
   }
-  return card;
+  attachCardTools(card, valEl, c.result);
+  return markTocCard(card, {
+    title: t("ui.home.summaryTitle") + " · " + t("ui.magic.verdict." + c.verdict),
+    color: verdictColor(c.verdict),
+    badge: "摘要",
+  });
 }
 
-// 单条候选卡（原 for 循环体抽出，行为不变）。
+// 单条候选卡。
+function appendResultActions(host, text, opts) {
+  if (!host || text == null) return null;
+  const s = String(text);
+  if (!s.trim() || s.length > 8192) return null;
+  try {
+    const locale = getLocale();
+    const r = classifyResult(s, { locale });
+    if (!r || r.kind === "text") return null;
+    return renderResultActions(host, r, { locale, ...(opts || {}) });
+  } catch {
+    return null;
+  }
+}
+
+function appendQrResultActions(host, text) {
+  if (!host || text == null) return null;
+  const s = String(text);
+  if (!s.trim()) return null;
+  const locale = getLocale();
+  const lines = s.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+  let count = 0;
+  for (const line of lines) {
+    if (count >= 4) break;
+    if (line.length > 2048) continue;
+    try {
+      const r = classifyResult(line, { locale });
+      if (!r || r.kind === "text") continue;
+      renderResultActions(host, r, { locale });
+      count++;
+    } catch { /* 单行分类失败不影响其余行 */ }
+  }
+  if (count) return count;
+  try {
+    const r = classifyResult(s, { locale });
+    if (r) return renderResultActions(host, r, { locale });
+  } catch { /* 忽略 */ }
+  return null;
+}
+
 function renderCandCard(c, search = {}) {
   const chainLabel = c.chain
     .map((id) => { const o = getOp(id); return o ? opNameBi(o) : id; })
@@ -1368,14 +1980,20 @@ function renderCandCard(c, search = {}) {
   const cribTag = c._cribHit ? " ●" : "";
   const isLong = c.result.length > 500;
   const valEl = el("div", { class: "ok-val" }, isLong ? c.result.slice(0, 500) + " …" : c.result);
-  highlightResult(valEl, c.result, c.signals, typeof search === "undefined" ? {} : search);
+  valEl.setAttribute("contenteditable", "false");
+  const marks = (c._cribHit || c.flagPriority || (search && search.query)) ? c.signals : [];
+  highlightResult(valEl, c.result, marks, typeof search === "undefined" ? {} : search);
   const card = el("div",
-    { class: "onekey-card" + (c._cribHit ? " crib-hit" : ""),
-      title: t("ui.common.clickCopy"),
-      onclick: () => { navigator.clipboard?.writeText(c.result); toast(t("ui.toast.copiedResult")); } },
-    el("div", { class: "ok-name" }, `${chainLabel}　·　${t("ui.home.confidence")} ${(c.confidence * 100).toFixed(0)}%${cribTag}`),
+    { class: "onekey-card" + (c._cribHit ? " crib-hit" : "") },
+    el("div", { class: "ok-name" },
+      el("span", { class: "ok-verdict ok-verdict-" + c.verdict }, t("ui.magic.verdict." + c.verdict)),
+      el("span", { class: "ok-chain" }, chainLabel),
+      el("span", { class: "ok-conf" }, `${t("ui.home.confidence")} ${(c.confidence * 100).toFixed(0)}%${cribTag}`)),
     valEl,
+    resultSourceLine(c, chainLabel),
+    renderEvidenceChips(c),
   );
+  appendResultActions(card, c.result);
   if (isLong) {
     const expandBtn = el("span", { class: "ok-expand" }, t("ui.common.expand", c.result.length));
     let expanded = false;
@@ -1387,7 +2005,12 @@ function renderCandCard(c, search = {}) {
     });
     card.append(expandBtn);
   }
-  return card;
+  attachCardTools(card, valEl, c.result);
+  return markTocCard(card, {
+    title: chainLabel || c.chain[0] || "结果",
+    color: verdictColor(c.verdict),
+    badge: `${(c.confidence * 100).toFixed(0)}%`,
+  });
 }
 
 // 爆破分组卡——同算法多参数分支收进一张 <details>。头显示算法名 + 分支数 + 最优分支
@@ -1397,11 +2020,16 @@ function renderBruteGroupCard(g, search = {}) {
   // 参数扫描组默认折叠；仅当组内某分支命中 flag/crib 且分支数不大时自动展开。
   // 仿射 311 分支这类大组即使命中也不整组摊开——顶部摘要卡已展示 flag 解，
   // 整组展开只会把其余候选推到屏幕外。小参数组（凯撒 25 等）命中则展开。
-  const hasHit = g.items.some((c) => c.flagPriority || c.matchesCrib);
-  const box = el("details", { class: "onekey-card onekey-brute", open: hasHit && g.items.length <= 32 ? "" : null });
-  box.append(el("summary", { class: "ok-name" }, t("ui.home.bruteGroup", op ? opNameBi(op) : g.base, g.items.length)));
+  const box = el("details", { class: "onekey-card onekey-brute" });
+  const titleText = t("ui.home.bruteGroup", op ? opNameBi(op) : g.base, g.items.length);
+  box.append(el("summary", { class: "ok-name" }, titleText));
   for (const c of g.items) box.append(renderCandidateRow(c, { search, copied: () => toast(t("ui.toast.copiedResult")) }));
-  return box;
+  return markTocCard(box, {
+    title: titleText,
+    color: "var(--warning)",
+    badge: String(g.items.length),
+    group: "爆破参数",
+  });
 }
 
 // 原始输入卡——置顶展示用户原文，明确标注「原始输入」。不做 crib 绿色高亮
@@ -1410,10 +2038,10 @@ function appendRawCard(outWrap, raw) {
   const isLong = raw.length > 500;
   const valEl = el("div", { class: "ok-val" }, isLong ? raw.slice(0, 500) + " …" : raw);
   const card = el("div",
-    { class: "onekey-card onekey-raw",
-      title: t("ui.common.clickCopy"),
-      onclick: () => { navigator.clipboard?.writeText(raw); toast(t("ui.toast.copiedResult")); } },
-    el("div", { class: "ok-name" }, t("ui.home.rawCard")),
+    { class: "onekey-card onekey-raw" },
+    el("div", { class: "ok-name" },
+      el("span", { class: "ok-verdict" }, "原文"),
+      el("span", {}, t("ui.home.rawCard"))),
     valEl,
   );
   if (isLong) {
@@ -1427,18 +2055,20 @@ function appendRawCard(outWrap, raw) {
     });
     card.append(expandBtn);
   }
+  const tools = el("div", { class: "ok-card-tools" }, copyBtn(() => raw));
+  card.append(tools);
  // 编辑框智能——原文卡检测不可见/零宽字符（CTF 零宽隐写常见考点）。
  // 仅在真检测到时才挂显形切换组件，避免干扰正常输入。
   try {
     const rep = invisibleReport(raw);
     if (rep.count > 0) {
- // host 拦截冒泡：组件内按钮点击不触发原文卡的复制 onclick。
       const invHost = el("div", { class: "onekey-raw-inv", onclick: (ev) => ev.stopPropagation() });
       card.append(invHost);
       invisibleToggle(invHost, raw);
     }
   } catch { /* 检测失败不影响原文卡 */ }
-  outWrap.append(card);
+  const marked = markTocCard(card, { title: t("ui.home.rawCard"), color: "var(--on-surface-var)", badge: "原文" });
+  outWrap.append(marked);
 }
 
 // 穷举追加区——首页「一把梭」结果后追加全解（所有解码器全跑全列）。
@@ -1482,19 +2112,22 @@ async function appendExhaustSection(outWrap, q, crib, token) {
     return;
   }
   if (!r.total) { box.remove(); return; }       // 无变化项，撤掉空区
-  // 默认折叠；仅当穷举命中 flag/crib 时自动展开，让命中一眼可见。
-  box.open = r.hits > 0;
+  // 穷举/爆破参数区一律默认折叠（用户 2026-10-26 口径）。
+  box.open = false;
 
   summary.append(el("span", { class: "onekey-exhaust-stat" }, t("ui.exhaust.stat", r.total, r.hits)));
   for (const g of r.groups) {
-    const catBox = el("div", { class: "exhaust-cat" });
-    catBox.append(el("div", { class: "exhaust-cat-head" },
+    const catBox = el("details", { class: "exhaust-cat", open: "" });
+    catBox.append(el("summary", { class: "exhaust-cat-head" },
       el("span", { class: "exhaust-cat-name" }, catNameById(g.cat)),
       el("span", { class: "exhaust-cat-count" }, String(g.items.length)),
     ));
     for (const a of g.algos || []) {
-      const group = el("details", { class: "exhaust-algo", open: a.hasStrongHit ? "" : null });
-      group.append(el("summary", {}, opNameBi(getOp(a.baseOpId) || { id:a.baseOpId, name:a.baseOpId })));
+      const group = el("details", { class: "exhaust-algo" });
+      group.append(el("summary", { class: "exhaust-algo-head" },
+        el("span", { class: "exhaust-algo-name" }, opNameBi(getOp(a.baseOpId) || { id:a.baseOpId, name:a.baseOpId })),
+        el("span", { class: "exhaust-algo-meta" }, t("ui.exhaust.branchCount", a.items.length)),
+      ));
       for (const it of a.items) group.append(renderCandidateRow(it));
       catBox.append(group);
     }
@@ -1556,7 +2189,12 @@ function ensureAnalysisChains() {
       import("./core/imageAnalysis.js"),
       import("./core/audioAnalysis.js"),
     ]).then(([fa, ia, aa]) => {
-      _analysisChains = { analyzeFile: fa.analyzeFile, analyzeImageAsync: ia.analyzeImageAsync, analyzeAudio: aa.analyzeAudio };
+      _analysisChains = {
+        analyzeFile: fa.analyzeFile,
+        analyzeImageAsync: ia.analyzeImageAsync,
+        analyzeAudio: aa.analyzeAudio,
+        finalizeSections: fa.finalizeSections,
+      };
       return _analysisChains;
     }).catch((e) => { _analysisChainsLoading = null; throw e; });
   }
@@ -1564,23 +2202,106 @@ function ensureAnalysisChains() {
 }
 
 // ---- 文件分析报告渲染 ----
-async function handleFile(file, outWrap) {
+let _fileRunSeq = 0;
+let _activeFileCtrl = null;
+async function waitForFileControl(control) {
+  if (!control) return true;
+  while (control.paused && !control.cancelled) {
+    await new Promise((r) => setTimeout(r, 80));
+  }
+  return !control.cancelled;
+}
+
+async function handleFile(file, outWrap, fileStrength, control = null, token = 0, opts = {}) {
   try { await ensureAll(); } catch { /* 加载尽力而为，缺 op 由各分析器自行降级 */ } // 文件分析走全量 op 面（惰载）
+  const isolated = !!opts.isolated; // 内嵌 data:image 伪文件：不能抢占/改写主文件分析的全局令牌
+  const fileCfg = fileStrength && fileStrength.level
+    ? fileStrength
+    : (loadLastConfig("file") || { level: "normal", customIds: [] });
+  const fileResolved = resolveDecodeConfig({ ...fileCfg, scope: "file" });
+  const ctrl = control || { paused: false, cancelled: false };
+  const myToken = isolated ? 0 : (token || ++_fileRunSeq);
+  const stale = () => !isolated && myToken !== _fileRunSeq;
+  const runBar = createRunBar(outWrap, {
+    title: "文件 / 图像分析",
+    onPause: () => { ctrl.paused = true; },
+    onResume: () => { ctrl.paused = false; },
+    onStop: () => { ctrl.cancelled = true; },
+    doneText: (n) => `完成 · ${n} 段分析`,
+    stoppedText: "已终止 · 显示已得结果",
+  });
   outWrap.innerHTML = "";
-  outWrap.append(el("div", { class: "file-report-loading" }, t("ui.file.loading", file.name)));
+  outWrap.append(runBar.element, el("div", { class: "file-report-loading" }, t("ui.file.loading", file.name)));
+  let chains = null, bytes = null, report = null, lsbText = "";
+  // 每次只落一张卡并让浏览器画一帧：结构/图像/隐写无论哪条链先出结果，都逐张出现。
+  let sectionQueue = Promise.resolve();
+  const queueSection = (s, source) => {
+    if (!s) return;
+    sectionQueue = sectionQueue.then(async () => {
+      if (stale() || ctrl.cancelled) return;
+      try { chains.finalizeSections([s], { source }); } catch { /* ignore */ }
+      appendFileReportSection(outWrap, report, s, runBar);
+      await new Promise((r) => setTimeout(r, 16));
+    });
+  };
+  const flushSections = () => sectionQueue;
+  const progress = (label, percent) => runBar.setProgress({ phase: "file", label, percent });
+  const waitOrThrow = async () => {
+    if (!(await waitForFileControl(ctrl))) {
+      const err = new Error("cancelled"); err.cancelled = true; throw err;
+    }
+    if (stale()) {
+      const err = new Error("superseded"); err.superseded = true; throw err;
+    }
+  };
   try {
-    const chains = await ensureAnalysisChains(); // 三链懒载（首次拖入触发；失败进 catch 显示错误）
-    const buf = await file.arrayBuffer();
-    const bytes = new Uint8Array(buf);
-    const report = await chains.analyzeFile(bytes, file.name);
+    progress("读取文件", 4);
+    await waitOrThrow();
+    chains = await ensureAnalysisChains(); // 三链懒载（首次拖入触发；失败进 catch 显示错误）
+    if (opts.bytes) bytes = opts.bytes;
+    else {
+      const buf = await file.arrayBuffer();
+      bytes = new Uint8Array(buf);
+    }
+    await waitOrThrow();
+    progress("结构分析", 12);
+    // 结构分析一开始就让出报告头；analyzeFile 每识别一段就回调，立即插一张卡。
+    report = { name: file.name, size: bytes.length, sections: [], __bytes: bytes };
+    ensureFileReportShell(outWrap, report, runBar);
+    const analyzed = await chains.analyzeFile(bytes, file.name, {
+      control: ctrl,
+      onSection: (s) => {
+        if (stale() || ctrl.cancelled) return;
+        if (!report.sections.includes(s)) report.sections.push(s);
+        try { chains.finalizeSections([s], { source: "fileAnalysis" }); } catch { /* ignore */ }
+        appendFileReportSection(outWrap, report, s, runBar);
+      },
+    });
+    if (stale() || ctrl.cancelled) return { lsbText: "" };
+    // 复制数组，切断 analyzeFile 的 push 回调；后续图像/隐写/ LSB 不能绕过 sectionQueue。
+    Object.assign(report, analyzed, { __bytes: bytes, sections: analyzed.sections.slice() });
+    for (const s of report.sections) {
+      if (!outWrap.__fileSectionCards || !outWrap.__fileSectionCards.has(s)) {
+        try { chains.finalizeSections([s], { source: "fileAnalysis" }); } catch { /* ignore */ }
+        appendFileReportSection(outWrap, report, s, runBar);
+      }
+    }
+    updateFileReportHeader(outWrap, report);
+    progress("图像 / 音频 / 反编补充", 30);
  // 补充分析器（独立模块，按类型分派）：图片(PNG/BMP)像素级 / 音频(WAV)频谱级。
  // 各返回 { sections }，追加到主报告末尾（补充信息，排主报告 alert>warn>info 之后合理）。
     try {
       const ext = (report.ext || "").toLowerCase();
       const mime = report.detected || "";
       let extra = null;
+      const emitImage = (s) => {
+        if (stale() || ctrl.cancelled || report.sections.includes(s)) return;
+        report.sections.push(s);
+        queueSection(s, "imageAnalysis");
+      };
       if (ext === "png" || ext === "bmp" || ext === "jpg" || ext === "jpeg" || ext === "gif" || /png|bmp|jpe?g|gif/i.test(mime)) {
-        extra = await chains.analyzeImageAsync(bytes, file.name, report.detected);
+        extra = await chains.analyzeImageAsync(bytes, file.name, report.detected, { control: ctrl, onSection: emitImage });
+        await flushSections();
       } else if (ext === "wav" || /wav|audio/i.test(mime)) {
         extra = chains.analyzeAudio(bytes, file.name, report.detected);
       } else if (ext === "7z" || bytes.length >= 6 && bytes[0] === 0x37 && bytes[1] === 0x7a && bytes[2] === 0xbc && bytes[3] === 0xaf && bytes[4] === 0x27 && bytes[5] === 0x1c) {
@@ -1600,21 +2321,140 @@ async function handleFile(file, outWrap) {
         }] };
       }
       if (extra && Array.isArray(extra.sections) && extra.sections.length) {
-        report.sections.push(...extra.sections);
+        for (const s of extra.sections) {
+          if (!report.sections.includes(s)) {
+            report.sections.push(s);
+            queueSection(s, s.source || "fileAnalysis");
+          }
+        }
+        await flushSections();
+        const merged = mergeImageFixSections(report.sections);
+        if (merged !== report.sections) replaceFileReportSections(outWrap, report, merged, runBar);
       }
-    } catch { /* 补充分析失败不阻断主报告 */ }
-    renderFileReport(outWrap, report);
+    } catch (e) {
+      if (e && (e.cancelled || e.superseded)) throw e;
+      // 补充分析失败不阻断主报告
+    }
+    await waitOrThrow();
+    progress("隐写自动尝试", 55);
+    // 算法级隐写自动尝试（OutGuess/steghide/WaterMarkH；F5/jsteg 仅手动）：
+    // 与结构取证分开，走独立线程 + 超时；无 Worker 时同步降级。
+    // 只对图片/音频跑，纯文本文件走 magic/特殊通道。
+    try {
+      const ext = (report.ext || file.name.split(".").pop() || "").toLowerCase();
+      if (/^(png|bmp|jpe?g|wav|mp3)$/.test(ext) && bytes.length <= 32 * 1024 * 1024) {
+        const { scanStegoFile } = await import("./core/stegoFileScan.js");
+        const stegoSeen = new Set();
+        const emitStego = (s) => {
+          if (!s || stegoSeen.has(s) || stale() || ctrl.cancelled) return;
+          stegoSeen.add(s);
+          report.sections.push(s);
+          queueSection(s, "stegoFileScan");
+        };
+        const stegoSections = await scanStegoFile(bytes, file.name, {
+          ext,
+          key: state.homeKey || "",
+          level: fileResolved.level,
+          allowOps: fileResolved.allowOps,
+          control: ctrl,
+          onSection: emitStego,
+        });
+        for (const s of stegoSections) emitStego(s);
+        await flushSections();
+      }
+    } catch (e) {
+      if (e && (e.cancelled || e.superseded)) throw e;
+      // 自动隐写通道失败不阻断主报告
+    }
+    await waitOrThrow();
+    progress("LSB 自动扫描", 80);
+ // 图片 LSB 自动扫描：文本载荷（base64/flag/token）回填输入框并继续智能解码。
+ // CTF 图片题最常见入口；此前只能在文件报告里手动找，一键解码输入框也点不了上传。
+    try {
+      const ext = (report.ext || "").toLowerCase();
+      const mime = report.detected || "";
+      if (ext === "png" || ext === "bmp" || /png|bmp/i.test(mime)) {
+        const { zstegScan } = await import("./core/zstegScan.js");
+        const z = zstegScan(bytes, { maxBit: 2 });
+        const plausible = (t) => t && t.length >= 4 && !t.includes("\uFFFD")
+          && !/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(t);
+        const looksPayload = (t) => /^[A-Za-z0-9+/]{8,}={0,2}$/.test(t)
+          || /[A-Za-z0-9_]{2,}\{[^{}\n]{1,}\}/.test(t)
+          || /^[A-Za-z0-9_]{10,}$/.test(t);
+        const best = z.candidates.find((c) => c.score >= 1.2 && plausible(c.text) && looksPayload(c.text));
+        if (best) lsbText = best.text;
+        const lines = [`LSB 全组合（bit0–2）已试 ${z.tried} 组；${z.width}×${z.height} · ${z.channels} 通道`];
+        for (const c of z.candidates.slice(0, 3)) {
+          lines.push(`#${c.score.toFixed(2)} [${c.note}] ${c.text.slice(0, 160) || "(空)"}`);
+        }
+        if (lsbText) lines.push("", `已自动送入智能解码：${lsbText.slice(0, 160)}`);
+        const lsbSec = {
+          id: "lsb-scan", title: "LSB 低位隐写（自动扫描）",
+          level: lsbText ? "warn" : "info", icon: "visibility",
+          body: lines.join("\n"),
+        };
+        report.sections.push(lsbSec);
+        queueSection(lsbSec, "fileAnalysis");
+        await flushSections();
+      }
+    } catch (e) {
+      if (e && (e.cancelled || e.superseded)) throw e;
+      // LSB 失败不阻断主报告
+    }
+    await waitOrThrow();
+    await flushSections();
+    progress("整理报告", 94);
+    // 图片/音频/反编补充段并入后再统一排序一次（考点置顶、熵/颜色/Binwalk 置底）。
+    if (typeof chains.finalizeSections === "function") {
+      try { report.sections = chains.finalizeSections(report.sections); } catch { /* 排序失败保留原顺序 */ }
+    }
+    report.__bytes = bytes;
+    if (stale()) return { lsbText: "" };
+    finishFileReport(outWrap, report, runBar);
+    return { lsbText };
   } catch (e) {
+    if (e && e.superseded) return { lsbText: "" };
+    if (e && e.cancelled) {
+      // 用户在输入框改文本会清空 fileReport；此时不能把已清掉的报告重新插回去。
+      const shellAlive = !!(outWrap.__fileSectionsHost && outWrap.__fileSectionsHost.isConnected);
+      if (report && !stale() && shellAlive) {
+        report.__bytes = bytes;
+        try { report.sections.push({ id: "analysis-stopped", title: "分析已终止", level: "info", icon: "stop", body: "用户终止，以下为已得结果。" }); } catch { /* ignore */ }
+        if (chains && typeof chains.finalizeSections === "function") {
+          try { report.sections = chains.finalizeSections(report.sections); } catch { /* ignore */ }
+        }
+        finishFileReport(outWrap, report, runBar);
+      } else if (!stale() && outWrap.childElementCount > 0) {
+        outWrap.innerHTML = "";
+        outWrap.append(el("div", { class: "file-report-error" }, "分析已终止，未产出结果。"));
+      }
+      return { lsbText: "" };
+    }
     outWrap.innerHTML = "";
     outWrap.append(el("div", { class: "file-report-error" }, t("ui.file.fail", e && e.message ? e.message : String(e))));
   }
 }
 
-function renderFileReport(outWrap, r) {
-  outWrap.innerHTML = "";
+function mergeImageFixSections(sections) {
+  const pngIdx = sections.findIndex((s) => s.id === "png-ihdr");
+  const fixIdx = sections.findIndex((s) => s.id === "img-sizerecover" && /PNG/i.test(s.title || ""));
+  if (pngIdx < 0 || fixIdx < 0) return sections;
+  const fix = sections[fixIdx];
+  const merged = {
+    ...fix,
+    id: "img-sizerecover",
+    title: "PNG 宽高校验与修复",
+    level: "alert",
+    body: fix.body,
+  };
+  const out = sections.filter((_, i) => i !== pngIdx && i !== fixIdx);
+  out.splice(Math.min(pngIdx, fixIdx), 0, merged);
+  return out;
+}
+
+function fileReportHeader(r) {
   const sizeStr = r.size > 1024 ? (r.size / 1024).toFixed(1) + " KB" : r.size + " B";
- // 报告头重排——文件名放大置顶为主标题，类型/大小作副信息行。
-  outWrap.append(el("div", { class: "file-report-header" },
+  return el("div", { class: "file-report-header" },
     msym("attach_file", "file-report-glyph"),
     el("div", { class: "file-report-headmain" },
       el("div", { class: "file-name" }, r.name || t("ui.file.unnamed")),
@@ -1624,46 +2464,251 @@ function renderFileReport(outWrap, r) {
         r.ext ? el("span", { class: "file-ext" }, "." + r.ext) : null,
       ),
     ),
-  ));
- // sections 已由 fileAnalysis 按 alert>warn>info 排好序，最重要的在最上。
- // 每张卡带 section.icon（风格统一的 Material 小图标），标题前注入，颜色随 level 区分。
+  );
+}
+
+function ensureFileReportShell(outWrap, r, runBar) {
+  const old = outWrap.__fileSectionsHost;
+  if (old && old.isConnected) return old;
+  outWrap.innerHTML = "";
+  if (runBar && runBar.element) outWrap.append(runBar.element);
+  outWrap.append(fileReportHeader(r));
+  const host = el("div", { class: "file-report-sections" });
+  outWrap.append(host);
+  outWrap.__fileSectionsHost = host;
+  outWrap.__fileSectionCards = new Map();
+  return host;
+}
+
+function updateFileReportHeader(outWrap, r) {
+  const old = outWrap.querySelector(".file-report-header");
+  if (old) old.replaceWith(fileReportHeader(r));
+}
+
+function scheduleFileReportToc(outWrap) {
+  if (outWrap.__fileTocTimer) return;
+  // 流式插卡会连续触发；120ms 合并一次目录重建，避免每张卡都 O(n) 重建。
+  outWrap.__fileTocTimer = setTimeout(() => {
+    outWrap.__fileTocTimer = 0;
+    if (outWrap.isConnected) refreshResultToc(outWrap);
+  }, 120);
+}
+
+function clearFileReportView(outWrap) {
+  if (!outWrap) return;
+  if (outWrap.__fileTocTimer) {
+    clearTimeout(outWrap.__fileTocTimer);
+    outWrap.__fileTocTimer = 0;
+  }
+  outWrap.__fileSectionsHost = null;
+  outWrap.__fileSectionCards = null;
+  outWrap.innerHTML = "";
+}
+
+function appendFileReportSection(outWrap, r, s, runBar) {
+  if (!s) return;
+  ensureFileReportShell(outWrap, r, runBar);
+  renderFileReport(outWrap, r, { section: s, runBar });
+  scheduleFileReportToc(outWrap);
+}
+
+function finishFileReport(outWrap, r, runBar) {
+  ensureFileReportShell(outWrap, r, runBar);
+  const host = outWrap.__fileSectionsHost;
+  const cards = outWrap.__fileSectionCards || (outWrap.__fileSectionCards = new Map());
   for (const s of r.sections) {
-    const hasActions = Array.isArray(s.actions) && s.actions.length > 0;
- // view 动作：整卡可双击查看（取第一个 view 动作的内容）；卡片加提示条与手型光标。
-    const viewAct = hasActions ? s.actions.find((a) => a.type === "view") : null;
-    const card = el("div", Object.assign(
-      { class: "file-section " + s.level + (viewAct ? " file-section-viewable" : "") },
-      viewAct ? keyBtn(() => openSectionView(s.title, viewAct)) : {},
-    ),
-      el("div", { class: "file-section-title" },
-        s.icon ? msym(s.icon, "file-section-glyph") : null,
-        el("span", {}, s.title),
-      ),
-      el("div", { class: "file-section-body" }, s.body),
+    if (!cards.has(s)) renderFileReport(outWrap, r, { section: s, runBar });
+  }
+  // 按最终 priority 顺序移动已有节点，不重建卡片、不丢滚动位置。
+  for (const s of r.sections) {
+    const card = cards.get(s);
+    if (card) host.append(card);
+  }
+  if (runBar) runBar.setDone(r.sections.length);
+  if (outWrap.__fileTocTimer) {
+    clearTimeout(outWrap.__fileTocTimer);
+    outWrap.__fileTocTimer = 0;
+  }
+  refreshResultToc(outWrap);
+}
+
+function pruneFileReportSections(outWrap, r) {
+  const cards = outWrap.__fileSectionCards;
+  if (!cards) return;
+  const keep = new Set(r.sections);
+  for (const [s, card] of [...cards]) {
+    if (!keep.has(s)) {
+      try { card.remove(); } catch { /* ignore */ }
+      cards.delete(s);
+    }
+  }
+}
+
+function replaceFileReportSections(outWrap, r, next, runBar) {
+  r.sections = Array.isArray(next) ? next : [];
+  pruneFileReportSections(outWrap, r);
+  for (const s of r.sections) {
+    if (!outWrap.__fileSectionCards || !outWrap.__fileSectionCards.has(s)) {
+      appendFileReportSection(outWrap, r, s, runBar);
+    }
+  }
+  refreshResultToc(outWrap);
+}
+
+function renderFileReport(outWrap, r, opts = {}) {
+  const host = ensureFileReportShell(outWrap, r, opts.runBar);
+  const cards = outWrap.__fileSectionCards || (outWrap.__fileSectionCards = new Map());
+  // sections 已由 fileAnalysis.finalizeSections 按考点优先级排好：
+  // 二维码/flag/隐藏文件/流量结论在前，熵/颜色/Binwalk/CRC/LSB 在后。
+  const list = opts.section ? [opts.section] : r.sections;
+  for (const s of list) {
+    if (!s || cards.has(s)) continue;
+    const acts = Array.isArray(s.actions) ? s.actions : [];
+    const viewAct = acts.find((a) => a && a.type === "view");
+    const previewActs = acts.filter((a) => a && a.type === "preview" && a.bytes);
+    const downloadActs = acts.filter((a) => a && a.type === "download" && a.bytes);
+    const copyActs = acts.filter((a) => a && a.type === "copy");
+    const lsbAct = acts.find((a) => a && a.type === "open-lsb-deep");
+    const collapsible = s.collapsed === true || s.defaultOpen === false;
+    const open = s.defaultOpen !== false && s.collapsed !== true;
+
+    const titleRow = el("div", { class: "file-section-title" },
+      s.icon ? msym(s.icon, "file-section-glyph") : null,
+      el("span", { class: "file-section-name" }, s.title),
+      s.badge ? el("span", { class: "file-section-badge" }, s.badge) : null,
+      s.source ? el("span", { class: "file-section-source" }, s.source) : null,
     );
-    if (hasActions) {
- // 下载动作按钮行（view 动作不出按钮，走双击）。
-      const dlActs = s.actions.filter((a) => a.type === "download");
-      if (dlActs.length) {
-        const bar = el("div", { class: "file-section-actions" });
-        for (const a of dlActs) {
-          bar.append(el("button", {
-            class: "file-section-act",
-            onclick: (e) => { e.stopPropagation(); downloadBytes(a.bytes, a.filename, a.mime); },
-          }, msym("download", "file-act-glyph"), el("span", {}, a.label)));
-        }
-        card.append(bar);
+    const bodyEl = el("div", { class: "file-section-body" }, s.body || "");
+    const children = [];
+    if (collapsible) {
+      const sum = el("summary", { class: "file-section-summary" }, titleRow);
+      children.push(sum, bodyEl);
+    } else {
+      children.push(titleRow, bodyEl);
+    }
+
+    const card = el(collapsible ? "details" : "div", {
+      class: "file-section " + s.level + (viewAct ? " file-section-viewable" : "") + (collapsible ? " file-section-collapsible" : ""),
+    }, ...children);
+    if (collapsible) card.open = open;
+    if (viewAct) {
+      card.addEventListener("dblclick", () => openSectionView(s.title, viewAct));
+    }
+
+ // 二维码/条码结果：直接给可编辑文本框 + 一键复制 + 送入智能解码（不再是只读长串）。
+    const isQr = /^img-qr/.test(String(s.id || "")) && !/flag/.test(String(s.id || ""));
+    if (isQr) {
+      let text = viewAct && typeof viewAct.text === "string" ? viewAct.text : null;
+      if (text == null) {
+        const m = /(?:^|\n)内容[:：]\s*([\s\S]*?)(?:\n（双击|\n?$)/.exec(String(s.body || ""));
+        if (m) text = m[1].trim();
       }
-      if (viewAct) {
-        card.append(el("div", { class: "file-section-viewhint" },
-          msym("open_in_full", "file-view-glyph"),
-          el("span", {}, t("ui.file.dblToView")),
-        ));
-        card.addEventListener("dblclick", () => openSectionView(s.title, viewAct));
+      if (text) {
+        const ta = el("textarea", {
+          class: "file-qr-edit", rows: Math.min(10, Math.max(2, text.split("\n").length + 1)),
+          spellcheck: "false", "aria-label": "识别结果（可编辑）",
+        });
+        ta.value = text;
+        const bar = el("div", { class: "file-section-actions" });
+        bar.append(el("button", {
+          class: "file-section-act",
+          onclick: (e) => { e.stopPropagation(); copyPlainText(ta.value, "二维码内容已复制"); },
+        }, msym("content_copy", "file-act-glyph"), el("span", {}, "复制内容")));
+        bar.append(el("button", {
+          class: "file-section-act",
+          onclick: (e) => {
+            e.stopPropagation();
+            if (outWrap.__sendToHome) outWrap.__sendToHome(ta.value);
+            else copyPlainText(ta.value, "已复制（未找到首页输入框）");
+          },
+        }, msym("bolt", "file-act-glyph"), el("span", {}, "送入智能解码")));
+        card.append(ta, bar);
+        appendQrResultActions(card, text);
       }
     }
-    outWrap.append(card);
+
+ // 图片产物直接内联预览；点击优先走统一图像查看器（R7 未接线时回退灯箱）。
+    for (const a of previewActs) {
+      const u8a = a.bytes instanceof Uint8Array ? a.bytes : new Uint8Array(a.bytes);
+      const url = URL.createObjectURL(new Blob([u8a], { type: a.mime || "image/png" }));
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch { /* ignore */ } }, 120000);
+      const img = el("img", {
+        class: "io-out-file-preview", src: url, alt: a.filename || a.label || "preview",
+        style: "max-width:min(100%,420px);max-height:320px;border-radius:6px;cursor:zoom-in;background:#fff;border:1px solid var(--outline);margin-top:8px",
+      });
+      img.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openImagePreview(url, a.filename || a.label || "", u8a);
+      });
+      card.append(img);
+    }
+
+    const actionBar = el("div", { class: "file-section-actions" });
+    if (viewAct) {
+      actionBar.append(el("button", {
+        class: "file-section-act",
+        onclick: (e) => { e.stopPropagation(); openSectionView(s.title, viewAct); },
+      }, msym("open_in_full", "file-act-glyph"), el("span", {}, "查看全文")));
+    }
+    const qrSection = /^img-qr/.test(String(s.id || ""));
+    for (const a of copyActs) {
+      // 二维码/条码段只复制解出的内容；失败诊断正文绝不喂给复制按钮。
+      const copyTextValue = a.text != null ? a.text : (qrSection ? "" : s.body);
+      if (qrSection && !String(copyTextValue).trim()) continue;
+      actionBar.append(el("button", {
+        class: "file-section-act",
+        onclick: (e) => { e.stopPropagation(); copyPlainText(copyTextValue, a.label || "已复制"); },
+      }, msym("content_copy", "file-act-glyph"), el("span", {}, a.label || "复制")));
+    }
+    for (const a of downloadActs) {
+      actionBar.append(el("button", {
+        class: "file-section-act",
+        onclick: (e) => { e.stopPropagation(); downloadBytes(a.bytes, a.filename, a.mime); },
+      }, msym("download", "file-act-glyph"), el("span", {}, a.label || "下载")));
+    }
+    if (lsbAct) {
+      actionBar.append(el("button", {
+        class: "file-section-act",
+        onclick: async (e) => {
+          e.stopPropagation();
+          try {
+            const mod = await import("./ui/stegSolvePage.js");
+            mod.setPendingStegSolve(r.__bytes, (r.name || "图片") + ".png");
+            selectOp("stegSolve");
+          } catch (err) { toast("StegSolve 打开失败：" + ((err && err.message) || err)); }
+        },
+      }, msym("grid_view", "file-act-glyph"), el("span", {}, "打开详细 LSB / StegSolve")));
+    }
+    if (actionBar.children.length) card.append(actionBar);
+    const src = String(s.source || "") + " " + String(s.id || "");
+    const tocGroup = s.tocGroup || (
+      /image|qr|lsb|pixel|png|gif|jpeg|jpg|bmp|webp/i.test(src) ? "图像分析"
+        : /stego/i.test(src) ? "隐写尝试"
+          : "结构分析"
+    );
+    const tocColor = s.level === "alert" ? "var(--error)" : s.level === "warn" ? "var(--warning)" : "var(--primary)";
+    const marked = markTocCard(card, {
+      title: s.tocTitle || s.title || s.id || "分析",
+      color: tocColor,
+      badge: s.badge || "",
+      group: tocGroup,
+    });
+    host.append(marked);
+    cards.set(s, marked);
   }
+  if (!opts.section) refreshResultToc(outWrap);
+}
+
+// 预览图点击：优先统一图像查看器（存在时），否则灯箱。
+async function openImagePreview(url, alt, bytes) {
+  try {
+    const mod = await import("./ui/imageOpsViewer.js");
+    if (mod && typeof mod.openImageOpsViewer === "function") {
+      mod.openImageOpsViewer(bytes || url, { title: alt || "图片查看" });
+      return;
+    }
+  } catch { /* R7 未接线 → 回退灯箱 */ }
+  openImageLightbox(url, alt);
 }
 
 // section view 动作：只读查看窗（文本 pre / 图片 img），复用 expandableInput 注入的 .exp-* modal 样式。
@@ -2162,8 +3207,18 @@ function renderOp() {
     }
   }
 
- // exe 型 op（requiresBridge）：无编解码语义，点即启动本机 exe / 跑 CLI。
- // 不渲染输入/输出/转换，改为「启动」按钮 + 结果显示区。若有 params（CLI 型）仍渲染参数栏。
+  // StegSolve 独立 op：不再挂首页一把梭，改为专用交互页面（对齐 jar 菜单/操作）。
+  if (op.id === "stegSolve") {
+    loadStegSolvePage()
+      .then((m) => {
+        if (state.view === "op" && state.opId === "stegSolve") m.renderStegSolvePage($ws, op);
+      })
+      .catch((e) => toast("StegSolve 页面加载失败：" + ((e && e.message) || e)));
+    return;
+  }
+
+  // exe 型 op（requiresBridge）：无编解码语义，点即启动本机 exe / 跑 CLI。
+  // 不渲染输入/输出/转换，改为「启动」按钮 + 结果显示区。若有 params（CLI 型）仍渲染参数栏。
   if (op.requiresBridge) {
     renderExeOp(op);
     return;
@@ -2359,6 +3414,13 @@ function renderOp() {
     msym("swap_vert"), " " + t("ui.op.chainToInput"));
   chainAct.addEventListener("click", () => { inArea.value = outArea.value; invalidateFileBytes(inArea); convert(); });
 
+ // 导出报告：把本次运行的 op/参数/输入/输出/错误原样落成 MD（内嵌 JSON），不推断未验证结论。
+  const reportAct = el("button", { class: "act-btn", title: t("ui.op.report") }, msym("description"), " " + t("ui.op.report"));
+  reportAct.addEventListener("click", () => {
+    const r = buildOpReport(op);
+    cloudWarnGate(() => downloadBytes(new TextEncoder().encode(r.md), r.name, "text/markdown;charset=utf-8"));
+  });
+
  // 输入区主体：多字段模式渲染 fieldAreas；io=none 且无自定义实现 → 细提示条替代巨型输入框。
   const inputBody = hasFields
     ? el("div", { class: "io-fields" }, ...fieldAreas)
@@ -2398,8 +3460,8 @@ function renderOp() {
       ),
       inputBody,
     ),
- // 动作条（居中）
-    el("div", { class: "io-actions" }, runAct, chainAct),
+ // 动作条（居中）：转换 / 配方链 / 导出报告
+    el("div", { class: "io-actions" }, runAct, chainAct, reportAct),
  // 输出
     el("div", { class: "io-pane" },
       el("div", { class: "io-pane-head" },
@@ -3737,6 +4799,43 @@ const REFERENCE_PROJECTS = [
 // 关于页：独立路由 #/about，像 op 页一样在工作区渲染（非弹窗）。
 // 结构：logo 占位 → 标题 → 简介 → GitHub → 引用项目 → 依赖 → 技术栈 →
 //      作者 + 鸣谢 → 注册信息（来源/授权两行）→ 版权（2026–今年，自动取）→ 字库声明。
+function openAboutLangModal() {
+  ensureExpStyles();
+  const previousFocus = document.activeElement;
+  const overlay = el("div", { class: "exp-overlay" });
+  const dialog = el("div", { class: "exp-dialog about-lang-dialog", role: "dialog", "aria-modal": "true", "aria-label": t("ui.about.langModalTitle") });
+  const list = el("div", { class: "about-lang-modal-list", dir: getDir() === "rtl" ? "rtl" : "ltr" });
+  list.append(el("p", { class: "about-lang-modal-note" }, t("ui.about.langsNote")));
+  let close;
+  const closeBtn = el("button", { type: "button", class: "exp-close", title: t("ui.expand.cancel"), onclick: () => close() }, msym("close"));
+  const head = el("div", { class: "exp-head" },
+    el("div", { class: "exp-title" }, t("ui.about.langModalTitle")),
+    closeBtn,
+  );
+  dialog.append(head, list);
+  overlay.append(dialog);
+  document.body.append(overlay);
+  const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
+  close = () => {
+    document.removeEventListener("keydown", onKey);
+    overlay.remove();
+    try { previousFocus && previousFocus.focus && previousFocus.focus(); } catch { /* ignore */ }
+  };
+  document.addEventListener("keydown", onKey);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  localeCoverage().then((rows) => {
+    if (!overlay.isConnected) return;
+    const sorted = [...rows].sort((a, b) => b.pct - a.pct || a.name.localeCompare(b.name));
+    for (const r of sorted) {
+      list.append(el("div", { class: "about-lang-row" },
+        el("span", { class: "about-lang-name" }, r.name),
+        el("span", { class: "about-lang-pctx" }, `${r.pct.toFixed(1)}%`),
+      ));
+    }
+  }).catch(() => {});
+  try { closeBtn.focus(); } catch { /* ignore */ }
+}
+
 function renderAbout(host) {
   const page = el("div", { class: "about-page" });
 
@@ -3828,24 +4927,12 @@ function renderAbout(host) {
  // ⑥.5 语言支持：各语言界面文案翻译完成度（相对中文权威表，运行时统计）。
  //  恒烈 2026-10-12 要求：关于页备注各语言翻译百分比，每个版本都要做 —— 故改为
  //  打开本页时实时计算，新增文案键后百分比自动跟随，不需要任何手工维护。
- const langsWrap = el("div", { class: "about-langs" });
+ const langBtn = el("button", { type: "button", class: "chip-btn" }, t("ui.about.langButton"));
+ langBtn.addEventListener("click", openAboutLangModal);
  page.append(section("ui.about.langs",
    el("p", { class: "about-langs-note" }, t("ui.about.langsNote")),
-   langsWrap,
+   langBtn,
  ));
- localeCoverage().then((rows) => {
-   for (const r of rows) {
-     const bar = el("span", { class: "about-lang-bar" });
-     const fill = el("i", { class: "about-lang-fill" });
-     fill.style.width = Math.max(3, Math.min(100, r.pct)) + "%";
-     bar.append(fill);
-     langsWrap.append(el("div", { class: "about-lang", dir: r.dir },
-       el("span", { class: "about-lang-name" }, r.name),
-       bar,
-       el("span", { class: "about-lang-pct" }, r.pct.toFixed(1) + "%"),
-     ));
-   }
- }).catch(() => {});
 
  // ⑦ 作者 + 贡献者（胶囊）+ 鸣谢
  //  创始人：头像 + 加粗名 + 角色徽标；其他开源贡献者：纯胶囊无头像。
@@ -4260,3 +5347,18 @@ async function restorePlugins() {
 }
 if (document.readyState === "complete") detectRuntimeAndPreload();
 else window.addEventListener("load", detectRuntimeAndPreload, { once: true });
+
+// 命令面板入口：Ctrl/Cmd+K 聚焦侧栏搜索（任意页面可用，含 op 页），Esc 退出并交还焦点。
+// 不拦截浏览器原生快捷键之外的组合（Shift/Alt 修饰一律放行），避免抢用户输入。
+window.addEventListener("keydown", (e) => {
+  const box = document.getElementById("opSearchInput");
+  if (!box) return;
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "k" || e.key === "K")) {
+    e.preventDefault();
+    box.focus();
+    box.select();
+    if (typeof box.scrollIntoView === "function") box.scrollIntoView({ block: "nearest" });
+    return;
+  }
+  if (e.key === "Escape" && document.activeElement === box) box.blur();
+});

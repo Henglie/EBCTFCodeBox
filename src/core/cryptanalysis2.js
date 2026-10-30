@@ -19,6 +19,7 @@ import { register } from "./registry.js";
 import {
   vigenereDecode, playfairDecode, parseHillKey, invertMatrixMod,
 } from "./classic.js";
+import { solveVigenere } from "./vigenereSolver.js";
 
 const AZ = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const AZ_NO_J = "ABCDEFGHIKLMNOPQRSTUVWXYZ";
@@ -118,41 +119,9 @@ function recoverVigenereKey(ct, keyLen) {
 }
 
 function vigenereAuto(text, p = {}) {
-  const maxLen = Math.min(Number(p && p.maxKeyLen) || 20, 30);
-  const ct = cleanLetters(text);
-  const lines = [];
-  lines.push("=== 维吉尼亚全自动破解 ===");
-  lines.push(`密文长度：${ct.length}（仅字母）`);
-  if (ct.length < 20) {
-    lines.push("（密文过短，统计不可靠，结果仅供参考）");
-  }
-  lines.push("");
-  const est = guessKeyLength(ct, maxLen);
-  const target = 0.0667;
-  const all = [];
-  for (let L = 1; L <= Math.min(maxLen, 12); L++) {
-    const cols = [];
-    for (let i = 0; i < L; i++) {
-      let col = "";
-      for (let j = i; j < ct.length; j += L) col += ct[j];
-      cols.push(col);
-    }
-    const avg = cols.reduce((s, c) => s + indexCoincidence(c), 0) / L;
-    all.push({ L, avg });
-  }
-  lines.push("--- 各密钥长度平均 IC（接近 0.0667 为英语）---");
-  for (const a of all) {
-    lines.push(`  L=${String(a.L).padStart(2)}  IC=${a.avg.toFixed(4)}${a.L === est.L ? "  ← 选中" : ""}`);
-  }
-  lines.push("");
-  const key = recoverVigenereKey(ct, est.L);
-  const plain = vigenereDecode(ct, key);
-  lines.push(`推断密钥长度：${est.L}`);
-  lines.push(`恢复密钥：${key}`);
-  lines.push("");
-  lines.push("--- 解密结果 ---");
-  lines.push(plain);
-  return lines.join("\n");
+  // guballa.de 算法复刻：逐密钥长度做相邻 bigram 密钥优化 + 全段坐标下降精修，
+  // 并把 L=1..max 全部列出；带 { } 数字的 CTF flag 会按字母位置保留包装。
+  return solveVigenere(text, p || {});
 }
 
 // ============================================================
@@ -520,8 +489,22 @@ register({
   id: "vigenereAuto",
   cat: "analysis",
   name: "维吉尼亚全自动破解",
-  desc: "IC 估密钥长度 + 列卡方恢复密钥 + 自动解密（英语统计）",
-  params: [{ key: "maxKeyLen", label: "最大密钥长度", type: "number", default: 20 }],
+  desc: "guballa 相邻 bigram 算法：语言画像 + 逐密钥长度全枚举 + 全段精修；支持经典/Beaufort/变体/Autokey、6 种语言、flag 前缀 crib",
+  params: [
+    { key: "maxKeyLen", label: "最大密钥长度", type: "number", default: 20 },
+    { key: "minKeyLen", label: "最小密钥长度", type: "number", default: 1 },
+    { key: "keyLen", label: "指定密钥长度（0=全枚举）", type: "number", default: 0 },
+    { key: "lang", label: "语言", type: "select", default: "en", options: [
+      { value: "en", label: "英语" }, { value: "de", label: "德语" }, { value: "es", label: "西班牙语" },
+      { value: "fr", label: "法语" }, { value: "nl", label: "荷兰语" }, { value: "pt", label: "葡萄牙语" },
+    ] },
+    { key: "variant", label: "变体", type: "select", default: "classic", options: [
+      { value: "classic", label: "经典 Vigenère" }, { value: "beaufort", label: "Beaufort" },
+      { value: "variant", label: "变体 Beaufort" }, { value: "autokey", label: "Autokey" },
+    ] },
+    { key: "crib", label: "已知明文前缀 crib（可选，如 flag）", type: "text", default: "" },
+    { key: "top", label: "最佳候选条数", type: "number", default: 8 },
+  ],
   run: vigenereAuto,
 });
 

@@ -170,14 +170,14 @@ export default {
   },
 
   barcodeGen: {
-    what: "条码生成：把文本生成 Code128 / EAN-13 / DataMatrix 三种非 QR 条码的 PNG 图片，可配合扫码功能读回验证。auto 档按内容自动选符号。",
+    what: "条码生成：把文本生成 8 种非 QR 条码的 PNG 图片——Code128 / EAN-13 / UPC-A / Code39 / ITF-14 / DataMatrix / PDF417 / Aztec，可配合扫码功能读回验证。auto 档按内容自动选符号。",
     principle:
       "内核是 bwip-js（BWIPP PostScript 条码库的 JS 移植）raw 接口，本工具取其模块几何自绘 PNG：\n\n" +
       "1. Code128：自动在 A/B/C 三个码表间切换（纯数字段用 C 表两位一码字压密），码字 = 起始符 + 数据 + mod-103 校验 + stop；输出条空宽序列（sbs）\n" +
       "2. EAN-13：12 位输入自动补 mod-10 校验位；13 位输入先验校验位；护条（两侧加长条）按 BWIPP includetext 的几何延伸\n" +
       "3. DataMatrix：任意文本（含中文）经 ECC 200 Reed-Solomon 纠错编成模块矩阵，方形从 10×10 起自动扩档\n\n" +
       "产物 PNG 含静区（quiet zone）：1D 默认 10-11 模块、DM 默认 2 模块——静区不足是扫码失败最常见原因。",
-    usage: "输入条码内容，选符号（auto/code128/ean13/datamatrix）。Code128 仅接受可打印 ASCII；EAN-13 仅数字（12 位自动补位）；DataMatrix 收任意文本。输出 PNG 下载 + 报告（模块宽/码字序列/校验位）。生成后可用「扫码」功能读回对拍。",
+    usage: "输入条码内容，选符号（auto/code128/ean13/upca/code39/itf14/datamatrix/pdf417/azteccode）。Code128 仅接受可打印 ASCII；EAN-13/UPC-A/ITF-14 仅数字并自动补/验校验位；Code39 限 0-9 A-Z 与 - . 空格 $ / + %；DataMatrix/PDF417/Aztec 收任意文本。输出 PNG 下载 + 报告（模块宽/码字序列/校验位）。生成后可用「扫码」功能读回对拍。",
     examples: [
       { in: "EBCTF{barcode_not_qr}", param: "sym=code128", out: "barcode_code128.png + 码字序列与校验字符" },
       { in: "211234567890", param: "sym=auto", out: "自动补校验位 0 → barcode_ean13.png" },

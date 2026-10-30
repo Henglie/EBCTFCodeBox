@@ -183,6 +183,9 @@
 }
 .ds-mini-row { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 .ds-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 4px var(--sp-2);
   font-size: var(--fs-xs);
   color: var(--on-surface-var);
@@ -191,6 +194,7 @@
   border-radius: var(--r-full);
   transition: all var(--dur-short) var(--ease);
 }
+.ds-mini .msym { font-size: 16px; }
 .ds-mini:hover { background: var(--surface-hi); color: var(--on-surface); }
 .ds-mini:active { transform: scale(.94); }
 .ds-mini.danger { color: var(--error); }
@@ -207,6 +211,8 @@
 /* 分类折叠：默认隐藏行，open 类才展开。双列 grid 提升空间利用率 */
 .ds-cat-rows { display: none; border-bottom: 1px solid var(--outline-var); grid-template-columns: 1fr 1fr; gap: 0 10px; }
 .ds-cat.open .ds-cat-rows { display: grid; }
+/* 搜索过滤必须真的隐藏；此前只加 .hidden 类但没有任何规则，目录永远收不起来。 */
+.ds-cat.hidden { display: none !important; }
 .ds-cat-head {
   display: flex; align-items: center; gap: var(--sp-2);
   width: 100%;

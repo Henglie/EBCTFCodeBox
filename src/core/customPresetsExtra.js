@@ -209,27 +209,6 @@ for (const ch of input) {
 return out;`,
   },
   {
-    id: "railFenceVar",
-    name: "栅栏变体（W 型 / 顺序型）",
-    code: `// 栅栏密码变体：mode=w（W 型之字）或 seq（顺序分栏）。params.rails 栏数（默认 3）。
-const rails = Math.max(2, Number(params.rails ?? params.n ?? 3));
-const seq = String(params.mode ?? "w").toLowerCase() === "seq";
-const per = seq ? rails : 2 * (rails - 1);
-const rowOf = (i) => seq ? i % rails : Math.min(i % per, per - (i % per));
-if (dir === "decode") {
-  const sizes = new Array(rails).fill(0);
-  for (let i = 0; i < input.length; i++) sizes[rowOf(i)]++;
-  let pos = 0, rows = [];
-  for (let r = 0; r < rails; r++) { rows.push(input.slice(pos, pos + sizes[r]).split("")); pos += sizes[r]; }
-  let out = "";
-  for (let i = 0; i < input.length; i++) out += rows[rowOf(i)].shift();
-  return out;
-}
-let rows = Array.from({ length: rails }, () => []);
-for (let i = 0; i < input.length; i++) rows[rowOf(i)].push(input[i]);
-return rows.map((r) => r.join("")).join("");`,
-  },
-  {
     id: "bacon5bit",
     name: "培根 5 位变体（A/B 换符）",
     code: `// 培根 5 位变体：每字母→5 位 A/B 组（A=0,B=1），可换符（params.aA / params.bB）。

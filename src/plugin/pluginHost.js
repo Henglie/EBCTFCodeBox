@@ -146,13 +146,20 @@ function writeSources(map) {
   try { localStorage.setItem(STORE_SOURCES, JSON.stringify(map)); } catch { /* 忽略 */ }
 }
 
+// 动态 import 的相对说明符以本模块（src/plugin/）为基准，用户在插件面板填的
+// ./addons/… 却按站点根理解。统一按页面 baseURI 解析；持久化仍存原串，
+// 换部署路径（根目录 / GitHub Pages 子路径）时不失效。
+function resolveSource(url) {
+  try { return new URL(url, document.baseURI).href; } catch { return url; }
+}
+
 /**
  * 从 URL 动态加载一个插件（用户"自行增加算法/创作语言"的入口）。
  * 仅接受同源或用户显式确认的 URL；加载成功记入 sources 供下次自动启用。
  * @param {string} url 插件 ESM 模块 URL
  */
 export async function loadFromUrl(url) {
-  const mod = await import(/* @vite-ignore */ url);
+  const mod = await import(/* @vite-ignore */ resolveSource(url));
   const rec = await activate(mod);
   const sources = readSources();
   sources[rec.manifest.id] = url;
@@ -184,7 +191,7 @@ export async function restoreEnabled(builtins = {}) {
     if (_loaded.has(id)) continue;
     try {
       if (builtins[id]) { await activate(builtins[id]); continue; }
-      if (sources[id]) { await import(/* @vite-ignore */ sources[id]).then(activate); }
+      if (sources[id]) { await import(/* @vite-ignore */ resolveSource(sources[id])).then(activate); }
     } catch (e) {
       console.warn(`[pluginHost] 恢复插件 ${id} 失败，已跳过：`, e && e.message ? e.message : e);
     }
@@ -231,7 +238,7 @@ export async function importConfig(cfg) {
     if (_loaded.has(id)) continue;
     const url = sources[id];
     if (!url) continue; // 内置插件无源，交给 restoreEnabled
-    try { await import(/* @vite-ignore */ url).then(activate); loaded++; }
+    try { await import(/* @vite-ignore */ resolveSource(url)).then(activate); loaded++; }
     catch (e) { console.warn(`[pluginHost] 导入插件 ${id} 失败，已跳过：`, e && e.message ? e.message : e); }
   }
   return loaded;

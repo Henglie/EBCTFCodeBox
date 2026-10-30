@@ -88,7 +88,9 @@ const FLAG_FORMAT_RE = /[a-z0-9_]{2,}\{[^{}]{1,}\}/i;
 // - 末尾必须紧跟结构符 [\{:=_]：保证是「flag 格式」而非普通英文句子——
 //  "Welcome to CTFshow vegetable" 无结构符不误命中；且修复旧正则「乱码里 ctf5*19 因 ctf 后跟
 //  数字误吃 -160 顶到 top1」（ctf5 后是 *，非 {:=_，不命中 → 乱码沉底，凯撒正解上位）。
-const FLAG_STRONG_RE = /(^|[^a-z])(flag|ctf|key|pass|hgame|moectf)[a-z0-9_]*[\{:=_]/i;
+// 强 flag 结构必须带成对花括号：旧式「关键词 + =/_/:」会把 CTFd...=、Key_zozg 这类
+// 普通 token 误判为强 flag，整组置顶并高亮（用户 2026-10-26 反馈「高光误导」）。
+const FLAG_STRONG_RE = /(^|[^a-z])(flag|ctf|key|pass|hgame|moectf)[a-z0-9_]*\{[^{}\n]{1,}\}/i;
 
 const DEFAULTS = {
   maxDepth: 1,            // 最大解码层数（默认 1=单层；多层链式解码由 UI「多层」开关传 3）
@@ -104,8 +106,10 @@ const DEFAULTS = {
                           // 由 UI 的「解码强度」预设/自定义勾选传入，见 core/decodeProfile.js。
   timeBudget: 30000,      // 硬墙钟死线（毫秒）：兜底上限，超时无条件收尾（防病态输入无限跑）
   signal: null,           // AbortSignal（看门狗/新输入接管）——aborted 立即收尾返回已有候选
-  softDeadlineMs: 5000,   // 软死线（毫秒）：到点回调 onPartial(已得结果) 让 UI 先渲染，之后继续跑
-  onPartial: null,        // 软死线回调 (candidates)=>void——渲染部分结果，不中断后台继续
+  softDeadlineMs: 5000,   // 软死线（毫秒）：兜底回调 onPartial(已得结果) 让 UI 先渲染，之后继续跑
+  onPartial: null,        // 流式部分结果回调 (candidates)=>void——节流增量，不中断后台继续
+  onProgress: null,       // 进度回调 ({phase,done,total,opId,label,percent})=>void
+  _control: null,         // 内部：共享暂停控制对象 {paused:boolean}（Worker/主线程降级同款）
   yieldEvery: 40,         // 每跑 N 个 op 让出一次主线程（宏任务）：UI 可刷新/倒计时可走/abort 可收
 };
 
@@ -171,6 +175,8 @@ function keyedAttackParams(opId, key) {
 const KEYED_OP_IDS = [
   // 现代（分组/流/令牌）
   "aes", "des", "des3", "sm4", "blowfish", "rc4", "xor", "fernet", "rc2", "rabbit",
+  // 需要密钥的流密码：无 key 时纯噪声，只在用户填 key 后跑
+  "hc128", "hc256", "a51", "salsa20", "chacha20",
   // emoji 加密（口令走 password 参数，keyedAttackParams 已特化）
   "txtmoji",
   // 古典文本密钥
@@ -194,6 +200,34 @@ const NO_MAGIC_OPS = new Set(["luhn", "spiralMatrix", "ttlStego", "cnidCheck", "
 // （实测 type7 解出 ctfshow{...Kn0w...Ci$c0...} 后被 leetSpeak 把 0→o、$→s 变成劣化版
 // 却仍带 ctfshow{ 拿强档，分数贴住真解顶到 #2）。故：cur.text 已 flag-strong 时跳过它们。
 const PLAINTEXT_STYLE_OPS = new Set(["leetSpeak", "rot13", "rot47", "rot5", "rot18", "atbash", "rot8000"]);
+
+// 常见「第一步就该试」的编码/古典 op：解出可打印结果时给可信度加成。
+// 用户反馈：base64 明明是正确答案（如解出下一步的 key），却因不是 flag 格式被小众算法压下去。
+const COMMON_DECODE_OPS = new Set([
+  "base64", "base32", "base16", "base58", "base85", "base91", "base62",
+  "url", "htmlEntity", "unicodeEscape", "quotedPrintable", "morse", "bacon",
+  "railFence", "caesar", "atbash", "a1z26", "unicode", "hex", "asciiRadix",
+]);
+
+// 纯不透明串（十六进制/哈希/无分隔 base64 长串）：多一层解出这种结果通常还没到明文。
+function looksOpaqueToken(str) {
+  const t = String(str || "").trim();
+  if (t.length < 16) return false;
+  if (/^[0-9a-f]+$/i.test(t) && t.length >= 16) return true;
+  if (/^[A-Za-z0-9+/]+={0,2}$/.test(t) && t.length >= 24 && !/[ _.-]/.test(t)) return true;
+  return false;
+}
+
+// 字母汤（无空格、几乎全字母、元音占比很低）：solitaire/slidefair 等无密钥古典
+// 密码对任意输入产出的典型垃圾，卡方不低却完全不是明文。
+function looksLetterSoup(str) {
+  const t = String(str || "").trim();
+  if (t.length < 10 || /\s/.test(t)) return false;
+  const letters = t.replace(/[^A-Za-z]/g, "");
+  if (letters.length / t.length < 0.85) return false;
+  const vowels = (letters.match(/[aeiouyAEIOUY]/g) || []).length;
+  return vowels / letters.length < 0.22;
+}
 
 // 字符串 → UTF-8 字节序列（scorer 需要 bytes）
 function toBytes(str) {
@@ -512,8 +546,10 @@ function compositeScore(result, chainLength, matchesCrib, chain) {
   score += (chainLength - 1) * 12;
  // 明文样式变换 op（leetSpeak/rot 等冷门美化算法，产品裁决3）惩罚：
  // 它们 detect 命中率高（含 0/1/@ 就中）却是冷门算法，开穷举/多层时总在前排刷存在感。
- // 链里含这类 op 即 +35，把它压到真正的解码链之后（真解含它极少，多为噪声二次变换）。
-  if (chain && chain.some((op) => PLAINTEXT_STYLE_OPS.has(op))) score += 35;
+ // leetSpeak 会把数字替换成字母，反而降低卡方/洗掉密文特征，实测把 base64 真解压到
+ // 100 名开外（用户 2026-10-26 反馈「Leet 默认不要高光」）——单独重罚到沉底。
+  if (chain && chain.includes("leetSpeak")) score += 220;
+  else if (chain && chain.some((op) => PLAINTEXT_STYLE_OPS.has(op))) score += 35;
  // xor/rot 单字节暴力候选（产品裁决2）：整类降权。它们是「碰运气」猜测，绝大多数无意义，
  // 除非真解出 flag/命中 crib（那时 -160/-10000 强奖励会盖过本惩罚）。+45 把普通 xor/rot
  // 噪声压到正经解码链之后，不再前排刷屏。
@@ -524,6 +560,24 @@ function compositeScore(result, chainLength, matchesCrib, chain) {
  // CTF 正解常是普通单词串/句子，本项补足「只认 flag 关键词」的盲区（产品裁决4）。
   score += meaningfulTextBonus(result);          // 命中真实词表：最高 -120（净奖励）
   score += ctfHotBonus(chain, result);            // CTF 高频算法轻量置顶（不压 flag/crib/有意义文本）
+ // 常见编码单层解码可信度加成：base64 解出 key/token/下一步密文本身就是有效答案，
+ // 不该因为没有 flag{} 形状而被小众算法压下去（用户 2026-10-26 实测反馈）。
+  if (chain && chain.length === 1 && COMMON_DECODE_OPS.has(String(chain[0]).split(/[(:]/)[0])) {
+    if (isPrintableRatio(result) >= 0.9 && String(result).trim().length >= 4) score -= 95;
+  }
+ // 不透明串惩罚：多层解完仍是纯 hex/无分隔 base64 长串，通常只是中间层，不是最终明文。
+  if (chain && chain.length > 1 && looksOpaqueToken(result)) score += 90;
+ // 转义字节预览（base91 等解出的 \xNN/\uNNNN 序列）不是可读明文。
+  if (/\\x[0-9a-f]{2}|\\u[0-9a-f]{4}/i.test(result)) score += 85;
+  if (looksLetterSoup(result)) score += 40;
+ // 参数扫描（rotSpecial/affine/rot 等）的无意义分支：这类网格一次产出几十上百条，
+ // 卡方对短乱码不敏感 → 实测把 base64 真解挤到 50 名开外（用户 2026-10-26 反馈）。
+ // 只有真命中词典/flag 的分支免罚；其余一律沉底，等用户展开分组卡再看。
+  if (chain && chain.some((step) => /[(:]/.test(String(step)))
+    && meaningfulTextBonus(result) === 0 && !FLAG_STRONG_RE.test(result)) score += 55;
+  if (/^[A-Z]{12,}$/.test(String(result)) && meaningfulTextBonus(result) === 0) score += 45;
+ // 极短且无意义的输出（如 a52 → "05a4"）不足以作为解码答案，别占前排。
+  if (String(result).trim().length < 5 && meaningfulTextBonus(result) === 0 && !FLAG_STRONG_RE.test(result)) score += 35;
   return score;
 }
 
@@ -634,6 +688,7 @@ export async function magicDecode(input, opts = {}) {
   const decoders = OPS.filter(
     (op) => typeof op.detect === "function" && typeof op.decode === "function"
       && !isAutoCandidateExcluded(op) && !NO_MAGIC_OPS.has(op.id)
+      && op.cat !== "hash"   // 哈希不可逆：decode 档（若存在）只吐摘要/报告，自动解码纯噪声
       && !excluded(op.id)
       && allowed(op.id)
   );
@@ -649,6 +704,7 @@ export async function magicDecode(input, opts = {}) {
     (op) => typeof op.detect !== "function"
       && typeof op.decode === "function"
       && !isAutoCandidateExcluded(op) && !NO_MAGIC_OPS.has(op.id)
+      && op.cat !== "hash"
       && !excluded(op.id)
       && !PARAM_SWEEP[op.id]
       && !KEYED_OPS.has(op.id)
@@ -696,54 +752,174 @@ export async function magicDecode(input, opts = {}) {
   let guard = 0;
  // 硬墙钟死线（兜底上限）：无论迭代计数如何，超 o.timeBudget 毫秒无条件收尾返回已有候选。
  // 防病态输入无限跑；正常在软死线(5s)已回调部分结果，用户多半已看到解。
+ // 暂停期间补回墙钟（见 waitIfPaused），不把用户按暂停的时间算进预算。
   const start = Date.now();
-  const hardDeadline = start + o.timeBudget;
- // 软死线（看门狗 5s）：到点回调 onPartial(当前已得候选) 让 UI 先渲染「已得结果」，
- // 之后**不中断**继续跑（协作式让出主线程 = 等价后台线程），后续新解出的候选下轮回调补充。
- // 只回调一次（partialFired 防抖）——避免频繁重排 UI。
-  const softDeadline = start + o.softDeadlineMs;
-  let partialFired = false;
+  let hardDeadline = start + o.timeBudget;
+ // 软死线（看门狗 5s）：兜底再回调一次 onPartial，之后**不中断**继续跑。
+  let softDeadline = start + o.softDeadlineMs;
  // abort（新输入接管 / 用户强制中断）：signal.aborted 立即收尾，历史任务不再往下跑，
  // 不堆积、不崩溃。返回已得候选（调用方靠 token 决定是否丢弃）。
   const aborted = () => o.signal && o.signal.aborted;
- // 协作式让出：每处理 yieldEvery 个 op 让出一次宏任务，使浏览器能刷新倒计时 / 响应 abort /
- // 不冻结页面。node 里 setTimeout(0) 极快，几乎无开销。
+
+ // ---- 协作式暂停（Worker pause/resume 或主线程共享 control 对象）----
+ // 每个 yield 点检查 control.paused；暂停期间用定时器让出事件循环（非忙等），done 计数不推进，
+ // 恢复后从原处继续。暂停时长补回两条死线，暂停再久也不会把任务耗尽。
+  const control = o._control && typeof o._control === "object" ? o._control : null;
+  const waitIfPaused = async () => {
+    if (!control || !control.paused) return aborted();
+    const t0 = Date.now();
+    while (control.paused) {
+      if (aborted()) return true;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    const delta = Date.now() - t0;
+    hardDeadline += delta;
+    softDeadline += delta;
+    return aborted();
+  };
+
+ // ---- 流式部分结果（节流增量）----
+ // 新候选置脏，innerTick 每轮约 150ms 节流回调一次；depth0 各阶段收尾再强制补一次，
+ // 小输入也能看到「逐个算法出结果」而非等到 softDeadline 才一次性给。候选数组始终是
+ // finalizeResults 的当前快照。
+  const PARTIAL_THROTTLE_MS = 150;
+  let partialDirty = false;
+  let lastPartialAt = 0;
+  let softFired = false;
+  const maybePartial = (force = false) => {
+    if (!o.onPartial || !partialDirty) return;
+    const now = Date.now();
+    if (!force && now - lastPartialAt < PARTIAL_THROTTLE_MS) return;
+    lastPartialAt = now;
+    partialDirty = false;
+    try { o.onPartial(finalizeResults(results, o)); } catch { /* 回调异常不影响主流程 */ }
+  };
+  const maybeSoftPartial = () => {
+    if (softFired || !o.onPartial || Date.now() < softDeadline) return;
+    softFired = true;
+    lastPartialAt = Date.now();
+    partialDirty = false;
+    try { o.onPartial(finalizeResults(results, o)); } catch { /* 回调异常不影响主流程 */ }
+  };
+
+ // ---- 进度上报（onProgress）----
+ // 五阶段：detect/param/plain/keyed/bfs。done/total 为该阶段计数（total 允许估算，按实际
+ // 工作量上修），percent 是加权总进度，单独钳制为 0-100 单调不减。节流 100ms，收尾强制 100。
+  const PROGRESS_THROTTLE_MS = 100;
+  const PHASE_WEIGHT = { detect: 0.45, param: 0.18, plain: 0.12, keyed: 0.1, bfs: 0.15 };
+  const progDone = { detect: 0, param: 0, plain: 0, keyed: 0, bfs: 0 };
+  let paramTotal = 0;
+  if (o.paramScan && sweepGrids) for (const id of paramScanList) paramTotal += (sweepGrids.get(id) || []).length;
+  let keyedTotal = 0;
+  if (o.key) {
+    for (const id of KEYED_OP_IDS) {
+      const op = getOp(id);
+      if (op && typeof op.decode === "function" && !op.noAuto && allowed(id)) keyedTotal += keyedAttackParams(id, o.key).length;
+    }
+  }
+  const progTotal = {
+    detect: Math.max(1, decoders.length + (o.intensive ? 262 : 0)),
+    param: Math.max(0, paramTotal),
+    plain: plainOps.length,
+    keyed: keyedTotal,
+    bfs: 1,
+  };
+  let nodesStarted = 0;
+  const enabledPhases = ["detect", "bfs"];
+  if (progTotal.param > 0) enabledPhases.push("param");
+  if (progTotal.plain > 0) enabledPhases.push("plain");
+  if (progTotal.keyed > 0) enabledPhases.push("keyed");
+  let progressPercent = 0;
+  let lastProgressAt = 0;
+  const phaseTotal = (phase) => {
+    if (phase === "detect") {
+      progTotal.detect = Math.max(progTotal.detect,
+        decoders.length * Math.max(1, nodesStarted) + (o.intensive ? 262 : 0));
+    } else if (phase === "bfs") {
+      progTotal.bfs = Math.max(progTotal.bfs, progDone.bfs + queue.length);
+    }
+    return Math.max(progTotal[phase], progDone[phase]);
+  };
+  const emitProgress = (phase, opId = null, label = "", force = false) => {
+    if (!o.onProgress) return;
+    const now = Date.now();
+    if (!force && now - lastProgressAt < PROGRESS_THROTTLE_MS) return;
+    lastProgressAt = now;
+    let wsum = 0, acc = 0;
+    for (const p of enabledPhases) {
+      const w = PHASE_WEIGHT[p] || 0;
+      if (w <= 0) continue;
+      wsum += w;
+      acc += w * Math.min(1, progDone[p] / Math.max(1, phaseTotal(p)));
+    }
+    let percent = wsum > 0 ? Math.round((acc / wsum) * 100) : 0;
+    if (percent < progressPercent) percent = progressPercent;
+    if (percent > 100) percent = 100;
+    progressPercent = percent;
+    try {
+      o.onProgress({
+        phase, done: progDone[phase], total: phaseTotal(phase),
+        opId: opId || null, label: label || "", percent,
+      });
+    } catch { /* 回调异常不影响主流程 */ }
+  };
+  const finishProgress = (ok) => {
+    if (!o.onProgress) return;
+    if (ok) {
+      for (const p of enabledPhases) progDone[p] = phaseTotal(p);
+      progressPercent = 100;
+      try {
+        o.onProgress({
+          phase: "bfs", done: progDone.bfs, total: progTotal.bfs,
+          opId: null, label: "", percent: 100,
+        });
+      } catch { /* ignore */ }
+    } else {
+      emitProgress("bfs", null, "", true);
+    }
+  };
+ // 候选新增置脏：_record 通过 results._onCandidate 回调（数组自定义属性，不参与结果序列化）。
+  results._onCandidate = () => { partialDirty = true; };
+
+  // 协作式让出：按「时间窗 + op 数」双阈值让出宏任务。只看 op 数时，慢 op 或
+  // 密集暴力循环会把 Worker 消息队列压住，pause 要等几十个 op 才被派发；时间窗保证
+  // 最迟约 12ms 回到事件循环，暂停/终止按钮能及时生效。
   let sinceYield = 0;
-  const maybeYield = async () => {
-    if (++sinceYield >= o.yieldEvery) {
+  let lastYieldAt = Date.now();
+  const maybeYield = async (force = false) => {
+    const now = Date.now();
+    const byCount = ++sinceYield >= o.yieldEvery;
+    const byTime = now - lastYieldAt >= 12;
+    if (force || byCount || byTime) {
       sinceYield = 0;
+      lastYieldAt = now;
       await new Promise((r) => setTimeout(r, 0));
     }
   };
- // 到软死线且未回调过 → 回调当前部分结果（先 finalize 一份快照给 UI）。
-  const maybeFirePartial = () => {
-    if (!partialFired && o.onPartial && Date.now() >= softDeadline) {
-      partialFired = true;
-      try { o.onPartial(finalizeResults(results, o)); } catch { /* 回调异常不影响主流程 */ }
-    }
-  };
- // 内层 op 循环的每轮心跳：让出主线程 + 软死线到点回调部分结果 + 检查中断。
- // **关键**：默认单层解码(maxDepth=1)队列只有 depth0 一个节点，全部 op 扫描都在**一次**
- // while 迭代的内层 for 循环里跑完；若只在 while 顶层 yield/firePartial，软死线到点时代码正
- // 卡在内层 op 扫描（每个浏览器专属图像/音频 op 耗满 700ms 超时），onPartial 直到整轮扫完才
- // 触发 → 用户看到「后台继续」却画面全空（产品负责人实测「你好？」5s 后空白的根因）。故内层循环每
- // 轮都调此心跳：软死线一到立刻回调已得候选让 UI 先渲染，并周期让出使倒计时/中断生效。
- // 返回 true 表示已中断（新输入接管），调用方 break 收尾。
-  // innerTick 额外检查硬死线：maxDepth=1 时全部 op 扫描都在内层 for 一次跑完，
-  // 若只在 while 顶层查 deadline，timeBudget 形同虚设（实测 10KB base64 跑 52s）。
+ // 内层 op 循环的每轮心跳：暂停协作 + 让出主线程 + 节流 partial + 软死线兜底 + 检查中断。
+ // 默认单层解码(maxDepth=1)全部 op 扫描都在**一次** while 迭代的内层 for 里跑完，故必须
+ // 在内层每轮都让出/回调，不能只等 while 顶层。返回 true 表示已中断（新输入接管/超时）。
   const innerTick = async () => {
+    if (await waitIfPaused()) return true;
     await maybeYield();
-    maybeFirePartial();
+    maybePartial(false);
+    maybeSoftPartial();
     if (Date.now() > hardDeadline) return true;  // 硬死线到 → 中断内层 op 扫描
     return aborted();
   };
+  emitProgress("detect", null, "", true);  // 起始 0%
   while (queue.length > 0) {
     if (guard++ > o.guard) break; // 兜底防爆（迭代计数）
     if (Date.now() > hardDeadline) break; // 兜底防爆（硬墙钟死线）
+    if (await waitIfPaused()) break;      // 暂停协作：恢复后从这里继续
     if (aborted()) break;                 // 新输入接管 / 用户中断 → 立即收尾
-    maybeFirePartial();                   // 软死线到 → 回调部分结果（继续跑）
+    maybePartial(false);                  // 节流增量 partial
+    maybeSoftPartial();                   // 软死线兜底回调
     await maybeYield();                   // 周期让出主线程（倒计时能走 / abort 能收）
     const cur = queue.shift();
+    nodesStarted++;
+    progDone.bfs++;
+    emitProgress("bfs", null, "depth " + cur.depth);
     if (cur.depth >= o.maxDepth) continue;
 
  // ---- intensive 暴力：只在 depth 0 跑（防组合爆炸，CTF 常见单层 XOR）----
@@ -759,8 +935,13 @@ export async function magicDecode(input, opts = {}) {
         if (candidateSignals(text).signals.some(s => s.kind === "flagStrong")) return true;           // 含 xxx{...} flag 结构，必留
         return isPrintableRatio(text) >= 0.85;                // 高可打印率 = 像明文
       };
- // 1-byte XOR 全 255 key（lib:142-155）
+      let bruteAborted = false;
+// 1-byte XOR 全 255 key（lib:142-155）
       for (let key = 1; key <= 255; key++) {
+        progDone.detect++;
+        emitProgress("detect", `xor:${key}`, `xor ${key}`);
+        // 暴力通道同样要给暂停/终止/死线留心跳；否则一次 intensive 可把 Worker 锁死十几秒。
+        if ((key & 15) === 0 && await innerTick()) { bruteAborted = true; break; }
         const xored = new Array(bytes.length);
         for (let i = 0; i < bytes.length; i++) xored[i] = bytes[i] ^ key;
         const text = latin1Decode(xored);
@@ -768,8 +949,11 @@ export async function magicDecode(input, opts = {}) {
         if (!bruteWorth(text)) continue;                      // 乱码门：不像明文即丢弃
         _record(text, cur, `xor:${key}`, 0.5, results, seen, cribRe, queue, byteStatHint);
       }
- // 位旋转 1-7（lib:157-166）
-      for (let rot = 1; rot <= 7; rot++) {
+// 位旋转 1-7（lib:157-166）
+      for (let rot = 1; !bruteAborted && rot <= 7; rot++) {
+        progDone.detect++;
+        emitProgress("detect", `rot:${rot}`, `rot ${rot}`);
+        if (await innerTick()) { bruteAborted = true; break; }
         const rotated = new Array(bytes.length);
         for (let i = 0; i < bytes.length; i++) {
           const b = bytes[i];
@@ -780,6 +964,8 @@ export async function magicDecode(input, opts = {}) {
         if (!bruteWorth(text)) continue;                      // 乱码门：不像明文即丢弃
         _record(text, cur, `rot:${rot}`, 0.5, results, seen, cribRe, queue, byteStatHint);
       }
+      if (bruteAborted) break;
+      if (cur.depth === 0) maybePartial(true);  // 阶段收尾补一次快照
     }
 
  // ---- MT3 参数网格扫描（白名单 op 绕过 detect）——depth≤1 的可信链上跑 ----
@@ -807,7 +993,10 @@ export async function magicDecode(input, opts = {}) {
         if (!grid || grid.length === 0) continue;
         for (const params of grid) {
           if (guard++ > o.guard) { scanOver = true; break; }
-          if (await innerTick()) { scanOver = true; break; }  // 软死线回调 + 让出 + 中断
+          progDone.param++;
+          if (await innerTick()) { scanOver = true; break; }  // 暂停/软死线回调 + 让出 + 中断
+          const tag = formatParamTag(opId, params);
+          emitProgress("param", opId, tag);
           let decoded;
           try {
             decoded = await decodeWithTimeout(op.decode, cur.text, params);
@@ -817,11 +1006,11 @@ export async function magicDecode(input, opts = {}) {
           if (decoded == null) continue;
           decoded = String(resultText(decoded));
           if (decoded.length === 0 || decoded === cur.text) continue;
-          const tag = formatParamTag(opId, params);
  // queue 传 null：参数扫描候选不参与后续 BFS（防爆炸），靠 compositeScore 排序。
           _record(decoded, cur, tag, 0.5, results, seen, cribRe, null, byteStatHint);
         }
       }
+      if (cur.depth === 0) maybePartial(true);  // 阶段收尾补一次快照
     }
 
  // ---- 无 detect 的纯编解码/花式 op 跑（需求1：花式算法也安排上）——只 depth 0 对原始输入跑 ----
@@ -833,7 +1022,9 @@ export async function magicDecode(input, opts = {}) {
       const admitPlain = plainOps;
       for (const op of admitPlain) {
         if (guard++ > o.guard) break;
-        if (await innerTick()) break;  // 软死线回调 + 让出 + 中断
+        progDone.plain++;
+        if (await innerTick()) break;  // 暂停/软死线回调 + 让出 + 中断
+        emitProgress("plain", op.id, op.name || op.id);
         const fn = op.decode || op.run;
         let decoded;
         try {
@@ -847,6 +1038,7 @@ export async function magicDecode(input, opts = {}) {
  // 花式 op 单层候选不入队（queue null），靠 compositeScore 排序。
         _record(decoded, cur, op.id, 0.5, results, seen, cribRe, null, byteStatHint);
       }
+      if (cur.depth === 0) maybePartial(true);  // 阶段收尾补一次快照
     }
 
  // ---- 带密钥加解密尝试（需求3）：工具栏填了 key 才跑 ----
@@ -865,7 +1057,9 @@ export async function magicDecode(input, opts = {}) {
         const attempts = keyedAttackParams(opId, o.key);
         for (const { params, tag } of attempts) {
           if (guard++ > o.guard) break;
-          if (await innerTick()) break;   // 软死线回调 + 让出 + 中断
+          progDone.keyed++;
+          if (await innerTick()) break;   // 暂停/软死线回调 + 让出 + 中断
+          emitProgress("keyed", opId, tag);
           let decoded;
           try {
             decoded = await decodeWithTimeout(op.decode, cur.text, params);
@@ -879,6 +1073,7 @@ export async function magicDecode(input, opts = {}) {
           _record(decoded, cur, `${opId}(${tag})`, 0.5, results, seen, cribRe, null, byteStatHint, "keyed");
         }
       }
+      if (cur.depth === 0) maybePartial(true);  // 阶段收尾补一次快照
     }
 
  // ---- 常规 op 尝试 ----
@@ -888,7 +1083,9 @@ export async function magicDecode(input, opts = {}) {
     const curIsFlag = FLAG_STRONG_RE.test(cur.text);
     for (const op of decoders) {
       if (guard++ > o.guard) break;
-      if (await innerTick()) break;   // 软死线回调 + 让出 + 中断
+      progDone.detect++;
+      if (await innerTick()) break;   // 暂停/软死线回调 + 让出 + 中断
+      emitProgress("detect", op.id, op.name || op.id);
       if (curIsFlag && PLAINTEXT_STYLE_OPS.has(op.id)) continue;
       if (combinedAdmit(op.id, cur.text) === false) continue;
       let score;
@@ -910,7 +1107,10 @@ export async function magicDecode(input, opts = {}) {
 
       let decoded;
       try {
-        decoded = await decodeWithTimeout(op.decode, cur.text, defaultParams(op));
+        // magicParams：仅用于智能解码打分的参数覆盖（如四角默认列候选会压低语言分，
+        // magic 改用首候选；op 页仍按用户/默认参数执行）。
+        const magicParams = op.magicParams ? { ...defaultParams(op), ...op.magicParams } : defaultParams(op);
+        decoded = await decodeWithTimeout(op.decode, cur.text, magicParams);
       } catch {
         continue;
       }
@@ -927,7 +1127,9 @@ export async function magicDecode(input, opts = {}) {
 
       _record(decoded, cur, op.id, score, results, seen, cribRe, queue, byteStatHint);
     }
+    if (cur.depth === 0) maybePartial(true);  // 阶段收尾补一次快照
   }
+  finishProgress(!aborted());
 
   const cands = finalizeResults(results, o);
  // 可解释性：把模型预测（11 类 top5 概率 + 18 维特征）附到返回候选——
@@ -955,8 +1157,8 @@ export async function magicDecode(input, opts = {}) {
 }
 
 // 把累积的候选整理成最终返回数组：Occam 去重 + 排序 + 全列。
-// 抽成独立函数供两处调用：① 软死线到点回调 onPartial（部分结果快照）② 主循环跑完最终返回。
-// **纯函数、无副作用**：每次基于当前 results 快照重算，多次调用互不干扰（软死线调一次、结尾调一次）。
+// 抽成独立函数供两处调用：① 流式 onPartial / 软死线兜底（当前部分结果快照）② 主循环跑完最终返回。
+// **纯函数、无副作用**：每次基于当前 results 快照重算，多次调用互不干扰（partial 多次、结尾一次）。
 function finalizeResults(results, o) {
  // 共享信号有限加权：基于原始基础分计算，重复 partial/final 不累计。
  // 这里不再删非命中候选，保证纯文本 / 无 flag 场景仍出正常候选——对齐同类实现
@@ -996,8 +1198,32 @@ function finalizeResults(results, o) {
     const flagPriority = !echoPenalized && !nearEchoPenalized
       && isPrintableRatio(c.result) >= 0.8
       && FLAG_STRONG_RE.test(c.result);
-    return { ...c, baseScore: c.score, score, confidence: scoreToConfidence(score),
+    const confidence = scoreToConfidence(score);
+ // 四态裁决（T700）：把「分低」翻译成用户能判断的证据等级。
+ // confirmed=命中 flag/用户目标/crib（非回声）；likely=可打印且高置信或命中真实词表；
+ // ambiguous=回声/近似回声或中等置信；normal=其余低置信候选。
+    const hasStrongHit = !echoPenalized && signal.signals.some((s) => s.kind === "flagStrong" || s.kind === "target");
+    const hasMeaningful = meaningfulTextBonus(c.result) < 0;
+    const printableOK = isPrintableRatio(c.result) >= 0.85;
+    let verdict, verdictReason;
+    if (hasStrongHit) { verdict = "confirmed"; verdictReason = "flag"; }
+    else if (echoPenalized || nearEchoPenalized) { verdict = "ambiguous"; verdictReason = "echo"; }
+    else if (flagPriority || (confidence >= 0.55 && printableOK) || (hasMeaningful && confidence >= 0.35 && c.chain.length <= 2)) {
+      verdict = "likely"; verdictReason = hasMeaningful ? "meaningful" : "highScore";
+    } else if (confidence >= 0.25) { verdict = "ambiguous"; verdictReason = "weak"; }
+    else { verdict = "normal"; verdictReason = "low"; }
+    const chips = [];
+    if (signal.signals.some((s) => s.kind === "target")) chips.push("target");
+    if (signal.signals.some((s) => s.kind === "flagStrong")) chips.push("flag");
+    if (signal.signals.some((s) => s.kind === "flagKeyword")) chips.push("keyword");
+    if (signal.signals.some((s) => s.kind === "structure")) chips.push("structure");
+    if (echo || nearEcho) chips.push("echo");
+    if (hasMeaningful) chips.push("meaningful");
+    if (printableOK) chips.push("printable");
+    if (c.chain.length > 1) chips.push("chain");
+    return { ...c, baseScore: c.score, score, confidence,
       echo, echoPenalized, nearEcho, nearEchoSimilarity: similarity, flagPriority,
+      verdict, verdictReason, chips: [...new Set(chips)],
       signals: signal.signals, signalAdjust: strongAdjust + ordinaryAdjust, signalsTruncated: signal.truncated };
   });
 
@@ -1135,6 +1361,9 @@ function _record(text, cur, opId, detectScore, results, seen, cribRe, queue, byt
     ...(_step.params ? { params: _step.params } : {}),
     ...(_step.paramLabel ? { paramLabel: _step.paramLabel } : {}),
   });
+  if (typeof results._onCandidate === "function") {
+    try { results._onCandidate(); } catch { /* 置脏回调异常不影响主流程 */ }
+  }
 
  // queue 可为 null：参数扫描候选只记录不入队（防 BFS 二层组合爆炸）。
  // queue.conf 保留但已非 confidence 来源（confidence 由 score 归一化），供未来扩展。

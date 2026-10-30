@@ -25,6 +25,7 @@
 import { register } from "./registry.js";
 import { EN as EN_BYTE_FREQ } from "./magic/langfreq.js";
 import { substitutionHillClimb } from "./cryptanalysis2.js";
+import { formatSubstitutionReport } from "./vigenereSolver.js";
 
 // ============================================================
 // 1. 单字母频率表（A-Z，百分比 0-100）
@@ -377,6 +378,9 @@ function subCipherSolver(text, p) {
   const s = text.toUpperCase();
   const cleanS = cleanAlpha(text);
   if (cleanS.length < 10) return "单表替换求解: 密文过短（需 ≥10 字母）";
+  if (p && p.lang && p.lang !== "en" && !knownStr) {
+    return formatSubstitutionReport(text, p.lang, { iterations, restarts, seed });
+  }
 
  // 已知映射：格式「密文=明文」，多对用逗号/分号/空格分隔（如 XH=TH,QM=IN，只取字母）
   const locked = new Map();
@@ -620,6 +624,10 @@ register({
     { key: "restarts", label: "随机重启", type: "number", default: 5, placeholder: "1-20" },
     { key: "seed", label: "随机种子", type: "number", default: 12345 },
     { key: "known", label: "已知映射", type: "text", default: "", placeholder: "可选，密文=明文，如 XH=TH,QM=IN（锁定后加速收敛）" },
+    { key: "lang", label: "语言（非英语走多语言 bigram 内核）", type: "select", default: "en", options: [
+      { value: "en", label: "英语（四元组）" }, { value: "de", label: "德语" }, { value: "es", label: "西班牙语" },
+      { value: "fr", label: "法语" }, { value: "nl", label: "荷兰语" }, { value: "pt", label: "葡萄牙语" },
+    ] },
   ],
   run: subCipherSolver,
 });
@@ -645,3 +653,4 @@ export {
   caesarShift,
   applySub,
 };
+

@@ -33,6 +33,9 @@
  * ============ 文本 / 文件双作用域 ============
  * 文本与文件参与的算法天然不同（文件走取证/隐写/容器解析，文本走编码/古典/现代密码）。
  * SCOPES = ["text","file"]，两套 op 集合与两套用户方案各存各的，互不串味。
+ * 文件域除解码器外还收文件向 run 型工具（pcap/strings/exif/归档解析等，本地桥除外），
+ * 并把 stegoFileScan 的固定自动集在 normal 及以上默认放行；fast 不跑重活。
+ * allowOps 对文件分析是「白名单」语义：null = 不限，Set/数组 = 只跑命中项。
  *
  * ============ 红线 ============
  * - core 层零 UI / i18n / main 依赖：只 import registry + ctfPresets（均为纯数据/纯函数）。
@@ -104,11 +107,12 @@ const CUSTOM_BUDGET = STRENGTH_PRESETS.enhanced.magic;
  * 文本作用域反之——排除纯文件向分类，避免对一段密文跑 pcap 修复这类无意义项。
  */
 // 「倾向文件输入」的分类：智能解码走文件优先路径时的判据之一。
-// ⚠ 分类拆分后必须同步：原 forensic/stego 各自裂成 archive+crack+forensic+filefmt
-//  与 image+audio+stego，漏改会让这些类的 op 在智能解码里丢掉"文件优先"待遇。
+// ⚠ 分类拆分后必须同步：forensic/stego 已裂成 archive+crack+forensic+filefmt
+//  与 image+audio+stegoFile，漏改会让这些类的 op 在智能解码里丢掉"文件优先"待遇。
+// 保留 "stego" 作历史兼容（旧插件/旧方案可能仍用该 id）。
 const FILE_FIRST_CATS = new Set([
   "archive", "crack", "forensic", "filefmt",
-  "image", "audio", "stego",
+  "image", "audio", "stego", "stegoFile",
   "data", "analysis",
 ]);
 
@@ -131,6 +135,41 @@ export const BRUTE_OPS = [
 /** 某 id 是否属爆破池。 */
 export function isBruteOp(id) {
   return BRUTE_OPS.includes(id);
+}
+
+/**
+ * 文件分析固定自动集的成员（与 stegoFileScan 的历史行为对齐）。
+ * 默认档及以上放行基础隐写尝试；重/解释器类按 FILE_BASELINE_MIN_LEVEL 抬高门槛，
+ * 避免「拖图即自动跑 Piet」这类高噪声重活污染默认结果。fast 档不跑重活。
+ */
+// jsteg / F5 仅手动：F5 误报率高、jsteg 耗时占空间，不进档位预设的固定自动集。
+export const FILE_BASELINE_OPS = [
+  "outguess", "steghide",
+  "morseWav", "watermarkhFft", "pietExec",
+  "rasterStego", "mp3stego",
+];
+const _fileBaseline = new Set(FILE_BASELINE_OPS);
+
+/**
+ * 固定自动集成员的最低强度档。未列出的成员默认 normal；
+ * Piet 执行是完整解释器（重、噪声大），只有 enhanced 及以上才自动进一把梭。
+ */
+export const FILE_BASELINE_MIN_LEVEL = {
+  pietExec: "enhanced",
+};
+const LEVEL_ORDER = { fast: 0, normal: 1, enhanced: 2, extreme: 3, max: 4 };
+
+/** 某 id 是否属文件分析固定自动集。 */
+export function isFileBaselineOp(id) {
+  return _fileBaseline.has(id);
+}
+
+/** 固定自动集成员在指定强度档是否应自动参与（fast 一律不跑重活）。 */
+export function isFileBaselineAllowedAt(id, level) {
+  if (!_fileBaseline.has(id)) return false;
+  if (level === "fast" || !level) return false;
+  const min = FILE_BASELINE_MIN_LEVEL[id] || "normal";
+  return (LEVEL_ORDER[level] ?? LEVEL_ORDER.normal) >= (LEVEL_ORDER[min] ?? LEVEL_ORDER.normal);
 }
 
 /**
@@ -173,6 +212,16 @@ export function isAutoDecodable(op) {
 /** 该 op 是否吃原始字节（文件作用域主力）。 */
 function acceptsBytes(op) {
   return !!(op && op.acceptsBytes);
+}
+
+/**
+ * 文件作用域可实际调度的 op：有 decode 或 run，且不依赖本地桥。
+ * 文件侧很多能力是 run 型取证工具（pcap/strings/exif/归档解析），
+ * 它们不参与 magicDecode，但必须出现在文件页签并可按强度放行。
+ */
+export function isFileRunnable(op) {
+  if (!op || op.requiresBridge) return false;
+  return typeof op.decode === "function" || typeof op.run === "function";
 }
 
 /**
@@ -220,26 +269,52 @@ export function buildTierMap() {
 }
 
 /**
+ * 文件作用域 tier：解码器沿用 opTier；run 型文件工具按热度补层，冷门压到 5。
+ * noAuto 的 op 仍列出（供用户手动勾选），但 UI 侧标记 auto=false，档位默认集合不收。
+ */
+function fileOpTier(op) {
+  const t = opTier(op);
+  if (t) return t;
+  if (!isFileRunnable(op)) return 0;
+  const meta = CTF_HOT_META[op.id];
+  if (meta && meta.rank === 1) return 1;
+  if (meta && meta.rank === 2) return 2;
+  return 5;
+}
+
+/**
  * 某作用域下「候选池」：该作用域值得列出/参与的 op 列表。
- * - text：排除只对文件有意义的分类（除非该 op 也能吃文本）
- * - file：优先文件向分类 + acceptsBytes，其余仍可勾（用户可能先把文件读成文本）
- * 返回按分类分组，供 UI 折叠渲染；同时带 tier 供强度档筛选。
+ * - text：只收可自动解码的 op，并排除只对文件有意义的分类（除非该 op 也能吃文本）
+ * - file：收 decode/run 两类（本地桥除外）；文件向分类 + acceptsBytes 标 primary，
+ *   其余仍可勾（用户可能先把文件读成文本）
+ * 返回按分类分组，供 UI 折叠渲染；同时带 tier 供强度档筛选、auto 供档位默认集合过滤。
  */
 export function opPool(scope = "text") {
   const pool = [];
   for (const op of OPS) {
-    const tier = opTier(op);
-    if (!tier) continue;                       // 不可自动解码的不进池
-    const fileward = FILE_FIRST_CATS.has(op.cat) || acceptsBytes(op);
+    if (isBruteOp(op.id)) continue;            // 爆破走独立通道，不进普通候选池
     if (scope === "file") {
+      const tier = fileOpTier(op);
+      if (!tier) continue;
+      const fileCat = FILE_FIRST_CATS.has(op.cat);
+      // 解码器全域保留（文件内容可能先当文本解）；run 型只收文件向分类，
+      // 避免把哈希计算、非对称密钥工具等纯文本/通用 run op 塞进文件页签。
+      // 固定自动集成员即使分类不在文件向清单也保留（如 PNG 的 Piet 执行）。
+      if (!isAutoDecodable(op) && !(fileCat && isFileRunnable(op)) && !_fileBaseline.has(op.id)) continue;
       // 文件域：文件向 op 排前，其余照列（不硬排除，留用户自主）
-      pool.push({ id: op.id, cat: op.cat, name: op.name, tier, primary: fileward });
-    } else {
-      // 文本域：纯文件向（吃字节且属文件分类）的排除，其余照列
-      const onlyFile = acceptsBytes(op) && FILE_FIRST_CATS.has(op.cat);
-      if (onlyFile) continue;
-      pool.push({ id: op.id, cat: op.cat, name: op.name, tier, primary: true });
+      const fileward = fileCat || acceptsBytes(op);
+      pool.push({
+        id: op.id, cat: op.cat, name: op.name, tier,
+        primary: fileward, auto: !op.noAuto, baseline: _fileBaseline.has(op.id),
+      });
+      continue;
     }
+    const tier = opTier(op);
+    if (!tier) continue;                       // 文本域：不可自动解码的不进池
+    // 文本域：纯文件向（吃字节且属文件分类）的排除，其余照列
+    const onlyFile = acceptsBytes(op) && FILE_FIRST_CATS.has(op.cat);
+    if (onlyFile) continue;
+    pool.push({ id: op.id, cat: op.cat, name: op.name, tier, primary: true, auto: true });
   }
   return pool;
 }
@@ -268,14 +343,99 @@ export function opPoolByCat(scope = "text") {
   return out;
 }
 
-/** 某档强度在某作用域下默认参与的 op id 集合。 */
+/** 某档强度在某作用域下默认参与的 op id 集合（noAuto 项只在用户手动勾选时生效）。 */
 export function opsForLevel(level, scope = "text") {
   const maxTier = LEVEL_TIER[level] ?? LEVEL_TIER.normal;
+  // 文件域固定自动集按成员最低档放行（normal 基础集 / enhanced 起 Piet）。
+  const keepBaseline = scope === "file" && !!STRENGTH_PRESETS[level];
   const out = new Set();
   for (const o of opPool(scope)) {
-    if (o.tier <= maxTier) out.add(o.id);
+    if (o.auto === false) continue;
+    if (o.tier <= maxTier || (keepBaseline && isFileBaselineAllowedAt(o.id, level))) out.add(o.id);
   }
   return out;
+}
+
+/** 某作用域允许用户勾选的 op id 集合（自定义档 / 方案载入的过滤口径）。 */
+export function selectableOpIds(scope = "text") {
+  return new Set(opPool(scope).map((o) => o.id));
+}
+
+// ============================================================
+// 作用域配置归一化（纯函数，UI 与 main 共用；零 DOM）
+// ============================================================
+
+/** 解析层数只允许 1..3；非法值回退到档位预设。 */
+export function normalizeDepth(value, fallback = 1) {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(1, Math.min(3, n));
+}
+
+/** 缺省作用域配置：默认档 + 空勾选 + 默认层数。 */
+export function defaultScopeConfig(scope = "text") {
+  const preset = STRENGTH_PRESETS.normal;
+  return {
+    level: "normal",
+    customIds: [],
+    depth: preset.magic.maxDepth,
+    bruteIds: [],
+  };
+}
+
+/** 该对象是否是 { text?, file? } 双作用域形状（旧单层 {level,customIds} 不算）。 */
+export function isScopeBundle(cfg) {
+  if (!cfg || typeof cfg !== "object") return false;
+  return !!((cfg.text && typeof cfg.text === "object") || (cfg.file && typeof cfg.file === "object"));
+}
+
+/**
+ * 归一化单个作用域的配置：
+ * - level 非法回退 normal；customIds 只保留该作用域池内真实存在的 id（去重）
+ * - depth 夹到 1..3，缺省取档位预设（custom 取 enhanced）
+ * - bruteIds 只保留真实爆破 op，且只在 text 作用域有效
+ * @param {object} cfg { level?, customIds?, depth?, bruteIds? }
+ * @param {"text"|"file"} scope
+ */
+export function normalizeScopeConfig(cfg = {}, scope = "text") {
+  const sc = SCOPES.includes(scope) ? scope : "text";
+  const src = cfg && typeof cfg === "object" ? cfg : {};
+  const level = src.level === "custom" || STRENGTH_PRESETS[src.level] ? src.level : "normal";
+  const preset = STRENGTH_PRESETS[level === "custom" ? "enhanced" : level];
+  const validIds = selectableOpIds(sc);
+  const customIds = Array.isArray(src.customIds)
+    ? [...new Set(src.customIds.filter((id) => typeof id === "string" && validIds.has(id)))]
+    : [];
+  const bruteIds = sc === "text" && Array.isArray(src.bruteIds)
+    ? [...new Set(src.bruteIds.filter((id) => isBruteOp(id)))]
+    : [];
+  return {
+    level,
+    customIds,
+    depth: normalizeDepth(src.depth, preset.magic.maxDepth),
+    bruteIds,
+  };
+}
+
+/**
+ * 归一化新旧两种弹窗配置：
+ * - 双作用域 {text,file} → 两套各自归一
+ * - 旧单层 {level,customIds} → 归到 text，file 用默认 normal
+ * @returns {{text:object, file:object, legacy:boolean}}
+ */
+export function normalizeScopeBundle(cfg = {}) {
+  if (isScopeBundle(cfg)) {
+    return {
+      text: normalizeScopeConfig(cfg.text, "text"),
+      file: normalizeScopeConfig(cfg.file, "file"),
+      legacy: false,
+    };
+  }
+  return {
+    text: normalizeScopeConfig(cfg, "text"),
+    file: defaultScopeConfig("file"),
+    legacy: true,
+  };
 }
 
 // ============================================================
@@ -284,32 +444,65 @@ export function opsForLevel(level, scope = "text") {
 
 /**
  * 把「强度档 + 自定义勾选」解析成一键解码要用的参数。
- * @param {object} cfg { level, scope, customIds?:string[] }
- * @returns {{ level, scope, allowOps:Set<string>, magic:object, exhaust:boolean }}
+ * @param {object} cfg { level, scope, customIds?:string[], depth?:1..3, bruteIds?:string[] }
+ * @returns {{ level, scope, allowOps:Set<string>|null, magic:object, exhaust:boolean, bruteOps:string[] }}
  *   allowOps 为 null 表示不限制（max 档全放开，交给 magic 原有逻辑）。
+ *   file 作用域的 allowOps 同时含 decode/run 两类，供文件分析按强度过滤。
  */
 export function resolveDecodeConfig(cfg = {}) {
-  const scope = SCOPES.includes(cfg.scope) ? cfg.scope : "text";
-  const level = cfg.level === "custom" || STRENGTH_PRESETS[cfg.level] ? cfg.level : "normal";
+  const src = cfg && typeof cfg === "object" ? cfg : {};
+  const scope = SCOPES.includes(src.scope) ? src.scope : "text";
+  const level = src.level === "custom" || STRENGTH_PRESETS[src.level] ? src.level : "normal";
+  const bruteOps = scope === "text" ? bruteIdsOf(src.bruteIds) : [];
 
   if (level === "custom") {
-    const ids = Array.isArray(cfg.customIds) ? cfg.customIds.filter((id) => {
-      const op = getOp(id);
-      return op && isAutoDecodable(op);
-    }) : [];
+    const poolIds = selectableOpIds(scope);
+    const ids = Array.isArray(src.customIds) ? src.customIds.filter((id) => poolIds.has(id)) : [];
+    const magic = { ...CUSTOM_BUDGET };
+    magic.maxDepth = normalizeDepth(src.depth, magic.maxDepth);
     return {
       level, scope,
       allowOps: new Set(ids),
-      magic: { ...CUSTOM_BUDGET },
+      magic,
       exhaust: false,
-      bruteOps: bruteIdsOf(cfg.bruteIds),
+      bruteOps,
     };
   }
 
   const preset = STRENGTH_PRESETS[level];
   // max 档不设白名单：全部放开，等同旧行为（避免白名单反而挡掉插件新注册的 op）
   const allowOps = level === "max" ? null : opsForLevel(level, scope);
-  return { level, scope, allowOps, magic: { ...preset.magic }, exhaust: preset.exhaust, bruteOps: bruteIdsOf(cfg.bruteIds) };
+  const magic = { ...preset.magic };
+  magic.maxDepth = normalizeDepth(src.depth, magic.maxDepth);
+  return { level, scope, allowOps, magic, exhaust: preset.exhaust, bruteOps };
+}
+
+/**
+ * allowOps 过滤语义（供文件分析 / 隐写自动尝试等消费方复用）。
+ * null/undefined = 不限制；Set 或数组按 id 命中；其他值按不限制处理。
+ */
+export function isOpAllowed(allowOps, id) {
+  if (allowOps == null) return true;
+  if (allowOps instanceof Set) return allowOps.has(id);
+  if (Array.isArray(allowOps)) return allowOps.includes(id);
+  return true;
+}
+
+/**
+ * 「应用」回执：始终双作用域 {text,file}；顶层再平铺 text 字段，
+ * 让仍按 {level,customIds} 读取的旧调用无需改签名即可工作。
+ */
+export function buildApplyPayload(textCfg, fileCfg) {
+  const text = normalizeScopeConfig(textCfg, "text");
+  const file = normalizeScopeConfig(fileCfg, "file");
+  return {
+    text,
+    file,
+    level: text.level,
+    customIds: text.customIds,
+    depth: text.depth,
+    bruteIds: text.bruteIds,
+  };
 }
 
 /** 从用户勾选里挑出真实注册的爆破 op id（幽灵 id 剔除）。 */

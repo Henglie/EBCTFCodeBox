@@ -14,6 +14,7 @@
  * encode(text, p) / decode(text, p) 双向；只有一向的只填一个
  * run(text, p) 单向工具（如哈希），填了 run 就不显示双向切换
  * detect(text) 可选，一键解码用的识别指纹，返回 0..1 置信度
+ * magicParams 可选，仅供一键解码打分时覆盖参数（如 { all: false }）；不影响 UI 与直接调用
  *
  * 产物协议（2026-09-02）：encode/decode/run 可返回对象
  * { text: string, files: [{ name, mime, bytes|dataUrl }] } —— text 进输出区，

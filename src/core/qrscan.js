@@ -49,6 +49,7 @@ import { sampleAligned, buildRefinedCandidates } from "./qrscanRefine.js";
 import { detectAndSample } from "./symboldetect.js";
 import { decodeFindlessFromGray, decodeFindless, estimateInk, moduleInkConfidence } from "./qrFindless.js";
 import { zxingReadRgba, qrZxingFormatsOf } from "./qrZxing.js";
+import { fixQrText, qrPayloadKind } from "./qrText.js";
 
 // ============================================================
 // 输入解析：dataURL / base64 / hex / 原始字节 → Uint8Array
@@ -219,7 +220,7 @@ export function concludeDiag(diag) {
     version: "版本信息（v7+ 的 18 位 BCH）与尺寸推出的版本不一致——版本区被涂改。",
     data: "取数后无法解析出有效数据段。",
     rs: "RS 纠错失败：码字错误/擦除超出该块纠错容量（ISO/IEC 18004 §6.5：e + 2v ≤ nsym，nsym 见附录 B 分块表）——信息已越过纠错上界，需更多可见模块或更精确的擦除位置。",
-    erasure: "标出的擦除位置数已超过该块校验码字数 nsym（或达到 nsym 而无残余校验）——擦除信息本身不足以定位错误，属容量上界。",
+    erasure: "标出的擦除位置数已超过该块校验码字数 nsym（或达到 nsym 而无残余校验）——擦除信息本身不足以定位错误，属容量上界。若整片灰底/涂改遮住大块数据区（如超过总模块数约 30%），已超过 QR 最高纠错级 H 的恢复上限，属信息论不可恢复（known-gap），不是参数问题。",
     segment: "数据段解析失败（模式指示符/字符计数越界）。",
     capacity: "解出的文本装不进该 (版本, 纠错级)——判为假成功并拒绝。",
     reencode: "解出的文本无法重编码回同一码字流——判为假成功并拒绝。",
@@ -249,7 +250,7 @@ export function renderDiagReport(diag, result) {
     for (const h of hits) {
       L.push("　· " + (h.format || "-") + (h.ecLevel ? "/" + h.ecLevel : "") +
         (h.isInverted ? " 反色" : "") + (h.isMirrored ? " 镜像" : "") +
-        " → " + JSON.stringify(String(h.text).slice(0, 70)));
+        " → " + JSON.stringify(String(h.textFixed != null ? h.textFixed : h.text).slice(0, 70)));
     }
   } else {
   const ink = diag.image.ink;
@@ -536,8 +537,14 @@ function scanGrayDiag(gray, w, h, opt = {}) {
         return { text: r3.text, version: ver, size: n, ecl: r3.ecl, mask: r3.mask,
                  errorCount: r3.errorCount, erasureCount: r3.erasureCount, via: `${via}+eras(${bins[k].m})` };
       }
-      rec(diag, "decodes", { via: `${via}+eras(${bins[k].m})`, n, ok: false, stage: "capacity",
-        reason: `严判据：${clip(String(strictMiss), 120)}；宽判据：${clip(String((err && err.message) || (r3 && r3.reason) || "未通过"), 120)}` });
+      // 失败阶段按实际证据归类：旧实现一律写 "capacity"，会让「遮挡超过 RS 容量、
+      // 32 组组合全败」误报成「解出的文本装不进容量」，与 RS 擦除失败的事实不符。
+      const looseMiss = String((err && err.message) || (r3 && r3.reason) || "未通过");
+      const sawText = !!(r2 && r2.ok && r2.text) || !!(r3 && r3.ok && r3.text);
+      const failStage = sawText ? "capacity"
+        : (/重编码码字流不一致|重编码判据不通过|无法重编码/.test(String(strictMiss) + " " + looseMiss) ? "reencode" : "erasure");
+      rec(diag, "decodes", { via: `${via}+eras(${bins[k].m})`, n, ok: false, stage: failStage,
+        reason: `严判据：${clip(String(strictMiss), 120)}；宽判据：${clip(looseMiss, 120)}` });
     }
     return null;
   };
@@ -701,22 +708,112 @@ function scanGray(gray, w, h, opt = {}) {
 // 多符号平铺、网点半色调、低对比底图。后者恰是 ZXing-C++ 检测器的长项，两者互补
 // 而非替换：引擎不可用（资产未随包/加载失败）时本函数返回 null，静默回退自研链路，
 // 既有行为一行不变。
+// 多符号排序口径：QR 永远在最前；QR 内部 flag 结构 > URL/邮箱 > 普通；
+// 之后按 Aztec / DataMatrix / PDF417 / 一维码（其余格式殿后）。序号作最终稳定键。
+const ZX_FORMAT_RANK = { QRCode: 0, Aztec: 1, DataMatrix: 2, PDF417: 3 };
+function zxFormatRank(format) {
+  const r = ZX_FORMAT_RANK[format];
+  return r == null ? 4 : r;
+}
+function zxQrSubRank(text) {
+  const k = qrPayloadKind(text);
+  return k === "flag" ? 0 : (k === "url" || k === "email") ? 1 : 2;
+}
+function zxHitRank(h) {
+  if (h.format === "QRCode") return zxQrSubRank(h.textFixed || h.text);
+  return 10 + zxFormatRank(h.format || "");
+}
+function zxPoint(p) {
+  if (!p || typeof p !== "object") return null;
+  const x = Number(p.x), y = Number(p.y);
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+}
+/** 每个命中符号的出处（引擎原始序号 + 四角坐标 + 反色/镜像 + 版本）。 */
+function zxSourceOf(h, index) {
+  const pos = h.position || {};
+  const position = {
+    topLeft: zxPoint(pos.topLeft),
+    topRight: zxPoint(pos.topRight),
+    bottomRight: zxPoint(pos.bottomRight),
+    bottomLeft: zxPoint(pos.bottomLeft),
+  };
+  const corners = [position.topLeft, position.topRight, position.bottomRight, position.bottomLeft]
+    .map((p) => (p ? [p.x, p.y] : null));
+  return {
+    engine: "zxing",
+    index,
+    format: h.format || "",
+    version: h.version || "",
+    ecLevel: h.ecLevel || "",
+    isInverted: !!h.isInverted,
+    isMirrored: !!h.isMirrored,
+    orientation: typeof h.orientation === "number" ? h.orientation : 0,
+    position,
+    corners,
+  };
+}
+
+// ZXing 在病态图上可能长时间不返回（Phantom_QR 两张图会卡死主线程）。
+// 浏览器里放进独立 Worker，6s 硬超时后 terminate；Node/无 Worker 环境才回退直调。
+function zxingViaWorker(rgba, w, h, options) {
+  if (typeof Worker !== "function") return Promise.resolve({ fallback: true });
+  let worker;
+  try {
+    worker = new Worker(new URL("./qrZxingWorker.js", import.meta.url), { type: "module" });
+  } catch {
+    return Promise.resolve({ fallback: true });
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { worker.terminate(); } catch { /* ignore */ }
+      resolve(value);
+    };
+    const timer = setTimeout(() => finish({ timeout: true, hits: [] }), 6000);
+    worker.onmessage = (event) => finish(event.data || { hits: [] });
+    worker.onerror = () => finish({ error: "worker", hits: [] });
+    try {
+      const copy = new Uint8ClampedArray(rgba);
+      worker.postMessage({ rgba: copy.buffer, width: w, height: h, options }, [copy.buffer]);
+    } catch {
+      finish({ fallback: true });
+    }
+  });
+}
+
 async function tryZxing(rgba, w, h, opt = {}) {
   if (!rgba || !w || !h) return null;
   try {
     const formats = qrZxingFormatsOf(opt.formats);
-    let hits = await zxingReadRgba(rgba, w, h, { formats });
+    const workerScan = async (options) => {
+      const r = await zxingViaWorker(rgba, w, h, options);
+      if (r.fallback) return zxingReadRgba(rgba, w, h, options);
+      if (r.timeout || r.error) return null;
+      return r.hits || [];
+    };
+    let hits = await workerScan({ formats });
     if (!hits || !hits.length) {
-      // 二段重试：tryDownscale 对「生成型锐利 1D 条码」会把模块缩糊导致读不出
-      //（拍照大图找小码的优化，对满幅条码反有害）；空结果时关掉再扫一次，仅失败路径付代价。
-      hits = await zxingReadRgba(rgba, w, h, { formats, tryDownscale: false });
+      // 失败重试：tryDownscale 对「超小图/1D 码」不友好；但超时后不再重试，避免双倍卡死。
+      if (hits === null) return null;
+      hits = await workerScan({ formats, tryDownscale: false });
     }
     if (!hits || !hits.length) return null;
-    // 放开读码范围后**二维码仍排最前**：本 op 的主语义是二维码，其余符号（条码/DataMatrix/
-    // PDF417/Aztec）在诊断报告里逐个列出。若不做这步，「全部格式」会把 Aztec 之类顶到第一条，
-    // 用户反而看不到图里的二维码（实测 0.png：不排序时首条变成 Aztec 而不是 QR）。
-    // 组内保持引擎原顺序（稳定划分），不改变同一格式内的先后。
-    return hits.filter((h) => h.format === "QRCode").concat(hits.filter((h) => h.format !== "QRCode"));
+    // 逐符号补 textFixed（GBK/GB18030 乱码修复）与 source（出处），随后稳定排序。
+    // 不丢弃任何命中：排序只改变报告/结果顺序。
+    const annotated = hits.map((h, index) => {
+      const fixed = fixQrText(h.text, h.bytes);
+      const item = Object.assign({}, h, { textFixed: fixed, source: zxSourceOf(h, index) });
+      if (fixed !== h.text) {
+        item.textOriginal = h.text;
+        item.text = fixed;
+      }
+      return item;
+    });
+    annotated.sort((a, b) => (zxHitRank(a) - zxHitRank(b)) || (a.source.index - b.source.index));
+    return annotated;
   } catch {
     return null;
   }
@@ -730,7 +827,7 @@ function zxingHitToResult(h, n) {
   if (h.isInverted) tags.push("inv");
   if (h.isMirrored) tags.push("mir");
   return {
-    text: h.text,
+    text: h.textFixed != null ? h.textFixed : h.text,
     via: tags.join("/") + (n > 1 ? "+multi" + n : ""),
     version: hasV ? v : "-",
     size: hasV ? 17 + 4 * v : "?",
@@ -759,6 +856,15 @@ export async function scanRgba(rgba, w, h, opt = {}) {
     diag.zxing = { hits: zxHits };
     diag.ms = Date.now() - t0;
     return { ok: true, result: zxingHitToResult(zxHits[0], zxHits.length), diag, zxHits };
+  }
+  // 大图不走自研 legacy 回退：Phantom_QR 的 1200×800 / 2400×1600 图会让
+  // scanGrayDiag 的病态路径长时间不返回。ZXing 已超时/无命中时直接交给上层
+  // 的同步 PNG/BMP QR 路径，主线程不再被二次扫描拖住。
+  if (opt.skipLegacy === true || w * h > 800000) {
+    const diag = newDiag(w, h);
+    diag.ms = Date.now() - t0;
+    diag.legacySkipped = "large-image";
+    return { ok: false, result: null, error: "大图跳过 legacy 回退（防卡死）", diag };
   }
   return scanGrayDiag(rgbaToGray(rgba, w, h), w, h, opt);
 }
@@ -839,17 +945,17 @@ register({
   cat: "image",
   family: "qr",
   familyLabel: "scan",
-  name: "二维码扫描解析",
-  desc: "二维码一个入口全包：粘贴图片自动扫描，粘贴文本矩阵自动解析。图片（PNG/JPEG/GIF/BMP/WebP）解出内容；0/1 矩阵或 ASCII art 给出版本/纠错级/掩码/finder 体检。定位符被抹掉或遮挡也能解（网格重建 + 穷举 + 擦除纠错）。「读码范围」放开后可一并读出图中的条码（Code128/EAN/UPC/ITF 等）与 DataMatrix/PDF417/Aztec，多枚符号在诊断报告里逐个列出；勾「诊断报告」失败时给出卡在哪一步与建议。全程本地计算。",
+  name: "二维码 / 条形码扫描解析",
+  desc: "二维码与条形码统一扫描入口：默认读全部可读格式（QR / Code128 / Code39 / EAN / UPC / ITF / Codabar / DataMatrix / PDF417 / Aztec）。粘贴图片自动扫描，粘贴文本矩阵自动解析。图片（PNG/JPEG/GIF/BMP/WebP）解出内容；0/1 矩阵或 ASCII art 给出版本/纠错级/掩码/finder 体检。定位符被抹掉或遮挡也能解（网格重建 + 穷举 + 擦除纠错）。「读码范围」放开后可一并读出图中的条码（Code128/EAN/UPC/ITF 等）与 DataMatrix/PDF417/Aztec，多枚符号在诊断报告里逐个列出；勾「诊断报告」失败时给出卡在哪一步与建议。全程本地计算。",
   acceptsBytes: true,
   params: [
     { key: "report", label: "诊断报告", type: "bool", default: false },
     { key: "budgetMs", label: "单张时间预算(ms)", type: "number", default: 8000 },
-    { key: "formats", label: "读码范围", type: "select", default: "qr",
+    { key: "formats", label: "读码范围", type: "select", default: "all",
       options: [
-        { value: "qr", label: "仅二维码（默认）" },
+        { value: "qr", label: "仅二维码" },
         { value: "qr_linear", label: "二维码 + 线性条码" },
-        { value: "all", label: "全部可读格式（含 DataMatrix/PDF417/Aztec）" },
+        { value: "all", label: "全部可读格式（默认，含 1D/DataMatrix/PDF417/Aztec）" },
       ] },
   ],
   run: qrScanUnified,

@@ -101,6 +101,20 @@ import E_EN_RAND_BEACON from "./edu-en/edu-randBeacon.en.js"; // Public randomne
 import E_EN_EDU_T359 from "./edu-en/edu-t359.en.js"; // RSA sign (rsaSign) 1 — partial shard, incl. the eNFS deployment tip
 import E_EN_EDU_IMAGE_TOOLBOX from "./edu-en/edu-imageToolbox.en.js"; // image toolbox batch 8（imageCompress/imageGray/imagePixelate/imageFrosted/imageSketch/imageToText/gifCompose/img2dataURI）
 import EDU_EN_BATCH7_NEW from "./edu-en/edu-batch7-new.en.js"; // v0.1.11 迷因四件套 + 图片/进制反向 9 op（xianzi/hajimi/zako×2/dataURIToImage/img2bits/imageToData/floatToDecimal/complementToDec）
+import EDU_EN_CN_LOOKUP from "./edu-en/edu-cn-lookup.en.js"; // v0.1.12 五种中文查字编码
+import EDU_EN_P0_20261025 from "./edu-en/edu-p0-20261025.en.js"; // v0.1.12 P0：AEAD/PQC/ZIP + 进制小数
+import EDU_EN_T690 from "./edu-en/edu-t690.en.js"; // v0.1.12 T690：ECDH/RSA-OAEP/HPKE
+import EDU_EN_T693 from "./edu-en/edu-t693.en.js"; // T693：Mach-O/WASM
+import EDU_EN_T694 from "./edu-en/edu-t694.en.js"; // T694：UTF-32/GB18030
+import EDU_EN_T703 from "./edu-en/edu-t703.en.js"; // T703：SHA-224/cSHAKE
+import EDU_EN_REGEX from "./edu-en/edu-regex.en.js"; // regexTool: generic regex extract/replace
+import EDU_EN_TEACH from "./edu-en/edu-teach.en.js"; // teaching trio: BFV/MPC/quantum
+import EDU_EN_T689T710 from "./edu-en/edu-t689t710.en.js";
+import EDU_EN_T723 from "./edu-en/edu-t723.en.js";
+import EDU_EN_T722 from "./edu-en/edu-t722.en.js";
+import EDU_EN_T720 from "./edu-en/edu-t720.en.js";
+import EDU_EN_R18 from "./edu-en/edu-r18.en.js"; // R18: lsbDeep/rasterStego/mp3stego/imageThumb
+import EDU_EN_T721 from "./edu-en/edu-t721.en.js"; // 2026-10-26: Falcon/Poseidon/KZG/SSH·PKCS12·JWK/GCM·NTRU/Xoodyak/ECC (17 ops)
 
 const EDU_EN = Object.assign(
   {},
@@ -186,6 +200,20 @@ const EDU_EN = Object.assign(
   E_EN_EDU_T359,
   E_EN_EDU_IMAGE_TOOLBOX,
   EDU_EN_BATCH7_NEW,
+  EDU_EN_CN_LOOKUP,
+  EDU_EN_P0_20261025,
+  EDU_EN_T690,
+  EDU_EN_T693,
+  EDU_EN_T694,
+  EDU_EN_T703,
+  EDU_EN_REGEX,
+  EDU_EN_TEACH,
+  EDU_EN_T689T710,
+  EDU_EN_T723,
+  EDU_EN_T722,
+  EDU_EN_T720,
+  EDU_EN_R18,
+  EDU_EN_T721,
 );
 
 import { EN as INTEGRATED, HASH_VECTORS, BASE_NOTES, EXTRA_ALIASES, CRC_PARAMS } from "./edu/edu-integrated.js";

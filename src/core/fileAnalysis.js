@@ -48,6 +48,246 @@ function _decodeUtf8Fatal(bytes) {
   return r.text;
 }
 
+export const SECTION_PRIORITY = Object.freeze({
+  "img-qr-flag": 1,
+  "img-qr": 6,
+  "audio-dtmf-flag": 10,
+  "audio-lsb-flag": 10,
+  "traffic-flag": 10,
+  "flag-search": 10,
+  "trailing-decode": 10,
+  "lsb-deep-hit": 16,
+  "img-thumbnails": 18,
+  "traffic-conclusion": 22,
+  "mqtt-topics": 22,
+  "audio-dtmf": 22,
+  "audio-morse": 22,
+  "usb-keyboard": 22,
+  "usb-mouse": 22,
+  "img-sizerecover": 26,
+  "png-ihdr": 26,
+  "img-meta": 50,
+  "ooxml-text": 52,
+  "fileinfo": 55,
+  "audio-format": 55,
+  "audio-sstv": 55,
+  "strings": 58,
+  "zip": 60,
+  "b64-embed": 62,
+  "zero-width": 64,
+  "trailing": 65,
+  "http-summary": 72,
+  "dns-summary": 73,
+  "tls-sni": 73,
+  "tcp-transcript": 74,
+  "pcap-tcp": 76,
+  "pcap-http": 76,
+  "pcap-dns": 76,
+  "pcap-icmp": 76,
+  "usb-other": 78,
+  "usb-none": 78,
+  "pcap-overview": 79,
+  "traffic-overview": 79,
+  "tcp-frames": 85,
+  "entropy": 900,
+  "img-colorfreq": 910,
+  "binwalk": 920,
+  "png-chunks": 930,
+  "lsb-scan": 935,
+  "lsb": 940,
+  "audio-lsb": 940,
+  "empty": 999,
+});
+
+const SECTION_BADGE = {
+  "img-qr": "QR",
+  "img-qr-flag": "FLAG",
+  "img-thumbnails": "缩略图",
+  "img-sizerecover": "宽高",
+  "img-meta": "EXIF",
+  "img-colorfreq": "颜色",
+  "fileinfo": "文件",
+  "ooxml-text": "文档",
+  "strings": "字符串",
+  "zip": "ZIP",
+  "b64-embed": "Base64",
+  "zero-width": "零宽",
+  "trailing": "尾附",
+  "trailing-decode": "尾附",
+  "flag-search": "FLAG",
+  "entropy": "熵",
+  "binwalk": "Binwalk",
+  "png-chunks": "CRC",
+  "lsb": "LSB",
+  "lsb-scan": "LSB",
+  "lsb-deep-hit": "LSB命中",
+  "png-ihdr": "宽高",
+  "traffic-flag": "FLAG",
+  "traffic-conclusion": "流量",
+  "traffic-overview": "流量",
+  "mqtt-topics": "MQTT",
+  "http-summary": "HTTP",
+  "dns-summary": "DNS",
+  "tls-sni": "TLS",
+  "tcp-transcript": "TCP",
+  "tcp-frames": "帧",
+  "pcap-overview": "流量",
+  "pcap-tcp": "TCP",
+  "pcap-http": "HTTP",
+  "pcap-dns": "DNS",
+  "pcap-icmp": "ICMP",
+  "usb-other": "USB",
+  "usb-none": "USB",
+  "audio-dtmf": "DTMF",
+  "audio-dtmf-flag": "FLAG",
+  "audio-morse": "摩斯",
+  "audio-sstv": "SSTV",
+  "audio-lsb": "LSB",
+  "audio-lsb-flag": "FLAG",
+  "audio-format": "音频",
+  "audio-none": "音频",
+  "empty": "空",
+};
+
+const LEVEL_WEIGHT = { alert: 0, warn: 1, info: 2 };
+
+function _sectionText(s) {
+  return String((s && (s.body != null ? s.body : s.text)) || "");
+}
+
+function _inferPriority(s) {
+  const id = String((s && s.id) || "");
+  const body = _sectionText(s);
+  if (id.startsWith("usb-keyboard") || id.startsWith("usb-mouse")) return 22;
+  if (id.startsWith("img-qr")) {
+    if (id.includes("flag")) return 1;
+    if (/未识别到|暂不支持|无法识别/.test(body)) return 78;
+    return 6;
+  }
+  if (id === "flag-search") {
+    return (s.level === "alert" || /flag\s*花括号/.test(body)) ? 10 : 60;
+  }
+  if (id === "zero-width") return s.level === "alert" ? 16 : 64;
+  if (id === "trailing-decode") {
+    return (s.level === "alert" || /最终 flag|命中 flag|★ flag/i.test(body)) ? 10 : 64;
+  }
+  if (id === "png-ihdr") {
+    return /CRC32 不符|IHDR 块异常|过短/.test(body) ? 26 : 55;
+  }
+  if (SECTION_PRIORITY[id] != null) return SECTION_PRIORITY[id];
+  return 80;
+}
+
+function _inferBadge(s) {
+  const id = String((s && s.id) || "");
+  if (id.startsWith("usb-keyboard")) return "键盘";
+  if (id.startsWith("usb-mouse")) return "鼠标";
+  if (id.startsWith("img-qr-flag")) return "FLAG";
+  if (id.startsWith("img-qr")) return /未识别到|暂不支持|无法识别/.test(_sectionText(s)) ? "QR" : "QR";
+  if (id.startsWith("usb-")) return "USB";
+  if (id.startsWith("pcap-")) return SECTION_BADGE[id] || "流量";
+  if (id.startsWith("traffic-")) return SECTION_BADGE[id] || "流量";
+  return SECTION_BADGE[id] || "分析";
+}
+
+function _inferSource(s, fallback) {
+  const id = String((s && s.id) || "");
+  if (s && s.source) return s.source;
+  if (id.startsWith("pcap-")) return "pcapDeep";
+  if (/^(traffic|usb|mqtt|http-summary|dns-summary|tls-sni|tcp-)/.test(id)) return "trafficReadable";
+  if (id.startsWith("audio-")) return "audioAnalysis";
+  if (id === "img-thumbnails") return "imageThumb";
+  if (id === "lsb-deep-hit") return "lsbDeep";
+  return fallback || "fileAnalysis";
+}
+
+function _inferCollapsed(s) {
+  const id = String((s && s.id) || "");
+  if (id === "png-chunks") return !/失败/.test(_sectionText(s));
+  if (id === "binwalk" || id === "entropy" || id === "img-colorfreq" ||
+      id === "lsb" || id === "lsb-scan" || id === "audio-lsb") return true;
+  if (id.startsWith("pcap-") && id !== "pcap-error") return true;
+  if (id === "http-summary" || id === "dns-summary" || id === "tls-sni" ||
+      id === "tcp-transcript" || id === "tcp-frames" || id === "traffic-overview" ||
+      id === "usb-other" || id === "usb-none") return true;
+  if (SECTION_PRIORITY[id] >= 900) return true;
+  return false;
+}
+
+const NPF_RE = /NPF_\{[0-9A-Fa-f][0-9A-Fa-f-]{7,}\}(?!（Windows NPF)/g;
+
+export function annotateNpfText(text) {
+  return String(text == null ? "" : text).replace(
+    NPF_RE,
+    (m) => m + "（Windows NPF 驱动/网络配置标识，非 flag）",
+  );
+}
+
+function _ensureFlagView(s) {
+  if (!/flag$/i.test(String(s.id || ""))) return;
+  const acts = Array.isArray(s.actions) ? s.actions : (s.actions = []);
+  if (acts.some((a) => a && a.type === "view")) return;
+  const text = typeof s.body === "string" ? s.body : "";
+  if (!text) return;
+  acts.unshift({ type: "view", label: "查看 flag", text });
+}
+
+function _ensureCopyAction(s) {
+  const acts = Array.isArray(s.actions) ? s.actions : (s.actions = []);
+  if (acts.some((a) => a && a.type === "copy")) return;
+  const id = String((s && s.id) || "");
+  const view = acts.find((a) => a && a.type === "view" && typeof a.text === "string" && a.text !== "");
+  // 二维码/条码段：只有真正解出内容时才允许复制，且只复制二维码内容本身。
+  // 未识别/空内容时绝不把诊断报告正文塞进「复制全文」——那不是 QR 的全文。
+  if (/^img-qr/.test(id)) {
+    if (!view) return;
+    acts.push({ type: "copy", label: "复制内容", text: view.text });
+    return;
+  }
+  const text = view ? view.text : (typeof s.body === "string" ? s.body : "");
+  if (!text) return;
+  acts.push({ type: "copy", label: "复制全文", text });
+}
+
+export function finalizeSections(sections, opts = {}) {
+  const list = Array.isArray(sections) ? sections : [];
+  const fallbackSource = opts.source || "fileAnalysis";
+  list.forEach((s, i) => {
+    if (!s || typeof s !== "object") return;
+    if (!Number.isFinite(s.priority)) s.priority = _inferPriority(s);
+    if (s.id === "traffic-conclusion" && typeof s.body === "string") {
+      s.body = s.body.replace(/；+/g, "\n").replace(/\n{2,}/g, "\n");
+    }
+    if (typeof s.body === "string" && s.body.includes("NPF_{")) s.body = annotateNpfText(s.body);
+    if (Array.isArray(s.actions)) {
+      for (const a of s.actions) {
+        if (a && a.type === "view" && typeof a.text === "string" && a.text.includes("NPF_{")) {
+          a.text = annotateNpfText(a.text);
+        }
+      }
+    }
+    if (s.collapsed == null) s.collapsed = _inferCollapsed(s);
+    if (s.defaultOpen == null) s.defaultOpen = !s.collapsed;
+    if (!s.tocTitle) s.tocTitle = s.title || s.id || "分析";
+    if (!s.source) s.source = _inferSource(s, fallbackSource);
+    if (!s.badge) s.badge = _inferBadge(s);
+    _ensureFlagView(s);
+    _ensureCopyAction(s);
+    s._order = i;
+  });
+  list.sort((a, b) => {
+    const pa = Number.isFinite(a.priority) ? a.priority : 80;
+    const pb = Number.isFinite(b.priority) ? b.priority : 80;
+    if (pa !== pb) return pa - pb;
+    const la = LEVEL_WEIGHT[a.level] == null ? 3 : LEVEL_WEIGHT[a.level];
+    const lb = LEVEL_WEIGHT[b.level] == null ? 3 : LEVEL_WEIGHT[b.level];
+    if (la !== lb) return la - lb;
+    return a._order - b._order;
+  });
+  list.forEach((s) => { delete s._order; delete s._sortLast; });
+  return list;
+}
+
 // ============================================================
 // 工具：字节读取
 // ============================================================
@@ -1096,12 +1336,29 @@ function clearZipPseudoEnc(bytes) {
 // bytes: Uint8Array / number[]，name: 文件名（带扩展名）
 // 返回 report 对象
 // ============================================================
-export async function analyzeFile(bytes, name = "") { // pcap 人话结论惰载（trafficReadable 动态引入）
+export async function analyzeFile(bytes, name = "", opts = {}) { // pcap 人话结论惰载（trafficReadable 动态引入）
+  const onSection = typeof opts.onSection === "function" ? opts.onSection : null;
+  const control = opts && opts.control ? opts.control : null;
+  // 结构分析本身是同步大函数：每产出一段就让出一帧，main 才能逐张插卡而不是最后一次性刷新。
+  const yieldUI = async () => {
+    if (control) {
+      while (control.paused && !control.cancelled) await new Promise((r) => setTimeout(r, 80));
+      if (control.cancelled) {
+        const e = new Error("cancelled");
+        e.cancelled = true;
+        throw e;
+      }
+    }
+    if (onSection) await new Promise((r) => setTimeout(r, 0));
+  };
  // 兼容 number[] / Uint8Array
   if (!bytes || bytes.length === 0) {
     return {
       name, size: 0,
-      sections: [{ id: "empty", title: "空文件", level: "warn", icon: "warning", body: "文件为空，无法分析" }],
+      sections: finalizeSections(
+        [{ id: "empty", title: "空文件", level: "warn", icon: "warning", body: "文件为空，无法分析" }],
+        { source: "fileAnalysis" },
+      ),
     };
   }
   const u8a = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
@@ -1123,6 +1380,18 @@ export async function analyzeFile(bytes, name = "") { // pcap 人话结论惰载
   const extConsist = checkExtConsistency(detected, fileExt);
 
   const sections = [];
+  // 流式输出：每识别到一个 section 就回调一次，main.js 可立即插卡（一把梭与文本通道对齐）。
+  // 只是一层 push 包装，不改变返回数组与最终排序。
+  if (onSection) {
+    const rawPush = sections.push.bind(sections);
+    sections.push = (...items) => {
+      const n = rawPush(...items);
+      for (const s of items) {
+        try { onSection(s); } catch { /* 单个回调失败不影响分析 */ }
+      }
+      return n;
+    };
+  }
 
  // 1. 文件信息（合并：文件头 magic 识别 + 扩展名一致性）
   {
@@ -1149,6 +1418,7 @@ export async function analyzeFile(bytes, name = "") { // pcap 人话结论惰载
       body: infoLines.join("\n"),
     });
   }
+  await yieldUI();
 
  // 2. pcap/pcapng 协议级分析（拖入即跑 TCP 重组/HTTP 提取/DNS 隧道/ICMP 载荷，免去手动逐个 op）
   if (detected && (detected.ext === "pcap" || detected.ext === "pcapng")) {
@@ -1160,17 +1430,27 @@ export async function analyzeFile(bytes, name = "") { // pcap 人话结论惰载
     const trafficSections = analyzeTrafficBytes(u8a);
     for (const s of trafficSections) sections.push(s);
   }
+  await yieldUI();
 
  // 3. 文件尾附加数据（附带 actions：文本 + 二进制双份存盘）
   const trailing = checkTrailingData(u8a, detected);
   if (trailing) {
     let body = trailing.msg + (trailing.preview ? "\n预览: " + trailing.preview : "");
     const actions = [];
+    let trailerKind = null;
+    let tailHasZip = false;
     if (trailing.hasTrailing) {
       const tail = getTrailingBytes(u8a, detected);
       if (tail && tail.length) {
+        for (let i = 0; i + 4 <= Math.min(tail.length, 4096); i++) {
+          if (tail[i] === 0x50 && tail[i + 1] === 0x4B && tail[i + 2] === 0x03 && tail[i + 3] === 0x04) {
+            tailHasZip = true;
+            break;
+          }
+        }
         const bn = baseName(name);
         const ft = trailerFileType(tail);
+        trailerKind = ft.name;
  // 文本一份：尾部字节按 latin1 转文本存 <basename>_trailer.txt
         let txt = "";
         for (let k = 0; k < tail.length; k++) txt += String.fromCharCode(tail[k]);
@@ -1189,15 +1469,22 @@ export async function analyzeFile(bytes, name = "") { // pcap 人话结论惰载
         });
       }
     }
+    const archiveKinds = new Set(["ZIP", "ZIP-EOCD", "RAR4", "RAR5", "7Z", "GZIP", "BZIP2", "XZ"]);
     const sec = {
       id: "trailing", title: "文件尾附加数据",
       level: trailing.hasTrailing ? "alert" : (trailing.found ? "info" : "warn"),
       icon: trailing.hasTrailing ? "warning" : "attach_file",
+      priority: trailing.hasTrailing && (archiveKinds.has(trailerKind) || tailHasZip) ? 14 : 65,
+      collapsed: false,
+      tocTitle: trailing.hasTrailing ? "文件尾附加数据" : "文件尾检查",
+      source: "fileAnalysis",
+      badge: trailing.hasTrailing ? "尾附" : "文件尾",
       body,
     };
     if (actions.length) sec.actions = actions;
     sections.push(sec);
   }
+  await yieldUI();
 
  // 4. PNG IHDR
   const ihdr = checkPngIhdr(u8a, detected);
@@ -1209,6 +1496,7 @@ export async function analyzeFile(bytes, name = "") { // pcap 人话结论惰载
       body: ihdr.msg,
     });
   }
+  await yieldUI();
 
  // 5.0 OOXML（docx/xlsx/pptx）正文：zip 内 XML 是 deflate 压缩的，直接扫字节只见压缩流乱码。
  //    解压对应部件 → 剥 XML 标签 → 抽正文文本（中文 flag/情报在此才现真身）。
@@ -1250,6 +1538,7 @@ export async function analyzeFile(bytes, name = "") { // pcap 人话结论惰载
     };
     sections.push(sec);
   }
+  await yieldUI();
 
  // 6. 零宽/不可见字符（降误报 + 真命中自动隐写解码）
   const zw = checkZeroWidth(u8a);
@@ -1293,6 +1582,7 @@ export async function analyzeFile(bytes, name = "") { // pcap 人话结论惰载
     if (actions.length) sec.actions = actions;
     sections.push(sec);
   }
+  await yieldUI();
 
  // 7. base64 嵌入
   const b64 = checkEmbeddedB64(u8a);
@@ -1303,6 +1593,7 @@ export async function analyzeFile(bytes, name = "") { // pcap 人话结论惰载
       body: b64.msg + "\n" + b64.body,
     });
   }
+  await yieldUI();
 
  // 8. 熵分析（密码学向，本工具主打 misc → 同级内排到最后）
   const ent = analyzeEntropy(u8a);
@@ -1315,6 +1606,7 @@ export async function analyzeFile(bytes, name = "") { // pcap 人话结论惰载
       _sortLast: true,
     });
   }
+  await yieldUI();
 
  // 9. ZIP 伪加密（识别伪加密 → 自动输出清除加密位的修正 ZIP）
   const zip = checkZipPseudoEnc(u8a, detected);
@@ -1340,6 +1632,7 @@ export async function analyzeFile(bytes, name = "") { // pcap 人话结论惰载
     }
     sections.push(sec);
   }
+  await yieldUI();
 
  // 10. flag/key/{} 专搜
   const fk = checkFlagKeywords(u8a);
@@ -1355,6 +1648,7 @@ export async function analyzeFile(bytes, name = "") { // pcap 人话结论惰载
       body,
     });
   }
+  await yieldUI();
 
  // 11. 文件尾附加数据递归解码
   const td = analyzeTrailingDecode(u8a, detected);
@@ -1375,115 +1669,237 @@ export async function analyzeFile(bytes, name = "") { // pcap 人话结论惰载
       body: lines.join("\n"),
     });
   }
+  await yieldUI();
 
- // 12. Binwalk 全文 magic 扫描
+  // 12. Binwalk 全文 magic 扫描
   const bw = checkBinwalk(u8a);
   if (bw) {
-    const lines = [];
-    lines.push("命中 " + bw.hits.length + " 处已知格式头:");
- // 优先列压缩/归档/文档类内嵌（CTF 叠加隐写高频），避免被短魔数噪声挤掉
+    const hitLine = (h) => "  0x" + h.offset.toString(16).padStart(8, "0") + " (" + h.offset + ")  " + h.name + " — " + h.desc;
+    const fullLines = [];
+    fullLines.push("命中 " + bw.hits.length + " 处已知格式头:");
+    for (const h of bw.hits) fullLines.push(hitLine(h));
     const KEY = new Set(["ZIP", "ZIP-EOCD", "RAR4", "RAR5", "7Z", "GZIP", "BZIP2", "XZ", "PDF", "PNG", "JPEG", "GIF87", "GIF89"]);
-    const keyHits = bw.hits.filter((h) => KEY.has(h.name));
-    const shown = new Set();
-    for (const h of keyHits.slice(0, 30)) {
-      lines.push("  0x" + h.offset.toString(16).padStart(8, "0") + " (" + h.offset + ")  " + h.name + " — " + h.desc);
-      shown.add(h.offset);
-    }
-    for (const h of bw.hits) {
-      if (shown.size >= 40) break;
-      if (shown.has(h.offset)) continue;
-      lines.push("  0x" + h.offset.toString(16).padStart(8, "0") + " (" + h.offset + ")  " + h.name + " — " + h.desc);
-      shown.add(h.offset);
-    }
-    const keyEmbedded = keyHits.filter((h) => h.offset > 0);
+    const keyEmbedded = bw.hits.filter((h) => h.offset > 0 && KEY.has(h.name));
     if (bw.embedded.length > 0) {
-      lines.push("▸ 偏移 0 之外命中 " + bw.embedded.length + " 处，疑似多文件叠加 / 内嵌文件");
+      fullLines.push("▸ 偏移 0 之外命中 " + bw.embedded.length + " 处，疑似多文件叠加 / 内嵌文件");
       if (keyEmbedded.length > 0) {
-        lines.push("  其中压缩/归档类内嵌: " + keyEmbedded.map((h) => h.name + "@0x" + h.offset.toString(16)).slice(0, 8).join(", "));
+        fullLines.push("  其中压缩/归档类内嵌: " + keyEmbedded.map((h) => h.name + "@0x" + h.offset.toString(16)).slice(0, 8).join(", "));
       }
     }
+    const bodyLines = ["命中 " + bw.hits.length + " 处已知格式头（仅展示前 10 条）:"];
+    for (const h of bw.hits.slice(0, 10)) bodyLines.push(hitLine(h));
+    const rest = Math.max(0, bw.hits.length - 10);
+    if (rest > 0) bodyLines.push("其余 " + rest + " 条（完整清单双击查看）");
     sections.push({
       id: "binwalk", title: "Binwalk 全文魔数扫描",
       level: bw.embedded.length > 0 ? "warn" : "info", icon: "search",
-      body: lines.join("\n"),
+      priority: 920, collapsed: true, defaultOpen: false,
+      tocTitle: "Binwalk", source: "fileAnalysis", badge: "Binwalk",
+      body: bodyLines.join("\n"),
+      actions: [{ type: "view", label: "双击查看完整 Binwalk 清单", text: fullLines.join("\n") }],
     });
   }
+  await yieldUI();
 
- // 13. PNG 逐块 CRC 校验 + 文本块
+  // 13. PNG 逐块 CRC 校验 + 文本块
   const pc = pngChunkCrcReport(u8a);
   if (pc) {
-    const lines = [];
-    lines.push("共 " + pc.chunks.length + " 个 chunk:");
+    const failed = pc.chunks.filter((c) => c.crcOk === false);
+    const passed = pc.chunks.filter((c) => c.crcOk === true).length;
+    const unknown = pc.chunks.filter((c) => c.crcOk === null).length;
+    const fullLines = ["共 " + pc.chunks.length + " 个 chunk:"];
     for (const c of pc.chunks) {
       const crc = c.crcOk === null ? "?" : (c.crcOk ? "通过" : "失败");
-      lines.push("  [" + c.type + "] 长度 " + c.len + "  CRC " +
+      fullLines.push("  [" + c.type + "] 长度 " + c.len + "  CRC " +
         (c.storedCrc !== null ? pc.hex4(c.storedCrc) : "----") + " " + crc);
     }
     if (pc.texts.length) {
-      lines.push("文本块内容:");
-      for (const t of pc.texts) lines.push("  " + t.type + " \"" + t.kw + "\" = " + t.val);
+      fullLines.push("文本块内容:");
+      for (const t of pc.texts) fullLines.push("  " + t.type + " \"" + t.kw + "\" = " + t.val);
     }
-    if (pc.anyCrcFail) lines.push("⚠ 存在 CRC 校验失败的 chunk —— 可能藏数据 / 被篡改");
+    const bodyLines = [];
+    if (failed.length) {
+      bodyLines.push("共 " + pc.chunks.length + " 个 chunk，CRC 失败 " + failed.length + " 块:");
+      for (const c of failed) {
+        bodyLines.push("  [" + c.type + "] 长度 " + c.len + "  CRC " +
+          (c.storedCrc !== null ? pc.hex4(c.storedCrc) : "----") + " 失败");
+      }
+      bodyLines.push("其余 " + passed + " 块 CRC 通过" + (unknown ? "，" + unknown + " 块无法判定" : ""));
+    } else if (unknown) {
+      bodyLines.push("共 " + pc.chunks.length + " 个 chunk，" + passed + " 块 CRC 通过，" + unknown + " 块无法判定（完整清单双击查看）");
+    } else {
+      bodyLines.push("共 " + pc.chunks.length + " 个 chunk，全部 CRC 通过（完整清单双击查看）");
+    }
     sections.push({
       id: "png-chunks", title: "PNG 逐块 CRC 校验",
       level: pc.anyCrcFail ? "alert" : "info", icon: "data_object",
-      body: lines.join("\n"),
+      priority: 930, collapsed: !pc.anyCrcFail, defaultOpen: pc.anyCrcFail,
+      tocTitle: "PNG chunk CRC", source: "fileAnalysis",
+      badge: pc.anyCrcFail ? "CRC失败" : "CRC",
+      body: bodyLines.join("\n"),
+      actions: [{ type: "view", label: "双击查看完整 chunk 清单", text: fullLines.join("\n") }],
     });
   }
+  await yieldUI();
 
- // 14. 图片 LSB 各通道提取
+  // 14. 图片 LSB 各通道提取
   const lsb = analyzeLsb(u8a, detected);
   if (lsb) {
-    if (lsb.unsupported) {
-      sections.push({
-        id: "lsb", title: "图片 LSB 通道提取",
-        level: "info", icon: "image",
-        body: "暂不支持该图片的像素解码: " + lsb.unsupported,
-      });
-    } else {
-      const head = "图片 " + lsb.width + "×" + lsb.height + "，" + lsb.channels + " 通道；各排列 LSB 提取（前 50 字节可打印预览）:";
-      sections.push({
-        id: "lsb", title: "图片 LSB 通道提取",
-        level: "info", icon: "image",
-        body: head + "\n" + lsb.lines.join("\n"),
-      });
-    }
+    const lsbSec = {
+      id: "lsb", title: "图片 LSB 通道提取",
+      level: "info", icon: "image",
+      priority: 940, collapsed: true, defaultOpen: false,
+      tocTitle: "LSB 概览", source: "fileAnalysis", badge: "LSB",
+      body: lsb.unsupported
+        ? "暂不支持该图片的像素解码: " + lsb.unsupported
+        : "图片 " + lsb.width + "×" + lsb.height + "，" + lsb.channels + " 通道；各排列 LSB 提取（前 50 字节可打印预览）:\n" + lsb.lines.join("\n"),
+      actions: [{ type: "open-lsb-deep", label: "打开 LSB 深度分析" }],
+    };
+    sections.push(lsbSec);
+    try {
+      const deepMod = await import("./lsbDeep.js");
+      if (deepMod && typeof deepMod.lsbDeepScan === "function") {
+        let deep = deepMod.lsbDeepScan(u8a, {});
+        if (deep && typeof deep.then === "function") deep = await deep;
+        const cands = Array.isArray(deep) ? deep
+          : (deep && (deep.candidates || deep.hits || deep.results)) || [];
+        if (cands.length) {
+          const genuine = cands.filter((c) => {
+            if (!c) return false;
+            const text = String(c.text || "");
+            if (Array.isArray(c.flags) && c.flags.length) return true;
+            if (c.url) return true;
+            if (_findFlag(text)) return true;
+            return false;
+          }).slice(0, 5);
+          if (genuine.length) {
+            lsbSec.body += "\n\n● LSB 深度扫描 " + cands.length + " 组候选，命中 " + genuine.length + " 组 flag/URL 形态:";
+            for (const c of genuine) {
+              const tag = [c.channel, c.bit != null ? "bit" + c.bit : "", c.order, c.scan]
+                .filter(Boolean).join("/");
+              lsbSec.body += "\n  [" + (tag || c.note || "候选") + "] " + String(c.text || "").slice(0, 160);
+            }
+          } else {
+            lsbSec.body += "\n\n● LSB 深度扫描已完成 " + cands.length + " 组组合，未发现 flag/URL 形态命中（可点「打开 LSB 深度分析」查看全部候选）。";
+          }
+          if (genuine.length) {
+            const hitActions = [{ type: "view", label: "双击查看 LSB 深度命中", text: genuine.map((c) => String(c.text || "")).join("\n\n") }];
+            for (const c of genuine) {
+              const png = c && c.previewPng;
+              if (typeof png === "string" && png.startsWith("data:image/")) {
+                try {
+                  const comma = png.indexOf(",");
+                  const bin = atob(png.slice(comma + 1));
+                  const out = new Uint8Array(bin.length);
+                  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+                  hitActions.push({ type: "preview", label: "LSB 深度候选预览", filename: "lsb_deep_preview.png", mime: "image/png", bytes: out });
+                } catch { /* 预览解不出不阻断 */ }
+              } else if (png && png.length) {
+                hitActions.push({ type: "preview", label: "LSB 深度候选预览", filename: "lsb_deep_preview.png", mime: "image/png", bytes: png });
+              }
+            }
+            sections.push({
+              id: "lsb-deep-hit", title: "LSB 深度命中",
+              level: "alert", icon: "visibility",
+              priority: 16, collapsed: false, defaultOpen: true,
+              tocTitle: "LSB 深度命中", source: "lsbDeep", badge: "LSB命中",
+              body: "LSB 深度扫描命中 " + genuine.length + " 组候选：\n" +
+                genuine.map((c) => "● " + String(c.text || "").slice(0, 300)).join("\n"),
+              actions: hitActions,
+            });
+          }
+        }
+      }
+    } catch { /* lsbDeep 未落地时静默跳过 */ }
   }
+  await yieldUI();
 
- // 15. 图片 EXIF / XMP 元数据
+  // 15. 图片 EXIF / XMP 元数据
   const exif = extractExif(u8a);
   const xmp = extractXmp(u8a);
   if (exif || xmp) {
-    const lines = [];
+    const fullParts = [];
     if (exif) {
-      lines.push("EXIF:");
-      for (const t of exif.tags) lines.push("  " + t.name + ": " + t.value);
+      const exifLines = ["EXIF:"];
+      for (const t of exif.tags) exifLines.push("  " + t.name + ": " + t.value);
+      fullParts.push(exifLines.join("\n"));
+    }
+    if (xmp) fullParts.push("XMP:\n" + xmp);
+    const fullText = fullParts.join("\n\n");
+    const previewLines = [];
+    if (exif) {
+      previewLines.push("EXIF:");
+      for (const t of exif.tags.slice(0, 12)) previewLines.push("  " + t.name + ": " + t.value);
+      if (exif.tags.length > 12) previewLines.push("  …（共 " + exif.tags.length + " 项）");
     }
     if (xmp) {
       const x = xmp.length > 600 ? xmp.slice(0, 600) + " …" : xmp;
-      lines.push("XMP:");
-      lines.push("  " + x.replace(/\n/g, "\n  "));
+      previewLines.push("XMP:");
+      previewLines.push("  " + x.replace(/\n/g, "\n  "));
     }
+    const bn = baseName(name);
     sections.push({
       id: "img-meta", title: "图片 EXIF / XMP 元数据",
       level: "info", icon: "image",
-      body: lines.join("\n"),
+      priority: 50, collapsed: false, tocTitle: "EXIF / XMP",
+      source: "fileAnalysis", badge: "EXIF",
+      body: previewLines.join("\n"),
+      actions: [
+        { type: "view", label: "查看完整 EXIF / XMP", text: fullText },
+        { type: "copy", label: "复制完整 EXIF / XMP", text: fullText },
+        {
+          type: "download", label: "导出 EXIF_XMP " + bn + "_meta.txt",
+          filename: bn + "_meta.txt", mime: "text/plain", bytes: strToBytes(fullText),
+        },
+      ],
     });
   }
+  await yieldUI();
 
- // 按重要性稳定排序：alert > warn > info，同级保持原插入顺序
-  const LEVEL_WEIGHT = { alert: 0, warn: 1, info: 2 };
-  const weight = (lv) => (LEVEL_WEIGHT[lv] === undefined ? 3 : LEVEL_WEIGHT[lv]);
-  sections.forEach((s, i) => { s._order = i; });
-  sections.sort((a, b) => {
-    const d = weight(a.level) - weight(b.level);
-    if (d !== 0) return d;
- // 同级：_sortLast 标记的（如熵分析，密码学才用）排到本级末尾
-    const la = a._sortLast ? 1 : 0, lb = b._sortLast ? 1 : 0;
-    if (la !== lb) return la - lb;
-    return a._order - b._order;
-  });
-  sections.forEach((s) => { delete s._order; delete s._sortLast; });
+  // 15b. EXIF / JFIF 缩略图（R8 模块未落地时静默跳过）
+  try {
+    const thumbMod = await import("./imageThumb.js");
+    const extractThumbs = thumbMod && (thumbMod.extractExifThumbnails ||
+      (thumbMod.default && thumbMod.default.extractExifThumbnails));
+    if (typeof extractThumbs === "function") {
+      let thumbs = extractThumbs(u8a);
+      if (thumbs && typeof thumbs.then === "function") thumbs = await thumbs;
+      if (Array.isArray(thumbs) && thumbs.length) {
+        const lines = ["提取到 " + thumbs.length + " 张缩略图:"];
+        const actions = [];
+        thumbs.forEach((t, i) => {
+          const mime = t.mime || "image/jpeg";
+          const ext = mime.includes("png") ? "png" : "jpg";
+          const source = t.source || "EXIF";
+          lines.push("  #" + (i + 1) + " " + source + " " + (t.width || "?") + "×" + (t.height || "?") +
+            " " + mime + " " + (t.bytes ? t.bytes.length : 0) + " 字节");
+          if (t.bytes) {
+            actions.push({
+              type: "preview", label: "预览缩略图 #" + (i + 1),
+              filename: "exif_thumb_" + (i + 1) + "." + ext, mime, bytes: t.bytes,
+            });
+            actions.push({
+              type: "download", label: "下载缩略图 #" + (i + 1) + " ." + ext,
+              filename: "exif_thumb_" + (i + 1) + "." + ext, mime, bytes: t.bytes,
+            });
+          }
+        });
+        const listing = lines.join("\n");
+        actions.unshift({ type: "view", label: "查看缩略图清单", text: listing });
+        actions.push({ type: "copy", label: "复制缩略图清单", text: listing });
+        sections.push({
+          id: "img-thumbnails", title: "EXIF / JFIF 缩略图",
+          level: "alert", icon: "photo_library",
+          priority: 18, collapsed: false, defaultOpen: true,
+          tocTitle: "EXIF 缩略图", source: "imageThumb", badge: "缩略图",
+          body: listing, actions,
+        });
+      }
+    }
+  } catch { /* imageThumb 未落地 / 解析失败不阻断 */ }
+  await yieldUI();
+
+  finalizeSections(sections, { source: "fileAnalysis" });
 
   return {
     name, size,

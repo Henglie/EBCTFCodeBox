@@ -1,9 +1,9 @@
-// BUILD-STAMP: cafdc8c43be2717d
+// BUILD-STAMP: 27f5faf887e4399e
 importScripts("./sw-assets.js");
 
 // The asset generator synchronizes BUILD-STAMP with the resource revision.
 
-const APP_VERSION = "0.1.11";
+const APP_VERSION = "0.1.12";
 const CACHE_PREFIX = "ebctf-shell-";
 const CACHE_NAME = `${CACHE_PREFIX}${APP_VERSION}-${self.__EBCTF_ASSET_REV}`;
 const ASSETS = self.__EBCTF_ASSETS;
@@ -23,6 +23,7 @@ const RUNTIME_CACHE_FIRST = [
   "/public/codeimages/",     // 对照图（manifest 保留预缓存）
   "/public/vendor/katex/",   // KaTeX dist
   "/src/vendor/",            // 编辑器/PGP/条码内核（与 gen_sw_assets 的 EXCLUDE_RULES 同步）
+  "/addons/",                // 官方插件包（默认不启用，用户显式加载时才取；同上同步）
   "/public/models/",         // byteStat CNN 权重
   "/public/contributors/",   // 贡献者头像
   "/src/i18n/locales/",      // 非 zh/en 语言包（动态 import）

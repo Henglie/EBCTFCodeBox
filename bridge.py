@@ -34,6 +34,28 @@ except ImportError:
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
+def _force_utf8_stdio():
+    """重定向到管道/文件时把 stdout/stderr 切到 UTF-8。
+
+    原生启动器（原生启动器/src/modules/python_capability.c）用 bridge_cli.py 的
+    stdout 作为 JSON 通道，并执行 ebctf_bridge_valid_utf8 校验；不合法就**静默丢弃**
+    整个完成事件。Python 在 Windows 管道里默认按本地代码页（cp936）写中文，JSON 含
+    中文错误/工具说明时即被丢弃 → 前端等满 90s 只看到 request timeout。
+    这里在 import 时修正编码。TTY 保持原样，避免控制台乱码。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            if stream is None or stream.isatty():
+                continue
+            enc = (getattr(stream, "encoding", "") or "").replace("-", "").lower()
+            if enc in ("utf8", "utf8mb4"):
+                continue
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+_force_utf8_stdio()
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 IS_WIN = platform.system() == "Windows"
 
@@ -199,11 +221,24 @@ DECOMPILE_TOOLS = {
     ],
     # pylingual：3.9+ 大模型反编（实验，需手动装 + HF_ENDPOINT 镜像）
     "pylingual": ["pylingual"],
+    # pycdc（Decompyle++）：2.7/3.x 的兜底反编器。注意 PATH 上可能存在同名但完全
+    # 无关的 pycdc（本机 Python314\Scripts\pycdc.exe 就是另一个产品），因此探测必须
+    # 校验 `-h` 输出含 input.pyc；只靠「文件存在」会把假工具当成可用。
+    "pycdc": [
+        os.path.join(os.path.dirname(ROOT), "PyKC", "third_party", "bin", "pycdc.exe"),
+        r"C:\Users\Administrator\Documents\我的项目源码\PyKC\third_party\bin\pycdc.exe",
+        os.path.join(ROOT, "tools", "exe", "cli", "pycdc.exe"),
+        "pycdc",
+    ],
     # 7-Zip：容器解压（部分打包壳）
     "7z": [r"C:\Program Files\7-Zip\7z.exe", "7z"],
 }
 
-DECOMPILE_TIMEOUT = 120  # 反编较慢，独立超时（秒）
+DECOMPILE_TIMEOUT = 120  # exe 分支（解包 + 多 pyc）的单个子进程上限（秒）
+PYC_DECOMPILE_TIMEOUT = 30  # 单个 pyc 的单个反编工具上限（秒）
+# 单个 pyc 的工具链总预算。原生启动器给 Python 能力 60s，留 5s 余量：
+# 超预算就返回已有尝试结果和明确原因，而不是让上层等满 90s 黑箱超时。
+PYC_TOTAL_BUDGET = 55
 
 # D7：exe 分支的总体预算。真实样本解出上百个 pyc，每个各起一次子进程必然撞超时
 #（实测 222 个 → 137 s）。这里改用「总体时间 + pyc 数量」双上限，达到即返回部分结果，
@@ -220,11 +255,18 @@ TOOL_PROBE_TIMEOUT = 8  # 秒；短超时，避免探测本身成为新的阻塞
 # 但 `7z --version` 退出码是 7（它只认 `-h`/无参），会被误判成「坏了」。
 TOOL_PROBE_ARGS = {
     "7z": ["-h"],
+    "pycdc": ["-h"],  # Decompyle++ 只认 -h/--help；--version 会以 exit=2 被误判为坏工具
+}
+# 探测输出必须包含的标记。pycdc 同名工具太多（PATH 上的 Python 包也叫 pycdc），
+# 仅看退出码会把无关程序当反编器。
+TOOL_PROBE_EXPECT = {
+    "pycdc": "input.pyc",
 }
 
-def _probe_executable(path, timeout=TOOL_PROBE_TIMEOUT, args=None):
-    """「路径存在」≠「能工作」。这里真的跑一次 --version：退出码 0 才算可用。
-    返回 (ok, reason)；reason ∈ {'ok','missing','broken:exit=N','broken:<异常类名>'}。
+def _probe_executable(path, timeout=TOOL_PROBE_TIMEOUT, args=None, expect=None):
+    """「路径存在」≠「能工作」。这里真的跑一次版本/帮助命令：退出码 0（且命中
+    expect 标记）才算可用。返回 (ok, reason)；reason ∈
+    {'ok','missing','broken:exit=N','broken:<异常类名>','broken:unexpected-output'}。
 
     背景：uncompyle6/decompyle3 3.9.3 与 xdis 5.0.13 的 API 不兼容，import 即
     ImportError: PYTHON_VERSION_TRIPLE —— 文件明明在，却一跑就崩。旧实现只判存在，
@@ -237,14 +279,25 @@ def _probe_executable(path, timeout=TOOL_PROBE_TIMEOUT, args=None):
         mtime = 0
     if args is None:
         args = ["--version"]
-    key = (path, mtime, tuple(args))
+    key = (path, mtime, tuple(args), expect)
     if key in _TOOL_PROBE_CACHE:
         return _TOOL_PROBE_CACHE[key]
     try:
-        p = subprocess.run([path] + list(args), stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL, timeout=timeout, shell=False)
-        res = (p.returncode == 0,
-               "ok" if p.returncode == 0 else "broken:exit=%s" % p.returncode)
+        p = subprocess.run(
+            [path] + list(args),
+            stdout=subprocess.PIPE if expect else subprocess.DEVNULL,
+            stderr=subprocess.PIPE if expect else subprocess.DEVNULL,
+            timeout=timeout, shell=False,
+        )
+        if p.returncode != 0:
+            res = (False, "broken:exit=%s" % p.returncode)
+        elif expect:
+            text = (p.stdout or b"").decode("utf-8", "replace") + \
+                   (p.stderr or b"").decode("utf-8", "replace")
+            res = ((True, "ok") if expect.lower() in text.lower()
+                   else (False, "broken:unexpected-output"))
+        else:
+            res = (True, "ok")
     except Exception as exc:
         res = (False, "broken:%s" % type(exc).__name__)
     _TOOL_PROBE_CACHE[key] = res
@@ -272,7 +325,8 @@ def _resolve_tool(key, usable_only=True):
             continue
         if not usable_only:
             return path
-        ok, _reason = _probe_executable(path, args=TOOL_PROBE_ARGS.get(key))
+        ok, _reason = _probe_executable(
+            path, args=TOOL_PROBE_ARGS.get(key), expect=TOOL_PROBE_EXPECT.get(key))
         if ok:
             return path
     return None
@@ -280,12 +334,13 @@ def _resolve_tool(key, usable_only=True):
 def tool_diagnostics():
     """逐工具的可用性诊断（供 decompile-env 诚实上报）。"""
     out = {}
-    for key in ("uncompyle6", "decompyle3", "pylingual", "7z"):
+    for key in ("uncompyle6", "decompyle3", "pylingual", "pycdc", "7z"):
         path = _locate_tool(key)
         if not path:
             out[key] = {"found": False, "usable": False, "reason": "missing"}
             continue
-        ok, reason = _probe_executable(path, args=TOOL_PROBE_ARGS.get(key))
+        ok, reason = _probe_executable(
+            path, args=TOOL_PROBE_ARGS.get(key), expect=TOOL_PROBE_EXPECT.get(key))
         out[key] = {"found": True, "usable": ok, "reason": reason}
     return out
 
@@ -329,7 +384,7 @@ def _pyc_version(magic4):
     return None, None
 
 def _pick_decompiler(mm):
-    """据 (major,minor) 选反编工具。返回 (toolKey|None, note)。"""
+    """据 (major,minor) 选首选反编工具。返回 (toolKey|None, note)。"""
     if not mm:
         return None, "无法识别 Python 版本"
     major, minor = mm
@@ -341,55 +396,102 @@ def _pick_decompiler(mm):
         return "pylingual", "Python 3.9+ 需 pylingual 大模型反编（实验，需手动安装）"
     return None, "不支持的 Python 版本 %d.%d" % (major, minor)
 
-def _run_decompiler(tool_key, pyc_path, workdir):
+def _candidate_tools(mm):
+    """首选 + 兜底链。pycdc（Decompyle++）覆盖 2.7 与多数 3.x，作为最后兜底：
+    - uncompyle6/decompyle3 在本机因 xdis 版本冲突全部不可用时，pycdc 仍可出源码；
+    - 3.9+ pylingual 不可用时也有明确兜底，而不是直接放弃。
+    返回 (chain, note)。"""
+    primary, note = _pick_decompiler(mm)
+    chain = []
+    if primary:
+        chain.append(primary)
+    if mm and mm[0] == 3 and 7 <= mm[1] <= 8 and "decompyle3" not in chain:
+        chain.append("decompyle3")
+    if "pycdc" not in chain:
+        chain.append("pycdc")
+    return chain, note
+
+def _decode_tool_output(raw):
+    """解反编器输出：优先 UTF-8，失败回退 GB18030（中文 Windows 常见），最后替换。"""
+    if not raw:
+        return ""
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    try:
+        return raw.decode("gb18030")
+    except UnicodeDecodeError:
+        return raw.decode("utf-8", "replace")
+
+def _run_decompiler(tool_key, pyc_path, workdir, timeout=None):
     """调白名单反编工具于单个 pyc。subprocess 参数数组 shell=False。"""
     exe = _resolve_tool(tool_key)
     if not exe:
+        found = _locate_tool(tool_key)
         return {"ok": False, "tool": tool_key,
-                "error": "%s 未安装（本机不可用，需手动安装）" % tool_key}
+                "error": ("%s 已找到但不可用（探测失败）" % tool_key) if found
+                         else ("%s 未安装（本机不可用，需手动安装）" % tool_key)}
+    limit = timeout if timeout is not None else DECOMPILE_TIMEOUT
     env = dict(os.environ)
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
     if tool_key == "pylingual":
         # HF 镜像仅供 pylingual 自身模型拉取，绝不上传用户样本（零外发红线）
         env["HF_ENDPOINT"] = "https://hf-mirror.com"
-        env.setdefault("PYTHONUTF8", "1")
         cmd = [exe, pyc_path]  # 注：pylingual CLI 形态待确认，骨架先占位
     else:
-        # uncompyle6 / decompyle3：默认把反编源码写 stdout
-        env.setdefault("PYTHONUTF8", "1")
+        # uncompyle6 / decompyle3 / pycdc：默认把反编源码写 stdout
         cmd = [exe, pyc_path]
     try:
         proc = subprocess.run(
-            cmd, capture_output=True, timeout=DECOMPILE_TIMEOUT,
+            cmd, capture_output=True, timeout=limit,
             cwd=workdir, env=env, shell=False,
         )
-        src = proc.stdout.decode("utf-8", "replace")
-        err = proc.stderr.decode("utf-8", "replace")
+        src = _decode_tool_output(proc.stdout)
+        err = _decode_tool_output(proc.stderr)
         return {
             "ok": proc.returncode == 0 or bool(src.strip()),
             "tool": tool_key, "exe": exe, "exitCode": proc.returncode,
             "source": src, "stderr": err,
         }
     except subprocess.TimeoutExpired:
-        return {"ok": False, "tool": tool_key, "error": "反编超时（%ds）" % DECOMPILE_TIMEOUT}
+        return {"ok": False, "tool": tool_key, "error": "反编超时（%ds）" % limit}
     except Exception as e:
         return {"ok": False, "tool": tool_key, "error": "反编异常: %s" % e}
 
 def _decompile_pyc_bytes(data, workdir, label="input.pyc"):
-    """反编单个 pyc（字节）。返回含 pyVersion/tool/source 的结果字典。"""
+    """反编单个 pyc（字节）。按候选链逐个尝试，返回含 pyVersion/tool/source 的结果。"""
     if len(data) < 8:
         return {"ok": False, "error": "文件过小，非有效 pyc"}
     magic4 = data[:4]
     ver, mm = _pyc_version(magic4)
-    tool_key, note = _pick_decompiler(mm)
+    chain, note = _candidate_tools(mm)
     fp = os.path.join(workdir, os.path.basename(label) or "input.pyc")
     with open(fp, "wb") as f:
         f.write(data)
-    result = {"pyVersion": ver, "magic": magic4.hex(), "tool": tool_key, "note": note}
-    if not tool_key:
-        result["ok"] = False
-        result["error"] = note or "无可用反编工具"
-        return result
-    result.update(_run_decompiler(tool_key, fp, workdir))
+    result = {"pyVersion": ver, "magic": magic4.hex(), "tool": None, "note": note}
+    attempts = []
+    deadline = time.time() + PYC_TOTAL_BUDGET
+    for tool_key in chain:
+        remain = deadline - time.time()
+        if remain <= 1:
+            attempts.append({"tool": tool_key, "error": "总预算耗尽，未尝试"})
+            break
+        r = _run_decompiler(tool_key, fp, workdir,
+                            timeout=max(5, min(PYC_DECOMPILE_TIMEOUT, int(remain))))
+        if r.get("ok") and (r.get("source") or "").strip():
+            result.update(r)
+            result["ok"] = True
+            if attempts:
+                result["attempts"] = attempts
+            return result
+        reason = r.get("error") or (r.get("stderr") or "").strip()[:300] or "无输出"
+        attempts.append({"tool": tool_key, "error": reason})
+    result["ok"] = False
+    result["attempts"] = attempts
+    detail = "; ".join("%s: %s" % (a["tool"], a["error"]) for a in attempts)
+    result["error"] = (note + "；" if note else "") + ("反编失败（" + detail + "）" if detail else "无可用反编工具")
     return result
 
 def _decompile_exe_bytes(data, workdir, label="input.exe"):
@@ -504,6 +606,7 @@ def decompile_env():
     diag = tool_diagnostics()
     tools_bool = {k: bool(v["usable"]) for k, v in diag.items()}
     tools_bool["pyinstxtractor"] = bool(pk)
+    decompile_keys = ("uncompyle6", "decompyle3", "pylingual", "pycdc")
     notes = []
     if xdis_ok and xver:
         # 如实声明已知的版本冲突：不修、不自动 pip，只告诉用户与前端。
@@ -511,17 +614,23 @@ def decompile_env():
            not diag.get("decompyle3", {}).get("usable"):
             notes.append(
                 "uncompyle6/decompyle3 在本机不可用：其 3.9.3 与已装的 xdis %s 不兼容"
-                "（ImportError: PYTHON_VERSION_TRIPLE）。需用户自行处理版本约束，本工具不会自动安装。" % xver)
-    notes.append("pycdc（Decompyle++）本机存在，但按当前卡面口径**未**纳入白名单，故不参与反编。")
+                "（ImportError: PYTHON_VERSION_TRIPLE）。已自动改用 pycdc（Decompyle++）"
+                "兜底；本工具不会自动安装/降级第三方包。" % xver)
+    if diag.get("pycdc", {}).get("usable"):
+        notes.append("pycdc（Decompyle++）已纳入白名单并作为兜底反编器（2.7 / 多数 3.x）。")
+    elif diag.get("pycdc", {}).get("found"):
+        notes.append("pycdc 同名程序存在但探测失败（需 Decompyle++ 版 pycdc，支持 input.pyc 用法）。")
     return {
         "ok": True,
         "win": IS_WIN,
         "platform": platform.system(),
         "xdis": {"ok": xdis_ok, "version": xver},
         "tools": tools_bool,
-        # 新增：逐工具的「找到 / 可用 / 原因」，前端可据此精确灰置并给出原因
+        # 逐工具的「找到 / 可用 / 原因」，前端可据此精确灰置并给出原因
         "toolDetails": diag,
-        "available": any(v["usable"] for v in diag.values()),
+        # available 只统计反编工具，避免仅装了 7z 就误报「反编可用」
+        "available": any(diag.get(k, {}).get("usable") for k in decompile_keys),
+        "decompileAvailable": any(diag.get(k, {}).get("usable") for k in decompile_keys),
         "notes": notes,
     }
 
@@ -531,9 +640,11 @@ class BridgeHandler(BaseHTTPRequestHandler):
         from urllib.parse import urlparse
         origin = self.headers.get("Origin", "")
         if origin:
-            host = urlparse(origin).netloc.split(":")[0].lower()
-            if host in ALLOWED_ORIGIN_HOSTS:
+            parts = urlparse(origin)
+            host = (parts.hostname or "").lower()
+            if parts.scheme in ("http", "https") and host in ALLOWED_ORIGIN_HOSTS:
                 self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Cache-Control", "no-cache")
@@ -561,6 +672,11 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 "win": IS_WIN,
                 "tools": list(WHITELIST.keys()),
                 "launch": list(LAUNCH_WHITELIST.keys()),
+                # 供前端快速识别「本机 bridge.py」并确认反编能力（只读、不拉子进程）
+                "product": "EBCTFCodeBox",
+                "apiVersion": "1",
+                "bridge": "python",
+                "decompile": True,
             })
         elif path == "/api/tools":
             info = {}

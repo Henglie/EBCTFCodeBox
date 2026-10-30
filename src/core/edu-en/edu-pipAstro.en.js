@@ -66,7 +66,7 @@ export default {
       "On failure check for 0/7–9 in dice mode, out-of-range digits in domino mode, or a flipped orientation.",
     examples: [
       { in: "123456", param: "dice", out: "⚀⚁⚂⚃⚄⚅", desc: "One die face per digit" },
-      { in: "⚅⚄⚁⚃⚂⚀", param: "dice · decode", out: "6152431", desc: "Lossless round trip" },
+      { in: "⚅⚄⚁⚃⚂⚀", param: "dice · decode", out: "652431", desc: "Lossless round trip" },
       { in: "00 01 11", param: "domino · horizontal", out: "🀱 🀲 🀹", desc: "One tile per digit pair" },
       { in: "🁡 🀺 🁊", param: "domino · horizontal · decode", out: "66 12 34", desc: "Orientation must match" },
       { in: "012345", param: "domino · horizontal", out: "🀲🁂🁒", desc: "Separators optional" },

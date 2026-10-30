@@ -2,7 +2,10 @@
  * asmAssemble.js — 机器码汇编核心（供「快速换算 · 机器码&汇编互转」面板调用，非独立 op）。
  *
  * 引擎：WASM 汇编引擎（本地懒加载、零外发、失败明确报错；引擎与许可信息仅存工程文档 PROGRESS.md）。
- *       架构：x86/x86-64/ARM/ARM64/MIPS/PPC/SPARC/SystemZ/Hexagon/EVM。
+ *       实际可用的只有 x86(x86-64)/ARM(Thumb)/ARM64——随包 keystone wasm 只编译了这三族；
+ *       glue 里的 KS_ARCH_* 常量是头文件全集，不能当作「已支持」的证据（MIPS/PPC/SPARC/
+ *       SystemZ/Hexagon 均 ks_open 报 KS_ERR_ARCH；EVM 虽能打开，但带操作数的 PUSH1 汇编失败，
+ *       不作为可用架构暴露）。
  * 资产：public/wasm/vendor/ 下 glue + wasm（emscripten MODULARIZE 产物）。
  * 加载：懒加载单例，零外发；失败抛明确错误不假装成功。
  * ⚠ 鸿蒙原生版不支持 WebAssembly → 本面板鸿蒙不可用（能力矩阵登记）。
@@ -27,37 +30,24 @@ async function loadEngineModule() {
 function engineAvailable() { return _available; }
 
 // ---- 架构映射：UI 值 → {arch, mode}（引擎 Const） ----
-const ARCH_MAP = {
+// 白名单只列经过实测 ks_open/ks_asm 成功的架构；不要凭 glue 里的常量增项。
+export const ARCH_MAP = {
   "x86":    { arch: "KS_ARCH_X86",     mode: "KS_MODE_32" },
   "x86-64": { arch: "KS_ARCH_X86",     mode: "KS_MODE_64" },
   "arm":    { arch: "KS_ARCH_ARM",     mode: "KS_MODE_ARM" },
   "arm-thumb": { arch: "KS_ARCH_ARM",  mode: "KS_MODE_THUMB" },
   "arm64":  { arch: "KS_ARCH_ARM64",   mode: "KS_MODE_LITTLE_ENDIAN" },
-  "mips":   { arch: "KS_ARCH_MIPS",    mode: "KS_MODE_MIPS32" },
-  "mips64": { arch: "KS_ARCH_MIPS",    mode: "KS_MODE_MIPS64" },
-  "ppc":    { arch: "KS_ARCH_PPC",     mode: "KS_MODE_PPC32" },
-  "ppc64":  { arch: "KS_ARCH_PPC",     mode: "KS_MODE_PPC64" },
-  "sparc":  { arch: "KS_ARCH_SPARC",   mode: "KS_MODE_SPARC32" },
-  "systemz":{ arch: "KS_ARCH_SYSTEMZ", mode: "KS_MODE_LITTLE_ENDIAN" },
-  "hexagon":{ arch: "KS_ARCH_HEXAGON", mode: "KS_MODE_LITTLE_ENDIAN" },
-  "evm":    { arch: "KS_ARCH_EVM",     mode: "KS_MODE_LITTLE_ENDIAN" },
 };
 
-const ARCH_OPTIONS = [
+export const ARCH_OPTIONS = [
   { value: "x86", label: "x86 (32-bit)" },
   { value: "x86-64", label: "x86-64 (64-bit)" },
   { value: "arm", label: "ARM" },
   { value: "arm-thumb", label: "ARM Thumb" },
   { value: "arm64", label: "ARM64 (AArch64)" },
-  { value: "mips", label: "MIPS (32)" },
-  { value: "mips64", label: "MIPS (64)" },
-  { value: "ppc", label: "PowerPC (32)" },
-  { value: "ppc64", label: "PowerPC (64)" },
-  { value: "sparc", label: "SPARC" },
-  { value: "systemz", label: "SystemZ" },
-  { value: "hexagon", label: "Hexagon" },
-  { value: "evm", label: "EVM" },
 ];
+
+export const SUPPORTED_ARCHS = Object.freeze(ARCH_OPTIONS.map((o) => o.value));
 
 function hexDump(u8, cols = 16, base = 0) {
   const lines = [];
@@ -76,9 +66,12 @@ export async function asmAssembleRun({ text, params }) {
   const C = glue.Const;
   const key = String(params.arch || "x86");
   const spec = ARCH_MAP[key];
-  if (!spec) throw new Error("未知架构: " + key);
+  if (!spec) throw new Error("不支持的架构: " + key + "（可用: " + SUPPORTED_ARCHS.join(", ") + "）");
   const arch = C[spec.arch];
   const mode = C[spec.mode];
+  if (arch === undefined || mode === undefined) {
+    throw new Error("引擎缺少架构常量 " + spec.arch + "/" + spec.mode + "，当前 wasm 构建不支持该架构");
+  }
   const src = String(text);
 
   const ks = new glue.Keystone(arch, mode);

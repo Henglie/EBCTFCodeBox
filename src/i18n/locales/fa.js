@@ -1658,4 +1658,8 @@ export default {
   "op.a1z26.desc": "کدگذاری A1Z26: تبدیل یک‌به‌یک و دوطرفهٔ حروف و اعداد 1-26.",
   "op.dna.desc": "کدگذاری DNA: تبدیل دوطرفهٔ کدون‌های 3 حرفی (A/C/G/T) و نویسه‌ها.",
   "op.keyboard.desc": "کدگذاری مختصات صفحه‌کلید: نمایش حروف با مختصات سطر و ستون صفحه‌کلید QWERTY، مانند Q=11.",
+  "op.plausibaer.name": "Coordinate Formula Solver (Plausibär)",
+  "op.plausibaer.desc": "Enumerate unknown variables/formulas in coordinates; outputs every valid lat/lon, decimal coordinate and map link (local reimplementation of guballa.de Plausibär)",
+  "op.stegSolve.name": "StegSolve Image Analysis",
+  "op.stegSolve.desc": "Standalone StegSolve 1.4 page: 42 channel/bit-plane/colour transforms, Data Extract, Stereogram Solver, Frame Browser, Image Combiner and file-format report.",
 };

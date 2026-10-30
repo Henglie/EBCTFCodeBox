@@ -55,11 +55,18 @@ import "./hash.js";
 import "./hashExt.js";
 import "./hashMore.js"; // 批F 哈希查漏 md6/snefru/sha0/has160/gostHash（hash, run, 64 组 KAT, 无 detect）
 import "./cn.js";
+import "./cnLookupWubi.js";
+import "./cnLookupTelegraph.js";
+import "./cnLookupZhengma.js";
+import "./cnLookupFourCorner.js";
+import "./cnLookupCangjie.js";
 import "./modern.js";
 import "./modernExt.js";
+import "./aeadModes.js"; // AEAD 补口：chacha20Poly1305/poly1305/ghash/aeadNonceReuse（RFC 8439 / NIST GCM）
 import "./blockMore.js"; // 对称查漏 noekeon/shacal2/cast6（block, 双向, NESSIE/RFC 2612 向量, 无 detect）
 import "./modernExt2.js"; // 现代分组密码补全组2（RC5/IDEA/Blowfish/RC6）
 import "./analysis.js";
+import "./knnClassify.js"; // KNN 分类 op（analysis, run, 训练集参数 + 待检测输入, 预测 A/B）
 import "./stego.js";
 import "./lib/sjcl.js";
 import "./stegoImage.js";
@@ -82,6 +89,16 @@ import "./cmac.js";
 import "./cmacMore.js"; // CMAC 扩展 cmacExt（hash, run, Camellia/SEED/Twofish/RC6/IDEA/Blowfish/CAST5, RFC 4493 结构, 无 detect） // CMAC 家族 aesCmac/sm4Cmac/kmac（hash, run, RFC 4493 + SP 800-185 cSHAKE, 无 detect）
 import "./jwtsign.js"; // JWT 签发/验签 jwtSign/jwtVerify（crypto, run async, HS/RS/ES256, RFC 7519/7518, 无 detect）
 import "./mlkem.js"; // ML-KEM keyGen/encaps/decaps（crypto, run, FIPS 203, 无 detect）
+import "./pqcFormat.js"; // PQC blob 解析 + NTRU 系数打包（asym, run）
+import "./ecdhP.js"; // 素数域 ECDH（asym, run）
+import "./rsaOaep.js"; // RSA-OAEP 加解密（asym, run）
+import "./hpke.js"; // HPKE Base 加解密（asym, run）
+import "./sha224.js"; // SHA-224（hash, run）
+import "./cshake.js"; // cSHAKE128/256（hash, run）
+import "./utf32Codec.js"; // UTF-32 LE/BE（text, run）
+import "./gb18030.js"; // GB18030 严格版四字节（text, run）
+import "./machoParse.js"; // Mach-O/fat 结构解析（filefmt, run）
+import "./wasmParse.js"; // WASM 结构解析（filefmt, run）
 import "./netcodec.js"; // 网络/协议编码组
 import "./timecodec.js"; // 时间戳/日期编码组
 import "./checkdigit.js"; // 条码/校验位组
@@ -93,6 +110,7 @@ import "./zakoOfficial.js"; // 杂鱼密语官网闭源版复刻（PBKDF2+AES-GC
 import "./hashCrack.js"; // 哈希爆破/彩虹表组（哈希类型识别 + 字典爆破 + 彩虹表 + HMAC 爆破）
 import "./cryptanalysis.js"; // 密码分析工具组（频率分析/IC/Kasiski/卡方/单表替换求解/凯撒求位移）
 import "./cryptanalysis2.js"; // 密码分析扩展（维吉尼亚全自动/Hill已知明文/Playfair爬山）
+import "./plausibaer.js"; // 坐标公式候选求解（guballa Plausibär 本地复刻）
 import "./cryptoTryAll.js"; // 密钥+密文一键尝试（枚举 AES/DES/3DES/RC4/XOR/Fernet × 模式 × 编码试解）
 import "./webshell.js"; // webshell 流量解密预设（哥斯拉 PHP_XOR_BASE64 / 冰蝎 AES-ECB，固定 key 封装）
 import "./qrcode.js"; // 二维码/条码组（QR 生成/结构解析 + Aztec/DataMatrix 识别 + 条码判定）
@@ -116,7 +134,7 @@ import "./timecodecExt.js"; // 时间戳扩展组（儒略日/Excel序列日期/
 import "./hexview.js"; // hexview (hexdump/range/stats)
 import "./audiostego.js"; // 音频隐写识别组（WAV头解析/音频LSB提取/DTMF Goertzel/SSTV识别，run 单向分析类）
 import "./pcmTransforms.js"; // PCM 波形变换（audio, run, 声道差/差分/反相/倒放/阈值位流, 无 detect）
-import "./barcodeGen.js"; // 条码生成 barcodeGen（image, run async, Code128/EAN-13/DataMatrix → PNG, bwip-js vendor 惰载, 无 detect）
+import "./barcodeGen.js"; // 条码生成 barcodeGen（image, run async, Code128/EAN-13/UPC-A/Code39/ITF-14/DataMatrix/PDF417/Aztec → PNG, bwip-js vendor 惰载, 无 detect）
 import "./sstv.js"; // SSTV 慢扫描电视 编/解 sstv（audio, acceptsBytes, Martin M1/Robot36 双向, FM 鉴频+逐行再同步, 无 detect）
 import "./esolang2.js"; // esolang 扩展组
 import "./malbolgeExec.js"; // Malbolge 解释器 malbolgeExec（esolang, run 型: 执行/normalize/assemble, 步数护栏, 官方 7 样例对拍 17/17）
@@ -183,7 +201,8 @@ import "./bfDialects.js"; // BF 方言 Blub/COW（fancy，有 detect）
 import "./bftoolsImg.js"; // Brainloller/Braincopter 图像变体（stego）
 import "./xwing.js"; // X-Wing 混合 KEM（asym，PQC 批A）
 import "./stegdetect.js"; // stegdetect JPEG 隐写检测（analysis）
-import "./jsteg.js"; // jsteg JPEG 系数隐写（stego）
+import "./jsteg.js";
+import "./stegoOpWrappers.js"; // R18：lsbDeep/rasterStego/mp3stego/imageThumb（stegoFile，acceptsBytes） // jsteg JPEG 系数隐写（stego）
 import "./dtmfWav.js"; // DTMF 拨号音 WAV 编/解（stego；此前仅经 audioAnalysis 间接注册，Node/Worker 闭包缺项）
 import "./morseWav.js"; // 摩斯音频解码 morseWav（audio, decode, WAV→包络→Otsu 自适应阈值→点划分类→明文, 无 detect）
 import "./xmssLms.js"; // XMSS/LMS 哈希签名（asym，PQC 批A）
@@ -352,6 +371,7 @@ import "./unitConv.js"; // 单位换算 unitConv（data, run, 数据量 SI/IEC �
 import "./gifTiming.js"; // GIF 帧时序隐写 gifTiming（stego, run, GCE Delay 厘秒→数字/ASCII/二进制阈值三模式, 无 detect）
 import "./jpgSizeRecover.js"; // JPEG 宽高修复 jpgSizeRecover（forensic, run, SOF+霍夫曼熵解码数 MCU 反推真实高度, 无 detect）
 import "./zipRepair.js"; // ZIP 伪加密修复/置位 zipRepair+zipPseudoEncrypt（forensic, run, EOCD→CD→LFH 清/置通用位标志 bit0, 无 detect）
+import "./zipExtract.js"; // ZIP 条目列表/提取/解密导出 zipEntries+zipExtract（archive, run）
 import "./adsTools.js"; // NTFS ADS 备用数据流 adsTool（forensic, run, ZIP 内嵌 ADS 检测/提取/删除/添加, APPNOTE 0x000A 口径, 无 detect）——替代 ntfsstreams GUI exe
 import "./stringsExtract.js"; // 字符串提取 stringsExtract（forensic, run, ASCII/UTF-16LE 双模式可打印串扫描, 无 detect）
 import "./jwtCrack.js"; // JWT 密钥爆破 jwtCrack（modern, run async, HS256/384/512 弱密钥字典爆破, 无 detect）
@@ -370,5 +390,24 @@ import "./objectIdTime.js"; // ObjectID 时间戳解析 objectIdTime（radix, ru
 import "./rc4Drop.js"; // RC4-drop / CipherSaber-2 rc4Drop（stream, 双向, RFC 6229 + cstest.cs2 向量, 无 detect）
 import "./xsalsa20.js"; // XSalsa20 xsalsa20（stream, 双向, libsodium stream3/core3/core4 向量, 无 detect）
 import "./imageToolbox.js"; // 图像处理工具组 imageCompress/imageGray/imagePixelate/imageFrosted/imageSketch/imageToText/gifCompose（image, run, 纯 JS, 无 detect）
+import "./falconVerify.js"; // Falcon-512/1024 公钥解析 + 验签 falconPkParse+falconVerify（asym, run, spec 算法16, SHAKE256）
+import "./poseidon.js"; // Poseidon/Poseidon2 哈希 poseidon+poseidon2（hash, run, BN254/BLS12-381 官方实例）
+import "./kzg.js"; // KZG/EIP-4844 kzgVerify+kzgCommit+kzgBlobParse（asym/filefmt, 主网可信设置）
+import "./gcmAttack.js"; // GCM forbidden attack gcmForbidden（crack, run, nonce 重用恢复 H+伪造 tag）
+import "./ntruCca2.js"; // NTRU CCA-2 ntruCca2Encrypt/Decrypt（asym, 双向, EESS/P1363.1 + MGF 绑定）
+import "./xoodyak.js"; // Xoodyak xoodyakHash+xoodyakAead（hash/modern, NIST LWC 决赛 KAT）
+import "./sshKey.js"; // OpenSSH 私钥 sshKeyParse（asym, run, openssh-key-v1+bcrypt_pbkdf）
+import "./pkcs12.js"; // PKCS#12/PFX pkcs12Parse（asym, run, RFC 7292 + PBES2/RC2）
+import "./jwkOkp.js"; // OKP JWK jwkOkpImport/jwkOkpExport（asym, 双向, RFC 8037）
+import "./eccSubgroup.js"; // ECC 小子群/无效曲线 eccSubgroupAttack（crack, run）
+import "./cmsVerify.js"; // CMS/PKCS#7 SignedData 验签 cmsVerify（asym, run, RFC 5652, RSA/ECDSA）
+import "./x509Verify.js"; // X.509 证书链验签 x509Verify（asym, run, RFC 5280, RSA/ECDSA/Ed25519）
+import "./sshsigVerify.js"; // OpenSSH SSHSIG 验签 sshsigVerify（asym, run, Ed25519/RSA/ECDSA）
+import "./sigVerify.js"; // 统一验签入口 sigVerify（asym, run, JWT/PGP/X.509/CMS/SSHSIG 分诊）
+import "./regexTool.js"; // 通用正则提取/替换 regexTool（text, run, 编译前结构白名单）
+import "./bfvToy.js"; // BFV 玩具同态加密 bfvToy（block, run, 教学：噪声账本/同态加乘）
+import "./mpcToy.js"; // 安全多方计算玩具 mpcToy（modern, run, 教学：Beaver 三元组/1-of-2 OT 模拟）
+import "./quantumToy.js"; // 量子算法玩具 quantumToy（modern, run, 教学：Grover/Shor statevector）
 import "./detectExt3.js"; // EASY 30 op detect 补齐（须在所有 op 注册后）
 import "./detectSupplement.js"; // 编码类 detect 覆盖补齐（须在所有 op 注册后）
+

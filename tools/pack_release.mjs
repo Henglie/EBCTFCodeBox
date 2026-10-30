@@ -74,7 +74,7 @@ const INCLUDE_FILES = [
 // 整目录递归（src 含 core/ui/i18n/plugin/main.js；public 含 fonts/th 五个 woff2
 // 约 33 MB 首屏子集 + 四平面，缺一个就有豆腐块，必须全量带；tools 打包时只带
 // exe/ —— bridge.py 的 EXE_BASE，v0.1.4 漏的就是它，构建脚本由 DIR_EXCLUDE 剔除）
-const INCLUDE_DIRS = ["src", "public", "tools", "mcp", "skills", "bin"];
+const INCLUDE_DIRS = ["src", "public", "tools", "mcp", "skills", "bin", "addons"];
 
 // 白名单目录内部的清扫（PROGRESS 表明确排除项）。
 // rel 为相对项目根的 posix 路径（目录本身也会被问询，rel 形如 "src" / ""）。

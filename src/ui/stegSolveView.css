@@ -1,0 +1,421 @@
+.stegsolve-overlay {
+  z-index: 130;
+}
+
+.stegsolve-dialog {
+  width: min(1120px, 96vw);
+  max-width: 1120px;
+  max-height: 92vh;
+  min-height: 0;
+}
+
+.stegsolve-head {
+  margin-bottom: var(--sp-3);
+}
+
+.stegsolve-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stegsolve-tabs {
+  display: flex;
+  gap: var(--sp-1);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--outline-var);
+  margin-bottom: var(--sp-3);
+  padding-bottom: var(--sp-2);
+  scrollbar-width: thin;
+}
+
+.stegsolve-tab {
+  flex: none;
+  height: 36px;
+  padding: 0 var(--sp-4);
+  border: 1px solid transparent;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--on-surface-var);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-short) var(--ease), color var(--dur-short) var(--ease), border-color var(--dur-short) var(--ease);
+}
+
+.stegsolve-tab:hover {
+  background: var(--surface-hi);
+  color: var(--on-surface);
+}
+
+.stegsolve-tab.active {
+  background: var(--primary-container);
+  border-color: color-mix(in srgb, var(--primary) 40%, transparent);
+  color: var(--on-primary-container);
+}
+
+.stegsolve-tab:focus-visible,
+.stegsolve-btn:focus-visible,
+.stegsolve-select:focus-visible,
+.stegsolve-cand:focus-visible,
+.stegsolve-range:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.stegsolve-status {
+  flex: none;
+  min-height: 1.4em;
+  margin-bottom: var(--sp-2);
+  font-size: var(--fs-sm);
+  font-family: var(--mono);
+  color: var(--on-surface-var);
+  overflow-wrap: anywhere;
+}
+
+.stegsolve-status[data-level="error"] {
+  color: var(--error);
+}
+
+.stegsolve-status[data-level="ok"] {
+  color: var(--success);
+}
+
+.stegsolve-meta {
+  flex: none;
+  margin-bottom: var(--sp-2);
+  color: var(--on-surface-var);
+  font-size: var(--fs-xs);
+  font-family: var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.stegsolve-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.stegsolve-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-height: 0;
+}
+
+.stegsolve-panel[hidden] {
+  display: none;
+}
+
+.stegsolve-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-2);
+}
+
+.stegsolve-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  color: var(--on-surface-var);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.stegsolve-field.grow {
+  flex: 1;
+  min-width: 180px;
+}
+
+.stegsolve-select {
+  height: 36px;
+  min-width: 96px;
+  max-width: 180px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-sm);
+  background: var(--field-bg);
+  color: var(--on-surface);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.stegsolve-select:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.stegsolve-check-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 var(--sp-2);
+  color: var(--on-surface);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.stegsolve-check {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}
+
+.stegsolve-btn {
+  height: 36px;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--outline);
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  color: var(--on-surface);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--dur-short) var(--ease), color var(--dur-short) var(--ease), border-color var(--dur-short) var(--ease), filter var(--dur-short) var(--ease);
+}
+
+.stegsolve-btn:hover:not(:disabled) {
+  background: var(--surface-hi);
+  border-color: var(--outline-var);
+}
+
+.stegsolve-btn:active:not(:disabled) {
+  background: var(--surface-3);
+}
+
+.stegsolve-btn.primary {
+  background: var(--primary);
+  border-color: transparent;
+  color: var(--on-primary);
+}
+
+.stegsolve-btn.primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.stegsolve-btn.active {
+  background: var(--primary-container);
+  border-color: var(--primary);
+  color: var(--on-primary-container);
+}
+
+.stegsolve-btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.stegsolve-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  max-height: 56vh;
+  overflow: auto;
+  padding: var(--sp-2);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-md);
+  background-color: var(--surface-1);
+  background-image:
+    linear-gradient(45deg, color-mix(in srgb, var(--on-surface) 6%, transparent) 25%, transparent 25%),
+    linear-gradient(-45deg, color-mix(in srgb, var(--on-surface) 6%, transparent) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, color-mix(in srgb, var(--on-surface) 6%, transparent) 75%),
+    linear-gradient(-45deg, transparent 75%, color-mix(in srgb, var(--on-surface) 6%, transparent) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+.stegsolve-canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 52vh;
+  width: auto;
+  height: auto;
+  border-radius: var(--r-sm);
+  image-rendering: pixelated;
+  box-shadow: 0 0 0 1px var(--outline-var);
+  background: transparent;
+}
+
+.stegsolve-caption {
+  color: var(--on-surface-var);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.stegsolve-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.stegsolve-analysis {
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+  padding: var(--sp-3);
+}
+
+.stegsolve-analysis > summary {
+  cursor: pointer;
+  padding: 2px 0;
+  color: var(--on-surface);
+  font-size: var(--fs-base);
+  font-weight: 700;
+  list-style-position: inside;
+}
+
+.stegsolve-cand-summary {
+  margin: var(--sp-2) 0;
+  color: var(--on-surface-var);
+  font-size: var(--fs-sm);
+  font-family: var(--mono);
+}
+
+.stegsolve-cand-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--sp-2);
+  max-height: 250px;
+  overflow: auto;
+  padding: 2px;
+}
+
+.stegsolve-cand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--sp-2);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--on-surface);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-short) var(--ease), border-color var(--dur-short) var(--ease);
+}
+
+.stegsolve-cand:hover {
+  background: var(--surface-hi);
+  border-color: var(--outline);
+}
+
+.stegsolve-cand.active {
+  border-color: var(--primary);
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+}
+
+.stegsolve-cand.has-flag {
+  border-color: var(--flag-hit, #ffd54f);
+  box-shadow: inset 3px 0 0 var(--flag-hit, #ffd54f);
+}
+
+.stegsolve-cand-head {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.stegsolve-cand-meta {
+  color: var(--on-surface-var);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+}
+
+.stegsolve-cand-flag {
+  color: var(--flag-hit, #ffd54f);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.stegsolve-cand-text {
+  max-height: 190px;
+  margin: var(--sp-2) 0 0;
+  padding: var(--sp-3);
+  overflow: auto;
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--on-surface-var);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.stegsolve-frame-count {
+  padding-bottom: 9px;
+  color: var(--on-surface-var);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.stegsolve-range {
+  width: 100%;
+  height: 36px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.stegsolve-range:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.stegsolve-file {
+  display: none;
+}
+
+.stegsolve-drop.drag {
+  outline: 2px dashed var(--primary);
+  outline-offset: -6px;
+}
+
+.stegsolve-empty {
+  padding: var(--sp-3);
+  color: var(--on-surface-var);
+  font-size: var(--fs-sm);
+}
+
+@media (max-width: 720px) {
+  .stegsolve-overlay {
+    padding: var(--sp-2);
+  }
+
+  .stegsolve-dialog {
+    width: 100%;
+    max-height: 96vh;
+    padding: var(--sp-3);
+  }
+
+  .stegsolve-select {
+    max-width: none;
+  }
+
+  .stegsolve-field {
+    flex: 1 1 140px;
+  }
+
+  .stegsolve-cand-list {
+    grid-template-columns: 1fr;
+  }
+
+  .stegsolve-stage {
+    min-height: 160px;
+  }
+}

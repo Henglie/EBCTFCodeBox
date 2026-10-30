@@ -186,6 +186,21 @@ import EDU_RC4_DROP from "./edu/edu_rc4Drop.js";
 import EDU_XSALSA20 from "./edu/edu_xsalsa20.js";
 import EDU_DATA_TO_IMAGE from "./edu/edu_dataToImage.js";
 import EDU_BATCH7_NEW from "./edu/edu-batch7-new.js"; // v0.1.11 迷因四件套 + 图片/进制反向 9 op
+import EDU_CN_LOOKUP from "./edu/edu-cn-lookup.js"; // v0.1.12 五种中文查字编码
+import EDU_P0_20261025 from "./edu/edu-p0-20261025.js"; // v0.1.12 P0：AEAD/PQC/ZIP + 进制小数
+import EDU_T690 from "./edu/edu-t690.js"; // v0.1.12 T690：ECDH/RSA-OAEP/HPKE
+import EDU_T693 from "./edu/edu-t693.js"; // T693：Mach-O/WASM
+import EDU_T694 from "./edu/edu-t694.js"; // T694：UTF-32/GB18030
+import EDU_T703 from "./edu/edu-t703.js"; // T703：SHA-224/cSHAKE
+import EDU_REGEX from "./edu/edu-regex.js"; // 通用正则提取/替换 regexTool
+import EDU_TEACH from "./edu/edu-teach.js"; // BFV/MPC/量子 教学三件
+import EDU_T689T710 from "./edu/edu-t689t710.js";
+import EDU_T723 from "./edu/edu-t723.js";
+import EDU_T722 from "./edu/edu-t722.js";
+import EDU_T720 from "./edu/edu-t720.js";
+import EDU_T721 from "./edu/edu-t721.js"; // 2026-10-26：Falcon/Poseidon/KZG/SSH·PKCS12·JWK/GCM·NTRU/Xoodyak/ECC 共 17 op
+import EDU_PLAUSIBAER from "./edu/edu-plausibaer.js"; // guballa Plausibär 坐标公式求解
+import EDU_R18 from "./edu/edu-r18.js"; // R18：lsbDeep/rasterStego/mp3stego/imageThumb
 
 // 合并所有分片。后者不覆盖前者（分区不重叠）；重叠时以后者为准，构建期应避免。
 const EDU = Object.assign(
@@ -332,6 +347,21 @@ const EDU = Object.assign(
   EDU_RAND_BEACON,
   EDU_IMAGE_TOOLBOX,
   EDU_BATCH7_NEW,
+  EDU_CN_LOOKUP,
+  EDU_P0_20261025,
+  EDU_T690,
+  EDU_T693,
+  EDU_T694,
+  EDU_T703,
+  EDU_REGEX,
+  EDU_TEACH,
+  EDU_T689T710,
+  EDU_T723,
+  EDU_T722,
+  EDU_T720,
+  EDU_T721,
+  EDU_PLAUSIBAER,
+  EDU_R18,
 );
 
 import { ZH as INTEGRATED, HASH_VECTORS, BASE_NOTES, EXTRA_ALIASES, CRC_PARAMS } from "./edu/edu-integrated.js";
@@ -407,3 +437,4 @@ export function eduAliases() {
 }
 
 export default EDU;
+

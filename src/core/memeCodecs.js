@@ -14,6 +14,7 @@
 import { register } from "./registry.js";
 import { streamCompress, streamDecompress } from "./compress.js";
 import { decodeUtf8Lossless, finishBytesDecode } from "./bytesIo.js";
+import { randomBytes as randBytes } from "./randSource.js";
 
 function bytesToText(bytes, name) {
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
@@ -157,14 +158,7 @@ register({
 const HJM_DEFAULT_MAP = ["哈", "基", "米"];
 
 function hjmRandomShift() {
-  try {
-    if (globalThis.crypto && typeof globalThis.crypto.getRandomValues === "function") {
-      const b = new Uint8Array(1);
-      globalThis.crypto.getRandomValues(b);
-      return b[0] % 9;
-    }
-  } catch { /* 无 CSPRNG 时退化为 Math.random（仅混淆用） */ }
-  return Math.floor(Math.random() * 9);
+  return randBytes(1)[0] % 9;
 }
 
 function hjmParseKey(key) {

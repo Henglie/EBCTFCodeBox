@@ -23,13 +23,22 @@ export default {
     aka: ["培根密码", "Bacon cipher", "培根加密", "Baconian cipher", "Bacon's cipher", "培根隐写", "双字母隐写", "abab编码", "Francis Bacon", "弗朗西斯培根", "字体隐写", "biliteral cipher"]
   },
   railFence: {
-    what: "Rail Fence cipher — arranges letters along a zigzag of rails.",
-    principle: "Plaintext is written in a Z-shape across a number of rails, then read off row by row to form the ciphertext. Decryption restores positions using the rail period.",
-    usage: "params: rails(default 2). Bidirectional encode/decode.",
-    examples: [{ in: "HELLO", param: { rails: 2 }, out: "HLOEL", desc: "2 rails: H/L/O on top, E/L on the bottom, merged into HLOEL." }],
-    formulas: [{ tex: "T = 2(r-1)", caption: "The period T is set by the rail count r; positions in the same column are symmetric." }],
-    tips: ["rails=2 is equivalent to separating odd and even positions.", "More rails make a steeper zigzag.", "The rail count must be agreed on with the receiver."],
-    aka: ["栅栏密码", "Rail Fence cipher", "篱笆密码", "锯齿密码", "railfence", "rail fence", "zigzag cipher", "Z字形密码", "W型密码", "换位密码", "栏栅密码", "曲折密码"]
+    what: "Rail Fence cipher — a transposition that reorders characters by rail count, in either W (zigzag) or Z (traditional columnar) mode.",
+    principle: "Both modes write the plaintext into r rails and then read row by row; only the writing path differs. W mode moves up and down along 0→1→…→r−1→…→0 (zigzag), then reads each row; it also accepts an offset, which leaves the first N cells of the path empty before writing (dCode's \"Use an offset of +N characters\"), equivalent to starting at position N of the zigzag period. Z mode (traditional fence, the Baidu Baike definition) fills column by column from top to bottom — character i lands on rail i mod r — then reads each row. Decryption derives each rail's length from the same path, slices the ciphertext into rails, and interleaves them back.",
+    usage: "params: rails(default 2, 2..64), mode(w=W zigzag / z=Z traditional columnar, default w), offset(W-mode offset, default 0, 0..64; must be 0 in Z mode). Bidirectional encode/decode.",
+    examples: [
+      { in: "HELLOWORLD", param: { rails: 3, mode: "w" }, out: "HOLELWRDLO", desc: "W mode, 3 rails: H/L/O on rail 1, E/L/W/R on rail 2, L/D on rail 3." },
+      { in: "HELLOWORLD", param: { rails: 3, mode: "w", offset: 2 }, out: "LOELWRDHOL", desc: "W mode, 3 rails, offset 2: the path skips 2 cells before writing (CSDN offset example)." },
+      { in: "HELLOWORLD", param: { rails: 3, mode: "z" }, out: "HLODEORLWL", desc: "Z mode, 3 rails: columns H/E/L, L/O/W, O/R/L, D, then read row by row." },
+      { in: "HELLOWORLD", param: { rails: 2, mode: "w" }, out: "HLOOLELWRD", desc: "With 2 rails both modes coincide (odd/even split)." }
+    ],
+    formulas: [
+      { tex: "T = 2(r-1)", caption: "W mode period T is set by the rail count r (bounce at top and bottom)." },
+      { tex: "\\text{row}(i) = i \\bmod r", caption: "In Z mode character i lands on rail i mod r." },
+      { tex: "\\text{offset} \\equiv \\text{offset} \\bmod T", caption: "The W-mode offset is taken modulo T: offset=T equals 0." }
+    ],
+    tips: ["With rails=2, W and Z produce identical output; they diverge at 3 or more rails.", "What CTF write-ups call a W-type rail fence is W mode; the Baidu Baike definition of 栅栏密码 is Z mode.", "The offset belongs to W mode only: a non-zero offset in Z mode raises an explicit error instead of being ignored.", "The offset is modulo T=2(r−1), so offset=T equals 0.", "Rail count, mode and offset must all be agreed on with the receiver.", "Both modes only permute characters — the ciphertext uses exactly the plaintext's character set."],
+    aka: ["栅栏密码", "Rail Fence cipher", "篱笆密码", "锯齿密码", "railfence", "rail fence", "zigzag cipher", "Z字形密码", "W型密码", "W型栅栏", "Z型栅栏", "传统栅栏", "普通栅栏", "分栏密码", "换位密码", "栏栅密码", "曲折密码"]
   },
   caesar: {
     what: "Caesar cipher — shifts the whole alphabet by a fixed amount.",
@@ -106,7 +115,7 @@ export default {
   keyboard: {
     what: "Keyboard coordinate encoding — row/column numbers on a 3-row QWERTY keyboard.",
     principle: "Following the standard 3-row QWERTY layout, each key maps to a (row.col) coordinate.",
-    usage: "No parameters (QWERTY 3-row coordinates). Bidirectional encode/decode.",
+    usage: "params: layout(qwerty3=three letter rows, two-digit; full4=four rows incl. digits, R.C dot-separated; default qwerty3). Bidirectional encode/decode.",
     examples: [{ in: "HI", param: {}, out: "26 18", desc: "H = row 2, col 6 = 26; I = row 1, col 8 = 18." }],
     formulas: [{ tex: "E(c) = (\\text{row}, \\text{col})", caption: "The key's row/column position on the keyboard." }],
     tips: ["Based on the standard QWERTY layout.", "Row numbers run 1-3 from top to bottom.", "Coordinates with no separator are written together."],
@@ -149,12 +158,15 @@ export default {
     aka: ["嗷呜", "嗷呜啊", "兽语", "beast语", "阴阳怪气语", "yygq", "阴阳怪气", "阴阳怪气编码", "就这不会吧", "yygq编码", "阴阳语", "怪话编码", "网络梗编码", "口头禅二进制", "yin yang", "阴阳怪气密码"]
   },
   braille: {
-    what: "Braille encoding — 8-dot braille from the Unicode U+2800 block.",
-    principle: "Each character maps into the Unicode 8-dot braille block (U+2800-U+28FF), represented as an 8-position dot pattern.",
-    usage: "No parameters (U+2800 block). Bidirectional encode/decode.",
-    examples: [{ in: "AB", param: {}, out: "⡱⡲", desc: "A=⡱, B=⡲, 8-dot braille characters." }],
-    formulas: [{ tex: "E(c) = \\text{U+28}\\text{XX}", caption: "Maps into the U+2800-U+28FF 8-dot braille block." }],
-    tips: ["Uses the Unicode U+2800 block.", "8 dots (including an upper and lower layer).", "Distinct from standard 6-dot braille."],
+    what: "Braille encoding — 8-dot braille from the Unicode U+2800 block, with three mappings: auto / nabcc / raw.",
+    principle: "Characters map into the U+2800–U+28FF braille block according to the selected mapping: nabcc is standard Braille ASCII (A=⠁, letters uppercased); raw is the legacy scrambled dictionary (A=⡱, kept for old outputs); auto encodes with nabcc and detects both tables when decoding.",
+    usage: "params: mapping(auto/nabcc/raw, default auto). Bidirectional encode/decode.",
+    examples: [
+      { in: "AB", param: { mapping: "nabcc" }, out: "⠁⠃", desc: "Standard Braille ASCII: A=⠁ (dot 1), B=⠃ (dots 1-2)." },
+      { in: "AB", param: { mapping: "raw" }, out: "⡱⡲", desc: "Legacy raw dictionary: A=⡱, B=⡲." }
+    ],
+    formulas: [{ tex: "E(c) = \\text{U+28}\\text{XX}", caption: "Maps into the U+2800-U+28FF braille block; the dot pattern comes from the mapping table." }],
+    tips: ["auto encoding equals nabcc (standard Braille ASCII, letters uppercased).", "raw is the legacy scrambled dictionary (outputs like ⡱⡲) kept for old challenges.", "The U+2800–U+28FF block is a strong fingerprint.", "6-dot and 8-dot braille share the block; the mapping table is what distinguishes them."],
     aka: ["8 点盲文", "Braille", "盲文", "braille", "盲文编码", "盲人点字", "点字", "Braille cipher", "布莱叶盲文", "点阵盲文", "Unicode盲文", "六点盲文"]
   },
   eightdiagram: {
@@ -303,7 +315,7 @@ export default {
   t9Phone: {
     what: "T9 phone encoding — letters to key number + press position.",
     principle: "a=21, b=22, c=23… each letter is encoded as two digits: the tens digit is the key number, the units digit is its press position on that key.",
-    usage: "No parameters (a=21...z=94). Bidirectional encode/decode.",
+    usage: "params: mode(twoDigit=fixed two digits a=21…z=94 / multitap=2=a 22=b 222=c; default twoDigit). Bidirectional encode/decode.",
     examples: [{ in: "ABC", param: {}, out: "212223", desc: "A=21, B=22, C=23 (the 1st/2nd/3rd position on the 2 key)." }],
     formulas: [{ tex: "E(c) = 10 \\cdot \\text{key}(c) + \\text{pos}(c)", caption: "Key number ×10 + press position." }],
     tips: ["a=21 ... z=94.", "2=abc, 3=def, 4=ghi, 5=jkl, 6=mno, 7=pqrs, 8=tuv, 9=wxyz.", "Distinct from multitap."],

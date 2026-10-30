@@ -1660,4 +1660,8 @@ export default {
   "op.a1z26.desc": "Codificação A1Z26: converte letras e números 1-26 em correspondência um a um.",
   "op.dna.desc": "Codificação DNA: converte entre códons de 3 letras (A/C/G/T) e caracteres.",
   "op.keyboard.desc": "Codificação por coordenadas do teclado: representa letras por posições de linha e coluna no teclado QWERTY, como Q=11.",
+  "op.plausibaer.name": "Coordinate Formula Solver (Plausibär)",
+  "op.plausibaer.desc": "Enumerate unknown variables/formulas in coordinates; outputs every valid lat/lon, decimal coordinate and map link (local reimplementation of guballa.de Plausibär)",
+  "op.stegSolve.name": "StegSolve Image Analysis",
+  "op.stegSolve.desc": "Standalone StegSolve 1.4 page: 42 channel/bit-plane/colour transforms, Data Extract, Stereogram Solver, Frame Browser, Image Combiner and file-format report.",
 };

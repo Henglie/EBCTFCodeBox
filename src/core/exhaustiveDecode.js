@@ -92,7 +92,10 @@ export const PARAM_SWEEP = {
   railFence: (text) => {
     const maxR = Math.min(20, Math.max(2, (text || "").length - 1));
     const arr = [];
-    for (let r = 2; r <= maxR; r++) arr.push({ rails: r });
+    for (let r = 2; r <= maxR; r++) {
+      arr.push({ rails: r });                 // W 型（默认档，标签保持旧格式）
+      if (r >= 3) arr.push({ rails: r, mode: "z" }); // Z 型传统分栏；rails=2 两模式等价，不重复产候选
+    }
     return arr;
   },
   routeCipher: (text) => {

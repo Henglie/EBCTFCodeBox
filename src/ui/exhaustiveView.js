@@ -175,11 +175,13 @@ function renderResults(out, statBar, r) {
     }).filter((a) => a.items.length);
     if (!algos.length) continue;
 
-    const catBox = el("div", { class: "exhaust-cat" });
-    catBox.append(el("div", { class: "exhaust-cat-head" },
+    // 分类头本身可折叠：原先只是普通 div，用户点不动，长列表只能整页滚。
+    const catBox = el("details", { class: "exhaust-cat", open: "" });
+    const head = el("summary", { class: "exhaust-cat-head" },
       el("span", { class: "exhaust-cat-name" }, catDisplayName(g.cat, g.catName)),
       el("span", { class: "exhaust-cat-count" }, String(algos.reduce((n, a) => n + a.items.length, 0))),
-    ));
+    );
+    catBox.append(head);
     for (const a of algos) catBox.append(renderAlgo(a, wantOnlyHit));
     out.append(catBox);
   }

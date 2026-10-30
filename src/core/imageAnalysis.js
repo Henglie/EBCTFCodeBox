@@ -51,6 +51,7 @@ import { decodeToPixelFrames } from "./canvasDecode.js";
 // 工业级读码链（ZXing-C++ WASM + 自研几何链）：真实拍摄图/透视/旋转/反色/多符号/
 // 半色调的通用检测。与工具页扫码**同一条链**（qrscan.scanRgba），保证两入口结论一致。
 import { scanRgba } from "./qrscan.js";
+import { finalizeSections } from "./fileAnalysis.js";
 
 // flag 正则（照 section schema 契约，冻结）
 const FLAG_RE = /(flag|ctf|key)\{[^}]+\}/i;
@@ -279,6 +280,14 @@ function needDownload(text) {
 /** 拖入路径单帧扫描预算（ms）：文件报告要即时反馈，故比工具页默认 8s 收紧。 */
 const DRAGIN_SCAN_BUDGET_MS = 4000;
 
+async function waitControl(control) {
+  if (!control) return true;
+  while (control.paused && !control.cancelled) {
+    await new Promise((r) => setTimeout(r, 80));
+  }
+  return !control.cancelled;
+}
+
 /** decoded（decodePngPixels/decodeBmpPixels/canvas 帧契约）→ RGBA（读码器只吃 4 字节/像素）。 */
 function decodedToRgba(decoded) {
   const { width: w, height: h, channels: ch, samples: s } = decoded;
@@ -302,14 +311,27 @@ function decodedToRgba(decoded) {
   return out;
 }
 
-/** 统一构造「二维码识别」段（+ flag 段）。extra = 该符号的附加说明（引擎/版本/纠错级…）。 */
-function qrSectionFor(text, extra, name, frame, srcW, srcH, tagSuffix) {
+function qrSourceLabel(src) {
+  if (typeof src === "string" && src) return src;
+  if (src && typeof src === "object") return "qrscan/" + (src.engine || "engine");
+  return "qrscan";
+}
+
+/** 统一构造「二维码/条码识别」段（+ flag 段）。extra = 该符号的附加说明（引擎/版本/纠错级…）。 */
+function qrSectionFor(text, extra, name, frame, srcW, srcH, tagSuffix, meta) {
   const sections = [];
+  const info = meta || {};
+  const sourceLabel = qrSourceLabel(info.source);
   const frameTag = frame ? "（第 " + (frame.index + 1) + "/" + frame.total + " 帧）" : "";
   const tag = (frame ? "-f" + frame.index : "") + (tagSuffix || "");
   const hasFlag = FLAG_RE.test(text);
+  const hasUrl = /(?:https?:\/\/|www\.)/i.test(text);
+  const format = info.format || (/EAN|UPC|ITF|Code\s?128|Code\s?39|PDF417|Aztec|DataMatrix|MaxiCode/i.test(extra) ? "Barcode" : "QRCode");
+  const isQr = /qr/i.test(format);
+  const fmtLabel = isQr ? "QR" : String(format).toUpperCase();
+  const title = (isQr ? "二维码识别" : "条码识别") + (frame ? " " + frameTag : "");
   const lines = [
-    "识别到 QR 码" + frameTag + "（" + extra + "）",
+    "识别到 " + (isQr ? "QR 码" : "条码 " + format) + frameTag + "（" + extra + "）",
     "尺寸: " + srcW + "×" + srcH + " 像素源图",
     "内容: " + (text === "" ? "(空)" : text),
     "（双击卡片查看完整内容）",
@@ -317,6 +339,7 @@ function qrSectionFor(text, extra, name, frame, srcW, srcH, tagSuffix) {
   const actions = [];
   if (text !== "") {
     actions.push({ type: "view", label: "双击查看", text });
+    actions.push({ type: "copy", label: "复制内容", text });
     if (needDownload(text)) {
       const base = (name || "qr").replace(/\.[^.]+$/, "") || "qr";
       actions.push({
@@ -328,14 +351,22 @@ function qrSectionFor(text, extra, name, frame, srcW, srcH, tagSuffix) {
       });
     }
   }
-  sections.push({
+  const section = {
     id: "img-qr" + tag,
-    title: "二维码识别" + (frame ? " " + frameTag : ""),
+    title,
     level: hasFlag ? "alert" : "info",
     icon: "qr_code",
+    priority: hasFlag ? 1 : hasUrl ? 3 : isQr ? 6 : 7,
+    collapsed: false,
+    defaultOpen: true,
+    tocTitle: hasFlag ? "QR flag" : (isQr ? "二维码" : "条码"),
+    source: sourceLabel,
+    badge: hasFlag ? "FLAG" : hasUrl ? "URL" : fmtLabel,
     body: lines.join("\n"),
     actions,
-  });
+  };
+  if (info.sourceIndex != null) section.sourceIndex = info.sourceIndex;
+  sections.push(section);
   if (hasFlag) {
     const m = text.match(FLAG_RE);
     sections.push({
@@ -343,7 +374,17 @@ function qrSectionFor(text, extra, name, frame, srcW, srcH, tagSuffix) {
       title: "flag",
       level: "alert",
       icon: "emergency",
+      priority: 10,
+      collapsed: false,
+      defaultOpen: true,
+      tocTitle: "QR flag",
+      source: sourceLabel,
+      badge: "FLAG",
       body: "识别到 flag" + frameTag + ":\n" + m[0],
+      actions: [
+        { type: "view", label: "查看 flag", text: m[0] },
+        { type: "copy", label: "复制 flag", text: m[0] },
+      ],
     });
   }
   return sections;
@@ -357,7 +398,7 @@ function legacyExtraOf(r) {
 }
 
 /** 对图片字节跑统一扫描链，返回 section 数组（无命中/引擎不可用 → []）。 */
-async function unifiedQrSections(bytes, name) {
+async function unifiedQrSections(bytes, name, control = null) {
   const sections = [];
   let frames = null;
   const png = decodePngPixels(bytes) || decodeBmpPixels(bytes);
@@ -372,10 +413,17 @@ async function unifiedQrSections(bytes, name) {
   }
   if (!frames) return sections;
   for (const { decoded, info } of frames) {
+    if (!(await waitControl(control))) break;
     const rgba = decodedToRgba(decoded);
     if (!rgba) continue;
     let r = null;
-    try { r = await scanRgba(rgba, decoded.width, decoded.height, { budgetMs: DRAGIN_SCAN_BUDGET_MS }); } catch { r = null; }
+    // 大图/高噪图不要开 ZXing 的 full tryHarder + 64 符号搜索：
+    // Phantom_QR 两张图会在这里把主线程拖死。大图降级为有限符号、关闭 downscale 重试。
+    const big = decoded.width * decoded.height > 800000;
+    const scanOpt = big
+      ? { budgetMs: DRAGIN_SCAN_BUDGET_MS, tryHarder: false, tryDownscale: false, maxNumberOfSymbols: 8 }
+      : { budgetMs: DRAGIN_SCAN_BUDGET_MS };
+    try { r = await scanRgba(rgba, decoded.width, decoded.height, scanOpt); } catch { r = null; }
     if (!r || !r.ok) continue;
     const W = decoded.width, H = decoded.height;
     if (r.zxHits && r.zxHits.length) {
@@ -388,10 +436,16 @@ async function unifiedQrSections(bytes, name) {
           (hasV ? "，版本 v" + v + " " + (17 + 4 * v) + "×" + (17 + 4 * v) + " 模块" : "") +
           (h.isInverted ? "，反色" : "") + (h.isMirrored ? "，镜像" : "") +
           (n > 1 ? "，第 " + (i + 1) + "/" + n + " 个符号" : "");
-        for (const s of qrSectionFor(h.text || "", extra, name, info, W, H, n > 1 ? "-s" + i : "")) sections.push(s);
+        for (const s of qrSectionFor(h.textFixed || h.text || "", extra, name, info, W, H, n > 1 ? "-s" + i : "",
+          {
+            format: h.format,
+            source: h.source || "qrscan",
+            sourceIndex: h.sourceIndex != null ? h.sourceIndex : (h.source && h.source.index),
+          })) sections.push(s);
       }
     } else if (r.result) {
-      for (const s of qrSectionFor(r.result.text || "", legacyExtraOf(r.result), name, info, W, H, "")) sections.push(s);
+      for (const s of qrSectionFor(r.result.text || "", legacyExtraOf(r.result), name, info, W, H, "",
+        { format: "QRCode", source: "imageAnalysis" })) sections.push(s);
     }
   }
   return sections;
@@ -427,6 +481,7 @@ function buildQrSections(decoded, name, frame, skipQr) {
       const actions = [];
       if (text !== "") {
         actions.push({ type: "view", label: "双击查看", text });
+        actions.push({ type: "copy", label: "复制内容", text });
         if (needDownload(text)) {
           const base = (name || "qr").replace(/\.[^.]+$/, "") || "qr";
           actions.push({
@@ -438,11 +493,18 @@ function buildQrSections(decoded, name, frame, skipQr) {
           });
         }
       }
+      const hasUrl = /(?:https?:\/\/|www\.)/i.test(text);
       sections.push({
         id: "img-qr" + suffix,
         title: "二维码识别" + (frame ? " " + frameTag : ""),
         level: hasFlag ? "alert" : "info",
         icon: "qr_code",
+        priority: hasFlag ? 1 : hasUrl ? 3 : 6,
+        collapsed: false,
+        defaultOpen: true,
+        tocTitle: hasFlag ? "QR flag" : "二维码",
+        source: "imageAnalysis",
+        badge: hasFlag ? "FLAG" : hasUrl ? "URL" : "QR",
         body: lines.join("\n"),
         actions,
       });
@@ -453,7 +515,17 @@ function buildQrSections(decoded, name, frame, skipQr) {
           title: "flag",
           level: "alert",
           icon: "emergency",
+          priority: 10,
+          collapsed: false,
+          defaultOpen: true,
+          tocTitle: "QR flag",
+          source: "imageAnalysis",
+          badge: "FLAG",
           body: "识别到 flag" + frameTag + ":\n" + m[0],
+          actions: [
+            { type: "view", label: "查看 flag", text: m[0] },
+            { type: "copy", label: "复制 flag", text: m[0] },
+          ],
         });
       }
   } else if (!frame) {
@@ -463,6 +535,12 @@ function buildQrSections(decoded, name, frame, skipQr) {
       title: "二维码识别",
       level: "info",
       icon: "qr_code",
+      priority: 78,
+      collapsed: false,
+      defaultOpen: true,
+      tocTitle: "二维码",
+      source: "imageAnalysis",
+      badge: "QR",
       body:
         "未识别到 QR 码。图片为 " + decoded.width + "×" + decoded.height +
         (decoded.width !== decoded.height
@@ -532,19 +610,36 @@ function buildColorFreqSections(decoded, name, frameInfo) {
       title: prefix + "颜色频率统计",
       level: "info",
       icon: "palette",
+      priority: 910,
+      collapsed: true,
+      defaultOpen: false,
+      tocTitle: "颜色频率",
+      source: "imageAnalysis",
+      badge: "颜色",
       body: "颜色种类超过 " + MAX_COLORS + "（连续色调/照片）。颜色隐写通常针对纯色块图，此处不做稀有色像素提取。",
     }];
   }
   const sorted = [...freq.entries()].sort((a, b) => b[1] - a[1]);
   const tableLines = sorted.slice(0, 20).map(([k, n], i) =>
     (i + 1) + ". " + _colorKeyToStr(k, channels) + "  " + n + "  " + (n / total * 100).toFixed(2) + "%");
+  const colorBody = "共 " + freq.size + " 种颜色 / " + total + " 像素（" + width + "×" + height + "）\n序号 颜色 像素数 占比\n" +
+    tableLines.join("\n") + (sorted.length > 20 ? "\n…（还有 " + (sorted.length - 20) + " 种）" : "");
   const secs = [{
     id: "img-colorfreq",
     title: prefix + "颜色频率统计",
     level: "info",
     icon: "palette",
-    body: "共 " + freq.size + " 种颜色 / " + total + " 像素（" + width + "×" + height + "）\n序号 颜色 像素数 占比\n" +
-      tableLines.join("\n") + (sorted.length > 20 ? "\n…（还有 " + (sorted.length - 20) + " 种）" : ""),
+    priority: 910,
+    collapsed: true,
+    defaultOpen: false,
+    tocTitle: "颜色频率",
+    source: "imageAnalysis",
+    badge: "颜色",
+    body: colorBody,
+    actions: [
+      { type: "view", label: "查看完整颜色统计", text: colorBody },
+      { type: "copy", label: "复制颜色统计", text: colorBody },
+    ],
   }];
   return secs;
 }
@@ -591,6 +686,24 @@ function jpegSizeChangeIsMeaningful(bytes) {
   return Math.abs(trueH - sof.height) >= 8 * vmax;
 }
 
+// 一把梭只给判定与修复图：报告正文里的整段 base64 对用户是噪音（还极长），
+// 统一剥掉「修复后 base64」段，文件本体走下方预览/下载。
+function stripEmbeddedBase64(text) {
+  const lines = String(text || "").split(/\r?\n/);
+  const out = [];
+  let skipping = false;
+  for (const line of lines) {
+    if (/修复后\s*base64/i.test(line)) { skipping = true; continue; }
+    if (skipping) {
+      if (line.trim() === "" || /^[A-Za-z0-9+/=\s]{40,}$/.test(line)) continue;
+      skipping = false;
+    }
+    if (/^[A-Za-z0-9+/=]{200,}$/.test(line.trim())) continue;
+    out.push(line);
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function buildSizeRecoverSections(bytes, name) {
   const sections = [];
   for (const [opId, title] of SIZE_RECOVER_OPS) {
@@ -605,20 +718,37 @@ function buildSizeRecoverSections(bytes, name) {
     }
     if (!r || typeof r === "string") continue;      // 字符串 = 无需修复/修复失败，无产物
     if (!Array.isArray(r.files) || !r.files.length) continue;
-    sections.push({
-      id: "img-sizerecover",
-      title,
-      level: "alert",
-      icon: "download",
-      body: (r.text || "") +
-        "\n\n（已生成修复后的文件，点下方按钮直接下载，不必再从 base64 行手拷。）",
-      actions: r.files.map((f) => ({
+    const reportText = stripEmbeddedBase64(r.text);
+    const fileActions = r.files.flatMap((f) => [
+      ...(f.mime && /^image\//.test(f.mime)
+        ? [{ type: "preview", label: "修复后图片", filename: f.name, mime: f.mime, bytes: f.bytes }]
+        : []),
+      {
         type: "download",
         label: "下载 " + f.name,
         filename: f.name,
         mime: f.mime,
         bytes: f.bytes,
-      })),
+      },
+    ]);
+    sections.push({
+      id: "img-sizerecover",
+      title,
+      level: "alert",
+      icon: "download",
+      priority: 26,
+      collapsed: false,
+      defaultOpen: true,
+      tocTitle: title,
+      source: "imageAnalysis",
+      badge: "宽高",
+      body: reportText +
+        "\n\n（已生成修复后的文件：上方直接预览，下方按钮下载。）",
+      actions: [
+        { type: "view", label: "查看宽高修复报告", text: reportText },
+        { type: "copy", label: "复制修复报告", text: reportText },
+        ...fileActions,
+      ],
     });
     break; // 一张图只会命中一种容器
   }
@@ -634,15 +764,17 @@ export function analyzeImage(bytes, name = "", detected, opts) {
  // 若放在解码之后就会被 null 早退吞掉——而那恰恰是最需要出修复文件的情况。
   const sizeSections = buildSizeRecoverSections(u8a, name);
 
- // 像素解码：PNG 优先，再 BMP。两者均自包含 magic 判断。
+  // 像素解码：PNG 优先，再 BMP。两者均自包含 magic 判断。
   let decoded = decodePngPixels(u8a);
   if (!decoded) decoded = decodeBmpPixels(u8a);
-  if (!decoded) return sizeSections.length ? { sections: sizeSections } : null; // 非 PNG/BMP → 交给其他分析
+  if (!decoded) return sizeSections.length
+    ? { sections: finalizeSections(sizeSections, { source: "imageAnalysis" }) }
+    : null; // 非 PNG/BMP → 交给其他分析
 
- // 像素解码不支持（位深/隔行等）
+  // 像素解码不支持（位深/隔行等）
   if (decoded.unsupported) {
     return {
-      sections: [
+      sections: finalizeSections([
         ...sizeSections,
         {
           id: "img-qr",
@@ -651,16 +783,18 @@ export function analyzeImage(bytes, name = "", detected, opts) {
           icon: "qr_code",
           body: "暂不支持该图片的像素解码，无法识别二维码: " + decoded.unsupported,
         },
-      ],
+      ], { source: "imageAnalysis" }),
     };
   }
 
- // ---- 二维码识别（核心）----
+  // ---- 二维码识别（核心）----
   const sections = sizeSections.slice();
   for (const s of buildQrSections(decoded, name, null, skipQr)) sections.push(s);
- // ---- 颜色频率统计 + 稀有色像素提取 ----
+  // ---- 颜色频率统计 + 稀有色像素提取 ----
   for (const s of buildColorFreqSections(decoded, name, null)) sections.push(s);
-  return sections.length ? { sections } : null;
+  return sections.length
+    ? { sections: finalizeSections(sections, { source: "imageAnalysis" }) }
+    : null;
 }
 
 // ------------------------------------------------------------
@@ -674,21 +808,38 @@ export function analyzeImage(bytes, name = "", detected, opts) {
 // JPEG/GIF 返回 null，不阻断。
 // 返回 Promise<{ sections:[...] } | null>。
 // ------------------------------------------------------------
-export async function analyzeImageAsync(bytes, name = "", detected) {
+export async function analyzeImageAsync(bytes, name = "", detected, opts = {}) {
+  const control = opts && opts.control ? opts.control : null;
+  const onSection = typeof opts.onSection === "function" ? opts.onSection : null;
+  const emit = (list) => {
+    if (!onSection) return;
+    for (const s of list || []) {
+      if (!s) continue;
+      try { onSection(s); } catch { /* 单个回调失败不影响分析 */ }
+    }
+  };
+  if (!(await waitControl(control))) return null;
   if (!bytes || bytes.length === 0) return null;
   const u8a = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
 
   // ---- ① 统一读码链优先（ZXing 工业级检测器 + 自研几何链）----
-  const zxSections = await unifiedQrSections(u8a, name);
+  const zxSections = await unifiedQrSections(u8a, name, control);
+  if (!(await waitControl(control))) return null;
+  emit(zxSections);
   const zxHit = zxSections.length > 0;
 
- // PNG/BMP 走同步自包含解码（保持既有行为不变；ZXing 已命中则抑制其二维码段，避免自相矛盾）。
+  // PNG/BMP 走同步自包含解码（保持既有行为不变；ZXing 已命中则抑制其二维码段，避免自相矛盾）。
+  if (!(await waitControl(control))) return null;
   const sync = analyzeImage(u8a, name, detected, { skipQr: zxHit });
-  if (sync) return { sections: [...zxSections, ...sync.sections] };
+  if (sync) {
+    emit(sync.sections);
+    return { sections: finalizeSections([...zxSections, ...sync.sections], { source: "imageAnalysis" }) };
+  }
 
  // 走到这里说明不是 PNG/BMP（或 PNG/BMP 像素解码不可用）：先给宽高修复留个机会。
  // jpgSizeRecover 是纯 JS，不依赖 canvas，Node 侧同样可用。
   const sizeSections = buildSizeRecoverSections(u8a, name);
+  emit(sizeSections);
 
  // JPEG/GIF：canvas 解码到 RGBA 像素帧，逐帧跑 QR 识别。
   let framePack;
@@ -699,17 +850,21 @@ export async function analyzeImageAsync(bytes, name = "", detected) {
   }
   if (!framePack || !framePack.frames || !framePack.frames.length) {
     const out = [...zxSections, ...sizeSections];
-    return out.length ? { sections: out } : null;
+    return out.length ? { sections: finalizeSections(out, { source: "imageAnalysis" }) } : null;
   }
 
   const { mime, frames, total } = framePack;
   const multi = total > 1 || frames.length > 1;
   const sections = [...zxSections, ...sizeSections];
   for (let i = 0; i < frames.length; i++) {
+    if (!(await waitControl(control))) break;
     const frameInfo = multi ? { index: i, total } : null;
     const secs = buildQrSections(frames[i], name, frameInfo, zxHit);
+    emit(secs);
     for (const s of secs) sections.push(s);
-    for (const s of buildColorFreqSections(frames[i], name, frameInfo)) sections.push(s);
+    const colorSecs = buildColorFreqSections(frames[i], name, frameInfo);
+    emit(colorSecs);
+    for (const s of colorSecs) sections.push(s);
   }
 
  // 有帧但一个 QR 都没识别到：给一条 info，说明已解到像素但未见 QR
@@ -728,7 +883,8 @@ export async function analyzeImageAsync(bytes, name = "", detected) {
     });
   }
 
-  return sections.length ? { sections } : null;
+  emit(sections);
+  return sections.length ? { sections: finalizeSections(sections, { source: "imageAnalysis" }) } : null;
 }
 
 export default { analyzeImage, analyzeImageAsync };

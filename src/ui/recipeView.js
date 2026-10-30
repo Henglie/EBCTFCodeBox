@@ -9,6 +9,10 @@ import { icon as iconSvg } from "./icons.js";
 import { attachEditorToolbar } from "./editorToolbar.js";
 import { ioArea } from "./ioArea.js"; // 天珩连字：输入/输出改 contenteditable div（textarea 吞 OpenType 特性）
 import { decodeUtf8Lossless } from "../core/bytesIo.js";
+import {
+  listSavedRecipes, saveNamedRecipe, saveDraft, loadDraft, serializeRecipe,
+  encodeShare, decodeShare, buildShareUrl, shareCodeFromHash,
+} from "./recipeStore.js";
 
 // BOM 保真的严格 UTF-8 解码（bytesIo 单一源）：非法序列抛 TypeError（同旧 fatal TextDecoder 语义），
 // 唯一行为差异是合法 BOM（U+FEFF 开头）不再被静默吞掉。
@@ -100,7 +104,14 @@ let _pending = false;
 
 // 自动重跑闸门：小输入即时重跑；大输入只标记挂起，等手动 Bake。
 // 所有内部 mutation（加/删/移节点、改参数/方向、载入预设、输入变化）走这里，Bake 按钮直呼 runChain(true) 强制跑。
+let _draftTimer = null;
+function serializeState() { return serializeRecipe(rState); }
+function scheduleDraft() {
+  clearTimeout(_draftTimer);
+  _draftTimer = setTimeout(() => saveDraft(serializeState()), 250);
+}
 function maybeRunChain() {
+  scheduleDraft();
   if (rState.input.length > AUTO_RUN_THRESHOLD) {
     _pending = true;
     reflectPending();
@@ -298,9 +309,7 @@ function exportRecipe() {
 }
 // 从 JSON 文本恢复链。校验 format/nodes；只保留 registry 里存在且非 bridge 的 op（安全 + 防脏数据）。
 // 返回 {ok, error}。
-function importRecipeFromText(text) {
-  let data;
-  try { data = JSON.parse(text); } catch { return { ok: false, error: tt("ui.recipe.importBadJson") }; }
+function applyRecipeData(data, { silentRender = false } = {}) {
   if (!data || data.format !== RECIPE_FORMAT || !Array.isArray(data.nodes)) {
     return { ok: false, error: tt("ui.recipe.importBadFormat") };
   }
@@ -315,10 +324,41 @@ function importRecipeFromText(text) {
   }
   if (!nodes.length) return { ok: false, error: tt("ui.recipe.importEmpty") };
   rState.nodes = nodes;
+  rState.file = null;
   if (typeof data.input === "string") rState.input = data.input;
-  renderRecipe();
-  maybeRunChain();
+  if (!silentRender) { renderRecipe(); maybeRunChain(); }
   return { ok: true, count: nodes.length };
+}
+
+function importRecipeFromText(text) {
+  let data;
+  try { data = JSON.parse(text); } catch { return { ok: false, error: tt("ui.recipe.importBadJson") }; }
+  return applyRecipeData(data);
+}
+
+// T698/T699：一次启动恢复（分享链接优先于自动草稿）。异步解码后重绘一次。
+let _bootRestored = false;
+let _lastShare = "";
+function restoreOnce() {
+  if (_bootRestored) return;
+  _bootRestored = true;
+  const share = shareCodeFromHash(location.hash);
+  if (share && share !== _lastShare) {
+    _lastShare = share;
+    decodeShare(share).then((data) => {
+      const r = applyRecipeData(data, { silentRender: true });
+      if (r.ok) { renderRecipe(); maybeRunChain(); }
+    }).catch(() => { /* 坏链接静默回退草稿 */ restoreDraftOnce(); });
+    return;
+  }
+  restoreDraftOnce();
+}
+function restoreDraftOnce() {
+  if (rState.nodes.length || rState.input) return;
+  const d = loadDraft();
+  if (!d) return;
+  const r = applyRecipeData(d, { silentRender: true });
+  if (r.ok) setTimeout(() => { renderRecipe(); maybeRunChain(); }, 0);
 }
 // 触发文件选择导入。
 function importRecipe() {
@@ -706,6 +746,7 @@ export function renderRecipe(container) {
   const host = container || _recipeHost || document.getElementById("recipeHost");
   if (!host) return;
   _recipeHost = host;   // 记住首次拿到的 host，供后续无参调用复用
+  restoreOnce();
   host.innerHTML = "";
 
   const wrap = el("div", { class: "recipe-view" });
@@ -737,6 +778,42 @@ export function renderRecipe(container) {
  // 配方导出/导入（自有 JSON 格式，非 CyberChef——op 命名体系不同无法互通）。
   bar.append(el("button", { class: "recipe-clear-btn", title: tt("ui.recipe.exportRecipe"), onclick: exportRecipe }, msym("download"), " " + tt("ui.recipe.exportRecipe")));
   bar.append(el("button", { class: "recipe-clear-btn", title: tt("ui.recipe.importRecipe"), onclick: importRecipe }, msym("content_paste"), " " + tt("ui.recipe.importRecipe")));
+
+ // T698：命名存档 + 自动草稿；T699：分享链接（只进 hash，不发网络）。
+  const savedSel = el("select", { class: "recipe-preset-picker recipe-saved-picker", title: tt("ui.recipe.loadSaved") });
+  const refreshSaved = () => {
+    savedSel.innerHTML = "";
+    savedSel.append(el("option", { value: "" }, tt("ui.recipe.loadSaved")));
+    for (const r of listSavedRecipes()) savedSel.append(el("option", { value: r.name }, r.name));
+  };
+  refreshSaved();
+  savedSel.addEventListener("change", () => {
+    if (!savedSel.value) return;
+    const rec = listSavedRecipes().find((r) => r.name === savedSel.value);
+    if (!rec) return;
+    const r = applyRecipeData(rec.data);
+    storeStatus.textContent = r.ok ? tt("ui.recipe.savedLoaded", rec.name) : r.error;
+  });
+  const saveBtn = el("button", { class: "recipe-clear-btn", title: tt("ui.recipe.saveRecipe"), onclick: () => {
+    const name = window.prompt(tt("ui.recipe.savePrompt"), tt("ui.recipe.saveDefault", new Date().toISOString().slice(0, 16).replace("T", " ")));
+    if (!name || !name.trim()) return;
+    const okSave = saveNamedRecipe(name, serializeState());
+    storeStatus.textContent = okSave ? tt("ui.recipe.savedOk", name.trim()) : tt("ui.recipe.saveFail");
+    refreshSaved();
+  } }, msym("save"), " " + tt("ui.recipe.saveRecipe"));
+  const shareBtn = el("button", { class: "recipe-clear-btn", title: tt("ui.recipe.shareRecipe"), onclick: async () => {
+    shareBtn.disabled = true;
+    try {
+      const r = await encodeShare(serializeState());
+      const url = buildShareUrl(r.code);
+      try { await navigator.clipboard.writeText(url); storeStatus.textContent = r.degraded ? tt("ui.recipe.shareDegraded", url.length) : tt("ui.recipe.shareCopied", url.length); }
+      catch { storeStatus.textContent = url; }
+    } catch (e) {
+      storeStatus.textContent = e && e.message ? e.message : tt("ui.recipe.shareFail");
+    } finally { shareBtn.disabled = false; }
+  } }, msym("link"), " " + tt("ui.recipe.shareRecipe"));
+  const storeStatus = el("span", { class: "recipe-store-status" });
+  bar.append(saveBtn, savedSel, shareBtn, storeStatus);
  // 手动执行按钮「执行！（Bake！）」——致敬 CyberChef。大输入下自动重跑闸门关闭，靠它强制跑全链。
  // .pending 类由 reflectPending 切换（大输入有挂起改动时高亮提示「该点我了」）。
   const bakeBtn = el("button", { class: "recipe-bake-btn", id: "recipeBake", onclick: () => { _pending = false; reflectPending(); runChain(); } },

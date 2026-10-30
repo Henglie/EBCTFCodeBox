@@ -1352,8 +1352,8 @@ function imageDiffTransform(imageData, p = {}) {
         else if (mode === "add") v = (a + b) & 0xFF;
         else if (mode === "and") v = a & b;
         else if (mode === "or") v = a | b;
-        else v = a ^ b; // xor 默认
-        dO[o + c] = v;
+        else v = a ^ b; // xor Ĭ��
+        dO[o + c] = c === 3 ? 255 : v; // alpha 固定不透明，避免 XOR 后整图全透明
       }
     }
   }

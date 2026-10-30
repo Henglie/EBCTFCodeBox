@@ -1659,4 +1659,8 @@ export default {
   "op.a1z26.desc": "A1Z26 kodlaması: harfler ile 1-26 sayıları arasında bire bir, çift yönlü dönüşüm yapar.",
   "op.dna.desc": "DNA kodlaması: 3 harfli kodonlar (A/C/G/T) ile karakterler arasında çift yönlü dönüşüm yapar.",
   "op.keyboard.desc": "Klavye koordinatı kodlaması: harfleri QWERTY klavyesindeki satır ve sütun konumlarıyla gösterir; örneğin Q=11.",
+  "op.plausibaer.name": "Coordinate Formula Solver (Plausibär)",
+  "op.plausibaer.desc": "Enumerate unknown variables/formulas in coordinates; outputs every valid lat/lon, decimal coordinate and map link (local reimplementation of guballa.de Plausibär)",
+  "op.stegSolve.name": "StegSolve Image Analysis",
+  "op.stegSolve.desc": "Standalone StegSolve 1.4 page: 42 channel/bit-plane/colour transforms, Data Extract, Stereogram Solver, Frame Browser, Image Combiner and file-format report.",
 };

@@ -9,7 +9,7 @@
   <span>恒烈 CTF 编码工具箱 · EBCTFCodeBox</span>
 </h1>
 <p align="center">
-  <span align="center">本地优先、零外发的编解码 / 加解密 / 隐写分析工具箱：820 个注册操作覆盖 23 类能力，绝大多数在浏览器本地运行，Windows 另可启用本地桥能力，macOS / Linux 提供双击启动器。</span>
+  <span align="center">本地优先、零外发的编解码 / 加解密 / 隐写分析工具箱：878 个注册操作覆盖 23 类能力，绝大多数在浏览器本地运行，Windows 另可启用本地桥能力，macOS / Linux 提供双击启动器。</span>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 - [项目简介](#项目简介)　　　　[特点](#特点)
 - [界面预览](#界面预览)　　　　[运行](#运行)
 - [平台兼容性](#平台兼容性)　　[性能要求](#性能要求)
-- [目录结构](#目录结构)　　　　[编解码全清单](#编解码全清单820-ops--23-分类)
+- [目录结构](#目录结构)　　　　[编解码全清单](#编解码全清单878-ops--23-分类)
 - [插件与 AI 接入](#插件与-ai-接入)　[开源协议](#开源协议)
 - [第三方资源与许可](#第三方资源与许可)　[隐私](#隐私)
 - [关键词 / Keywords](#关键词--keywords)
@@ -47,49 +47,47 @@
 | 百度网盘 | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
 | 夸克网盘 | https://pan.quark.cn/s/3b7e573b19c0 | 无 |
 
-当前版本 **v0.1.11**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
+当前版本 **v0.1.12**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
 
 ## 更新日志
 
-## v0.1.11
+## v0.1.12
 
 ### 新增功能
 
-- 新增哦齁编码（仙子曰）
-- 新增哈基米加密（三进制）
-- 新增杂鱼密语（官方闭源版复刻）＋ Base8 开源变体
-- 新增 Base64/dataURI 转图片
-- 新增图片转二进制点阵
-- 新增图片还原数值数据
-- 新增任意进制浮点转十进制
-- 新增原反补码转十进制
-- 自定义实现自动内联完整依赖闭包
-- 自定义实现支持 async 与文件产物
-- 搜索支持图像/视频/音频等同义词
+- 栅栏密码新增「模式」下拉框：W 型（锯齿 zigzag，默认）与 Z 型（传统分栏，按列写入、按行读出）
+- W 型新增「偏移量」档（0..64，轨迹先空 N 格再落字；Z 型填非 0 显式报错）
+- 一键解码的栅栏参数扫描同时覆盖 W 型与 Z 型（栏数 ≥3 时两种走法都试）
+- 新增五笔字型（86/98 双版本，20,902 字全码，支持连写自动分段与同码候选）
+- 新增中文电码（7,099 字，保留前导 0，四位定长）
+- 新增郑码（27,492 字，全码优先、短码可解）
+- 新增四角号码（16,720 字，默认列出同码全部候选，支持 4/5 位与点分写法）
+- 新增仓颉码（27,525 字，1–5 码、难字键 X）
+- 五种编码均补齐 aka≥10、中英科普卡、zh/en/de/fr/ja/ko/ru 文案与四项往返 harness
+- 新增 ChaCha20-Poly1305 / Poly1305 / GHASH / AEAD nonce 重用
+- 新增 PQC blob 解析 + NTRU 系数打包/解包
+- 新增 ZIP 条目列表 + 条目提取/解密导出
+- 新增 ECDH / RSA-OAEP / HPKE 封装族（5 op）
+- 新增 Mach-O / WASM 结构解析（2 op）
+- 新增 GB18030 严格四字节 / UTF-32（2 op）
+- 新增 SHA-224 / cSHAKE（2 op）
+- 进制小数升级为 2–36 BigInt 精确换基与循环节检测（base=0 兼容旧四档）
+- 文件分析隐写自动尝试新增光栅拆图、MP3Stego（密钥框口令）、Piet 执行、alpha 条带 3-bit 解码与 foremost 内嵌文件分离，产物可预览/打包下载
+- 智能解码与二维码结果卡新增类型动作行：URL/邮箱/WiFi/电话/geo/vCard/JSON/JWT/flag/base64；联网动作二次确认，WiFi 分 SSID/口令复制
+- 新增真题基准 `工具/rt_realtest_bench.mjs`（49 项：36 pass / 0 fail / 7 known-gap / 6 skipped）与真题结论模块 `src/core/stegoResearch.js`
 
 ### 修复
 
-- 修复 Data URI 解析二进制图片丢文件
-- 修复 Data URI 声明 MIME 与真实格式不符无提示
-- 修复单向 op 按钮方向文案错误
-- 修复 run 优先级导致 MIME multipart 编码不可达
-- 修复穷举解码对象产物显示 [object Object]
-- 修复 ZIP 伪加密被误判真加密（改为按声明方式实测数据判定）
-- 修复任意进制浮点前缀与进制不匹配时解析错误
-- 修复自定义实现完整源码漏收集模板插值里的依赖
-- 修复点阵图 / 数值转图在大输入下的越界与爆栈
-
-### 安全与优化
-
-- 自定义沙箱保留网络能力（用户授权外发）
-- 零外发口径澄清：程序自身不主动外发
-- OpenPGP.js 升级 5.11.3（修复 CVE-2025-47934）
-- MCP 隐藏 JSFuck / JJEncode 执行面
-- RSA 公钥指数合法性校验与弱参数告警
-- 杂鱼密语 / 杂鱼编码大数据输入性能大幅提升（O(n²) → O(n)）
-- MCP 启动提示 Node 安全版本
-- 按需资产纳入 SW revision
-- README 补充 2026-10 安全说明
+- 修复栅栏密码简介写 W 型、科普原理写 Z 字形，且没有 Z 型入口的问题
+- 修复盲文科普卡「无参数」与实际 mapping 档（auto/nabcc/raw）不符
+- 修复键盘坐标、T9 手机九宫格科普卡「无参数」与实际参数不符
+- 修复点数记数（骰面解码）示例多写一位数字
+- 修复童子军木棍密码示例尾串多一个空格
+- 撤销自定义实现中与正式 op 重复的「栅栏变体」预设（W/Z 已并入 railFence）
+- 修复五笔 98 源表 7 条首字母大写异常码（我=Qtrny、为=Oyeyi 等，已按标准码修正）
+- 修复四角号码 5 位输入在字表只有 4 位主码时解不出（如 36780 → 识，末位 0 自动回退）
+- 修复汇编/反汇编架构假覆盖：收窄到实测可用的 5 种架构，移除 RISC-V 与未验证架构入口
+- 修复天珩字库平面 range：p1 补 ExtG/H/J、p16 改为第 16 平面 PUA、p0 补第 14 平面，生僻字不再掉系统字体
 
 更早版本的完整变更记录见 [CHANGELOG.md](./CHANGELOG.md)。
 
@@ -113,7 +111,7 @@
 
 - **本地优先 · 零外发**：原生 ES module，无框架、无构建步骤。核心编解码在浏览器本地执行，不上传用户输入；「外链」只生成 URL。PWA 更新仅下载本站资源，本地桥只访问 `127.0.0.1`，外部 AI 仅在用户主动配置 endpoint 后启用。
 - **一把梭智能解码**：粘贴或拖入内容，自动识别可能的编码链并给出候选解码结果，支持 crib 目标特征过滤与深度爆破。
-- **820 个注册操作 · 23 分类**：覆盖 Base、文本传输、花式 CTF、深奥编程语言、中文本土、古典密码、现代加密（分组 / 流 / 非对称 / 其他）、哈希校验、进制字符集（含素数判定与筛选）、分析爆破、密码攻击、压缩归档、口令与归档破解、取证流量、文件格式结构、数据结构、图像与二维码、音频音视频、隐写及 4 个可选 Windows GUI 桥入口。完整清单由 registry 自动生成。
+- **878 个注册操作 · 23 分类**：覆盖 Base、文本传输、花式 CTF、深奥编程语言、中文本土、古典密码、现代加密（分组 / 流 / 非对称 / 其他）、哈希校验、进制字符集（含素数判定与筛选）、分析爆破、密码攻击、压缩归档、口令与归档破解、取证流量、文件格式结构、数据结构、图像与二维码、音频音视频、隐写及 4 个可选 Windows GUI 桥入口。完整清单由 registry 自动生成。
 - **解码强度四件套**（v0.1.2）：强度档位 + 自定义算法池 + **暴力爆破独立通道**（XOR/凯撒/字典/彩虹表/HMAC/PBE/Playfair/ZIP/CRC32/bkcrack，结果单独归组展示不污染主排序）+ **解析层数 1~3 选择**。
 - **宽松判定模式**（v0.1.2）：增强/极强/最强/自定义档只按字符种类数放行算法，变体编码题（「喵呜」表 0/1、emoji 表二进制）也能参与解码；默认/快速档保持严格定义域识别。
 - **密钥+密文一键尝试**：给定密文与密钥，自动枚举 AES/DES/3DES/RC4/XOR/Fernet × 多种模式 × 多种编码组合。
@@ -214,7 +212,7 @@ nginx / Apache / Caddy 等正式 Web 服务器同样可用，需注意两点：
 
    附带的 `通用点我启动.py` 已默认下发这两个头；自建服务器需自行配置。缺失这两个头时，多线程 WASM op 会优雅降级或提示不可用，纯前端功能不受影响。
 
-PWA 已完整接线（`manifest.json` + `sw.js`）：首次在线访问后预缓存 709 项核心运行资源（版本更新时按校验和增量补下，只传有变化的文件），支持安装到桌面和核心功能完全断网运行；大体积按需资产（天珩字库四平面、WASM、IDS 拼字数据、编码对照图、KaTeX）首次用到后即缓存、之后同样离线可用。顶栏“检查更新”会下载完整新版本后再询问刷新。
+PWA 已完整接线（`manifest.json` + `sw.js`）：首次在线访问后预缓存 853 项核心运行资源（版本更新时按校验和增量补下，只传有变化的文件），支持安装到桌面和核心功能完全断网运行；大体积按需资产（天珩字库四平面、WASM、IDS 拼字数据、编码对照图、KaTeX）首次用到后即缓存、之后同样离线可用。顶栏“检查更新”会下载完整新版本后再询问刷新。
 
 ## 平台兼容性
 
@@ -270,7 +268,7 @@ public/
 资料/              算法码表核对资料 + 研究成果（开发资料，不随发行包分发）
 ```
 
-## 编解码全清单（820 ops · 23 分类）
+## 编解码全清单（878 ops · 23 分类）
 
 > 本节由 `node tools/gen_readme_ops.mjs` 从主入口真实 import 闭包生成；opId 即注册表唯一标识。
 
@@ -309,7 +307,7 @@ public/
 | crockford32 | Crockford Base32 |  |
 | dxBase64 | DXBase64 |  |
 
-### 文本 / 传输编码（39 ops）
+### 文本 / 传输编码（42 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -330,6 +328,8 @@ public/
 | caretMdecode | Caret/M 控制字符 |  |
 | natoAlphabet | NATO 音标字母 |  |
 | asciiControl | ASCII 控制字符 |  |
+| utf32 | UTF-32 LE/BE |  |
+| gb18030 | GB18030 严格版（含四字节） |  |
 | gbCharset | GBK / GB2312 / GB18030 |  |
 | gb2312QuWei | GB2312 区位码 |  |
 | big5 | Big5 繁体中文 |  |
@@ -352,11 +352,14 @@ public/
 | mimeMultipart | MIME multipart 解析 |  |
 | yenc | yEnc 编 / 解码 |  |
 | binhex | BinHex 4.0 编 / 解码 |  |
+| regexTool | 通用正则提取 / 替换 |  |
 
-### 花式 / CTF 编码（78 ops）
+### 花式 / CTF 编码（79 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
+| yunying | 云影密码（01248） | 0 分隔，1/2/4/8 数字和映射 A-Z；encode 仅 A-Z，decode 严格校验 1-26 |
+| scoutStick | 童子军木棍密码 |  |
 | morse | 摩斯电码 |  |
 | bacon | 培根密码 |  |
 | rot13 | ROT13 |  |
@@ -365,7 +368,6 @@ public/
 | rot47 | ROT47 |  |
 | atbash | Atbash |  |
 | a1z26 | A1Z26 |  |
-| scoutStick | 童子军木棍密码 | dCode Code Chinois / Samurai |
 | dna | DNA 编码 |  |
 | keyboard | 键盘坐标 |  |
 | ook | Ook! |  |
@@ -456,7 +458,7 @@ public/
 | braincopterDecode | Braincopter 解码 |  |
 | braincopterEncode | Braincopter 编码 |  |
 
-### 中文 / 本土编码（24 ops）
+### 中文 / 本土编码（29 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -465,8 +467,17 @@ public/
 | baiJiaXing | 百家姓 |  |
 | element | 元素周期表 |  |
 | foyu | 佛曰 |  |
+| wubi | 五笔字型 |  |
+| cnTelegraph | 中文电码 |  |
+| zhengma | 郑码 |  |
+| fourCorner | 四角号码 |  |
+| cangjie | 仓颉码 |  |
 | shzyhxjzg | 社会主义核心价值观 |  |
 | makkaPakka | 玛卡巴卡 |  |
+| xianziCode | 哦齁编码（仙子曰） |  |
+| hajimiCode | 哈基米加密（三进制） |  |
+| zakoCode | 杂鱼编码（Base8 开源版） |  |
+| zakoMystery | 杂鱼密语（官方版） |  |
 | countingRods | 算筹数字 |  |
 | suiYanSuiYu | 随言随语 |  |
 | fuyouyue | 佛又曰 |  |
@@ -480,10 +491,6 @@ public/
 | xiangyue | 想曰 XiangYue |  |
 | xiangyueEnc | 想曰 XiangYue 加密 |  |
 | yueChang | 曰唱 |  |
-| xianziCode | 哦齁编码（仙子曰） |  |
-| hajimiCode | 哈基米加密（三进制） |  |
-| zakoCode | 杂鱼编码（Base8 开源版） |  |
-| zakoMystery | 杂鱼密语（官方版） |  |
 
 ### 古典密码（71 ops）
 
@@ -561,7 +568,7 @@ public/
 | beaufortVariant | 变体 Beaufort |  |
 | redefence | Redefence 栅栏 |  |
 
-### 现代密码·分组（32 ops）
+### 现代密码·分组（33 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -597,6 +604,7 @@ public/
 | threefish | Threefish 可调分组密码 |  |
 | skipjack | Skipjack 分组密码 |  |
 | mars | MARS 分组密码 |  |
+| bfvToy | BFV 玩具同态加密（教学） |  |
 
 ### 现代密码·流（21 ops）
 
@@ -604,7 +612,7 @@ public/
 |---|---|---|
 | rc4 | RC4 | RC4 流密码（自反，key 任意长） |
 | xor | XOR | 重复密钥异或（自反，CTF 最常用；单字节爆破见分析类 xorBrute） |
-| rabbit | Rabbit 流密码 | RFC 4503 Rabbit 流密码。三变体：CryptoJS Legacy（旧版在线工具默认，推荐）/ CryptoJS 标准 / RFC 4503 文档方向；32 位 hex 密钥直用（IV 可留空），口令按 CryptoJS 封装（Salted base64）加解密，decode 自动试空口令与常见口令。 |
+| rabbit | Rabbit 流密码 | RFC 4503 Rabbit 流密码。变体三档：CryptoJS Legacy（旧版在线工具默认，推荐）/ CryptoJS 标准 / RFC 4503 文档方向（0.1.9 及更早行为）。密钥填 32 位 hex 直用（IV 可选）；填口令或留空则按 CryptoJS OpenSSL 封装（Salted base64）加解密。decode 对 CryptoJS 密文（U2FsdGVkX1 开头）自动带空口令与常见口令尝试。 |
 | salsa20 | Salsa20 |  |
 | chacha20 | ChaCha20 |  |
 | flashSwirl | FlashSwirl 闪旋 |  |
@@ -624,7 +632,7 @@ public/
 | rc4Drop | RC4-drop / CipherSaber-2 |  |
 | xsalsa20 | XSalsa20 |  |
 
-### 现代密码·非对称（105 ops）
+### 现代密码·非对称（126 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -638,6 +646,17 @@ public/
 | mlkemKeyGen | ML-KEM 密钥生成 |  |
 | mlkemEncaps | ML-KEM 封装 |  |
 | mlkemDecaps | ML-KEM 解封装 |  |
+| pqcBlobParse | PQC blob 解析（ML-KEM/ML-DSA/SLH-DSA） |  |
+| ntruPack | NTRU 系数打包 |  |
+| ntruUnpack | NTRU 系数解包 |  |
+| ecdhP | ECDH 共享密钥（素数域曲线） |  |
+| rsaOaepEnc | RSA-OAEP 加密 |  |
+| rsaOaepDec | RSA-OAEP 解密 |  |
+| x25519KeyGen | X25519 密钥生成 |  |
+| x25519Shared | X25519 共享密钥（双方私钥） |  |
+| x25519SharedFromPub | X25519 共享密钥（私钥+对方公钥） |  |
+| hpkeSeal | HPKE 加密（Base） |  |
+| hpkeOpen | HPKE 解密（Base） |  |
 | rsaParams | RSA 参数计算（p,q→n,φ,d） |  |
 | rsaModinv | 模逆（a⁻¹ mod m） |  |
 | rsaEgcd | 扩展欧几里得（Bézout） |  |
@@ -654,9 +673,6 @@ public/
 | sm9Verify | SM9 验签 |  |
 | sm9Encrypt | SM9 加密 |  |
 | sm9Decrypt | SM9 解密 |  |
-| x25519KeyGen | X25519 密钥生成 |  |
-| x25519Shared | X25519 共享密钥（双方私钥） |  |
-| x25519SharedFromPub | X25519 共享密钥（私钥+对方公钥） |  |
 | xwingKeyGen | X-Wing 密钥生成 |  |
 | xwingEncaps | X-Wing 封装 |  |
 | xwingDecaps | X-Wing 解封装 |  |
@@ -733,13 +749,27 @@ public/
 | schnorrSign | Schnorr 签名 |  |
 | schnorrVerify | Schnorr 验签 |  |
 | schnorrReuseK | Schnorr nonce 重用攻击 |  |
+| falconPkParse | Falcon 公钥解析 |  |
+| falconVerify | Falcon 验签 |  |
+| kzgVerify | KZG 证明验证 |  |
+| kzgCommit | KZG blob 承诺 |  |
+| ntruCca2Encrypt | NTRU CCA-2 加密 |  |
+| ntruCca2Decrypt | NTRU CCA-2 解密 |  |
+| sshKeyParse | OpenSSH 私钥解析 |  |
+| jwkOkpImport | JWK OKP 导入 |  |
+| jwkOkpExport | JWK OKP 导出 |  |
+| cmsVerify | CMS / PKCS#7 验签 |  |
+| x509Verify | X.509 证书链验签 |  |
+| sshsigVerify | OpenSSH SSHSIG 验签 |  |
+| sigVerify | 统一验签入口 |  |
 
-### 现代密码·其他（29 ops）
+### 现代密码·其他（33 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
 | fernet | Fernet | 对称令牌（AES-128-CBC + HMAC-SHA256，key 为 base64url 32 字节） |
 | xorStrings | XOR 循环补齐 |  |
+| chacha20Poly1305 | ChaCha20-Poly1305 AEAD |  |
 | jwt | JWT |  |
 | jwtNone | JWT None 攻击 |  |
 | jweIdentify | JWE 结构识别 |  |
@@ -767,8 +797,11 @@ public/
 | pasetoV4Verify | PASETO v4 验签（public） |  |
 | shamir | Shamir 秘密共享 |  |
 | jwtCrack | JWT 密钥爆破（小字典演示） |  |
+| xoodyakAead | Xoodyak-AEAD |  |
+| mpcToy | 安全多方计算玩具（教学） |  |
+| quantumToy | 量子算法玩具（Grover / Shor） |  |
 
-### 哈希 / 校验（66 ops）
+### 哈希 / 校验（73 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -803,11 +836,15 @@ public/
 | sha0 | SHA-0 |  |
 | has160 | HAS-160 |  |
 | gostHash | GOST R 34.11-94 |  |
+| poly1305 | Poly1305 MAC |  |
+| ghash | GHASH（GCM 认证哈希） |  |
 | argon2 | Argon2 KDF（Argon2d/i/id） |  |
 | tiger | Tiger / Tiger2 哈希（192-bit） |  |
 | kupyna | Kupyna 哈希（DSTU 7564:2014） |  |
 | kmac | KMAC |  |
 | cmacExt | CMAC 扩展 |  |
+| sha224 | SHA-224 |  |
+| cshake | cSHAKE |  |
 | crcGeneric | 通用 CRC（参数化） |  |
 | crc16Modbus | CRC-16/MODBUS |  |
 | crc16CcittTrue | CRC-16/CCITT-FALSE |  |
@@ -838,6 +875,9 @@ public/
 | jh | JH |  |
 | xxhash | xxHash 极速哈希 |  |
 | cityhash | CityHash 非加密哈希 |  |
+| poseidon | Poseidon |  |
+| poseidon2 | Poseidon2 |  |
+| xoodyakHash | Xoodyak-Hash |  |
 
 ### 进制 / 字符集（82 ops）
 
@@ -857,6 +897,8 @@ public/
 | asciiOffset | ASCII 偏移 |  |
 | decimalToFloat | 十进制转任意进制浮点 |  |
 | binaryComplement | 原码反码补码 |  |
+| floatToDecimal | 任意进制浮点转十进制 |  |
+| complementToDec | 原反补码转十进制 |  |
 | completion | 补零对齐 |  |
 | splitHex | Hex N 位分割 |  |
 | standardCode | 字符集互转 |  |
@@ -897,8 +939,6 @@ public/
 | geoHash | Geohash 编码 |  |
 | geoPlusCode | Plus Code / OLC |  |
 | geoMaidenhead | Maidenhead 网格 |  |
-| floatToDecimal | 任意进制浮点转十进制 |  |
-| complementToDec | 原反补码转十进制 |  |
 | geoUtm | UTM 坐标 |  |
 | color | 颜色编码互转 |  |
 | colorInfo | 颜色全息信息 |  |
@@ -923,10 +963,10 @@ public/
 | randomSecure | 增强随机安全 |  |
 | randBeacon | 公开随机信标验证 |  |
 | radixAll | 一键多进制转换 |  |
-| progCalc | 程序员计算器 | 位运算表达式求值（手写递归下降解析器，无 eval）：& \| ^ ~ << >> >>> + - * / % **、括号、rotl/rotr 循环移位；8/16/32/64 位字宽掩码回绕（全程 BigInt），有/无符号切换；一次输出十进制/十六进制/八进制/二进制（4 位分组）/补码/popcount/前导零/尾随零。 |
+| progCalc | 程序员计算器 |  |
 | objectIdTime | ObjectID 时间戳解析 |  |
 
-### 分析 / 爆破（46 ops）
+### 分析 / 爆破（48 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -942,6 +982,7 @@ public/
 | extractHashes | 提取哈希串 |  |
 | getAllCasings | 大小写全排列 |  |
 | alternatingCaps | 交替大小写 |  |
+| knnClassify | KNN 分类（新能源车 A/B） |  |
 | hashTypeIdentify | 哈希类型识别 |  |
 | vigenereAuto | 维吉尼亚全自动破解 |  |
 | hillKnownPlain | Hill 已知明文攻击 |  |
@@ -952,6 +993,7 @@ public/
 | chiSquareAnalysis | 卡方检验（详细） |  |
 | subCipherSolver | 单表替换自动求解 |  |
 | caesarBrute | 凯撒/ROT 自动求位移 |  |
+| plausibaer | 坐标公式求解（Plausibär） |  |
 | ecCurveIdent | 椭圆曲线参数识别 |  |
 | sstiKeyword | SSTI 关键字识别 |  |
 | xorCribDrag | XOR crib-drag 已知明文拖动 |  |
@@ -977,10 +1019,11 @@ public/
 | xorshiftRecover | xorshift 状态恢复 |  |
 | rc4Visualize | RC4 KSA/PRGA 可视化 |  |
 
-### 密码攻击（21 ops）
+### 密码攻击（22 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
+| aeadNonceReuse | AEAD nonce 重用（ChaCha20-Poly1305） |  |
 | ecdsaReuseK | ECDSA nonce 重用攻击 |  |
 | hashDictCrack | 哈希字典爆破（小字典演示） |  |
 | rainbowQuery | 彩虹表查询（本地演示小表） |  |
@@ -1003,7 +1046,7 @@ public/
 | prngAttack | PRNG 破解（LCG / MT19937） |  |
 | hashLengthExtension | 哈希长度扩展攻击（MD5/SHA1/SHA256） |  |
 
-### 压缩 / 归档（16 ops）
+### 压缩 / 归档（18 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1022,9 +1065,11 @@ public/
 | archiveUnified | 压缩 / 归档归一分析 |  |
 | zipRepair | ZIP 伪加密修复 |  |
 | zipPseudoEncrypt | ZIP 伪加密（置位） |  |
+| zipEntries | ZIP 条目列表 |  |
+| zipExtract | ZIP 条目提取 / 解密导出 |  |
 | zipCreate | ZIP 创建（出题） |  |
 
-### 口令 / 归档破解（10 ops）
+### 口令 / 归档破解（12 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1038,6 +1083,8 @@ public/
 | rar2john | RAR 哈希提取（rar2john） |  |
 | sshkey2john | SSH 私钥哈希提取（sshkey2john） |  |
 | bkcrackAttack | ZipCrypto 已知明文攻击 (bkcrack) |  |
+| gcmForbidden | GCM nonce 重用攻击 |  |
+| eccSubgroupAttack | ECDH 小子群/无效曲线攻击 |  |
 
 ### 取证 / 流量（19 ops）
 
@@ -1049,10 +1096,10 @@ public/
 | pcapDnsTunnel | DNS 隧道检测 | 提取 DNS query 子域名数据标签，拼接后尝试 base32/base64/hex 解码，检出 DNS 隧道外泄的隐藏数据。复用 pcapParse DNS 分帧 |
 | pcapIcmpPayload | ICMP 载荷提取 | 提取 ICMP echo 载荷，按 id/seq 排序拼接，还原 ICMP 隐写/隧道外泄的数据。复用 pcapParse ICMP 分帧 |
 | pcapFieldExtract | pcap 字段提取/过滤 | 逐包提取 ip.id / TTL / TCP urgent pointer / DNS qry-answer 等字段，支持协议与方向过滤（src:/dst:/port=），输出表格/TSV/纯值三档（纯值 TTL 列可直接接 TTL 隐写解码） |
-| mcLevelDat | Minecraft level.dat 解析 | 解析 Minecraft Java 版世界存档 level.dat（gzip 压缩的 NBT）：种子/出生点/GameRules/版本/DataVersion，高亮非常规 GameRule 与异常坐标等可疑字段。自写大端序 NBT 解析器，Long 用 BigInt，纯前端零外发 |
-| mcMapRender | Minecraft 地图渲染 | 把 Minecraft Java 版地图物品 map_#.dat（gzip NBT，根下 data.colors 为 128×128 调色板索引）渲染成 PNG：内置 62 个 MapColor 基础色 + 4 档明暗，解码 16384 字节为 RGBA，手写最小 PNG 编码器（零 canvas 依赖）提供完整文件下载和缩略预览。CTF 常用地图画二维码/像素画/隐藏文字。支持最近邻放大便于看二维码。复用 mcSave 的 NBT 解析器，纯前端零外发 |
-| trailerCarve | 文件附加数据剥离 | 识别载体正体结束偏移（PNG IEND/JPEG FFD9/GIF 3B/ZIP EOCD/BMP/RIFF/PDF %%EOF），剥出尾部附加字节并识别魔数；或 binwalk 式全文扫描内嵌文件 |
 | oleExtract | OLE/CFB 容器静态提取 |  |
+| mcLevelDat | Minecraft level.dat 解析 |  |
+| mcMapRender | Minecraft 地图渲染 |  |
+| trailerCarve | 文件附加数据剥离 |  |
 | foremostCarve | 文件雕刻（Foremost JS） |  |
 | trafficReadable | 流量可读结论 |  |
 | usbKeyboard | USB 键盘流量解析 |  |
@@ -1063,13 +1110,15 @@ public/
 | mcTextExtract | Minecraft 文本情报提取 |  |
 | mcNbtView | Minecraft NBT 树查看器 |  |
 
-### 文件格式 / 结构（11 ops）
+### 文件格式 / 结构（15 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
 | pycExeDecompile | pyc/exe 反编（本地桥） | 拖入 .pyc 或 PyInstaller 打包 .exe，经本地 bridge.py 自动判 Python 版本并反编为源码（uncompyle6/decompyle3，3.9+ 走 pylingual 实验链路；仅 Windows，需先起 python bridge.py） |
 | htmlCommentExtract | HTML 注释提取 |  |
 | zipCommentExtract | ZIP 注释提取 |  |
+| machoParse | Mach-O 结构解析 |  |
+| wasmParse | WASM 结构解析 |  |
 | scriptDecoder | MS 脚本解码（.vbe/.jse） |  |
 | adsTool | NTFS ADS 备用数据流 |  |
 | stringsExtract | 字符串提取（strings） |  |
@@ -1078,13 +1127,13 @@ public/
 | apkManifest | APK Manifest 解析 |  |
 | elfInfo | ELF 可执行信息 |  |
 | peInfo | PE 可执行信息 |  |
+| kzgBlobParse | EIP-4844 blob 解析 |  |
+| pkcs12Parse | PKCS#12/PFX 解析 |  |
 
 ### 数据结构 / 序列化（21 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
-| hexRange | Hex 区间提取 | 提取指定偏移区间的字节，多格式展示（hex/dec/oct/bin/ASCII/UTF-8） |
-| hexStats | 字节分布统计 | 字节值分布（256 桶密度网格/3 桶）+ 可打印率 + 全局/滑窗香农熵（曲线定位加密/压缩区）+ top-N 高频字节 |
 | stegoDetect | 隐写检测（文本 / 文件） |  |
 | b64urlJson | Base64url ↔ JSON |  |
 | pemParse | PEM/DER 结构解析 |  |
@@ -1098,46 +1147,48 @@ public/
 | bsonParse | BSON 文档解析 |  |
 | phpSerializeParse | PHP serialize 解析 |  |
 | javaSerializeIdent | Java 序列化识别 |  |
+| hexRange | Hex 区间提取 |  |
+| hexStats | 字节分布统计 |  |
 | diffTool | 差异对比 |  |
 | rison | Rison |  |
 | pickleDisasm | Pickle 反汇编 |  |
 | cryptoAddrUnified | 加密货币地址解析 |  |
 | huffmanCodec | 哈夫曼编解码（通用） |  |
-| unitConv | 单位换算 | 数据量 B/KB/MB/GB/TB/PB 与 KiB/MiB/GiB/TiB/PiB 两制并列（SI 1000 制 vs IEC 60027-2 1024 制，系数全部可溯源）；速率 bps/Kbps/Mbps/Gbps ↔ B/s/KB/s/MB/s（bit×8）；时间 ns~d；纯数字触发时间戳纪元对照（Unix 秒/毫秒、FILETIME、Cocoa、Chrome μs、DOS 打包，数量级自动嗅探）；频率 Hz~GHz；角度 deg/rad/gon。数据量全程 BigInt 有理数，PB 级零精度损失，精确小数与截断位明确标注。 |
+| unitConv | 单位换算 |  |
 
 ### 图像 / 二维码（37 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
-| pngChunkList | PNG 全块解析 | 列举 PNG 所有 chunk（IHDR/PLTE/tEXt/zTXt/iTXt/bKGD/iCCP/IDAT/IEND 等），解析文本块与元数据（压缩文本经仓库内 inflate 解出，无需 pako）；可导出逐块原字节（含长度/类型/CRC）、PLTE 调色板与调色板索引位流 |
-| jpegAppList | JPEG APPn 段列举 | 列举 JPEG 所有 APP0-APP15 段及 marker 段（SOF/DQT/DHT/COM 等），标识段内容 |
-| gifComment | GIF 注释扩展 | 提取 GIF 89a 注释扩展块（0x21 0xFE），拼接所有 sub-block 文本 |
-| gifFrames | GIF 多帧提取 | 逐帧解码合成并压缩为 PNG，单 ZIP 下载；默认全部帧，受4096帧/128MiB ZIP及像素、时间预算约束，失败不交付不完整包 |
-| iccStrip | ICC 剥离 | 剥离 ICC profile（PNG iCCP chunk / JPEG APP2 ICC_PROFILE 段），返回去 ICC 后的 base64 |
-| qrGen | QR 码生成 | 纯 JS QR 编码（数字/字母/字节模式 + L/M/Q/H 纠错），输出可扫描二维码 PNG（含静默区）+ 0/1 矩阵 JSON。核心移植自 Nayuki (MIT) |
-| barcodeIdentify | 条码类型判定 | 2D（QR/Aztec/DataMatrix 结构识别）+ 1D（EAN/UPC/ISBN/ITF/Code39/Codabar 校验位判定） |
-| qrDecode | QR 码解码 | 从 0/1 矩阵反解 QR 内容：finder 检测 + 格式信息 + 之字形取数 + 掩码还原 + RS 纠错 + 数字/字母/字节模式还原。开「诊断」输出版本/ECL/掩码/RS纠错数/分段模式全流程报告 |
-| pngSizeRecover | PNG 宽高爆破恢复 | 检测 PNG IHDR CRC 篡改 + 爆破恢复真实宽高（CTF 改高度藏图经典；先只爆高度 O(N) 秒出，再爆宽度，最后双爆兜底；输出修复后 base64） |
-| bmpSizeRecover | BMP 宽高修复 | 检测 BMP 宽高与像素数据量不一致 + 反推真实宽高（BMP 无 CRC，用像素字节数整除 rowSize 反推；CTF 改 BMP 宽高藏图；输出修复后 base64） |
-| jpgSizeRecover | JPEG 宽高修复 | 基线 JPEG 数 MCU 反推真实高度（SOF 无校验和，熵解码扫描数据数块即得；CTF 改高度藏图的 JPEG 版）+ 手动强制宽高，输出修复后 base64 |
-| qrScanImage | 二维码扫描解析 | 二维码一个入口全包：粘贴图片自动扫描，粘贴文本矩阵自动解析。图片（PNG/JPEG/GIF/BMP/WebP）解出内容；0/1 矩阵或 ASCII art 给出版本/纠错级/掩码/finder 体检。定位符被抹掉或遮挡也能解（网格重建 + 穷举 + 擦除纠错）。「读码范围」放开后可一并读出图中的条码（Code128/EAN/UPC/ITF 等）与 DataMatrix/PDF417/Aztec，多枚符号在诊断报告里逐个列出；勾「诊断报告」失败时给出卡在哪一步与建议。全程本地计算。 |
+| pngChunkList | PNG 全块解析 |  |
+| jpegAppList | JPEG APPn 段列举 |  |
+| gifComment | GIF 注释扩展 |  |
+| gifFrames | GIF 多帧提取 |  |
+| iccStrip | ICC 剥离 |  |
 | imageBasic | 图像基础操作 |  |
 | pngText | PNG 文本块读写 |  |
 | pngHeight | PNG 高度修改 |  |
 | exifExtract | EXIF 提取 |  |
 | bitplaneSlicing | 位平面分解 |  |
 | imageDiff | 图像差异对比 |  |
+| pngSizeRecover | PNG 宽高爆破恢复 |  |
+| bmpSizeRecover | BMP 宽高修复 |  |
+| qrGen | QR 码生成 |  |
+| barcodeIdentify | 条码类型判定 |  |
+| qrDecode | QR 码解码 |  |
 | qrFormatBrute | QR 格式信息爆破 |  |
-| barcodeGen | 条码生成（Code128/EAN-13/DataMatrix） |  |
+| qrScanImage | 二维码 / 条形码扫描解析 |  |
+| barcodeGen | 条码生成（1D/2D 八符号） |  |
 | imageStructUnified | 图像结构分析（归一） |  |
 | bin2img | 二进制转图片 |  |
-| img2bits | 图片转二进制点阵 |  |
 | img2dataURI | 图片转 Base64/dataURI |  |
 | dataURIToImage | Base64/dataURI 转图片 |  |
-| dataToImage | 数值数据渲染成图 |  |
+| img2bits | 图片转二进制点阵 |  |
 | imageToData | 图片还原数值数据 |  |
+| dataToImage | 数值数据渲染成图 |  |
 | bmpPalette | BMP 调色板隐写分析 |  |
 | gifTiming | GIF 帧时序隐写 |  |
+| jpgSizeRecover | JPEG 宽高修复 |  |
 | imageCompress | 图片压缩 |  |
 | imageGray | 图片黑白化 |  |
 | imagePixelate | 图片像素化 |  |
@@ -1151,11 +1202,11 @@ public/
 
 | opId | 名称 | 说明 |
 |---|---|---|
-| dtmfWav | DTMF 拨号音 WAV | 按键序列 ↔ 拨号音 WAV：encode 数字(0-9 A-D * #)→叠加行/列双正弦 16位单声道 WAV(base64)；decode WAV(base64/hex)→Goertzel 检 8 基频→按键。解码支持整数 PCM(8/16/24/32bit)/IEEE float(32/64bit)/µ-law，对标并超越 dtmf2num。 |
-| wavHeader | WAV 头解析 | 解析 RIFF/WAVE 结构：遍历 chunk + fmt 块（采样率/位深/声道/格式码）+ data 块时长；输入 hex/base64/UTF-8 自动识别 |
-| sstvIdent | SSTV 模式识别 | 检测 1200Hz 起始同步脉冲 + VIS 码，标注可能的 SSTV 模式（Robot/Scottie/Martin/PD）；仅识别不解调图像 |
+| wavHeader | WAV 头解析 |  |
+| sstvIdent | SSTV 模式识别 |  |
 | pcmTransforms | PCM 波形变换 |  |
 | sstv | SSTV 慢扫描电视 编/解 |  |
+| dtmfWav | DTMF 拨号音 WAV |  |
 | morseWav | 摩斯音频编解码 |  |
 | spectrogram | 音频频谱图（STFT） |  |
 
@@ -1177,21 +1228,26 @@ public/
 | nthChar | 第 N 字隐写 |  |
 | wordSpacingBits | 词距位隐写 |  |
 
-### 文件隐写（27 ops）
+### 文件隐写（32 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
-| audioLsb | 音频 LSB 提取 | 从 WAV PCM 样本最低有效位提取隐藏比特流 → 文本/hex + 原字节下载；支持 8/16/24/32 位深、按声道选取、每样本多位 |
-| audioLsbEmbed | 音频 LSB 嵌入（出题） | 把载荷写进 WAV PCM 样本最低位（或每样本多位）生成隐写 WAV；位布局与 audioLsb 提取一一对应；输入非 WAV 时按原始 PCM 封装 |
 | lsbImage | LSB 像素隐写 |  |
 | pixelJihad | PixelJihad |  |
 | arnoldCat | Arnold 猫脸变换 |  |
 | arnoldCatBrute | Arnold 猫脸暴破 |  |
 | f5stego | F5 JPEG 隐写 编/解 |  |
+| audioLsb | 音频 LSB 提取 |  |
+| audioLsbEmbed | 音频 LSB 嵌入（出题） |  |
 | jphswinLaunch | JPHS · JPEG 隐写 |  |
 | openpuffLaunch | OpenPuff · 多载体 |  |
 | oursecretLaunch | OurSecret · 隐写 |  |
 | jsteg | jsteg JPEG 隐写 编/解 |  |
+| lsbDeep | LSB 深度扫描（全通道 · 位平面） |  |
+| rasterStego | 光栅隐写拆图（zbRasterTerminator） |  |
+| mp3stego | MP3Stego 解码（-X -P） |  |
+| imageThumb | EXIF 缩略图提取 |  |
+| stegSolve | StegSolve 图像分析 |  |
 | dctWatermark | DCT 盲水印 |  |
 | dualFftWatermark | 双图盲水印(F) 频域叠加 |  |
 | outguess | OutGuess 隐写（双向） |  |
@@ -1219,6 +1275,7 @@ public/
 
 - 开发指南：[`src/plugin/README.md`](./src/plugin/README.md)
 - 参考插件（活样板，照抄改名即起步）：[`src/plugin/examples/hello-cipher/index.js`](./src/plugin/examples/hello-cipher/index.js)
+- 官方插件包（随发行包分发、**默认不启用**）：[`addons/dcode-extras-2026-10/`](./addons/dcode-extras-2026-10/)。在插件页「官方插件」区直接点击启用（自动读取 official.json，同源 addons/ 目录发现兜底）；不进主 op 计数、不进预缓存，首次在线加载后离线可用。当前 408 op，988 个 dCode 工具已逐条入账。
 
 ### 给外部 AI 用（MCP / Skills）
 
@@ -1278,6 +1335,14 @@ AI 的联网出口只有可选的 `aiClient`，且必须用户自备 endpoint + 
 - [zxing-wasm](https://github.com/Sec-ant/zxing-wasm)（MIT © 2023 Ze-Zheng Wu；上游 ZXing-C++ 为 Apache-2.0）— 二维码/条码解码。
 - [CodeMirror 6](https://github.com/codemirror/dev)（MIT）— 自定义算法编辑器内核。
 - [KaTeX](https://github.com/KaTeX/KaTeX) 0.16.11（MIT，字体 OFL）— 数学公式渲染。
+- [wubi-code-data](https://github.com/program-in-chinese/npm-wubi-code-data) 1.0.2（ISC；98 表上游 wubi-lex，MIT）— 五笔 86/98 单字全码。
+- [Chinese-characters-code-table](https://github.com/yefeijiang/Chinese-characters-code-table)（BSD-2-Clause）— 20,902 字五笔/郑码字表（本工具只用郑码列）。
+- [zhengma_for_rime](https://github.com/chen32768/zhengma_for_rime)（Apache-2.0）— 郑码 Rime 单字表，用于补全多码与生僻字。
+- [Unicode Unihan 18.0.0](https://www.unicode.org/Public/18.0.0/ucd/Unihan.zip)（Unicode License v3）— 中文电码、四角号码、仓颉码字段。
+- [node-ctc](https://github.com/lisposter/node-ctc)（MIT）— 中文电码补缺与交叉核对。
+- [hanziDB.csv](https://github.com/ruddfawcett/hanziDB.csv)（MIT；字频源自 Jun Da 现代汉语字频表）— 同码候选的词频排序。
+
+以上汉字码表的完整许可文本见 [`src/core/data/README.md`](./src/core/data/README.md)。
 
 ### 图标 · Material Symbols Rounded
 

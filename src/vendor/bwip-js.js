@@ -1,6 +1,6 @@
 // This file is part of the bwip-js project available at:
 //
-//   http://metafloor.github.io/bwip-js
+//    http://metafloor.github.io/bwip-js
 //
 // Copyright (c) 2011-2026 Mark Warren
 //
@@ -30,7 +30,7 @@
 //
 "use strict";
 
-import { bwipp_auspost,bwipp_azteccode,bwipp_azteccodecompact,bwipp_aztecrune,bwipp_bc412,bwipp_channelcode,bwipp_codablockf,bwipp_code11,bwipp_code128,bwipp_code16k,bwipp_code2of5,bwipp_code32,bwipp_code39,bwipp_code39ext,bwipp_code49,bwipp_code93,bwipp_code93ext,bwipp_codeone,bwipp_coop2of5,bwipp_d3aqr,bwipp_daft,bwipp_databarexpanded,bwipp_databarexpandedcomposite,bwipp_databarexpandedstacked,bwipp_databarexpandedstackedcomposite,bwipp_databarlimited,bwipp_databarlimitedcomposite,bwipp_databaromni,bwipp_databaromnicomposite,bwipp_databarstacked,bwipp_databarstackedcomposite,bwipp_databarstackedomni,bwipp_databarstackedomnicomposite,bwipp_databartruncated,bwipp_databartruncatedcomposite,bwipp_datalogic2of5,bwipp_datamatrix,bwipp_datamatrixrectangular,bwipp_datamatrixrectangularextension,bwipp_dotcode,bwipp_ean13,bwipp_ean13composite,bwipp_ean14,bwipp_ean2,bwipp_ean5,bwipp_ean8,bwipp_ean8composite,bwipp_flattermarken,bwipp_gs1_128,bwipp_gs1_128composite,bwipp_gs1_cc,bwipp_gs1datamatrix,bwipp_gs1datamatrixrectangular,bwipp_gs1dldatamatrix,bwipp_gs1dlqrcode,bwipp_gs1dotcode,bwipp_gs1northamericancoupon,bwipp_gs1qrcode,bwipp_hanxin,bwipp_hibcazteccode,bwipp_hibccodablockf,bwipp_hibccode128,bwipp_hibccode39,bwipp_hibcdatamatrix,bwipp_hibcdatamatrixrectangular,bwipp_hibcmicropdf417,bwipp_hibcpdf417,bwipp_hibcqrcode,bwipp_iata2of5,bwipp_identcode,bwipp_industrial2of5,bwipp_interleaved2of5,bwipp_isbn,bwipp_ismn,bwipp_issn,bwipp_itf14,bwipp_japanpost,bwipp_kix,bwipp_leitcode,bwipp_mailmark,bwipp_mands,bwipp_matrix2of5,bwipp_maxicode,bwipp_micropdf417,bwipp_microqrcode,bwipp_msi,bwipp_onecode,bwipp_pdf417,bwipp_pdf417compact,bwipp_pharmacode,bwipp_pharmacode2,bwipp_planet,bwipp_plessey,bwipp_posicode,bwipp_postnet,bwipp_pzn,bwipp_qrcode,bwipp_rationalizedCodabar,bwipp_raw,bwipp_rectangularmicroqrcode,bwipp_royalmail,bwipp_sscc18,bwipp_swissqrcode,bwipp_symbol,bwipp_telepen,bwipp_telepennumeric,bwipp_ultracode,bwipp_upca,bwipp_upcacomposite,bwipp_upce,bwipp_upcecomposite,bwipp_lookup,bwipp_symlist,bwipp_encode,BWIPP_VERSION } from './bwipp.js';
+import { bwipp_auspost,bwipp_azteccode,bwipp_azteccodecompact,bwipp_aztecrune,bwipp_bc412,bwipp_channelcode,bwipp_codablockf,bwipp_code11,bwipp_code128,bwipp_code16k,bwipp_code2of5,bwipp_code32,bwipp_code39,bwipp_code39ext,bwipp_code49,bwipp_code93,bwipp_code93ext,bwipp_codeone,bwipp_coop2of5,bwipp_d3aqr,bwipp_daft,bwipp_databarexpanded,bwipp_databarexpandedcomposite,bwipp_databarexpandedstacked,bwipp_databarexpandedstackedcomposite,bwipp_databarlimited,bwipp_databarlimitedcomposite,bwipp_databaromni,bwipp_databaromnicomposite,bwipp_databarstacked,bwipp_databarstackedcomposite,bwipp_databarstackedomni,bwipp_databarstackedomnicomposite,bwipp_databartruncated,bwipp_databartruncatedcomposite,bwipp_datalogic2of5,bwipp_datamatrix,bwipp_datamatrixrectangular,bwipp_datamatrixrectangularextension,bwipp_dotcode,bwipp_ean13,bwipp_ean13composite,bwipp_ean14,bwipp_ean2,bwipp_ean5,bwipp_ean8,bwipp_ean8composite,bwipp_flattermarken,bwipp_gs1_128,bwipp_gs1_128composite,bwipp_gs1_cc,bwipp_gs1datamatrix,bwipp_gs1datamatrixrectangular,bwipp_gs1dldatamatrix,bwipp_gs1dlqrcode,bwipp_gs1dotcode,bwipp_gs1northamericancoupon,bwipp_gs1qrcode,bwipp_hanxin,bwipp_hibcazteccode,bwipp_hibccodablockf,bwipp_hibccode128,bwipp_hibccode39,bwipp_hibcdatamatrix,bwipp_hibcdatamatrixrectangular,bwipp_hibcmicropdf417,bwipp_hibcpdf417,bwipp_hibcqrcode,bwipp_iata2of5,bwipp_identcode,bwipp_industrial2of5,bwipp_interleaved2of5,bwipp_isbn,bwipp_ismn,bwipp_issn,bwipp_itf14,bwipp_japanpost,bwipp_kix,bwipp_leitcode,bwipp_mailmark,bwipp_mands,bwipp_matrix2of5,bwipp_maxicode,bwipp_micropdf417,bwipp_microqrcode,bwipp_msi,bwipp_onecode,bwipp_pdf417,bwipp_pdf417compact,bwipp_pharmacode,bwipp_pharmacode2,bwipp_planet,bwipp_plessey,bwipp_posicode,bwipp_postnet,bwipp_pzn,bwipp_qrcode,bwipp_rationalizedCodabar,bwipp_raw,bwipp_rectangularmicroqrcode,bwipp_royalmail,bwipp_sscc18,bwipp_swissqrcode,bwipp_symbol,bwipp_telepen,bwipp_telepennumeric,bwipp_ultracode,bwipp_upca,bwipp_upcacomposite,bwipp_upce,bwipp_upcecomposite,bwipp_lookup,bwipp_symlist,bwipp_encode,BWIPP_VERSION } from "./bwipp.js";
 // exports.js
 const BWIPJS_VERSION = '4.11.4 (2026-08-19)';
 
@@ -106,9 +106,9 @@ function _ToAny(encoder, opts, drawing) {
 // Returns a string containing a fully qualified SVG definition,
 // including the natural width and height of the image, in pixels:
 //
-// <svg viewBox="0 0 242 200" xmlns="http://www.w3.org/2000/svg">
-//  ...
-// </svg>
+//  <svg viewBox="0 0 242 200" xmlns="http://www.w3.org/2000/svg">
+//   ...
+//  </svg>
 //
 // Available on all platforms.
 function ToSVG(opts) {
@@ -414,14 +414,14 @@ BWIPJS.prototype.restore = function() {
     }
 };
 // Per the postscript spec:
-// As discussed in Section 4.4.1, Current Path, points entered into a path
-// are immediately converted to device coordinates by the current
-// transformation matrix (CTM); subsequent modifications to the CTM do not
-// affect existing points.  `currentpoint` computes the user space
-// coordinates corresponding to the current point according to the current
-// value of the CTM. Thus, if a current point is set and then the CTM is
-// changed, the coordinates returned by currentpoint will be different
-// from those that were originally specified for the point.
+//  As discussed in Section 4.4.1, Current Path, points entered into a path
+//  are immediately converted to device coordinates by the current
+//  transformation matrix (CTM); subsequent modifications to the CTM do not
+//  affect existing points.  `currentpoint` computes the user space
+//  coordinates corresponding to the current point according to the current
+//  value of the CTM. Thus, if a current point is set and then the CTM is
+//  changed, the coordinates returned by currentpoint will be different
+//  from those that were originally specified for the point.
 BWIPJS.prototype.currpos = function() {
     return { x:(this.g_posx-this.g_m4)/this.g_tsx,
              y:(this.g_posy-this.g_m5)/this.g_tsy
@@ -479,7 +479,7 @@ BWIPJS.prototype.jsstring = function(s) {
         // Postscript (like C) treats nul-char as end of string.
         //for (var i = 0, l = s.length; i < l && s[i]; i++);
         //if (i < l) {
-        // return String.fromCharCode.apply(null,s.subarray(0, i));
+        //  return String.fromCharCode.apply(null,s.subarray(0, i));
         //}
         return String.fromCharCode.apply(null,s)
     }
@@ -919,11 +919,11 @@ BWIPJS.prototype.showmaxicode = function(pix) {
     // Dimensions needed for plotting the hexagons.  These must be integer values.
     var w, h, wgap, hgap;
     // if (opts.??? ) {
-    // // Create a one or two pixel gap
-    // wgap = (mwidth & 1) ? 1 : 2;
-    // hgap = 1;
-    // w = mwidth - gap;
-    // h = 4 * tsy;
+    //  // Create a one or two pixel gap
+    //  wgap = (mwidth & 1) ? 1 : 2;
+    //  hgap = 1;
+    //  w = mwidth - gap;
+    //  h = 4 * tsy;
     // } else {
         // Create a 1/8mm gap
         wgap = (tsx/2)|0;
@@ -2108,10 +2108,10 @@ function DrawingSVG() {
                 if (glyph.length) {
                     // A glyph is composed of a sequence of curve and line segments.
                     // `type` is one of:
-                    //  M is move-to
-                    //  L is line-to
-                    //  Q is quadratic bezier curve-to
-                    //  C is cubic bezier curve-to
+                    //   M is move-to
+                    //   L is line-to
+                    //   Q is quadratic bezier curve-to
+                    //   C is cubic bezier curve-to
                     for (var i = 0, l = glyph.length; i < l; i++) {
                         let seg = glyph[i];
                         if (seg.type == 'M' || seg.type == 'L') {
@@ -2288,15 +2288,15 @@ var FontLib = (function() {
         glyph.offset = 0;
 
         //glyph = {
-        //     top:font.GlyphTop(),
-        //     left:font.GlyphLeft(),
-        //     width:font.GlyphWidth(),
-        //     height:font.GlyphHeight(),
-        //     advance:font.GlyphAdvance(),
-        //     bitmap:font.GlyphBitmap(),
-        //     offset:0,
-        //     cachekey:cachekey,
-        // };
+        //      top:font.GlyphTop(),
+        //      left:font.GlyphLeft(),
+        //      width:font.GlyphWidth(),
+        //      height:font.GlyphHeight(),
+        //      advance:font.GlyphAdvance(),
+        //      bitmap:font.GlyphBitmap(),
+        //      offset:0,
+        //      cachekey:cachekey,
+        //  };
 
         // Purge old
         if (glyphcount > 250) {
@@ -2357,7 +2357,7 @@ function LoadFont() {
 //
 // This file is part of the bwip-js project available at:
 //
-//     http://metafloor.github.io/bwip-js
+//      http://metafloor.github.io/bwip-js
 //
 // Copyright (c) 2019 Mark Warren : MIT LICENSE
 
@@ -2858,7 +2858,7 @@ function stbtt_GetGlyphBox(info, glyph_index, out) {
 }
 
 //static int stbtt__close_shape(stbtt_vertex * vertices, int num_vertices, int was_off,
-//                  int start_off, int sx, int sy, int scx, int scy, int cx, int cy)
+//                   int start_off, int sx, int sy, int scx, int scy, int cx, int cy)
 function stbtt__close_shape(vertices, num_vertices, was_off, start_off, sx, sy, scx, scy, cx, cy) {
     if (start_off) {
         if (was_off) {
@@ -3067,8 +3067,8 @@ function stbtt__GetGlyphShapeTT(info, glyph_index) {
     }
     //console.log('vertices(' + vertices.length + ')');
     //for (var i = 0; i < vertices.length; i++) {
-    // var pt = vertices[i];
-    // console.log(`${i}: ${pt.x},${pt.y} / ${pt.cx},${pt.cy} / ${pt.type}`);
+    //  var pt = vertices[i];
+    //  console.log(`${i}: ${pt.x},${pt.y} / ${pt.cx},${pt.cy} / ${pt.type}`);
     //}
 
     return vertices;
@@ -3128,7 +3128,7 @@ function stbtt__csctx_rline_to(ctx, dx, dy) {
 }
 
 //static void stbtt__csctx_rccurve_to(stbtt__csctx * ctx, float dx1, float dy1, float dx2,
-//                                 float dy2, float dx3, float dy3)
+//                                  float dy2, float dx3, float dy3)
 function stbtt__csctx_rccurve_to(ctx, dx1, dy1, dx2, dy2, dx3, dy3) {
     var cx1 = ctx.x + dx1,
         cy1 = ctx.y + dy1,
@@ -3185,7 +3185,7 @@ function stbtt__cid_get_glyph_subrs(info, glyph_index) {
 }
 
 //static int stbtt__run_charstring(const stbtt_fontinfo * info, int glyph_index,
-//                                stbtt__csctx * c)
+//                                 stbtt__csctx * c)
 function stbtt__run_charstring(info, glyph_index, c) {
     var in_header = 1, maskbits = 0, subr_stack_height = 0, sp = 0, v, i, b0,
         has_subrs = 0, clear_stack,
@@ -3547,7 +3547,7 @@ function stbtt__csctx_init() {
 }
 
 //static int stbtt__GetGlyphShapeT2(const stbtt_fontinfo * info, int glyph_index,
-//                                 stbtt_vertex ** pvertices)
+//                                  stbtt_vertex ** pvertices)
 function stbtt__GetGlyphShapeT2(info, glyph_index) {
     var output_ctx = stbtt__csctx_init();
     if (stbtt__run_charstring(info, glyph_index, output_ctx)) {
@@ -3557,7 +3557,7 @@ function stbtt__GetGlyphShapeT2(info, glyph_index) {
 }
 
 //static int stbtt__GetGlyphInfoT2(const stbtt_fontinfo * info, int glyph_index, int *x0,
-//                     int *y0, int *x1, int *y1)
+//                      int *y0, int *x1, int *y1)
 function stbtt__GetGlyphInfoT2(info, glyph_index, out) {
     var c = stbtt__csctx_init();
     var r = stbtt__run_charstring(info, glyph_index, c);
@@ -3569,7 +3569,7 @@ function stbtt__GetGlyphInfoT2(info, glyph_index, out) {
 }
 
 //extern int stbtt_GetGlyphShape(const stbtt_fontinfo * info, int glyph_index,
-//                              stbtt_vertex ** pvertices)
+//                               stbtt_vertex ** pvertices)
 function stbtt_GetGlyphShape(info, glyph_index) {
     if (!info.cff.length) {
         return stbtt__GetGlyphShapeTT(info, glyph_index);
@@ -3579,7 +3579,7 @@ function stbtt_GetGlyphShape(info, glyph_index) {
 }
 
 //extern void stbtt_GetGlyphHMetrics(const stbtt_fontinfo * info, int glyph_index,
-//                      int *advanceWidth, int *leftSideBearing)
+//                       int *advanceWidth, int *leftSideBearing)
 function stbtt_GetGlyphHMetrics(info, glyph_index) {
     var numOfLongHorMetrics = ttUSHORT(info.data, info.hhea + 34);
     if (glyph_index < numOfLongHorMetrics) {
@@ -3597,7 +3597,7 @@ function stbtt_GetGlyphHMetrics(info, glyph_index) {
 }
 
 //extern void stbtt_GetCodepointHMetrics(const stbtt_fontinfo * info, int codepoint,
-//                          int *advanceWidth, int *leftSideBearing)
+//                           int *advanceWidth, int *leftSideBearing)
 function stbtt_GetCodepointHMetrics(info, codepoint) {
      return stbtt_GetGlyphHMetrics(info, stbtt_FindGlyphIndex(info, codepoint));
 }
@@ -3612,8 +3612,8 @@ function stbtt_GetFontVMetrics(info) {
 }
 
 //extern void stbtt_GetGlyphBitmapBoxSubpixel(const stbtt_fontinfo * font, int glyph,
-//                             float scale_x, float scale_y, float shift_x, float shift_y,
-//                             int *ix0, int *iy0, int *ix1, int *iy1)
+//                              float scale_x, float scale_y, float shift_x, float shift_y,
+//                              int *ix0, int *iy0, int *ix1, int *iy1)
 function stbtt_GetGlyphBitmapBoxSubpixel(font, glyph, scale_x, scale_y, shift_x, shift_y) {
     var tmp = {};
     if (!stbtt_GetGlyphBox(font, glyph, tmp)) {
@@ -3628,15 +3628,15 @@ function stbtt_GetGlyphBitmapBoxSubpixel(font, glyph, scale_x, scale_y, shift_x,
 }
 
 //extern void stbtt_GetCodepointBitmapBoxSubpixel(const stbtt_fontinfo * font,
-//                                   int codepoint, float scale_x, float scale_y, float shift_x,
-//                                   float shift_y, int *ix0, int *iy0, int *ix1, int *iy1)
+//                                    int codepoint, float scale_x, float scale_y, float shift_x,
+//                                    float shift_y, int *ix0, int *iy0, int *ix1, int *iy1)
 function stbtt_GetCodepointBitmapBoxSubpixel(font, codepoint, scale_x, scale_y, shift_x, shift_y) {
     return stbtt_GetGlyphBitmapBoxSubpixel(font, stbtt_FindGlyphIndex(font, codepoint),
                                             scale_x, scale_y, shift_x, shift_y);
 }
 
 //extern void stbtt_GetCodepointBitmapBox(const stbtt_fontinfo * font, int codepoint,   float scale_x, float scale_y,
-//                                     int *ix0, int *iy0, int *ix1, int *iy1)
+//                                      int *ix0, int *iy0, int *ix1, int *iy1)
 function stbtt_GetCodepointBitmapBox(font, codepoint, scale_x, scale_y) {
     return stbtt_GetCodepointBitmapBoxSubpixel(font, codepoint, scale_x, scale_y, 0, 0);
 }
@@ -3656,7 +3656,7 @@ function stbtt__new_active(e, off_x, start_point) {
 }
 
 //static void stbtt__handle_clipped_edge(float *scanline, int x, stbtt__active_edge * e,
-//                          float x0, float y0, float x1, float y1)
+//                           float x0, float y0, float x1, float y1)
 function stbtt__handle_clipped_edge(scanline, x, e, x0, y0, x1, y1) {
     x = x|0;
     if (y0 == y1) {
@@ -3687,7 +3687,7 @@ function stbtt__handle_clipped_edge(scanline, x, e, x0, y0, x1, y1) {
 }
 
 //static void stbtt__fill_active_edges_new(float *scanline, float *scanline_fill, int len,
-//                            stbtt__active_edge * e, float y_top)
+//                             stbtt__active_edge * e, float y_top)
 // The C implementation passed scanline_fill as a +1 pointer on the call, and then -1 in
 // places in this function.  That doesn't work with array-views, so we reverse the handling.
 function stbtt__fill_active_edges_new(scanline, scanline_fill, len, e, y_top) {
@@ -3804,7 +3804,7 @@ function stbtt__fill_active_edges_new(scanline, scanline_fill, len, e, y_top) {
 }
 
 //static void stbtt__rasterize_sorted_edges(stbtt__bitmap * result, stbtt__edge * e, int n,
-//                             int vsubsample, int off_x, int off_y, void *userdata)
+//                              int vsubsample, int off_x, int off_y, void *userdata)
 function stbtt__rasterize_sorted_edges(result, edges, nedges, vsubsample, off_x, off_y) {
     vsubsample |= 0, off_x |= 0, off_y |= 0;
     var active = null, z;
@@ -3939,9 +3939,9 @@ function stbtt__sort_edges(p, n) {
 }
 
 //static void stbtt__rasterize(stbtt__bitmap * result, stbtt__point * pts, int *wcount,
-//                int windings, float scale_x, float scale_y, float shift_x,
-//                float shift_y, int off_x, int off_y, int invert,
-//                void *userdata)
+//                 int windings, float scale_x, float scale_y, float shift_x,
+//                 float shift_y, int off_x, int off_y, int invert,
+//                 void *userdata)
 function stbtt__rasterize(result, pts, wcount, scale_x, scale_y, shift_x, shift_y, off_x, off_y, invert) {
     var y_scale_inv = invert ? -scale_y : scale_y,
         e, n, i, j, k, m,
@@ -3983,8 +3983,8 @@ function stbtt__rasterize(result, pts, wcount, scale_x, scale_y, shift_x, shift_
  }
 
 //static int stbtt__tesselate_curve(stbtt__point * points, int *num_points, float x0,
-//                      float y0, float x1, float y1, float x2, float y2,
-//                      float objspace_flatness_squared, int n)
+//                       float y0, float x1, float y1, float x2, float y2,
+//                       float objspace_flatness_squared, int n)
 function stbtt__tesselate_curve(points, x0, y0, x1, y1, x2, y2, objspace_flatness_squared, n) {
     var mx = (x0 + 2 * x1 + x2) / 4,
         my = (y0 + 2 * y1 + y2) / 4,
@@ -4005,8 +4005,8 @@ function stbtt__tesselate_curve(points, x0, y0, x1, y1, x2, y2, objspace_flatnes
 }
 
 //static void stbtt__tesselate_cubic(stbtt__point * points, int *num_points, float x0,
-//                      float y0, float x1, float y1, float x2, float y2,
-//                      float x3, float y3, float objspace_flatness_squared, int n)
+//                       float y0, float x1, float y1, float x2, float y2,
+//                       float x3, float y3, float objspace_flatness_squared, int n)
 function stbtt__tesselate_cubic(points, x0, y0, x1, y1, x2, y2, x3, y3, objspace_flatness_squared, n) {
     var dx0 = x1 - x0,
         dy0 = y1 - y0,
@@ -4049,7 +4049,7 @@ function stbtt__tesselate_cubic(points, x0, y0, x1, y1, x2, y2, x3, y3, objspace
 }
 
 //static stbtt__point *stbtt_FlattenCurves(stbtt_vertex * vertices, int num_verts,
-//       float objspace_flatness, int **contour_lengths, int *num_contours, void *userdata)
+//        float objspace_flatness, int **contour_lengths, int *num_contours, void *userdata)
 function stbtt_FlattenCurves(vertices, objspace_flatness, contour_lengths) {
     var points = [],
         objspace_flatness_squared = objspace_flatness * objspace_flatness,
@@ -4087,21 +4087,21 @@ function stbtt_FlattenCurves(vertices, objspace_flatness, contour_lengths) {
 
     //console.log("--cl(" + (n+1) + '):');
     //for (var i = 0; i <= n; i++) {
-    // console.log(" %d", contour_lengths[i]);
+    //  console.log(" %d", contour_lengths[i]);
     //}
     //console.log("\n--pts(" + points.length + '):');
     //for (var i = 0; i < points.length; i++) {
-    // var pt = points[i];
-    // console.log(i + ': ' + pt.x  + ',' + pt.y);
+    //  var pt = points[i];
+    //  console.log(i + ': ' + pt.x  + ',' + pt.y);
     //}
 
     return points;
 }
 
 //extern void stbtt_Rasterize(stbtt__bitmap * result, float flatness_in_pixels,
-//               stbtt_vertex * vertices, int num_verts, float scale_x,
-//               float scale_y, float shift_x, float shift_y, int x_off,
-//               int y_off, int invert, void *userdata)
+//                stbtt_vertex * vertices, int num_verts, float scale_x,
+//                float scale_y, float shift_x, float shift_y, int x_off,
+//                int y_off, int invert, void *userdata)
 function stbtt_Rasterize(result, flatness_in_pixels, vertices, scale_x, scale_y, shift_x, shift_y,
                          x_off, y_off, invert) {
     x_off |= 0, y_off |= 0;
@@ -4115,9 +4115,9 @@ function stbtt_Rasterize(result, flatness_in_pixels, vertices, scale_x, scale_y,
 }
 
 //extern void stbtt_MakeGlyphBitmapSubpixel(const stbtt_fontinfo * info,
-//                             unsigned char *output, int out_w, int out_h,
-//                             int out_stride, float scale_x, float scale_y,
-//                             float shift_x, float shift_y, int glyph)
+//                              unsigned char *output, int out_w, int out_h,
+//                              int out_stride, float scale_x, float scale_y,
+//                              float shift_x, float shift_y, int glyph)
 function stbtt_MakeGlyphBitmapSubpixel(info, buffer, out_w, out_h, out_stride,
                                     scale_x, scale_y, shift_x, shift_y, glyph) {
     var vertices = stbtt_GetGlyphShape(info, glyph);
@@ -4134,10 +4134,10 @@ function stbtt_MakeGlyphBitmapSubpixel(info, buffer, out_w, out_h, out_stride,
 }
 
 //extern void stbtt_MakeCodepointBitmapSubpixel(const stbtt_fontinfo * info,
-//                                 unsigned char *output, int out_w,
-//                                 int out_h, int out_stride, float scale_x,
-//                                 float scale_y, float shift_x,
-//                                 float shift_y, int codepoint)
+//                                  unsigned char *output, int out_w,
+//                                  int out_h, int out_stride, float scale_x,
+//                                  float scale_y, float shift_x,
+//                                  float shift_y, int codepoint)
 function stbtt_MakeCodepointBitmapSubpixel(info, buffer, out_w, out_h, out_stride,
                                     scale_x, scale_y, shift_x, shift_y, codepoint) {
     stbtt_MakeGlyphBitmapSubpixel(info, buffer, out_w, out_h, out_stride,

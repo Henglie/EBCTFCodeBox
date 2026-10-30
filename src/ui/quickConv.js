@@ -866,14 +866,13 @@ function renderDatePanel() {
 // ============ 面板 ③：机器码&汇编互转 ============
 // 面板 ③：WASM 引擎懒加载，零外发；引擎与许可信息仅存工程文档 PROGRESS.md。
 // 红线：本面板只做交互，WASM 调用全在 core/asmDisasm.js 与 core/asmAssemble.js。
-const ASM_ARCH_BOTH = ["x86", "x86-64", "arm", "arm-thumb", "arm64", "mips", "mips64", "ppc", "ppc64", "sparc", "systemz", "evm"];
-const ASM_ARCH_DISASM_ONLY = ["riscv", "m68k", "tms320c64x", "xcore"];
-const ASM_ARCH_ASSEMBLE_ONLY = ["hexagon"];
+// 只列经过随包 wasm 实测可用的架构（与 core/asmAssemble.js、core/asmDisasm.js 的 ARCH_MAP 一致）。
+// 不按引擎 glue 的常量表增项：MIPS/PPC/SPARC/SystemZ/M68K/TMS320C64X/XCore 会 cs_open/ks_open
+// 报「不支持的架构」，缺少引擎常量的架构直接不列——宁可隐藏，也不做假解码。
+const ASM_ARCHS = ["x86", "x86-64", "arm", "arm-thumb", "arm64"];
 const ASM_ARCH_LABEL = {
   "x86": "x86 (32-bit)", "x86-64": "x86-64 (64-bit)", "arm": "ARM", "arm-thumb": "ARM Thumb",
-  "arm64": "ARM64 (AArch64)", "mips": "MIPS (32)", "mips64": "MIPS (64)", "riscv": "RISC-V (64)",
-  "ppc": "PowerPC (32)", "ppc64": "PowerPC (64)", "sparc": "SPARC", "systemz": "SystemZ",
-  "m68k": "M68K", "tms320c64x": "TMS320C64x", "xcore": "XCore", "evm": "EVM", "hexagon": "Hexagon",
+  "arm64": "ARM64 (AArch64)",
 };
 let _asmTimer = null;
 
@@ -894,14 +893,12 @@ function renderAsmPanel() {
   seg.append(mkDirBtn("asm", "ui.qc.asmAssemble"), mkDirBtn("disasm", "ui.qc.asmDisasm"));
   bar.append(seg);
 
-  // 架构 select（按方向过滤可选项）
+  // 架构 select（汇编/反汇编共用同一份经验证白名单）
   const archSel = el("select", {
     "aria-label": tt("ui.qc.asmArch"),
     onchange: () => { A.arch = archSel.value; renderAsmPanel(); },
   });
-  const archList = A.dir === "asm"
-    ? [...ASM_ARCH_BOTH, ...ASM_ARCH_ASSEMBLE_ONLY]
-    : [...ASM_ARCH_BOTH, ...ASM_ARCH_DISASM_ONLY];
+  const archList = ASM_ARCHS;
   if (!archList.includes(A.arch)) A.arch = "x86";
   for (const a of archList) {
     archSel.append(el("option", { value: a, selected: A.arch === a ? "" : null }, ASM_ARCH_LABEL[a]));

@@ -159,6 +159,18 @@ function bkcrackWasmAvailable() { return _available; }
  * @param {string[]} readBack 跑完后从虚拟 FS 读回的文件名
  * @returns {{stdout:string, files:Object<string,Uint8Array>}|null} null=wasm 不可用
  */
+// bkcrack 的进度是终端风格：\r + ANSI 清行 + 大量 " 62.7 % (n / total)"。
+// 直接塞进 textarea 会变成几万行噪声并占用内存；这里只保留实质输出。
+const BK_ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g;
+const BK_PROGRESS_RE = /^\d+(?:\.\d+)?\s*%\s*\(\d+\s*\/\s*\d+\)$/;
+function pushBkcrackLine(lines, raw) {
+  for (const part of String(raw == null ? "" : raw).split(/[\r\n]+/)) {
+    const line = part.replace(BK_ANSI_RE, "").trim();
+    if (!line || BK_PROGRESS_RE.test(line)) continue;
+    lines.push(line);
+  }
+}
+
 async function runBkcrack(argv, inputs = [], readBack = []) {
   const create = await loadBkcrackFactory();
   if (!create) return null;
@@ -169,8 +181,8 @@ async function runBkcrack(argv, inputs = [], readBack = []) {
  // MODULARIZE + noInitialRun：await 工厂拿到实例，print/printErr 收集到 buffer
     mod = await create({
       noInitialRun: true,
-      print: (t) => lines.push(t),
-      printErr: (t) => lines.push(t),
+      print: (t) => pushBkcrackLine(lines, t),
+      printErr: (t) => pushBkcrackLine(lines, t),
  // 抑制 emscripten 状态噪音
       setStatus: () => {},
     });
@@ -218,6 +230,22 @@ function parseKeys(stdout) {
 }
 
 // ============================================================
+// 运行环境能力检测
+// bkcrack attack()/recoverPassword() 无条件 std::thread，wasm 为 pthread 构建，
+// 没有单线程快路径；缺 SharedArrayBuffer / 非 crossOriginIsolated 时 pthread 无法启动，
+// 入口必须先拦下，否则会卡在“点击转换”。不引入 CDN，不做假的单线程回退。
+// ============================================================
+function bkcrackRuntimeCheck() {
+  const hasSAB = typeof SharedArrayBuffer === "function";
+  const isolated = typeof crossOriginIsolated !== "undefined" && crossOriginIsolated === true;
+  if (hasSAB && isolated) return { ok: true, hasSAB, isolated };
+  const reasons = [];
+  if (!hasSAB) reasons.push("SharedArrayBuffer 不可用");
+  if (!isolated) reasons.push("crossOriginIsolated=false（缺少 COOP/COEP 响应头，或不是安全上下文）");
+  return { ok: false, hasSAB, isolated, reason: reasons.join("；") };
+}
+
+// ============================================================
 // 主 op：run 单向
 // 模式 recover : 仅恢复内部密钥态 key0/key1/key2
 // 模式 decrypt : 恢复密钥并解密目标条目全部数据（一次 callMain 带 -d）
@@ -229,6 +257,29 @@ const OUT_TMP = "decrypted.bin";
 async function bkcrackRun(text, p) {
   const lines = [];
   lines.push("=== ZipCrypto 已知明文攻击 (bkcrack / Biham-Kocher) ===");
+
+  // 入口能力检测：不满足 pthread 运行条件立即返回，绝不加载 wasm 后卡住。
+  const env = bkcrackRuntimeCheck();
+  if (!env.ok) {
+    lines.push("");
+    lines.push("✗ 当前页面不满足 bkcrack wasm（pthread）运行条件，已立即停止，未开始攻击，不会卡住。");
+    lines.push("  检测结果: SharedArrayBuffer=" + env.hasSAB + "，crossOriginIsolated=" + env.isolated);
+    lines.push("  原因: " + env.reason);
+    lines.push("");
+    lines.push("修复（任选其一）：");
+    lines.push("  1) 用下发 COOP/COEP 响应头的服务器打开本页：");
+    lines.push("       Cross-Origin-Opener-Policy: same-origin");
+    lines.push("       Cross-Origin-Embedder-Policy: require-corp");
+    lines.push("     推荐：运行仓库根目录 `python 通用点我启动.py`（其 end_headers 已下发这两项）。");
+    lines.push("     ⚠ bridge.py 是纯 API 桥，不托管页面；用 python -m http.server / 普通静态服务器");
+    lines.push("       打开 UI 时不会带这两个头，bkcrack 必然停在这里（这是浏览器安全限制，不是工具 bug）。");
+    lines.push("     自检: DevTools Console 执行 crossOriginIsolated，必须返回 true。");
+    lines.push("  2) 无法改响应头时，改用本地 bkcrack.exe 命令行完成攻击；本仓库当前未内置 bkcrack 本地桥接通道。");
+    lines.push("");
+    lines.push("说明: public/wasm/bkcrack.js 是 emscripten pthread 构建（bkcrack 无单线程快路径），");
+    lines.push("      不能在无 SharedArrayBuffer 的环境降级为单线程；本项目不引入 CDN 远程加载。");
+    return lines.join("\n");
+  }
 
  // ---- 解析加密 ZIP ----
   let zipBytes;
@@ -260,11 +311,12 @@ async function bkcrackRun(text, p) {
     return lines.join("\n") + "\n\n✗ 已知明文解析失败: " + (e && e.message ? e.message : String(e));
   }
   const offset = Math.max(0, parseInt((p && p.plainOffset) || "0", 10) || 0);
-  if (mode !== "recoverPassword") {
-    lines.push("目标条目: " + entry);
-    lines.push("已知明文: " + plainBytes.length + " 字节，偏移 " + offset + "，前 16 字节(hex): " + bytesToHex(plainBytes, 16));
-  } else {
+  if (mode === "recoverPassword") {
     lines.push("目标: 从密钥态暴力恢复原始密码（无需档案）");
+  } else {
+    lines.push("目标条目: " + entry);
+    if (mode === "decryptKeys") lines.push("模式: 已知密钥态（-k），无需已知明文");
+    else lines.push("已知明文: " + plainBytes.length + " 字节，偏移 " + offset + "，前 16 字节(hex): " + bytesToHex(plainBytes, 16));
   }
   lines.push("");
 
@@ -274,6 +326,10 @@ async function bkcrackRun(text, p) {
  // 模式 decryptKeys : 已知密钥态解密 -C <zip> -c <entry> -k X Y Z -d <outfile>
  // 模式 recoverPassword : 密码暴力恢复 -k X Y Z -r <length> <charset>（无需档案）
   const keysStr = String((p && p.keys) || "").trim();
+  // 浏览器 wasm 的 pthread 默认会按 hardwareConcurrency 开满线程；实测在
+  // Chromium+COOP/COEP 下多线程反而严重变慢（174B 样本 10 min 未完成），
+  // 固定 -j 1 约 136 s 完成。默认 1，用户可显式调高。
+  const jobs = Math.max(1, Math.min(64, parseInt((p && p.jobs) || "1", 10) || 1));
   let argv, inputs, readBack = [];
   if (mode === "decryptKeys" || mode === "recoverPassword") {
     const km = keysStr.split(/[\s,]+/).filter(Boolean);
@@ -290,7 +346,7 @@ async function bkcrackRun(text, p) {
       const maxLen = Math.max(1, parseInt((p && p.recLen) || "6", 10) || 6);
       const charset = String((p && p.charset) || "").trim();
       if (!charset) { lines.push("✗ 密码恢复需填「候选字符集」（如 0123456789 或 ?l?u?d 语义集的展开字符）。"); return lines.join("\n"); }
-      argv = ["-k", ...km, "-r", String(maxLen), charset];
+      argv = ["-k", ...km, "-r", String(maxLen), charset, "-j", String(jobs)];
       inputs = [];
     }
   } else {
@@ -303,6 +359,7 @@ async function bkcrackRun(text, p) {
     }
     argv = ["-C", ENTRY_TMP, "-c", entry, "-p", PLAIN_TMP];
     if (offset > 0) argv.push("-o", String(offset));
+    argv.push("-j", String(jobs));
     inputs = [{ name: ENTRY_TMP, bytes: zipBytes }, { name: PLAIN_TMP, bytes: plainBytes }];
     if (mode === "decrypt") readBack.push(OUT_TMP), argv.push("-d", OUT_TMP);
   }
@@ -310,6 +367,9 @@ async function bkcrackRun(text, p) {
   lines.push("--- 执行 ---");
   lines.push("命令: bkcrack " + argv.join(" "));
   lines.push("⚠ CPU 密集：攻击/密码恢复典型耗时数秒~几十分钟，峰值内存 300-500MB（密钥表）。请耐心等待，勿关页面。");
+  if (mode !== "decryptKeys") {
+    lines.push("  并行线程: " + jobs + "（浏览器 wasm 实测 1 线程最稳；多线程可能更慢，可按机器调高）");
+  }
   lines.push("");
 
   const res = await runBkcrack(argv, inputs, readBack);
@@ -342,6 +402,10 @@ async function bkcrackRun(text, p) {
     } else {
       lines.push("✗ 未恢复出密码（字符集/长度范围内无解）。可扩大字符集或长度上限后重试。");
     }
+  } else if (mode === "decryptKeys") {
+    const dec = res.files[OUT_TMP];
+    if (dec && dec.length) lines.push("✓ 已应用已知密钥态，解密成功（结果见下）。");
+    else lines.push("✗ 已知密钥态解密未生成文件：检查目标条目名 / 密钥态是否匹配。");
   } else if (keys) {
     lines.push("✓ 已恢复内部密钥态 key0 key1 key2:");
     lines.push("    " + keys.join(" "));
@@ -382,7 +446,7 @@ register({
   id: "bkcrackAttack",
   cat: "crack",
   name: "ZipCrypto 已知明文攻击 (bkcrack)",
-  desc: "ZIP 传统 ZipCrypto 加密的杀手锏（开源工具 bkcrack 的本地 WASM 封装，代码来源 kimci86/bkcrack，https://github.com/kimci86/bkcrack）：给出某条目 ≥12 字节连续已知明文，恢复内部密钥态并解密全档，无视密码长度（非 AES）。四种模式：明文攻击求密钥 / 攻击+解密 / 已知密钥态解密（-k）/ 已知密钥态暴力恢复密码（-k -r）。放置 public/wasm/bkcrack.js 后启用，wasm 缺失自动降级。⚠ CPU 密集，数秒~几十分钟、峰值内存 300-500MB。",
+  desc: "ZIP 传统 ZipCrypto 加密的杀手锏（开源工具 bkcrack 的本地 WASM 封装，代码来源 kimci86/bkcrack，https://github.com/kimci86/bkcrack）：给出某条目 ≥12 字节连续已知明文，恢复内部密钥态并解密全档，无视密码长度（非 AES）。四种模式：明文攻击求密钥 / 攻击+解密 / 已知密钥态解密（-k）/ 已知密钥态暴力恢复密码（-k -r）。放置 public/wasm/bkcrack.js 后启用，wasm 缺失自动降级。⚠ CPU 密集，数秒~几十分钟、峰值内存 300-500MB。并行线程默认 1（浏览器 wasm 多线程实测更慢；可按机器调高）。",
   params: [
     {
       key: "inputEnc", label: "加密 ZIP 编码", type: "select", default: "auto",
@@ -414,6 +478,7 @@ register({
       ],
     },
     { key: "keys", label: "密钥态（3 组 8 位 hex）", type: "text", default: "", placeholder: "如 e8adb3d5 49151c56 08a55810（-k 模式用）" },
+    { key: "jobs", label: "并行线程数", type: "number", default: 1, placeholder: "默认 1；浏览器 wasm 多线程可能更慢（1-64）" },
     { key: "recLen", label: "密码恢复长度上限", type: "number", default: 6, placeholder: "-r 长度上限，越长越慢（-k -r 模式用）" },
     { key: "charset", label: "密码恢复字符集", type: "text", default: "", placeholder: "如 0123456789 或 abcdef（-k -r 模式用）" },
   ],
@@ -424,5 +489,5 @@ register({
 export {
   decodeToBytes, looksLikeZip, parseKeys,
   loadBkcrackFactory, bkcrackWasmAvailable, runBkcrack,
-  bkcrackRun,
+  bkcrackRuntimeCheck, bkcrackRun,
 };

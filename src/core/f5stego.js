@@ -31,6 +31,16 @@
  * 不确定处：F5 有多个互不兼容的实现（原始 Java F5 「F5 v1.1」的口令派生
  * stegdetect 家族等）。本 op 专门匹配 f5stegojs 系嵌入；其他实现产出的样本不保证可解。
  *
+ * 已知样本边界（2026-10-30 复测，勿删）：
+ * `资料/测试题库/图片隐写/F5隐写口令f5alsogood/F5隐写口令f5alsogood.jpg`
+ * 是 Andreas Westfeld 原始 Java F5（Extract.java）产物，**不是 f5stegojs 方言**：
+ * · 原版 Extract（Java 8，`-p f5alsogood`）输出：`Length of embedded file: 32 bytes`
+ *   `(1, 127, 7) code used`，明文 `zip-password-is-Every0neL0veBeF5`（R14 证据）；
+ * · 本 op 的 f5stegojs 提取得到 k=8、长度头声明 15647B、实际只抽出 143B——
+ *   长度头不自洽（f5stegojs 合法长度头不可能超过实际抽出字节数）。
+ * 结论：本 op 判定该样本「非 f5stegojs，不能解」，不冒充修复成功。若要支持原始
+ * Java F5，需另加 Java SHA1PRNG + 全分量置换 + 32-bit 长度头路径，不能只调 key/参数。
+ *
  * 红线遵守：
  * - 纯前端零外发：纯 JS，无 node 专属 API，浏览器可跑。
  * - 件内自注册（文件末尾 register(op)）；不改 main.js / i18n。
@@ -112,8 +122,15 @@ function parseKey(keyStr, keyFormat) {
   if (keyFormat === "ints") return asInts();
   if (keyFormat === "text") return asText();
   if (keyFormat === "hex") return asHex();
- // auto
-  if (/^[\s,]*\d[\d\s,]*$/.test(s)) return asInts();
+ // auto：带分隔符的整数列表（"1,2,3" / "1 2 3"）→ 字节数组；单个 0-255 整数
+ // 仍按旧行为当单字节 key（"42" → [42]）；但单个越界数字串（如口令 "123456"）
+ // 改按文本处理——旧规则把它当整数 123456，触发 0-255 越界报错，把合法口令误杀。
+ // 要强制把 "123456" 当整数列表请选 keyFormat=ints（仍会明确报越界）。
+  if (/^[\s,]*\d[\d\s,]*$/.test(s)) {
+    if (/[\s,]/.test(s.trim())) return asInts();
+    const n = parseInt(s.trim(), 10);
+    if (Number.isFinite(n) && n >= 0 && n <= 255) return asInts();
+  }
   return asText();
 }
 
@@ -300,15 +317,19 @@ function f5extract(coeffSrc, key) {
   }
 
   const declaredLen = l;
-  const availLen = out.length - s;
-  const payload = out.subarray(s, s + Math.min(l, availLen));
+  // 注意：out 是按理论容量预分配的，尾部未必真的写到。可用 payload 必须按
+  // **实际抽出字节数 outPos** 截，不能用 out.length——旧实现用理论容量判断，
+  // 会把「声明 15647B、实际仅抽出 143B」判成未截断，并输出 15KB 零填充噪声。
+  const actualPayloadLen = Math.max(0, outPos - s);
+  const payload = out.subarray(s, s + Math.min(l, actualPayloadLen));
   return {
     payload,
     declaredLen,
-    truncated: l > availLen,
+    truncated: l > actualPayloadLen,
     k,
     headerBytes: s,
     rawExtractedBytes: outPos,
+    actualPayloadBytes: actualPayloadLen,
   };
 }
 
@@ -902,15 +923,33 @@ function f5stegoRun(text, p) {
   }
 
   const payload = ext.payload;
+  const actualPayloadLen = ext.actualPayloadBytes != null
+    ? ext.actualPayloadBytes
+    : Math.max(0, ext.rawExtractedBytes - ext.headerBytes);
   L.push(`● 矩阵编码参数 k = ${ext.k}（(1, ${(1 << ext.k) - 1}, ${ext.k}) 编码）`);
-  L.push(`● 长度头声明 payload = ${ext.declaredLen} 字节（头占 ${ext.headerBytes} 字节，原始抽出 ${ext.rawExtractedBytes} 字节）`);
+  L.push(`● 长度头声明 payload = ${ext.declaredLen} 字节（头占 ${ext.headerBytes} 字节，实际抽出 ${ext.rawExtractedBytes} 字节，其中 payload 可用 ${actualPayloadLen} 字节）`);
+
+ // 长度头自洽性：f5stegojs 的合法长度头不可能超过实际抽出字节数。超过就不是
+ // 本 op 能解的样本（典型：原始 Java F5 的 32-bit 头被误读，或密钥/keyFormat 不对）。
   if (ext.truncated) {
-    L.push(`  ⚠ 声明长度 > 实际可用，已截断到 ${payload.length} 字节。密钥可能不对，或数据被破坏。`);
+    L.push(`  ⚠ 长度头不自洽：声明 ${ext.declaredLen} > 实际可提供 ${actualPayloadLen} 字节。`);
+    L.push("");
+    L.push("--- 判定 ---");
+    L.push("✗ 非 f5stegojs，不能解（也可能是密钥/keyFormat 不对或文件被截断）。");
+    L.push("  典型非 f5stegojs 样本：Andreas Westfeld 原始 Java F5，其 32-bit 长度头 +");
+    L.push("  Java SHA1PRNG 全分量置换 + 块内 zigzag 重映射与本 op 的 4-bit k 头 +");
+    L.push("  2/3 字节长度头 + RC4 置换不兼容（本仓库 R14 已用原版 Extract 验证该样本）。");
+    L.push("  本 op 不把噪声当结果，也不冒充原始 Java F5 的解。");
+    L.push("");
+    L.push(`● 实取 payload: ${payload.length} 字节（已按实际抽出量截断）`);
+    L.push("--- 诊断预览（非有效载荷，仅用于确认长度头/密钥） ---");
+    L.push("  " + bytesToHex(payload, Math.min(maxHex, 64)));
+    return L.join("\n");
   }
   L.push(`● 实取 payload: ${payload.length} 字节`);
   L.push("");
 
- // 合理性启发：声明长度是否离谱
+ // 合理性启发：声明长度是否离谱（理论上限；正常样本不会触发）
   if (ext.declaredLen > coeff.length) {
     L.push("⚠ 声明长度大于系数总数，极可能密钥/格式不匹配（提取到的是噪声）。");
     L.push("");
@@ -1267,6 +1306,7 @@ register({
   name: "F5 JPEG 隐写 编/解",
   desc: "F5(f5stegojs 系) JPEG 隐写双向：encode 用密钥把消息经 (1,2^k-1,k) 矩阵编码+收缩写入亮度 DCT 系数并重打包 JPEG；decode 熵解码取系数 → 密钥置换 → 矩阵解码提取隐藏字节流，输出 hex/ASCII/UTF-8 + F5 容量诊断 + flag 命中。纯前端，零外发",
   acceptsBytes: true,
+  noAuto: true,
   params: [
     {
       key: "key", label: "密钥(F5 种子)", type: "text", default: "",
@@ -1283,7 +1323,7 @@ register({
     {
       key: "keyFormat", label: "密钥格式", type: "select", default: "auto",
       options: [
-        { value: "auto", label: "自动（纯数字→整数列表，否则文本）" },
+        { value: "auto", label: "自动（带分隔符的整数列表→字节，否则文本）" },
         { value: "ints", label: "整数列表（逗号/空格分隔 0-255）" },
         { value: "text", label: "口令文本（UTF-8 字节）" },
         { value: "hex", label: "Hex 字节串" },

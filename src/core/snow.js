@@ -449,11 +449,15 @@ function WhitespaceDecoder(opts) {
 		this.iv = k.iv;
 	}
 	this.compress = !!(opts && opts.compress);
+	this.collectRawBits = !!(opts && opts.collectRawBits);
+	this.rawBits = this.collectRawBits ? [] : null;
 	this.outBytes = [];
 	this.outValue = 0;
 	this.outCount = 0;
 	this.uncAcc = "";
 	this.startTabFound = false;
+	this.bitsIn = 0;
+	this.huffBits = 0;
 }
 
 /* ICE 1-bit CFB 解密一侧（encrypt.c decrypt_bit） */
@@ -487,6 +491,7 @@ WhitespaceDecoder.prototype.uncompressBit = function (bit) {
 		this.outputBit(bit);
 		return;
 	}
+	this.huffBits++;
 	this.uncAcc += bit ? "1" : "0";
 	const b = huffRev().get(this.uncAcc);
 	if (b !== undefined) {
@@ -504,9 +509,14 @@ WhitespaceDecoder.prototype.decodeBits = function (spc) {
 	if (spc > 7) {
 		throw new Error("非法编码：连续 " + spc + " 个空格（数据损坏或密码/参数错误）");
 	}
-	this.decryptBit(spc & 1);
-	this.decryptBit((spc >> 1) & 1);
-	this.decryptBit((spc >> 2) & 1);
+	this.bitsIn += 3;
+	const b0 = spc & 1;
+	const b1 = (spc >> 1) & 1;
+	const b2 = (spc >> 2) & 1;
+	if (this.rawBits) this.rawBits.push(b0, b1, b2);
+	this.decryptBit(b0);
+	this.decryptBit(b1);
+	this.decryptBit(b2);
 };
 
 WhitespaceDecoder.prototype.decodeWhitespace = function (s) {
@@ -547,6 +557,38 @@ WhitespaceDecoder.prototype.extract = function (text) {
 	return this.outBytes;
 };
 
+/*
+ * 收尾状态：尚未组成整字节的残余位（仅作诊断，不作为解密成功依据）。
+ *
+ * 原版 encode_flush 最后只补 0~2 个「零位」把位流补齐到 3bit 组。
+ * 明文模式下这些零位就是残余位（<=2 且全零）；-C 模式下解码器停在
+ * 未完整的 Huffman 码前缀上，残余可为非零位（官方 uncompress_flush
+ * 只在残余 >2 位时告警）。真正的判定是「回编码逐位比对 + 文本合理性门」，
+ * 见 _snowAttempt 与 _snowTextPlausible。
+ */
+WhitespaceDecoder.prototype.finish = function () {
+	if (this.compress) {
+		const bits = this.uncAcc;
+		return {
+			bits,
+			count: bits.length,
+			allZero: bits.indexOf("1") < 0,
+		};
+	}
+	const count = this.outCount;
+	let bits = "";
+	if (count > 0) {
+		bits = (this.outValue >>> 0).toString(2);
+		if (bits.length < count) bits = "0".repeat(count - bits.length) + bits;
+		bits = bits.slice(-count);
+	}
+	return {
+		bits,
+		count,
+		allZero: this.outValue === 0,
+	};
+};
+
 /* ------------------------------------------------------------------ *
  * 管道组装：消息字节 → [Huffman] → [ICE CFB] → 空白编码
  * ------------------------------------------------------------------ */
@@ -556,33 +598,24 @@ function utf8ToBytes(str) {
 }
 
 /*
- * 编码。message: string；opts: { text: 容器, password, compress, lineLength }
- * 返回隐写文本（与 snow.exe 输出一致，每行以 \n 结尾）。
+ * 消息字节 → 比特数组。编码管道的单一实现：
+ *   字节 →（-C）固定 Huffman 码 →（-p）ICE 1-bit CFB。
+ * snowEncode 用它写空白；解码回编码校验也用它保证两侧完全同源。
  */
-function snowEncode(message, opts) {
-	opts = opts || {};
-	const lineLength = Math.max(8, Math.floor(Number(opts.lineLength) || 80));
-	const container = (opts.text === undefined || opts.text === null) ? "" : String(opts.text);
-	const lines = container.length === 0 ? [] : container.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
-
-	const enc = new WhitespaceEncoder(lines, lineLength);
-
+function _snowPayloadBits(msgBytes, password, compress) {
 	let ice = null, iv = null;
-	if (opts.password) {
-		const k = makeIceKeyFromPassword(String(opts.password));
+	const passwd = password == null ? "" : String(password);
+	if (passwd.length > 0) {
+		const k = makeIceKeyFromPassword(passwd);
 		ice = k.key;
 		iv = k.iv;
 	}
-	const useCompress = !!opts.compress;
-
-	// 修复：二进制负载（Uint8Array/Buffer）原字节直接入编码管道；
-	// 字符串仍走 UTF-8（字面 "0,128,255" 是 9 个字符，不猜成字节数组）。
-	// Array.from(视图) 尊重 byteOffset/length 子视图边界，且不修改输入。
-	const msgBytes = message instanceof Uint8Array ? Array.from(message) : utf8ToBytes(String(message));
+	const useCompress = !!compress;
+	const bits = [];
 
 	function encryptBit(bit) {
 		if (!ice) {
-			enc.writeBit(bit);
+			bits.push(bit);
 			return;
 		}
 		const ks = new Uint8Array(8);
@@ -593,7 +626,7 @@ function snowEncode(message, opts) {
 			if (i < 7 && (iv[i + 1] & 128) !== 0) iv[i] |= 1;
 		}
 		iv[7] |= bit;
-		enc.writeBit(bit);
+		bits.push(bit);
 	}
 
 	const cState = { _v: 0, _n: 0 };
@@ -616,30 +649,412 @@ function snowEncode(message, opts) {
 			compressBitBound((c & (128 >> i)) !== 0 ? 1 : 0);
 		}
 	}
+	return bits;
+}
 
-	return enc.flush();
+/* 比特数组 + encode_flush 的 0~2 个零位补位（与容器文本/行宽无关） */
+function _snowPaddedPayloadBits(msgBytes, password, compress) {
+	const bits = _snowPayloadBits(msgBytes, password, compress);
+	while (bits.length % 3 !== 0) bits.push(0);
+	return bits;
+}
+
+function _snowBitsEqual(a, b) {
+	if (!a || !b || a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i++) {
+		if (a[i] !== b[i]) return false;
+	}
+	return true;
 }
 
 /*
- * 解码。text: 含隐写的文本；opts: { password, compress }
- * 返回消息字符串（UTF-8）；二进制负载返回 { text, files:[{name,mime,bytes}] }。
+ * 编码。message: string；opts: { text: 容器, password, compress, lineLength }
+ * 返回隐写文本（与 snow.exe 输出一致，每行以 \n 结尾）。
  */
-function snowDecode(text, opts) {
+function snowEncode(message, opts) {
 	opts = opts || {};
-	const dec = new WhitespaceDecoder(opts);
-	const bytes = dec.extract(String(text));
-	if (bytes.length === 0) {
-		throw new Error("未找到隐写数据（缺少行尾 TAB 数据起点标记）");
+	const lineLength = Math.max(8, Math.floor(Number(opts.lineLength) || 80));
+	const container = (opts.text === undefined || opts.text === null) ? "" : String(opts.text);
+	const lines = container.length === 0 ? [] : container.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+
+	const enc = new WhitespaceEncoder(lines, lineLength);
+
+	// 修复：二进制负载（Uint8Array/Buffer）原字节直接入编码管道；
+	// 字符串仍走 UTF-8（字面 "0,128,255" 是 9 个字符，不猜成字节数组）。
+	// Array.from(视图) 尊重 byteOffset/length 子视图边界，且不修改输入。
+	const msgBytes = message instanceof Uint8Array ? Array.from(message) : utf8ToBytes(String(message));
+
+	const bits = _snowPayloadBits(msgBytes, opts.password, opts.compress);
+	for (const bit of bits) enc.writeBit(bit);
+	return enc.flush();
+}
+
+/* 文本合理性：合法 UTF-8 之外再排除 NUL/C0/C1 控制字符（防止随机字节伪装成文本） */
+function _snowTextCheck(str) {
+	if (typeof str !== "string" || str.length === 0) {
+		return { ok: false, reason: "空文本" };
 	}
-	const u8 = new Uint8Array(bytes);
-	try {
-		return _decodeUtf8Fatal(u8);
-	} catch (e) {
+	for (const ch of str) {
+		const cp = ch.codePointAt(0);
+		if (cp === 0) return { ok: false, reason: "含 NUL" };
+		if (cp < 0x20 && cp !== 0x09 && cp !== 0x0a && cp !== 0x0d) {
+			return { ok: false, reason: "含控制字符 U+" + cp.toString(16).padStart(4, "0") };
+		}
+		if (cp >= 0x7f && cp <= 0x9f) {
+			return { ok: false, reason: "含 C1 控制字符 U+" + cp.toString(16).padStart(4, "0") };
+		}
+	}
+	return { ok: true };
+}
+
+function _snowBinaryResult(u8) {
+	return {
+		text: "(二进制负载，" + u8.length + " 字节，点击下载)",
+		files: [{ name: "snow_payload.bin", mime: "application/octet-stream", bytes: Array.from(u8) }],
+	};
+}
+
+/* ------------------------------------------------------------------ *
+ * 文本合理性（snow 无认证字段，错误密码可能解出「可打印乱码」）
+ *
+ * 官方格式没有 MAC/长度头：-C 模式下只要解密位流能完整切成 Huffman 码，
+ * 任意密码都能「自洽」地解出一串字节并原样回编码。因此回编码只能校验
+ * 位流一致性，不能证明密码正确。最终还需判断解出的明文是否像人写的内容：
+ *   1) flag/URL/邮箱/JSON/JWT/hex/单 token/CJK 等结构化载荷直接放行；
+ *   2) 普通文本用高频英文词覆盖率 + 高频双字母结构 + 最长辅音串判定。
+ * 这仍是启发式（格式本身无解），但能挡住随机明文；极端的自定义明文可
+ * 用 opts.looseText 跳过。
+ * ------------------------------------------------------------------ */
+
+const SNOW_COMMON_WORDS = new Set((
+	"the be to of and a in that have it for not on with he as you do at this but his by from they we say her she or an will my one all would there their what so up out if about who get which go me when make can like time no just him know take people into year your good some could them see other than then now look only come its over think also back after use two how our work first well way even new want because any these give day most us is was are were been has had did does said going made many much more very where why while should might must shall may here thing things something nothing anything everyone someone world life hand part place case week company system program question government number night point home water room mother area money story fact month lot right study book eye job word business issue side kind head house service friend father power hour game line end member law car city community name president team minute idea kid body information parent face others level office door health person art war history party result change morning reason research girl guy moment air teacher force education foot boy age policy process music market sense nation plan college interest death experience effect class control care field development role effort rate heart drug show leader light voice wife police mind price report decision son view relationship town road arm difference value building action model season society tax director position player record paper space ground form event official matter center couple site project activity star table need court production eat teach oil situation cost industry figure street image phone data picture practice piece land product doctor wall patient worker news test movie north love support technology step baby computer type attention draw film tree source red nearly organization choose cause hair century evidence window difficult listen soon culture billion chance brother energy period course summer plant opportunity term letter condition choice single rule daughter administration south husband floor campaign material population economy hospital church close thousand risk current fire future wrong involve defense anyone increase security bank myself certainly west sport board seek per subject officer private rest behavior deal performance fight throw top quickly past goal second bed order author fill represent focus foreign drop blood upon agency push nature color recently store reduce sound note fine before near movement page enter share common poor natural race concern series significant similar hot language usually response dead rise animal factor decade article shoot east save seven artist away scene stock career despite central eight thus treatment beyond happy exactly protect approach lie size dog fund serious occur media ready sign thought list individual simple quality pressure accept answer hard resource identify left meeting determine prepare disease whatever success argue cup particularly amount ability staff recognize indicate character growth loss degree wonder attack herself region television box training pretty trade election everybody physical lay general feeling standard bill message fail outside arrive analysis benefit sex forward lawyer present section environmental glass skill sister professor operation financial crime stage ok compare authority miss design sort act ten knowledge gun station blue state strategy clearly discuss indeed truth song example democratic check environment leg dark various rather laugh guess executive set study prove hang entire rock forget claim remove manager enjoy network legal religious cold final main science green memory card above seat cell establish nice trial expert spring firm radio visit management avoid imagine tonight huge ball finish yourself theory impact respond statement maintain charge popular traditional onto reveal direction weapon employee cultural contain peace pain apply measure wide shake fly interview manage chair fish particular camera structure politics perform bit weight suddenly discover candidate treat trip evening affect inside conference unit best style adult worry range mention deep edge specific writer trouble necessary throughout challenge fear shoulder institution middle sea dream bar beautiful property instead improve stuff exist drive train immediately thank each through against between during without within along across behind toward towards upon among around since until although though unless however therefore perhaps maybe probably actually especially usually sometimes always never often already almost enough quite really together forward backward upward downward anywhere everywhere somewhere nowhere upstairs downstairs afternoon midnight today tomorrow yesterday tonight monday tuesday wednesday thursday friday saturday sunday january february march april june july august september october november december flag ctf key secret password hidden found correct cipher encrypt decrypt snow stego welcome congratulations hello world please thanks sorry yes okay great nice love hate work play read write open close start stop end begin quick brown fox jumps jumped lazy dog over under alpha bravo charlie delta echo foxtrot compressed compress payload narrow line lines spread across truncate container plain binary data file text"
+).split(/\s+/));
+
+const SNOW_COMMON_BIGRAMS = new Set((
+	"th he in er an re on at en nd ti es or te of ed is it al ar st to nt ng se ha as ou io le ve co me de hi ri ro ic ne ea ra ce li ch ll be ma si om ur ca el ta la ns di fo ho pe ec pr no ct us ac ot il tr ly nc et"
+).split(" "));
+
+/* 无空格拼接词（如 secretmessage）能否切成常用词 */
+function _snowSegmentWords(lower) {
+	const n = lower.length;
+	const ok = new Array(n + 1).fill(false);
+	ok[0] = true;
+	for (let i = 1; i <= n; i++) {
+		for (let j = 0; j < i; j++) {
+			if (ok[j] && i - j >= 3 && SNOW_COMMON_WORDS.has(lower.slice(j, i))) {
+				ok[i] = true;
+				break;
+			}
+		}
+	}
+	return ok[n];
+}
+
+function _snowTextPlausible(str) {
+	const t = String(str).trim();
+	if (!t) return { ok: false, reason: "空文本", rank: 0 };
+
+	/* rank 用于同一份数据被 -C / 明文两种模式都解出时的择优（结构化 > 普通文本） */
+	if (/[A-Za-z0-9_.-]{2,}\{[^{}\r\n]{1,300}\}/.test(t)) {
+		return { ok: true, reason: "flag", rank: 100 };
+	}
+	if (/(?:https?|ftp):\/\/\S+/i.test(t)) return { ok: true, reason: "URL", rank: 95 };
+	if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) return { ok: true, reason: "邮箱", rank: 95 };
+	if (/^(?:[0-9a-fA-F]{2}[ :,-]?){4,}$/.test(t)) {
+		return { ok: true, reason: "十六进制字节", rank: 92 };
+	}
+	if (/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(t)) {
+		return { ok: true, reason: "JWT", rank: 92 };
+	}
+	if (/^[\[{]/.test(t) && /[\]}]$/.test(t)) {
+		try {
+			JSON.parse(t);
+			return { ok: true, reason: "JSON", rank: 92 };
+		} catch (e) { /* 不是 JSON，继续 */ }
+	}
+	if ((t.match(/[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]/g) || []).length >= 2) {
+		return { ok: true, reason: "CJK 文本", rank: 90 };
+	}
+	/* 无空白单 token：只放行有明确形状的 key/hash/base64/重复串/密码样式；
+	 * 其余（含纯字母词）继续走自然文本判定。不能无条件放行——错误密码
+	 * 也可能解出一整串无空白的可打印乱码。 */
+	if (!/\s/.test(t)) {
+		if (/^[A-Za-z0-9+/]+={0,2}$/.test(t) && t.length >= 8 && t.length % 4 === 0) {
+			return { ok: true, reason: "base64 token", rank: 75 };
+		}
+		if (/^[0-9a-fA-F]+$/.test(t) && t.length >= 8 && t.length % 2 === 0) {
+			return { ok: true, reason: "hex token", rank: 75 };
+		}
+		if (/^[A-Za-z0-9_.-]{8,}$/.test(t)) {
+			const classes = (/[a-z]/.test(t) ? 1 : 0) + (/[A-Z]/.test(t) ? 1 : 0)
+				+ (/[0-9]/.test(t) ? 1 : 0);
+			if (classes >= 2 || t.length >= 24) {
+				return { ok: true, reason: "token", rank: 72 };
+			}
+		}
+		if (/^(.)\1+$/.test(t)) return { ok: true, reason: "重复串", rank: 70 };
+		if (/[\/\\]/.test(t) && /^[\w./\\-]+$/.test(t)) {
+			return { ok: true, reason: "路径", rank: 72 };
+		}
+		if (t.length >= 6 && t.length <= 64 && /[A-Za-z]/.test(t) && /[0-9]/.test(t)
+			&& /^[A-Za-z0-9!@#$%^&*_+\-.]{6,64}$/.test(t)) {
+			return { ok: true, reason: "密码样式 token", rank: 70 };
+		}
+		if (/^[A-Za-z]{8,}$/.test(t) && _snowSegmentWords(t.toLowerCase())) {
+			return { ok: true, reason: "拼接词 token", rank: 65 };
+		}
+	}
+	/* "<flag|key|secret…> + 长 token" */
+	if (/\b(?:flag|key|secret|password|answer|token|plaintext)\b/i.test(t)
+		&& /[A-Za-z0-9_\-+\/=]{6,}/.test(t)) {
+		return { ok: true, reason: "关键字+载荷", rank: 85 };
+	}
+
+	const letters = t.replace(/[^A-Za-z]/g, "");
+	if (letters.length < 12) return { ok: true, reason: "短文本", rank: 60 };
+
+	const lower = t.toLowerCase();
+	const segs = lower.split(/[^a-z]+/);
+	const words = segs.filter((w) => w.length >= 3);
+	let pairs = 0;
+	let known = 0;
+	for (const w of segs) {
+		for (let i = 0; i + 1 < w.length; i++) {
+			pairs++;
+			if (SNOW_COMMON_BIGRAMS.has(w.slice(i, i + 2))) known++;
+		}
+	}
+	const bigram = pairs > 0 ? known / pairs : 1;
+	const run = (t.match(/[bcdfghjklmnpqrstvwxz]{4,}/gi) || [])
+		.reduce((m, r) => Math.max(m, r.length), 0);
+	if (words.length === 0) return { ok: true, reason: "无字母词", rank: 60 };
+	const common = words.filter((w) => SNOW_COMMON_WORDS.has(w)).length;
+	const cov = common / words.length;
+	if (cov >= 0.34) {
 		return {
-			text: "(二进制负载，" + u8.length + " 字节，点击下载)",
-			files: [{ name: "snow_payload.bin", mime: "application/octet-stream", bytes: Array.from(u8) }],
+			ok: true,
+			reason: "常用词覆盖 " + cov.toFixed(2),
+			rank: 50 + Math.round(cov * 10),
 		};
 	}
+	if (cov >= 0.15 && bigram >= 0.45) {
+		return {
+			ok: true,
+			reason: "常用词+双字母结构 " + cov.toFixed(2) + "/" + bigram.toFixed(2),
+			rank: 45 + Math.round(cov * 20) + Math.round(bigram * 10),
+		};
+	}
+	/* 双字母结构仅在样本足够长时作为弱证据：短随机串（如错误密码产物）容易碰巧命中 */
+	if (pairs >= 24 && bigram >= 0.65 && run <= 4) {
+		return {
+			ok: true,
+			reason: "英文双字母结构 " + bigram.toFixed(2),
+			rank: 40 + Math.round(bigram * 10),
+		};
+	}
+	return {
+		ok: false,
+		rank: 0,
+		reason: "疑似随机乱码（常用词 " + cov.toFixed(2) + "，双字母 " + bigram.toFixed(2)
+			+ "，最长辅音串 " + run + "）",
+	};
+}
+
+/*
+ * 单模式尝试：按 -p / -C 组合各自解一遍。
+ *
+ * 官方 snow 无文件头、无密码校验字段，无法从容器判断是否用了 -C/-p。
+ * 旧判定要求「收尾残余 0~2 个零位」，但：
+ *   - -C 的正确解允许非零 Huffman 残余前缀（snow_5201314.txt 正确解残余为 1 位 "1"，
+ *     见官方 compress.c uncompress_flush 只对 >2 位告警）；
+ *   - 错误密码可能恰好留下 0 位残余并解出可打印乱码（123456 即如此）。
+ * 第一层：确定性回编码校验——用同一密码/同一 -C 把解出的字节重新编码成位流
+ * （含 encode_flush 的 0~2 个零位补位），与文件中实际提取的位流逐位比对。
+ * 编码与解码管道同源（_snowPayloadBits），位流与容器文本、行宽、CRLF 均无关。
+ * 注意：-C 的 Huffman 解码与编码互为逆运算，若错误密码恰好把位流完整切成码，
+ * 回编码仍会逐位一致（实测 123456 即如此），所以它只能证明「位流自洽」。
+ * 第二层：文本合理性门（_snowTextPlausible）——flag/URL/JSON/hex/token/CJK
+ * 等结构化载荷放行，普通文本按常用词与双字母结构判定，拒绝可打印乱码。
+ * padding 仅保留为诊断信息，不作为成功依据。
+ */
+function _snowAttempt(text, password, compress, looseText) {
+	const dec = new WhitespaceDecoder({ password, compress, collectRawBits: true });
+	let bytes;
+	try {
+		bytes = dec.extract(String(text));
+	} catch (e) {
+		return {
+			compress,
+			ok: false,
+			error: (e && e.message) || String(e),
+			bytes: null,
+			roundTripOk: false,
+		};
+	}
+	if (bytes.length === 0) {
+		return {
+			compress,
+			ok: false,
+			error: "未找到隐写数据（缺少行尾 TAB 数据起点标记）",
+			bytes: null,
+			roundTripOk: false,
+		};
+	}
+	const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+	const fin = dec.finish();
+	/* 明文补位是零位；-C 残余是 Huffman 码前缀，官方只约束长度 <=2 */
+	const paddingOk = compress ? fin.count <= 2 : (fin.count <= 2 && fin.allZero);
+	const roundTripBits = _snowPaddedPayloadBits(u8, password, compress);
+	const roundTripOk = _snowBitsEqual(dec.rawBits, roundTripBits);
+	const utf = decodeUtf8Lossless(u8);
+	let textVal = null;
+	let textOk = false;
+	let textError = null;
+	let plausible = null;
+	let textPlausible = false;
+	let plausibleRank = 0;
+	if (!utf.ok) {
+		textError = "不是合法 UTF-8";
+	} else {
+		const sane = _snowTextCheck(utf.text);
+		if (sane.ok) {
+			textVal = utf.text;
+			textOk = true;
+			plausible = _snowTextPlausible(utf.text);
+			textPlausible = plausible.ok || looseText;
+			plausibleRank = plausible.ok ? plausible.rank : (looseText ? 1 : 0);
+		} else {
+			textError = sane.reason;
+		}
+	}
+	return {
+		compress,
+		ok: true,
+		bytes: u8,
+		text: textVal,
+		textOk,
+		utf8Ok: !!utf.ok,
+		textError,
+		textPlausible,
+		plausibleRank,
+		plausibleReason: plausible ? plausible.reason : null,
+		padding: fin,
+		paddingOk,
+		roundTripOk,
+		fileBits: dec.rawBits ? dec.rawBits.length : 0,
+	};
+}
+
+function _snowDecodeInternal(text, opts) {
+	opts = opts || {};
+	const password = opts.password == null ? "" : String(opts.password);
+	const hasPassword = password.length > 0;
+	const hintCompress = opts.compress === true;
+	/* 二进制负载只能按「无密码 + 显式 allowBinary」解释：带密码时无法区分“正确的二进制
+	 * 明文”和“错误密码解出的随机字节”，为避免假成功一律不返回二进制。 */
+	const allowBinary = (opts.allowBinary === true || opts.binary === true) && !hasPassword;
+	const looseText = opts.looseText === true || opts.allowSuspiciousText === true;
+	/* compress 只是提示：false/未传时先按明文解，失败再自动尝试 -C（官方 -C 无法从容器识别） */
+	const order = hintCompress ? [true, false] : [false, true];
+	const attempts = order.map((compress) =>
+		_snowAttempt(text, hasPassword ? password : "", compress, looseText));
+
+	/* 两种模式可能同时自洽（如明文位流恰好也是合法 -C 流），按文本类型 rank 择优；
+	 * rank 相同则按尝试顺序（显式 compress 提示优先）。 */
+	let chosen = null;
+	for (const a of attempts) {
+		if (!(a.ok && a.textOk && a.textPlausible && a.roundTripOk)) continue;
+		if (!chosen || a.plausibleRank > chosen.plausibleRank) chosen = a;
+	}
+	if (chosen) {
+		return { ok: true, result: chosen.text, chosen, attempts, password: hasPassword };
+	}
+
+	/* 二进制负载：只接受「无密码 + 显式 allowBinary + 回编码自洽 + 确实不是文本」的候选。
+	 * 可打印乱码（textOk 但合理性失败）不得走此分支，否则错误密码会被包装成下载文件。 */
+	if (allowBinary) {
+		const bin = attempts.find((a) => a.ok && a.roundTripOk && !a.textOk);
+		if (bin) {
+			return {
+				ok: true,
+				result: _snowBinaryResult(bin.bytes),
+				chosen: bin,
+				attempts,
+				password: hasPassword,
+				binary: true,
+			};
+		}
+	}
+
+	const details = attempts.map((a) => {
+		const mode = a.compress ? "-C" : "明文";
+		if (!a.ok) return mode + "：" + a.error;
+		if (!a.roundTripOk) {
+			return mode + "：回编码校验失败（解密位流与原文不一致）";
+		}
+		if (!a.textOk) return mode + "：" + (a.textError || "不是文本");
+		if (!a.textPlausible) {
+			return mode + "：" + (a.plausibleReason || "文本合理性校验失败");
+		}
+		return mode + "：未通过文本校验";
+	}).join("；");
+	const error = hasPassword
+		? "密码错误或数据不匹配（snow -p 解密失败；" + details + "）"
+		: "未找到有效的 snow 数据（可能是 -p 加密，请填写密码；原始字节负载需无密码且显式 allowBinary；"
+			+ details + "）";
+	return { ok: false, error, attempts, password: hasPassword };
+}
+
+/*
+ * 解码。text: 含隐写的文本；opts: { password, compress, allowBinary, looseText }
+ * 返回消息字符串（UTF-8）；无密码且 allowBinary 时，二进制负载返回
+ * { text, files:[{name,mime,bytes}] }。
+ * compress 未显式 true 时自动识别 -C；密码错误/文本乱码抛异常，不返回假负载。
+ * looseText 跳过文本合理性门（仅供确实需要解出非常规明文的调用方）。
+ */
+function snowDecode(text, opts) {
+	const r = _snowDecodeInternal(text, opts);
+	if (r.ok) return r.result;
+	throw new Error(r.error);
+}
+
+/* 自检导出：返回两种模式的中间结果与最终判定，不改变 snowDecode 的行为 */
+function snowDecodeDetailed(text, opts) {
+	const r = _snowDecodeInternal(text, opts);
+	return {
+		ok: r.ok,
+		result: r.ok ? r.result : null,
+		error: r.ok ? null : r.error,
+		password: !!r.password,
+		chosen: r.chosen ? {
+			compress: r.chosen.compress,
+			textOk: r.chosen.textOk,
+			textPlausible: !!r.chosen.textPlausible,
+			plausibleRank: r.chosen.plausibleRank || 0,
+			plausibleReason: r.chosen.plausibleReason || null,
+			paddingOk: r.chosen.paddingOk,
+			padding: r.chosen.padding,
+			roundTripOk: !!r.chosen.roundTripOk,
+			fileBits: r.chosen.fileBits || 0,
+			bytes: Array.from(r.chosen.bytes),
+		} : null,
+		attempts: r.attempts.map((a) => ({
+			compress: a.compress,
+			ok: a.ok,
+			error: a.error || null,
+			textOk: !!a.textOk,
+			textPlausible: !!a.textPlausible,
+			plausibleRank: a.plausibleRank || 0,
+			plausibleReason: a.plausibleReason || null,
+			utf8Ok: !!a.utf8Ok,
+			textError: a.textError || null,
+			paddingOk: !!a.paddingOk,
+			padding: a.padding || null,
+			roundTripOk: !!a.roundTripOk,
+			fileBits: a.fileBits || 0,
+			bytes: a.bytes ? Array.from(a.bytes) : null,
+		})),
+	};
 }
 
 /* ------------------------------------------------------------------ *
@@ -661,4 +1076,4 @@ register({
 	decode: (t, p) => snowDecode(t, p || {}),
 });
 
-export { snowEncode, snowDecode, IceKey };
+export { snowEncode, snowDecode, snowDecodeDetailed, IceKey };

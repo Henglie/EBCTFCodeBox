@@ -337,7 +337,7 @@ export default {
       { in: "L", param: "classic, order=vh", out: "|||---", desc: "L = 3rd consonant after I: 3 vertical + 3 horizontal" },
       { in: "DCODE", param: "classic, order=hv", out: "-||| -|| ---- -||| --", desc: "Horizontal-first notation, exactly the same meaning" },
       { in: "DCODE", param: "samurai, order=vh", out: "|--- |-- |||| |--- ||", desc: "The Samurai variant swaps the roles of horizontal and vertical bars" },
-      { in: "Hello, World!", param: "classic, order=vh", out: "|||-- -- |||--- |||--- ---- , / ||----- ---- |||---- |||--- |||-  !", desc: "Non-letters pass through and spaces become /; decoding always outputs uppercase" },
+      { in: "Hello, World!", param: "classic, order=vh", out: "|||-- -- |||--- |||--- ---- , / ||----- ---- |||---- |||--- |||- !", desc: "Non-letters pass through and spaces become /; decoding always outputs uppercase" },
     ],
     formulas: [
       { tex: "\\text{letter} = \\mathrm{V}[\\,h\\,]\\text{-th consonant after } \\mathrm{V}[\\,h\\,]", caption: "Classic code: h is the vowel index (1-6) and v the consonant index after it; v=0 means the vowel itself" },

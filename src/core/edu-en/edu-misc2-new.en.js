@@ -175,14 +175,14 @@ export default {
   },
 
   barcodeGen: {
-    what: "Barcode generation: renders text into Code128 / EAN-13 / DataMatrix PNG barcodes (non-QR), verifiable via the built-in scanner. The auto mode picks the symbology from the content.",
+    what: "Barcode generation: renders text into 8 non-QR PNG symbologies — Code128 / EAN-13 / UPC-A / Code39 / ITF-14 / DataMatrix / PDF417 / Aztec — verifiable via the built-in scanner. The auto mode picks the symbology from the content.",
     principle:
       "The engine is bwip-js (a JS port of the BWIPP PostScript barcode library); its raw interface supplies module geometry and the tool draws the PNG itself:\n\n" +
       "1. Code128: switches automatically among code sets A/B/C (dense digit runs use set C, two digits per codeword); codewords = start + data + mod-103 check + stop, output as a bar-space width sequence (sbs)\n" +
       "2. EAN-13: a 12-digit input gets its mod-10 check digit appended; a 13-digit input is verified first; guard bars are extended using BWIPP includetext geometry\n" +
       "3. DataMatrix: arbitrary text (Chinese included) is encoded into a module matrix with ECC 200 Reed-Solomon error correction, square sizes from 10×10 upward\n\n" +
       "The PNG includes a quiet zone: 10-11 modules for 1D by default, 2 for DataMatrix — a missing quiet zone is the most common cause of scan failures.",
-    usage: "Enter the content and pick the symbology (auto/code128/ean13/datamatrix). Code128 accepts printable ASCII only; EAN-13 digits only (12 digits get the check digit appended); DataMatrix takes any text. Output is a downloadable PNG plus a report (module width / codeword sequence / check digit). Verify by scanning it back with the QR/barcode scanner.",
+    usage: "Enter the content and pick the symbology (auto/code128/ean13/upca/code39/itf14/datamatrix/pdf417/azteccode). Code128 accepts printable ASCII only; EAN-13/UPC-A/ITF-14 digits only with automatic check-digit completion/validation; Code39 is limited to 0-9 A-Z and - . space $ / + %; DataMatrix/PDF417/Aztec take any text. Output is a downloadable PNG plus a report (module width / codeword sequence / check digit). Verify by scanning it back with the QR/barcode scanner.",
     examples: [
       { in: "EBCTF{barcode_not_qr}", param: "sym=code128", out: "barcode_code128.png + codeword sequence and check character" },
       { in: "211234567890", param: "sym=auto", out: "check digit 0 appended → barcode_ean13.png" },

@@ -101,3 +101,48 @@ m.callMain(['--version']);   // => bkcrack 1.8.1 - 2025-10-25
 - 文件经 `FS.writeFile` 写进 MEMFS 后再传路径给 callMain；产物用 `FS.readFile` 取回。
 - stdout/stderr 走 `print`/`printErr` 回调，需解析 "Keys" 行拿 X Y Z。
 - 部署务必配 COOP/COEP（见上「pthread」节），否则 pthread 无法启动。
+
+## 本地运行页面（bkcrack op 的硬前置）
+
+`public/wasm/bkcrack.js` 是 pthread 构建，**页面本身**必须处于 cross-origin isolated
+上下文；只有 wasm 文件本身带 header 没有用。浏览器要求：
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+且页面是 `http://127.0.0.1|localhost` 或 HTTPS（安全上下文）。全部 JS/wasm/字体等
+资源必须同源，或带 CORS/CORP，否则 COEP 会拦资源。
+
+正确做法：
+
+```bat
+python 通用点我启动.py
+```
+
+它默认在 `127.0.0.1:8180` 起静态服务，`end_headers` 已对每个响应下发上面两个头。
+
+**不满足的常见场景（会看到 op 的明确错误，不是攻击失败）**：
+
+- `python -m http.server 8899` → 无 COOP/COEP；
+- VS Code Live Server / 各类静态托管默认 → 无 COOP/COEP；
+- 直接 `file://` 打开 → 不是安全上下文；
+- 用 `bridge.py` 打开页面 → bridge.py 只提供 `/api/*`，不托管 UI，也不会给页面加头。
+
+自检：页面 DevTools Console 执行 `crossOriginIsolated`，必须为 `true`；
+`typeof SharedArrayBuffer === "function"` 也是必要条件。op 入口会先做这两个检查，
+不满足时立即输出修复步骤并停止，不会加载 wasm、不会卡在“点击转换”。
+
+已用 Playwright/Chromium（`serviceWorkers: "block"`）实测：
+带上述两头的本地服务 `crossOriginIsolated=true`，bkcrack wasm `--version` 输出
+`bkcrack 1.8.1 - 2025-10-25`；同一环境下 `-k` 已知密钥态解密真实 ZipCrypto 条目
+成功（16 字节原文逐字节一致）；无头服务 `crossOriginIsolated=false`，op 只报错
+不启动攻击。
+
+已知明文攻击仍是 CPU 密集型，且 **浏览器 wasm 的多线程调度有坑**：同一 174B
+Stored ZipCrypto 样本（`known` 区 727208 个候选）在 Chromium 里按默认线程数
+（hardwareConcurrency）跑，10 分钟未完成；改用 `-j 1` 后 **约 130–150 s** 找到 key：
+`fb6dee11 9733c503 63560e7a`。因此 op 现在把并行线程数做成参数（默认 **1**，
+可调 1-64），并在执行区打印 `并行线程: N`。native `bkcrack.exe` 同一样本约 11 s，
+可作为性能基线。不要把“多线程更慢/超时”当假成功。

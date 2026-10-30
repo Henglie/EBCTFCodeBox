@@ -40,13 +40,23 @@ function loadBwipRaw() {
 
 /* ================= 参数与符号常量 ================= */
 
-const SYMS = ["code128", "ean13", "datamatrix"];
+const SYMS = ["code128", "ean13", "upca", "code39", "itf14", "datamatrix", "pdf417", "azteccode"];
+const TWO_D = new Set(["datamatrix", "pdf417", "azteccode"]);
+const SYM_NAME = {
+  code128: "Code128", ean13: "EAN-13", upca: "UPC-A", code39: "Code39",
+  itf14: "ITF-14", datamatrix: "DataMatrix", pdf417: "PDF417", azteccode: "Aztec",
+};
 
 // 每符号默认参数：modulePx 模块像素宽、heightModules 1D 条高（模块单位）、quietModules 静区（模块单位）
 const DEFAULTS = {
   code128:     { modulePx: 4, heightModules: 40, quietModules: 10 },
   ean13:       { modulePx: 4, heightModules: 60, quietModules: 11 },
+  upca:        { modulePx: 4, heightModules: 60, quietModules: 11 },
+  code39:      { modulePx: 4, heightModules: 40, quietModules: 10 },
+  itf14:       { modulePx: 4, heightModules: 60, quietModules: 10 },
   datamatrix:  { modulePx: 6, heightModules: 0,  quietModules: 2  },
+  pdf417:      { modulePx: 3, heightModules: 0,  quietModules: 2  },
+  azteccode:   { modulePx: 6, heightModules: 0,  quietModules: 2  },
 };
 
 // ≤0（含留空/非法）一律回落符号默认——0 是 UI 的「按符号默认」哨兵值
@@ -146,6 +156,16 @@ export function ean13CheckDigit(digits12) {
   return String((10 - (sum % 10)) % 10);
 }
 
+/** GS1 mod-10 校验位（UPC-A 11 位 / ITF-14 13 位）：右起权重 3,1 交替。 */
+export function gs1CheckDigit(digits) {
+  let sum = 0, w = 3;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    sum += Number(digits[i]) * w;
+    w = w === 3 ? 1 : 3;
+  }
+  return String((10 - (sum % 10)) % 10);
+}
+
 /** Code128 校验字符：csum = (start + Σ codeword_i × i) mod 103（i 从 1 起，不含 stop） */
 export function code128Checksum(codes) {
   let s = codes[0];
@@ -219,6 +239,37 @@ function validateInput(sym, text) {
     if (t[12] !== expect) {
       throw new Error(`EAN-13 校验位错误：末位应为 ${expect}，实际 ${t[12]}。可去掉末位由本工具自动补全。`);
     }
+    return t;
+  }
+  if (sym === "upca") {
+    if (!/^\d+$/.test(t)) throw new Error("UPC-A 输入必须是纯数字（11 位自动补校验位，或 12 位）。");
+    if (t.length !== 11 && t.length !== 12) throw new Error(`UPC-A 输入必须是 11 位或 12 位数字，当前 ${t.length} 位。`);
+    if (t.length === 11) return t + gs1CheckDigit(t);
+    const expect = gs1CheckDigit(t.slice(0, 11));
+    if (t[11] !== expect) throw new Error(`UPC-A 校验位错误：末位应为 ${expect}，实际 ${t[11]}。可去掉末位自动补全。`);
+    return t;
+  }
+  if (sym === "itf14") {
+    if (!/^\d+$/.test(t)) throw new Error("ITF-14 输入必须是纯数字（13 位自动补校验位，或 14 位）。");
+    if (t.length !== 13 && t.length !== 14) throw new Error(`ITF-14 输入必须是 13 位或 14 位数字，当前 ${t.length} 位。`);
+    if (t.length === 13) return t + gs1CheckDigit(t);
+    const expect = gs1CheckDigit(t.slice(0, 13));
+    if (t[13] !== expect) throw new Error(`ITF-14 校验位错误：末位应为 ${expect}，实际 ${t[13]}。可去掉末位自动补全。`);
+    return t;
+  }
+  if (sym === "code39") {
+    const up = t.toUpperCase();
+    if (!/^[0-9A-Z\-. $/+%]+$/.test(up)) {
+      throw new Error("Code39 仅接受 0-9、A-Z 与 - . 空格 $ / + %（小写自动转大写）。");
+    }
+    return up;
+  }
+  if (sym === "pdf417") {
+    if (t.length > 1850) throw new Error("PDF417 输入过长（>1850 字符）。");
+    return t;
+  }
+  if (sym === "azteccode") {
+    if (t.length > 3000) throw new Error("Aztec 输入过长（>3000 字符）。");
     return t;
   }
   if (sym === "datamatrix") {
@@ -304,37 +355,40 @@ export function createBarcodeGen(rawFn) {
   function encode(text, p = {}) {
     let sym = String(p.sym || "auto").toLowerCase().replace(/-/g, "");
     if (sym === "dm" || sym === "datamatrix") sym = "datamatrix";
+    if (sym === "upc" || sym === "upca") sym = "upca";
+    if (sym === "itf" || sym === "itf14") sym = "itf14";
+    if (sym === "aztec") sym = "azteccode";
     const t0 = String(text === undefined || text === null ? "" : text);
     if (sym === "auto") {
       sym = /^\d{12}(\d)?$/.test(t0.trim()) ? "ean13" : "code128"; // 12/13 位纯数字 → EAN-13，否则 Code128
     }
     if (!SYMS.includes(sym)) {
-      throw new Error(`未知符号类型「${p.sym}」。支持：code128 / ean13 / datamatrix。`);
+      throw new Error(`未知符号类型「${p.sym}」。支持：${SYMS.join(" / ")}。`);
     }
     const d = DEFAULTS[sym];
     const modulePx = clampInt(p.modulePx, 1, 20, d.modulePx);
     const quietModules = clampInt(p.quietModules, 0, 50, d.quietModules);
-    const heightModules = sym === "datamatrix"
+    const heightModules = TWO_D.has(sym)
       ? 0
       : clampInt(p.heightModules, 5, 400, d.heightModules);
 
-    // EAN-13 用 includetext 的 bhs/bbs 获得护条下沿延伸（几何与 BWIPP 一致，不渲染文字）
-    const mods = encodeModules(sym, t0, sym === "ean13" ? { includetext: true } : {});
+    // EAN-13 / UPC-A 用 includetext 的 bhs/bbs 获得护条下沿延伸（几何与 BWIPP 一致，不渲染文字）
+    const mods = encodeModules(sym, t0, (sym === "ean13" || sym === "upca") ? { includetext: true } : {});
 
     const lines = [];
     const meta = { sym, input: mods.input, modulePx, quietModules };
     let rgba, W, H;
-    if (sym === "datamatrix") {
+    if (TWO_D.has(sym)) {
       rgba = render2DRgba(mods.pixs, mods.pixx, mods.pixy, modulePx, quietModules).rgba;
       W = (mods.pixx + quietModules * 2) * modulePx;
       H = (mods.pixy + quietModules * 2) * modulePx;
       meta.size = `${mods.pixx}×${mods.pixy}`;
-      lines.push(`DataMatrix 生成成功：${mods.pixx}×${mods.pixy} 模块，静区 ${quietModules} 模块`);
+      lines.push(`${SYM_NAME[sym]} 生成成功：${mods.pixx}×${mods.pixy} 模块，静区 ${quietModules} 模块`);
     } else {
       const r2 = render1DRgba(mods.sbs, mods.bhs, mods.bbs, modulePx, heightModules, quietModules);
       rgba = r2.rgba; W = r2.W; H = r2.H;
       meta.widthModules = mods.sbs.reduce((a, b) => a + b, 0);
-      lines.push(`${sym === "ean13" ? "EAN-13" : "Code128"} 生成成功：${meta.widthModules} 模块宽`);
+      lines.push(`${SYM_NAME[sym]} 生成成功：${meta.widthModules} 模块宽`);
     }
     meta.image = `${W}×${H}px`;
 
@@ -342,6 +396,20 @@ export function createBarcodeGen(rawFn) {
       meta.checkDigit = mods.input[12];
       meta.content = mods.input;
       lines.push(`内容：${mods.input}（12 位输入自动补校验位 ${meta.checkDigit}）`);
+    }
+    if (sym === "upca") {
+      meta.checkDigit = mods.input[11];
+      meta.content = mods.input;
+      lines.push(`内容：${mods.input}（11 位输入自动补校验位 ${meta.checkDigit}）`);
+    }
+    if (sym === "itf14") {
+      meta.checkDigit = mods.input[13];
+      meta.content = mods.input;
+      lines.push(`内容：${mods.input}（13 位输入自动补校验位 ${meta.checkDigit}）`);
+    }
+    if (sym === "code39") {
+      meta.content = mods.input;
+      lines.push(`内容：${mods.input}（小写已转大写）`);
     }
     if (sym === "code128") {
       const cws = sbsToCw128(mods.sbs, rawFn);
@@ -352,11 +420,11 @@ export function createBarcodeGen(rawFn) {
       }
       lines.push(`内容：${mods.input}`);
     }
-    if (sym === "datamatrix") lines.push(`内容：${mods.input}`);
+    if (sym === "datamatrix" || sym === "pdf417" || sym === "azteccode") lines.push(`内容：${mods.input}`);
 
     const png = encodePNG(rgba, W, H);
     lines.push(`产物：barcode_${sym}.png（${W}×${H}，${png.length} 字节）`);
-    lines.push(`参数：模块 ${modulePx}px、静区 ${quietModules} 模块${sym !== "datamatrix" ? `、条高 ${heightModules} 模块` : ""}`);
+    lines.push(`参数：模块 ${modulePx}px、静区 ${quietModules} 模块${!TWO_D.has(sym) ? `、条高 ${heightModules} 模块` : ""}`);
     lines.push("内核：bwip-js 4.11.4 / BWIPP 2026-05-28（双 MIT）");
 
     return {
@@ -379,15 +447,20 @@ async function barcodeRun(input, p = {}) {
 register({
   id: "barcodeGen",
   cat: "image",
-  name: "条码生成（Code128/EAN-13/DataMatrix）",
-  desc: "非 QR 条码生成：Code128（自动 B/C 码表 + mod-103 校验字符）、EAN-13（12 位自动补校验位 + 护条延伸）、DataMatrix（任意文本含中文）。auto 档 12/13 位纯数字走 EAN-13，其余走 Code128。输出 PNG（含静区），参数 0/留空=按符号默认。内核 bwip-js 4.11.4 / BWIPP 2026-05-28（双 MIT），可配合扫码功能读回验证",
+  name: "条码生成（1D/2D 八符号）",
+  desc: "非 QR 条码生成：Code128（自动 B/C 码表 + mod-103 校验字符）、EAN-13、UPC-A、Code39、ITF-14（均自动补/验校验位）、DataMatrix、PDF417、Aztec（任意文本含中文）。auto 档 12/13 位纯数字走 EAN-13，其余走 Code128。输出 PNG（含静区），参数 0/留空=按符号默认。内核 bwip-js 4.11.4 / BWIPP 2026-05-28（双 MIT），可配合扫码功能读回验证",
   params: [
     { key: "sym", label: "符号", type: "select", default: "auto",
       options: [
         { value: "auto", label: "自动（12/13 位数字→EAN-13，否则 Code128）" },
         { value: "code128", label: "Code128（ASCII）" },
         { value: "ean13", label: "EAN-13（12/13 位数字）" },
+        { value: "upca", label: "UPC-A（11/12 位数字）" },
+        { value: "code39", label: "Code39（0-9 A-Z 与 - . $ / + %）" },
+        { value: "itf14", label: "ITF-14（13/14 位数字）" },
         { value: "datamatrix", label: "DataMatrix（任意文本）" },
+        { value: "pdf417", label: "PDF417（任意文本）" },
+        { value: "azteccode", label: "Aztec（任意文本）" },
       ] },
     { key: "modulePx", label: "模块宽（像素）", type: "number", default: 0, placeholder: "0=按符号默认（1D 4 / DM 6），范围 1-20" },
     { key: "quietModules", label: "静区（模块）", type: "number", default: 0, placeholder: "0=按符号默认（1D 10-11 / DM 2）" },

@@ -108,6 +108,17 @@ function escapeText(s) {
   });
 }
 
+// pcapng 的 if_name 常是 \Device\NPF_{GUID}：这是 Windows Npcap/WinPcap 的驱动接口名，
+// 不是 CTF flag。通用 flag 模式（小写前缀 + 花括号）理论上不该命中它，但报告里仍要显式标注，
+// 避免用户把它当答案。负向断言保证重复调用不会叠加标注。
+const NPF_RE = /NPF_\{[0-9A-Fa-f][0-9A-Fa-f-]{7,}\}(?!（Windows NPF)/g;
+export function annotateNpfText(text) {
+  return String(text == null ? "" : text).replace(
+    NPF_RE,
+    (m) => m + "（Windows NPF 驱动/网络配置标识，非 flag）",
+  );
+}
+
 // ============================================================
 // 1. 容器解析（libpcap / pcapng）
 // ============================================================
@@ -174,7 +185,23 @@ function parsePcapng(bytes) {
     const totalLen = rd32(pos + 4);
     if (totalLen < 12 || pos + totalLen > bytes.length) break;
     if (bt === 1) {
-      interfaces.push({ linkType: rd16(pos + 8), snapLen: rd32(pos + 12) });
+      const iface = { linkType: rd16(pos + 8), snapLen: rd32(pos + 12), name: null, description: null, os: null };
+      // IDB 选项区：linkType(2) + reserved(2) + snapLen(4) + options，末尾 totalLen-4 为块尾长度。
+      // if_name(2) 常见为 \Device\NPF_{GUID}（Windows Npcap 驱动接口名）。
+      let op = pos + 16;
+      const optEnd = pos + totalLen - 4;
+      while (op + 4 <= optEnd) {
+        const code = rd16(op);
+        if (code === 0) break;
+        const len = rd16(op + 2);
+        const vstart = op + 4;
+        if (vstart + len > optEnd) break;
+        if (code === 2) iface.name = latin1(bytes, vstart, vstart + len).replace(/\0+$/, "");
+        else if (code === 3) iface.description = latin1(bytes, vstart, vstart + len).replace(/\0+$/, "");
+        else if (code === 12) iface.os = latin1(bytes, vstart, vstart + len).replace(/\0+$/, "");
+        op = vstart + ((len + 3) & ~3);
+      }
+      interfaces.push(iface);
     } else if (bt === 6) {
       const ifaceId = rd32(pos + 8);
       const inclLen = rd32(pos + 20);
@@ -1576,6 +1603,69 @@ function tsLabel(pkt) {
 
 function section(id, title, level, icon, body) { return { id, title, level, icon, body }; }
 
+// ---- section 展示元数据（与 fileAnalysis.finalizeSections 同口径） ----
+// 显式给出 priority/collapsed/defaultOpen/source/badge 后，finalizeSections 的推断不会覆盖；
+// 排序也用同一套优先级，保证「op 报告」与「拖入文件报告」顺序一致。
+function trafficSectionPriority(id) {
+  if (id === "traffic-flag") return 10;
+  if (id === "traffic-plaintext") return 14;
+  if (id === "traffic-conclusion") return 20;
+  if (/^usb-keyboard-raw/.test(id)) return 76;
+  if (/^usb-keyboard/.test(id) || /^usb-mouse/.test(id)) return 22;
+  if (id === "mqtt-topics") return 22;
+  if (id === "http-summary") return 72;
+  if (id === "dns-summary" || id === "tls-sni") return 73;
+  if (id === "tcp-transcript") return 74;
+  if (id === "usb-other" || id === "usb-none") return 78;
+  if (id === "traffic-overview") return 79;
+  if (id === "tcp-frames") return 85;
+  return 80;
+}
+function trafficSectionCollapsed(id) {
+  return id === "traffic-overview" || id === "http-summary" || id === "dns-summary" ||
+    id === "tls-sni" || id === "tcp-transcript" || id === "tcp-frames" ||
+    id === "usb-other" || id === "usb-none" || /^usb-keyboard-raw/.test(id);
+}
+function trafficSectionBadge(id, flags) {
+  if (id === "traffic-flag") return "FLAG";
+  if (id === "traffic-plaintext") return "明文";
+  if (id === "traffic-conclusion") return (flags && flags.length) ? "FLAG" : "流量";
+  if (/^usb-keyboard-raw/.test(id)) return "原始";
+  if (/^usb-keyboard/.test(id)) return "键盘";
+  if (/^usb-mouse/.test(id)) return "鼠标";
+  if (id === "mqtt-topics") return "MQTT";
+  if (id === "http-summary") return "HTTP";
+  if (id === "dns-summary") return "DNS";
+  if (id === "tls-sni") return "TLS";
+  if (id === "tcp-transcript") return "TCP";
+  if (id === "tcp-frames") return "帧";
+  if (id === "traffic-overview") return "流量";
+  if (id === "usb-other" || id === "usb-none") return "USB";
+  return "流量";
+}
+function decorateTrafficSection(s, flags) {
+  if (!s || typeof s !== "object") return s;
+  const id = String(s.id || "");
+  if (!Number.isFinite(s.priority)) s.priority = trafficSectionPriority(id);
+  if (s.collapsed == null) s.collapsed = trafficSectionCollapsed(id);
+  if (s.defaultOpen == null) s.defaultOpen = !s.collapsed;
+  if (!s.tocTitle) s.tocTitle = s.title || id || "流量";
+  if (!s.source) s.source = "trafficReadable";
+  if (!s.badge) s.badge = trafficSectionBadge(id, flags);
+  return s;
+}
+function finalizeTrafficSections(sections, flags) {
+  const list = Array.isArray(sections) ? sections : [];
+  list.forEach((s, i) => { decorateTrafficSection(s, flags); s._order = i; });
+  list.sort((a, b) => (a.priority - b.priority) || (a._order - b._order));
+  list.forEach((s) => { delete s._order; });
+  return list;
+}
+function appendSummary(result, line) {
+  if (!line) return;
+  result.summary = result.summary ? result.summary + "\n" + line : line;
+}
+
 /**
  * 分析一个流量包字节流，产出结构化结果 + 人话结论。
  * @param {Uint8Array|number[]} bytes
@@ -1605,6 +1695,9 @@ export function analyzeTraffic(bytes, opts) {
   if (container.interfaces && container.interfaces.length > 1) {
     overview.push("接口数: " + container.interfaces.length + " → " + container.interfaces.map((i) => (LINKTYPES[i.linkType] || i.linkType)).join(", "));
   }
+  // pcapng IDB 的 if_name（如 \Device\NPF_{GUID}）是 Npcap 驱动接口名，属于环境信息，必须标注清楚。
+  const ifaceNames = (container.interfaces || []).map((i) => i && i.name).filter(Boolean);
+  if (ifaceNames.length) overview.push("抓包接口: " + ifaceNames.map((n) => annotateNpfText(n)).join(", "));
   const span = container.packets.length ? (container.packets[container.packets.length - 1].tsSec - container.packets[0].tsSec) : 0;
   if (span > 0) overview.push("时间跨度: " + span + " 秒");
 
@@ -1620,9 +1713,24 @@ export function analyzeTraffic(bytes, opts) {
 
   result.sections.unshift(section("traffic-overview", "流量概览", "info", "analytics", overview.join("\n")));
   if (result.flags.length) {
-    result.sections.push(section("traffic-flag", "flag / 明文线索", "alert", "flag",
-      result.flags.map((f) => "★ " + f).join("\n")));
+    // 结论卡也要能看到答案；flag 卡单独置顶并带查看/复制动作（不依赖上层再补）。
+    if (!/flag:/.test(result.summary || "")) appendSummary(result, "flag: " + result.flags.join(" / "));
+    const flagSec = section("traffic-flag", "flag / 明文线索", "alert", "flag",
+      result.flags.map((f) => "★ " + f).join("\n"));
+    flagSec.actions = [
+      { type: "view", label: "查看 flag", text: result.flags.join("\n") },
+      { type: "copy", label: "复制 flag", text: result.flags.join("\n") },
+    ];
+    result.sections.push(flagSec);
   }
+  result.summary = annotateNpfText(result.summary || "—");
+  for (const s of result.sections) {
+    if (typeof s.body === "string") s.body = annotateNpfText(s.body);
+    if (Array.isArray(s.actions)) for (const a of s.actions) {
+      if (a && typeof a.text === "string") a.text = annotateNpfText(a.text);
+    }
+  }
+  finalizeTrafficSections(result.sections, result.flags);
   result.stats.packetCount = container.packets.length;
   result.stats.flagCount = result.flags.length;
   return result;
@@ -1663,7 +1771,6 @@ function analyzeUsbPath(container, result, overview, o) {
   if (mouseGroups.length) kinds.push("usb-mouse");
   result.kind = kinds.length ? kinds.join("+") : "usb-unknown";
 
-  const summaryBits = [];
   result.tables.usbStreams = groups.map((g) => ({
     device: g.dev, bus: g.bus, endpoint: "0x" + g.ep.toString(16), role: g.role,
     reports: g.reports.length, reportLengths: g.reportLens,
@@ -1672,100 +1779,179 @@ function analyzeUsbPath(container, result, overview, o) {
   // ---- 键盘 ----
   let ki = 0;
   result.tables.keyboards = [];
+  const summaryLines = [];
+  summaryLines.push("USB 流量（" + container.packets.length + " 包）：识别 " + kbdGroups.length + " 个键盘接口 / " + mouseGroups.length + " 个鼠标接口");
   for (const g of kbdGroups) {
+    const idx = ki++;
+    const kid = "usb-keyboard-" + idx;
+    const rawId = "usb-keyboard-raw-" + idx;
+    const devLabel = "bus " + g.bus + " / dev " + g.dev + " / EP 0x" + g.ep.toString(16);
     const dec = decodeKeyboardReports(g.reports, { backspace: o.backspace !== false });
-    const title = "USB 键盘还原（bus " + g.bus + " / dev " + g.dev + " / EP 0x" + g.ep.toString(16) + "）";
-    const lines = [];
-    lines.push("报告数: " + g.reports.length + "（报告长度 " + g.reportLens.join("/") + " 字节）");
-    lines.push("有效按键事件: " + dec.keys.length + " 次");
-    const modCount = {};
-    for (const k of dec.keys) for (const m of k.mods) modCount[m] = (modCount[m] || 0) + 1;
-    if (Object.keys(modCount).length) lines.push("修饰键统计: " + Object.entries(modCount).map(([k, v]) => k + "×" + v).join(", "));
-    const combos = dec.keys.filter((k) => k.combo);
-    if (combos.length) {
-      const head = combos.slice(0, 12).map((k) => {
-        const label = k.mods.join("+") + "+" + (k.base || "0x" + k.code.toString(16).padStart(2, "0"));
-        if (k.char === null) return label + "（明文无字符）";
-        return label + "→" + escapeText(k.char) + (k.combo === "alt" ? "（meta，ESC 前缀）" : "");
-      });
-      lines.push("组合键（修饰键参与字符生成，不按裸字母输出）: " + head.join(", ") + (combos.length > 12 ? " … 共 " + combos.length + " 次" : ""));
-    }
-    lines.push("");
-    lines.push("--- 按键序列（HID usage，含修饰键） ---");
-    lines.push(dec.keys.map((k) => (k.char === null ? "" : "") + "0x" + k.code.toString(16).padStart(2, "0") + (k.char ? "→" + escapeText(k.char) : "") + (k.mods.length ? "[" + k.mods.join("+") + "]" : "")).join("  ") || "(无)");
-    lines.push("");
-    lines.push("--- 还原明文（按 Shift / CapsLock / 修饰键状态；控制字符写作 \\xNN） ---");
-    lines.push(escapeText(dec.text) || "(空)");
+    const title = "USB 键盘还原（" + devLabel + "）";
 
-    // 打字节奏图：按键间隔时间着色，真彩 PNG 走产物协议（样本无时间戳时不出图）
-    const rhythm = buildKeyRhythmArtifact(dec.keys, "keyboard_rhythm_dev" + g.dev + "_ep" + g.ep.toString(16) + ".png");
-    if (rhythm) {
-      result.artifacts.push(rhythm.artifact);
-      lines.push("");
-      lines.push("--- 打字节奏图（真彩 PNG，" + rhythm.width + "×" + rhythm.height + " 像素） ---");
-      lines.push(rhythm.note);
-    }
-
-    const extra = [];
     const hexText = dec.text.trim();
     let hexDecoded = null;
     if (/^[0-9a-fA-F]+$/.test(hexText) && hexText.length % 2 === 0 && hexText.length >= 4) {
       const ascii = latin1(hexToBytesLocal(hexText));
-      if (printableRatio(hexToBytesLocal(hexText)) > 0.85) {
-        hexDecoded = ascii;
-        extra.push("该明文为偶数长度纯 hex，按 hex 解码后为：");
-        extra.push(ascii);
-      }
+      if (printableRatio(hexToBytesLocal(hexText)) > 0.85) hexDecoded = ascii;
     }
-    const fl = findFlags(dec.text + "\n" + extra.join("\n"));
+    const fl = findFlags(dec.text + "\n" + (hexDecoded || ""));
     for (const f of fl) if (!result.flags.includes(f)) result.flags.push(f);
-    if (extra.length) { lines.push(""); lines.push("--- 自动二次解码 ---"); lines.push(extra.join("\n")); }
+
+    const plainDisplay = escapeText(dec.text) || "(空)";
+    const modCount = {};
+    for (const k of dec.keys) for (const m of k.mods) modCount[m] = (modCount[m] || 0) + 1;
+    const combos = dec.keys.filter((k) => k.combo);
+    const unknownKeys = dec.keys.filter((k) => k.char && /^\[0x[0-9a-f]{2}\]$/.test(k.char)).length;
+    const ctrlCount = (dec.text.match(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g) || []).length;
+    const anomalies = [];
+    if (!dec.text) anomalies.push("未解出任何字符");
+    if (ctrlCount) anomalies.push("明文含 " + ctrlCount + " 个控制字符（按 C0 语义保留，报告中写作 \\xNN）");
+    if (unknownKeys) anomalies.push(unknownKeys + " 个未在 HID 键盘表中的 usage（以 [0xNN] 标记）");
+    if (combos.length) anomalies.push("组合键 " + combos.length + " 次（Ctrl/Alt/Gui 已按语义处理，未把裸字母写入明文）");
+    if (hexDecoded) anomalies.push("明文是纯 hex，已自动二次解码");
+    if (/flag\s*(?:is\s*)?not\s+in\s+the\s+keyboard/i.test(dec.text)) {
+      anomalies.push("明文明确提示 flag 不在键盘——重点查看同包鼠标轨迹图");
+    }
+    if (!anomalies.length) anomalies.push("无");
+
+    const rhythm = buildKeyRhythmArtifact(dec.keys, "keyboard_rhythm_dev" + g.dev + "_ep" + g.ep.toString(16) + ".png");
+    if (rhythm) { rhythm.artifact.sectionId = kid; result.artifacts.push(rhythm.artifact); }
+
+    // 结论卡分行：设备/接口、按键次数、明文、flag、异常各占一行，不再用「；」把多条结论挤在一起。
+    const lines = [];
+    lines.push("【结论】");
+    lines.push("设备/接口: " + devLabel + "（报告长度 " + g.reportLens.join("/") + " 字节）");
+    lines.push("报告数: " + g.reports.length + " 帧");
+    lines.push("按键次数: " + dec.keys.length + " 次" + (dec.keys.length !== g.reports.length ? "（长按/空报告去重后）" : ""));
+    if (Object.keys(modCount).length) lines.push("修饰键: " + Object.entries(modCount).map(([k, v]) => k + "×" + v).join(" / "));
+    lines.push("明文: " + (plainDisplay.length > 160 ? plainDisplay.slice(0, 160) + "…" : plainDisplay));
+    lines.push("flag: " + (fl.length ? fl.join(" / ") : "未命中"));
+    for (const a of anomalies) lines.push("异常: " + a);
+    if (combos.length) {
+      const head = combos.slice(0, 8).map((k) => {
+        const label = k.mods.join("+") + "+" + (k.base || "0x" + k.code.toString(16).padStart(2, "0"));
+        if (k.char === null) return label + "（明文无字符）";
+        return label + "→" + escapeText(k.char) + (k.combo === "alt" ? "（meta，ESC 前缀）" : "");
+      });
+      lines.push("组合键明细: " + head.join(", ") + (combos.length > 8 ? " … 共 " + combos.length + " 次" : ""));
+    }
+    lines.push("");
+    lines.push("【还原明文】（独立块；可用下方按钮查看/复制）");
+    lines.push(plainDisplay);
+    if (hexDecoded) {
+      lines.push("");
+      lines.push("【hex 二次解码】");
+      lines.push(hexDecoded);
+    }
+    lines.push("");
+    lines.push("【打字节奏图】");
+    lines.push(rhythm
+      ? "已生成 " + rhythm.width + "×" + rhythm.height + " 真彩 PNG，内联预览见本卡片下方。" + rhythm.note
+      : "样本缺时间戳或按键不足 2 次，未生成节奏图。");
+    lines.push("");
+    lines.push("【原始帧 / hex】默认折叠；完整按键序列与帧 hex 见「" + rawId + "」卡片。");
+
+    const kbSec = section(kid, title, fl.length ? "alert" : "info", "keyboard", lines.join("\n"));
+    kbSec.actions = [
+      { type: "view", label: "查看还原明文", text: plainDisplay + (hexDecoded ? "\n\n[hex 二次解码]\n" + hexDecoded : "") },
+      { type: "copy", label: "复制还原明文", text: dec.text },
+    ];
+    if (hexDecoded) kbSec.actions.push({ type: "copy", label: "复制 hex 解码明文", text: hexDecoded });
+    if (rhythm) {
+      kbSec.actions.push({ type: "preview", label: rhythm.artifact.name, filename: rhythm.artifact.name, mime: rhythm.artifact.mime, bytes: rhythm.artifact.bytes });
+      kbSec.actions.push({ type: "download", label: "下载 " + rhythm.artifact.name, filename: rhythm.artifact.name, mime: rhythm.artifact.mime, bytes: rhythm.artifact.bytes });
+    }
+    result.sections.push(kbSec);
+
+    // 原始帧/hex 独立卡片：默认折叠，避免把结论卡撑成一屏 hex。
+    const rawLines = [];
+    rawLines.push("设备/接口: " + devLabel);
+    rawLines.push("");
+    rawLines.push("按键序列（HID usage，含修饰键）:");
+    rawLines.push(dec.keys.map((k) => "0x" + k.code.toString(16).padStart(2, "0") + (k.char ? "→" + escapeText(k.char) : "") + (k.mods.length ? "[" + k.mods.join("+") + "]" : "")).join("  ") || "(无)");
+    rawLines.push("");
+    rawLines.push("原始报告帧 hex（前 200 帧；共 " + g.reports.length + " 帧）:");
+    for (let i = 0; i < Math.min(200, g.reports.length); i++) {
+      const r = g.reports[i];
+      rawLines.push("#" + (r.index !== undefined ? r.index : i) + " t=" + ((r.tsSec || 0) + "." + String(r.tsUsec || 0).padStart(6, "0")) + " " + toHex(r.data));
+    }
+    if (g.reports.length > 200) rawLines.push("… 其余 " + (g.reports.length - 200) + " 帧未列出");
+    const rawSec = section(rawId, "USB 键盘原始帧 / hex / 按键序列（默认折叠）", "info", "data_object", rawLines.join("\n"));
+    rawSec.actions = [{ type: "copy", label: "复制原始帧 hex", text: rawLines.join("\n") }];
+    result.sections.push(rawSec);
 
     result.tables.keyboards.push({
-      bus: g.bus, device: g.dev, endpoint: "0x" + g.ep.toString(16), reports: g.reports.length,
-      keyEvents: dec.keys.length, text: dec.text, hexDecoded, flags: fl,
+      sectionId: kid, rawSectionId: rawId, bus: g.bus, device: g.dev, endpoint: "0x" + g.ep.toString(16), reports: g.reports.length,
+      keyEvents: dec.keys.length, text: dec.text, hexDecoded, flags: fl, anomalies,
     });
-    result.sections.push(section("usb-keyboard-" + (ki++), title, fl.length ? "alert" : "info", "keyboard", lines.join("\n")));
-    const plain = escapeText(dec.text);
-    summaryBits.push("键盘(dev" + g.dev + "/EP0x" + g.ep.toString(16) + ") 还原 " + dec.keys.length + " 次按键 → 明文「" + (plain.length > 120 ? plain.slice(0, 120) + "…" : plain) + "」");
+    const shortPlain = plainDisplay.length > 120 ? plainDisplay.slice(0, 120) + "…" : plainDisplay;
+    summaryLines.push("键盘#" + (idx + 1) + " 设备/接口: " + devLabel);
+    summaryLines.push("键盘#" + (idx + 1) + " 按键次数: " + dec.keys.length + " 次");
+    summaryLines.push("键盘#" + (idx + 1) + " 明文: 「" + shortPlain + "」");
+    summaryLines.push("键盘#" + (idx + 1) + " flag: " + (fl.length ? fl.join(" / ") : "未命中"));
+    if (hexDecoded) summaryLines.push("键盘#" + (idx + 1) + " hex 解码: " + hexDecoded);
+    for (const a of anomalies) if (a !== "无") summaryLines.push("键盘#" + (idx + 1) + " 异常: " + a);
   }
 
   // ---- 鼠标 ----
   let mi = 0;
   result.tables.mouses = [];
   for (const g of mouseGroups) {
+    const idx = mi++;
+    const mid = "usb-mouse-" + idx;
+    const devLabel = "bus " + g.bus + " / dev " + g.dev + " / EP 0x" + g.ep.toString(16);
     const dec = decodeMouseReports(g.reports, {});
-    const title = "USB 鼠标轨迹（bus " + g.bus + " / dev " + g.dev + " / EP 0x" + g.ep.toString(16) + "）";
-    const lines = [];
-    lines.push("报告数: " + dec.reportCount + "（报告长度 " + g.reportLens.join("/") + " 字节）");
-    lines.push("采用位移布局: " + dec.layout.label);
-    lines.push("坐标范围: X " + dec.bbox.minX + ".." + dec.bbox.maxX + "（宽 " + dec.bbox.width + "）  Y " + dec.bbox.minY + ".." + dec.bbox.maxY + "（高 " + dec.bbox.height + "）");
-    lines.push("平均步长 " + dec.meanStep.toFixed(2) + " px，95 分位步长 " + dec.p95Step + " px，有位移报告占比 " + (dec.movingRatio * 100).toFixed(1) + "%");
-    lines.push("笔划段数（按大步长=抬笔切分）: " + dec.strokes);
+    const title = "USB 鼠标轨迹（" + devLabel + "）";
+    const pts = dec.points;
     const downs = dec.events.filter((e) => e.type === "down");
     const cnt = { 左键: 0, 右键: 0, 中键: 0 };
     for (const e of downs) cnt[e.button]++;
+    const track = buildTrackArtifact(dec, "mouse_track_dev" + g.dev + "_ep" + g.ep.toString(16) + ".png", { maxSide: o.pngMaxSide });
+    if (track) { track.artifact.sectionId = mid; result.artifacts.push(track.artifact); }
+
+    const lines = [];
+    lines.push("【结论】");
+    lines.push("设备/接口: " + devLabel + "（报告长度 " + g.reportLens.join("/") + " 字节）");
+    lines.push("报告数: " + dec.reportCount + " 帧");
+    lines.push("采用位移布局: " + dec.layout.label);
+    lines.push("坐标范围: X " + dec.bbox.minX + ".." + dec.bbox.maxX + "（宽 " + dec.bbox.width + "） / Y " + dec.bbox.minY + ".." + dec.bbox.maxY + "（高 " + dec.bbox.height + "）");
+    lines.push("平均步长: " + dec.meanStep.toFixed(2) + " px，95 分位步长 " + dec.p95Step + " px，有位移报告占比 " + (dec.movingRatio * 100).toFixed(1) + "%");
+    lines.push("笔划段数: " + dec.strokes + "（大步长按抬笔切分）");
     lines.push("按键事件: 共 " + dec.events.length + " 个（按下 " + downs.length + "） → 左键 " + cnt["左键"] + " / 右键 " + cnt["右键"] + " / 中键 " + cnt["中键"]);
+    lines.push("轨迹图: " + (track ? "已生成 " + track.width + "×" + track.height + " 真彩 PNG，内联预览见本卡片下方" : "轨迹范围过小，未生成图片"));
     lines.push("");
-    lines.push("--- 轨迹坐标序列（累计，前 20 + 末 10） ---");
-    const pts = dec.points;
+    lines.push("【轨迹坐标序列（累计，前 20 + 末 10）】");
     const head = pts.slice(0, 20).map((p) => "(" + p[0] + "," + p[1] + ")").join(" ");
     const tail = pts.slice(-10).map((p) => "(" + p[0] + "," + p[1] + ")").join(" ");
     lines.push(head + (pts.length > 30 ? " … " + tail : ""));
-    const track = buildTrackArtifact(dec, "mouse_track_dev" + g.dev + "_ep" + g.ep.toString(16) + ".png", { maxSide: o.pngMaxSide });
-    if (track) result.artifacts.push(track.artifact);
     lines.push("");
-    lines.push("--- 轨迹图（真彩 PNG） ---");
-    lines.push(track ? track.note + "（" + track.width + "×" + track.height + " 像素，已加入可下载产物）" : "(轨迹范围过小，未生成图片)");
+    lines.push("【轨迹图说明】");
+    lines.push(track ? track.note : "未生成轨迹图。");
+    lines.push("判读提示: 颜色表示绘制时序（深蓝→红），深灰方框为左键按下位置；若图形像文字/图案，可下载原图放大判读。");
 
-    result.sections.push(section("usb-mouse-" + (mi++), title, "info", "mouse", lines.join("\n")));
+    const mSec = section(mid, title, "info", "mouse", lines.join("\n"));
+    mSec.actions = [];
+    if (track) {
+      mSec.actions.push({ type: "preview", label: track.artifact.name, filename: track.artifact.name, mime: track.artifact.mime, bytes: track.artifact.bytes });
+      mSec.actions.push({ type: "download", label: "下载 " + track.artifact.name, filename: track.artifact.name, mime: track.artifact.mime, bytes: track.artifact.bytes });
+    }
+    const coordText = pts.slice(0, 4000).map((p, i) => "#" + i + " (" + p[0] + "," + p[1] + ")").join("\n");
+    if (coordText) {
+      mSec.actions.push({ type: "view", label: "查看轨迹坐标全文", text: coordText });
+      mSec.actions.push({ type: "copy", label: "复制轨迹坐标", text: coordText });
+    }
+    result.sections.push(mSec);
+
     result.tables.mouses.push({
-      bus: g.bus, device: g.dev, endpoint: "0x" + g.ep.toString(16), reports: dec.reportCount,
+      sectionId: mid, bus: g.bus, device: g.dev, endpoint: "0x" + g.ep.toString(16), reports: dec.reportCount,
       layout: dec.layout.label, bbox: dec.bbox, strokes: dec.strokes, pointCount: pts.length,
       buttonDown: downs.length, buttonCounts: cnt,
     });
     result.tables["mousePoints_" + g.dev + "_" + g.ep.toString(16)] = pts.slice(0, 4000);
-    summaryBits.push("鼠标(dev" + g.dev + "/EP0x" + g.ep.toString(16) + ") 轨迹 " + dec.reportCount + " 点，范围 " + dec.bbox.width + "×" + dec.bbox.height + "，左键 " + cnt["左键"] + " 次");
+    summaryLines.push("鼠标#" + (idx + 1) + " 设备/接口: " + devLabel);
+    summaryLines.push("鼠标#" + (idx + 1) + " 轨迹: " + dec.reportCount + " 点，坐标范围 " + dec.bbox.width + "×" + dec.bbox.height + "，笔划 " + dec.strokes + " 段，左键 " + cnt["左键"] + " 次");
+    if (track) summaryLines.push("鼠标#" + (idx + 1) + " 轨迹图: " + track.artifact.name + "（" + track.width + "×" + track.height + "，已内联预览）");
   }
 
   // ---- 其他端点（提示，不展开） ----
@@ -1774,14 +1960,60 @@ function analyzeUsbPath(container, result, overview, o) {
     result.sections.push(section("usb-other", "USB 其他端点", "info", "usb", lines.join("\n")));
   }
 
-  result.summary = "USB 流量（" + container.packets.length + " 包）：识别 " + kbdGroups.length + " 个键盘接口 / " + mouseGroups.length + " 个鼠标接口。"
-    + (summaryBits.length ? " " + summaryBits.join("；") : "");
+  result.summary = summaryLines.join("\n");
 }
 
 function hexToBytesLocal(s) {
   const out = new Uint8Array(s.length / 2);
   for (let i = 0; i < s.length; i += 2) out[i / 2] = parseInt(s.slice(i, i + 2), 16);
   return out;
+}
+
+// telnet 协商字节（IAC WILL/WONT/DO/DONT/SB..SE）会在明文前制造大量 \xff.. 噪声；
+// 只用于「明文结论」卡的清洗，不改动原始转录与重组字节。
+function stripTelnetIac(bytes) {
+  const out = [];
+  for (let i = 0; i < bytes.length; i++) {
+    const b = bytes[i];
+    if (b !== 0xff) { out.push(b); continue; }
+    const cmd = bytes[i + 1];
+    if (cmd === undefined) break;
+    if (cmd === 0xff) { out.push(0xff); i++; continue; }
+    if (cmd >= 0xfb && cmd <= 0xfe) { i += 2; continue; }
+    if (cmd === 0xfa) {
+      i += 2;
+      while (i + 1 < bytes.length && !(bytes[i] === 0xff && bytes[i + 1] === 0xf0)) i++;
+      i += 1;
+      continue;
+    }
+    i += 1;
+  }
+  return new Uint8Array(out);
+}
+
+function readablePlainLines(text) {
+  return String(text || "")
+    .split(/\r\n|\r|\n/)
+    .map((line) => line.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "").trim())
+    .filter(Boolean);
+}
+
+function formParam(body, name) {
+  if (!body || !body.length) return null;
+  const s = latin1(body);
+  for (const part of s.split("&")) {
+    const eq = part.indexOf("=");
+    if (eq <= 0) continue;
+    if (part.slice(0, eq) !== name) continue;
+    const raw = part.slice(eq + 1);
+    try { return decodeURIComponent(raw.replace(/\+/g, " ")); } catch { return raw; }
+  }
+  return null;
+}
+
+function looksLikeLongHex(text) {
+  const t = String(text || "").trim();
+  return t.length >= 64 && t.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(t);
 }
 
 // ---- 网络路径 ----
@@ -1811,6 +2043,7 @@ function analyzeNetworkPath(container, result, overview, o) {
   const dnsList = [], tlsList = [];
   const httpObjects = [];
   const mqttFlows = [];
+  const plainEntries = [];
 
   for (const flow of flowList) {
     const dirs = [...flow.dirs.values()];
@@ -1865,6 +2098,8 @@ function analyzeNetworkPath(container, result, overview, o) {
     const lines = [];
     const connects = uniqueMqtt.filter((m) => m.type === 1);
     lines.push("MQTT 报文数: " + uniqueMqtt.length + "（去重后）");
+    const ifaceNames = (container.interfaces || []).map((i) => i && i.name).filter(Boolean);
+    if (ifaceNames.length) lines.push("抓包接口: " + ifaceNames.map((n) => annotateNpfText(n)).join(", "));
     for (const c of connects) {
       lines.push("CONNECT: 协议 " + (c.protocolName || "?") + " v" + (c.protocolLevel || "?") +
         "，clientId=「" + (c.clientId || "") + "」" + (c.cleanSession ? "，CleanSession=1" : "") +
@@ -1885,7 +2120,12 @@ function analyzeNetworkPath(container, result, overview, o) {
       t.publishes.forEach((p, i) => {
         const qos = p.qos !== undefined ? p.qos : "?";
         lines.push("   #" + (i + 1) + " QoS=" + qos + " retain=" + (p.retain ? 1 : 0) + " dup=" + (p.dup ? 1 : 0) + " 载荷 " + (p.payload ? p.payload.length : 0) + " 字节");
-        if (p.payloadText && p.payloadText.trim()) lines.push("      文本: " + escapeText(p.payloadText.length > 200 ? p.payloadText.slice(0, 200) + "…" : p.payloadText));
+        if (p.payloadText && p.payloadText.trim()) {
+          const pt = p.payloadText.trim();
+          lines.push("      文本: " + escapeText(pt.length > 200 ? pt.slice(0, 200) + "…" : pt));
+          for (const f of findFlags(pt)) if (!result.flags.includes(f)) result.flags.push(f);
+          if (!looksLikeLongHex(pt)) plainEntries.push({ source: "MQTT 主题 " + t.topic, how: "payload", text: pt });
+        }
         lines.push("      hex : " + (p.payloadHex || "") + (p.payload && p.payload.length > 32 ? " …" : ""));
         for (const v of payloadVariants(p.payload)) {
           const magic = detectMagic(v.bytes);
@@ -1905,7 +2145,7 @@ function analyzeNetworkPath(container, result, overview, o) {
     }));
     result.sections.push(section("mqtt-topics", "MQTT 主题表", "info", "hub", lines.join("\n")));
 
-    // 汇总人话
+    // 汇总人话：一行一个结论，NPF 接口名显式标注为 Windows 驱动/网络配置标识。
     const topics = table.topics.map((t) => t.topic);
     const archiveHits = [];
     for (const t of table.topics) for (const p of t.publishes) {
@@ -1914,10 +2154,15 @@ function analyzeNetworkPath(container, result, overview, o) {
         if (m) archiveHits.push(t.topic + " → " + m.name + (v.how === "原始载荷" ? "" : "（载荷为 hex 文本，已解码）"));
       }
     }
-    result.summary = "MQTT 流量（" + uniqueMqtt.length + " 报文）：" + connects.length + " 次 CONNECT" +
-      (connects[0] && connects[0].clientId ? "（clientId " + connects[0].clientId + "）" : "") +
-      "，主题 " + topics.length + " 个 → " + topics.join(", ") +
-      (archiveHits.length ? "；★ " + archiveHits.join("，") + " 经 MQTT 传输，载荷已导出" : "");
+    const mqttSum = [];
+    mqttSum.push("MQTT 流量（" + uniqueMqtt.length + " 报文）：" + connects.length + " 次 CONNECT" +
+      (connects[0] && connects[0].clientId ? "（clientId " + connects[0].clientId + "）" : ""));
+    mqttSum.push("主题: " + topics.length + " 个 → " + topics.join(", "));
+    if (archiveHits.length) mqttSum.push("关键载荷: " + archiveHits.join("，") + "，已导出为可下载产物");
+    const mqttTexts = [...new Set(plainEntries.filter((e) => e.source.startsWith("MQTT ")).map((e) => e.text))];
+    if (mqttTexts.length) mqttSum.push("明文: " + mqttTexts.slice(0, 6).map((t) => "「" + (t.length > 80 ? t.slice(0, 80) + "…" : t) + "」").join(" / "));
+    if (ifaceNames.length) mqttSum.push("抓包接口: " + ifaceNames.map((n) => annotateNpfText(n)).join(", "));
+    result.summary = result.summary ? result.summary + "\n" + mqttSum.join("\n") : mqttSum.join("\n");
   }
 
   // ---- HTTP ----
@@ -1936,12 +2181,20 @@ function analyzeNetworkPath(container, result, overview, o) {
         if (!L.text) continue;
         const t = L.text.trim();
         lines.push("  [" + L.how + "] " + L.bytes.length + " 字节 → " + escapeText(t.length > 400 ? t.slice(0, 400) + "…" : t));
+        const src = "HTTP " + m.kind + " " + m.startLine + "（" + m.flowLabel + "）";
+        if (t) plainEntries.push({ source: src, how: L.how, text: t });
         const fl = findFlags(t);
         for (const f of fl) if (!result.flags.includes(f)) result.flags.push(f);
       }
+      const cmd = formParam(m.bodyRaw, "c");
+      if (cmd) plainEntries.push({ source: "HTTP 请求参数 c " + m.startLine + "（" + m.flowLabel + "）", how: "form", text: cmd });
       if (!m.layers.length && m.bodyRaw.length) {
         const t = isMostlyText(m.bodyRaw, 512) ? latin1(m.bodyRaw) : null;
-        if (t) lines.push("  [原文] " + escapeText(t.length > 300 ? t.slice(0, 300) + "…" : t));
+        if (t) {
+          lines.push("  [原文] " + escapeText(t.length > 300 ? t.slice(0, 300) + "…" : t));
+          plainEntries.push({ source: "HTTP " + m.kind + " " + m.startLine + "（" + m.flowLabel + "）", how: "原文", text: t.trim() });
+          for (const f of findFlags(t)) if (!result.flags.includes(f)) result.flags.push(f);
+        }
       }
     });
     result.sections.push(section("http-summary", "HTTP 请求/响应摘要", "info", "language", lines.join("\n")));
@@ -1950,9 +2203,23 @@ function analyzeNetworkPath(container, result, overview, o) {
       bodySize: m.bodyRaw.length, decoded: m.layers.filter((l) => l.text).map((l) => ({ how: l.how, text: l.text })),
     }));
     const reqCount = httpObjects.filter((m) => m.kind === "request").length;
-    result.summary = (result.summary ? result.summary + " " : "") +
-      "HTTP " + reqCount + " 请求 / " + (httpObjects.length - reqCount) + " 响应" +
-      (result.tables.http.some((h) => h.decoded.length) ? "，响应体含可解码明文（见 HTTP 摘要）" : "");
+    const httpSum = [];
+    httpSum.push("HTTP 流量（" + container.packets.length + " 包）：" + reqCount + " 请求 / " + (httpObjects.length - reqCount) + " 响应");
+    const httpKeyTexts = [];
+    for (const m of httpObjects) {
+      for (const L of m.layers) if (L.text && L.text.trim()) httpKeyTexts.push(L.text.trim());
+      const cmd = formParam(m.bodyRaw, "c");
+      if (cmd) httpKeyTexts.push(cmd);
+    }
+    const uniqHttp = [...new Set(httpKeyTexts)].filter((t) => t.length >= 2 && !/^</.test(t));
+    const httpFlagTexts = uniqHttp.filter((t) => findFlags(t).length);
+    const httpOther = uniqHttp.filter((t) => !findFlags(t).length && t.length <= 120);
+    const shownHttp = [...httpFlagTexts, ...httpOther].slice(0, 8);
+    if (shownHttp.length) {
+      httpSum.push("明文: " + shownHttp.map((t) => "「" + (t.length > 80 ? t.slice(0, 80) + "…" : t) + "」").join(" / "));
+      httpSum.push("说明: HTTP 请求/响应摘要默认折叠，完整头/体见「HTTP 请求/响应摘要」卡");
+    }
+    result.summary = result.summary ? result.summary + "\n" + httpSum.join("\n") : httpSum.join("\n");
   }
 
   // ---- DNS ----
@@ -1969,7 +2236,7 @@ function analyzeNetworkPath(container, result, overview, o) {
     result.sections.push(section("dns-summary", "DNS 查询摘要", "info", "dns", lines.join("\n")));
     const qnames = dnsList.flatMap((d) => d.dns.questions.map((q) => q.name));
     result.tables.dns = dnsList.map((d) => ({ index: d.index, src: d.src, dst: d.dst, isResponse: d.dns.isResponse, questions: d.dns.questions, answers: d.dns.answers }));
-    result.summary = (result.summary ? result.summary + " " : "") + "DNS " + dnsList.length + " 报文，查询 " + qnames.length + " 个域名（" + qnames.slice(0, 6).join(", ") + (qnames.length > 6 ? " …" : "") + "）";
+    appendSummary(result, "DNS: " + dnsList.length + " 报文，查询 " + qnames.length + " 个域名（" + qnames.slice(0, 6).join(", ") + (qnames.length > 6 ? " …" : "") + "）");
   }
 
   // ---- TLS SNI ----
@@ -1978,7 +2245,7 @@ function analyzeNetworkPath(container, result, overview, o) {
     const lines = tlsList.map((t) => "#" + t.index + " " + t.src + " → " + t.dst + ":" + t.port + "  ClientHello SNI = " + (t.sni || "(未携带)") + "  recordVersion=0x" + t.recordVersion.toString(16));
     result.sections.push(section("tls-sni", "TLS ClientHello / SNI", "info", "lock", lines.join("\n")));
     result.tables.tls = tlsList;
-    result.summary = (result.summary ? result.summary + " " : "") + "TLS 握手 " + tlsList.length + " 次，SNI: " + tlsList.map((t) => t.sni || "(无)").join(", ");
+    appendSummary(result, "TLS: 握手 " + tlsList.length + " 次，SNI: " + tlsList.map((t) => t.sni || "(无)").join(", "));
   }
 
   // ---- TCP 会话转录（兜底，覆盖 telnet / 明文 shell 等） ----
@@ -1997,17 +2264,60 @@ function analyzeNetworkPath(container, result, overview, o) {
         lines.push("  " + escapeText(t.length > 1200 ? t.slice(0, 1200) + "…" : t));
         lines.push("");
         transcripts.push({ from: dir.from, to: dir.to, segs: dir.segs.length, bytes: bytes.length, text: t });
-        const fl = findFlags(t);
+        const plines = readablePlainLines(latin1(stripTelnetIac(bytes)));
+        if (plines.length) plainEntries.push({ source: "TCP " + dir.from + " → " + dir.to, how: "明文", text: plines.join("\n") });
+        const fl = findFlags(t + "\n" + plines.join("\n"));
         for (const f of fl) if (!result.flags.includes(f)) result.flags.push(f);
       }
     }
     if (lines.length) {
       if (result.kind === "unknown") result.kind = "tcp-session";
-      result.sections.push(section("tcp-transcript", "TCP 会话转录（明文）", result.flags.length ? "alert" : "info", "swap_horiz", lines.join("\n")));
+      result.sections.push(section("tcp-transcript", "TCP 会话转录（明文，默认折叠）", result.flags.length ? "alert" : "info", "swap_horiz", lines.join("\n")));
       result.tables.tcpTranscripts = transcripts;
       result.tables.tcpFlows = flowList.map((f) => ({ a: f.a, b: f.b, dirs: [...f.dirs.values()].map((d) => ({ from: d.from, to: d.to, segs: d.segs.length, bytes: reassembleDir(d).length })) }));
-      result.summary = (result.summary ? result.summary + " " : "") + "未发现 HTTP/DNS/MQTT/TLS，已按 TCP 会话转录输出明文（" + flowList.length + " 条流）";
+      const tcpSum = [];
+      tcpSum.push("TCP 明文会话（" + flowList.length + " 条流）");
+      const tcpTexts = [...new Set(plainEntries.filter((e) => e.source.startsWith("TCP ")).map((e) => e.text))];
+      if (tcpTexts.length) tcpSum.push("明文: " + tcpTexts.slice(0, 4).map((x) => "「" + (x.length > 120 ? x.slice(0, 120) + "…" : x) + "」").join(" / "));
+      tcpSum.push("说明: TCP 会话转录默认折叠，完整转录见「TCP 会话转录」卡");
+      result.summary = result.summary ? result.summary + "\n" + tcpSum.join("\n") : tcpSum.join("\n");
     }
+  }
+
+  // ---- 明文结论（HTTP / MQTT / TCP 统一置顶；摘要卡仍折叠保留细节） ----
+  const plainScored = [];
+  const seenPlain = new Set();
+  for (const e of plainEntries) {
+    const text = String(e.text || "").trim();
+    if (text.length < 2 || looksLikeLongHex(text)) continue;
+    const flagHits = findFlags(text);
+    for (const f of flagHits) if (!result.flags.includes(f)) result.flags.push(f);
+    if (!flagHits.length && /^<\s*(?:!doctype|html|head|body|\?xml)/i.test(text)) continue;
+    if (seenPlain.has(text)) continue;
+    seenPlain.add(text);
+    let score = flagHits.length ? 100 : 0;
+    if (/flag|ctf/i.test(text)) score += 50;
+    if (/pass(?:word)?|secret|token|login|username|clientid/i.test(text)) score += 20;
+    plainScored.push({ source: e.source, how: e.how, text, score });
+  }
+  plainScored.sort((a, b) => b.score - a.score);
+  const plainPicked = plainScored.slice(0, 20);
+  if (plainPicked.length) {
+    const lines = [];
+    lines.push("明文结论: " + plainPicked.length + " 条（flag 优先；单条最多显示 300 字，完整内容见查看/复制）");
+    lines.push("");
+    plainPicked.forEach((e) => {
+      lines.push("▼ " + e.source + "  [" + e.how + "]");
+      lines.push("  " + escapeText(e.text.length > 300 ? e.text.slice(0, 300) + "…" : e.text));
+    });
+    const fullText = plainPicked.map((e) => "[" + e.source + "]\n" + e.text).join("\n\n");
+    const plainSec = section("traffic-plaintext", "HTTP/TCP/MQTT 明文结论", result.flags.length ? "alert" : "info", "subject", lines.join("\n"));
+    plainSec.actions = [
+      { type: "view", label: "查看明文全文", text: fullText },
+      { type: "copy", label: "复制明文", text: fullText },
+    ];
+    result.sections.push(plainSec);
+    appendSummary(result, "明文结论: 已提取 " + plainPicked.length + " 条（flag/密码/命令输出优先，见「HTTP/TCP/MQTT 明文结论」卡）");
   }
 
   if (!result.summary) {
@@ -2070,17 +2380,50 @@ export function renderReadableReport(result) {
 export function analyzeTrafficBytes(bytes, opts) {
   let result;
   try { result = analyzeTraffic(bytes, opts); }
-  catch (e) { return [section("traffic-error", "流量分析异常", "warn", "warning", (e && e.message) || String(e))]; }
-  const out = [];
-  out.push(section("traffic-conclusion", "流量可读结论", result.flags.length ? "alert" : "info", result.flags.length ? "flag" : "travel_explore", result.summary || "—"));
-  for (const s of result.sections) out.push(s);
-  // 产物协议：图片/载荷作为可下载动作挂到结论卡（拖入路径与 op 路径同源，见 main.js file-section-actions）
-  if (result.artifacts && result.artifacts.length) {
-    out[0].actions = result.artifacts.map((a) => ({
-      type: "download", label: "下载 " + a.name, filename: a.name, mime: a.mime || "application/octet-stream", bytes: a.bytes,
-    }));
+  catch (e) {
+    const err = section("traffic-error", "流量分析异常", "warn", "warning", (e && e.message) || String(e));
+    return finalizeTrafficSections([err], []);
   }
-  return out;
+  const out = [];
+  const conclusion = section("traffic-conclusion", "流量可读结论", result.flags.length ? "alert" : "info", result.flags.length ? "flag" : "travel_explore", result.summary || "—");
+  decorateTrafficSection(conclusion, result.flags);
+  out.push(conclusion);
+  for (const s of result.sections) out.push(s);
+  // 产物协议：图片/载荷作为可下载动作挂到结论卡（拖入路径与 op 路径同源，见 main.js file-section-actions）。
+  // 2026-10-28：轨迹图/节奏图同时挂到对应键盘/鼠标 section，并加 preview 动作让报告内联显示，
+  // 不再只给一个下载按钮（鼠标流量解出图片后用户找不到图）。
+  if (result.artifacts && result.artifacts.length) {
+    const imgActs = result.artifacts.map((a) => {
+      const acts = [{ type: "download", label: "下载 " + a.name, filename: a.name, mime: a.mime || "application/octet-stream", bytes: a.bytes }];
+      if ((a.mime || "").startsWith("image/")) {
+        acts.unshift({ type: "preview", label: a.name, filename: a.name, mime: a.mime, bytes: a.bytes });
+      }
+      return acts;
+    });
+    conclusion.actions = imgActs.flat();
+    let kbdN = 0, mouseN = 0;
+    const hasAct = (sec, type, filename) => Array.isArray(sec.actions) && sec.actions.some((x) => x && x.type === type && x.filename === filename);
+    for (const a of result.artifacts) {
+      let id = a.sectionId;
+      if (!id) {
+        const isKbd = /^keyboard_rhythm/i.test(a.name);
+        const isMouse = /^mouse_track/i.test(a.name);
+        if (!isKbd && !isMouse) continue;
+        id = isKbd ? "usb-keyboard-" + (kbdN++) : "usb-mouse-" + (mouseN++);
+      }
+      const sec = out.find((s) => s.id === id);
+      if (!sec) continue;
+      if (!Array.isArray(sec.actions)) sec.actions = [];
+      if ((a.mime || "").startsWith("image/") && !hasAct(sec, "preview", a.name)) {
+        sec.actions.push({ type: "preview", label: a.name, filename: a.name, mime: a.mime, bytes: a.bytes });
+      }
+      if (!hasAct(sec, "download", a.name)) {
+        sec.actions.push({ type: "download", label: "下载 " + a.name, filename: a.name, mime: a.mime || "application/octet-stream", bytes: a.bytes });
+      }
+    }
+  }
+  // 同一套优先级排序：flag / 明文结论 → 键鼠还原 → 流量结论 → 摘要 → 原始帧。
+  return finalizeTrafficSections(out, result.flags);
 }
 
 /** op run 入口：文本/rawBytes → 中文人话报告。 */

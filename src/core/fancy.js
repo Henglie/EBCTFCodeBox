@@ -1,6 +1,6 @@
 /*
  * fancy.js — 花式 / CTF 编码 A 组（cat:'fancy'）。
- * 摩斯电码、培根密码（24/26 字母）、栅栏密码（W 型）、凯撒、ROT13/5/18/47
+ * 摩斯电码、培根密码（24/26 字母）、栅栏密码（W 型锯齿 / Z 型传统分栏）、凯撒、ROT13/5/18/47
  * Atbash、A1Z26、童子军木棍密码（dCode Code Chinois/Samurai）、DNA、敲击码 TapCode、键盘坐标。
  *
  * 算法来源：复刻自 WhatsInYourClipboard 的 ciphers.js / classicalGrid.js /
@@ -109,26 +109,47 @@ function baconDecode(text, p) {
   return out;
 }
 
-// ============ 栅栏密码（W 型 zigzag） ============
-function railFenceEncode(text, p) {
-  const rails = Math.max(2, Number((p && p.rails) || 2));
-  if (rails < 2 || rails >= text.length) return text;
-  const rows = new Array(rails).fill("");
-  let r = 0, dir = 1;
-  for (const ch of text) {   // 按码点迭代：text[i] 是 UTF-16 码元，非 BMP 字符（emoji 等）代理对会被拆散打乱
-    rows[r] += ch;
-    if (r === 0) dir = 1;
-    else if (r === rails - 1) dir = -1;
-    r += dir;
-  }
-  return rows.join("");
+// ============ 栅栏密码（W 型锯齿 / Z 型传统分栏） ============
+// 同一栏数下两种走法结果不同，仅 rails=2 时等价（都是奇偶位分离）：
+//  - W 型：明文沿 0→1→…→(r-1)→…→0 的锯齿轨迹逐字符落行，再逐行读出（zigzag / rail fence）。
+//    W 型可带偏移量 offset：轨迹开头先空出 offset 个格子再落字（dCode「Use an offset of +N
+//    characters」口径），等价于从锯齿周期的第 offset 个位置起写。
+//  - Z 型：传统分栏（百度百科「栅栏密码」、CTF「传统型（Z型）」口径）——明文按列自上而下
+//    写入 r 行，再逐行读出；等价于「每 r 个字符一组，取每组第 i 个字符依次拼接」。Z 型无偏移量。
+const RAIL_MIN = 2;
+const RAIL_MAX = 64;
+const RAIL_OFFSET_MAX = 64;
+
+/** 栏数：空值取默认 2；其余必须是 2..64 的整数（不把 0/NaN 静默当默认）。 */
+function railRails(v) {
+  if (v === undefined || v === null || v === "") return 2;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < RAIL_MIN || n > RAIL_MAX)
+    throw new Error(`栅栏密码：栏数须为 ${RAIL_MIN}..${RAIL_MAX} 的整数（当前 ${v}）。`);
+  return n;
 }
-function railFenceDecode(text, p) {
-  const rails = Math.max(2, Number((p && p.rails) || 2));
-  if (rails < 2 || rails >= text.length) return text;
-  const chars = [...text];   // 按码点切分（与 encode 的 for-of 对称），避免代理对被拆散
-  const len = chars.length;
- // 算 W 型 pattern
+
+/** 模式：w = W 型锯齿（默认，兼容旧行为）；z = Z 型传统分栏。 */
+function railMode(p) {
+  const raw = p && p.mode;
+  const m = String(raw === undefined || raw === null || raw === "" ? "w" : raw).toLowerCase();
+  if (m !== "w" && m !== "z")
+    throw new Error(`栅栏密码：未知模式 "${m}"（仅支持 w=W 型锯齿 / z=Z 型传统分栏）。`);
+  return m;
+}
+
+/** W 型偏移量：空值取 0；其余必须是 0..64 的整数。 */
+function railOffset(p) {
+  const raw = p && p.offset;
+  if (raw === undefined || raw === null || raw === "") return 0;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0 || n > RAIL_OFFSET_MAX)
+    throw new Error(`栅栏密码：偏移量须为 0..${RAIL_OFFSET_MAX} 的整数（当前 ${raw}）。`);
+  return n;
+}
+
+/** W 型 zigzag 的逐字符行号序列。 */
+function railWPattern(len, rails) {
   const pattern = new Array(len);
   let r = 0, dir = 1;
   for (let i = 0; i < len; i++) {
@@ -137,24 +158,71 @@ function railFenceDecode(text, p) {
     else if (r === rails - 1) dir = -1;
     r += dir;
   }
- // 每行字符数
+  return pattern;
+}
+
+function railFenceEncode(text, p) {
+  const rails = railRails(p && p.rails);
+  const mode = railMode(p);
+  const offset = railOffset(p);
+  const chars = [...text];   // 按码点迭代：text[i] 是 UTF-16 码元，非 BMP 字符（emoji 等）代理对会被拆散打乱
+  if (rails >= chars.length) return text;   // 栏数 ≥ 长度时无有效换位
+  if (mode === "z") {
+    if (offset !== 0)
+      throw new Error("栅栏密码：Z 型（传统分栏）没有偏移量，请把偏移量设为 0 或改用 W 型。");
+    // Z 型：按列写入（第 i 个字符落 i % rails 行），逐行读出
+    const rows = Array.from({ length: rails }, () => []);
+    for (let i = 0; i < chars.length; i++) rows[i % rails].push(chars[i]);
+    return rows.map((row) => row.join("")).join("");
+  }
+  // W 型：锯齿轨迹落行（前 offset 格空置），逐行读出
+  const pattern = railWPattern(chars.length + offset, rails);
+  const rows = Array.from({ length: rails }, () => []);
+  for (let i = 0; i < chars.length; i++) rows[pattern[offset + i]].push(chars[i]);
+  return rows.map((row) => row.join("")).join("");
+}
+
+function railFenceDecode(text, p) {
+  const rails = railRails(p && p.rails);
+  const mode = railMode(p);
+  const offset = railOffset(p);
+  const chars = [...text];   // 按码点切分（与 encode 的 for-of 对称），避免代理对被拆散
+  const len = chars.length;
+  if (rails >= len) return text;
+  if (mode === "z") {
+    if (offset !== 0)
+      throw new Error("栅栏密码：Z 型（传统分栏）没有偏移量，请把偏移量设为 0 或改用 W 型。");
+    // Z 型：各行长度 = ceil((len - r) / rails)，按段回填后按 i % rails 交错还原
+    const rows = [];
+    let idx = 0;
+    for (let r = 0; r < rails; r++) {
+      const count = Math.ceil((len - r) / rails);
+      rows.push(chars.slice(idx, idx + count));
+      idx += count;
+    }
+    const out = new Array(len);
+    for (let i = 0; i < len; i++) out[i] = rows[i % rails][Math.floor(i / rails)];
+    return out.join("");
+  }
+  const pattern = railWPattern(len + offset, rails);
+  // 每行字符数（只统计偏移之后实际落字的位置）
   const counts = new Array(rails).fill(0);
-  for (const row of pattern) counts[row]++;
- // 切片
+  for (let i = offset; i < pattern.length; i++) counts[pattern[i]]++;
+  // 切片
   const rows = [];
   let idx = 0;
-  for (let i = 0; i < rails; i++) {
-    rows.push(chars.slice(idx, idx + counts[i]));
-    idx += counts[i];
+  for (let r = 0; r < rails; r++) {
+    rows.push(chars.slice(idx, idx + counts[r]));
+    idx += counts[r];
   }
- // 按 pattern 重组
-  let out = "";
+  // 按 pattern 重组（从偏移位置起读）
   const ptr = new Array(rails).fill(0);
+  const out = new Array(len);
   for (let i = 0; i < len; i++) {
-    const row = pattern[i];
-    out += rows[row][ptr[row]++];
+    const row = pattern[offset + i];
+    out[i] = rows[row][ptr[row]++];
   }
-  return out;
+  return out.join("");
 }
 
 // ============ 凯撒（参数移位量） ============
@@ -456,6 +524,39 @@ function keyboardDecode(text, p) {
   }).join("");
 }
 
+// ============ 云影密码 / 01248 ============
+// 0 作字母分隔；每段只由 1/2/4/8 组成，数字和即 A=1..Z=26。
+function yunyingDecode(text) {
+  const s = String(text == null ? "" : text).trim();
+  if (!s) throw new Error("云影密码输入为空");
+  const out = [];
+  for (const part of s.split("0")) {
+    if (!part) continue;
+    if (!/^[1248]+$/.test(part)) throw new Error("云影密码每段只能由 1/2/4/8 组成（0 为分隔）");
+    let n = 0;
+    for (const ch of part) n += Number(ch);
+    if (n < 1 || n > 26) throw new Error(`云影密码段「${part}」数字和 ${n} 超出 A-Z（1-26）`);
+    out.push(A_UP[n - 1]);
+  }
+  return out.join("");
+}
+
+function yunyingEncode(text) {
+  const s = String(text == null ? "" : text).toUpperCase().replace(/\s+/g, "");
+  if (!s) throw new Error("云影密码明文为空");
+  if (!/^[A-Z]+$/.test(s)) throw new Error("云影密码只支持 A-Z 字母");
+  const parts = [];
+  for (const ch of s) {
+    let n = A_UP.indexOf(ch) + 1;
+    let part = "";
+    for (const w of [8, 4, 2, 1]) {
+      while (n >= w) { part += String(w); n -= w; }
+    }
+    parts.push(part);
+  }
+  return parts.join("0");
+}
+
 // ---- 注册 ----
 register({
   id: "morse", cat: "fancy", name: "摩斯电码", desc: "ITU-R M.1677（字母/数字/标点，/ 分词）",
@@ -478,9 +579,22 @@ register({
 });
 
 register({
-  id: "railFence", cat: "classic", name: "栅栏密码", desc: "W 型 zigzag（参数：栏数）",
+  id: "yunying", cat: "fancy", name: "云影密码（01248）",
+  desc: "01248/云影密码：0 分隔字母，1/2/4/8 数字和映射 A=1..Z=26；encode 仅接受 A-Z，decode 严格校验每段数字和 1-26。",
+  encode: yunyingEncode, decode: yunyingDecode,
+  detect: (t) => (/^[01248\s]+$/.test(t.trim()) && /0/.test(t) && t.replace(/[^01248]/g, "").length >= 2 ? 0.45 : 0),
+});
+
+register({
+  id: "railFence", cat: "classic", name: "栅栏密码", desc: "两种走法：W 型锯齿 zigzag（可带偏移量）/ Z 型传统分栏（按列写、按行读）；参数：栏数 + 模式 + 偏移量",
   params: [
-    { key: "rails", label: "栏数", type: "number", default: 2, placeholder: "2-10" },
+    { key: "rails", label: "栏数", type: "number", default: 2, placeholder: "2-64" },
+    { key: "mode", label: "模式", type: "select", default: "w",
+      options: [
+        { value: "w", label: "W 型（锯齿 zigzag）" },
+        { value: "z", label: "Z 型（传统分栏）" },
+      ] },
+    { key: "offset", label: "偏移量（仅 W 型）", type: "number", default: 0, placeholder: "0-64" },
   ],
   encode: railFenceEncode, decode: railFenceDecode,
 });
@@ -563,6 +677,7 @@ register({
 export {
   morseEncode, morseDecode, MORSE, MORSE_REV,
   baconEncode, baconDecode, BACON24, BACON26, BACON24_ALPHA,
+  yunyingEncode, yunyingDecode,
   railFenceEncode, railFenceDecode,
   caesarShift, rot13, rot5, rot18, rot47, atbash,
   a1z26Encode, a1z26Decode,

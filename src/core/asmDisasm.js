@@ -2,6 +2,9 @@
  * asmDisasm.js — 机器码反汇编核心（供「快速换算 · 机器码&汇编互转」面板调用，非独立 op）。
  *
  * 引擎：WASM 反汇编引擎（本地懒加载、零外发、失败明确报错；引擎与许可信息仅存工程文档 PROGRESS.md）。
+ *       实际可用的只有 x86(x86-64)/ARM(Thumb)/ARM64——随包 capstone wasm 只编译了这三族；
+ *       glue 里的 CS_ARCH_* 常量是头文件全集，不能当作「已支持」的证据（MIPS/PPC/SPARC/
+ *       SystemZ/M68K/TMS320C64X/XCore 均 cs_open 报 CS_ERR_ARCH；有的架构连常量都没有）。
  * 资产：public/wasm/vendor/ 下 glue + wasm（emscripten MODULARIZE 产物）。
  * 加载：懒加载（单例 promise，不进首屏），零外发（仅本地相对路径 import，绝不 CDN）。
  * 降级：WASM 缺失/加载失败 → 给明确错误消息，不假装成功。
@@ -28,43 +31,24 @@ async function loadEngineModule() {
 function engineAvailable() { return _available; }
 
 // ---- 架构映射：UI 值 → {arch, mode}（引擎 Const；mode 组合见下） ----
-const ARCH_MAP = {
+// 白名单只列经过实测 cs_open/cs_disasm 成功的架构；不要凭 glue 里的常量增项。
+export const ARCH_MAP = {
   "x86":      { arch: "CS_ARCH_X86",     mode: "CS_MODE_32" },
   "x86-64":   { arch: "CS_ARCH_X86",     mode: "CS_MODE_64" },
   "arm":      { arch: "CS_ARCH_ARM",     mode: "CS_MODE_ARM" },
   "arm-thumb":{ arch: "CS_ARCH_ARM",     mode: "CS_MODE_THUMB" },
   "arm64":    { arch: "CS_ARCH_ARM64",   mode: "CS_MODE_ARM" },
-  "mips":     { arch: "CS_ARCH_MIPS",    mode: "CS_MODE_MIPS32" },
-  "mips64":   { arch: "CS_ARCH_MIPS",    mode: "CS_MODE_MIPS64" },
-  "riscv":    { arch: "CS_ARCH_RISCV",   mode: "CS_MODE_RISCV64" },
-  "ppc":      { arch: "CS_ARCH_PPC",     mode: "CS_MODE_32" },
-  "ppc64":    { arch: "CS_ARCH_PPC",     mode: "CS_MODE_64" },
-  "sparc":    { arch: "CS_ARCH_SPARC",   mode: "CS_MODE_32" },
-  "systemz":  { arch: "CS_ARCH_SYSTEMZ", mode: "CS_MODE_32" },
-  "m68k":     { arch: "CS_ARCH_M68K",    mode: "CS_MODE_32" },
-  "tms320c64x":{ arch: "CS_ARCH_TMS320C64X", mode: "CS_MODE_32" },
-  "xcore":    { arch: "CS_ARCH_XCORE",   mode: "CS_MODE_32" },
-  "evm":      { arch: "CS_ARCH_EVM",     mode: "CS_MODE_32" },
 };
 
-const ARCH_OPTIONS = [
+export const ARCH_OPTIONS = [
   { value: "x86", label: "x86 (32-bit)" },
   { value: "x86-64", label: "x86-64 (64-bit)" },
   { value: "arm", label: "ARM" },
   { value: "arm-thumb", label: "ARM Thumb" },
   { value: "arm64", label: "ARM64 (AArch64)" },
-  { value: "mips", label: "MIPS (32)" },
-  { value: "mips64", label: "MIPS (64)" },
-  { value: "riscv", label: "RISC-V (64)" },
-  { value: "ppc", label: "PowerPC (32)" },
-  { value: "ppc64", label: "PowerPC (64)" },
-  { value: "sparc", label: "SPARC" },
-  { value: "systemz", label: "SystemZ" },
-  { value: "m68k", label: "M68K" },
-  { value: "tms320c64x", label: "TMS320C64x" },
-  { value: "xcore", label: "XCore" },
-  { value: "evm", label: "EVM" },
 ];
+
+export const SUPPORTED_ARCHS = Object.freeze(ARCH_OPTIONS.map((o) => o.value));
 
 // ---- 输入编码 ----
 function decodeInput(text, enc, rawBytes) {
@@ -100,9 +84,12 @@ export async function asmDisasmRun({ text, params, rawBytes }) {
   const C = glue.Const;
   const key = String(params.arch || "x86");
   const spec = ARCH_MAP[key];
-  if (!spec) throw new Error("未知架构: " + key);
+  if (!spec) throw new Error("不支持的架构: " + key + "（可用: " + SUPPORTED_ARCHS.join(", ") + "）");
   const arch = C[spec.arch];
   const mode = C[spec.mode];
+  if (arch === undefined || mode === undefined) {
+    throw new Error("引擎缺少架构常量 " + spec.arch + "/" + spec.mode + "，当前 wasm 构建不支持该架构");
+  }
   const bytes = decodeInput(text, params.enc || "hex", rawBytes);
   const base = Number(params.base) || 0;
 

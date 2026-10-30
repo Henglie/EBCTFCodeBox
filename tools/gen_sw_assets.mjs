@@ -22,7 +22,7 @@ async function gitLsFiles() {
 
 const runtimeExts = new Set([
   ".js", ".css", ".json", ".wasm", ".woff2", ".png", ".webp",
-  ".jpg", ".svg", ".ico", ".txt", ".bin", ".dat",
+  ".jpg", ".svg", ".ico", ".txt", ".bin", ".dat", ".tsv",
 ]);
 
 // --cached：已跟踪文件；--others --exclude-standard：尚未 git add 但不被 .gitignore 忽略的新文件。
@@ -64,6 +64,10 @@ const EXCLUDE_RULES = [
   // 首次在线使用后由 SW runtime cache 回填，此后离线可用——与 sw.js 的
   // RUNTIME_CACHE_FIRST "/src/vendor/" 两处保持同步。两份许可 .txt 仍留预缓存。
   [/^src\/vendor\/(codemirror\.bundle\.js|openpgp\.min\.js|bwip-js\.js|bwipp\.js)$/, "编辑器/PGP/条码内核（按功能懒加载）"],
+  // 官方插件包（dCode 补全集等）：随发行包分发但默认不启用，用户在插件面板
+  // 显式加载时才动态 import。首次在线加载后由 SW runtime cache 回填——
+  // 与 sw.js 的 RUNTIME_CACHE_FIRST "/addons/" 两处保持同步。
+  [/^addons\//, "官方插件包（默认不启用，用户显式加载）"],
   // 语言包：i18n/index.js 仅静态 import zh；en 已改按需 dynamic import（ensureLoaded/_loadEn，
   // boot 后 warmEnglish 空闲预热），仍留预缓存保离线切换；其余语言同上下文动态加载
   [/^src\/i18n\/locales\//, "i18n 语言包（切语言才动态 import）"],

@@ -15,38 +15,42 @@ import { register } from "./registry.js";
 
 const BRIDGE_URL = "http://127.0.0.1:8181";  // 127.0.0.1 保证命中 bridge 监听的 IPv4 地址（localhost 可能解析到 ::1）
 const BRIDGE_TIMEOUT = 70000; // 略大于 bridge 的 60s
+const HEALTH_TIMEOUT = 1500;  // 探活必须快：桥未起时立刻返回，不拖启动
 
-// 探测 bridge 是否在线。先试 /api/health，404 则 fallback 到 /api/tools。
-// localhost 可能解析到 ::1（IPv6）而 bridge 监听在 127.0.0.1；此处同时试两个地址。
+async function fetchJsonWithTimeout(url, ms, opts) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const r = await fetch(url, { ...(opts || {}), signal: ctrl.signal });
+    if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
+    try {
+      return { ok: true, json: await r.json() };
+    } catch {
+      return { ok: false, error: "响应不是 JSON（8181 可能被其他程序占用）" };
+    }
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// 探测 bridge 是否在线。先试 /api/health（统一返回 ok:true），老桥 404 时
+// fallback 到 /api/tools 并补 ok:true。只打 127.0.0.1，避免 localhost→::1 空等。
 // 不抛错，返回 {ok, win, tools} 或 {ok:false, error}。
 async function bridgeHealth() {
-  const urls = [
-    "http://127.0.0.1:8181/api/health",
-    "http://localhost:8181/api/health",
-    "http://127.0.0.1:8181/api/tools",
-    "http://localhost:8181/api/tools",
-  ];
-  for (const url of urls) {
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 2000);
-      const r = await fetch(url, { signal: ctrl.signal });
-      clearTimeout(t);
-      if (r.ok) {
-        try { return await r.json(); } catch { /* fall through */ }
-      }
-    } catch { /* 连接失败/超时，继续试下一个 */ }
+  let lastErr = "";
+  const health = await fetchJsonWithTimeout(`${BRIDGE_URL}/api/health`, HEALTH_TIMEOUT, { cache: "no-store" });
+  if (health.ok && health.json && health.json.ok === true) return health.json;
+  if (!health.ok) lastErr = health.error;
+  else lastErr = "health 响应异常";
+
+  const tools = await fetchJsonWithTimeout(`${BRIDGE_URL}/api/tools`, HEALTH_TIMEOUT, { cache: "no-store" });
+  if (tools.ok && tools.json && typeof tools.json === "object") {
+    return { ok: true, ...tools.json };
   }
-  // 全失败时再发一次原始 health 请求取具体错误信息
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 3000);
-    const r = await fetch(`${BRIDGE_URL}/api/health`, { signal: ctrl.signal });
-    clearTimeout(t);
-    return { ok: false, error: `health HTTP ${r.status}` };
-  } catch (e) {
-    return { ok: false, error: String(e) };
-  }
+  if (!tools.ok) lastErr = tools.error;
+  return { ok: false, error: `本地桥未运行（127.0.0.1:8181）：${lastErr || "无法连接"}` };
 }
 
 // 调用 bridge /api/run。返回 {ok, stdout, stderr, exitCode} 或 {ok:false, error}。
@@ -60,17 +64,29 @@ async function bridgeRun(tool, args, stdinBytes, filesMap) {
     for (const [k, v] of Object.entries(filesMap)) f[k] = b64encode(v);
     body.files = f;
   }
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), BRIDGE_TIMEOUT);
   try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), BRIDGE_TIMEOUT);
     const r = await fetch(`${BRIDGE_URL}/api/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       signal: ctrl.signal,
     });
-    clearTimeout(t);
-    const j = await r.json();
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`;
+      try {
+        const j = await r.json();
+        if (j && j.error) msg += ": " + j.error;
+      } catch { /* 非 JSON 错误体 */ }
+      return { ok: false, error: msg };
+    }
+    let j;
+    try {
+      j = await r.json();
+    } catch {
+      return { ok: false, error: "bridge 返回非 JSON 响应" };
+    }
     if (!j.ok) return { ok: false, error: j.error || "bridge error" };
     return {
       ok: true,
@@ -79,7 +95,13 @@ async function bridgeRun(tool, args, stdinBytes, filesMap) {
       stderr: b64decodeText(j.stderr),
     };
   } catch (e) {
-    return { ok: false, error: String(e) };
+    const aborted = e && (e.name === "AbortError" || e.name === "TimeoutError");
+    return {
+      ok: false,
+      error: aborted ? `本地桥 ${Math.round(BRIDGE_TIMEOUT / 1000)}s 未返回` : String((e && e.message) || e),
+    };
+  } finally {
+    clearTimeout(t);
   }
 }
 

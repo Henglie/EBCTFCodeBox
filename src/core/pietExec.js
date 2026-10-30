@@ -18,17 +18,31 @@
  * 执行语义（对齐 npiet / David Morgan-Mar Piet 规范）：
  * 指令由「色相变化步数(0-5)」×「明度变化步数(0-2)」决定（Piet 官方表）。
  * 受阻时先 toggle CC 再转 DP，交替最多 8 次，每次**重选出口 codel**；
- * 白块滑行不执行指令，受阻同样 CC/DP 交替重试；8 次全失败 → 程序终止。
- * 单向 run（图灵完备语言无逆运算，只执行）。步数上限防死循环。
+ * 白块按 npiet 口径逐 codel 直线滑行（不执行指令），撞黑/边界时退回最后一个白
+ * codel 并空转；从白 codel 出发受阻则同时翻转 CC 与 DP；8 次全失败 → 程序终止。
+ * 单向 run（图灵完备语言无逆运算，只执行）。
+ *
+ * 可中断（R11）：白块滑行也计入步数；总步数上限 + 墙钟超时 + 「已有输出后连续 N
+ * 步无新输出」停顿检测，任一触发即强制终止并保留已输出内容。输出每产生一个字符/
+ * 数字就立即写入缓冲并触发 onOutput 回调，不等到执行结束。
+ * 图像输入默认按 npiet 口径自动探测 codel 尺寸（0 = 自动，>=1 = 指定）。
  *
  * 算法来源：David Morgan-Mar Piet 规范（dangermouse.net/esoteric/piet.html），
- * 对拍基准 npiet v1.3（tools/exe/cli/npiet）。
+ * 对拍基准 npiet v1.3（资料/参考/.../res/cmd/npiet/npiet.exe）。
  */
 import { register } from "./registry.js";
 import { inflateRaw } from "./pcapDeep.js";
 
-const MAX_STEPS = 1_000_000;
+const MAX_STEPS = 2_000_000;   // 总步数上限（含白块滑行），主线程同步循环也不会无限跑
+const MAX_WALL_MS = 3000;      // 墙钟超时（毫秒）
+const STALL_STEPS = 500_000;   // 已有输出后，连续多少步没有新输出视为疑似死循环
 const MAX_OUT = 100_000;
+const STALL_MSG = "已检测到输出后进程持续无新输出，疑似死循环，已强制终止";
+
+const nowMs = () =>
+  (typeof performance !== "undefined" && typeof performance.now === "function")
+    ? performance.now()
+    : Date.now();
 
 // 18 色：色相(hue) 0..5 × 明度(light) 0..2。light: 0=亮,1=正常,2=暗。
 // 官方 RGB 表。
@@ -206,6 +220,42 @@ function classifyPiet(r, g, b) {
   return { kind: "white" }; // npiet 默认：未知颜色按白处理（-uu/-ub 未启用）
 }
 
+/**
+ * npiet 口径自动探测 codel 尺寸：全图横向/纵向同色连续像素的最短游程。
+ * 只有能整除宽高且 >=2 才采用，否则退回 1（避免把普通大色块误判成缩放图）。
+ */
+function guessCodelSize(rgba, w, h) {
+  // 先按像素分类成 0..17 色 + 18 白 + 19 黑，避免横纵扫描重复分类。
+  const keys = new Uint8Array(w * h);
+  for (let i = 0, o = 0; i < keys.length; i++, o += 4) {
+    if (rgba[o + 3] === 0) { keys[i] = 18; continue; }
+    const c = classifyPiet(rgba[o], rgba[o + 1], rgba[o + 2]);
+    keys[i] = c.kind === "color" ? c.hue * 3 + c.light : (c.kind === "black" ? 19 : 18);
+  }
+  let minRun = Math.min(w, h);
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    let prev = -1, run = 0;
+    for (let x = 0; x < w; x++) {
+      const k = keys[row + x];
+      if (k === prev) run++;
+      else { if (prev !== -1 && run < minRun) minRun = run; prev = k; run = 1; }
+    }
+    if (run < minRun) minRun = run;
+  }
+  for (let x = 0; x < w; x++) {
+    let prev = -1, run = 0;
+    for (let y = 0; y < h; y++) {
+      const k = keys[y * w + x];
+      if (k === prev) run++;
+      else { if (prev !== -1 && run < minRun) minRun = run; prev = k; run = 1; }
+    }
+    if (run < minRun) minRun = run;
+  }
+  if (minRun >= 2 && minRun <= 64 && w % minRun === 0 && h % minRun === 0) return minRun;
+  return 1;
+}
+
 /** PNG RGBA → cell 网格（codelSize 取样，默认 1） */
 function imageToCells(rgba, w, h, codelSize) {
   const cs = Math.max(1, Math.floor(codelSize || 1));
@@ -236,61 +286,80 @@ const CMD_TABLE = [
 ];
 
 // ============ 主执行 ============
-function pietRunGrid(text) {
-  return pietRunCells(parseGrid(text));
+function resolveLimit(v, def) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return def;
+  return Math.max(1, Math.floor(n));
 }
 
-/** 解释器核心：{grid, h, w} → {out, stack, steps}（文本网格与图像输入共用） */
-function pietRunCells({ grid, h, w }) {
+function reasonText(res) {
+  switch (res.reason) {
+    case "max-steps": return "达到最大步数限制（" + res.maxSteps + " 步），已强制终止";
+    case "timeout": return "达到墙钟超时限制（" + res.timeLimitMs + " ms），已强制终止";
+    case "stall": return STALL_MSG;
+    default: return "程序正常终止（受阻 8 次，无路可走）";
+  }
+}
+
+function pietRunGrid(text, opts = {}) {
+  return pietRunCells(parseGrid(text), opts);
+}
+
+/**
+ * 解释器核心：{grid, h, w} → {out, stack, steps, cmds, reason, ...}
+ * opts: { maxSteps, timeLimitMs, stallSteps, maxOut, onOutput }
+ * steps 为 npiet exec_step 口径（白块滑行也计入）；cmds 为实际执行指令数。
+ * 任一限制触发都会返回已产生的 out（不丢输出）。
+ */
+function pietRunCells(cells, opts = {}) {
+  const { grid, h, w } = cells;
+  const o = opts || {};
+  const maxSteps = resolveLimit(o.maxSteps, MAX_STEPS);
+  const timeLimitMs = resolveLimit(o.timeLimitMs, MAX_WALL_MS);
+  const stallSteps = resolveLimit(o.stallSteps, STALL_STEPS);
+  const maxOut = resolveLimit(o.maxOut, MAX_OUT);
+  const onOutput = typeof o.onOutput === "function" ? o.onOutput : null;
+
   const sameColor = (a, b) =>
     a.kind === b.kind &&
     (a.kind !== "color" || (a.hue === b.hue && a.light === b.light));
-  const isBlocked = (x, y) =>
-    x < 0 || y < 0 || x >= w || y >= h || grid[y][x].kind === "black";
 
- // flood fill 求 (x,y) 所在同色块的所有 codel
-  function blockOf(x, y) {
+  const cellAt = (x, y) =>
+    (x < 0 || y < 0 || x >= w || y >= h) ? null : grid[y][x];
+
+  // 静态色块缓存：同一 codel 只 flood fill 一次；出口 codel 按 (dp,cc) 记忆化。
+  const blockCache = new Map(); // cellKey → block {cells, size, exits}
+  function getBlock(x, y) {
+    const key = y * w + x;
+    const hit = blockCache.get(key);
+    if (hit) return hit;
     const target = grid[y][x];
-    const seen = new Set();
     const cells = [];
+    const seen = new Set([key]);
     const st = [[x, y]];
-    seen.add(y * w + x);
     while (st.length) {
-      const [cx, cy] = st.pop();
-      cells.push([cx, cy]);
-      for (const [nx, ny] of [[cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]]) {
+      const [bx, by] = st.pop();
+      cells.push([bx, by]);
+      for (const [nx, ny] of [[bx+1,by],[bx-1,by],[bx,by+1],[bx,by-1]]) {
         if (nx<0||ny<0||nx>=w||ny>=h) continue;
-        const key = ny * w + nx;
-        if (seen.has(key)) continue;
-        if (sameColor(grid[ny][nx], target)) { seen.add(key); st.push([nx, ny]); }
+        const nk = ny * w + nx;
+        if (seen.has(nk)) continue;
+        if (sameColor(grid[ny][nx], target)) { seen.add(nk); st.push([nx, ny]); }
       }
     }
-    return cells;
+    const blk = { cells, size: cells.length, exits: new Map() };
+    for (const [bx, by] of cells) blockCache.set(by * w + bx, blk);
+    return blk;
   }
 
- // 在色块中按 DP/CC 选出口 codel
- // DP: 0=右,1=下,2=左,3=上 CC: 0=左,1=右
-  function chooseExit(cells, dp, cc) {
- // 先按 DP 方向取极值边，再按 CC 取该边的极值角
-    let best = null;
-    for (const [cx, cy] of cells) {
-      if (best === null) { best = [cx, cy]; continue; }
-      if (betterCodel(cx, cy, best[0], best[1], dp, cc)) best = [cx, cy];
-    }
-    return best;
-  }
   function betterCodel(x, y, bx, by, dp, cc) {
- // 主方向优先
-    const primary = (v, axis, dir) => dir === 0 ? v : -v; // 占位
- // DP 主轴取极值
     switch (dp) {
       case 0: if (x !== bx) return x > bx; break; // 右：x 最大
       case 1: if (y !== by) return y > by; break; // 下：y 最大
       case 2: if (x !== bx) return x < bx; break; // 左：x 最小
       case 3: if (y !== by) return y < by; break; // 上：y 最小
     }
- // 同主轴，按 CC 取次轴。CC 相对 DP 左/右手。
- // 次轴方向 = DP 顺时针(右CC) 或逆时针(左CC) 转 90°
+    // 同主轴按 CC 取次轴：DP 顺时针(右CC)/逆时针(左CC) 转 90°
     const ccDir = (dp + (cc === 1 ? 1 : 3)) % 4;
     switch (ccDir) {
       case 0: return x > bx;
@@ -301,17 +370,45 @@ function pietRunCells({ grid, h, w }) {
     return false;
   }
 
+  function chooseExit(blk, dp, cc) {
+    const ek = dp * 2 + cc;
+    const hit = blk.exits.get(ek);
+    if (hit) return hit;
+    let best = blk.cells[0];
+    for (let i = 1; i < blk.cells.length; i++) {
+      const [x, y] = blk.cells[i];
+      if (betterCodel(x, y, best[0], best[1], dp, cc)) best = blk.cells[i];
+    }
+    blk.exits.set(ek, best);
+    return best;
+  }
+
   const DXY = [[1,0],[0,1],[-1,0],[0,-1]]; // dp 方向增量
 
- // 规范：程序从最左上 codel 开始，DP=右，CC=左（npiet 口径；起始黑块 → 无输出终止）。
   const stack = [];
   let out = "";
+  let outTruncated = false;
+  let steps = 0, cmds = 0, stepsSinceOutput = 0;
   let dp = 0, cc = 0;
   let cx = 0, cy = 0;
-  let steps = 0;
-  let terminated = grid[0][0].kind === "black";
+  let reason = "terminated";
+  const startedAt = nowMs();
 
- // 指令实现
+  // 输出即时 flush：每个字符/数字一产生就写进 out，并回调 onOutput。
+  function emit(s) {
+    if (!s) return;
+    if (out.length >= maxOut) { outTruncated = true; return; }
+    const room = maxOut - out.length;
+    const chunk = s.length > room ? s.slice(0, room) : s;
+    out += chunk;
+    if (chunk.length < s.length) outTruncated = true;
+    stepsSinceOutput = 0;
+    if (onOutput) {
+      try { onOutput(chunk, out); } catch { /* 回调异常不影响解释 */ }
+    }
+  }
+
+  // 指令实现
   function doCmd(name, blockSize) {
     const pop = () => stack.pop();
     switch (name) {
@@ -344,88 +441,104 @@ function pietRunCells({ grid, h, w }) {
       }
       case "innum": break;  // 无 stdin
       case "inchar": break; // 无 stdin
-      case "outnum": { const a=pop(); if(a==null)break; if(out.length<MAX_OUT) out += String(a); break; }
-      case "outchar": { const a=pop(); if(a==null)break; if(out.length<MAX_OUT) out += String.fromCharCode(a & 0xFF); break; } // putchar 字节口径（对齐 npiet）
+      case "outnum": { const a=pop(); if(a==null)break; emit(String(a)); break; }
+      case "outchar": { const a=pop(); if(a==null)break; emit(String.fromCharCode(a & 0xFF)); break; } // putchar 字节口径（对齐 npiet）
     }
   }
   function push2(a,b){ if(a!=null)stack.push(a); if(b!=null)stack.push(b); }
 
- // 受阻重试：toggle CC → 转 DP 交替（最多 8 次，每次按规范**重选出口 codel**）
-  function retryMoveFromBlock(cells) {
-    for (let t = 1; t <= 8; t++) {
-      if (t % 2 === 1) cc ^= 1; else dp = (dp + 1) % 4;
-      const [ex, ey] = chooseExit(cells, dp, cc);
-      const nx = ex + DXY[dp][0], ny = ey + DXY[dp][1];
-      if (!isBlocked(nx, ny)) return [nx, ny];
-    }
-    return null; // 8 次全失败 → 程序终止
-  }
-
- // 白块滑行：不执行指令；出口沿 DP 前进，受阻同样 CC/DP 交替重试；返回落点（有色块坐标）
-  function slideWhite(sx0, sy0) {
-    let sx = sx0, sy = sy0;
-    while (true) {
-      const wBlock = blockOf(sx, sy);
-      const [wex, wey] = chooseExit(wBlock, dp, cc);
-      let nx = wex + DXY[dp][0], ny = wey + DXY[dp][1];
-      if (isBlocked(nx, ny)) {
-        const moved = retryMoveFromBlock(wBlock);
-        if (!moved) return null;
-        nx = moved[0]; ny = moved[1];
-      }
-      sx = nx; sy = ny;
-      if (grid[sy][sx].kind !== "white") return [sx, sy]; // 滑出白块（黑已被 isBlocked 拦住，不会落到这）
-    }
-  }
-
- // 主循环（npiet 语义：无状态去重，靠受阻 8 次终止 + 步数护栏；合法循环程序可正常跑）
-  while (!terminated && steps < MAX_STEPS) {
+  // npiet piet_step 口径：成功走一步返回 0，8 次受阻返回 -1（程序终止）。
+  function pietStep() {
     const curCell = grid[cy][cx];
-    if (curCell.kind === "black") break; // 不应发生
-    if (curCell.kind === "white") {
-      const land = slideWhite(cx, cy);
-      if (!land) terminated = true;
-      else { cx = land[0]; cy = land[1]; }
-      continue;
-    }
-    const block = blockOf(cx, cy);
-    const blockSize = block.length;
-    const [ex, ey] = chooseExit(block, dp, cc);
-    let nx = ex + DXY[dp][0], ny = ey + DXY[dp][1];
+    if (curCell.kind === "black") return -1;
+    for (let tries = 0; tries < 8; tries++) {
+      let nx, ny, blockSize;
+      if (curCell.kind === "white") {
+        nx = cx; ny = cy; blockSize = 1; // 白 codel 本身：只前进一格
+      } else {
+        const blk = getBlock(cx, cy);
+        blockSize = blk.size;
+        [nx, ny] = chooseExit(blk, dp, cc);
+      }
+      let ax = nx + DXY[dp][0], ay = ny + DXY[dp][1];
+      let nextCell = cellAt(ax, ay);
+      let whiteCrossed = curCell.kind === "white";
 
-    if (isBlocked(nx, ny)) {
-      const moved = retryMoveFromBlock(block);
-      if (!moved) break; // 程序终止
-      nx = moved[0]; ny = moved[1];
-    }
+      if (nextCell && nextCell.kind === "white") {
+        // 白块内沿 DP 直线滑行，直到非白
+        while (nextCell && nextCell.kind === "white") {
+          ax += DXY[dp][0]; ay += DXY[dp][1];
+          nextCell = cellAt(ax, ay);
+        }
+        whiteCrossed = true;
+        if (!nextCell || nextCell.kind === "black") {
+          // npiet v1.3 默认：撞黑/边界退回最后一个白 codel，本步空转
+          nextCell = { kind: "white" };
+          ax -= DXY[dp][0]; ay -= DXY[dp][1];
+        }
+      }
 
-    const nextCell = grid[ny][nx];
-    if (nextCell.kind === "white") {
-      const land = slideWhite(nx, ny);
-      if (!land) break;
-      cx = land[0]; cy = land[1];
-      continue;
-    }
+      if (!nextCell || nextCell.kind === "black") {
+        // 受阻：从白 codel 出发同时翻 CC+DP；从色块出发按 CC→DP 交替（每次重选出口）
+        if (curCell.kind === "white") { cc ^= 1; dp = (dp + 1) % 4; }
+        else if ((tries & 1) === 0) cc ^= 1;
+        else dp = (dp + 1) % 4;
+        continue;
+      }
 
- // 进入有色块：按色相/明度差执行指令（白滑行路径不执行，已 continue）
-    steps++;
-    const hueDiff = (nextCell.hue - curCell.hue + 6) % 6;
-    const lightDiff = (nextCell.light - curCell.light + 3) % 3;
-    const cmd = CMD_TABLE[hueDiff][lightDiff];
-    if (cmd) doCmd(cmd, blockSize);
-    cx = nx; cy = ny;
+      steps++;
+      stepsSinceOutput++;
+      if (!whiteCrossed) {
+        cmds++;
+        const hueDiff = (nextCell.hue - curCell.hue + 6) % 6;
+        const lightDiff = (nextCell.light - curCell.light + 3) % 3;
+        const cmd = CMD_TABLE[hueDiff][lightDiff];
+        if (cmd) doCmd(cmd, blockSize);
+      }
+      cx = ax; cy = ay;
+      return 0;
+    }
+    return -1; // 8 次全失败 → 程序终止
   }
 
-  return { out, stack, steps };
+  while (true) {
+    if (grid[cy][cx].kind === "black") { reason = "terminated"; break; }
+    if (steps >= maxSteps) { reason = "max-steps"; break; }
+    if (out.length > 0 && stepsSinceOutput >= stallSteps) { reason = "stall"; break; }
+    if ((steps & 511) === 0 && nowMs() - startedAt >= timeLimitMs) { reason = "timeout"; break; }
+    if (pietStep() < 0) { reason = "terminated"; break; }
+  }
+
+  const elapsedMs = Math.max(0, Math.round(nowMs() - startedAt));
+  return {
+    out, stack, steps, cmds, reason,
+    terminated: reason === "terminated",
+    aborted: reason !== "terminated",
+    elapsedMs, stepsSinceOutput, outTruncated,
+    maxSteps, timeLimitMs, stallSteps,
+    codelSize: cells.codelSize,
+    codelAuto: cells.codelAuto,
+  };
+}
+
+function asBytes(v) {
+  return v instanceof Uint8Array ? v : Uint8Array.from(v);
 }
 
 function pietRun(text, p = {}) {
- // 图像输入（npiet 桥补齐）：rawBytes 通道或 base64 PNG 签名
-  let cells = null;
+  p = p || {};
+  const opts = {
+    maxSteps: p.maxSteps,
+    timeLimitMs: p.timeLimitMs,
+    stallSteps: p.stallSteps,
+    onOutput: p.onOutput,
+  };
+  // 图像输入（npiet 桥补齐）：rawBytes 通道或 base64 PNG 签名
+  let res = null;
   if (p && p.rawBytes && p.rawBytes.length) {
-    cells = imageToCellsFromBytes(p.rawBytes, p.codelSize);
+    res = imageToCellsFromBytes(asBytes(p.rawBytes), p.codelSize, opts);
   }
-  if (!cells && typeof text === "string") {
+  if (!res && typeof text === "string") {
     const trimmed = text.trim();
     if (/^(data:image|iVBORw0KGgo)/.test(trimmed.slice(0, 20))) {
       // base64（可带 dataURL 前缀）→ PNG 字节（iVBORw0KGgo = PNG 签名的 base64 前缀）
@@ -435,37 +548,63 @@ function pietRun(text, p = {}) {
       else bin = Buffer.from(b64, "base64").toString("binary");
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      cells = imageToCellsFromBytes(bytes, p.codelSize);
+      res = imageToCellsFromBytes(bytes, p.codelSize, opts);
     }
   }
-  if (!cells) cells = pietRunGrid(text);
-  const { out, stack, steps } = cells;
+  if (!res) res = pietRunGrid(text, opts);
+  const { out, stack, steps, cmds } = res;
   const lines = [];
   lines.push(out === "" ? "(无输出)" : out);
   lines.push("");
   lines.push("--- 执行摘要 ---");
-  lines.push("步数: " + steps + (steps >= MAX_STEPS ? " (达上限)" : ""));
+  lines.push("步数: " + steps + (res.reason === "max-steps" ? "（达上限 " + res.maxSteps + "）" : ""));
+  lines.push("指令数: " + cmds);
+  lines.push("耗时: " + res.elapsedMs + " ms");
+  lines.push("终止原因: " + reasonText(res));
+  if (res.codelSize) {
+    lines.push("codel 尺寸: " + res.codelSize + (res.codelAuto ? "（自动探测）" : "（指定）"));
+  }
+  if (res.aborted) {
+    lines.push("已保留输出: " + out.length + " 字符" +
+      (res.outTruncated ? "（输出达上限，后续已截断）" : ""));
+  }
   lines.push("终栈: [" + stack.join(", ") + "]");
   return lines.join("\n");
 }
 
 // 图像字节 → 执行结果（PNG → cells → 解释器）
-function imageToCellsFromBytes(bytes, codelSize) {
+// codelSize 0/缺省 = 按 npiet 口径自动探测；>=1 = 指定（保留旧 API 显式传 1 的行为）。
+function imageToCellsFromBytes(bytes, codelSize, opts = {}) {
   const png = decodePng(bytes);
-  const cells = imageToCells(png.rgba, png.w, png.h, codelSize);
-  return pietRunCells(cells);
+  let cs = Math.floor(Number(codelSize) || 0);
+  let auto = false;
+  if (!(cs >= 1)) {
+    cs = guessCodelSize(png.rgba, png.w, png.h);
+    auto = true;
+  }
+  const cells = imageToCells(png.rgba, png.w, png.h, cs);
+  cells.codelSize = cs;
+  cells.codelAuto = auto;
+  return pietRunCells(cells, opts);
 }
 
 // ---- 注册 ----
 register({
   id: "pietExec", cat: "esolang", name: "Piet 执行",
-  desc: "Piet 图形语言解释器（DP/CC 状态机执行→输出）。支持真图像输入（PNG 拖入/粘贴 base64，npiet 补齐路径）与色块网格文本（色码 Rl/Y/Gd/C/B/M + K黑 W白 或 6 位 hex）。执行语义对齐 npiet v1.3，仅执行。",
+  desc: "Piet 图形语言解释器（DP/CC 状态机执行→输出）。支持真图像输入（PNG 拖入/粘贴 base64，codel 尺寸自动探测）与色块网格文本（色码 Rl/Y/Gd/C/B/M + K黑 W白 或 6 位 hex）。执行语义对齐 npiet v1.3；带步数上限、墙钟超时与输出后停顿检测，死循环强制终止并保留已输出内容。",
   params: [
-    { key: "codelSize", label: "codel 尺寸（图像输入）", type: "number", default: 1, placeholder: "图像里 1 个 codel 的边长像素，默认 1" },
+    { key: "codelSize", label: "codel 尺寸（图像输入，0=自动探测）", type: "number", default: 0, placeholder: "0=自动，>=1=指定 codel 边长像素" },
+    { key: "maxSteps", label: "最大步数（含白块滑行）", type: "number", default: MAX_STEPS, placeholder: "默认 " + MAX_STEPS },
+    { key: "timeLimitMs", label: "墙钟超时（毫秒）", type: "number", default: MAX_WALL_MS, placeholder: "默认 " + MAX_WALL_MS + " ms" },
+    { key: "stallSteps", label: "输出后无新输出步数阈值", type: "number", default: STALL_STEPS, placeholder: "默认 " + STALL_STEPS + " 步" },
   ],
   run: pietRun,
   acceptsBytes: true,
   detect: () => 0,
 });
 
-export { pietRun, pietRunGrid, pietRunCells, imageToCellsFromBytes, decodePng, parseGrid, parseToken, PIET_RGB, CMD_TABLE };
+export {
+  pietRun, pietRunGrid, pietRunCells, imageToCellsFromBytes, decodePng,
+  parseGrid, parseToken, PIET_RGB, CMD_TABLE,
+  guessCodelSize, MAX_STEPS, MAX_WALL_MS, STALL_STEPS, STALL_MSG,
+};

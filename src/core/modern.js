@@ -107,7 +107,12 @@ function xorBytes(a, b) {
   return o;
 }
 function incCounter(ctr) {
-  for (let i = ctr.length - 1; i >= 0; i--) { if (++ctr[i] !== 0) break; }
+  // 必须显式取低 8 位：对 Uint8Array 元素做 ++，回绕时表达式值是 256 而非 0，
+  // 用 !==0 判断会让进位链在第一处低字节回绕时提前断开（256 块后 keystream 全错）。
+  for (let i = ctr.length - 1; i >= 0; i--) {
+    ctr[i] = (ctr[i] + 1) & 0xff;
+    if (ctr[i] !== 0) break;
+  }
 }
 
 // ============================================================

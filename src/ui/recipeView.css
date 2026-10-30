@@ -379,3 +379,10 @@
 @media (max-height: 640px) {
   .recipe-io { min-height: 72px; }
 }
+
+/* T698/T699：命名存档 + 分享链接状态 */
+.recipe-store-status { font-size: var(--fs-xs); color: var(--on-surface-var); max-width: 28rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recipe-saved-picker { max-width: 14rem; }
+@media (max-width: 860px) {
+  .recipe-store-status { flex-basis: 100%; white-space: normal; }
+}

@@ -133,9 +133,19 @@ export function zstegScan(bytes, opts = {}) {
             ? extractPlane(samples, width, height, channels, chans, bit, cm, MAX_BYTES)
             : extractPlaneLsbFirst(samples, width, height, channels, chans, bit, cm, MAX_BYTES);
           tried++;
-          // 无效 UTF-8 字节替换为 U+FFFD（与逐字节有损解码行为一致）
-          const text = new TextDecoder("utf-8", { fatal: false }).decode(raw);
+          // 无效 UTF-8 字节替换为 U+FFFD（与逐字节有损解码行为一致）。
+          // CTF 的 LSB 文本载荷普遍用 0x00 补齐到图片容量：截到首个 NUL 再评分/展示，
+          // 否则几百个 NUL 会把可读前缀的分数拖到垫底（实测 secret.png 的 base64 载荷被埋没）。
+          const decodedText = new TextDecoder("utf-8", { fatal: false }).decode(raw);
+          const nul = decodedText.indexOf("\u0000");
+          const text = nul >= 0 ? decodedText.slice(0, nul) : decodedText;
           let score = englishScore(text);
+          // 文本载荷常见形态优先：可打印 base64 / 纯字母数字 token / flag 结构。
+          // 短乱码（如 "}\p{X~L"）的平均可读性可能略高，但长度与结构不像载荷。
+          const t = text.trim();
+          if (/^[A-Za-z0-9+/]{8,}={0,2}$/.test(t)) score += 2.0;
+          else if (/^[A-Za-z0-9_]{8,}$/.test(t)) score += 0.5;
+          if (t.length < 6 && !/[{}]/.test(t)) score -= 1.0;
           if (re && re.test(text)) score += 5.0;
           const note = `bit${bit} ${cname} ${msb ? "msb" : "lsb"}${cm ? " 列优先" : ""}`;
           cands.push({ text, score, note });

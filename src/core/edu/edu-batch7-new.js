@@ -324,7 +324,7 @@ export default {
       { in: "L", param: "classic, order=vh", out: "|||---", desc: "L = I 后第 3 个辅音：3 竖 + 3 横" },
       { in: "DCODE", param: "classic, order=hv", out: "-||| -|| ---- -||| --", desc: "横线在前的写法，语义完全相同" },
       { in: "DCODE", param: "samurai, order=vh", out: "|--- |-- |||| |--- ||", desc: "Samurai 变体把横/竖角色对调" },
-      { in: "Hello, World!", param: "classic, order=vh", out: "|||-- -- |||--- |||--- ---- , / ||----- ---- |||---- |||--- |||-  !", desc: "非字母透传，空格用 /；解码统一大写" },
+      { in: "Hello, World!", param: "classic, order=vh", out: "|||-- -- |||--- |||--- ---- , / ||----- ---- |||---- |||--- |||- !", desc: "非字母透传，空格用 /；解码统一大写" },
     ],
     formulas: [
       { tex: "\\text{letter} = \\mathrm{V}[\\,h\\,]\\text{-th consonant after } \\mathrm{V}[\\,h\\,]", caption: "经典码：h 为元音序号（1-6），v 为其后辅音序号；v=0 时就是该元音本身" },

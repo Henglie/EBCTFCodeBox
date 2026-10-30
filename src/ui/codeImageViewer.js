@@ -1,11 +1,10 @@
-// codeImageViewer.js — 图形编码对照表查询器（244 张外星文字/游戏文字/古文字/符号/旗语/条码等）
-// 左侧分类树（按中文分类分组）+ 名称/别名搜索 + 右侧大图 + 名称/别名。
+// codeImageViewer.js — 图形编码对照表查询器（外星文字/游戏文字/古文字/符号/旗语/条码等）
+// 左侧分类树 + 名称/别名搜索 + 右侧大图 + 自动识图（条码解码 / 视觉对照候选）。
 // 图片走本地 public/codeimages/，IntersectionObserver 懒加载，点击看大图。
 // 自持 el/msym（icon 注水），tt/window.__ebctfT 兜底 i18n（不进主表）。零外发。
 import { icon as iconSvg } from "./icons.js";
 import { attachModalLifecycle } from "./modalLifecycle.js";
 
-// ---- 轻量 DOM 工具（本模块自持，零耦合）----
 function el(tag, attrs = {}, ...children) {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -31,6 +30,9 @@ function tt(key, ...args) {
   for (let i = 0; i < args.length; i++) s = s.replace("{" + i + "}", String(args[i]));
   return s;
 }
+function toast(msg) {
+  try { if (typeof window !== "undefined" && window.__ebctfToast) { window.__ebctfToast(msg); return; } } catch { /* 回退 */ }
+}
 
 // i18n 未接线时的中文兜底
 const CI_FALLBACK = {
@@ -54,9 +56,26 @@ const CI_FALLBACK = {
   "ui.ci.cat.flag": "旗语手语",
   "ui.ci.cat.barcode": "条码",
   "ui.ci.cat.other": "其他",
+  "ui.ci.rec.title": "自动识图",
+  "ui.ci.rec.desc": "上传题目图片：先跑二维码/条形码解码，再做字形与整图对照，给出最可能的编码样式和对照表。全程本地计算。",
+  "ui.ci.rec.upload": "上传题目图片",
+  "ui.ci.rec.drop": "或把图片拖到这里",
+  "ui.ci.rec.running": "识别中…",
+  "ui.ci.rec.fail": "识别失败：{0}",
+  "ui.ci.rec.barcode": "读码命中",
+  "ui.ci.rec.noBarcode": "未读到二维码/条形码。",
+  "ui.ci.rec.candidates": "候选编码样式",
+  "ui.ci.rec.noCandidates": "没有足够相似的对照表。可继续按字形/别名搜索。",
+  "ui.ci.rec.glyphs": "检测到 {0} 个符号，去重后 {1} 类",
+  "ui.ci.rec.matchGlyphs": "字形吻合 {0} 个",
+  "ui.ci.rec.score": "相似度 {0}%",
+  "ui.ci.rec.open": "打开对照表",
+  "ui.ci.rec.hint": "视觉对照只负责「像哪张编码表」；外星文字/游戏文字的字形→字母映射仍需按对照表人工确认。",
+  "ui.ci.rec.reset": "重新选择",
+  "ui.ci.rec.copy": "复制",
+  "ui.ci.rec.copied": "已复制",
 };
 
-// 分类名 i18n key（与 manifest.cat 对应）。中文兜底并入 CI_FALLBACK，走 tt() 取当前语言。
 const CAT_LABEL_KEY = {
   alien: "ui.ci.cat.alien",
   game: "ui.ci.cat.game",
@@ -81,15 +100,16 @@ const CAT_ICON = {
 const MANIFEST_URL = "public/codeimages/codeImageManifest.json";
 const IMG_BASE = "public/";
 
-// ---- 状态（会话态）----
 const ciState = {
-  manifest: null,   // { images:[...] }
-  activeCat: "all", // 当前分类过滤
-  query: "",        // 搜索词
-  selected: null,   // 当前选中的 image 对象
+  manifest: null,
+  fpManifest: null,
+  fpPromise: null,
+  activeCat: "all",
+  query: "",
+  selected: null,
 };
 
-let _io = null; // IntersectionObserver（缩略图懒加载）
+let _io = null;
 
 function ensureIO() {
   if (_io) return _io;
@@ -102,7 +122,7 @@ function ensureIO() {
       if (src && !img.getAttribute("src")) img.setAttribute("src", src);
       obs.unobserve(img);
     }
-  }, { rootMargin: "200px" });
+  }, { rootMargin: "300px" });
   return _io;
 }
 
@@ -111,9 +131,17 @@ function matches(img, q) {
   const hay = [img.cn, img.en, ...(img.alias || [])].join(" ").toLowerCase();
   return hay.includes(q.toLowerCase());
 }
+function cnName(img) { return img.cn || img.en; }
+function thumbSrc(im) { return IMG_BASE + "codeimages/thumbs/" + im.id + ".webp"; }
 
-function cnName(img) {
-  return img.cn || img.en;
+function loadFingerprints() {
+  if (ciState.fpManifest) return Promise.resolve(ciState.fpManifest);
+  if (ciState.fpPromise) return ciState.fpPromise;
+  ciState.fpPromise = fetch("public/codeimages/codeImageFingerprints.json", { cache: "force-cache" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => { ciState.fpManifest = j; return j; })
+    .catch(() => null);
+  return ciState.fpPromise;
 }
 
 // ---- 渲染主入口 ----
@@ -121,19 +149,18 @@ export async function renderCodeImageViewer(container) {
   container.innerHTML = "";
   const wrap = el("div", { class: "ci-view" });
 
- // 标题
   wrap.append(el("div", { class: "op-head" },
     el("div", { class: "op-title" }, msym("image"), tt("ui.ci.title")),
     el("div", { class: "op-desc" }, tt("ui.ci.desc")),
   ));
 
- // 来源横幅已按产品负责人令移除（原来源声明版权归属不实）。
+  const rec = buildRecognizePanel();
+  wrap.append(rec.root);
 
   const body = el("div", { class: "ci-body" });
   wrap.append(body);
   container.append(wrap);
 
- // 载入 manifest（首次）
   if (!ciState.manifest) {
     try {
       const r = await fetch(MANIFEST_URL, { cache: "force-cache" });
@@ -145,8 +172,8 @@ export async function renderCodeImageViewer(container) {
   }
 
   const imgs = ciState.manifest.images || [];
+  rec.setManifest(imgs);
 
- // ---- 左栏：分类树 + 搜索 ----
   const side = el("div", { class: "ci-side" });
   const searchBox = el("input", {
     class: "ci-search", type: "search", placeholder: tt("ui.ci.search"),
@@ -156,35 +183,32 @@ export async function renderCodeImageViewer(container) {
   const tree = el("div", { class: "ci-tree" });
   side.append(searchBox, tree);
 
- // ---- 右栏：网格（点击卡片弹模态大图）----
   const main = el("div", { class: "ci-main" });
   const grid = el("div", { class: "ci-grid" });
   main.append(grid);
-
   body.append(side, main);
 
- // 统计各分类数量
+  const cardById = new Map();
+  let allBuilt = false;
+
   function catCount(cat) {
     return imgs.filter((im) => (cat === "all" || im.cat === cat) && matches(im, ciState.query)).length;
   }
 
   function buildTree() {
     tree.innerHTML = "";
- // 全部
-    const total = catCount("all");
-    tree.append(treeItem("all", tt("ui.ci.all"), "apps", total));
+    tree.append(treeItem("all", tt("ui.ci.all"), "apps", catCount("all")));
     for (const cat of CAT_ORDER) {
       const c = catCount(cat);
-      if (c === 0 && ciState.query) continue; // 搜索时隐藏空分类
+      if (c === 0 && ciState.query) continue;
       tree.append(treeItem(cat, catLabel(cat), CAT_ICON[cat] || "image", c));
     }
   }
 
   function treeItem(cat, label, ic, count) {
-    const active = ciState.activeCat === cat;
     return el("button", {
-      class: "ci-tree-item" + (active ? " active" : ""),
-      onclick: () => { ciState.activeCat = cat; buildTree(); buildGrid(); },
+      class: "ci-tree-item" + (ciState.activeCat === cat ? " active" : ""),
+      onclick: () => { ciState.activeCat = cat; buildTree(); applyFilter(); },
     },
       msym(ic, "ci-tree-ic"),
       el("span", { class: "ci-tree-label" }, label),
@@ -192,25 +216,23 @@ export async function renderCodeImageViewer(container) {
     );
   }
 
-  function buildGrid() {
-    grid.innerHTML = "";
+  function buildAllCards() {
+    if (allBuilt) return;
+    allBuilt = true;
     const io = ensureIO();
-    const list = imgs.filter((im) =>
-      (ciState.activeCat === "all" || im.cat === ciState.activeCat) && matches(im, ciState.query));
-
-    if (list.length === 0) {
-      grid.append(el("div", { class: "ci-empty" }, tt("ui.ci.empty")));
-      return;
-    }
-
-    for (const im of list) {
+    const frag = document.createDocumentFragment();
+    for (const im of imgs) {
       const thumb = el("img", {
-        class: "ci-thumb-img", alt: cnName(im), loading: "lazy",
-        "data-src": IMG_BASE + im.file, width: "160",
+        class: "ci-thumb-img", alt: cnName(im), loading: "lazy", decoding: "async",
+        "data-src": thumbSrc(im), width: "160", height: "120",
       });
-      thumb.addEventListener("error", () => thumb.classList.add("ci-thumb-err"));
+      thumb.addEventListener("error", () => {
+        if (thumb.dataset.retried) { thumb.classList.add("ci-thumb-err"); return; }
+        thumb.dataset.retried = "1";
+        thumb.setAttribute("src", IMG_BASE + im.file);
+      });
       if (io) io.observe(thumb);
-      else thumb.setAttribute("src", IMG_BASE + im.file); // 无 IO 时直接加载
+      else thumb.setAttribute("src", thumbSrc(im));
 
       const unconf = /（待确认）$/.test(im.cn);
       const card = el("button", {
@@ -222,29 +244,179 @@ export async function renderCodeImageViewer(container) {
         el("div", { class: "ci-card-name" }, cnName(im).replace(/（待确认）$/, "")),
         unconf ? el("span", { class: "ci-badge" }, tt("ui.ci.unconfirmed")) : null,
       );
-      card._imgId = im.id;
-      grid.append(card);
+      card._img = im;
+      cardById.set(im.id, card);
+      frag.append(card);
     }
+    grid.append(frag);
   }
 
- // 搜索防抖
+  function applyFilter() {
+    buildAllCards();
+    let visible = 0;
+    const q = ciState.query;
+    for (const im of imgs) {
+      const card = cardById.get(im.id);
+      if (!card) continue;
+      const ok = (ciState.activeCat === "all" || im.cat === ciState.activeCat) && matches(im, q);
+      card.classList.toggle("ci-hidden", !ok);
+      if (ok) visible++;
+    }
+    const empty = grid.querySelector(".ci-empty");
+    if (!visible) {
+      if (!empty) grid.append(el("div", { class: "ci-empty" }, tt("ui.ci.empty")));
+    } else if (empty) empty.remove();
+  }
+
   let sTimer = 0;
   searchBox.addEventListener("input", () => {
     clearTimeout(sTimer);
     sTimer = setTimeout(() => {
       ciState.query = searchBox.value.trim();
       buildTree();
-      buildGrid();
-    }, 150);
+      applyFilter();
+    }, 120);
   });
 
   buildTree();
-  buildGrid();
+  applyFilter();
+}
+
+// ---- 自动识图面板 ----
+function buildRecognizePanel() {
+  let manifest = [];
+  let busy = false;
+
+  const input = el("input", { type: "file", accept: "image/*", class: "ci-rec-file" });
+  const drop = el("div", { class: "ci-rec-drop" },
+    msym("upload", "ci-rec-drop-ic"),
+    el("div", { class: "ci-rec-drop-main" }, tt("ui.ci.rec.upload")),
+    el("div", { class: "ci-rec-drop-sub" }, tt("ui.ci.rec.drop")),
+  );
+  const status = el("div", { class: "ci-rec-status" });
+  const result = el("div", { class: "ci-rec-result" });
+  const resetBtn = el("button", {
+    class: "ci-rec-reset", type: "button", hidden: "hidden",
+    onclick: () => { input.value = ""; result.innerHTML = ""; status.textContent = ""; resetBtn.hidden = true; },
+  }, tt("ui.ci.rec.reset"));
+
+  const pick = () => { if (!busy) input.click(); };
+  drop.addEventListener("click", pick);
+  input.addEventListener("change", () => { if (input.files && input.files[0]) handleFile(input.files[0]); });
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("drag"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+  drop.addEventListener("drop", (e) => {
+    e.preventDefault();
+    drop.classList.remove("drag");
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  });
+
+  async function handleFile(file) {
+    if (!file || !/^image\//i.test(file.type || "")) { status.textContent = tt("ui.ci.rec.fail", "不是图片文件"); return; }
+    busy = true;
+    result.innerHTML = "";
+    status.textContent = tt("ui.ci.rec.running");
+    resetBtn.hidden = false;
+    try {
+      const [bytes, fp] = await Promise.all([file.arrayBuffer(), loadFingerprints()]);
+      const { recognizeCodeImage } = await import("../core/codeImageRecognize.js");
+      const r = await recognizeCodeImage(new Uint8Array(bytes), { manifest, fingerprints: fp && fp.images });
+      renderResult(r, file);
+      status.textContent = "";
+    } catch (e) {
+      status.textContent = tt("ui.ci.rec.fail", e && e.message ? e.message : e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  function renderResult(r, file) {
+    result.innerHTML = "";
+    const preview = el("div", { class: "ci-rec-preview" },
+      el("img", { src: URL.createObjectURL(file), alt: file.name }),
+      el("div", { class: "ci-rec-meta" },
+        el("div", { class: "ci-rec-name" }, file.name),
+        el("div", { class: "ci-rec-sub" }, (r.width || 0) + "×" + (r.height || 0)),
+        r.glyphCount
+          ? el("div", { class: "ci-rec-sub" }, tt("ui.ci.rec.glyphs", r.glyphCount, r.glyphKinds || 0))
+          : null,
+      ),
+    );
+    result.append(preview);
+
+    if (r.barcodes && r.barcodes.length) {
+      const box = el("div", { class: "ci-rec-block ci-rec-hit" },
+        el("div", { class: "ci-rec-block-title" }, msym("qr_code"), tt("ui.ci.rec.barcode")),
+      );
+      for (const b of r.barcodes) {
+        const line = el("div", { class: "ci-rec-barcode" },
+          el("span", { class: "ci-rec-barcode-fmt" }, b.format || "barcode"),
+          el("code", { class: "ci-rec-barcode-text" }, b.text),
+        );
+        const copy = el("button", {
+          class: "ci-rec-copy", type: "button", title: tt("ui.ci.rec.copy"),
+          onclick: async () => {
+            try { await navigator.clipboard.writeText(b.text); toast(tt("ui.ci.rec.copied")); } catch { /* ignore */ }
+          },
+        }, msym("content_copy"));
+        line.append(copy);
+        box.append(line);
+      }
+      result.append(box);
+    } else {
+      result.append(el("div", { class: "ci-rec-block ci-rec-muted" }, tt("ui.ci.rec.noBarcode")));
+    }
+
+    const cands = r.candidates || [];
+    const box = el("div", { class: "ci-rec-block" },
+      el("div", { class: "ci-rec-block-title" }, msym("travel_explore"), tt("ui.ci.rec.candidates")),
+    );
+    if (!cands.length) {
+      box.append(el("div", { class: "ci-rec-muted" }, tt("ui.ci.rec.noCandidates")));
+    } else {
+      const list = el("div", { class: "ci-rec-cands" });
+      for (const c of cands) {
+        const im = c.image;
+        const card = el("button", {
+          class: "ci-rec-cand", type: "button",
+          onclick: () => openModal(im),
+        },
+          el("img", { src: thumbSrc(im), alt: cnName(im), loading: "lazy" }),
+          el("div", { class: "ci-rec-cand-main" },
+            el("div", { class: "ci-rec-cand-name" }, cnName(im).replace(/（待确认）$/, "")),
+            el("div", { class: "ci-rec-cand-meta" },
+              el("span", { class: "ci-rec-score" }, tt("ui.ci.rec.score", Math.round(c.score * 100))),
+              c.glyphMatched ? el("span", {}, tt("ui.ci.rec.matchGlyphs", c.glyphMatched)) : null,
+              el("span", {}, catLabel(im.cat)),
+            ),
+          ),
+        );
+        list.append(card);
+      }
+      box.append(list);
+    }
+    result.append(box);
+    result.append(el("div", { class: "ci-rec-hint" }, tt("ui.ci.rec.hint")));
+  }
+
+  const root = el("div", { class: "ci-rec" },
+    el("div", { class: "ci-rec-head" },
+      el("div", { class: "ci-rec-title" }, msym("auto_awesome"), tt("ui.ci.rec.title")),
+      el("div", { class: "ci-rec-desc" }, tt("ui.ci.rec.desc")),
+      resetBtn,
+    ),
+    drop, input, status, result,
+  );
+
+  return {
+    root,
+    setManifest(list) { manifest = list || []; },
+  };
 }
 
 // ---- 模态大图弹窗（滚轮缩放）----
-// 全局单例：任意时刻只允许一个弹窗
-let _modalEl = null;      // 遮罩根节点
+let _modalEl = null;
 let _lifecycle = null;
 
 function closeModal(immediate = false) {
@@ -259,16 +431,15 @@ function closeModal(immediate = false) {
 }
 
 function openModal(im) {
-  closeModal(true); // 防止叠加
+  closeModal(true);
   const previousFocus = document.activeElement;
 
   const unconf = /（待确认）$/.test(im.cn);
   const aliasStr = (im.alias || []).join("、");
 
- // 缩放状态：scale + 平移（拖拽）
   let scale = 1;
   let tx = 0, ty = 0;
-  const MIN = 0.5, MAX = 5, STEP = 0.0015; // 滚轮灵敏度
+  const MIN = 0.5, MAX = 5, STEP = 0.0015;
 
   const big = el("img", {
     class: "ci-modal-img", alt: cnName(im), src: IMG_BASE + im.file,
@@ -280,18 +451,14 @@ function openModal(im) {
     big.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
   }
 
- // 图片容器：承接滚轮缩放与拖拽平移
   const stage = el("div", { class: "ci-modal-stage" }, big);
 
- // 滚轮缩放：以光标位置为锚点
   stage.addEventListener("wheel", (e) => {
     e.preventDefault();
     const prev = scale;
- // 向上（deltaY<0）放大，向下缩小
     let next = prev * Math.exp(-e.deltaY * STEP);
     next = Math.max(MIN, Math.min(MAX, next));
     if (next === prev) return;
- // 锚点：光标相对 stage 中心的偏移，保持光标下的图像点不动
     const rect = stage.getBoundingClientRect();
     const cx = e.clientX - (rect.left + rect.width / 2);
     const cy = e.clientY - (rect.top + rect.height / 2);
@@ -302,7 +469,6 @@ function openModal(im) {
     applyTransform();
   }, { passive: false });
 
- // 拖拽平移（放大后可拖）
   let dragging = false, sx = 0, sy = 0, otx = 0, oty = 0;
   stage.addEventListener("pointerdown", (e) => {
     dragging = true; sx = e.clientX; sy = e.clientY; otx = tx; oty = ty;
@@ -323,45 +489,44 @@ function openModal(im) {
   };
   stage.addEventListener("pointerup", endDrag);
   stage.addEventListener("pointercancel", endDrag);
-
- // 双击复位
   stage.addEventListener("dblclick", () => {
     scale = 1; tx = 0; ty = 0; applyTransform();
   });
 
- // 关闭按钮
   const closeBtn = el("button", {
     class: "ci-modal-close", type: "button", title: tt("ui.ci.close"),
     "aria-label": tt("ui.ci.close"),
     onclick: () => closeModal(),
   }, msym("close"));
 
- // 头部信息：名称 / 别名 / 尺寸 / 分类
   const head = el("div", { class: "ci-modal-head" },
-    el("div", { class: "ci-modal-title" },
-      cnName(im).replace(/（待确认）$/, ""),
-      unconf ? el("span", { class: "ci-badge" }, tt("ui.ci.unconfirmed")) : null,
+    el("div", { class: "ci-modal-titles" },
+      el("div", { class: "ci-modal-title" },
+        cnName(im).replace(/（待确认）$/, ""),
+        unconf ? el("span", { class: "ci-badge" }, tt("ui.ci.unconfirmed")) : null,
+      ),
+      el("div", { class: "ci-modal-meta" },
+        im.en ? el("span", { class: "ci-modal-en" }, im.en) : null,
+        aliasStr ? el("span", { class: "ci-modal-alias" }, tt("ui.ci.alias") + "：" + aliasStr) : null,
+        el("span", { class: "ci-modal-dim" }, im.w + "×" + im.h),
+        el("span", { class: "ci-modal-cat" }, catLabel(im.cat)),
+      ),
     ),
-    el("div", { class: "ci-modal-meta" },
-      im.en ? el("span", { class: "ci-modal-en" }, im.en) : null,
-      aliasStr ? el("span", { class: "ci-modal-alias" }, tt("ui.ci.alias") + "：" + aliasStr) : null,
-      el("span", { class: "ci-modal-dim" }, im.w + "×" + im.h),
-      el("span", { class: "ci-modal-cat" }, catLabel(im.cat)),
-    ),
+    closeBtn,
   );
 
   const dialog = el("div", {
     class: "ci-modal-dialog", role: "dialog", "aria-modal": "true",
     "aria-label": cnName(im).replace(/（待确认）$/, ""),
-    onclick: (e) => e.stopPropagation(), // 阻止冒泡到遮罩
-  }, closeBtn, head, stage,
+    onclick: (e) => e.stopPropagation(),
+  }, head, stage,
     el("div", { class: "ci-modal-hint" }, tt("ui.ci.zoomHint")),
   );
 
- // 遮罩：点击关闭
   _modalEl = el("div", { class: "ci-modal-overlay" }, dialog);
   document.body.append(_modalEl);
   _lifecycle = attachModalLifecycle(_modalEl, { dialog, onClose: closeModal, initialFocus: closeBtn, restoreFocusTo: previousFocus });
 
   applyTransform();
 }
+

@@ -24,13 +24,22 @@ export default {
     aka: ["培根密码", "Bacon cipher", "培根加密", "Baconian cipher", "Bacon's cipher", "培根隐写", "双字母隐写", "abab编码", "Francis Bacon", "弗朗西斯培根", "字体隐写", "biliteral cipher"]
   },
   railFence: {
-    what: "栅栏密码，沿锯齿形轨道排列字母",
-    principle: "明文按 Z 字形沿 rails 条轨道书写，再逐行读取密文；解密按轨道周期还原位置",
-    usage: "params: rails(默认2)，双向 encode/decode",
-    examples: [{ in: "HELLO", param: { rails: 2 }, out: "HLOEL", desc: "2 条轨道：H/L/O 在上，E/L 在下，合并为 HLOEL" }],
-    formulas: [{ tex: "T = 2(r-1)", caption: "周期 T 由轨道数 r 决定，同列位置呈对称分布" }],
-    tips: ["rails=2 等价于奇偶位分离", "rails 越大锯齿越陡", "需与接收方约定轨道数"],
-    aka: ["栅栏密码", "Rail Fence cipher", "篱笆密码", "锯齿密码", "railfence", "rail fence", "zigzag cipher", "Z字形密码", "W型密码", "换位密码", "栏栅密码", "曲折密码"]
+    what: "栅栏密码，按栏数重排字符的换位密码，分 W 型（锯齿）与 Z 型（传统分栏）两种走法",
+    principle: "两种走法都先把明文写进 rails 行、再逐行读出，区别在写入轨迹。W 型：字符沿 0→1→…→r−1→…→0 的锯齿上下移动，写满后逐行读出（zigzag / rail fence）；可带偏移量 offset，轨迹开头先空出 offset 个格子再落字（dCode「Use an offset of +N characters」口径），等价于从锯齿周期的第 offset 个位置起写。Z 型（传统分栏，百度百科「栅栏密码」口径）：按列自上而下写满一列再写下一列，即第 i 个字符落在第 i mod r 行，再逐行读出。解密按同一轨迹先算出每行长度，切段回填后还原。",
+    usage: "params: rails(默认2，2..64)、mode(w=W 型锯齿 / z=Z 型传统分栏，默认 w)、offset(W 型偏移量，默认 0，0..64；Z 型必须为 0)，双向 encode/decode",
+    examples: [
+      { in: "HELLOWORLD", param: { rails: 3, mode: "w" }, out: "HOLELWRDLO", desc: "W 型 3 栏：H/L/O 在第 1 行，E/L/W/R 在第 2 行，L/D 在第 3 行" },
+      { in: "HELLOWORLD", param: { rails: 3, mode: "w", offset: 2 }, out: "LOELWRDHOL", desc: "W 型 3 栏、偏移 2：轨迹先空 2 格再落字（CSDN 偏移量算例）" },
+      { in: "HELLOWORLD", param: { rails: 3, mode: "z" }, out: "HLODEORLWL", desc: "Z 型 3 栏：按列写 H/E/L、L/O/W、O/R/L、D 后逐行读出" },
+      { in: "HELLOWORLD", param: { rails: 2, mode: "w" }, out: "HLOOLELWRD", desc: "2 栏时两模式等价（奇偶位分离）" }
+    ],
+    formulas: [
+      { tex: "T = 2(r-1)", caption: "W 型周期 T 由栏数 r 决定（到顶/到底折返）" },
+      { tex: "\\text{row}(i) = i \\bmod r", caption: "Z 型第 i 个字符落在第 i mod r 行" },
+      { tex: "\\text{offset} \\equiv \\text{offset} \\bmod T", caption: "W 型偏移量按周期取模：offset=T 与 0 等价" }
+    ],
+    tips: ["rails=2 时 W 型与 Z 型结果相同，栏数 ≥3 才分岔", "CTF 常说的「W 型栅栏」是 W 型；百度百科「栅栏密码」定义的是 Z 型", "偏移量只属于 W 型：Z 型填非 0 会显式报错，不静默忽略", "偏移量按周期 T=2(r−1) 取模，offset=T 与 0 等价", "需与接收方同时约定栏数、模式与偏移量", "两种模式都只换位不改字符，密文字符集与明文完全一致"],
+    aka: ["栅栏密码", "Rail Fence cipher", "篱笆密码", "锯齿密码", "railfence", "rail fence", "zigzag cipher", "Z字形密码", "W型密码", "W型栅栏", "Z型栅栏", "传统栅栏", "普通栅栏", "分栏密码", "换位密码", "栏栅密码", "曲折密码"]
   },
   caesar: {
     what: "凯撒密码，字母表整体位移替换",
@@ -107,7 +116,7 @@ export default {
   keyboard: {
     what: "键盘坐标编码，QWERTY 三行键盘的行列号",
     principle: "按标准 QWERTY 键盘三行布局，每个键映射为(行.列)坐标",
-    usage: "无参数(QWERTY 3 行坐标)，双向 encode/decode",
+    usage: "params: layout(qwerty3=三字母行二位连写 / full4=含数字行 R.C 点分隔，默认 qwerty3)，双向 encode/decode",
     examples: [{ in: "HI", param: {}, out: "26 18", desc: "H=第2行第6列=26, I=第1行第8列=18" }],
     formulas: [{ tex: "E(c) = (\\text{row}, \\text{col})", caption: "键在键盘上的行列位置" }],
     tips: ["以 QWERTY 标准布局为准", "行号自上而下 1-3", "坐标无分隔即连写"],
@@ -150,12 +159,15 @@ export default {
     aka: ["嗷呜", "嗷呜啊", "兽语", "beast语", "阴阳怪气语", "yygq", "阴阳怪气", "阴阳怪气编码", "就这不会吧", "yygq编码", "阴阳语", "怪话编码", "网络梗编码", "口头禅二进制", "yin yang", "阴阳怪气密码"]
   },
   braille: {
-    what: "盲文编码，Unicode U+2800 块 8 点盲文",
-    principle: "每个字符映射到 Unicode 8 点盲文区（U+2800-U+28FF），8 位点阵表示",
-    usage: "无参数(U+2800 块)，双向 encode/decode",
-    examples: [{ in: "AB", param: {}, out: "⡱⡲", desc: "A=⡱, B=⡲，8 点盲文字符" }],
-    formulas: [{ tex: "E(c) = \\text{U+28}\\text{XX}", caption: "映射到 U+2800-U+28FF 8 点盲文区" }],
-    tips: ["使用 Unicode U+2800 块", "8 点（含上下两层）", "区别于 6 点标准盲文"],
+    what: "盲文编码，Unicode U+2800 块 8 点盲文（三套码表：auto / nabcc / raw）",
+    principle: "字符按所选码表映射到 U+2800–U+28FF 盲文区：nabcc 是标准 Braille ASCII（A=⠁，字母统一转大写）；raw 是旧版乱序字典（A=⡱，兼容历史产物）；auto 编码走 nabcc、解码自动识别两套码表。",
+    usage: "params: mapping(auto/nabcc/raw，默认 auto)，双向 encode/decode",
+    examples: [
+      { in: "AB", param: { mapping: "nabcc" }, out: "⠁⠃", desc: "标准 Braille ASCII：A=⠁（第 1 点），B=⠃（第 1-2 点）" },
+      { in: "AB", param: { mapping: "raw" }, out: "⡱⡲", desc: "raw 乱序字典（旧版兼容）：A=⡱，B=⡲" }
+    ],
+    formulas: [{ tex: "E(c) = \\text{U+28}\\text{XX}", caption: "映射到 U+2800-U+28FF 盲文区，点位由码表决定" }],
+    tips: ["auto 编码等同 nabcc（标准 Braille ASCII，字母转大写）", "raw 为旧版乱序字典，产物形如 ⡱⡲，用于兼容历史题目", "U+2800–U+28FF 区段是明显指纹", "6 点与 8 点盲文共用同一区段，靠码表区分"],
     aka: ["8 点盲文", "Braille", "盲文", "braille", "盲文编码", "盲人点字", "点字", "Braille cipher", "布莱叶盲文", "点阵盲文", "Unicode盲文", "六点盲文"]
   },
   eightdiagram: {
@@ -304,7 +316,7 @@ export default {
   t9Phone: {
     what: "T9 手机编码，字母转数字键+位序",
     principle: "a=21, b=22, c=23… 每字母编码为两位：十位为键号，个位为该键第几位",
-    usage: "无参数(a=21...z=94)，双向 encode/decode",
+    usage: "params: mode(twoDigit=二位固定 a=21…z=94 / multitap=多击 2=a 22=b 222=c，默认 twoDigit)，双向 encode/decode",
     examples: [{ in: "ABC", param: {}, out: "212223", desc: "A=21, B=22, C=23（2 键的第 1/2/3 位）" }],
     formulas: [{ tex: "E(c) = 10 \\cdot \\text{key}(c) + \\text{pos}(c)", caption: "键号×10 + 位序" }],
     tips: ["a=21 ... z=94", "2=abc, 3=def, 4=ghi, 5=jkl, 6=mno, 7=pqrs, 8=tuv, 9=wxyz", "区别于 multitap"],

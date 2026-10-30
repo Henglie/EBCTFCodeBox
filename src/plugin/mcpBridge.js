@@ -18,15 +18,24 @@
 import { OPS, getOp, defaultParams, CATEGORIES, opsByCat } from "../core/registry.js";
 import { magicDecode } from "../core/magic/magic.js";
 import { APP_VERSION } from "../core/version.js";
-import { productFileEntries, productBytesBase64 } from "../core/productResult.js";
+import { productFileEntries } from "../core/productResult.js";
 
 // MCP server 版本与项目主版本统一（全局变量，避免割裂）。
 const SERVER_VERSION = APP_VERSION;
 
 // 虚拟/不宜对外单独暴露的 op（cryptoTryAll 是 UI 聚合入口，非独立算法）。统一口径，各处复用。
+const HIDDEN_OP_IDS = new Set(["cryptoTryAll"]);
 // jsfuck/jjencode 的 decode 会用 new Function 执行输入里的 JS：MCP 主进程无沙箱，
-// AI 提示注入可借此执行任意 Node 代码，故不对 MCP 暴露（浏览器 UI 仍可手动使用）。
-const HIDDEN_OP_IDS = new Set(["cryptoTryAll", "jsfuck", "jjencode"]);
+// AI 提示注入可借此执行任意 Node 代码。默认不暴露；调用方显式传 allowUnsafe:true
+// （或设置 EBCTF_MCP_UNSAFE=1）才放开，并在结果里明确标注风险。
+const UNSAFE_OP_IDS = new Set(["jsfuck", "jjencode"]);
+function includeUnsafe(args) {
+  return !!(args && (args.allowUnsafe === true || args.includeUnsafe === true)) || (typeof process !== "undefined" && process.env && process.env.EBCTF_MCP_UNSAFE === "1");
+}
+function opVisible(op, unsafe = false) {
+  if (!op || HIDDEN_OP_IDS.has(op.id)) return false;
+  return unsafe || !UNSAFE_OP_IDS.has(op.id);
+}
 
 /** op 支持的方向数组（encode/decode/run）。 */
 function opDirections(op) {
@@ -65,16 +74,16 @@ function opSchema(op) {
   };
 }
 
-/** 对外可见 op 集合（排除 cryptoTryAll 虚拟聚合 op）。列表/统计统一口径。 */
-function visibleOps() {
-  return OPS.filter((o) => !HIDDEN_OP_IDS.has(o.id));
+/** 对外可见 op 集合（默认排除 cryptoTryAll 与 JS 执行类；unsafe 时放开 JS 执行类）。 */
+function visibleOps(unsafe = false) {
+  return OPS.filter((o) => opVisible(o, unsafe));
 }
 
 /** 对外可见分类 + 每类 op 数（list_categories 工具与 categories 资源共用口径）。 */
-function visibleCategories() {
+function visibleCategories(unsafe = false) {
   return CATEGORIES
     .filter((c) => c.id !== "home")
-    .map((c) => ({ id: c.id, name: c.name, ops: opsByCat(c.id).filter((o) => !HIDDEN_OP_IDS.has(o.id)).length }));
+    .map((c) => ({ id: c.id, name: c.name, ops: opsByCat(c.id).filter((o) => opVisible(o, unsafe)).length }));
 }
 
 // ---------------------------------------------------------------------------
@@ -88,12 +97,13 @@ export const MCP_TOOLS = [
   },
   {
     name: "ebctf_list_ops",
-    description: "列出工具箱里所有编解码/加解密操作（op），可按关键词或分类过滤。每条含 id、分类、名称、支持方向(encode/decode/run)、是否带参。",
+    description: "列出工具箱里所有编解码/加解密操作（op），可按关键词或分类过滤。每条含 id、分类、名称、支持方向(encode/decode/run)、是否带参。默认隐藏 JS 执行类；需要时传 includeUnsafe:true。",
     inputSchema: {
       type: "object",
       properties: {
         keyword: { type: "string", description: "名称/id/分类过滤词（可选）" },
         cat: { type: "string", description: "分类 id 精确过滤（可选，见 ebctf_list_categories）" },
+        includeUnsafe: { type: "boolean", description: "是否列出 jsfuck/jjencode 等会执行输入代码的高风险 op（默认 false）" },
       },
     },
   },
@@ -102,7 +112,10 @@ export const MCP_TOOLS = [
     description: "查询指定 op 的完整参数 schema（参数 key/类型/默认值/可选项）与支持的方向。跑带参 op 前先用它了解怎么填 params。",
     inputSchema: {
       type: "object",
-      properties: { opId: { type: "string", description: "op 的 id" } },
+      properties: {
+        opId: { type: "string", description: "op 的 id" },
+        includeUnsafe: { type: "boolean", description: "允许查询 jsfuck/jjencode 等高风险 op（默认 false）" },
+      },
       required: ["opId"],
     },
   },
@@ -120,21 +133,46 @@ export const MCP_TOOLS = [
   },
   {
     name: "ebctf_run_op",
-    description: "对输入执行指定 op 的编码/解码/运行，返回结果文本。支持传自定义参数（params，形状见 ebctf_op_schema）。",
+    description:
+      "对输入执行指定 op。统一文件通道：文本走 input，图片/pcap/zip/pyc/exe 等二进制走 fileBase64 或 filePath；" +
+      "产物文件会以 base64 返回，也可用 outputDir 直接落盘并返回路径。支持传自定义参数（params，形状见 ebctf_op_schema）。",
     inputSchema: {
       type: "object",
       properties: {
         opId: { type: "string", description: "op 的 id（先用 ebctf_list_ops / ebctf_op_schema 查）" },
-        input: { type: "string", description: "输入文本" },
+        input: { type: "string", description: "输入文本（文本类 op 用；与 fileBase64/filePath 二选一或同时给）" },
+        fileBase64: { type: "string", description: "二进制输入：文件内容的 base64（图片/pcap/zip/pyc/exe 等）" },
+        filePath: { type: "string", description: "二进制输入：本机文件路径（仅 stdio MCP server / Node 环境可读）" },
+        inputEncoding: {
+          type: "string", enum: ["auto", "utf8", "hex", "base64"],
+          description: "文件转文本的编码（非 acceptsBytes op 使用；默认 auto：优先 UTF-8，失败则报错）",
+        },
+        fileName: { type: "string", description: "可选文件名（用于产物命名/报告）" },
         direction: { type: "string", enum: ["encode", "decode", "run"], description: "方向，缺省自动" },
         params: { type: "object", description: "自定义参数对象（可选，key 见 ebctf_op_schema；未给的用默认值）" },
+        outputDir: { type: "string", description: "可选：把产物文件写入该本地目录，返回绝对路径（MCP 文件类 op 推荐）" },
+        includeBase64: { type: "boolean", description: "产物是否同时返回 base64（默认：小文件 true，超过 256KB false）" },
+        allowUnsafe: { type: "boolean", description: "允许执行 jsfuck/jjencode 等会 new Function 输入的高风险 op（默认 false）" },
       },
-      required: ["opId", "input"],
+      required: ["opId"],
+    },
+  },
+  {
+    name: "ebctf_read_file",
+    description: "读取本机文件供 AI 检查（图片/pcap/zip/pyc/exe 等）。返回大小、猜测 MIME、sha256 与内容；默认按 UTF-8/hex 自动选择，二进制给 base64。仅本地 stdio server / Node 环境可用。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "本机文件绝对路径（或相对当前工作目录）" },
+        maxBytes: { type: "number", description: "最多读取字节数（默认 1 MiB，上限 8 MiB）" },
+        encoding: { type: "string", enum: ["auto", "utf8", "hex", "base64"], description: "内容编码（默认 auto）" },
+      },
+      required: ["path"],
     },
   },
   {
     name: "ebctf_magic_decode",
-    description: "对疑似编码文本做一键智能解码，返回按可能性排序的候选明文与解码链路。可开多层链式解码与暴力模式。",
+    description: "对疑似编码文本做一键智能解码，返回按可能性排序的候选明文与解码链路。可开多层链式解码与暴力模式。二进制文件先用 ebctf_read_file 或 ebctf_run_op 处理。",
     inputSchema: {
       type: "object",
       properties: {
@@ -149,6 +187,112 @@ export const MCP_TOOLS = [
 ];
 
 // ---------------------------------------------------------------------------
+// 统一文件通道：base64 / 本地路径 → 字节；产物 → base64 或落盘。
+// 浏览器 in-process 形态没有 fs，filePath/outputDir 会返回明确错误，不静默。
+// ---------------------------------------------------------------------------
+const MAX_FILE_BYTES = 64 * 1024 * 1024;
+const INLINE_BASE64_LIMIT = 256 * 1024;
+
+function b64ToBytes(b64) {
+  const clean = String(b64 || "").replace(/\s+/g, "");
+  if (!clean) return new Uint8Array(0);
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(clean)) throw new Error("fileBase64 不是合法 base64");
+  const bin = atob(clean);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function bytesToB64(bytes) {
+  let bin = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
+}
+
+function bytesToHex(bytes) {
+  let s = "";
+  for (const b of bytes) s += b.toString(16).padStart(2, "0");
+  return s;
+}
+
+function isNodeEnv() {
+  return typeof process !== "undefined" && !!(process.versions && process.versions.node);
+}
+
+async function nodeFs() {
+  if (!isNodeEnv()) throw new Error("filePath/outputDir 只在本地 Node（stdio MCP server）可用；浏览器内请改用 fileBase64");
+  return import("node:fs/promises");
+}
+
+async function readInputBytes(args) {
+  if (args.fileBase64 != null && String(args.fileBase64).length) {
+    const bytes = b64ToBytes(args.fileBase64);
+    if (bytes.length > MAX_FILE_BYTES) throw new Error(`fileBase64 超过 ${MAX_FILE_BYTES} 字节上限`);
+    return bytes;
+  }
+  if (args.filePath) {
+    const fs = await nodeFs();
+    const st = await fs.stat(args.filePath);
+    if (!st.isFile()) throw new Error(`不是文件：${args.filePath}`);
+    if (st.size > MAX_FILE_BYTES) throw new Error(`文件超过 ${MAX_FILE_BYTES} 字节上限：${st.size}`);
+    return new Uint8Array(await fs.readFile(args.filePath));
+  }
+  return null;
+}
+
+function bytesToText(bytes, encoding = "auto") {
+  if (encoding === "hex") return bytesToHex(bytes);
+  if (encoding === "base64") return bytesToB64(bytes);
+  if (encoding === "utf8") {
+    try { return new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+    catch { return new TextDecoder("utf-8", { fatal: false }).decode(bytes); }
+  }
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+  catch { return null; }
+}
+
+function guessMime(bytes) {
+  if (bytes.length > 8 && bytes[0] === 0x89 && bytes[1] === 0x50) return "image/png";
+  if (bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8) return "image/jpeg";
+  if (bytes.length > 6 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return "image/gif";
+  if (bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b) return "application/zip";
+  if (bytes.length > 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) return "application/pdf";
+  if (bytes.length > 4 && bytes[0] === 0x7f && bytes[1] === 0x45 && bytes[2] === 0x4c && bytes[3] === 0x46) return "application/x-elf";
+  if (bytes.length > 2 && bytes[0] === 0x4d && bytes[1] === 0x5a) return "application/x-msdownload";
+  if (bytes.length > 4 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) return "application/octet-stream";
+  return "application/octet-stream";
+}
+
+async function sha256Hex(bytes) {
+  try {
+    if (globalThis.crypto && globalThis.crypto.subtle) {
+      const d = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+      return Array.from(new Uint8Array(d), (b) => b.toString(16).padStart(2, "0")).join("");
+    }
+  } catch { /* ignore */ }
+  return "";
+}
+
+async function saveProductFiles(files, outputDir) {
+  const fs = await nodeFs();
+  const path = await import("node:path");
+  await fs.mkdir(outputDir, { recursive: true });
+  const base = path.resolve(outputDir);
+  const saved = [];
+  for (const f of files) {
+    const safe = path.basename(String(f.name || "download.bin")).replace(/[<>:"/\\|?*\x00-\x1f]/g, "_") || "download.bin";
+    const full = path.resolve(base, safe);
+    if (!full.startsWith(base + path.sep) && full !== base) throw new Error(`产物文件名越界：${f.name}`);
+    await fs.writeFile(full, f.bytes);
+    saved.push({ ...f, name: safe, path: full });
+  }
+  return saved;
+}
+
+// ---------------------------------------------------------------------------
 // 本地 dispatch：执行一个 MCP 工具调用，返回 MCP 规范的 content 结果。
 // @returns {Promise<{content:{type:string,text:string}[], isError?:boolean}>}
 // ---------------------------------------------------------------------------
@@ -157,13 +301,13 @@ export async function callMcpTool(name, args = {}) {
   const json = (obj) => wrap(JSON.stringify(obj, null, 2));
   try {
     if (name === "ebctf_list_categories") {
-      return json(visibleCategories());
+      return json(visibleCategories(includeUnsafe(args)));
     }
 
     if (name === "ebctf_list_ops") {
       const kw = (args.keyword || "").toLowerCase();
       const cat = (args.cat || "").trim();
-      const list = visibleOps()
+      const list = visibleOps(includeUnsafe(args))
         .filter((o) => !cat || o.cat === cat)
         .filter((o) => !kw
           || o.id.toLowerCase().includes(kw)
@@ -175,7 +319,7 @@ export async function callMcpTool(name, args = {}) {
 
     if (name === "ebctf_op_schema") {
       const op = getOp(args.opId);
-      if (!op || HIDDEN_OP_IDS.has(op.id)) return wrap(`无此 op: ${args.opId}`, true);
+      if (!op || !opVisible(op, includeUnsafe(args))) return wrap(`无此 op: ${args.opId}`, true);
       return json(opSchema(op));
     }
 
@@ -184,7 +328,7 @@ export async function callMcpTool(name, args = {}) {
       if (!input) return wrap("（空输入）", true);
       const limit = Number.isFinite(args.limit) && args.limit > 0 ? Math.min(args.limit, 50) : 15;
       const hits = [];
-      for (const op of visibleOps()) {
+      for (const op of visibleOps(false)) {
         if (op.requiresBridge || typeof op.detect !== "function") continue;
         let score = 0;
         try { score = Number(op.detect(input)) || 0; } catch { score = 0; }
@@ -196,20 +340,67 @@ export async function callMcpTool(name, args = {}) {
 
     if (name === "ebctf_run_op") {
       const op = getOp(args.opId);
-      if (!op || HIDDEN_OP_IDS.has(op.id)) return wrap(`无此 op: ${args.opId}`, true);
+      if (!op || !opVisible(op, includeUnsafe(args))) return wrap(`无此 op: ${args.opId}`, true);
       const dir = args.direction || (op.run ? "run" : op.decode ? "decode" : "encode");
       if (typeof op[dir] !== "function") return wrap(`op ${args.opId} 不支持方向 ${dir}`, true);
+      const bytes = await readInputBytes(args);
+      let input = args.input == null ? "" : String(args.input);
+      if (bytes) {
+        if (op.acceptsBytes) {
+          if (!input) input = bytesToText(bytes, "auto") || "";
+        } else if (!input) {
+          const enc = args.inputEncoding || "auto";
+          const t = bytesToText(bytes, enc);
+          if (t == null) {
+            return wrap(
+              `op ${args.opId} 不吃原始字节，且文件不是合法 UTF-8。请传 inputEncoding:"hex" 或 "base64"，` +
+              `或改用 acceptsBytes 的文件类 op（先在 ebctf_op_schema 看该 op 是否有 acceptsBytes/file 通道）。`, true);
+          }
+          input = t;
+        }
+      }
       // 默认参数打底，AI 传的 params 覆盖对应 key（未给的保持默认）。
       const p = { ...defaultParams(op), ...(args.params && typeof args.params === "object" ? args.params : {}) };
-      const out = await op[dir](String(args.input ?? ""), p);
+      if (bytes && op.acceptsBytes) p.rawBytes = bytes;
+      const out = await op[dir](input, p);
       if (out && typeof out === "object" && ("text" in out || "files" in out)) {
         const text = String(out.text ?? "");
-        const files = productFileEntries(out).map(({ name, mime, bytes }) => ({
-          name, mime, size: bytes.length, base64: productBytesBase64(bytes),
-        }));
-        return files.length ? json({ text, files }) : wrap(text);
+        const files = productFileEntries(out);
+        if (!files.length) return wrap(text);
+        const total = files.reduce((n, f) => n + f.bytes.length, 0);
+        let saved = files;
+        if (args.outputDir) saved = await saveProductFiles(files, args.outputDir);
+        const inline = args.includeBase64 === true || (args.includeBase64 !== false && total <= INLINE_BASE64_LIMIT && !args.outputDir);
+        const payload = [];
+        for (const f of saved) {
+          const item = {
+            name: f.name, mime: f.mime, size: f.bytes.length,
+            sha256: await sha256Hex(f.bytes),
+          };
+          if (f.path) item.path = f.path;
+          if (inline) item.base64 = bytesToB64(f.bytes);
+          payload.push(item);
+        }
+        return json({ text, files: payload, ...(args.outputDir ? { outputDir: args.outputDir } : {}) });
       }
       return wrap(out == null ? "" : String(out));
+    }
+
+    if (name === "ebctf_read_file") {
+      const fs = await nodeFs();
+      const st = await fs.stat(args.path);
+      if (!st.isFile()) return wrap(`不是文件：${args.path}`, true);
+      const limit = Math.max(1, Math.min(Number(args.maxBytes) || 1024 * 1024, 8 * 1024 * 1024));
+      const bytes = new Uint8Array(await fs.readFile(args.path));
+      const slice = bytes.subarray(0, limit);
+      const enc = args.encoding || "auto";
+      let content = bytesToText(slice, enc);
+      let used = enc;
+      if (content == null) { content = bytesToB64(slice); used = "base64"; }
+      return json({
+        path: args.path, size: bytes.length, readBytes: slice.length, truncated: bytes.length > slice.length,
+        mime: guessMime(bytes), encoding: used, sha256: await sha256Hex(bytes), content,
+      });
     }
 
     if (name === "ebctf_magic_decode") {
@@ -387,3 +578,6 @@ export function exportManifest() {
     },
   };
 }
+
+
+

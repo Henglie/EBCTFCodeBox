@@ -1,17 +1,19 @@
 /*
  * exebridge.js — pyc/exe 自动反编前端 op（件内自注册）。
  *
- * 调本地 bridge.py 的 /api/decompile（独立服务，端口 8181，仅 Windows）：
+ * 调本地 bridge.py 的 /api/decompile（独立服务，127.0.0.1:8181，仅 Windows）：
  * 前端把 .pyc/.exe 读成 base64 → POST bridge → 桥 xdis 查 magic 定 Python 版本
  * → 3.4-3.8 走 uncompyle6/decompyle3；3.9+ 走 pylingual（实验，需手动装）
- * → PyInstaller exe 先 PyInstxtractor 解包再逐 pyc 反编 → 返 py 源码。
+ * → 都不可用时回退 pycdc（Decompyle++）
+ * → PyInstaller exe 先 Pyinstxtractor 解包再逐 pyc 反编 → 返 py 源码。
+ * 反编前先 GET /api/health 短探活（2s）：桥没起立即明确报错，不空等 130s。
  *
  * 形态判定：
  * - bridge 不可用（纯静态分发 / 未起桥）→ op 返回明确提示「仅本地运行 + 仅 Windows」，不抛错。
  * - 非 Windows → 桥端点直接拒绝，前端如实透传提示。
  *
  * 零外发：
- * - 仅 fetch localhost:8181，绝不外发用户样本或反编结果到任何远端。
+ * - 仅 fetch 127.0.0.1:8181，绝不外发用户样本或反编结果到任何远端。
  * - pylingual 的 HF 镜像仅桥侧用于其自身模型拉取，不上传样本（见 bridge.py）。
  *
  * op：
@@ -22,9 +24,15 @@
  */
 import { register } from "./registry.js";
 
-const BRIDGE_URL = "http://localhost:8181";
+// 固定 127.0.0.1：bridge.py 只监听 IPv4 回环；localhost 在部分 Windows 环境先解析到
+// ::1，浏览器会白等到超时（旧版报 request timeout 的诱因之一）。
+const BRIDGE_URL = "http://127.0.0.1:8181";
 const HEALTH_TIMEOUT = 3000;
-const DECOMPILE_TIMEOUT = 130000; // 略大于桥的 120s
+const PREFLIGHT_TIMEOUT = 2000; // 桥未起时快速失败，不等满反编超时
+const PREFLIGHT_CACHE_MS = 10000; // 刚探活成功就在短窗口内复用，避免每次拖文件多一跳
+const DECOMPILE_TIMEOUT = 130000; // 略大于桥的 120s（exe 多 pyc 分支）
+
+let _bridgeUpAt = 0; // 最近一次健康检查成功的时间戳（ms）
 
 // ---- base64 编解码（与 localBridge.js 同形，本模块自持）----
 function b64encode(bytes) {
@@ -52,17 +60,48 @@ async function fetchWithTimeout(url, ms, opts) {
   }
 }
 
+function describeFetchError(e) {
+  const name = (e && e.name) || "";
+  if (name === "AbortError" || name === "TimeoutError") return "连接超时";
+  return String((e && e.message) || e);
+}
+
+/** 单次健康探测。必须拿到 JSON 且 ok:true 才认作本地桥（避免 8181 被别的服务占用时误判）。 */
+async function probeBridge(ms) {
+  try {
+    const r = await fetchWithTimeout(BRIDGE_URL + "/api/health", ms, { cache: "no-store" });
+    if (!r.ok) return { ok: false, error: "健康检查 HTTP " + r.status };
+    let j = null;
+    try { j = await r.json(); } catch { /* 非 JSON：不是本地桥 */ }
+    if (!j || j.ok !== true) return { ok: false, error: "健康检查响应不是本地桥（端口 8181 可能被占用）" };
+    return { ok: true, info: j };
+  } catch (e) {
+    return { ok: false, error: describeFetchError(e) };
+  }
+}
+
+/**
+ * 反编前先短探活：桥没起时立刻给明确提示，绝不把 130s 超时耗满。
+ * 成功结果缓存 10s，避免连续拖文件时每次多一跳。
+ */
+async function ensureBridge() {
+  if (Date.now() - _bridgeUpAt < PREFLIGHT_CACHE_MS) return { ok: true, cached: true };
+  const h = await probeBridge(PREFLIGHT_TIMEOUT);
+  if (h.ok) _bridgeUpAt = Date.now();
+  return h;
+}
+
 /** 探反编工具链可用性（GET /api/decompile-env）。返回桥结果或 {ok:false,...}。 */
 async function decompileEnv() {
   try {
     const r = await fetchWithTimeout(BRIDGE_URL + "/api/decompile-env", HEALTH_TIMEOUT, { cache: "no-store" });
-    if (!r.ok) return { ok: false, bridge: false, error: "HTTP " + r.status };
+    if (!r.ok) return { ok: false, bridge: true, error: "HTTP " + r.status };
     const j = await r.json();
     j.bridge = true;
     return j;
   } catch (e) {
  // 桥不可用（纯静态分发 / 未起桥）
-    return { ok: false, bridge: false, error: String(e) };
+    return { ok: false, bridge: false, error: describeFetchError(e) };
   }
 }
 
@@ -71,6 +110,14 @@ async function decompileEnv() {
  * 返回桥结果对象或 {ok:false, bridge:false, error}（桥不可用时）。
  */
 async function decompileBytes(bytes, name, kind) {
+  const online = await ensureBridge();
+  if (!online.ok) {
+    return {
+      ok: false,
+      bridge: false,
+      error: "无法连接 127.0.0.1:8181（" + (online.error || "本地桥未运行") + "）",
+    };
+  }
   const body = {
     kind: kind || "auto",
     name: name || "",
@@ -82,10 +129,35 @@ async function decompileBytes(bytes, name, kind) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const j = await r.json();
+    if (!r.ok) {
+      let msg = "HTTP " + r.status;
+      try {
+        const j = await r.json();
+        if (j && (j.error || j.message)) msg += ": " + (j.error || j.message);
+      } catch { /* 非 JSON 错误体 */ }
+      return { ok: false, bridge: true, httpStatus: r.status, error: msg };
+    }
+    let j;
+    try {
+      j = await r.json();
+    } catch {
+      return { ok: false, bridge: true, error: "桥返回非 JSON 响应" };
+    }
+    if (!j || typeof j !== "object") return { ok: false, bridge: true, error: "桥返回空响应" };
+    if (j.bridge === undefined) j.bridge = true; // 已收到响应 → 桥可达
     return j;
   } catch (e) {
-    return { ok: false, bridge: false, error: String(e) };
+    const aborted = (e && (e.name === "AbortError" || e.name === "TimeoutError")) || false;
+    if (aborted) {
+      return {
+        ok: false,
+        bridge: true,
+        timeout: true,
+        error: "本地桥 " + Math.round(DECOMPILE_TIMEOUT / 1000) +
+          "s 未返回（反编子进程卡住，或 8181 被其他程序占用）",
+      };
+    }
+    return { ok: false, bridge: false, error: describeFetchError(e) };
   }
 }
 
@@ -146,19 +218,24 @@ register({
       placeholder: "如 main.pyc" },
   ],
   run: async (text, p) => {
-    const b64 = (p.file != null && p.file !== "") ? p.file : (text || "");
-    if (!b64 || !b64.trim()) {
-      return "● 请提供 .pyc / .exe 文件的 Base64（或用文件拖放区）。本功能仅本地运行 + 仅 Windows 可用。";
+    const raw = (p && p.rawBytes && p.rawBytes.length)
+      ? (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes))
+      : null;
+    const b64 = (p.file != null && p.file !== "") ? p.file : (raw ? "" : (text || ""));
+    if (!raw && (!b64 || !b64.trim())) {
+      return "● 请提供 .pyc / .exe 文件（拖入输入框或点「选择文件」），或用文件拖放区粘贴其 Base64。本功能仅本地运行 + 仅 Windows 可用。";
     }
     let bytes;
     try {
-      bytes = decodeB64Input(b64);
+      bytes = raw || decodeB64Input(b64);
     } catch (e) {
       return "● Base64 解析失败：" + String(e);
     }
-    const res = await decompileBytes(bytes, p.name || "", p.kind || "auto");
-    return formatResult(res, p.name || "input");
+    const name = (p && p.name) || (p && p.rawFileName) || "";
+    const res = await decompileBytes(bytes, name, p.kind || "auto");
+    return formatResult(res, name || "input");
   },
+  acceptsBytes: true,
 });
 
 export { decompileEnv, decompileBytes, formatResult };

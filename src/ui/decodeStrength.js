@@ -3,11 +3,18 @@
  *
  * 替代原先首页工具栏的两个裸开关（深度爆破 / 多层链式）：
  * - 顶部滑块：5 档预设（快速→最强），按 CTF 考点从热门到冷门逐层放开，标注耗时承诺。
- * - 下方多选：全部可自动解码的 op 按分类折叠列出，可搜索、可整类勾选。
- * - 文本 / 文件双页签：两套配置各存各的（同一弹窗内切换）。
- * - 命名方案：可存多套、可删、可导入导出 JSON。
+ * - 下方多选：全部可参与的 op 按分类折叠列出，可搜索、可整类勾选。
+ * - 文本 / 文件双页签：两套配置各存各的（level/customIds/depth/bruteIds 全独立）。
+ * - 命名方案：按作用域分别保存，可删、可导入导出 JSON。
  *
- * 防卡死（538 op 的列表）：
+ * 文本 / 文件差异：
+ * - 文本页：可自动解码的 op；排除只对文件有意义的分类；额外带「暴力爆破」独立通道。
+ * - 文件页：decode + 文件向 run 型工具（图像/音频/隐写/归档/口令/取证/文件格式），
+ *   run 型工具同样标注 tier，供文件分析按强度放行；爆破通道只在文本页出现。
+ *
+ * 惰载态：打开时先 await ensureAll() 补齐全部 op 再渲染，避免列表只显示已闲时预载的部分。
+ *
+ * 防卡死（数百 op 的列表）：
  * - 分类默认折叠，只渲染标题行；展开某类才建该类的 checkbox（按需渲染）。
  * - 列表容器固定高度 + overflow:auto（滑动条），不撑爆弹窗。
  * - 搜索走 200ms 防抖，且只在已展开的类里重建 DOM。
@@ -23,6 +30,7 @@ import {
   STRENGTH_PRESETS,
   opPoolByCat,
   opsForLevel,
+  selectableOpIds,
   listProfiles,
   loadProfile,
   saveProfile,
@@ -31,7 +39,10 @@ import {
   importProfiles,
   bruteOpGroup,
   isBruteOp,
+  normalizeScopeBundle,
+  buildApplyPayload,
 } from "../core/decodeProfile.js";
+import { ensureAll } from "../core/lazyCore.js";
 import { icon as iconSvg } from "./icons.js";
 import { attachModalLifecycle } from "./modalLifecycle.js";
 
@@ -60,6 +71,7 @@ function msym(name, cls = "") {
 const _ZH = {
   "ui.ds.title": "解码强度",
   "ui.ds.note": "强度越高，参与的算法越多、耗时越长。按 CTF 考点热度从高到低逐层放开。",
+  "ui.ds.loading": "正在加载算法列表…",
   "ui.ds.tabText": "文本",
   "ui.ds.tabFile": "文件",
   "ui.ds.level.fast": "快速",
@@ -75,9 +87,16 @@ const _ZH = {
   "ui.ds.hint.max": "不限时 · 全部算法 + 穷举全解",
   "ui.ds.hint.custom": "由你勾选参与的算法",
   "ui.ds.opsCount": "参与算法 {0} / {1}",
+  "ui.ds.depth.title": "解析层数（多层链式）",
+  "ui.ds.depth.note": "层数 = 最多连续解码几层（如 base64 → gzip → 字符串）。爆破/穷举不受此限制。",
+  "ui.ds.depth.n": "{0} 层",
+  "ui.ds.brute.title": "暴力爆破算法（独立通道）",
+  "ui.ds.brute.note": "爆破结果单独归组展示，不参与主排序。勾选后一键解码会在主流程之外额外跑这些爆破。",
+  "ui.ds.bruteCount": "已选 {0} / {1} 个爆破算法",
   "ui.ds.search": "搜索算法名 / id…",
   "ui.ds.selectAll": "全选",
   "ui.ds.selectNone": "全不选",
+  "ui.ds.invert": "反选",
   "ui.ds.resetLevel": "按当前档重置勾选",
   "ui.ds.profiles": "我的方案",
   "ui.ds.profileName": "方案名",
@@ -125,23 +144,40 @@ let _debounce = null;
 /**
  * 打开解码强度弹窗。
  * @param {object} opt
- *   cfg      当前配置 { text:{level,customIds}, file:{level,customIds} }
- *   onApply  (cfg) => void  点「应用」回调，传回两套作用域的完整配置
+ *   cfg      双作用域 { text:{level,customIds,depth,bruteIds}, file:{...} }；
+ *            也接受旧单层 { level, customIds }（自动归到 text，file 用默认 normal）
+ *   onApply  (cfg) => void  点「应用」回调；返回 {text,file}，并在顶层平铺 text 字段兼容旧调用
  */
 export function openDecodeStrength(opt = {}) {
   closeDecodeStrength(true);
 
-  // 工作副本：合并文本+文件为统一配置。改动只在此弹窗内，点「应用」才回传。
-  const src = (opt.cfg && opt.cfg.text) || {};
-  const level = src.level || "normal";
-  const ids = Array.isArray(src.customIds) && src.customIds.length
-    ? new Set(src.customIds)
-    : opsForLevel(level === "custom" ? "enhanced" : level, "text");
-  const work = {
-    level,
-    ids,
-    depth: Math.max(1, Math.min(3, Number(src.depth) || (STRENGTH_PRESETS[level] ? STRENGTH_PRESETS[level].magic.maxDepth : 1))),
-    bruteIds: new Set(Array.isArray(src.bruteIds) ? src.bruteIds.filter((id) => isBruteOp(id)) : []),
+  // 工作副本：新旧配置都归一成 text/file 两套。改动只在此弹窗内，点「应用」才回传。
+  // works 等 ensureAll 补齐算法后再建，避免惰载态下按半截 OPS 算默认勾选。
+  const bundle = normalizeScopeBundle(opt.cfg);
+  let works = null;
+  let activeScope = "text";
+
+  function makeWork(cfg, scope) {
+    const level = cfg.level || "normal";
+    const preset = STRENGTH_PRESETS[level] || STRENGTH_PRESETS.normal;
+    const valid = selectableOpIds(scope);
+    const custom = (cfg.customIds || []).filter((id) => valid.has(id));
+    return {
+      level,
+      ids: custom.length ? new Set(custom) : opsForLevel(level === "custom" ? "enhanced" : level, scope),
+      depth: Math.max(1, Math.min(3, Number(cfg.depth) || preset.magic.maxDepth || 1)),
+      bruteIds: scope === "text" ? new Set((cfg.bruteIds || []).filter((id) => isBruteOp(id))) : new Set(),
+    };
+  }
+
+  const snapshot = (scope) => {
+    const w = works[scope];
+    return {
+      level: w.level,
+      customIds: [...w.ids],
+      depth: w.depth,
+      bruteIds: scope === "text" ? [...w.bruteIds] : [],
+    };
   };
 
   const dialog = el("div", { class: "ds-dialog", role: "dialog", "aria-modal": "true", "aria-label": t("ui.ds.title") });
@@ -161,9 +197,11 @@ export function openDecodeStrength(opt = {}) {
 
   // ---- 底部操作 ----
   const applyBtn = el("button", { class: "act-btn primary", type: "button" }, msym("check_circle"), el("span", {}, t("ui.ds.apply")));
-  const cancelBtn = el("button", { class: "act-btn", type: "button" }, el("span", {}, t("ui.ds.cancel")));
+  const cancelBtn = el("button", { class: "act-btn", type: "button" }, msym("close"), el("span", {}, t("ui.ds.cancel")));
   applyBtn.addEventListener("click", () => {
-    const out = { level: work.level, customIds: [...work.ids], depth: work.depth, bruteIds: [...work.bruteIds] };
+    if (!works) return;                       // 算法列表仍在加载，避免半截配置回传
+    // 双作用域 + 顶层平铺文本字段：仍按 {level,customIds} 读取的旧调用也能直接使用。
+    const out = buildApplyPayload(snapshot("text"), snapshot("file"));
     closeDecodeStrength();
     if (typeof opt.onApply === "function") opt.onApply(out);
   });
@@ -171,12 +209,37 @@ export function openDecodeStrength(opt = {}) {
   dialog.append(el("div", { class: "ds-foot" }, cancelBtn, applyBtn));
 
   // ============================================================
-  // 主体渲染
+  // 主体渲染（每次切换作用域整体重建；两套 work 状态独立保留）
   // ============================================================
   function renderBody() {
     body.innerHTML = "";
-    const pool = opPoolByCat("text");
-    const total = pool.reduce((n, g) => n + g.ops.length, 0);
+    clearTimeout(_debounce);
+    const scope = activeScope;
+    const work = works[scope];
+    // noAuto 只适合 op 页手动运行；不放进档位勾选列表，避免出现“勾了也不跑”的假开关。
+    const pool = opPoolByCat(scope)
+      .map((g) => ({ ...g, ops: g.ops.filter((o) => o.auto !== false) }))
+      .filter((g) => g.ops.length);
+    const bruteGroup = scope === "text" ? bruteOpGroup() : { cat: "_brute", catName: "", ops: [] };
+    const poolWithBrute = bruteGroup.ops.length ? [bruteGroup, ...pool] : pool;
+    const total = pool.reduce((n, g) => n + g.ops.length, 0) + bruteGroup.ops.length;
+
+    // ---- 作用域页签（复用层数按钮样式，不新增 CSS 依赖）----
+    const tabRow = el("div", { class: "ds-depth-row ds-tabs", role: "tablist" });
+    for (const sc of ["text", "file"]) {
+      const tab = el("button", {
+        class: "ds-depth-btn" + (scope === sc ? " on" : ""),
+        type: "button", role: "tab",
+        "aria-selected": scope === sc ? "true" : "false",
+        "data-scope": sc,
+      }, t(sc === "text" ? "ui.ds.tabText" : "ui.ds.tabFile"));
+      tab.addEventListener("click", () => {
+        if (activeScope === sc) return;
+        activeScope = sc;
+        renderBody();
+      });
+      tabRow.append(tab);
+    }
 
     // ---- 强度滑块 ----
     const levelIdx = work.level === "custom" ? STRENGTH_LEVELS.length : STRENGTH_LEVELS.indexOf(work.level);
@@ -190,30 +253,39 @@ export function openDecodeStrength(opt = {}) {
     const levelHint = el("div", { class: "ds-level-hint" });
     const countLine = el("div", { class: "ds-count" });
 
+    const syncCountLine = () => {
+      const n = work.ids.size + (scope === "text" ? work.bruteIds.size : 0);
+      countLine.textContent = t("ui.ds.opsCount", n, total);
+    };
+    const syncLevelText = () => {
+      const lv = work.level;
+      levelName.textContent = t("ui.ds.level." + lv);
+      levelHint.textContent = t("ui.ds.hint." + lv);
+      syncCountLine();
+    };
+
     const ticks = el("div", { class: "ds-ticks" });
     for (const lv of [...STRENGTH_LEVELS, "custom"]) {
       ticks.append(el("span", { class: "ds-tick" }, t("ui.ds.level." + lv)));
     }
 
-    const syncLevelText = () => {
-      const lv = work.level;
-      levelName.textContent = t("ui.ds.level." + lv);
-      levelHint.textContent = t("ui.ds.hint." + lv);
-      countLine.textContent = t("ui.ds.opsCount", work.ids.size, total);
-    };
-
     slider.addEventListener("input", () => {
       const i = parseInt(slider.value, 10);
       work.level = i >= STRENGTH_LEVELS.length ? "custom" : STRENGTH_LEVELS[i];
-      // 切到具体档 → 勾选同步为该档默认集合；切到 custom → 保留当前勾选
+      // 切到具体档 → 勾选同步为该作用域该档的默认集合；切到 custom → 保留当前勾选
       if (work.level !== "custom") {
-        work.ids = opsForLevel(work.level, "text");
+        // 原地更新：分类行/闭包持有的是同一个 Set 引用，换新 Set 会让已展开行
+        // 继续按旧集合显示，出现「档位变了勾选没变」的假 UI。
+        const next = opsForLevel(work.level, scope);
+        work.ids.clear();
+        for (const id of next) work.ids.add(id);
         refreshAllChecks();
       }
       syncLevelText();
     });
 
     body.append(el("div", { class: "ds-sec ds-sec-level" },
+      tabRow,
       el("div", { class: "ds-slider-row" }, slider),
       ticks,
       el("div", { class: "ds-level-meta" }, levelName, levelHint),
@@ -241,20 +313,18 @@ export function openDecodeStrength(opt = {}) {
 
     // ---- 搜索 + 批量 ----
     const search = el("input", { type: "text", class: "ds-search", placeholder: t("ui.ds.search"), spellcheck: "false" });
-    const allBtn = el("button", { class: "ds-mini", type: "button" }, t("ui.ds.selectAll"));
-    const noneBtn = el("button", { class: "ds-mini", type: "button" }, t("ui.ds.selectNone"));
-    const resetBtn = el("button", { class: "ds-mini", type: "button" }, t("ui.ds.resetLevel"));
+    const allBtn = el("button", { class: "ds-mini", type: "button" }, msym("select_all"), t("ui.ds.selectAll"));
+    const noneBtn = el("button", { class: "ds-mini", type: "button" }, msym("delete_sweep"), t("ui.ds.selectNone"));
+    const invertBtn = el("button", { class: "ds-mini", type: "button" }, msym("swap_horiz"), t("ui.ds.invert"));
+    const resetBtn = el("button", { class: "ds-mini", type: "button" }, msym("restart_alt"), t("ui.ds.resetLevel"));
     body.append(el("div", { class: "ds-sec ds-sec-tools" },
       el("label", { class: "ds-search-wrap" }, msym("search"), search),
-      el("div", { class: "ds-mini-row" }, allBtn, noneBtn, resetBtn),
+      el("div", { class: "ds-mini-row" }, allBtn, noneBtn, invertBtn, resetBtn),
     ));
 
     // ---- op 列表（分类折叠 + 按需渲染 + 独立滚动条）----
-    // 把「暴力爆破（独立通道）」作为虚拟分类 prepend 到列表最前，
-    // 与普通 op 共用同一折叠/搜索/勾选 UI（用户期望 brute 不再独立成块）。
-    // 该分组的勾选状态走 work.bruteIds（与 work.ids 分开存，runOneKey 仍按独立通道跑）。
-    const bruteGroup = bruteOpGroup();
-    const poolWithBrute = bruteGroup.ops.length ? [bruteGroup, ...pool] : pool;
+    // 文本页把「暴力爆破（独立通道）」作为虚拟分类 prepend 到列表最前；
+    // 文件页不渲染该分类，勾选状态仍只在 text 的 work.bruteIds 里。
     const list = el("div", { class: "ds-list" });
     body.append(list);
 
@@ -262,17 +332,14 @@ export function openDecodeStrength(opt = {}) {
     // idSet 指向 work.ids（普通分类）或 work.bruteIds（brute 虚拟分类），分组内增删互不串味。
     const groups = new Map();
 
-    const syncCountLine = () => {
-      const n = work.ids.size + work.bruteIds.size;
-      countLine.textContent = t("ui.ds.opsCount", n, total + bruteGroup.ops.length);
-    };
     const markCustom = () => {
       if (work.level !== "custom") {
         work.level = "custom";
         slider.value = String(STRENGTH_LEVELS.length);
         syncLevelText();
+      } else {
+        syncCountLine();
       }
-      syncCountLine();
     };
 
     function buildRows(g, host, filter, idSet) {
@@ -358,7 +425,7 @@ export function openDecodeStrength(opt = {}) {
     }
 
     allBtn.addEventListener("click", () => {
-      // 全选 = 普通分类全进 work.ids + brute 分类全进 work.bruteIds
+      // 全选 = 当前作用域全部参与（文本页同时含 brute 独立通道）
       for (const g of poolWithBrute) {
         const idSet = g.cat === "_brute" ? work.bruteIds : work.ids;
         for (const o of g.ops) idSet.add(o.id);
@@ -366,12 +433,25 @@ export function openDecodeStrength(opt = {}) {
       refreshAllChecks(); markCustom();
     });
     noneBtn.addEventListener("click", () => {
-      work.ids.clear(); work.bruteIds.clear(); refreshAllChecks(); markCustom();
+      work.ids.clear();
+      if (scope === "text") work.bruteIds.clear();
+      refreshAllChecks(); markCustom();
+    });
+    invertBtn.addEventListener("click", () => {
+      for (const g of poolWithBrute) {
+        const idSet = g.cat === "_brute" ? work.bruteIds : work.ids;
+        for (const o of g.ops) {
+          if (idSet.has(o.id)) idSet.delete(o.id); else idSet.add(o.id);
+        }
+      }
+      refreshAllChecks(); markCustom();
     });
     resetBtn.addEventListener("click", () => {
-      // 按档重置只影响普通 op（work.ids），brute 通道保留用户勾选（不归档）
+      // 按档重置只影响当前作用域普通 op；文本页的 brute 通道保留用户勾选（不归档）
       const lv = work.level === "custom" ? "normal" : work.level;
-      work.ids = opsForLevel(lv, "text");
+      const next = opsForLevel(lv, scope);
+      work.ids.clear();
+      for (const id of next) work.ids.add(id);
       work.level = lv;
       slider.value = String(STRENGTH_LEVELS.indexOf(lv));
       refreshAllChecks(); syncLevelText();
@@ -390,21 +470,21 @@ export function openDecodeStrength(opt = {}) {
             st2.open = true;
             st2.wrap.classList.add("open");
             st2.head.setAttribute("aria-expanded", "true");
-            buildRows(st2.g, st2.rowsHost, q);
+            buildRows(st2.g, st2.rowsHost, q, st2.idSet);
             st2.built = true;
           } else if (st2.built) {
-            buildRows(st2.g, st2.rowsHost, q);
+            buildRows(st2.g, st2.rowsHost, q, st2.idSet);
           }
         }
       }, 200);
     });
 
-    // ---- 我的方案（命名保存 / 载入 / 删除 / 导入导出）----
+    // ---- 我的方案（命名保存 / 载入 / 删除 / 导入导出，按当前作用域）----
     const nameInput = el("input", { type: "text", class: "ds-prof-name", placeholder: t("ui.ds.profileName"), spellcheck: "false" });
     const sel = el("select", { class: "ds-prof-sel" });
     const rebuildSel = () => {
       sel.innerHTML = "";
-      const names = listProfiles("text");
+      const names = listProfiles(scope);
       if (!names.length) {
         sel.append(el("option", { value: "" }, t("ui.ds.noProfile")));
         sel.disabled = true;
@@ -416,16 +496,16 @@ export function openDecodeStrength(opt = {}) {
     rebuildSel();
 
     const saveBtn = el("button", { class: "ds-mini", type: "button" }, msym("save"), t("ui.ds.save"));
-    const loadBtn = el("button", { class: "ds-mini", type: "button" }, t("ui.ds.load"));
-    const delBtn = el("button", { class: "ds-mini danger", type: "button" }, t("ui.ds.del"));
-    const expBtn = el("button", { class: "ds-mini", type: "button" }, t("ui.ds.export"));
-    const impBtn = el("button", { class: "ds-mini", type: "button" }, t("ui.ds.import"));
+    const loadBtn = el("button", { class: "ds-mini", type: "button" }, msym("history"), t("ui.ds.load"));
+    const delBtn = el("button", { class: "ds-mini danger", type: "button" }, msym("delete"), t("ui.ds.del"));
+    const expBtn = el("button", { class: "ds-mini", type: "button" }, msym("download"), t("ui.ds.export"));
+    const impBtn = el("button", { class: "ds-mini", type: "button" }, msym("cloud_upload"), t("ui.ds.import"));
     const profMsg = el("div", { class: "ds-prof-msg" });
 
     saveBtn.addEventListener("click", () => {
       const n = nameInput.value.trim();
       if (!n) { nameInput.focus(); return; }
-      saveProfile(n, { level: work.level, customIds: [...work.ids] }, "text");
+      saveProfile(n, { level: work.level, customIds: [...work.ids] }, scope);
       nameInput.value = "";
       rebuildSel();
       profMsg.textContent = "✓ " + n;
@@ -433,16 +513,22 @@ export function openDecodeStrength(opt = {}) {
     loadBtn.addEventListener("click", () => {
       const n = sel.value;
       if (!n) return;
-      const p = loadProfile(n, "text");
+      const p = loadProfile(n, scope);
       if (!p) return;
-      work.level = p.level;
-      work.ids = new Set(p.customIds);
+      const valid = selectableOpIds(scope);
+      const loaded = (p.customIds || []).filter((id) => valid.has(id));
+      work.level = p.level || "custom";
+      const next = loaded.length
+        ? new Set(loaded)
+        : opsForLevel(work.level === "custom" ? "enhanced" : work.level, scope);
+      work.ids.clear();
+      for (const id of next) work.ids.add(id);
       renderBody();          // 载入后整体重建（档位/勾选全变）
     });
     delBtn.addEventListener("click", () => {
       const n = sel.value;
       if (!n) return;
-      deleteProfile(n, "text");
+      deleteProfile(n, scope);
       rebuildSel();
       profMsg.textContent = "";
     });
@@ -483,14 +569,25 @@ export function openDecodeStrength(opt = {}) {
     syncLevelText();
   }
 
-  renderBody();
-
+  // 首屏先给占位：主线程惰载态下 OPS 只有一部分是真 op，直接渲染会漏算法。
+  // ensureAll 补齐后在当前弹窗内重建；期间被关闭/重开则不写旧节点。
+  body.append(el("div", { class: "ds-sec-note", style: "padding:24px;text-align:center" }, t("ui.ds.loading")));
   _overlay = el("div", { class: "ds-overlay" }, dialog);
   document.body.append(_overlay);
   _lifecycle = attachModalLifecycle(_overlay, { dialog, onClose: closeDecodeStrength });
+  const ov = _overlay;
 
-  // 焦点进弹窗（键盘/读屏可达）
-  setTimeout(() => { try { dialog.querySelector(".ds-slider").focus(); } catch { /* 忽略 */ } }, 0);
+  (async () => {
+    try { await ensureAll(); } catch { /* 加载失败按已就绪的 op 渲染，不阻断弹窗 */ }
+    if (_overlay !== ov) return;
+    works = {
+      text: makeWork(bundle.text, "text"),
+      file: makeWork(bundle.file, "file"),
+    };
+    renderBody();
+    // 焦点进弹窗（键盘/读屏可达）
+    setTimeout(() => { try { dialog.querySelector(".ds-slider").focus(); } catch { /* 忽略 */ } }, 0);
+  })();
 }
 
 /** 关闭弹窗。 */

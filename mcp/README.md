@@ -2,26 +2,28 @@
 
 把恒烈CTF编码工具箱的能力（列分类 / 列 op / 查参数 / 智能识别 / 跑 op / 一键智能解码）暴露成 MCP 工具，供支持 MCP 的 AI 客户端（Claude Desktop、Cline 等）调用。全程本地进程，零外发。
 
-server 版本 `0.1.11`，对外可见 op 820 个。`ebctf_list_categories` 列出 23 个功能分类（注册表 `CATEGORIES` 共 24 项，含 `home` 首页；首页不计入功能分类）。
+server 版本 `0.1.12`，对外可见 op 878 个。`ebctf_list_categories` 列出 23 个功能分类（注册表 `CATEGORIES` 共 24 项，含 `home` 首页；首页不计入功能分类）。
 
-> **安全**：建议使用 Node ≥ 26.5.1（或 24.18.1 / 22.23.2）——2026-07 安全公告修复权限模型越权与 HTTP/2 UAF；`server.mjs` 会对受影响版本在 stderr 提示。MCP 不暴露 JSFuck / JJEncode（二者解码会用 `new Function` 执行输入），且二者已排除出一键解码自动池。MCP 是本机 stdio 服务，不应部署为公网/多用户后端；后端不代用户外发（用户授权外发只发生在浏览器前端的自定义实现里）。
+> **安全**：建议使用 Node ≥ 26.5.1（或 24.18.1 / 22.23.2）——2026-07 安全公告修复权限模型越权与 HTTP/2 UAF；`server.mjs` 会对受影响版本在 stderr 提示。JSFuck / JJEncode 默认不暴露；确需使用传 `allowUnsafe:true`（或设 `EBCTF_MCP_UNSAFE=1`），二者解码会用 `new Function` 执行输入，风险自担。MCP 是本机 stdio 服务，不应部署为公网/多用户后端；后端不代用户外发（用户授权外发只发生在浏览器前端的自定义实现里）。
 
 ## 文件
 
 - `server.mjs` — Node stdio MCP server，讲 JSON-RPC over stdio，转发到 core 的 `callMcpTool`。支持 `initialize`（按规范协商协议版本，附 `serverInfo.title` 与推荐路径 `instructions`）/ `tools/list` / `tools/call` / `resources/list` / `resources/read`。
 - `ebctf-core-adapter.mjs` — 薄适配层，加载全量注册表后转出浏览器同款 `callMcpTool` / `MCP_TOOLS` / `exportManifest`。
+- `cli.mjs` — 文件友好的本地 CLI；`run --file`/`--out` 让图片、pcap、zip、pyc、exe 走真实字节通道，与 MCP 共用同一份能力面。
 
 单一事实源是 `src/plugin/mcpBridge.js` 的 `MCP_TOOLS` + `callMcpTool`。Node 侧不重写任何解码逻辑，只复用 core 纯函数；浏览器内 AI、mcp server、skills 三端共用同一份能力定义，加/改一个能力只动 `mcpBridge.js`。
 
-## 六个工具
+## 七个工具
 
 | 工具 | 参数 | 用途 |
 |------|------|------|
 | `ebctf_list_categories` | 无 | 列出功能分类，每类含 op 数量。先了解能力全景再下钻。 |
-| `ebctf_list_ops` | `keyword?`、`cat?` | 列 op，可按关键词或分类过滤。每条含 id、分类、名称、支持方向(encode/decode/run)、是否带参。 |
+| `ebctf_list_ops` | `keyword?`、`cat?`、`includeUnsafe?` | 列 op，可按关键词或分类过滤。每条含 id、分类、名称、支持方向(encode/decode/run)、是否带参。默认隐藏 JS 执行类。 |
 | `ebctf_op_schema` | `opId` | 查指定 op 的完整参数 schema（key/类型/默认值/可选项）与支持方向。跑带参 op 前先用它。 |
 | `ebctf_detect` | `input`、`limit?`（默认 15） | 智能识别：对文本跑全部带指纹的算法，返回按置信度(0~1)排序的候选编码/加密类型，不做解码。 |
-| `ebctf_run_op` | `opId`、`input`、`direction?`、`params?` | 对输入执行指定 op 的 encode/decode/run，支持传自定义参数（形状见 `ebctf_op_schema`，未给的用默认值）。 |
+| `ebctf_run_op` | `opId`、`input`、`fileBase64?`、`filePath?`、`inputEncoding?`、`outputDir?`、`includeBase64?`、`direction?`、`params?`、`allowUnsafe?` | 对输入执行指定 op。文本走 `input`；图片/pcap/zip/pyc/exe 等二进制走 `fileBase64` 或 `filePath`；产物可 base64 返回或 `outputDir` 落盘。 |
+| `ebctf_read_file` | `path`、`maxBytes?`、`encoding?` | 读取本机文件供 AI 检查，返回大小、MIME 猜测、sha256 与内容（二进制默认 base64）。 |
 | `ebctf_magic_decode` | `input`、`crib?`、`maxDepth?`（默认 1，多层传 3）、`intensive?`（默认 false） | 一键智能解码，返回按可能性排序的候选明文与解码链路。可开多层链式解码与 1-byte XOR / 位旋转暴力。 |
 
 ## 三个资源
@@ -34,7 +36,7 @@ server 版本 `0.1.11`，对外可见 op 820 个。`ebctf_list_categories` 列�
 | `ebctf://categories` | application/json | 功能分类与每类 op 数（与 `ebctf_list_categories` 同一口径） |
 | `ebctf://guide` | text/markdown | 解题引导：detect 识别 → magic_decode 一键解 → 不够再 list_ops / op_schema |
 
-工具与资源的取舍：工具返回「针对某个输入跑出来的结果」；资源返回「能力面本身的清单 / 引导」。820 个 op 的规模下，把 `ebctf://guide` 挂进对话比反复调 `ebctf_list_ops` 省往返——先读 guide 建立路线，再用工具下钻。
+工具与资源的取舍：工具返回「针对某个输入跑出来的结果」；资源返回「能力面本身的清单 / 引导」。878 个 op 的规模下，把 `ebctf://guide` 挂进对话比反复调 `ebctf_list_ops` 省往返——先读 guide 建立路线，再用工具下钻。
 
 ## 接入注意：stdout 纯净性
 
@@ -102,3 +104,5 @@ echo '{"jsonrpc":"2.0","id":5,"method":"resources/read","params":{"uri":"ebctf:/
 ## 零外发红线
 
 stdio server 是本地进程，AI 客户端 ↔ 本地 server 走 stdio，无网络出口。复用的 core 全是纯函数，不联网、不上传任何数据。
+
+
