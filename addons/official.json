@@ -3,9 +3,9 @@
   "plugins": [
     {
       "id": "dcode-extras-2026-10",
-      "name": "dCode 扩展包 · 2026-10 · 408 op",
-      "version": "2026.10.3",
-      "description": "dCode.fr 风格纯 JS 算法扩展包：988 个 dCode 工具已逐条入账（490 implemented / 319 mapped / 179 blocked），当前 408 op；blocked 为图片/OCR/外部数据库/版权字体等无法诚实离线实现的项。默认不启用。",
+      "name": "dCode 扩展包 Beta · 2026-10 · 408 op",
+      "version": "2026.10.3-beta.1",
+      "description": "dCode.fr 风格纯 JS 算法扩展包 Beta：988 个 dCode 工具逐条入账（490 implemented / 319 mapped / 179 blocked），当前 408 op；WASM/无限大数/自动运行策略下版优化。默认不启用。",
       "author": "恒烈CTF编码工具箱",
       "url": "./addons/dcode-extras-2026-10/index.js",
       "official": true

@@ -53,43 +53,24 @@
 
 ## v0.1.12
 
-### 新增功能
+### 新增
 
-- 栅栏密码新增「模式」下拉框：W 型（锯齿 zigzag，默认）与 Z 型（传统分栏，按列写入、按行读出）
-- W 型新增「偏移量」档（0..64，轨迹先空 N 格再落字；Z 型填非 0 显式报错）
-- 一键解码的栅栏参数扫描同时覆盖 W 型与 Z 型（栏数 ≥3 时两种走法都试）
-- 新增五笔字型（86/98 双版本，20,902 字全码，支持连写自动分段与同码候选）
-- 新增中文电码（7,099 字，保留前导 0，四位定长）
-- 新增郑码（27,492 字，全码优先、短码可解）
-- 新增四角号码（16,720 字，默认列出同码全部候选，支持 4/5 位与点分写法）
-- 新增仓颉码（27,525 字，1–5 码、难字键 X）
-- 五种编码均补齐 aka≥10、中英科普卡、zh/en/de/fr/ja/ko/ru 文案与四项往返 harness
-- 新增 ChaCha20-Poly1305 / Poly1305 / GHASH / AEAD nonce 重用
-- 新增 PQC blob 解析 + NTRU 系数打包/解包
-- 新增 ZIP 条目列表 + 条目提取/解密导出
-- 新增 ECDH / RSA-OAEP / HPKE 封装族（5 op）
-- 新增 Mach-O / WASM 结构解析（2 op）
-- 新增 GB18030 严格四字节 / UTF-32（2 op）
-- 新增 SHA-224 / cSHAKE（2 op）
-- 进制小数升级为 2–36 BigInt 精确换基与循环节检测（base=0 兼容旧四档）
-- 文件分析隐写自动尝试新增光栅拆图、MP3Stego（密钥框口令）、Piet 执行、alpha 条带 3-bit 解码与 foremost 内嵌文件分离，产物可预览/打包下载
-- 智能解码与二维码结果卡新增类型动作行：URL/邮箱/WiFi/电话/geo/vCard/JSON/JWT/flag/base64；联网动作二次确认，WiFi 分 SSID/口令复制
-- 新增真题基准 `工具/rt_realtest_bench.mjs`（49 项：36 pass / 0 fail / 7 known-gap / 6 skipped）与真题结论模块 `src/core/stegoResearch.js`
+- 云影密码（01248）双向 op；KNN A/B 分类；StegSolve 独立 op 页。
+- 栅栏密码补 Z 型，W 型支持 0–64 偏移并纳入一键解码。
+- 中文查字五件套：五笔 86/98、中文电码、郑码、四角号码、仓颉。
+- AEAD/PQC/ZIP/ECDH/RSA-OAEP/HPKE/Mach-O/WASM/GB18030/UTF-32/SHA-224/cSHAKE 等 op。
+- 文件分析流式插卡、自动隐写线索与文件产物；结果卡智能动作。
+- 官方插件页支持同源 addons/ 自动发现；dCode 扩展包 Beta，408 op。
 
 ### 修复
 
-- 修复栅栏密码简介写 W 型、科普原理写 Z 字形，且没有 Z 型入口的问题
-- 修复盲文科普卡「无参数」与实际 mapping 档（auto/nabcc/raw）不符
-- 修复键盘坐标、T9 手机九宫格科普卡「无参数」与实际参数不符
-- 修复点数记数（骰面解码）示例多写一位数字
-- 修复童子军木棍密码示例尾串多一个空格
-- 撤销自定义实现中与正式 op 重复的「栅栏变体」预设（W/Z 已并入 railFence）
-- 修复五笔 98 源表 7 条首字母大写异常码（我=Qtrny、为=Oyeyi 等，已按标准码修正）
-- 修复四角号码 5 位输入在字表只有 4 位主码时解不出（如 36780 → 识，末位 0 自动回退）
-- 修复汇编/反汇编架构假覆盖：收窄到实测可用的 5 种架构，移除 RISC-V 与未验证架构入口
-- 修复天珩字库平面 range：p1 补 ExtG/H/J、p16 改为第 16 平面 PUA、p0 补第 14 平面，生僻字不再掉系统字体
+- 语言完成度改为真实翻译统计；固定中文第一、English 第二；弹窗切换路由自动关闭。
+- 修复 Phantom_QR 卡死、结果目录残留、TOC 圆点遮挡、runbar 对齐。
+- F5/QR 受限样本保持明确失败；pyc/bkcrack/imageDiff/archive 修复。
 
-更早版本的完整变更记录见 [CHANGELOG.md](./CHANGELOG.md)。
+### 验证
+
+878 主 op；408 插件 op；题库 110 题/153 文件；stage 白名单 1630、清单 2634；未推送、未发布。详见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 项目简介
 
@@ -1275,7 +1256,7 @@ public/
 
 - 开发指南：[`src/plugin/README.md`](./src/plugin/README.md)
 - 参考插件（活样板，照抄改名即起步）：[`src/plugin/examples/hello-cipher/index.js`](./src/plugin/examples/hello-cipher/index.js)
-- 官方插件包（随发行包分发、**默认不启用**）：[`addons/dcode-extras-2026-10/`](./addons/dcode-extras-2026-10/)。在插件页「官方插件」区直接点击启用（自动读取 official.json，同源 addons/ 目录发现兜底）；不进主 op 计数、不进预缓存，首次在线加载后离线可用。当前 408 op，988 个 dCode 工具已逐条入账。
+- 官方插件包（随发行包分发、**默认不启用**）：[`addons/dcode-extras-2026-10/`](./addons/dcode-extras-2026-10/)。在插件页「官方插件」区直接点击启用（自动读取 official.json，同源 addons/ 目录发现兜底）；不进主 op 计数、不进预缓存，首次在线加载后离线可用。当前 Beta 408 op，988 个 dCode 工具已逐条入账。
 
 ### 给外部 AI 用（MCP / Skills）
 

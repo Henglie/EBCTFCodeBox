@@ -11,9 +11,9 @@
 
 export const manifest = {
   id: "dcode-extras-2026-10",
-  name: "dCode 扩展包 · 2026-10 · 408 op",
-  version: "2026.10.3",
-  description: "dCode.fr 风格纯 JS 算法扩展包：988 个工具全量入账，408 op；覆盖缺口见 COVERAGE.md。",
+  name: "dCode 扩展包 Beta · 2026-10 · 408 op",
+  version: "2026.10.3-beta.1",
+  description: "dCode.fr 风格纯 JS 算法扩展包 Beta：988 个工具逐条入账，408 op；WASM/无限大数/自动运行策略下版优化。覆盖缺口见 COVERAGE.md。",
   author: "恒烈CTF编码工具箱",
   apiVersion: 1,
 };
@@ -30,21 +30,21 @@ import { OPS as NUM_MORE } from "./ops/numeralmore.js";
 import { OPS as CIPHER_MORE } from "./ops/ciphermore.js";
 
 const CATS = [
-  { id: "dcode-extras-2026-10/cat-math", name: "补全 · 数学工具", icon: "calculate" },
-  { id: "dcode-extras-2026-10/cat-numeral", name: "补全 · 记数系统", icon: "pin" },
-  { id: "dcode-extras-2026-10/cat-text", name: "补全 · 文本工具", icon: "text_fields" },
-  { id: "dcode-extras-2026-10/cat-game", name: "补全 · 谜题求解", icon: "extension" },
-  { id: "dcode-extras-2026-10/cat-symbol", name: "补全 · 符号字母", icon: "translate" },
-  { id: "dcode-extras-2026-10/cat-cipher", name: "补全 · 古典密码", icon: "lock" },
+  { id: "dcode-extras-2026-10/cat-math", name: "dcode·数学", icon: "calculate" },
+  { id: "dcode-extras-2026-10/cat-numeral", name: "dcode·记数", icon: "pin" },
+  { id: "dcode-extras-2026-10/cat-text", name: "dcode·文本", icon: "text_fields" },
+  { id: "dcode-extras-2026-10/cat-game", name: "dcode·谜题", icon: "extension" },
+  { id: "dcode-extras-2026-10/cat-symbol", name: "dcode·符号", icon: "translate" },
+  { id: "dcode-extras-2026-10/cat-cipher", name: "dcode·古典", icon: "lock" },
 ];
 
 const EN_CAT = {
-  "cat-math": "Extras · Math",
-  "cat-numeral": "Extras · Numerals",
-  "cat-text": "Extras · Text",
-  "cat-game": "Extras · Puzzles",
-  "cat-symbol": "Extras · Symbols",
-  "cat-cipher": "Extras · Classical ciphers",
+  "cat-math": "dcode · Math",
+  "cat-numeral": "dcode · Numerals",
+  "cat-text": "dcode · Text",
+  "cat-game": "dcode · Puzzles",
+  "cat-symbol": "dcode · Symbols",
+  "cat-cipher": "dcode · Classical",
 };
 
 const STATIC_OPS = [...MATH_OPS, ...NUM_OPS, ...TEXT_OPS, ...GAME_OPS, ...LEX_OPS, ...SYM_OPS, ...MATH_MORE, ...TEXT_MORE, ...NUM_MORE, ...CIPHER_MORE];
@@ -55,12 +55,13 @@ export default async function setup(ctx) {
   await loadLexicon();
   for (const c of CATS) ctx.addCategory(c);
   let n = 0;
-  for (const op of STATIC_OPS) { ctx.registerOp(op); n++; }
+  for (const op of STATIC_OPS) { ctx.registerOp({ ...op, since: op.since || "2026.10.0", addedIn: "v0.1.12-beta" }); n++; }
   for (const name of AUTO_BATCHES) {
     try {
       const mod = await import("./ops/" + name);
       for (const raw of mod.OPS || []) {
-        const op = String(raw.id || "").startsWith("dcode-extras-2026-10/") ? raw : { ...raw, id: "dcode-extras-2026-10/" + raw.id };
+        const base = String(raw.id || "").startsWith("dcode-extras-2026-10/") ? raw : { ...raw, id: "dcode-extras-2026-10/" + raw.id };
+        const op = { ...base, since: base.since || "2026.10.3", addedIn: "v0.1.12-beta" };
         ctx.registerOp(op); n++;
       }
     } catch (e) {
@@ -73,5 +74,5 @@ export default async function setup(ctx) {
     zh: Object.fromEntries(CATS.map((c) => [`cat.${c.id}`, c.name])),
     en: Object.fromEntries(CATS.map((c) => [`cat.${c.id}`, EN_CAT[c.id.split("/").pop()] || "Extras"])),
   });
-  ctx.log(`已注册 ${n} 个 op（dCode 扩展包 · 2026-10）`);
+  ctx.log(`已注册 ${n} 个 op（dCode 扩展包 Beta · 2026-10）`);
 }

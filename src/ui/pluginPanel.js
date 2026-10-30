@@ -71,9 +71,9 @@ export function renderPluginsPage(host) {
 // ---- 1. 插件区 ----
 const OFFICIAL_FALLBACK = [{
   id: "dcode-extras-2026-10",
-  name: "dCode 扩展包 · 2026-10 · 408 op",
-  version: "2026.10.3",
-  description: "dCode.fr 风格纯 JS 算法扩展包：988 个工具全量入账，当前 408 op；覆盖缺口见 COVERAGE.md。默认不启用。",
+  name: "dCode 扩展包 Beta · 2026-10 · 408 op",
+  version: "2026.10.3-beta.1",
+  description: "dCode.fr 风格纯 JS 算法扩展包 Beta：988 个工具逐条入账，408 op；WASM/无限大数/自动运行策略下版优化。覆盖缺口见 COVERAGE.md。",
   url: "./addons/dcode-extras-2026-10/index.js",
   official: true,
 }];

@@ -55,70 +55,22 @@ Current version **v0.1.12**. The source of truth is always the GitHub repository
 
 ### New
 
-- Rail Fence now has a mode selector: W-zigzag (default, optional offset) and Z traditional columnar (write by column, read by row)
-- Wubi (Five-Stroke) 86/98 full single-character codes for 20,902 characters
-- Chinese Telegraph Code: 7,099 characters, fixed four digits with leading zeros
-- Zhengma: 27,492 characters, full-code first with short-code decoding
-- Four-Corner Code: 16,720 characters, all same-code candidates listed by default, 4/5-digit and dotted forms
-- Cangjie: 27,525 characters, 1–5 codes with the X difficult-character key
-- All five lookup codecs ship aka aliases, Chinese/English edu cards, seven-language UI text and a four-part acceptance harness
-- New ChaCha20-Poly1305 / Poly1305 / GHASH / AEAD nonce reuse ops
-- New PQC blob parser plus NTRU coefficient pack/unpack
-- New ZIP entry list plus extract/decrypt export
-- New ECDH / RSA-OAEP / HPKE wrappers (5 ops)
-- New Mach-O / WASM structure parsers (2 ops)
-- New strict GB18030 four-byte / UTF-32 ops (2 ops)
-- New SHA-224 / cSHAKE ops (2 ops)
-- Radix fractions upgraded to exact base 2–36 BigInt conversion with cycle detection (base=0 keeps the legacy four-base report)
-- File-analysis stego auto-scan now covers raster splitting (PNG/BMP), MP3Stego (passphrase from the home key box), Piet execution, alpha-strip 3-bit decoding and foremost embedded-file separation, with inline previews and ZIP download
-- Result cards now render type actions for URL / email / WiFi / phone / geo / vCard / JSON / JWT / flag / base64; network actions require confirmation and WiFi separates SSID/password copy
-- New real-test benchmark `工具/rt_realtest_bench.mjs` (49 items: 36 pass / 0 fail / 7 known-gap / 6 skipped) and findings module `src/core/stegoResearch.js`
+- Yunying cipher (01248); KNN A/B classifier; standalone StegSolve page.
+- Rail Fence Z mode; W mode offset 0–64 and smart-decode support.
+- Five Chinese lookup codecs: Wubi 86/98, Chinese Telegraph, Zhengma, Four-Corner, Cangjie.
+- AEAD/PQC/ZIP/ECDH/RSA-OAEP/HPKE/Mach-O/WASM/GB18030/UTF-32/SHA-224/cSHAKE ops.
+- Streaming file analysis, automatic stego leads and artifacts; smart result actions.
+- Official plugin discovery from addons/; dCode plugin Beta with 408 ops.
 
 ### Fixed
 
-- Removed the duplicate "rail fence variant" custom preset; W/Z modes now live in the railFence op
-- Fixed seven malformed Wubi 98 codes whose first letter was accidentally uppercase (我=Qtrny etc.)
-- Fixed four-corner 5-digit input when the table only stores the 4-digit main code (e.g. 36780 → 识)
-- Fixed W/Z rail-fence copy contradictions and several unrelated edu-card parameter mismatches
+- Real translation coverage; Chinese first, English second; language modal closes on route changes.
+- Phantom_QR hang, stale result TOC, TOC dot overlap and runbar alignment.
+- F5/QR limited samples stay explicit failures; pyc/bkcrack/imageDiff/archive fixes.
 
-## v0.1.11
+### Verification
 
-### New
-
-- Ohou codec (Xianzi)
-- Hakimi cipher (ternary)
-- Zako codec (official closed-source algorithm reproduced) + open-source Base8 variant
-- Base64/dataURI to image
-- Image to binary bit-stream
-- Image to numeric pixel data
-- Base-N float to decimal
-- Sign/magnitude, ones' and twos' complement to decimal
-- Custom implementations now inline the full dependency closure
-- Custom implementations support async and file products
-- Synonym-aware search (image/video/audio, etc.)
-
-### Fixed
-
-- Data URI parsing no longer loses binary image files
-- Data URI MIME/actual-format mismatch is now reported
-- One-way op buttons no longer show the wrong direction
-- Run-priority bug that made MIME multipart encoding unreachable
-- Exhaustive decode no longer shows [object Object] for product objects
-- ZIP pseudo-encryption no longer reported as real encryption (verified against the actual entry data)
-- Base-N float parsing no longer strips a prefix that does not match the selected base
-- Custom implementation source bundles no longer miss dependencies used inside template interpolations
-- Bitmap / numeric-data image ops no longer overflow or crash on large inputs
-
-### Security & Improvements
-
-- Custom sandbox keeps network access (user-authorised transfers)
-- Zero-upload wording clarified: the program itself never initiates transfers
-- OpenPGP.js upgraded to 5.11.3 (CVE-2025-47934)
-- JSFuck / JJEncode hidden from the MCP execution surface
-- RSA public-exponent validation and weak-key warnings
-- MCP warns about vulnerable Node versions
-- On-demand assets included in the SW revision
-- README security notes for October 2026
+878 main ops; 408 plugin ops; 110 challenges / 153 files; stage 1630 / manifest 2634; not pushed or released. See [CHANGELOG.md](./CHANGELOG.md).
 
 ## Introduction
 
@@ -1306,7 +1258,7 @@ Third parties can write plugins with zero main-project changes: a plugin is a st
 
 - Developer guide: [`src/plugin/README.md`](./src/plugin/README.md)
 - Reference plugin (a live template — copy, rename, start): [`src/plugin/examples/hello-cipher/index.js`](./src/plugin/examples/hello-cipher/index.js)
-- Official plugin package (shipped in releases, **disabled by default**): [`addons/dcode-extras-2026-10/`](./addons/dcode-extras-2026-10/). Enable it from the **Official plugins** section (official.json plus same-origin addons/ directory discovery); it adds no main op count, stays out of the precache, and becomes offline-available after the first online load. Current: 408 ops; all 988 dCode tools are accounted for.
+- Official plugin package (shipped in releases, **disabled by default**): [`addons/dcode-extras-2026-10/`](./addons/dcode-extras-2026-10/). Enable it from the **Official plugins** section (official.json plus same-origin addons/ directory discovery); it adds no main op count, stays out of the precache, and becomes offline-available after the first online load. Current: Beta 408 ops; all 988 dCode tools are accounted for.
 
 ### For External AI (MCP / Skills)
 
