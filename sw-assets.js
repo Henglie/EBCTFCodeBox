@@ -1,4 +1,4 @@
-self.__EBCTF_ASSET_REV = "1f97eaed8827355b";
+self.__EBCTF_ASSET_REV = "16ba842ff6e6f253";
 self.__EBCTF_ASSETS = [
   "./",
   "./index.html",
@@ -352,6 +352,7 @@ self.__EBCTF_ASSETS = [
   "./src/core/edu/edu-t723.js",
   "./src/core/edu/edu-t760.js",
   "./src/core/edu/edu-t796.js",
+  "./src/core/edu/edu-t813.js",
   "./src/core/edu/edu-teach.js",
   "./src/core/edu/edu-text-bubblebabble.js",
   "./src/core/edu/edu-text-jsescape.js",
@@ -761,6 +762,17 @@ self.__EBCTF_ASSETS = [
   "./src/core/stringsExtract.js",
   "./src/core/suiYanSuiYu.js",
   "./src/core/symboldetect.js",
+  "./src/core/t813Common.js",
+  "./src/core/t813EscapeSmartCharacters.js",
+  "./src/core/t813FromHexContent.js",
+  "./src/core/t813HexToOid.js",
+  "./src/core/t813IpChecksum.js",
+  "./src/core/t813OidToHex.js",
+  "./src/core/t813ParityBit.js",
+  "./src/core/t813RemoveDiacritics.js",
+  "./src/core/t813StripHttpHeaders.js",
+  "./src/core/t813ToHexContent.js",
+  "./src/core/t813XorChecksum.js",
   "./src/core/tar.js",
   "./src/core/text.js",
   "./src/core/textBlindWatermark.js",

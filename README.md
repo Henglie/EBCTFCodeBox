@@ -33,7 +33,7 @@
 - [项目简介](#项目简介)　　　　[特点](#特点)
 - [界面预览](#界面预览)　　　　[运行](#运行)
 - [平台兼容性](#平台兼容性)　　[性能要求](#性能要求)
-- [目录结构](#目录结构)　　　　[编解码全清单](#编解码全清单928-ops--23-分类)
+- [目录结构](#目录结构)　　　　[编解码全清单](#编解码全清单940-ops--23-分类)
 - [插件与 AI 接入](#插件与-ai-接入)　[开源协议](#开源协议)
 - [第三方资源与许可](#第三方资源与许可)　[隐私](#隐私)
 - [关键词 / Keywords](#关键词--keywords)
@@ -53,7 +53,7 @@
 
 ## v0.1.14（开发中）
 
-> 本版主要变化：新增结构化出站编码、文本处理工具组、中英文 OCR 与编码图识图升级；扩展面板重构并支持离线包批量管理；敏感参数默认遮罩、重运算显式运行、口令与私钥可隐藏；BOM 工具条状态与弹窗切路由修复；主 op 增至 930，六门文案 2939 键。
+> 本版主要变化：新增结构化出站编码、文本处理工具组、中英文 OCR 与编码图识图升级；扩展面板重构并支持离线包批量管理；敏感参数默认遮罩、重运算显式运行、口令与私钥可隐藏；BOM 工具条状态与弹窗切路由修复；主 op 增至 940，六门文案 2959 键。
 
 ## v0.1.13-beta
 
@@ -289,7 +289,7 @@ public/
 资料/              算法码表核对资料 + 研究成果（开发资料，不随发行包分发）
 ```
 
-## 编解码全清单（930 ops · 23 分类）
+## 编解码全清单（940 ops · 23 分类）
 
 > 本节由 `node tools/gen_readme_ops.mjs` 从主入口真实 import 闭包生成；opId 即注册表唯一标识。
 
@@ -328,7 +328,7 @@ public/
 | crockford32 | Crockford Base32 |  |
 | dxBase64 | DXBase64 |  |
 
-### 文本 / 传输编码（70 ops）
+### 文本 / 传输编码（72 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -402,6 +402,8 @@ public/
 | yenc | yEnc 编 / 解码 |  |
 | binhex | BinHex 4.0 编 / 解码 |  |
 | regexTool | 通用正则提取 / 替换 |  |
+| escapeSmartChars | 转义智能字符 |  |
+| removeDiacritics | 去除变音符号 |  |
 
 ### 花式 / CTF 编码（79 ops）
 
@@ -666,7 +668,7 @@ public/
 | opId | 名称 | 说明 |
 |---|---|---|
 | rc4 | RC4 | RC4 流密码（自反，key 任意长；密钥/输入/输出支持 UTF16/UTF16LE/UTF16BE/Latin1/Hex/Base64）。若密文以 U2FsdGVk 开头（OpenSSL/CryptoJS 的 Salted__ 封装），请改用「OpenSSL 口令加解密」并选 RC4 |
-| xor | XOR | 重复密钥异或（自反，CTF 最常用；单字节爆破见分析类 xorBrute） |
+| xor | XOR | 重复密钥异或（自反，CTF 最常用；单字节爆破见分析类 xorBrute；支持 Standard/Input differential/Output differential/Cascade + Null preserving） |
 | rabbit | Rabbit 流密码 | RFC 4503 Rabbit 流密码。变体三档：CryptoJS Legacy（旧版在线工具默认，推荐）/ CryptoJS 标准 / RFC 4503 文档方向（0.1.9 及更早行为）。密钥填 32 位 hex 直用（IV 可选）；填口令或留空则按 CryptoJS OpenSSL 封装（Salted base64）加解密。decode 对 CryptoJS 密文（U2FsdGVkX1 开头）自动带空口令与常见口令尝试。 |
 | salsa20 | Salsa20 |  |
 | chacha20 | ChaCha20 |  |
@@ -687,7 +689,7 @@ public/
 | rc4Drop | RC4-drop / CipherSaber-2 |  |
 | xsalsa20 | XSalsa20 |  |
 
-### 现代密码·非对称（128 ops）
+### 现代密码·非对称（130 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -819,6 +821,8 @@ public/
 | x509Verify | X.509 证书链验签 |  |
 | sshsigVerify | OpenSSH SSHSIG 验签 |  |
 | sigVerify | 统一验签入口 |  |
+| hexToOid | 十六进制 → 对象标识符 |  |
+| oidToHex | 对象标识符 → 十六进制 |  |
 
 ### 现代密码·其他（33 ops）
 
@@ -858,7 +862,7 @@ public/
 | mpcToy | 安全多方计算玩具（教学） |  |
 | quantumToy | 量子算法玩具（Grover / Shor） |  |
 
-### 哈希 / 校验（73 ops）
+### 哈希 / 校验（76 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -935,6 +939,9 @@ public/
 | poseidon | Poseidon |  |
 | poseidon2 | Poseidon2 |  |
 | xoodyakHash | Xoodyak-Hash |  |
+| ipChecksum | TCP/IP 校验和 |  |
+| xorChecksum | XOR 分块校验和 |  |
+| parityBit | 奇偶校验位 |  |
 
 ### 进制 / 字符集（83 ops）
 
@@ -1150,7 +1157,7 @@ public/
 | gcmForbidden | GCM nonce 重用攻击 |  |
 | eccSubgroupAttack | ECDH 小子群/无效曲线攻击 |  |
 
-### 取证 / 流量（20 ops）
+### 取证 / 流量（21 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1174,6 +1181,7 @@ public/
 | wpaDecrypt | WPA2 握手校验/CCMP 解密 |  |
 | mcTextExtract | Minecraft 文本情报提取 |  |
 | mcNbtView | Minecraft NBT 树查看器 |  |
+| stripHttpHeaders | 剥离 HTTP 头 |  |
 
 ### 文件格式 / 结构（15 ops）
 
@@ -1195,7 +1203,7 @@ public/
 | kzgBlobParse | EIP-4844 blob 解析 |  |
 | pkcs12Parse | PKCS#12/PFX 解析 |  |
 
-### 数据结构 / 序列化（27 ops）
+### 数据结构 / 序列化（29 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1226,6 +1234,8 @@ public/
 | huffmanCodec | 哈夫曼编解码（通用） |  |
 | unitConv | 单位换算 |  |
 | dataConvert | JSON / CSV / XML / YAML 转换 |  |
+| fromHexContent | SNORT Hex Content 解码 |  |
+| toHexContent | SNORT Hex Content 编码 |  |
 
 ### 图像 / 二维码（39 ops）
 

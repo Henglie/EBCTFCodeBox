@@ -16,8 +16,9 @@
 - Minecraft 文本情报提取支持拖入存档 ZIP 整包，深度扫描全部 NBT 字符串找 flag
 - CyberChef 参数对齐：Argon2 PHC 编码输出、Ascon/CMAC 密钥编码、Base85 自定义码表、bzip2 work factor、多字节二进制解码
 - 关于页新增 README 与更新日志入口
-- 主 op 增至 930
-- 六门文案 2939 键
+- 新增 10 个 CyberChef 对齐 op：TCP/IP 校验和、XOR 校验和、奇偶校验位、Hex↔OID、SNORT Hex Content 编解码、智能字符转义、去除变音符号、剥离 HTTP 头
+- 主 op 增至 940
+- 六门文案 2959 键
 
 ### 修复
 

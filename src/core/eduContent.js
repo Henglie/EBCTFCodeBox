@@ -211,6 +211,7 @@ import EDU_CC_PARITY from "./edu/edu-cc-parity.js"; // CyberChef P0：cobs/lzma/
 import EDU_CC_P0B from "./edu/edu-cc-p0b.js"; // CyberChef P0-B：serialEnc 5 + textUtils 28 + ocr
 import EDU_OPENSSL from "./edu/edu-openssl.js"; // OpenSSL Salted__ 一步式口令加解密
 import EDU_T796 from "./edu/edu-t796.js"; // CyberChef M：HTTP Dechunk / 拆分颜色通道
+import EDU_T813 from "./edu/edu-t813.js"; // T814：T813 批 10 op 科普（ipChecksum/xorChecksum/parityBit/hexToOid/oidToHex/fromHexContent/toHexContent/escapeSmartChars/removeDiacritics/stripHttpHeaders）
 
 // 合并所有分片。后者不覆盖前者（分区不重叠）；重叠时以后者为准，构建期应避免。
 const EDU = Object.assign(
@@ -382,6 +383,7 @@ const EDU = Object.assign(
   EDU_CC_P0B,
   EDU_OPENSSL,
   EDU_T796,
+  EDU_T813,
 );
 
 import { ZH as INTEGRATED, HASH_VECTORS, BASE_NOTES, EXTRA_ALIASES, CRC_PARAMS } from "./edu/edu-integrated.js";

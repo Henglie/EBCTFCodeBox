@@ -424,6 +424,16 @@ import "./gostKeyWrap.js"; // GOST 28147-89 Key Wrap gostKeyWrap（block, run, R
 import "./bfvToy.js"; // BFV 玩具同态加密 bfvToy（block, run, 教学：噪声账本/同态加乘）
 import "./mpcToy.js"; // 安全多方计算玩具 mpcToy（modern, run, 教学：Beaver 三元组/1-of-2 OT 模拟）
 import "./quantumToy.js"; // 量子算法玩具 quantumToy（modern, run, 教学：Grover/Shor statevector）
+import "./t813IpChecksum.js"; // T813：TCP/IP 校验和 ipChecksum（hash, run, RFC 1071）
+import "./t813XorChecksum.js"; // T813：XOR 分块校验和 xorChecksum（hash, run）
+import "./t813ParityBit.js"; // T813：奇偶校验位 parityBit（hash, run）
+import "./t813HexToOid.js"; // T813：十六进制→OID hexToOid（asym, run, X.690）
+import "./t813OidToHex.js"; // T813：OID→十六进制 oidToHex（asym, run, X.690）
+import "./t813FromHexContent.js"; // T813：SNORT Hex Content 解码 fromHexContent（data, run）
+import "./t813ToHexContent.js"; // T813：SNORT Hex Content 编码 toHexContent（data, run）
+import "./t813EscapeSmartCharacters.js"; // T813：转义智能字符 escapeSmartChars（text, run）
+import "./t813RemoveDiacritics.js"; // T813：去除变音符号 removeDiacritics（text, run）
+import "./t813StripHttpHeaders.js"; // T813：剥离 HTTP 头 stripHttpHeaders（forensic, run, RFC 7230）
 import "./detectExt3.js"; // EASY 30 op detect 补齐（须在所有 op 注册后）
 import "./detectSupplement.js"; // 编码类 detect 覆盖补齐（须在所有 op 注册后）
 

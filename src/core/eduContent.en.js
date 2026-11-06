@@ -122,6 +122,7 @@ import EDU_EN_R18 from "./edu-en/edu-r18.en.js"; // R18: lsbDeep/rasterStego/mp3
 import EDU_EN_T721 from "./edu-en/edu-t721.en.js"; // 2026-10-26: Falcon/Poseidon/KZG/SSH·PKCS12·JWK/GCM·NTRU/Xoodyak/ECC (17 ops)
 import EDU_EN_HISTORICAL from "./edu-en/edu-historical-machines.en.js"; // typex/sigaba/lorenz 3
 import EDU_EN_HISTORICAL_ATTACKS from "./edu-en/edu-historical-attacks.en.js"; // bombe/multipleBombe/colossus 3
+import EDU_EN_T813 from "./edu-en/edu-t813.en.js"; // T814: English cards for the T813 batch (10 ops)
 
 const EDU_EN = Object.assign(
   {},
@@ -226,6 +227,7 @@ const EDU_EN = Object.assign(
   EDU_EN_T721,
   EDU_EN_HISTORICAL,
   EDU_EN_HISTORICAL_ATTACKS,
+  EDU_EN_T813,
 );
 
 import { EN as INTEGRATED, HASH_VECTORS, BASE_NOTES, EXTRA_ALIASES, CRC_PARAMS } from "./edu/edu-integrated.js";
