@@ -336,6 +336,41 @@ function binPadDecode(text, bits) {
   return n.toString(10);
 }
 
+// ============ CyberChef To/From Charcode（Unicode 码点，Base 2-36，Delimiter） ============
+const CHARCODE_DELIMS = { Space: " ", Comma: ",", "Semi-colon": ";", Colon: ":", "Line feed": "\n", CRLF: "\r\n", Tab: "\t" };
+function toCharcodeCc(text, p) {
+  const base = Number(p && p.charcodeBase != null ? p.charcodeBase : 16);
+  if (!Number.isInteger(base) || base < 2 || base > 36) throw new Error("Error: Base argument must be between 2 and 36");
+  const delim = CHARCODE_DELIMS[(p && p.charcodeDelimiter) || "Space"] ?? " ";
+  const codes = [];
+  for (const ch of String(text == null ? "" : text)) codes.push(ch.codePointAt(0));
+  return codes.map((cp) => {
+    if (base !== 16) return cp.toString(base);
+    let pad = 2;
+    if (cp >= 256 && cp < 65536) pad = 4;
+    else if (cp >= 65536 && cp < 16777216) pad = 6;
+    else if (cp >= 16777216) pad = 8;
+    return cp.toString(16).toUpperCase().padStart(pad, "0");
+  }).join(delim);
+}
+function fromCharcodeCc(text, p) {
+  const base = Number(p && p.charcodeBase != null ? p.charcodeBase : 16);
+  if (!Number.isInteger(base) || base < 2 || base > 36) throw new Error("Error: Base argument must be between 2 and 36");
+  const delim = CHARCODE_DELIMS[(p && p.charcodeDelimiter) || "Space"] ?? " ";
+  const raw = String(text == null ? "" : text);
+  if (!raw) return "";
+  let tokens = raw.split(delim);
+  if (tokens.length === 1 && raw.length > 17) {
+    tokens = [];
+    for (let i = 0; i < raw.length; i += 2) tokens.push(raw.slice(i, i + 2));
+  }
+  return tokens.map((tok) => {
+    const n = parseInt(String(tok).trim(), base);
+    if (Number.isNaN(n)) throw new Error("无效 charcode: " + tok);
+    return String.fromCodePoint(n);
+  }).join("");
+}
+
 // ============ 注册 ============
 
 register({
@@ -375,9 +410,17 @@ register({
     { key: "signed", label: "十进制有符号（-128..127）", type: "bool", default: false },
     { key: "byteLength", label: "二进制位宽（1-256，0=沿用 bits）", type: "number", default: 0 },
     { key: "compat", label: "兼容模式（十/八/十六进制不补前导零）", type: "bool", default: false },
+    { key: "charcodeMode", label: "Charcode 模式（Unicode 码点，同 CC To/From Charcode）", type: "bool", default: false },
+    { key: "charcodeBase", label: "Charcode Base（2-36）", type: "number", default: 16 },
+    { key: "charcodeDelimiter", label: "Charcode Delimiter", type: "select", default: "Space",
+      options: [
+        { value: "Space", label: "Space" }, { value: "Comma", label: "Comma" },
+        { value: "Semi-colon", label: "Semi-colon" }, { value: "Colon", label: "Colon" },
+        { value: "Line feed", label: "Line feed" }, { value: "CRLF", label: "CRLF" }, { value: "Tab", label: "Tab" },
+      ] },
   ],
-  encode: (t, p) => asciiEncode(t, Number((p && p.base) || 16), p),
-  decode: (t, p) => asciiDecode(t, Number((p && p.base) || 16), p),
+  encode: (t, p) => (p && p.charcodeMode ? toCharcodeCc(t, p) : asciiEncode(t, Number((p && p.base) || 16), p)),
+  decode: (t, p) => (p && p.charcodeMode ? fromCharcodeCc(t, p) : asciiDecode(t, Number((p && p.base) || 16), p)),
 });
 
 register({
@@ -411,13 +454,102 @@ register({
   decode: (t, p) => ieee754Decode(t, (p && p.precision) || "single", p),
 });
 
+const BCD_SCHEMES = {
+  "8 4 2 1": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  "7 4 2 1": [0, 1, 2, 3, 4, 5, 6, 8, 9, 10],
+  "4 2 2 1": [0, 1, 4, 5, 8, 9, 12, 13, 14, 15],
+  "2 4 2 1": [0, 1, 2, 3, 4, 11, 12, 13, 14, 15],
+  "8 4 -2 -1": [0, 7, 6, 5, 4, 11, 10, 9, 8, 15],
+  "Excess-3": [3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+  "IBM 8 4 2 1": [10, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+};
+
+function bcdCcEncode(text, p) {
+  const scheme = BCD_SCHEMES[(p && p.scheme) || "8 4 2 1"];
+  if (!scheme) throw new Error("Unknown BCD scheme");
+  const packed = p && p.packed !== false;
+  const signed = p && p.signed === true;
+  const outFmt = (p && p.ioFormat) || "Nibbles";
+  const raw = String(text == null ? "" : text).trim();
+  const neg = raw.startsWith("-");
+  const s = raw.replace(/[^0-9]/g, "");
+  if (!s) throw new Error("Invalid input");
+  const digits = s.split("").map(Number);
+  let nibbles = digits.map((d) => scheme[d]);
+  if (signed) {
+    if (packed && digits.length % 2 === 0) nibbles.unshift(scheme[0]);
+    nibbles.push(neg ? 13 : 12);
+  }
+  let bytes = [];
+  if (packed) {
+    let encoded = 0, little = false;
+    for (const n of nibbles) {
+      encoded ^= little ? n : (n << 4);
+      if (little) { bytes.push(encoded); encoded = 0; }
+      little = !little;
+    }
+    if (little) bytes.push(encoded);
+  } else {
+    bytes = nibbles.slice();
+  }
+  if (outFmt === "Nibbles") return nibbles.map((n) => n.toString(2).padStart(4, "0")).join(" ");
+  if (outFmt === "Bytes") return bytes.map((b) => b.toString(2).padStart(8, "0")).join(" ");
+  let out = "";
+  for (const b of bytes) out += String.fromCharCode(b);
+  return out;
+}
+
+const BCD_LOOKUP = {};
+for (const [name, arr] of Object.entries(BCD_SCHEMES)) BCD_LOOKUP[name] = arr;
+
+function bcdCcDecode(text, p) {
+  const scheme = BCD_LOOKUP[(p && p.scheme) || "8 4 2 1"];
+  if (!scheme) throw new Error("Unknown BCD scheme");
+  const packed = p && p.packed !== false;
+  const signed = p && p.signed === true;
+  const inFmt = (p && p.ioFormat) || "Nibbles";
+  const raw = String(text == null ? "" : text);
+  let nibbles = [];
+  if (inFmt === "Nibbles" || inFmt === "Bytes") {
+    const clean = raw.replace(/\s/g, "");
+    for (let i = 0; i < clean.length; i += 4) nibbles.push(parseInt(clean.substr(i, 4), 2));
+  } else {
+    const bytes = new TextEncoder().encode(raw);
+    for (const b of bytes) { nibbles.push(b >>> 4); nibbles.push(b & 15); }
+  }
+  if (!packed) nibbles = nibbles.filter((_, i) => i % 2 === 1);
+  let sign = "";
+  if (signed) {
+    const last = nibbles.pop();
+    if (last === 13 || last === 11) sign = "-";
+  }
+  let out = sign;
+  for (const n of nibbles) {
+    const val = scheme.indexOf(n);
+    if (val < 0) throw new Error("Invalid input");
+    out += val;
+  }
+  if (!out.replace("-", "")) return "0";
+  return BigInt(out).toString();
+}
+
 register({
-  id: "bcd", cat: "radix", name: "BCD 码", desc: "十进制数字串↔BCD 十六进制串",
+  id: "bcd", cat: "radix", name: "BCD 码", desc: "十进制数字串↔BCD 十六进制串；mode=cc 时同 CyberChef From/To BCD（7 种 Scheme/Packed/Signed/Nibbles·Bytes·Raw）",
   params: [
     { key: "compat", label: "兼容模式（二进制半字节，空格分隔）", type: "bool", default: false },
+    { key: "mode", label: "模式", type: "select", default: "legacy", options: [
+      { value: "legacy", label: "项目旧口径（hex 半字节）" },
+      { value: "cc", label: "CyberChef BCD（Scheme/Packed/Signed/格式）" },
+    ] },
+    { key: "scheme", label: "Scheme", type: "select", default: "8 4 2 1",
+      options: Object.keys(BCD_SCHEMES).map((v) => ({ value: v, label: v })) },
+    { key: "packed", label: "Packed", type: "bool", default: true },
+    { key: "signed", label: "Signed", type: "bool", default: false },
+    { key: "ioFormat", label: "Input/Output format", type: "select", default: "Nibbles",
+      options: [{ value: "Nibbles", label: "Nibbles" }, { value: "Bytes", label: "Bytes" }, { value: "Raw", label: "Raw" }] },
   ],
-  encode: (t, p) => bcdEncode(t, p),
-  decode: (t, p) => bcdDecode(t, p),
+  encode: (t, p) => (p && p.mode === "cc" ? bcdCcEncode(t, p) : bcdEncode(t, p)),
+  decode: (t, p) => (p && p.mode === "cc" ? bcdCcDecode(t, p) : bcdDecode(t, p)),
 });
 
 register({

@@ -674,14 +674,124 @@ function ipRangeReport(text, p) {
   throw new Error("Invalid input.\n\nEnter either a CIDR range (e.g. 10.0.0.0/24) or a hyphenated range (e.g. 10.0.0.0 - 10.0.1.0). IPv6 also supported.");
 }
 
+// ============ Group IP addresses（同 CyberChef） ============
+const GROUP_DELIMS = { "Line feed": "\n", Space: " ", Comma: ",", "Semi-colon": ";", Colon: ":" };
+
+function groupIpReport(text, p) {
+  const delim = GROUP_DELIMS[(p && p.groupDelimiter) || "Line feed"] ?? "\n";
+  const subnet = Number(p && p.groupSubnet != null ? p.groupSubnet : 24);
+  const onlySubnets = p && p.groupOnlySubnets === true;
+  if (!Number.isInteger(subnet) || subnet < 0 || subnet > 127) throw new Error("CIDR must be less than 32 for IPv4 or 128 for IPv6");
+  const v4Mask = subnet <= 32 ? v4MaskFor(subnet) : 0n;
+  const v6Mask = ipv6MaskGroups(Math.min(subnet, 127));
+  const v4Groups = new Map();
+  const v6Groups = new Map();
+  for (const raw of String(text == null ? "" : text).split(delim)) {
+    const s = raw.trim();
+    if (!s) continue;
+    if (/^(\d{1,3}\.){3}\d{1,3}$/.test(s)) {
+      const ip = ipv4ToInt(s);
+      const net = ip & v4Mask;
+      if (!v4Groups.has(net)) v4Groups.set(net, []);
+      v4Groups.get(net).push(ip);
+    } else if (s.includes(":")) {
+      try {
+        const g = parseIpv6(s);
+        const net = g.map((x, i) => x & v6Mask[i]);
+        const key = ipv6Expand(net);
+        if (!v6Groups.has(key)) v6Groups.set(key, []);
+        v6Groups.get(key).push(g);
+      } catch { /* CC skips non-matching lines */ }
+    }
+  }
+  const out = [];
+  const keys4 = [...v4Groups.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  for (const net of keys4) {
+    out.push(intToIpv4(net) + "/" + Math.min(subnet, 32));
+    if (!onlySubnets) {
+      for (const ip of v4Groups.get(net).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))) out.push("  " + intToIpv4(ip));
+      out.push("");
+    }
+  }
+  const keys6 = [...v6Groups.keys()].sort();
+  for (const key of keys6) {
+    out.push(ipv6Compress(parseIpv6(key)) + "/" + Math.min(subnet, 127));
+    if (!onlySubnets) {
+      for (const g of v6Groups.get(key)) out.push("  " + ipv6Compress(g));
+      out.push("");
+    }
+  }
+  return out.length ? out.join("\n") + "\n" : "";
+}
+
+function v4MaskFor(prefix) {
+  if (prefix <= 0) return 0n;
+  return (0xFFFFFFFFn << BigInt(32 - prefix)) & 0xFFFFFFFFn;
+}
+
+// ============ IPv6 Transition Addresses（同 CyberChef） ============
+const TRANS_XOR = { "0": "2", "1": "3", "2": "0", "3": "1", "4": "6", "5": "7", "6": "4", "7": "5", "8": "a", "9": "b", a: "8", b: "9", c: "e", d: "f", e: "c", f: "d" };
+const hx2 = (s) => Number(s).toString(16).padStart(2, "0");
+
+function ipTransitionReport(text, p) {
+  const ignoreRanges = p && p.ignoreRanges !== false;
+  const removeHeaders = p && p.removeHeaders === true;
+  const lines = [];
+  for (const raw of String(text == null ? "" : text).split(/\r?\n/)) {
+    const s = raw.trim();
+    if (!s) continue;
+    if (ignoreRanges && s.includes("/")) continue;
+    let out = "";
+    if (/^(\d{1,3}\.){3}\d{1,3}$/.test(s)) {
+      const o = s.split(".");
+      const add = (label, addr) => { out += (removeHeaders ? "" : label) + addr + "\n"; };
+      add("6to4: ", "2002:" + hx2(o[0]) + hx2(o[1]) + ":" + hx2(o[2]) + hx2(o[3]) + "::/48");
+      add("IPv4 Mapped: ", "::ffff:" + hx2(o[0]) + hx2(o[1]) + ":" + hx2(o[2]) + hx2(o[3]));
+      add("IPv4 Translated: ", "::ffff:0:" + hx2(o[0]) + hx2(o[1]) + ":" + hx2(o[2]) + hx2(o[3]));
+      add("Nat 64: ", "64:ff9b::" + hx2(o[0]) + hx2(o[1]) + ":" + hx2(o[2]) + hx2(o[3]));
+    } else if (/^(\d{1,3}\.){3}\d{1,3}\/24$/.test(s)) {
+      const o = s.slice(0, -3).split(".");
+      const add = (label, addr) => { out += (removeHeaders ? "" : label) + addr + "\n"; };
+      add("6to4: ", "2002:" + hx2(o[0]) + hx2(o[1]) + ":" + hx2(o[2]) + "00::/40");
+      add("IPv4 Mapped: ", "::ffff:" + hx2(o[0]) + hx2(o[1]) + ":" + hx2(o[2]) + "00/120");
+      add("IPv4 Translated: ", "::ffff:0:" + hx2(o[0]) + hx2(o[1]) + ":" + hx2(o[2]) + "00/120");
+      add("Nat 64: ", "64:ff9b::" + hx2(o[0]) + hx2(o[1]) + ":" + hx2(o[2]) + "00/120");
+    } else if (/^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$/.test(s)) {
+      const m = s.split(":");
+      const mac = m[0] + m[1] + ":" + m[2] + "ff:fe" + m[3] + ":" + m[4] + m[5];
+      out = (removeHeaders ? "" : "EUI-64 Interface ID: ") + mac.slice(0, 1) + TRANS_XOR[mac.slice(1, 2)] + mac.slice(2) + "\n";
+    } else {
+      try {
+        parseIpv6(s);
+        if (s.startsWith("2002:")) {
+          out = (removeHeaders ? "" : "IPv4: ") + Number("0x" + s.slice(5, 7)) + "." + Number("0x" + s.slice(7, 9)) + "." + Number("0x" + s.slice(10, 12)) + "." + Number("0x" + s.slice(12, 14)) + "\n";
+        } else if (s.startsWith("::ffff:") || s.startsWith("64:ff9b::")) {
+          const g = parseIpv6(s);
+          out = (removeHeaders ? "" : "IPv4: ") + ipv4Pair(g[6], g[7]) + "\n";
+        } else if (s.slice(-5).toUpperCase() === "FF:FE") {
+          const mac = (s.slice(-19, -17) + ":" + s.slice(-17, -15) + ":" + s.slice(-14, -12) + ":" + s.slice(-7, -5) + ":" + s.slice(-4, -2) + ":" + s.slice(-2,)).toUpperCase();
+          out = (removeHeaders ? "" : "Mac Address: ") + mac.slice(0, 1) + TRANS_XOR[mac.slice(1, 2)] + mac.slice(2) + "\n";
+        }
+      } catch {
+        out = "Enter compressed or expanded IPv6 address, IPv4 address or MAC Address.";
+      }
+    }
+    if (out) lines.push(out.replace(/\n$/, ""));
+  }
+  return lines.length ? lines.join("\n") + "\n" : "";
+}
+
 register({
   id: "ipv6Format", cat: "radix", name: "IPv6 压缩/展开",
   desc: "IPv6 规范压缩（RFC 5952）↔ 全展开 8 组 4 位十六进制；report=true 时输出 CyberChef Parse IPv6 address 同口径的 longhand/shorthand 与保留段报告",
   params: [
     { key: "report", label: "详细报告（原样输出，不压缩/展开）", type: "bool", default: false },
+    { key: "transitionMode", label: "IPv6 Transition Addresses（同 CC）", type: "bool", default: false },
+    { key: "ignoreRanges", label: "Transition：Ignore ranges", type: "bool", default: true },
+    { key: "removeHeaders", label: "Transition：Remove headers", type: "bool", default: false },
   ],
-  encode: (t, p) => (p && p.report ? ipv6DetailedReport(t) : ipv6Compress(parseIpv6(t))),
-  decode: (t, p) => (p && p.report ? ipv6DetailedReport(t) : ipv6Expand(parseIpv6(t))),
+  encode: (t, p) => (p && p.transitionMode ? ipTransitionReport(t, p) : p && p.report ? ipv6DetailedReport(t) : ipv6Compress(parseIpv6(t))),
+  decode: (t, p) => (p && p.transitionMode ? ipTransitionReport(t, p) : p && p.report ? ipv6DetailedReport(t) : ipv6Expand(parseIpv6(t))),
 });
 
 register({
@@ -711,8 +821,16 @@ register({
     { key: "includeNetworkInfo", label: "输出网络信息", type: "bool", default: true },
     { key: "enumerate", label: "枚举 IPv4 地址", type: "bool", default: true },
     { key: "allowLarge", label: "允许大范围查询（>65536）", type: "bool", default: false },
+    { key: "groupMode", label: "Group IP addresses（同 CC）", type: "bool", default: false },
+    { key: "groupDelimiter", label: "Group：Delimiter", type: "select", default: "Line feed",
+      options: [
+        { value: "Line feed", label: "Line feed" }, { value: "Space", label: "Space" },
+        { value: "Comma", label: "Comma" }, { value: "Semi-colon", label: "Semi-colon" }, { value: "Colon", label: "Colon" },
+      ] },
+    { key: "groupSubnet", label: "Group：Subnet (CIDR)", type: "number", default: 24 },
+    { key: "groupOnlySubnets", label: "Group：Only show the subnets", type: "bool", default: false },
   ],
-  run: (t, p) => ((p && p.mode) === "auto" ? ipRangeReport(t, p) : cidrCalc(t)),
+  run: (t, p) => (p && p.groupMode ? groupIpReport(t, p) : (p && p.mode) === "auto" ? ipRangeReport(t, p) : cidrCalc(t)),
   detect: (t) => (/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(String(t).trim()) ? 0.5 : 0),
 });
 

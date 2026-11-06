@@ -80,32 +80,56 @@ const BACON24_ALPHA = "ABCDEFGHIKLMNOPQRSTUWXYZ"; // 24 字母（I=J, U=V）
 const BACON24 = {};
 for (let i = 0; i < 24; i++) BACON24[i.toString(2).padStart(5, "0")] = BACON24_ALPHA[i];
 
+function baconBitsForChar(ch, version) {
+  let c = ch;
+  if (version === "24") c = c === "J" ? "I" : c === "V" ? "U" : c;
+  const idx = version === "24" ? BACON24_ALPHA.indexOf(c) : c.charCodeAt(0) - 65;
+  return idx < 0 ? null : idx.toString(2).padStart(5, "0");
+}
 function baconEncode(text, p) {
   const version = (p && p.version) || "26";
-  const norm = text.toUpperCase().replace(/[^A-Z]/g, "");
-  if (version === "24") {
-    const s = norm.replace(/J/g, "I").replace(/V/g, "U");
-    return [...s].map((ch) => {
-      const idx = BACON24_ALPHA.indexOf(ch);
-      if (idx < 0) return "";
-      return idx.toString(2).padStart(5, "0").replace(/0/g, "a").replace(/1/g, "b");
-    }).join(" ");
+  const translation = (p && p.translation) || "a/b";
+  const keepExtra = p && p.keepExtra === true;
+  const invert = p && p.invert === true;
+  const src = String(text == null ? "" : text);
+  let bits = "";
+  for (const ch of src) {
+    const up = ch.toUpperCase();
+    if (up >= "A" && up <= "Z") {
+      const b = baconBitsForChar(up, version);
+      if (b) bits += b;
+    } else if (keepExtra) bits += ch;
   }
-  return [...norm].map((ch) => {
-    const idx = ch.charCodeAt(0) - 65;
-    return idx.toString(2).padStart(5, "0").replace(/0/g, "a").replace(/1/g, "b");
-  }).join(" ");
+  if (invert) bits = bits.replace(/[01]/g, (c) => (c === "0" ? "1" : "0"));
+  let body;
+  if (!keepExtra) {
+    const clean = bits.replace(/[^01]/g, "");
+    body = (clean.match(/.{5}/g) || []).join(" ");
+  } else {
+    body = bits;
+  }
+  if (translation === "0/1") return body;
+  if (translation === "A/B") return body.replace(/[01]/g, (c) => (c === "0" ? "A" : "B"));
+  return body.replace(/[01]/g, (c) => (c === "0" ? "a" : "b"));
 }
 function baconDecode(text, p) {
   const version = (p && p.version) || "26";
   const table = version === "24" ? BACON24 : BACON26;
- // 归一：a/A/0 → 0，b/B/1 → 1
-  const norm = text.replace(/[^abAB01]/g, "")
-    .replace(/[aA0]/g, "0").replace(/[bB1]/g, "1");
-  let out = "";
-  for (let i = 0; i + 5 <= norm.length; i += 5) {
-    out += table[norm.slice(i, i + 5)] || "?";
+  const translation = (p && p.translation) || "a/b";
+  const invert = p && p.invert === true;
+  let norm = String(text == null ? "" : text);
+  if (translation === "Case") {
+    norm = norm.replace(/[^A-Za-z]/g, "").replace(/./g, (c) => (c >= "A" && c <= "Z" ? "1" : "0"));
+  } else if (translation === "A-M/N-Z first letter") {
+    norm = norm.split(/\s+/).filter(Boolean).map((w) => (w[0].toUpperCase() >= "N" ? "1" : "0")).join("");
+  } else if (translation === "A/B") {
+    norm = norm.replace(/[^ABab]/g, "").replace(/[Aa]/g, "0").replace(/[Bb]/g, "1");
+  } else {
+    norm = norm.replace(/[^abAB01]/g, "").replace(/[aA0]/g, "0").replace(/[bB1]/g, "1");
   }
+  if (invert) norm = norm.replace(/[01]/g, (c) => (c === "0" ? "1" : "0"));
+  let out = "";
+  for (let i = 0; i + 5 <= norm.length; i += 5) out += table[norm.slice(i, i + 5)] || "?";
   return out;
 }
 
@@ -591,12 +615,22 @@ register({
 register({
   id: "bacon", cat: "fancy", name: "培根密码", desc: "5 位 a/b（24/26 字母两版）",
   params: [
-    { key: "version", label: "版本", type: "select", default: "26",
+    { key: "version", label: "版本（Alphabet）", type: "select", default: "26",
       options: [
-        { value: "26", label: "26 字母版（每字母独立）" },
-        { value: "24", label: "24 字母版（I=J, U=V）" },
+        { value: "26", label: "Complete（26 字母版）" },
+        { value: "24", label: "Standard（I=J and U=V，24 字母版）" },
       ],
     },
+    { key: "translation", label: "Translation", type: "select", default: "a/b",
+      options: [
+        { value: "a/b", label: "a/b（项目旧默认；解码兼容 0/1 与 A/B）" },
+        { value: "0/1", label: "0/1" },
+        { value: "A/B", label: "A/B" },
+        { value: "Case", label: "Case（仅解码）" },
+        { value: "A-M/N-Z first letter", label: "A-M/N-Z first letter（仅解码）" },
+      ] },
+    { key: "keepExtra", label: "Keep extra characters（编码）", type: "bool", default: false },
+    { key: "invert", label: "Invert Translation", type: "bool", default: false },
   ],
   encode: baconEncode, decode: baconDecode,
   detect: (t) => (/^[abAB01\s]+$/.test(t.trim()) && t.replace(/[^abAB01]/g, "").length % 5 === 0 && t.trim().length >= 5 ? 0.4 : 0),

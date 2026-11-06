@@ -289,6 +289,42 @@ const SPEED_UNITS = [
   { u: "kn", zh: "节", k: rat(463n, 900n) },
 ];
 
+// -- 面积（基准：平方米 m²；国际码磅协定/公顷法定定义） --
+const AREA_UNITS = [
+  { u: "km²", zh: "平方千米", k: rat(10n ** 6n) },
+  { u: "ha", zh: "公顷", k: rat(10n ** 4n) },
+  { u: "daa", zh: "公亩（decare）", k: rat(10n ** 3n) },
+  { u: "a", zh: "公亩（are）", k: rat(100n) },
+  { u: "da", zh: "分公亩（deciare）", k: rat(10n) },
+  { u: "m²", zh: "平方米", k: R1 },
+  { u: "ca", zh: "平方米（centiare）", k: R1 },
+  { u: "cm²", zh: "平方厘米", k: rat(1n, 10n ** 4n) },
+  { u: "mm²", zh: "平方毫米", k: rat(1n, 10n ** 6n) },
+  { u: "acre", zh: "英亩", k: rat(40468564224n, 10n ** 7n) },
+  { u: "mi²", zh: "平方英里", k: rat(2589988110336n, 10n ** 6n) },
+  { u: "yd²", zh: "平方码", k: rat(83612736n, 10n ** 8n) },
+  { u: "ft²", zh: "平方英尺", k: rat(9290304n, 10n ** 8n) },
+  { u: "in²", zh: "平方英寸", k: rat(64516n, 10n ** 8n) },
+];
+
+// -- 质量（基准：千克 kg；SI 词头 + 常衡精确值） --
+const MASS_UNITS = [
+  { u: "t", zh: "吨", k: rat(10n ** 3n) },
+  { u: "kg", zh: "千克", k: R1 },
+  { u: "g", zh: "克", k: rat(1n, 10n ** 3n) },
+  { u: "mg", zh: "毫克", k: rat(1n, 10n ** 6n) },
+  { u: "μg", zh: "微克", k: rat(1n, 10n ** 9n) },
+  { u: "ng", zh: "纳克", k: rat(1n, 10n ** 12n) },
+  { u: "pg", zh: "皮克", k: rat(1n, 10n ** 15n) },
+  { u: "fg", zh: "飞克", k: rat(1n, 10n ** 18n) },
+  { u: "zg", zh: "仄克", k: rat(1n, 10n ** 21n) },
+  { u: "yg", zh: "幺克", k: rat(1n, 10n ** 24n) },
+  { u: "ct", zh: "克拉", k: rat(2n, 10n ** 4n) },
+  { u: "lb", zh: "磅", k: rat(45359237n, 10n ** 8n) },
+  { u: "oz", zh: "盎司", k: rat(28349523125n, 10n ** 12n) },
+  { u: "st", zh: "英石", k: rat(635029318n, 10n ** 8n) },
+];
+
 // -- 时间戳纪元（全部换算到 Unix 秒基准；溯源见文件头） --
 // 1601→1970 = 11644473600 s（MSDN FILETIME）；1970→2001 = 978307200 s（Apple NSDate）
 const FT_OFF = 11644473600n; // 1601 纪元 ↔ 1970 纪元 秒差
@@ -361,6 +397,8 @@ function findGroup(unit) {
   if (ANGLE_UNITS.includes(unit)) return "angle";
   if (LEN_UNITS.some((x) => x.u === unit)) return "length";
   if (SPEED_UNITS.some((x) => x.u === unit)) return "speed";
+  if (AREA_UNITS.some((x) => x.u === unit)) return "area";
+  if (MASS_UNITS.some((x) => x.u === unit)) return "mass";
   if (CURRENCY_SETS.some((g) => g.units.some((x) => x.u === unit))) return "currency";
   return null;
 }
@@ -500,6 +538,24 @@ function speedReport(qty, unit) {
   return lines.join("\n");
 }
 
+function areaReport(qty, unit) {
+  const def = AREA_UNITS.find((x) => x.u === unit);
+  const m2 = ratMul(qty, def.k);
+  const lines = [`【面积换算】输入：${ratToStr(qty)} ${unit}（${def.zh}）`, ""];
+  for (const x of AREA_UNITS) lines.push(fmtUnitLine(x.u, ratDiv(m2, x.k)));
+  lines.push("", "注：ha=10^4 m²、a=100 m²、ca=1 m²、daa=1000 m²；acre=4046.8564224 m²（国际码磅协定）；英制平方单位由 in/ft/yd/mi 精确值平方导出。");
+  return lines.join("\n");
+}
+
+function massReport(qty, unit) {
+  const def = MASS_UNITS.find((x) => x.u === unit);
+  const kg = ratMul(qty, def.k);
+  const lines = [`【质量换算】输入：${ratToStr(qty)} ${unit}（${def.zh}）`, ""];
+  for (const x of MASS_UNITS) lines.push(fmtUnitLine(x.u, ratDiv(kg, x.k)));
+  lines.push("", "注：lb=0.45359237 kg、oz=lb/16、st=14 lb（常衡精确值）；t=10^3 kg。");
+  return lines.join("\n");
+}
+
 // -- 货币面额报告（收尾批次；组间绝不互转，同种货币内部列全部面额）--
 function currencyReport(qty, unit) {
   const hits = CURRENCY_SETS.filter((g) => g.units.some((x) => x.u === unit));
@@ -582,7 +638,7 @@ function unitConvRun(text, p) {
   }
   const grp = findGroup(unit);
   if (!grp) {
-    throw new Error(`未知单位 '${unit}'。支持：数据量 B/KB/MB/GB/TB/PB/KiB…PiB；速率 bps/Kbps/Mbps/Gbps/B/s/KB/s/MB/s；时间 ns/μs/ms/s/min/h/d；频率 Hz/kHz/MHz/GHz；角度 deg/rad/gon；长度 km/m/cm/mm/in/ft/yd/mi/nmi/里/尺…；货币 元/角/分、dollar/cent/quarter…；或纯数字（时间戳纪元对照）`);
+    throw new Error(`未知单位 '${unit}'。支持：数据量 B/KB/MB/GB/TB/PB/KiB…PiB；速率 bps/Kbps/Mbps/Gbps/B/s/KB/s/MB/s；时间 ns/μs/ms/s/min/h/d；频率 Hz/kHz/MHz/GHz；角度 deg/rad/gon；长度 km/m/cm/mm/in/ft/yd/mi/nmi/里/尺…；面积 km²/ha/daa/a/da/m²/ca/acre/mi²…；质量 t/kg/g/mg/lb/oz/st…；货币 元/角/分、dollar/cent/quarter…；或纯数字（时间戳纪元对照）`);
   }
   if (grp === "dataSize") return dataSizeReport(qty, unit);
   if (grp === "dataRate") return dataRateReport(qty, unit);
@@ -590,6 +646,8 @@ function unitConvRun(text, p) {
   if (grp === "freq") return freqReport(qty, unit);
   if (grp === "length") return lengthReport(qty, unit);
   if (grp === "speed") return speedReport(qty, unit);
+  if (grp === "area") return areaReport(qty, unit);
+  if (grp === "mass") return massReport(qty, unit);
   if (grp === "currency") return currencyReport(qty, unit);
   return angleReport(qty, unit);
 }
