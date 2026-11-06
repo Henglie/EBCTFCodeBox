@@ -599,6 +599,17 @@ function x509ParseRun(text, p = {}) {
     });
   }
 
+  // ---- Public Key from Certificate：只输出 SPKI（PEM / DER hex） ----
+  const outputMode = String(p?.output || "report");
+  if (outputMode === "publicKeyPem" || outputMode === "publicKeyDerHex") {
+    const spkiDer = derEncode(spkiNode);
+    if (outputMode === "publicKeyDerHex") return bytesToHex(spkiDer);
+    const b64 = bytesToBase64(spkiDer);
+    const lines = [];
+    for (let i = 0; i < b64.length; i += 64) lines.push(b64.slice(i, i + 64));
+    return "-----BEGIN PUBLIC KEY-----\n" + lines.join("\n") + "\n-----END PUBLIC KEY-----\n";
+  }
+
   // ---- 输出组装 ----
   const out = [];
   out.push("X.509 证书解析（ITU-T X.509 / RFC 5280 §4.1）");
@@ -926,6 +937,11 @@ register({
   name: "X.509 证书解析",
   desc: "解析 X.509 证书（RFC 5280 §4.1）：PEM（CERTIFICATE）或 DER hex 输入。输出版本/序列号/签名算法（OID+名称，含 RSASSA-PSS 参数）/签发者与主体 DN（X.501 逐 RDN，CN/O/C 等 100+ OID 友好名 + RFC 4514 串）/有效期（UTCTime/GeneralizedTime + 过期判定，时间基准可参数覆盖）/公钥参数（RSA n 位长+e、EC 曲线+点、Ed25519/DSA）/扩展明细（SAN DNS/IP/email/URI、BasicConstraints CA、KeyUsage 位、SKID/AKID、EKU、AIA + 全扩展 OID 总表）/签名值 hex。对拍 openssl x509 -text -noout。负例（非证书 PEM/截断 DER）中文报错",
   params: [
+    { key: "output", label: "输出", type: "select", default: "report", options: [
+      { value: "report", label: "完整解析报告（原有模式）" },
+      { value: "publicKeyPem", label: "Public Key from Certificate（PEM）" },
+      { value: "publicKeyDerHex", label: "Public Key from Certificate（DER hex）" },
+    ] },
     { key: "at", label: "过期判定基准时间", type: "text", default: "", placeholder: "留空=当前时间；或 ISO 时间如 2026-01-01T00:00:00Z" },
   ],
   run: x509ParseRun,

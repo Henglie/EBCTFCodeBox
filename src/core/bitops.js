@@ -316,18 +316,40 @@ register({
 });
 
 // 2. bitRotate（循环移位，encode 正向 / decode 反向）
+function bitShiftBytes(bytes, mode, n, type) {
+  const amount = Math.max(0, Math.min(7, Number(n) || 1));
+  const out = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) {
+    const b = bytes[i];
+    if (mode === "shiftLeft") out[i] = (b << amount) & 0xff;
+    else out[i] = type === "arithmetic" ? ((b >>> amount) ^ (b & 0x80)) & 0xff : (b >>> amount) & 0xff;
+  }
+  return out;
+}
+
 register({
   id: "bitRotate", cat: "radix", name: "位循环移位",
-  desc: "字节内循环移位 1-7 位。encode 按所选方向移；decode 反向移还原。文本↔Hex。",
+  desc: "字节内循环移位 1-7 位（或 CyberChef Bit shift left/right 同口径的逐字节移位）。encode 按所选方向移；decode 反向移还原（shift 档不还原，同 CC 单向语义）。文本↔Hex。",
   params: [
-    { key: "dir", label: "方向", type: "select", default: "left", options: [
+    { key: "opMode", label: "模式", type: "select", default: "rotate", options: [
+      { value: "rotate", label: "循环移位（原有模式）" },
+      { value: "shiftLeft", label: "Bit shift left" },
+      { value: "shiftRight", label: "Bit shift right" },
+    ] },
+    { key: "dir", label: "方向（rotate）", type: "select", default: "left", options: [
       { value: "left", label: "循环左移" },
       { value: "right", label: "循环右移" },
     ] },
     { key: "bits", label: "位数（1-7）", type: "number", default: 1 },
     { key: "carryThrough", label: "Carry through（跨字节 carry）", type: "bool", default: false },
+    { key: "shiftType", label: "右移类型（shiftRight）", type: "select", default: "logical", options: [
+      { value: "logical", label: "Logical shift" },
+      { value: "arithmetic", label: "Arithmetic shift" },
+    ] },
   ],
   encode: (t, p) => {
+    const om = (p && p.opMode) || "rotate";
+    if (om !== "rotate") return bytesToHex(bitShiftBytes(strToBytes(t), om, p && p.bits, p && p.shiftType));
     const dir = (p && p.dir) || "left";
     const n = Number((p && p.bits) || 1);
     const bytes = strToBytes(t);
@@ -336,6 +358,8 @@ register({
       : bitRotateBytes(bytes, dir, n));
   },
   decode: (t, p) => {
+    const om = (p && p.opMode) || "rotate";
+    if (om !== "rotate") return finishBytesDecode(bitShiftBytes(hexToBytes(t), om, p && p.bits, p && p.shiftType), { textMode: "hex", name: "bitRotate" });
     const dir = (p && p.dir) || "left";
     const n = Number((p && p.bits) || 1);
     const inv = dir === "right" ? "left" : "right";

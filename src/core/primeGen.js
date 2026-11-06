@@ -138,13 +138,25 @@ register({
   desc: "Miller-Rabin 检验生成指定位数的大素数（确定性版本，crypto CSPRNG）（素性检验用 primeTest，四则/分解用 bigCalc）",
   params: [
     { key: "bits", label: "位数", type: "number", default: 64, placeholder: "2..1024 位" },
+    { key: "minBits", label: "最小位数（Pseudo-Random Prime Generator，留空=用位数）", type: "number", default: "" },
+    { key: "maxBits", label: "最大位数（留空=用位数）", type: "number", default: "" },
     { key: "count", label: "数量", type: "number", default: 1, placeholder: "生成几个" },
   ],
   run: (_text, p) => {
-    const bits = Math.max(2, Math.min(1024, Number(p?.bits) || 64));
+    const baseBits = Math.max(2, Math.min(1024, Number(p?.bits) || 64));
+    const minBits = Math.max(2, Math.min(1024, Number(p?.minBits) || baseBits));
+    const maxBits = Math.max(minBits, Math.min(1024, Number(p?.maxBits) || minBits));
     const count = Math.max(1, Math.min(100, Number(p?.count) || 1));
     const primes = [];
     for (let i = 0; i < count; i++) {
+      let bits = baseBits;
+      if (maxBits > minBits) {
+        const span = maxBits - minBits + 1;
+        const r = new Uint8Array(2); r.set(randBytes(2));
+        bits = minBits + ((r[0] | (r[1] << 8)) % span);
+      } else {
+        bits = minBits;
+      }
       primes.push(generatePrime(bits).toString(10));
     }
     return primes.join("\n");

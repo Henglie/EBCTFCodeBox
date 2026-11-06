@@ -45,6 +45,13 @@ export const OCR_LANG_LABELS = [
 ];
 
 const OEM_LSTM_ONLY = 1;
+const OEM_MODES = { "Tesseract only": 0, "LSTM only": 1, "Tesseract/LSTM Combined": 2 };
+function normalizeOem(v) {
+  if (v == null || v === "") return OEM_LSTM_ONLY;
+  const name = String(v);
+  if (!(name in OEM_MODES)) throw new Error(`OCR：不支持的 Engine Mode "${name}"`);
+  return OEM_MODES[name];
+}
 
 /* -------------------------------------------------------------- 工具函数 */
 
@@ -150,7 +157,7 @@ async function assertAsset(url, label) {
   _preflighted.add(url);
 }
 
-async function createWorkerFor(lang, onProgress) {
+async function createWorkerFor(lang, onProgress, oem = OEM_LSTM_ONLY) {
   const T = await loadTesseractApi();
   const coreFile = supportsSimd() ? ASSET.coreSimd : ASSET.coreScalar;
   const workerUrl = new URL(ASSET.worker, VENDOR_BASE).href;
@@ -168,7 +175,7 @@ async function createWorkerFor(lang, onProgress) {
   const rec = { worker: null, logger: onProgress };
   let worker;
   try {
-    worker = await T.createWorker(lang, OEM_LSTM_ONLY, {
+    worker = await T.createWorker(lang, oem, {
       workerPath: workerUrl,
       corePath: coreUrl,
       langPath: langDirUrl,
@@ -187,11 +194,12 @@ async function createWorkerFor(lang, onProgress) {
   return rec;
 }
 
-async function getWorker(lang, onProgress) {
-  let rec = _workers.get(lang);
+async function getWorker(lang, onProgress, oem = OEM_LSTM_ONLY) {
+  const key = lang + "|" + oem;
+  let rec = _workers.get(key);
   if (!rec) {
-    rec = await createWorkerFor(lang, onProgress);
-    _workers.set(lang, rec);
+    rec = await createWorkerFor(lang, onProgress, oem);
+    _workers.set(key, rec);
   }
   rec.logger = onProgress;
   return rec;
@@ -222,7 +230,8 @@ export async function recognizeImage(bytes, opts = {}) {
     throw new Error("OCR：不支持的图片类型（仅支持 png / jpg / bmp / pbm）");
   }
   const lang = normalizeLang(opts.lang);
-  const rec = await getWorker(lang, typeof opts.onProgress === "function" ? opts.onProgress : undefined);
+  const oem = normalizeOem(opts.oem);
+  const rec = await getWorker(lang, typeof opts.onProgress === "function" ? opts.onProgress : undefined, oem);
   const dataUrl = `data:${MIME_BY_TYPE[type]};base64,${bytesToBase64(b)}`;
 
   let result;
@@ -254,7 +263,7 @@ export async function run(input, params = {}) {
   const onProgress = typeof p.onProgress === "function"
     ? p.onProgress
     : (typeof p.progress === "function" ? p.progress : undefined);
-  const res = await recognizeImage(bytes, { lang: p.lang, onProgress });
+  const res = await recognizeImage(bytes, { lang: p.lang, oem: p.oem, onProgress });
   return p.showConfidence === false ? res.text : `Confidence: ${res.confidence}%\n\n${res.text}`;
 }
 
@@ -277,6 +286,11 @@ export const OCR_OP = {
   params: [
     { key: "lang", label: "识别语言", type: "select", default: "eng", options: OCR_LANG_LABELS },
     { key: "showConfidence", label: "显示置信度", type: "bool", default: true },
+    { key: "oem", label: "OCR Engine Mode", type: "select", default: "LSTM only", options: [
+      { value: "Tesseract only", label: "Tesseract only" },
+      { value: "LSTM only", label: "LSTM only（项目旧默认）" },
+      { value: "Tesseract/LSTM Combined", label: "Tesseract/LSTM Combined" },
+    ] },
   ],
   run,
 };

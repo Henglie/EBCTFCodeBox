@@ -141,9 +141,20 @@ function md6StandardCompress(K, ell, i, r, L, z, p, keylen, d, B) {
 }
 
 /** MD6 主体（默认参数：无 key、L=64 全树模式、r=40+d/4）。字节层缓冲照参考 md6_mode.c。 */
-function md6Hash(msg, d) {
-  const r = 40 + Math.floor(d / 4), L = 64, keylen = 0;
+function md6Hash(msg, d, levels = 64, keyBytes = null) {
+  const r = 40 + Math.floor(d / 4), L = Math.max(0, Math.min(64, Math.floor(levels))), keylen = keyBytes ? keyBytes.length : 0;
+  if (keylen > 64) throw new Error("MD6 Key 最长 64 字节");
   const K = new Array(8).fill(0n);
+  if (keyBytes) {
+    for (let j = 0; j < 8; j++) {
+      let v = 0n;
+      for (let b = 0; b < 8; b++) {
+        const idx = j * 8 + b;
+        v = (v << 8n) | BigInt(idx < keylen ? keyBytes[idx] : 0);
+      }
+      K[j] = v;
+    }
+  }
   const BLOCKBYTES = 512, CHUNKBITS = 1024, MAXLVL = 29;
   const B = [], bits = [], iLvl = [];
   for (let e = 0; e < MAXLVL; e++) { B.push(new Uint8Array(BLOCKBYTES)); bits.push(0); iLvl.push(0); }
@@ -518,9 +529,15 @@ register({
   desc: "MD6 哈希（Rivest 2008 NIST SHA-3 提案，未终选无 RFC 终稿；Merkle 树结构，默认 256 位）",
   params: [
     { key: "bits", label: "摘要位数", type: "select", default: 256, options: [128, 160, 192, 224, 256, 320, 384, 448, 512] },
+    { key: "levels", label: "Levels（L，MD6 树层数）", type: "number", default: 64, placeholder: "默认 64（CC 默认）" },
+    { key: "key", label: "Key（UTF-8，≤64 字节，可留空）", type: "text", default: "", placeholder: "CyberChef MD6 Key" },
     INPUT_PARAM,
   ],
-  run: (t, p) => md6Hash(inputBytes(t, p), Number((p && p.bits) || 256)),
+  run: (t, p) => {
+    const keyText = String((p && p.key) || "");
+    const keyBytes = keyText === "" ? null : new TextEncoder().encode(keyText);
+    return md6Hash(inputBytes(t, p), Number((p && p.bits) || 256), Number(p && p.levels != null ? p.levels : 64), keyBytes);
+  },
 });
 
 register({

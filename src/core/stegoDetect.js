@@ -36,6 +36,7 @@ const MODE_OPTIONS = [
   { value: "zwScan", label: "零宽 / 不可见字符扫描（文本）" },
   { value: "confusablesScan", label: "同形异义字检测（文本）" },
   { value: "unicodeNormalize", label: "Unicode 规范化对比（文本）" },
+  { value: "normaliseUnicode", label: "Normalise Unicode（输出规范化文本，同 CyberChef）" },
   { value: "whitespaceScan", label: "空白字符隐写检测（文本）" },
   { value: "bidiScan", label: "双向控制符检测 / Trojan Source（文本）" },
   { value: "charInspect", label: "字符属性透视（文本）" },
@@ -55,6 +56,11 @@ function stegoDetectRun(text, p = {}) {
     case "zwScan": return zwScan(text, {});
     case "confusablesScan": return confusablesScan(text, {});
     case "unicodeNormalize": return unicodeNormalize(text, { form: p.form });
+    case "normaliseUnicode": {
+      const form = String(p.form || "NFC").toUpperCase();
+      if (!["NFC", "NFD", "NFKC", "NFKD"].includes(form)) throw new Error("Unknown Normalisation Form");
+      return String(text == null ? "" : text).normalize(form);
+    }
     case "whitespaceScan": return whitespaceScan(text, {});
     case "bidiScan": return bidiScan(text, {});
     case "charInspect": return charInspect(text, {});

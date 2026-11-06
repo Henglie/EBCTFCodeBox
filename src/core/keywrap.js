@@ -207,7 +207,64 @@ export function aesKeyUnwrap5649(kek, ciphertext) {
 
 // ============ run 层（UI 驱动） ============
 
+function decodeEncBytes(raw, enc) {
+  const s = String(raw == null ? "" : raw);
+  if (enc === "UTF8") return new TextEncoder().encode(s);
+  if (enc === "Latin1") {
+    const out = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i) & 0xff;
+    return out;
+  }
+  if (enc === "Base64") {
+    let b = s.replace(/\s+/g, "");
+    while (b.length % 4) b += "=";
+    const bin = atob(b);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  return hexToBytes(s);
+}
+
+function encodeOutBytes(bytes, enc) {
+  if (enc === "Raw" || enc === "Latin1") {
+    let s = "";
+    for (const b of bytes) s += String.fromCharCode(b);
+    return s;
+  }
+  return bytesToHex(bytes);
+}
+
+/** CyberChef AES Key Wrap/Unwrap 同口径：Key(KEK)/IV 可 toggle，Input/Output Hex/Raw。 */
+function keyWrapCc(text, p) {
+  const mode = (p && p.mode) || "wrap";
+  const std = (p && p.std) || "3394";
+  const kek = decodeEncBytes((p && p.kek) || "", p && p.keyEnc || "Hex");
+  checkKek(kek);
+  const iv = decodeEncBytes((p && p.iv != null ? p.iv : "a6a6a6a6a6a6a6a6"), p && p.ivEnc || "Hex");
+  if (iv.length !== 8) throw new Error(`IV 须为 8 字节（当前 ${iv.length}）`);
+  const data = decodeEncBytes(text, p && p.inEnc || "Hex");
+  let out;
+  if (mode === "wrap") {
+    if (std === "5649") out = aesKeyWrap5649(kek, data);
+    else {
+      if (data.length < 16 || data.length % 8 !== 0) throw new Error(`RFC 3394 明文须 ≥16 且为 8 字节倍数（当前 ${data.length}）`);
+      out = wordsToBytes(wrapCore(kek, bytesToWords(data), word64(iv, 0)));
+    }
+  } else {
+    if (std === "5649") out = aesKeyUnwrap5649(kek, data);
+    else {
+      if (data.length < 24 || data.length % 8 !== 0) throw new Error(`RFC 3394 密文须 ≥24 且为 8 字节倍数（当前 ${data.length}）`);
+      const { a, blocks } = unwrapCore(kek, bytesToWords(data));
+      if (a !== word64(iv, 0)) throw new Error("RFC 3394 解包完整性校验失败：A ≠ 给定 IV（密文被篡改或 KEK 错误）");
+      out = wordsToBytes(blocks);
+    }
+  }
+  return encodeOutBytes(out, p && p.outEnc || "Hex");
+}
+
 function keyWrapRun(text, p) {
+  if (p && p.wireMode === "cc") return keyWrapCc(text, p);
   const mode = (p && p.mode) || "wrap";
   const std = (p && p.std) || "3394";
   const kek = hexToBytes((p && p.kek) || "");
@@ -243,6 +300,13 @@ register({
   desc: "AES 密钥包装（RFC 3394，AIV=A6×8，明文须 8 字节倍数）/ 带填充包装（RFC 5649，AIV=A65959A6+长度，任意长度 1..2^32 字节）。KEK 支持 AES-128/192/256；解包完整性校验失败明示报错。RFC 3394 §4.1-4.6 五组 + RFC 5649 §6 两组官方向量验证。",
   params: [
     {
+      key: "wireMode", label: "参数口径", type: "select", default: "report",
+      options: [
+        { value: "report", label: "项目既有报告（原有模式）" },
+        { value: "cc", label: "CyberChef AES Key Wrap/Unwrap（Key/IV toggle + Input/Output）" },
+      ],
+    },
+    {
       key: "mode", label: "模式", type: "select", default: "wrap",
       options: [
         { value: "wrap", label: "包装 wrap" },
@@ -257,6 +321,15 @@ register({
       ],
     },
     { key: "kek", label: "KEK（16/24/32B hex）", type: "text", default: "", placeholder: "000102030405060708090a0b0c0d0e0f" },
+    { key: "keyEnc", label: "cc：Key (KEK) 编码", type: "select", default: "Hex",
+      options: [{ value: "Hex", label: "Hex" }, { value: "UTF8", label: "UTF8" }, { value: "Latin1", label: "Latin1" }, { value: "Base64", label: "Base64" }] },
+    { key: "iv", label: "cc：IV（默认 A6×8）", type: "text", default: "a6a6a6a6a6a6a6a6" },
+    { key: "ivEnc", label: "cc：IV 编码", type: "select", default: "Hex",
+      options: [{ value: "Hex", label: "Hex" }, { value: "UTF8", label: "UTF8" }, { value: "Latin1", label: "Latin1" }, { value: "Base64", label: "Base64" }] },
+    { key: "inEnc", label: "cc：Input", type: "select", default: "Hex",
+      options: [{ value: "Hex", label: "Hex" }, { value: "Raw", label: "Raw" }] },
+    { key: "outEnc", label: "cc：Output", type: "select", default: "Hex",
+      options: [{ value: "Hex", label: "Hex" }, { value: "Raw", label: "Raw" }] },
   ],
   run: keyWrapRun,
 });

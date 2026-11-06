@@ -270,7 +270,10 @@ function applyRegisterCapture(ctx, params, text) {
     if (params.strict) throw new Error("Register：strict 模式需要填写正则表达式");
     return { matched: false, count: 0 };
   }
-  const flags = String(params.flags || "");
+  let flags = String(params.flags || "");
+  if (params.caseInsensitive && !flags.includes("i")) flags += "i";
+  if (params.multiline && !flags.includes("m")) flags += "m";
+  if (params.dotAll && !flags.includes("s")) flags += "s";
   let re;
   try { re = new RegExp(src, flags); } catch (e) { throw new Error("Register 正则无效：" + errText(e)); }
   const m = re.exec(text == null ? "" : String(text));
@@ -795,7 +798,11 @@ async function runFlowRange(ctx, startPos, stopPos, scopeLo, scopeEnd, entryRaw,
         let mergeParams;
         try { mergeParams = substituteParams(mergeNode.params || {}, ctx.registers, ctx.registerSeen); }
         catch (err) { return await raise("exec-error", pos, node, errText(err), started); }
-        const joinStr = unescapeSeparator(mergeParams.join == null ? "\n" : mergeParams.join);
+        const joinStr = unescapeSeparator(
+          runParams.mergeDelimiter != null && runParams.mergeDelimiter !== ""
+            ? runParams.mergeDelimiter
+            : (mergeParams.join == null ? "\n" : mergeParams.join)
+        );
         await emit({ text: recipeDisplayText(inputText), branchCount: parts.length });
 
         const savedRegs = ctx.registers.slice();
@@ -816,7 +823,18 @@ async function runFlowRange(ctx, startPos, stopPos, scopeLo, scopeEnd, entryRaw,
             // 把分支内已完成的产物并回主表：分支中途失败时，输出区仍能显示最后一段已完成结果
             // （A2 的「错误保留前缀」在 Fork 里同样成立）。
             for (const [k, v] of nestedOutputs) workOutputs.set(k, v);
-            if (!r.ok) return r;
+            if (!r.ok) {
+              if (runParams.ignoreErrors) {
+                branchOuts.push("");
+                ctx.reason = "ok";
+                ctx.errorIndex = null;
+                ctx.errorNodeId = null;
+                ctx.errorMessage = null;
+                ctx.resumeAt = -1;
+                continue;
+              }
+              return r;
+            }
             branchOuts.push(r.text == null ? "" : String(r.text));
           }
         } finally {

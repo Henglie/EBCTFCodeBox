@@ -482,6 +482,7 @@ register({
     { sensitive: true, key: "d", label: "私钥指数 d（十进制）", type: "text", default: "", placeholder: "keyEnc=十进制参数时必填" },
     { sensitive: true, acceptFile: "text", key: "privPem", label: "私钥 PEM", type: "textarea", default: "", placeholder: "keyEnc=PEM 时必填（-----BEGIN RSA PRIVATE KEY----- 或 PRIVATE KEY）" },
     { key: "saltLen", label: "盐长 sLen（仅 PSS）", type: "select", default: "hlen", options: SALT_OPTIONS_SIGN },
+    { key: "saltLenCustom", label: "盐长自定义（数字，留空=用左侧选项）", type: "number", default: "" },
   ],
   run: async (text, p = {}) => {
   if (p && p.msgEnc != null && String(p.msgEnc).toLowerCase() !== "text") {
@@ -501,7 +502,8 @@ register({
     const raw = rawBytesOf(p);
     const msg = raw != null ? raw : messageBytes(text, "text");
 
-    const r = await rsaSignRaw(msg, hashKey, mode, d, n, p.saltLen);
+    const saltLen = p.saltLenCustom != null && String(p.saltLenCustom).trim() !== "" ? p.saltLenCustom : p.saltLen;
+    const r = await rsaSignRaw(msg, hashKey, mode, d, n, saltLen);
     const k = Math.ceil(bigintBitLen(n) / 8);
     const lines = [
       `RSASSA-${mode === "pss" ? "PSS" : "PKCS1-v1_5"} 签名 · ${HASHES[hashKey].label} · ${bigintBitLen(n)} 位模数`,
@@ -555,6 +557,7 @@ register({
     { key: "e", label: "公钥指数 e（十进制）", type: "text", default: "65537", placeholder: "常用 65537" },
     { acceptFile: "text", key: "pubPem", label: "公钥 PEM", type: "textarea", default: "", placeholder: "keyEnc=PEM 时必填（-----BEGIN PUBLIC KEY----- 或 RSA PUBLIC KEY）" },
     { key: "saltLen", label: "盐长 sLen（仅 PSS）", type: "select", default: "hlen", options: SALT_OPTIONS_VERIFY },
+    { key: "saltLenCustom", label: "盐长自定义（数字，留空=用左侧选项）", type: "number", default: "" },
   ],
   run: async (text, p = {}) => {
   if (p && p.msgEnc != null && String(p.msgEnc).toLowerCase() !== "text") {
@@ -580,7 +583,8 @@ register({
       ? bigintToBytes(decToBigint(p.sig, "签名 s"), Math.ceil(bigintBitLen(n) / 8), "签名 s")
       : hexToBytes(p.sig);
 
-    const r = await rsaVerifyRaw(msg, sigBytes, hashKey, mode, e, n, p.saltLen);
+    const saltLen = p.saltLenCustom != null && String(p.saltLenCustom).trim() !== "" ? p.saltLenCustom : p.saltLen;
+    const r = await rsaVerifyRaw(msg, sigBytes, hashKey, mode, e, n, saltLen);
     const lines = [
       `RSASSA-${mode === "pss" ? "PSS" : "PKCS1-v1_5"} 验签 · ${HASHES[hashKey].label} · ${bigintBitLen(n)} 位模数`,
       `消息摘要 mHash (${HASHES[hashKey].label}) = ${toHex(r.mHash)}`,

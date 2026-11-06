@@ -249,14 +249,86 @@ function parseMagnet(text) {
   return lines.join("\n");
 }
 
+// ============ Parse URI（同 CyberChef Parse URI） ============
+function parseUriReport(input) {
+  const text = String(input == null ? "" : input).trim();
+  if (!text) return "";
+  const hasScheme = /^[A-Za-z][A-Za-z0-9+.-]*:/.test(text);
+  let u = null;
+  try { u = new URL(text); } catch {
+    try { u = new URL(text, "http://example.invalid"); } catch { u = null; }
+  }
+
+  let protocol = "", auth = "", hostname = "", port = "", pathname = "", query = "", hash = "";
+  if (u) {
+    protocol = u.protocol || "";
+    if (u.username || u.password) auth = u.username + (u.password ? ":" + u.password : "");
+    hostname = hasScheme ? u.hostname : "";
+    port = hasScheme ? u.port : "";
+    pathname = u.pathname || "";
+    query = u.search ? u.search.slice(1) : "";
+    hash = u.hash || "";
+  } else {
+    const m = text.match(/^([A-Za-z][A-Za-z0-9+.-]*:)?(?:\/\/([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?$/);
+    if (m) {
+      protocol = m[1] || "";
+      const hostPart = m[2] || "";
+      if (hostPart) {
+        const at = hostPart.lastIndexOf("@");
+        const authPart = at >= 0 ? hostPart.slice(0, at) : "";
+        const hostPort = at >= 0 ? hostPart.slice(at + 1) : hostPart;
+        auth = authPart;
+        const hp = hostPort.match(/^([^:]*)(?::(\d*))?$/);
+        hostname = hp ? hp[1] : hostPort;
+        port = hp && hp[2] ? hp[2] : "";
+      }
+      pathname = m[3] || "";
+      query = m[4] || "";
+      hash = m[5] ? "#" + m[5] : "";
+    }
+  }
+
+  let output = "";
+  if (protocol) output += "Protocol:\t" + protocol + "\n";
+  if (auth) output += "Auth:\t\t" + auth + "\n";
+  if (hostname) output += "Hostname:\t" + hostname + "\n";
+  if (port) output += "Port:\t\t" + port + "\n";
+  if (pathname) output += "Path name:\t" + pathname + "\n";
+  if (query) {
+    const queryObj = Object.create(null);
+    for (const [key, value] of new URLSearchParams(query)) {
+      if (Object.prototype.hasOwnProperty.call(queryObj, key)) {
+        if (Array.isArray(queryObj[key])) queryObj[key].push(value);
+        else queryObj[key] = [queryObj[key], value];
+      } else queryObj[key] = value;
+    }
+    const keys = Object.keys(queryObj);
+    let padding = 0;
+    for (const k of keys) padding = k.length > padding ? k.length : padding;
+    output += "Arguments:\n";
+    for (const key of keys) {
+      output += "\t" + key.padEnd(padding, " ");
+      const v = queryObj[key];
+      output += (v && v.length ? " = " + v : "") + "\n";
+    }
+  }
+  if (hash) output += "Hash:\t\t" + hash + "\n";
+  return output;
+}
+
 // ============ 注册 op ============
 
 // 1. URL query 解析（run 单向）
 register({
   id: "urlQueryParse", cat: "text", name: "URL Query 解析",
-  desc: "解析 URL 查询串（? 后的 k=v&k=v），percent-decode + '+' 转空格，逐行列出键值。支持传入完整 URL。",
-  params: [],
-  run: (t) => parseUrlQuery(t),
+  desc: "解析 URL 查询串（? 后的 k=v&k=v），percent-decode + '+' 转空格，逐行列出键值。支持传入完整 URL；mode=uri 时同 CyberChef Parse URI 输出协议/认证/主机/端口/路径/参数/锚点。",
+  params: [
+    { key: "mode", label: "模式", type: "select", default: "query", options: [
+      { value: "query", label: "Query 解析（原有模式）" },
+      { value: "uri", label: "Parse URI（完整 URI 拆解）" },
+    ] },
+  ],
+  run: (t, p) => ((p && p.mode) === "uri" ? parseUriReport(t) : parseUrlQuery(t)),
   detect: (t) => (/[?&][^=&\s]+=[^&\s]*/.test(String(t)) ? 0.3 : 0),
 });
 

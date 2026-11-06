@@ -369,10 +369,83 @@ const ENCODE_FILE_META = {
   "deflate-raw": { name: "out.deflate", mime: "application/octet-stream" },
 };
 
+// Fixed-Huffman raw deflate（RFC 1951 BTYPE=01，全字面量）；CC Fixed 档用。
+function deflateFixedRaw(data) {
+  const out = [];
+  let bit = 0, n = 0;
+  const write = (val, nBits) => {
+    for (let i = 0; i < nBits; i++) {
+      bit |= ((val >> i) & 1) << n;
+      if (++n === 8) { out.push(bit & 0xff); bit = 0; n = 0; }
+    }
+  };
+  const rev = (v, bits) => { let r = 0; for (let i = 0; i < bits; i++) r = (r << 1) | ((v >> i) & 1); return r; };
+  write(1, 1); write(1, 1); write(0, 1); // BFINAL=1, BTYPE=01
+  for (const b of data) {
+    if (b <= 143) write(rev(0x30 + b, 8), 8);
+    else write(rev(0x190 + (b - 144), 9), 9);
+  }
+  write(0, 7); // EOB
+  if (n > 0) out.push(bit & 0xff);
+  return Uint8Array.from(out);
+}
+
+function rawByType(bytes, type) {
+  if (type === "None (Store)") return deflateStoredRaw(bytes);
+  if (type === "Fixed Huffman Coding") return deflateFixedRaw(bytes);
+  return null; // Dynamic → 走原生流
+}
+
+function gzipWrap(bytes, type, filename, comment, fhcrc) {
+  const body = rawByType(bytes, type) || deflateStoredRaw(bytes); // 兜底合法流
+  let flg = 0;
+  if (fhcrc) flg |= 0x02;
+  if (filename) flg |= 0x08;
+  if (comment) flg |= 0x10;
+  const head = [0x1f, 0x8b, 0x08, flg, 0, 0, 0, 0, 0, 0xff];
+  if (filename) head.push(...Array.from(filename, (c) => c.charCodeAt(0) & 0xff), 0);
+  if (comment) head.push(...Array.from(comment, (c) => c.charCodeAt(0) & 0xff), 0);
+  if (fhcrc) {
+    const hc = crc32Bytes(Uint8Array.from(head)) & 0xffff;
+    head.push(hc & 0xff, (hc >>> 8) & 0xff);
+  }
+  const tail = [crc32Bytes(bytes), bytes.length];
+  const tailBytes = new Uint8Array(8);
+  tailBytes.set([crc32Bytes(bytes) & 0xff, (crc32Bytes(bytes) >>> 8) & 0xff, (crc32Bytes(bytes) >>> 16) & 0xff, (crc32Bytes(bytes) >>> 24) & 0xff], 0);
+  tailBytes.set([bytes.length & 0xff, (bytes.length >>> 8) & 0xff, (bytes.length >>> 16) & 0xff, (bytes.length >>> 24) & 0xff], 4);
+  const out = new Uint8Array(head.length + body.length + 8);
+  out.set(head, 0); out.set(body, head.length); out.set(tailBytes, head.length + body.length);
+  return out;
+}
+
+function zlibWrap(bytes, type) {
+  const body = rawByType(bytes, type) || deflateStoredRaw(bytes);
+  const out = new Uint8Array(body.length + 6);
+  out[0] = 0x78; out[1] = 0x01;
+  out.set(body, 2);
+  const ad = adler32Bytes(bytes);
+  out[out.length - 4] = (ad >>> 24) & 0xff; out[out.length - 3] = (ad >>> 16) & 0xff;
+  out[out.length - 2] = (ad >>> 8) & 0xff; out[out.length - 1] = ad & 0xff;
+  return out;
+}
+
 function makeCompressOps(format, label) {
-  async function encode(text) {
+  async function encode(text, p = {}) {
     const bytes = te(text);
-    const zipped = await streamCompress(format, bytes);
+    const type = p.compressionType || "Dynamic Huffman Coding";
+    if (!["Dynamic Huffman Coding", "Fixed Huffman Coding", "None (Store)"].includes(type)) {
+      throw new Error("未知 Compression type：" + type);
+    }
+    let zipped;
+    if (format === "gzip" && (type !== "Dynamic Huffman Coding" || p.gzipFilename || p.gzipComment || p.gzipChecksum)) {
+      zipped = gzipWrap(bytes, type, p.gzipFilename || "", p.gzipComment || "", !!p.gzipChecksum);
+    } else if (format === "deflate" && type !== "Dynamic Huffman Coding") {
+      zipped = zlibWrap(bytes, type);
+    } else if (format === "deflate-raw" && type !== "Dynamic Huffman Coding") {
+      zipped = rawByType(bytes, type);
+    } else {
+      zipped = await streamCompress(format, bytes);
+    }
     // 产物协议（2026-09-02）：成功路径返回 {text, files}；text 保持原
     // base64 不变（链式兼容），files 供 main.js 渲染「⬇ 下载」按钮。
     // 压缩失败仍沿 streamCompress 抛错（错误路径形态不变）。
@@ -409,6 +482,16 @@ function makeCompressOps(format, label) {
 }
 
 const OUTPUT_FILE_PARAM = { key: "toFile", label: "二进制结果输出为文件", type: "bool", default: false };
+const COMPRESSION_TYPE_PARAM = { key: "compressionType", label: "Compression type（同 CyberChef）", type: "select", default: "Dynamic Huffman Coding", options: [
+  { value: "Dynamic Huffman Coding", label: "Dynamic Huffman Coding（默认，原生流）" },
+  { value: "Fixed Huffman Coding", label: "Fixed Huffman Coding（全字面量固定表）" },
+  { value: "None (Store)", label: "None (Store)" },
+] };
+const GZIP_EXTRA_PARAMS = [
+  { key: "gzipFilename", label: "Filename（gzip FNAME，可空）", type: "text", default: "" },
+  { key: "gzipComment", label: "Comment（gzip FCOMMENT，可空）", type: "text", default: "" },
+  { key: "gzipChecksum", label: "Include file checksum（gzip FHCRC）", type: "bool", default: false },
+];
 
 const gzipOps = makeCompressOps("gzip", "gzip");
 const zlibOps = makeCompressOps("deflate", "zlib");
@@ -1164,7 +1247,7 @@ const INPUT_ENC_PARAM = {
 register({
   id: "gzipCodec", cat: "archive", name: "Gzip 解压 / 压缩",
   desc: "gzip 流双向（浏览器 DecompressionStream；输入 hex/base64/UTF-8 自动识别）",
-  params: [INPUT_ENC_PARAM, OUTPUT_FILE_PARAM],
+  params: [INPUT_ENC_PARAM, OUTPUT_FILE_PARAM, COMPRESSION_TYPE_PARAM, ...GZIP_EXTRA_PARAMS],
   encode: gzipOps.encode, decode: gzipOps.decode,
   detect: gzipDetect,
   acceptsBytes: true,
@@ -1172,7 +1255,7 @@ register({
 register({
   id: "zlibCodec", cat: "archive", name: "Zlib 解压 / 压缩",
   desc: "zlib 流（含 2 字节头 + adler32 尾）双向；浏览器实测",
-  params: [INPUT_ENC_PARAM, OUTPUT_FILE_PARAM],
+  params: [INPUT_ENC_PARAM, OUTPUT_FILE_PARAM, COMPRESSION_TYPE_PARAM],
   encode: zlibOps.encode, decode: zlibOps.decode,
   detect: zlibDetect,
   acceptsBytes: true,
@@ -1180,7 +1263,7 @@ register({
 register({
   id: "deflateRawCodec", cat: "archive", name: "Raw Deflate 解压 / 压缩",
   desc: "raw deflate（无 zlib 头）双向；浏览器实测",
-  params: [INPUT_ENC_PARAM, OUTPUT_FILE_PARAM],
+  params: [INPUT_ENC_PARAM, OUTPUT_FILE_PARAM, COMPRESSION_TYPE_PARAM],
   encode: deflateRawOps.encode, decode: deflateRawOps.decode,
   acceptsBytes: true,
 });

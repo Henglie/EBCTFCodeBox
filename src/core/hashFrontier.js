@@ -1399,6 +1399,49 @@ const OPT_TEXT_HEX = [
   { value: "hex", label: "hex" },
 ];
 
+function phcB64ToBytes(b64) {
+  let s = String(b64 || "").replace(/=+$/, "");
+  if (!/^[A-Za-z0-9+/]+$/.test(s)) throw new Error("非法 PHC base64");
+  while (s.length % 4) s += "=";
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/** RFC 9106 PHC 串比对（同 CyberChef Argon2Compare：命中 Match，否则 No match）。 */
+function argon2Compare(text, p) {
+  try {
+    const encoded = String((p && p.encodedHash) || "").trim();
+    const parts = encoded.split("$");
+    // ["", "argon2id", "v=19", "m=...,t=...,p=...", salt, hash]
+    if (parts.length !== 6 || parts[0] !== "") return "No match";
+    const typeName = parts[1];
+    const type = A2_TYPES[typeName];
+    if (type === undefined) return "No match";
+    if (parts[2] !== "v=19") return "No match";
+    const kv = Object.create(null);
+    for (const item of parts[3].split(",")) {
+      const eq = item.indexOf("=");
+      if (eq < 0) return "No match";
+      kv[item.slice(0, eq)] = Number(item.slice(eq + 1));
+    }
+    const t = kv.t, m = kv.m, pp = kv.p;
+    if (!Number.isInteger(t) || !Number.isInteger(m) || !Number.isInteger(pp)) return "No match";
+    if (t < 1 || t > 1024 || m < 8 || m > 65536 || pp < 1 || pp > 254) return "No match";
+    const salt = phcB64ToBytes(parts[4]);
+    const expect = phcB64ToBytes(parts[5]);
+    if (expect.length < 4 || expect.length > 1024) return "No match";
+    const pwd = inputBytes(text, p);
+    const got = argon2Hash(pwd, salt, hexBytes(p.secret), hexBytes(p.ad), { type, t, m, p: pp, tagLen: expect.length });
+    let diff = 0;
+    for (let i = 0; i < expect.length; i++) diff |= expect[i] ^ got[i];
+    return diff === 0 ? `Match: ${text}` : "No match";
+  } catch {
+    return "No match";
+  }
+}
+
 register({
   id: "argon2",
   acceptsBytes: true,
@@ -1406,6 +1449,11 @@ register({
   name: "Argon2 KDF（Argon2d/i/id）",
   desc: "RFC 9106 口令密钥派生（PHC 冠军），内存困难型，Argon2d/i/id 三型可选",
   params: [
+    { key: "mode", label: "模式", type: "select", default: "derive", options: [
+      { value: "derive", label: "派生（原有模式）" },
+      { value: "compare", label: "比对 PHC hash（同 CyberChef Argon2 compare）" },
+    ] },
+    { key: "encodedHash", label: "Encoded hash（compare 模式）", type: "text", default: "", placeholder: "$argon2id$v=19$m=...$salt$hash" },
     { key: "type", label: "类型", type: "select", default: "argon2id", options: [
       { value: "argon2d", label: "Argon2d（数据相关）" },
       { value: "argon2i", label: "Argon2i（数据无关，抗侧信道）" },
@@ -1422,6 +1470,7 @@ register({
     { key: "ad", label: "associated data（hex，可空）", type: "text", default: "" },
   ],
   run(text, p) {
+    if ((p && p.mode) === "compare") return argon2Compare(text, p);
     const type = A2_TYPES[p.type || "argon2id"];
     if (type === undefined) throw new Error("未知 Argon2 类型");
     const t = Math.floor(Number(p.t) || 2);

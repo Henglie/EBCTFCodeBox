@@ -69,8 +69,10 @@ function pushU32(parts, v) { pushInto(parts, v & 0xFF, (v >>> 8) & 0xFF, (v >>> 
  * @param {"Deflated"|"Stored"} methodName 压缩方式
  * @returns {{bytes:Uint8Array, method:number, name:string, size:number, compSize:number}}
  */
-export function makeZip(data, filename, methodName) {
+export function makeZip(data, filename, methodName, comment = "", os = "Unix") {
   const name = (filename && String(filename).trim()) ? String(filename) : "flag.txt";
+  const commentB = Array.from(String(comment || ""), (c) => c.charCodeAt(0) & 0xff);
+  const versionMade = os === "MSDOS" ? 0x0014 : os === "Macintosh" ? 0x0714 : 0x031E;
   const method = methodName === "Stored" ? 0 : 8;
   const nameB = Array.from(name, (c) => c.charCodeAt(0) & 0xff);
   const crc = crc32Bytes(data);
@@ -90,21 +92,22 @@ export function makeZip(data, filename, methodName) {
   // CDH
   const cdOff = parts.length;
   pushInto(parts, 0x50, 0x4B, 0x01, 0x02);
-  pushU16(parts, 0x031E); pushU16(parts, 0x0014); // 版本 by/需要
+  pushU16(parts, versionMade); pushU16(parts, 0x0014); // 版本 by/需要
   pushU16(parts, flag); pushU16(parts, method);
   pushU16(parts, 0x4800); pushU16(parts, 0x5987);
   pushU32(parts, crc); pushU32(parts, comp.length); pushU32(parts, data.length);
-  pushU16(parts, nameB.length); pushU16(parts, 0); pushU16(parts, 0);
+  pushU16(parts, nameB.length); pushU16(parts, 0); pushU16(parts, commentB.length);
   pushU16(parts, 0); pushU16(parts, 0); pushU32(parts, 0); // 盘/内部/外部属性
   pushU32(parts, lfhOff);
-  parts.push(...nameB);
+  parts.push(...nameB, ...commentB);
 
   // EOCD
   const cdSize = parts.length - cdOff;
   pushInto(parts, 0x50, 0x4B, 0x05, 0x06);
   pushU16(parts, 0); pushU16(parts, 0); pushU16(parts, 1); pushU16(parts, 1);
   pushU32(parts, cdSize); pushU32(parts, cdOff);
-  pushU16(parts, 0);
+  pushU16(parts, commentB.length);
+  parts.push(...commentB);
 
   return { bytes: Uint8Array.from(parts), method, name, size: data.length, compSize: comp.length };
 }
@@ -133,7 +136,9 @@ function zipCreateRun(text, p) {
   try { data = inputToBytes(text, pp); }
   catch (e) { return "输入解析失败：" + (e && e.message ? e.message : String(e)); }
 
-  const z = makeZip(data, pp.filename, pp.method);
+  const comment = String(pp.comment || "");
+  if (new TextEncoder().encode(comment).length > 65535) throw new Error("ZIP 注释最长 65535 字节");
+  const z = makeZip(data, pp.filename, pp.method, comment, pp.os || "Unix");
   const methodName = z.method === 0 ? "Stored" : "Deflated";
   // 产物协议：ZIP 字节走 files 下载按钮（真文件交付），不再倾倒 base64 文本。
   // 需要文本形态时可用 Base 系列对下载文件再编码；zipRepair/zipPseudoEncrypt 等链式 op 走文件导入。
@@ -229,6 +234,14 @@ register({
       options: [
         { value: "Deflated", label: "Deflated（压缩）" },
         { value: "Stored", label: "Stored（不压缩）" },
+      ],
+    },
+    { key: "comment", label: "ZIP 注释（同 CC Comment）", type: "text", default: "" },
+    { key: "os", label: "Operating system（同 CC）", type: "select", default: "Unix",
+      options: [
+        { value: "MSDOS", label: "MSDOS" },
+        { value: "Unix", label: "Unix（项目旧默认）" },
+        { value: "Macintosh", label: "Macintosh" },
       ],
     },
   ],

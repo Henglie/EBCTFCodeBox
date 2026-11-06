@@ -455,6 +455,15 @@ function listCalc(text, p) {
       for (const n of nums.slice(1)) cur = divDec(cur, n);
       return fmtDec(cur.v, cur.s);
     }
+    case "mod": {
+      const { maxS, vals } = toCommonScale(nums);
+      let cur = vals[0];
+      for (const n of vals.slice(1)) {
+        if (n === 0n) throw new Error("列表取模除数不能为 0");
+        cur %= n;
+      }
+      return fmtDec(cur, maxS);
+    }
     case "mean": {
       const { maxS, vals } = toCommonScale(nums);
       const sum = vals.reduce((a, b) => a + b, 0n);
@@ -514,6 +523,7 @@ register({
         { value: "sub", label: "Subtract（首项减其余）" },
         { value: "mul", label: "Multiply（连乘）" },
         { value: "div", label: "Divide（首项除其余）" },
+        { value: "mod", label: "MOD（首项对后续逐项取模）" },
         { value: "mean", label: "Mean（算术平均，整数截断）" },
         { value: "median", label: "Median（中位数，整数截断）" },
       ] },
