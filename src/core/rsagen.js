@@ -1,5 +1,5 @@
 /*
- * rsagen.js — RSA 密钥对生成 + DER/PEM 导出（批A1，cat:'modern'）
+ * rsagen.js — RSA 密钥对生成 + DER/PEM 导出（cat:'modern'）
  *
  * 标准依据（照标准实现，不编造）：
  * - PKCS#1 v2.2 = RFC 8017 (2016-11)

@@ -57,7 +57,7 @@ export const EXPLICIT_RUN_OPS = [
   "pgpEncryptAndSign", "pgpDecryptAndVerify", "pgpParseKey",
   // 作者已标注 noAuto 的重 op（工具页同样要显式触发）
   "qrFormatBrute", "xiangyue", "xiangyueEnc", "adsTool",
-  // ---- v0.1.14 全 op 审计补录（判定依据与实测见开发档案 sensitive_audit.md）----
+  // ---- v0.1.14 全 op 审计补录（判定依据与实测见审计记录）----
   // KDF（内存硬化，默认快、调参即重；与既有 pbkdf2 同口径）：argon2 默认档实测 2.7s，
   //   scrypt 0.49s / yescrypt 0.60s / balloon 0.16s / bcrypt 0.11s / lyra2 0.03s；
   //   N / 内存 / 轮数一调即秒级，禁止参数框逐键自动跑。

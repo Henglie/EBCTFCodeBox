@@ -164,7 +164,7 @@ const CONFUSABLES = {
   0x03c4: ["Greek", "t", 0x0074],
   0x03c5: ["Greek", "u", 0x0075],
   0x03c7: ["Greek", "x", 0x0078],
- // R9 合并：并入原 confusablesDetect 独有的西里尔/全角同形字
+ // 合并：并入原 confusablesDetect 独有的西里尔/全角同形字
   0x0261: ["Latin", "g", 0x0067],
   0x0405: ["Cyrillic", "S", 0x0053],
   0x0406: ["Cyrillic", "I", 0x0049],

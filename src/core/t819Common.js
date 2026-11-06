@@ -1,5 +1,5 @@
 /*
- * t819Common.js —— T819 七个 CyberChef Code 类 op 的公共工具。
+ * t819Common.js —— CyberChef Code 类 op 的公共工具。
  *
  * 仅 t819*.js 使用；不接 registerAll。parseEscapedChars 与 CyberChef 11.2.0
  * src/core/Utils.mjs 的 Utils.parseEscapedChars 逐行一致，用于把 binaryShortString

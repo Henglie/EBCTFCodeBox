@@ -7,13 +7,13 @@
  * 判据（本清单的唯一依据 = 实测，不靠命名/直觉）：
  *   ① 该 op 的算法路径最终调用 randSource.randomBytes（统一随机源），且
  *   ② 调用发生在「生成随机值」的语义下（密钥 / nonce / IV / salt / 随机填充等）。
- *   验证方法（可复跑）：工具/_rand_ops_audit.mjs —— 给 crypto.getRandomValues 打桩，
+ *   验证方法（可复跑）：给 crypto.getRandomValues 打桩，
  *   真跑每个 op 看是否命中；对「需密钥而早退」的 sign/encrypt 类，用静态调用点补判
  *   （见该工具输出的 two-pass 证据）。
  *
  * ⚠ 维护：新增任何「会取随机字节」的 op（密钥生成 / 签名 / 加密 / 加盐 / 随机数），
  *   必须把它的 id 加进来，否则用户拿不到增强随机性开关。改动后跑
- *   `node 工具/_rand_ops_audit.mjs` 复核清单与实际调用点一致。
+ *   审计脚本的清单与实际调用点一致。
  *
  * ⚠ 已知未纳入：vendored 第三方库内部随机（openpgp.js / sjcl.js / abracadabra-cn）——
  *   见文末 `RAND_OPS_EXTERNAL`：不显示开关，改为**在参数区告知用户「为什么没有」**。

@@ -1,6 +1,6 @@
 /*
- * edu-t722.js — sshsigVerify（OpenSSH SSHSIG 验签）科普卡。
- * 样例值来自本机 ssh-keygen -Y sign/verify 与 verify_t722 实跑。
+ * sshsigVerify（OpenSSH SSHSIG 验签）科普卡。
+ * 样例值来自本机 ssh-keygen -Y sign/verify 实跑。
  */
 export default {
   sshsigVerify: {

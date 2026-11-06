@@ -1,5 +1,5 @@
 /*
- * pdfObjects.js — PDF 对象与流解析（P1 批，cat:'filefmt'，单向 run）。
+ * pdfObjects.js — PDF 对象与流解析（cat:'filefmt'，单向 run）。
  *
  * 解决什么：PDF 取证起手动作——不渲染页面、不修文件，直接把对象表挖出来：
  * 每个「N M obj ... endobj」对象的编号 / 文件偏移 / 体长 / Type / Subtype /

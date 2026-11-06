@@ -12,7 +12,7 @@
  *     故任何「仅含普通有效信息」的结果，其本模块奖励都不足以压过 flag 或用户目标特征。
  *
  * 全部判据均带权威依据（RFC / 规范 / 厂商文档）或带低误报判据（词边界 + 经验白名单），
- * 给不出低误报判据的类型已列入 BLOCKED（见 设计.md / 报告.md），本模块不实现。
+ * 给不出低误报判据的类型本模块不实现。
  *
  * 输入：字符串文本（通常是一键解码的某个候选 result）。
  * 输出：{ signals:[{kind,label,weight,span}], adjust:number, totalCap:number }
@@ -30,7 +30,7 @@ export const TOTAL_CAP = 32;
 // ============ 每类信号规格 ============
 // weight：单条命中奖励幅度（负值）。
 // cap   ：该类合计奖励幅度下限（更负，但不超过此值），实现「单独封顶」。
-// 判据（re 或 detector）必须带词边界 / 结构锚点，杜绝子串误报（见 设计.md 误报节）。
+// 判据（re 或 detector）必须带词边界 / 结构锚点，杜绝子串误报。
 export const SIGSPEC = Object.freeze({
   url: {
     label: "URL",

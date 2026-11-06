@@ -21,7 +21,7 @@
  * BMP 外字符按 UTF-16 码元拆编（原版 split("")+charCodeAt 口径），成对代理码元
  * 解码后由 fromCharCode 重组，round-trip 自洽。
  *
- * 接线（M 串行）：src/main.js 与 src/core/registerAll.js 各加
+ * 接线：src/main.js 与 src/core/registerAll.js 各加
  *   import "./core/textBlindWatermark.js"; / import "./textBlindWatermark.js";
  */
 import { register } from "./registry.js";

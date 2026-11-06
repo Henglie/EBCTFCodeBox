@@ -1,12 +1,12 @@
 /*
  * core/registerAll.js — 全算法注册入口（副作用 barrel，自动生成，勿手改）
  *
- * 由 工具/_gen_registerall.mjs 从 src/main.js 抽取所有 core 副作用 import 生成。
+ * 由构建脚本从 src/main.js 抽取所有 core 副作用 import 生成。
  * main.js 与 magic/magicWorker.js 共用此入口，确保主线程与 Worker 注册的 op 完全一致
  * （单一事实源，避免两处 import 列表漂移导致 Worker 少注册 op）。
  *
  * 注册顺序 = main.js 中原始顺序（detectExt/detectSupplement 系列在末尾，依赖其他 op 先注册）。
- * 新增算法：在 main.js 加 import "./core/xxx.js" 后重跑 工具/_gen_registerall.mjs 即可。
+ * 新增算法：在 main.js 加 import "./core/xxx.js" 后重跑生成脚本即可。
  */
 import "./oleExtract.js"; // OLE/CFB 容器静态提取 oleExtract（forensic, run, 目录树+FAT/MiniFAT 取流, 无 detect）
 import "./stegoQuickScan.js";
@@ -53,7 +53,7 @@ import "./radix.js";
 import "./radixExt.js";
 import "./hash.js";
 import "./hashExt.js";
-import "./hashMore.js"; // 批F 哈希查漏 md6/snefru/sha0/has160/gostHash（hash, run, 64 组 KAT, 无 detect）
+import "./hashMore.js"; // 哈希查漏 md6/snefru/sha0/has160/gostHash（hash, run, 64 组 KAT, 无 detect）
 import "./cn.js";
 import "./cnLookupWubi.js";
 import "./cnLookupTelegraph.js";
@@ -75,7 +75,7 @@ import "./imagefix.js"; // 图像尺寸修复（pngSizeRecover/jpegSizeRead/gifS
 import "./trailerCarve.js"; // 文件附加数据剥离 + binwalk 式全文魔数扫描（替代 carve）
 import "./opensslDec.js"; // OpenSSL Salted__ 一步式口令加解密
 import "./foremostJs.js"; // 文件雕刻（Foremost 纯 JS 版）foremostCarve（forensic, run, 头尾魔数雕刻内嵌文件, 无 detect）
-import "./hashFrontier.js"; // 哈希前沿补遗（批B）argon2/tiger/tiger2/kupyna（hash, run, 无 detect）
+import "./hashFrontier.js"; // 哈希前沿补遗 argon2/tiger/tiger2/kupyna（hash, run, 无 detect）
 import "./stegoText.js"; // 隐写文本检测组（零宽/同形字/规范化/空格/Bidi/字符透视，检测类 run 单向）
 import "./stegoDetect.js"; // 统一隐写检测 stegoDetect（data, run 单向, 11 个 mode：文本侧 8 + 文件侧 3，原 11 个纯检测 op 收敛入口）
 import "./textBlindWatermark.js"; // 文本盲水印 textBlindWatermark（stego, 双向+detect 分级, guofei v1 变长二进制+单双 U+200C, 与 zeroWidth 互不兼容）
@@ -141,11 +141,11 @@ import "./esolang2.js"; // esolang 扩展组
 import "./malbolgeExec.js"; // Malbolge 解释器 malbolgeExec（esolang, run 型: 执行/normalize/assemble, 步数护栏, 官方 7 样例对拍 17/17）
 import "./difftool.js"; // diff 对比工具（两文本/两 hex 逐字节 diff，run 单向分析类）
 import "./classicExt3.js"; // 古典补全组3（otp/multiplicative/keywordcipher/simplesub/runningkey）
-import "./classicExt4.js"; // 批一古典（homophonic/doubleTrans/pollux/morbit/bookCipher/turningGrille/kenny，dCode 双例对拍）
-import "./engEncoding.js"; // 批四工程编码（hexdump/modhex/citrixCtx1/scriptDecoder/rison/unixPerms，xxd+CyberChef 向量对拍）
-import "./encodingExt3.js"; // 批二编码映射（crockford32/alienAlphabet/futhark/countingRods/chuckUnary/wingdings/cardanGrille，dCode/Wikipedia/字体 cmap 三源对拍）
+import "./classicExt4.js"; // 古典（homophonic/doubleTrans/pollux/morbit/bookCipher/turningGrille/kenny，dCode 双例对拍）
+import "./engEncoding.js"; // 工程编码（hexdump/modhex/citrixCtx1/scriptDecoder/rison/unixPerms，xxd+CyberChef 向量对拍）
+import "./encodingExt3.js"; // 编码映射（crockford32/alienAlphabet/futhark/countingRods/chuckUnary/wingdings/cardanGrille，dCode/Wikipedia/字体 cmap 三源对拍）
 import "./bzip2Codec.js"; // bzip2 压缩 bzip2Enc（archive, run, WASM；与 bzip2Dec 同族）
-import "./compressExt2.js"; // 批三压缩校验（rle/lzw/elias/verhoeff/lz4Dec/bzip2Dec，PIL/CLI/规范三源对拍，bzip2 全链）
+import "./compressExt2.js"; // 压缩校验（rle/lzw/elias/verhoeff/lz4Dec/bzip2Dec，PIL/CLI/规范三源对拍，bzip2 全链）
 import "./fracmorse.js"; // 分数摩斯 Fractionated Morse
 import "./hamming.js"; // 海明码纠错编解码
 import "./snow.js"; // Snow 行尾空白隐写（Space/Tab 编码比特）
@@ -211,17 +211,17 @@ import "./carbonaro.js"; // Carbonaro 密码（classic）
 import "./albam.js"; // Al Bhed / Albam 替换（classic）
 import "./bfDialects.js"; // BF 方言 Blub/COW（fancy，有 detect）
 import "./bftoolsImg.js"; // Brainloller/Braincopter 图像变体（stego）
-import "./xwing.js"; // X-Wing 混合 KEM（asym，PQC 批A）
+import "./xwing.js"; // X-Wing 混合 KEM（asym，PQC）
 import "./stegdetect.js"; // stegdetect JPEG 隐写检测（analysis）
 import "./jsteg.js";
 import "./stegoOpWrappers.js"; // lsbDeep/rasterStego/mp3stego/imageThumb（stegoFile，acceptsBytes） // jsteg JPEG 系数隐写（stego）
 import "./dtmfWav.js"; // DTMF 拨号音 WAV 编/解（stego；此前仅经 audioAnalysis 间接注册，Node/Worker 闭包缺项）
 import "./morseWav.js"; // 摩斯音频解码 morseWav（audio, decode, WAV→包络→Otsu 自适应阈值→点划分类→明文, 无 detect）
-import "./xmssLms.js"; // XMSS/LMS 哈希签名（asym，PQC 批A）
-import "./hqc.js"; // HQC 后量子 KEM（asym，PQC 批A）
-import "./ntruReal.js"; // 真 NTRU（asym，PQC 批A）
-import "./bls.js"; // BLS 签名（asym，PQC 批C）
-import "./protocolSig.js"; // Merkle/Pedersen/Feldman/LSAG（asym，PQC 批C）
+import "./xmssLms.js"; // XMSS/LMS 哈希签名（asym，PQC）
+import "./hqc.js"; // HQC 后量子 KEM（asym，PQC）
+import "./ntruReal.js"; // 真 NTRU（asym，PQC）
+import "./bls.js"; // BLS 签名（asym，PQC）
+import "./protocolSig.js"; // Merkle/Pedersen/Feldman/LSAG（asym，PQC）
 import "./ctfCipherExt.js"; // 冷门编码/换位补齐 twinHex/trollScript/asciiSum（fancy，有 detect）+ caesarBox/curveCipher（classic）
 import "./zipCrack.js"; // ZIP 弱口令爆破（analysis, run 型, 单向）
 import "./chaocipher.js"; // 混沌密码 chaocipher（classic, 双向）

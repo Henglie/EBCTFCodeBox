@@ -164,7 +164,7 @@ register({
  // 传统模式含 JP+CN 标志字且以 CJK 为主 → 低置信度（防与其他 cn 编码误撞）。
     if (hasJp && hasCn && cjkRatio > 0.7) return 0.35;
  // 文言仿真模式无标志字：先按 CJK 占比粗筛，再用默认密钥试解做精确校验；
- // 密钥不符/非魔曰密文会抛错，不会误报（非默认密钥的 Classical 仍识别不了，见回执）。
+ // 密钥不符/非魔曰密文会抛错，不会误报（非默认密钥的 Classical 仍识别不了）。
     if (cjkRatio > 0.7 && /[，。！？、]/.test(s)) {
       try {
         const out = moyueDecode(s, { mode: "classical", key: DEFAULT_KEY });

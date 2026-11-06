@@ -1,5 +1,5 @@
 /*
- * encodingExt3.js — 批二·编码映射组（B1/B2/B7/B8/B9/B10/D1；A8 圣殿骑士 BLOCKED 未实现）。
+ * encodingExt3.js — 编码映射组（A8 圣殿骑士未实现）。
  *
  * 7 个 op：crockford32 / alienAlphabet / futhark / countingRods / chuckUnary / wingdings / cardanGrille。
  * 口径来源（逐项，全部 2026-09 抓取/实测核实，未凭记忆编造）：
@@ -32,7 +32,7 @@
  *   chuckUnary    — dCode code-chuck-norris：字符→7bit ASCII（可选 8bit）连成位流；
  *                   连续 N 个 1 →「0」+ N 个 0；连续 N 个 0 →「00」+ N 个 0；组间空格，
  *                   字符间无分隔（整条位流做游程）。页面例：位流 00011110 → 00 000 0 0000 00 0。
- *   wingdings     — 三重权威：① 本机 C:\Windows\Fonts\wingding.ttf cmap 实测（fontTools 解析）：
+ *   wingdings     — 三重权威：① Windows 系统字体 wingding.ttf cmap 实测（fontTools 解析）：
  *                   U+F020-F0FF ↔ 字形槽 0x20-0xFF —— Microsoft 符号字体 PUA 约定，pua 档依据；
  *                   ② Alan Wood 字体演示页 wingdings/wingdings-2/wingdings-3（0x20-0x7E 全表，
  *                   unicode 档依据）；③ Wikipedia Wingdings（Unicode 7.0 对应）作解码容错（个别槽

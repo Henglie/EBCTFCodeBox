@@ -20,7 +20,7 @@
  *    ca→BB、de→FC（Variant）；ca→BZ、de→XY（Beaufort））+ 完整算例：Key DIGRAPH，
  *    明文 "The Slidefair can be used with Vigenère, Variant or Beaufort."
  *    → 密文 EWKMCRNUAFCXTJYQMMYYFUTIGWZPKHJMPKBSAIECKVKVCFMIILCI（48 字母）。
- *    本实现默认参数即该例（见 verify_classic2_a.mjs）。
+ *    本实现默认参数即该例。
  *  - dCode「Slidefair Cipher」(https://www.dcode.fr/slidefair-cipher)，访问日期 2026-09-22：
  *    同一算法的独立表述与 MESSAGE/ABC→EMRTECXE 例（含奇数长补位约定），佐证矩形构造。
  *

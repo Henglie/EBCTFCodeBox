@@ -1,5 +1,5 @@
 /*
- * ecdsa.js — 通用 ECDSA 全家 + ECC 点运算（批A2+A6）。
+ * ecdsa.js — 通用 ECDSA 全家 + ECC 点运算。
  *
  * 五个 op（件内自注册）：
  *   ecdsaKeyGen     生成密钥对：d + 公钥（压缩/非压缩 hex）（crypto）

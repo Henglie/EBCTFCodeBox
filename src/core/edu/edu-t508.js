@@ -1,7 +1,7 @@
 /*
- * edu-t508.js — 批一·古典 A1-A7 科普卡（classicExt4.js）。
+ * 古典 A1-A7 科普卡（classicExt4.js）。
  * homophonic / doubleTrans / pollux / morbit / bookCipher / turningGrille / kenny
- * 示例输出全部来自实跑（test_batch1.mjs 同口径），无编造。
+ * 示例输出全部来自实跑，无编造。
  */
 export default {
   homophonic: {

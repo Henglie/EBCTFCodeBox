@@ -1,5 +1,5 @@
 /*
- * peInfo.js — PE 可执行文件信息（P1 批，cat:'filefmt'，单向 run）。
+ * peInfo.js — PE 可执行文件信息（cat:'filefmt'，单向 run）。
  *
  * 解决什么：Windows PE（.exe/.dll）头信息一眼概览——格式/架构/位数/类型
  * （EXE/DLL）/子系统/入口 RVA/镜像基址。CTF 里拿到 PE 先看架构/位数选引擎，

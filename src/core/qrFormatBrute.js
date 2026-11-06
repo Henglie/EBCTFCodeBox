@@ -18,7 +18,7 @@
  * 结果按 RS 纠错数升序全列（错组合偶发凑出合法分段时人工可辨），
  * 「RS 0 错 + 恰好命中格式区 BCH 距离最小」为最可信解。
  *
- * 接线（M 串行）：src/main.js 加
+ * 接线：src/main.js 加
  *   import "./core/qrFormatBrute.js"; // QR 格式信息爆破
  * src/core/registerAll.js 加
  *   import "./qrFormatBrute.js"; // QR 格式信息爆破

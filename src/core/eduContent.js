@@ -34,7 +34,7 @@ import EDU_MISC from "./eduContent.part-misc.js";            // stego + analysis
 // ---- 扩展模块增量分片（gen-*，各自独占文件，缺失时用可选兜底避免整站崩） ----
 import EDU_GEN_TEXT from "./eduContent.gen-text.js";         // text 补全 25 项
 import EDU_GEN_FANCY from "./eduContent.gen-fancy.js";       // fancy 补全 36 项
-// ---- 30 卡科普分片（src/core/edu/，各代理独占文件） ----
+// ---- 30 卡科普分片（src/core/edu/，按文件分片） ----
 import EDU_BASE1 from "./edu/edu-base1.js";                  // base 补全 12
 import EDU_BASE2 from "./edu/edu-base2.js";                  // base 补全 12
 import EDU_CLASSIC1 from "./edu/edu-classic1.js";            // classic 补全 8
@@ -115,7 +115,7 @@ import EDU_BLS_FAMILY from "./edu/edu-bls-family.js";         // BLS 卡（批C�
 import EDU_PROTOCOL_C from "./edu/edu-protocol-c.js";         // 批C 协议原语卡（Merkle/Pedersen/Feldman/LSAG）
 import EDU_CRYPTO_PG from "./edu/edu-crypto-pg.js";          // shamir/schnorr/ecdsaReuseK/rabin/x25519/ed25519/paillier/a51/magma 9
 import EDU_UNIFIED_MISC from "./edu/edu-unified-misc.js";    // archiveUnified/cryptoAddrUnified/imageStructUnified/numToPinyin/hanziToPinyin 5
-// ---- 发布前补全：91 个原无科普 op 的科普卡（按分类分片，各代理独占文件）----
+// ---- 发布前补全：91 个原无科普 op 的科普卡（按分类分片）----
 import EDU_FORENSIC_NEW from "./edu/edu-forensic-new.js";        // john 系/pcap 系/mc 系/取证 19
 import EDU_ANA_CRYPTO_NEW from "./edu/edu-ana-crypto-new.js";
 import EDU_TEXT_BUBBLE from "./edu/edu-text-bubblebabble.js"; // bubblebabble 1

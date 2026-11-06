@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bridge.py — 外部 exe 本地桥（独立本地服务，仅 Windows，署名：外部4）。
+bridge.py — 外部 exe 本地桥（独立本地服务，仅 Windows）。
 
 为什么独立服务而非改 start.py：
-  - 不碰主开发的 start.py（机制四 + 用户要求「不影响主开发」）。
+  - 不碰 start.py，作为独立进程运行，可选启用。
   - 独立进程，可选启用；不起则前端 op 灰置提示，不影响纯前端功能。
 
 安全红线（见库根安全约定）：
@@ -66,7 +66,7 @@ EXE_BASE = os.path.join(ROOT, "tools", "exe")
 # 这里只放「有命令行、可无人值守跑（读 args/stdin，回 stdout）」的 CLI exe。
 # 纯 GUI 程序（OurSecret/OpenPuff/Jphswin 等）见下方 LAUNCH_WHITELIST，走 /api/launch。
 WHITELIST = {
-    # ---- 新增 CLI 工具（署名：外部4）----
+    # ---- 新增 CLI 工具 ----
 }
 
 # ---- GUI 启动白名单（tool → 绝对路径）。仅「启动 exe 让用户手动操作」，不喂输入不取输出 ----

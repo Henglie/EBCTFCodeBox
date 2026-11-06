@@ -1,7 +1,7 @@
 /*
  * edu_trilitere.js — 科普卡：Trilitère。纯数据，无 import 无副作用。
  * 来源：dCode「Chiffre Trilitère」(2026-09-20 访问)，含完整字母表与算例 DCODE → ABA AAC BBC ABA ABB。
- * 字母表已用脚本 ref/trilitere_tables_check.py 校验为 27 个三元组的完整置换。
+ * 字母表已校验为 27 个三元组的完整置换。
  */
 export default {
   trilitere: {

@@ -1876,7 +1876,7 @@ export async function analyzeFile(bytes, name = "", opts = {}) { // pcap 人话�
   }
   await yieldUI();
 
-  // 15b. EXIF / JFIF 缩略图（R8 模块未落地时静默跳过）
+  // 15b. EXIF / JFIF 缩略图（模块未落地时静默跳过）
   try {
     const thumbMod = await import("./imageThumb.js");
     const extractThumbs = thumbMod && (thumbMod.extractExifThumbnails ||

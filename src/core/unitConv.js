@@ -1,7 +1,7 @@
 /*
  * unitConv.js — 单位换算（cat:'data'，run 报告型）。
  *
- * 九组（任务卡口径 + 收尾批次补三组）：
+ * 九组：
  * - 数据量：B/KB/MB/GB/TB/PB（SI 1000 制）与 KiB/MiB/GiB/TiB/PiB（IEC 1024 制）
  *   两制并列输出（最常被搞混的点）。
  * - 数据速率：bps/Kbps/Mbps/Gbps（bit，SI）与 B/s/KB/s/MB/s（Byte，bit×8）。
@@ -38,7 +38,7 @@
  * - 角度：deg（360° = 周角）；rad 为 SI 导出单位（ISO 80000-3，π rad = 180°）；
  *   gon（梯度，400 gon = 360°，ISO 80000-1 附录平面角单位）。
  *
- * 精度方案（任务卡硬要求）：数据量/速率/时间/时间戳组全程 BigInt 有理数
+ * 精度方案：数据量/速率/时间/时间戳组全程 BigInt 有理数
  * {n, d}（分母恒正，构造时 gcd 约分）。理由：PB 级字节数（10^15）虽在
  * Number.MAX_SAFE_INTEGER（≈9.007×10^15）内，但 1 PiB = 2^50 ≈ 1.126×10^15
  * 的中间换算（×1024、×8 累乘）极易越界；且小数（953.67431640625 MiB）在
@@ -186,7 +186,7 @@ const FREQ_UNITS = [
 // deg→rad：×π/180（ISO 80000-3）；deg→gon：×10/9（400 gon = 360°）
 const ANGLE_UNITS = ["deg", "rad", "gon"];
 
-// -- 长度（基准：米 m；收尾批次：op 侧补齐，与 unitTables.js 的 LENGTH_UNITS 逐字同源） --
+// -- 长度（基准：米 m；op 侧补齐，与 unitTables.js 的 LENGTH_UNITS 逐字同源） --
 // 英制精确值来自 1959 年美英等六国《国际码磅协定》；市制取 1984 年国务院
 // 《关于在我国统一实行法定计量单位的命令》；au/ly 为天文距离参考。
 // ⚠ 同源约定：此表与 src/core/unitTables.js 的 LENGTH_UNITS 必须保持一致，
@@ -212,7 +212,7 @@ const LEN_UNITS = [
   { u: "ly", zh: "光年", k: rat(9460730472580800n) },
 ];
 
-// -- 货币「面额」换算（不是汇率！ 收尾批次：op 侧补齐，与 unitTables.js 同源） --
+// -- 货币「面额」换算（不是汇率！ op 侧补齐，与 unitTables.js 同源） --
 // 产品负责人 2026-08-23 明确：货币要的是「元/角/分」这种**同一种货币内部主辅币面额**换算，
 // 比例由法律/铸币法定死，是精确常数，不联网、不过期、与零外发红线无冲突。
 // ⚠ 每种货币各自成一组，组间绝不互转（跨币种才需汇率，本工具不做）。
@@ -279,7 +279,7 @@ const CURRENCY_SETS = [
   },
 ];
 
-// -- 速度（基准：m/s；收尾批次：op 侧补齐 mph/kn，与 unitTables.js 的 SPEED_UNITS 同源）--
+// -- 速度（基准：m/s；op 侧补齐 mph/kn，与 unitTables.js 的 SPEED_UNITS 同源）--
 // mph = 1 mi/h = 0.44704 m/s 精确（由 mi 精确值导出）；kn = 1 nmi/h = 1852/3600 m/s 精确。
 // ⚠ 同源约定：与 unitTables.js 的 SPEED_UNITS 保持一致，改先改那边，这边同步。
 const SPEED_UNITS = [
@@ -507,7 +507,7 @@ function angleReport(qty, unit) {
   return lines.join("\n");
 }
 
-// -- 长度报告（收尾批次）--
+// -- 长度报告 --
 function lengthReport(qty, unit) {
   const def = LEN_UNITS.find((x) => x.u === unit);
   const meters = ratMul(qty, def.k); // 基准米（有理数）
@@ -523,7 +523,7 @@ function lengthReport(qty, unit) {
   return lines.join("\n");
 }
 
-// -- 速度报告（收尾批次）--
+// -- 速度报告 --
 function speedReport(qty, unit) {
   const def = SPEED_UNITS.find((x) => x.u === unit);
   const ms = ratMul(qty, def.k); // 基准 m/s（有理数）
@@ -556,7 +556,7 @@ function massReport(qty, unit) {
   return lines.join("\n");
 }
 
-// -- 货币面额报告（收尾批次；组间绝不互转，同种货币内部列全部面额）--
+// -- 货币面额报告（组间绝不互转，同种货币内部列全部面额）--
 function currencyReport(qty, unit) {
   const hits = CURRENCY_SETS.filter((g) => g.units.some((x) => x.u === unit));
   if (!hits.length) throw new Error(`未知货币面额 '${unit}'`);
@@ -667,17 +667,17 @@ function unitConvRun(text, p) {
   // 有限小数无截断标：5^9/2^11 = 953.67431640625（11 位有限）
   must(ratToStr(rat(10n ** 9n, 1n << 20n)) === "953.67431640625", "10^9/2^20 应精确 953.67431640625 无 …");
 
-  // 任务卡验证组 1：1 GB → 1000 MB 且 953.674… MiB
+  // 验证组 1：1 GB → 1000 MB 且 953.674… MiB
   let rep = unitConvRun("1 GB");
   must(rep.includes("MB    = 1000") || /MB\s+= 1000/.test(rep), "1 GB 应含 MB = 1000");
   must(/MiB\s+= 953\.67431640625/.test(rep), "1 GB 应含 MiB = 953.67431640625");
   must(/B\s+= 1000000000/.test(rep), "1 GB 应含 B = 1000000000");
-  // 任务卡验证组 2：1 GiB → 1024 MiB / 1073741824 B
+  // 验证组 2：1 GiB → 1024 MiB / 1073741824 B
   rep = unitConvRun("1 GiB");
   must(/MiB\s+= 1024/.test(rep), "1 GiB 应含 MiB = 1024");
   must(/B\s+= 1073741824/.test(rep), "1 GiB 应含 B = 1073741824");
   must(/KB\s+= 1073741\.824/.test(rep), "1 GiB 应含 KB = 1073741.824（精确）");
-  // 任务卡验证组 3：1 PB 精度不丢（15 位）
+  // 验证组 3：1 PB 精度不丢（15 位）
   rep = unitConvRun("1 PB");
   must(/B\s+= 1000000000000000/.test(rep), "1 PB 应含 B = 1000000000000000（15 位全精度）");
   must(/KiB\s+= 976562500000/.test(rep), "1 PB 应含 KiB = 976562500000（精确整除）");
@@ -726,7 +726,7 @@ function unitConvRun(text, p) {
   must(/FILETIME\s+: 133000000000000000/.test(rep), "FILETIME = 133000000000000000");
   must(/Cocoa 秒\s+: 677219200/.test(rep), "Cocoa = 677219200（1655526400-978307200，node BigInt 对拍）");
   must(/Chrome μs\s+: 13300000000000000/.test(rep), "Chrome μs = 13300000000000000");
-  // 任务卡验证组 4：FILETIME 133000000000000000 → Unix 时间（node Date 独立对拍）
+  // 验证组 4：FILETIME 133000000000000000 → Unix 时间（node Date 独立对拍）
   rep = unitConvRun("133000000000000000", { tsEpoch: "filetime" });
   const expectSec = 133000000000000000n / 10n ** 7n - FT_OFF; // node 独立算
   must(expectSec === 1655526400n, `对拍基准：FILETIME→Unix 秒应为 1655526400，实得 ${expectSec}`);
@@ -777,7 +777,7 @@ function unitConvRun(text, p) {
     threwLong = /超过上限/.test(e.message);
   }
   must(threwLong, "4097 字符应报超上限");
-  // ── 收尾批次：长度 / 货币 ──
+  // ── 长度 / 货币 ──
   rep = unitConvRun("1 mi");
   must(/m\s+= 1609\.344/.test(rep), "1 mi 应含 m = 1609.344（1959 协定精确值）");
   must(/km\s+= 1\.609344/.test(rep), "1 mi 应含 km = 1.609344");

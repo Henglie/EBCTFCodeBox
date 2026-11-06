@@ -1,5 +1,5 @@
 /*
- * dcode-extras · 文本补遗批（2026-10 · Agent A）
+ * dcode-extras · 文本补遗批（2026-10）
  * 英文数词、命名风格、回文/异形词/全字母句、换行、Rövarspråket、Ubbi Dubbi。
  */
 

@@ -29,8 +29,8 @@
  * 权威来源（访问日期 2026-09-22）：
  *  - dCode「Chiffre Monome-Binome」(https://www.dcode.fr/monome-binome)：
  *    两种网格、坐标读写规则、MONOME→34,36,35,36,34,5 与 4303536345→DINOME 官方向量、
- *    西班牙内战（1936）使用痕迹、关键词扰动变体。本实现默认参数即复现两向量（见
- *    verify_classic2_b.mjs）。
+ *    西班牙内战（1936）使用痕迹、关键词扰动变体。本实现默认参数即复现两向量。
+ *
  *
  * 契约：register({id, cat:"classic", name, desc, params, encode, decode})。
  */

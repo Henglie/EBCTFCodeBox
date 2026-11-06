@@ -35,7 +35,7 @@
  * `F5隐写口令样本 f5alsogood.jpg`
  * 是 Andreas Westfeld 原始 Java F5（Extract.java）产物，**不是 f5stegojs 方言**：
  * · 原版 Extract（Java 8，`-p f5alsogood`）输出：`Length of embedded file: 32 bytes`
- *   `(1, 127, 7) code used`，明文 `zip-password-is-Every0neL0veBeF5`（R14 证据）；
+ *   `(1, 127, 7) code used`，明文 `zip-password-is-Every0neL0veBeF5`（实测证据）；
  * · 本 op 的 f5stegojs 提取得到 k=8、长度头声明 15647B、实际只抽出 143B——
  *   长度头不自洽（f5stegojs 合法长度头不可能超过实际抽出字节数）。
  * 结论：本 op 判定该样本「非 f5stegojs，不能解」，不冒充修复成功。若要支持原始

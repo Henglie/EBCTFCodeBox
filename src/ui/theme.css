@@ -67,7 +67,7 @@
  /* 编辑框字形栈（恒烈 2026-09-02）：编程等宽在前命中拉丁/数字（Cascadia/Consolas 自带
      0/O、0/o、1/l/I 区分字形），汉字等 fallthrough 天珩。组合符随基字整簇选字体
      （Chromium 字素簇规则，实测 unicode-range 拆分无效）：拉丁+组合符簇随编程字体，
-     汉字+组合符簇仍走天珩拼字。回归脚本：工具/rt_browser_uv_grapheme.mjs。 */
+     汉字+组合符簇仍走天珩拼字。 */
   --io-font: var(--mono), var(--font-content);
 
  /* ---- 字号令牌（整体上调一档，标题永远高正文一档，层级比例不压平） ---- */

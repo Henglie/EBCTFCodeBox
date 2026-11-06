@@ -1,6 +1,6 @@
 /*
- * edu-t689t710.en.js — 2026-10-26 接线批：Falcon / Poseidon / KZG / OpenSSH·PKCS#12·JWK / GCM·NTRU-CCA2 / Xoodyak / ECC 攻击共 17 op 科普卡（English）。
- * aka 经 eduAliases() 注入搜索别名索引；示例值均来自各卡 verify harness 实跑。
+ * 2026-10-26：Falcon / Poseidon / KZG / OpenSSH·PKCS#12·JWK / GCM·NTRU-CCA2 / Xoodyak / ECC 攻击共 17 op 科普卡（English）。
+ * aka 经 eduAliases() 注入搜索别名索引；示例值均来自实跑。
  */
 export default {
   "falconPkParse": {

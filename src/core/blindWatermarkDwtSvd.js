@@ -55,7 +55,7 @@
  *    在奇异值恰好落在量化边界时可能不同。
  * ② 上游 `extract` 的 img 分支在部分版本里对 `wm_avg` 再走一次 k-means；本实现按参考 Rust 移植
  *    （`blind_watermark_bwm.rs` L275-290）取**软灰度**（`avg*255`），与「图片水印应保留灰度层次」一致。
- * 本环境无 cv2/PyWavelets（红线禁装），故与上游库的**逐位**对拍为 BLOCKED；但
+ * 本环境无 cv2/PyWavelets（红线禁装），故与上游库的**逐位**对拍暂时无法进行；但
  * `password_wm` 的置换序列已与 numpy 2.4.6 逐元素对拍一致（逐元素一致）。
  */
 

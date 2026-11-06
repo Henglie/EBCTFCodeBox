@@ -1,5 +1,5 @@
 /*
- * t816Common.js — T816 批共用工具。
+ * t816Common.js — CyberChef 移植类共用工具。
  *
  * 只被 t816*.js 引用，不进 registerAll；纯函数、零依赖、零外发。
  * parseEscapedChars 逐行移植 CyberChef src/core/Utils.mjs（Apache-2.0），

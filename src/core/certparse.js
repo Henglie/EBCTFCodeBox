@@ -1,6 +1,6 @@
 /*
  * certparse.js — X.509 证书解析 + SSH 公钥（authorized_keys / known_hosts）解析
- * （v0.1.6beta 批A5）。单向 run 工具（解析器，无双向编码语义）。
+ * （v0.1.6beta）。单向 run 工具（解析器，无双向编码语义）。
  *
  * 标准依据（注释随行标注）：
  *   - ITU-T X.509 / RFC 5280：证书结构 §4.1、有效期 §4.1.2.5、扩展 §4.2
@@ -968,5 +968,5 @@ register({
   run: sshHostKeyParseRun,
 });
 
-// 供任务卡后续（SSH 证书、CRL、CSR 解析）与回归脚本复用
+// 供后续（SSH 证书、CRL、CSR 解析）与回归测试复用
 export { x509ParseRun, sshHostKeyParseRun, parseSshBlob, parseSshInput, loadCertDer };

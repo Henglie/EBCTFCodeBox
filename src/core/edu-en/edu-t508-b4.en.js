@@ -1,7 +1,7 @@
 /*
- * edu-t508-b4.en.js — English edu cards for batch 4 (engEncoding.js).
+ * English edu cards for the engineering-encoding ops (engEncoding.js).
  * hexdump / modhex / citrixCtx1 / scriptDecoder / rison / unixPerms
- * Example outputs mirror the zh shard (real runs, test.mjs of 批4_工程编码).
+ * Example outputs mirror the zh shard (real runs).
  */
 export default {
   hexdump: {

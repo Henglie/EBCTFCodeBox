@@ -1,5 +1,5 @@
 /*
- * edu-t396a-family.js — 拆族 20 op 科普卡（paillier/dsa/schnorr/ed25519/x25519 族 + geffe 双件）。
+ * 20 op 家族科普卡（paillier/dsa/schnorr/ed25519/x25519 族 + geffe 双件）。
  * 格式契约见 eduContent.js 头注释：纯数据、无 import、无副作用。每卡 aka ≥10 条真实别名。
  */
 export default {

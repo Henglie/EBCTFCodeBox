@@ -29,8 +29,8 @@
  * 权威来源（访问日期 2026-09-22）：
  *  - dCode「Three Squares Cipher」(https://www.dcode.fr/three-square-cipher)：
  *    完整加解密算法 + 官方例（键 ONE/TWO/THREE；ME→T?K?D?（随机位以 ? 示）；
- *    MESSAGE→TKDGNVSAFRAV；UDBJDC→CODE）。本实现默认参数复现 UDBJDC→CODE（见
- *    verify_classic2_b.mjs）。
+ *    MESSAGE→TKDGNVSAFRAV；UDBJDC→CODE）。本实现默认参数复现 UDBJDC→CODE。
+ *
  *
  * 契约：register({id, cat:"classic", name, desc, params, encode, decode})。
  */

@@ -1,5 +1,5 @@
 /*
- * dcode-extras · Agent E2 · 数学阻塞项攻坚 + 公式缺口补齐
+ * dcode-extras · 数学阻塞项攻坚 + 公式缺口补齐
  * 纯 JS 实现：泰勒级数、逆 Laplace（有理函数）、Schur/三角化、Hermite 标准形、
  * 复矩阵、轮转覆盖、NegaFibonacci、几何图形命名、数值 ODE、数独/填色推理等。
  * 一切输入有界，超限显式报错；无外部 CAS/网络。

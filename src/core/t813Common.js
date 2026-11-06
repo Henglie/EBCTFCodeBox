@@ -1,5 +1,5 @@
 /*
- * t813Common.js — T813 批（CyberChef 小 op 移植）共用工具。
+ * t813Common.js — CyberChef 小 op 移植共用工具。
  *
  * 只被 t813*.js 引用，不进 registerAll；纯函数、零依赖、零外发。
  * 字节输入口径与 src/core/checksumExt.js 一致：优先 params.rawBytes（字节视图），

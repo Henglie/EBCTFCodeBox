@@ -1,5 +1,5 @@
 /*
- * ooxmlMeta.js — OOXML 元数据提取（P1 批，cat:'filefmt'，单向 run）。
+ * ooxmlMeta.js — OOXML 元数据提取（cat:'filefmt'，单向 run）。
  *
  * 解决什么：docx / xlsx / pptx 本质是 ZIP 容器，元数据在 docProps/ 下的
  * 三个 XML 部件里：core.xml（标题/作者/时间）、app.xml（程序/公司/页数）、

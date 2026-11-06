@@ -8,7 +8,7 @@
  * 自包含：内置精简 BLAKE2b（变长 1..64 输出）+ Argon2 压缩函数 G
  * 不依赖注册表 / hashExt，可离线 node 单测。
  *
- * 权威向量（argon2-cffi 25.1.0, version=19）：见 工具/rt_argon2_test.mjs：
+ * 权威向量（argon2-cffi 25.1.0, version=19）：
  * password/somesalt12345678 t=2 m=256 p=1 len=32 →
  * 8110e1165eb0e1114ee37d5ff017573ba0084b8366b4108db44749954b8d9871
  * 同上 p=2 → 08e29c1f9052d73937049de3224a2f7fd5f6e6ad3c0f403dda21b447588bdbb6

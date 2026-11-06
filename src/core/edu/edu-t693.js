@@ -1,7 +1,7 @@
 /*
- * edu_t693_zh.js — 两 op 科普卡候选（中文）。
- * 候选文件，未接线；示例 out 值全部来自本项目实跑（verify_t693.mjs 43/0，真实样例为
- * public/wasm/7zz.wasm 等 + bin/macOS启动器 universal2 fat），未编造。
+ * 两 op 科普卡（中文）。
+ * 示例 out 值全部来自本项目实跑（真实样例为 public/wasm/7zz.wasm 等 +
+ * bin/macOS启动器 universal2 fat），未编造。
  */
 export default {
   wasmParse: {

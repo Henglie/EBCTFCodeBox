@@ -1,5 +1,5 @@
 /*
- * pemkeys.js — PEM / JWK / DER 密钥格式互转层（批A4，cat:'crypto'）
+ * pemkeys.js — PEM / JWK / DER 密钥格式互转层（cat:'crypto'）
  *
  * 标准依据（照标准实现，不编造）：
  * - PEM 文法 = RFC 7468 (2015-04)

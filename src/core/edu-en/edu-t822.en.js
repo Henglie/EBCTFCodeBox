@@ -1,11 +1,9 @@
 /*
- * edu-t822.en.js — English edu cards for the 21 CyberChef-aligned ops delivered by
- * the same implementations and wired into registerAll.
+ * English edu cards for the 21 CyberChef-aligned ops.
  *
  * Pure data: no imports, no side effects. Each entry mirrors the Chinese card schema
  * (what / principle / usage / examples / tips / aka). Example outputs were measured by
- * dynamically importing the real src/core/registerAll.js and running each op; see
- * verify_t822.mjs.
+ * running each op against the real implementation.
  *
  * Authoritative sources (one line per op):
  *   cartesianProduct  — set theory (Cartesian product); CyberChef "Cartesian Product" (#59)

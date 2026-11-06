@@ -2956,7 +2956,7 @@ export default {
   "ui.io.placeholder.hex": "48 65 6c 6c 6f(16진수, 공백 허용)",
   "ui.io.err.unknownView": "알 수 없는 보기 {0}. {1} 중에서 선택하세요.",
   "ui.io.err.area": "attachIoCodingToolbar: area는 비어 있을 수 없습니다",
-  "ui.io.err.dom": "attachIoCodingToolbar에는 DOM이 필요합니다. 순수 알고리즘 검증에는 core/ioCoding.js를 직접 사용하세요.",
+  "ui.io.err.dom": "attachIoCodingToolbar에는 DOM이 필요합니다. 순수 알고리즘 검증에는 핵심 모듈을 직접 사용하세요.",
   "ui.io.err.utf32": "UTF-32 BOM {0}({1}바이트)을 감지했습니다. UTF-32 코덱은 제공하지 않으며 UTF-16으로 처리하지 않습니다. 먼저 UTF-8 또는 UTF-16으로 변환하세요.",
   "ui.io.err.bomMismatch": "BOM이 선택한 문자 집합과 일치하지 않습니다. 선두는 {0} BOM {1}({2}바이트)이지만 선택은 {3}입니다. auto / {0}로 바꾸거나 BOM을 제거하세요. 잘못된 문자 집합으로 조용히 디코드하지 않습니다.",
   "ui.recipe.control.register.name": "Register(정규식 캡처)",

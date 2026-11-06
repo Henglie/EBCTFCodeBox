@@ -1,5 +1,5 @@
 /*
- * dcode-extras · 古典密码补遗批（2026-10 · Agent A）
+ * dcode-extras · 古典密码补遗批（2026-10）
  * Myszkowski 换位、Quagmire I/II/III 多表代换。
  */
 

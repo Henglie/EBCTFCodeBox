@@ -29,7 +29,7 @@
  *    plaintext)」(http://zodiackillerciphers.com/408/key.html)：54 符号→字母全表（含
  *    出现次数与多音标注），本实现码表照抄该表。该页 Annotated solution 第 1/2 行密文
  *    （n9 sqr p slash z … be）按本表解得 ILIKEKILLINGPEOPLEBECAUSEITISSOMUCH，第 4 行
- *    解得 ANKILLINGWILDGAME，第 12 行解得 TINGYOURROCKSOFFW——verify_classic2_b.mjs
+ *    解得 ANKILLINGWILDGAME，第 12 行解得 TINGYOURROCKSOFFW，
  *    逐字复现。
  *  - dCode「Zodiac Killer Cipher」(https://www.dcode.fr/zodiac-killer-cipher)：
  *    Z408 全文明文（含原文拼写错误）、同音替换原理、J/Q/X/Z 无对应符号说明、

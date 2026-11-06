@@ -137,7 +137,7 @@ async function rsaSignRaw(n, d, msg, hashName) {
   return bigToBytes(s, (modBits(n) + 7) >> 3);
 }
 
-// ---------- ES256：P-256 走 WebCrypto（批1 修正：WebCrypto ECDSA sign/verify 的
+// ---------- ES256：P-256 走 WebCrypto（修正：WebCrypto ECDSA sign/verify 的
 // 签名格式本来就是 raw r||s（IEEE P1363，64B），旧实现误把 sign 输出当 DER 去解析，
 // 产出的签名实为错位字节——验签补齐时一并修正） ----------
 async function es256SignRaw(jwk, msg) {

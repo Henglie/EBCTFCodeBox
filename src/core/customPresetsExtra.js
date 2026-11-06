@@ -2,7 +2,7 @@
  * customPresetsExtra.js — CTF 常用魔改预设扩充（EXTRA_PRESETS，≥20 个）。
  *
  * 形状与 src/core/customImpl.js 的内置 CUSTOM_PRESETS 一致：{ id, name, code }。
- * 开发方归并时在 customImpl.js 里 import 并进 presetsFor()（待并 import 行见回执）：
+ * 归并时在 customImpl.js 里 import 并进 presetsFor()（待并 import 行如下）：
  *   import { EXTRA_PRESETS } from "./customPresetsExtra.js";
  *   presetsFor(opId) 里把 CUSTOM_PRESETS.concat(...) 改为
  *   CUSTOM_PRESETS.concat(EXTRA_PRESETS, _extraPresets.filter(...))

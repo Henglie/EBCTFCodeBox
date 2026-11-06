@@ -1,4 +1,4 @@
-self.__EBCTF_PACK_REV = "wasm:a8934429,fonts:e9658b79,locales:730a7efe,edu-en:52767dfa,ocr:303d1515";
+self.__EBCTF_PACK_REV = "wasm:a8934429,fonts:e9658b79,locales:e0be8554,edu-en:166e1796,ocr:303d1515";
 self.__EBCTF_PACKS = [
   {
     "id": "wasm",
@@ -38,8 +38,8 @@ self.__EBCTF_PACKS = [
   },
   {
     "id": "locales",
-    "rev": "730a7efe",
-    "bytes": 3170298,
+    "rev": "e0be8554",
+    "bytes": 3170314,
     "entries": [
       "/src/i18n/locales/ar.js",
       "/src/i18n/locales/bo.js",
@@ -63,8 +63,8 @@ self.__EBCTF_PACKS = [
   },
   {
     "id": "edu-en",
-    "rev": "52767dfa",
-    "bytes": 1415902,
+    "rev": "166e1796",
+    "bytes": 1415228,
     "entries": [
       "/src/core/edu-en/edu-ana-crypto-new.en.js",
       "/src/core/edu-en/edu-ana-freq.en.js",

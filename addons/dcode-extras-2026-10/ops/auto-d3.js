@@ -1,5 +1,5 @@
 /*
- * dcode-extras · Agent D3 批次（2026-10）
+ * dcode-extras · 综合工具批次（2026-10）
  *
  * 范围：dCode 的 Jeux de Lettres / Fun-Divers / Jeux de Nombres / Jeux de Société /
  *       Jeux sur Mobile / Recherche de Mots / Musique / Date et Temps /

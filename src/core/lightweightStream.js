@@ -8,11 +8,11 @@
  *
  * ⚠ 兼容目标（「改成作者库兼容」）：
  * 本实现的算法核心 **逐字取自 风之暇想 fzxx/Trivium-Grain 官方库**（github.com/fzxx/Trivium-Grain
- * 在线站 trivium-grain.js.org），由 工具/_tg_build.mjs 从 工具/_tg_author.cjs 程序化提取（去 UMD 壳 +
+ * 在线站 trivium-grain.js.org），由构建脚本从作者库程序化提取（去 UMD 壳 +
  * 去 console 计时，零手抄）。CTF 若用作者在线站出题，密文按作者的 I/O 约定走 —— 本箱与之**字节互通**。
  * 注意：作者库的位序约定（Trivium key/IV 不倒序 + keystream MSB-first；Grain 位数组→字节 LSB-first；
  * Grain-128AEAD 全程 swapBitsInByte 逐字节位翻转）与 eSTREAM/NIST **官方标准测试向量不一致** ——
- * 即本箱产出与官方 KAT **不同**，但与作者库**逐字节相同**。验证见 工具/rt_tg_crosscheck.mjs（本箱 vs 作者库 6/6 一致）。
+ * 即本箱产出与官方 KAT **不同**，但与作者库**逐字节相同**。已验证本箱 vs 作者库 6/6 一致。
  *
  * 红线：算法核心不手抄（脚本提取作者源码）；op 契约层（参数/encode/decode/i18n）本箱自写；零外发纯本地。
  *
@@ -117,7 +117,7 @@ function rawBytesOrNull(p, text) {
 }
 
 // ============================================================
-// 算法核心（逐字取自 fzxx/Trivium-Grain 官方库，工具/_tg_build.mjs 程序化提取）
+// 算法核心（逐字取自 fzxx/Trivium-Grain 官方库，构建脚本程序化提取）
 // ============================================================
 const TG = (function () {
 

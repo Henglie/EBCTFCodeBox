@@ -1,5 +1,5 @@
 /*
- * stegoOpWrappers.js — R18：把已落地但未注册的 4 个隐写/取证能力包装成 op 候选。
+ * stegoOpWrappers.js — 把已落地但未注册的 4 个隐写/取证能力包装成 op 候选。
  *
  * 本文件自注册 4 个 op（cat=stegoFile，官方分类里没有 "stego"）：
  *   lsbDeep     — LSB 全通道/位平面/位序/偏移深度扫描（复用 lsbDeepScan）

@@ -22,7 +22,7 @@ import {
 import { probeSandbox } from "../core/customImplClient.js";
 import { icon as iconSvg } from "./icons.js";
 
-// ---- CM6 bundle（单文件 ESM，已真浏览器验证，见 工具/rt_cm_smoke.mjs） ----
+// ---- CM6 bundle（单文件 ESM，已真浏览器验证） ----
 // ⚠ 性能审计 H2：821KB bundle 曾是顶层静态 import，随 main.js 进首屏关键路径——
 //  而「编辑代码」入口多数会话根本不打开。改为首次打开编辑器时动态 import + 模块级缓存；
 //  SW 不预缓存该文件：首次在线打开编辑器时拉取，之后由 runtime cache 回填，离线可用。

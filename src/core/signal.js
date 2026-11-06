@@ -1,7 +1,7 @@
 // 数字信号编码组 — 曼彻斯特/差分曼彻斯特/NRZI/密勒码/4B5B/PWM-PPM 比特流互转
 //
 // 红线：编码规则照 IEEE 802.3 / G.E. Thomas / USB NRZI / Miller / FDDI 4B5B 公开规范，未编造。
-// 注册契约：见 T2 回执。cat:'fancy'，每 op encode+decode 双向，输入输出均为字符串（'0'/'1' 比特流或可打印字符流）。
+// 注册契约：cat:'fancy'，每 op encode+decode 双向，输入输出均为字符串（'0'/'1' 比特流或可打印字符流）。
 // i18n key（请 M 并入 zh.js/en.js 防抢）：
 // op.manchester.name / op.manchester.desc
 // op.diffManchester.name / op.diffManchester.desc

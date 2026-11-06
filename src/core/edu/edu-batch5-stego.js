@@ -4,7 +4,7 @@
  * 纯数据 export default { [opId]: EduEntry }，无 import、无副作用、无 register（机制四低耦合）。
  * EduEntry 契约见 eduContent.js 头注释：what/principle/usage/examples/formulas/tips/aka。
  *
- * 覆盖范围（经 rt_t170_diff.mjs 差集核查）:
+ * 覆盖范围（按 registry 差集核查）:
  * registry cat=stego(43)/analysis(71) 共 114 op，已有科普 112 个（覆盖率 98.2%）
  * 本文件补齐 stego op 缺口：dtmfWav（DTMF 拨号音 WAV）。exeBridge 卡随 CLI 桥退役删除（2026-09-13 桥大清除）。
  *

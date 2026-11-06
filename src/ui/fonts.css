@@ -63,8 +63,8 @@
  * ⛔ 走过的弯路，别重犯：**另挂一片带 unicode-range 的组合符 face 无效**。
  * 那样基字在 A 片、组合符在 B 片，仍然没有任何单一 face 覆盖整簇 → 照样全部掉回退字体。
  *
- * 已采取的修法：把 320 个组合符**并进首屏子集本体**（工具/_mt78_build_combining.py 从天珩源
- * TH-Tshyn-P0.ttf 切片，工具/_mt78_merge_subset.py merge 进 th-ctf-subset.woff2）。
+ * 已采取的修法：把 320 个组合符**并进首屏子集本体**（从天珩源
+ * TH-Tshyn-P0.ttf 切片，merge 进 th-ctf-subset.woff2）。
  * 结果：cmap 14710 → 15017（丢失 0），字形 14594 → 14905，1.52 MB → 1.53 MB（+7.8 KB），
  * GDEF 里 U+0332 类别 3（mark）与 GSUB ccmp 均保住。所以这里**不需要**第二条 @font-face。
  * 字库子集与旧档备份均本地留存。

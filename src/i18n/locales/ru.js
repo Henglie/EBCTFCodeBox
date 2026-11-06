@@ -2956,7 +2956,7 @@ export default {
   "ui.io.placeholder.hex": "48 65 6c 6c 6f (hex, пробелы допустимы)",
   "ui.io.err.unknownView": "Неизвестный вид {0}; выберите {1}.",
   "ui.io.err.area": "attachIoCodingToolbar: area не может быть пустым",
-  "ui.io.err.dom": "attachIoCodingToolbar требует DOM; для проверки алгоритма используйте core/ioCoding.js.",
+  "ui.io.err.dom": "attachIoCodingToolbar требует DOM; для проверки алгоритма используйте основной модуль.",
   "ui.io.err.utf32": "Обнаружен BOM UTF-32 {0} ({1} байт): кодек UTF-32 не поддерживается и не считается UTF-16. Сначала преобразуйте в UTF-8 или UTF-16.",
   "ui.io.err.bomMismatch": "BOM не соответствует выбранной кодировке: байты начинаются с {0} BOM {1} ({2} байт), но выбрана {3}. Укажите auto / {0} или удалите BOM; молчаливое декодирование неверной кодировкой не выполняется.",
   "ui.recipe.control.register.name": "Register (захват регулярным выражением)",

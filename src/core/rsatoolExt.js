@@ -761,7 +761,7 @@ function isolateIntegerRoots(chain, lo, hi, maxRoots) {
  * 条件：det^{1/w} < b^m/√w，其中 b = n^beta（根所在因子下界），det = n^{δm(m+1)/2}·X^{w(w-1)/2}。
  * 用浮点对数判定。另计入 LLL 近似因子 2^((w-1)/4)（Hermite 因子）——
  * m=1 的小格对「系数接近均匀 mod n」的多项式（如后缀场景首一化 f）实测不稳，
- * 保守判定会自动跳到 m=2（端到端验证卡 T2 实证：m=1 必败、m=2 稳过）。
+ * 保守判定会自动跳到 m=2（端到端验证实证：m=1 必败、m=2 稳过）。
  */
 function pickLatticeParamsAll(nBits, d, lnX, beta, dimCap) {
   const lnN = Number(nBits) * Math.LN2;

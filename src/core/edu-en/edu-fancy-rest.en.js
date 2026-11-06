@@ -1,7 +1,7 @@
 /*
  * edu-fancy-rest.en.js — English edu shard: fancy family completion.
  * Covers 53 fancy-category ops: morse/bacon/railFence/caesar/rot13/rot5/rot18/rot47/atbash/a1z26/dna/keyboard/brainfuck/ook/cetacean/yygq/braille/eightdiagram/whitespace/pigpen/keyboardShift/malbolge/aaencode/baudot/type7/decabit/scytale/keyCode/shiftKey/keyword9/keyboardSurround/qweAbc/layoutMap/t9Phone/multitap/kbdFullCoord/stenoLetter/arrowKey/americanMorse/cnTelegraphMorse/tapCode/semaphore/dtmf/morseRhythm/manchester/diffManchester/nrzi/miller/fourB5B/pwmPpm/musicNotation/musicInfo/fracmorse.
- * Sample values were obtained by actually running _probe_fancy.mjs. Pure data export — no imports, no side effects, no register.
+ * Sample values were obtained by actually running the operations. Pure data export — no imports, no side effects, no register.
  */
 export default {
   morse: {

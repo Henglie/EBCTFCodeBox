@@ -2963,7 +2963,7 @@ export default {
   "ui.io.placeholder.hex": "48 65 6c 6c 6f (hexadécimal, espaces autorisés)",
   "ui.io.err.unknownView": "Vue inconnue {0} ; choisissez {1}.",
   "ui.io.err.area": "attachIoCodingToolbar : area ne doit pas être vide",
-  "ui.io.err.dom": "attachIoCodingToolbar nécessite un DOM ; pour les tests d’algorithme, utilisez core/ioCoding.js.",
+  "ui.io.err.dom": "attachIoCodingToolbar nécessite un DOM ; pour les tests d’algorithme, utilisez le module principal.",
   "ui.io.err.utf32": "BOM UTF-32 {0} détecté ({1} octets) : le codec UTF-32 n’est pas fourni et n’est pas traité comme UTF-16. Convertissez d’abord en UTF-8 ou UTF-16.",
   "ui.io.err.bomMismatch": "Le BOM ne correspond pas au jeu sélectionné : octets {0} BOM {1} ({2} octets), mais {3} est choisi. Utilisez auto / {0} ou retirez le BOM ; pas de décodage silencieux avec le mauvais jeu.",
   "ui.recipe.control.register.name": "Register (capture regex)",

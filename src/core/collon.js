@@ -15,7 +15,7 @@
  *    DCODE → DC/OD/E，D→(A,Y)、C→(A,X)、O→(L,Y)、D→(A,Y)、E→(A,Z)
  *    → 密文 AAYXLAYYAZ；解密算例：网格 ABCDEFGHIJKLMNOPQRSTUVXYZ（A-Z 去 W）、N=3，
  *    AKKXZVKKKVZY → AKK|XZV → (A,X)(K,Z)(K,V)… → 明文 COLLON。
- *    本实现默认参数即加密算例（见 verify_classic2_a.mjs）。
+ *    本实现默认参数即加密算例。
  *
  * 约定：
  *  - 明文/密文只取 A-Z（其余字符丢弃），输出大写；末系列不足 N 按实际长度输出（密文长度恒为明文 2 倍）。

@@ -1,14 +1,14 @@
 /*
- * dcode-extras · Agent E3 批次（2026-10）
+ * dcode-extras · 阻塞项攻坚批次（2026-10）
  *
- * 范围：D3 遗留的 41 个 blocked 条目中可确定性实现的部分，外加 D3 只做“组合枚举”的 Kakuro 整盘求解。
+ * 范围：此前遗留的 41 个 blocked 条目中可确定性实现的部分，外加此前只做“组合枚举”的 Kakuro 整盘求解。
  * 纪律：
  * - 只用纯 JS、用户输入或自带词表；不联网、不内置私有答案库/版权词典。
  * - 求解器全部有界（节点/结果/时间），超限显式报错，不静默截断。
  * - 图片/OCR/音频/运营商库/DNS/专有规则库仍然 blocked，并写明原因。
  * - 每个 e3-* op 在 tests/auto-e3.selftest.mjs 中有已知向量/往返/结构断言。
  *
- * 台账：41 个 D3 blocked 重审 + 1 个 Kakuro 升级 = 42 条；
+ * 台账：41 个既有 blocked 重审 + 1 个 Kakuro 升级 = 42 条；
  *       12 implemented / 7 mapped / 23 blocked。
  */
 
@@ -1168,7 +1168,7 @@ function solveKakuro(parsed) {
 const opKakuro = runOp(
   "e3-kakuro", CAT_NUM,
   "Kakuro 整盘求解（Kakuro / Cross Sums）",
-  "网格 token：# 墙、. 白格、A数字=横向和、D数字=纵向和、A12D3=同时有横纵线索。每段填 1..9 不重复且和等于线索；回溯+组合可行性剪枝。补齐 D3 仅做组合枚举的缺口",
+  "网格 token：# 墙、. 白格、A数字=横向和、D数字=纵向和、A12D3=同时有横纵线索。每段填 1..9 不重复且和等于线索；回溯+组合可行性剪枝。补齐仅做组合枚举的缺口",
   (t) => {
     const { main } = splitDoc(t);
     const parsed = parseKakuro(main);
@@ -1403,7 +1403,7 @@ export const OPS = [
   opMinesweeper, opHexword, opCrossword, opKakuro, opGuitar, opStaff,
 ];
 
-// 41 个 D3 blocked 条目逐条重新判定 + 1 个 D3 部分 mapped（Kakuro）升级。
+// 41 个既有 blocked 条目逐条重新判定 + 1 个部分 mapped（Kakuro）升级。
 const C = (cat, name, slug, status, opOrReason, note) => ({
   cat, name, slug, url: `https://www.dcode.fr/${slug}`, status,
   ...(status === "blocked" ? { reason: opOrReason } : { op: opOrReason }),
@@ -1452,7 +1452,7 @@ export const COVERAGE = [
   C("Musique", "Code Acéré", "chiffre-acere", "blocked", "冷门符号密码存在多个互不兼容变体，无公开唯一规范"),
   C("Musique", "Notation des Accords de Guitare", "notation-accords-guitare", "implemented", "e3-guitar", "和弦构成音 + 标准调弦 0..12 品指法/ASCII 指板；非和弦图数据库"),
   C("Musique", "Partition/Portée de Musique", "partition-musique", "mapped", "e3-staff", "文本/ABC/ASCII 五线谱；不生成图形乐谱或字体"),
-  { cat: "Jeux de Nombres", name: "Solveur de Kakuro", slug: "solveur-kakuro", url: "https://www.dcode.fr/solveur-kakuro", status: "implemented", op: "e3-kakuro", note: "D3 仅映射到 game-kakuro 组合枚举；本批实现整盘回溯求解", tag: "upgrade" },
+  { cat: "Jeux de Nombres", name: "Solveur de Kakuro", slug: "solveur-kakuro", url: "https://www.dcode.fr/solveur-kakuro", status: "implemented", op: "e3-kakuro", note: "此前仅映射到 game-kakuro 组合枚举；现实现整盘回溯求解", tag: "upgrade" },
 ];
 
 

@@ -194,7 +194,7 @@ export function inputFeatures(text) {
 //
 // **零误排铁律**：指纹类必须是该 op「encode 输出全域」的证明性超集——即 decode 的一切
 // 合法输入都恒 ⊆ 类。据此排除「输入 ⊄ 类」的候选绝不会丢真解（编码器根本产不出）。
-// 下表由 工具/_fp_verify.mjs 自证：对多样语料(字母/数字/符号/中文/emoji)跑 encode
+// 下表经自证：对多样语料(字母/数字/符号/中文/emoji)跑 encode
 // 全部成功输出均 ⊆ 所标类，且各 op 自身 encode 产物能通过自己的指纹门（self-round-trip）。
 // 仅收无 detect（有 detect 走 detect，更强）且 decode 输入 ≡ encode 输出（纯编解码器）的 op；
 // snow(掩护文本+空白，输入域宽于输出)、dtmfWav(WAV 二进制) 因输入域大于 encode 输出剔除。

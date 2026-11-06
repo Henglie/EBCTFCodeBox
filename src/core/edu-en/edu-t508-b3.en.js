@@ -1,7 +1,7 @@
 /*
- * edu-t508-b3.en.js — English edu cards for batch 3 (compressExt2.js).
+ * English edu cards for the compression/checksum ops (compressExt2.js).
  * rle / lzw / elias / verhoeff / lz4Dec / bzip2Dec
- * Example outputs mirror the zh shard (real runs, test.mjs).
+ * Example outputs mirror the zh shard (real runs).
  */
 export default {
   rle: {

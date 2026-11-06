@@ -1,5 +1,5 @@
 /*
- * zstegScan.js — LSB 全组合扫描（cat:'image'，P1 批）。
+ * zstegScan.js — LSB 全组合扫描（cat:'image'）。
  *
  * 解决什么：CTF 里 PNG/BMP 的 LSB 隐写通道组合多（哪个位平面 × 哪些通道 ×
  * 位序 × 行列遍历），手工逐个试很费时。本 op 在一组有界组合上批量提取并按

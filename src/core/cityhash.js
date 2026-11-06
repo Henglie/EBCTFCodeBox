@@ -281,7 +281,7 @@ function cityhashRun(text, p) {
 }
 
 // 载入自校验：官方 city-test.cc 的 setup() 伪随机 data + testdata[i]（offset=i*i, len=i）
-// 每条覆盖一个不同的长度分支，全 299 组对拍见 工具/_city_verify.mjs
+// 每条覆盖一个不同的长度分支，全 299 组对拍自证
 (() => {
   const data = new Uint8Array(4352);
   let a = 9n, b = 777n;

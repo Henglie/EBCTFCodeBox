@@ -2958,7 +2958,7 @@ export default {
   "ui.io.placeholder.hex": "48 65 6c 6c 6f（16 進数、空白可）",
   "ui.io.err.unknownView": "不明な表示 {0}。{1} から選択してください。",
   "ui.io.err.area": "attachIoCodingToolbar: area は空にできません",
-  "ui.io.err.dom": "attachIoCodingToolbar には DOM が必要です。純粋なアルゴリズム検証には core/ioCoding.js を直接使ってください。",
+  "ui.io.err.dom": "attachIoCodingToolbar には DOM が必要です。純粋なアルゴリズム検証にはコアモジュールを直接使ってください。",
   "ui.io.err.utf32": "UTF-32 BOM {0}（{1} バイト）を検出しました。UTF-32 コーデックは提供せず、UTF-16 としても扱いません。先に UTF-8 または UTF-16 に変換してください。",
   "ui.io.err.bomMismatch": "BOM が選択した文字コードと一致しません：先頭は {0} BOM {1}（{2} バイト）ですが、選択は {3} です。auto / {0} に変更するか BOM を除去してください。誤った文字コードで暗黙にデコードしません。",
   "ui.recipe.control.register.name": "Register（正規表現キャプチャ）",

@@ -1,5 +1,5 @@
 /*
- * edu-t721.js — cmsVerify（CMS/PKCS#7 验签）科普卡。示例值来自 OpenSSL 3.5.7 样例与 verify_t721 实跑。
+ * cmsVerify（CMS/PKCS#7 验签）科普卡。示例值来自 OpenSSL 3.5.7 样例与实跑。
  */
 export default {
   "cmsVerify": {

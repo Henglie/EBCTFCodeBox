@@ -1,6 +1,6 @@
 /*
  * bftoolsImg.js — Brainloller / Braincopter 图像变体编解码（）。
- * 规范来源：bftools.exe 逐字节实测对拍（见 progress.md 2026-09-04 晚段）。
+ * 规范来源：bftools.exe 逐字节实测对拍。
  *  - brainloller：bftools 实测色表（与社区规范不同）+ 蛇形路径 + 左右缘转向标记 + firebrick 终止。
  *  - braincopter：经典 esolangs 规范 f = (-2R+3G+B) mod 11，0..7→><+-.,[]，8/9/10=nop/终止。
  * 纯 JS、零 UI 依赖；PNG 解码复用 stegoPixels.decodePNG，PNG 写出为内置最小编码器（RGBA + stored-deflate zlib）。

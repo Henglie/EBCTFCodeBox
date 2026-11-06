@@ -99,7 +99,7 @@ const DEFAULTS = {
   intensive: false,       // 1-byte XOR + 位旋转暴力
   bruteBytes: 100,        // intensive 只对前 N 字节跑（防大输入爆炸）
   guard: 50000,           // 总迭代兜底（防组合爆炸）
-  paramScan: true,        // MT3：带参 op 参数网格扫描（白名单绕过 detect 要求直接扫描）
+  paramScan: true,        // 带参 op 参数网格扫描（白名单绕过 detect 要求直接扫描）
   paramScanLimit: PARAM_SCAN_DEFAULT_LIMIT, // 总组合数上限，超限只扫 P0
   key: null,              // 用户在工具栏填的密钥（需求3）——带 key 时试各加解密 op
   allowOps: null,         // 参与解码的 op id 白名单（Set/数组）。null=不限制（旧行为）。
@@ -189,7 +189,7 @@ const KEYED_OPS = new Set(KEYED_OP_IDS);
 // 报告型 decode op 黑名单——decode 吐「分析报告文本」而非解码字节的少数 op。
 // 它们有 decode 但语义是分析工具（对任意输入都吐一段中文/英文说明），报告文本会被
 // compositeScore 误判成有意义明文冒头污染结果。自动解码绝不纳入（手动用仍可）。
-// 由 工具/_report_probe.mjs 自动扫出（decode 输出含 ===/识别:/长度: 等报告标记）。
+// 由探针脚本自动扫出（decode 输出含 ===/识别:/长度: 等报告标记）。
 // knapsack：decode 型「教学报告」op——demo 密钥对任意逗号分隔数字串恒「可解」，返回
 // 带中文标题（=== 背包加密…解密 ===）+ 私钥 + 明文的多行报告，中文被词典命中抬分顶包。
 // 它不是通用解码器（需用户私钥），自动解码里纯噪声，拉黑。
@@ -555,7 +555,7 @@ function compositeScore(result, chainLength, matchesCrib, chain) {
  // 噪声压到正经解码链之后，不再前排刷屏。
   if (chain && chain.some((op) => /^(xor|rot):/.test(op))) score += 45;
   score += entropy(bytes);                       // 熵越高越不可能是正解
-  score += asciiPlaintextAdjustment(result);     // MT6a 纯 ASCII 明文优先（长≥3/无U+FFFD/全ASCII）
+  score += asciiPlaintextAdjustment(result);     // 纯 ASCII 明文优先（长≥3/无U+FFFD/全ASCII）
  // 有意义文本奖励：解码结果是真英文句子/中文词语（非 flag 字样也算正解）。
  // CTF 正解常是普通单词串/句子，本项补足「只认 flag 关键词」的盲区（产品裁决4）。
   score += meaningfulTextBonus(result);          // 命中真实词表：最高 -120（净奖励）
@@ -713,7 +713,7 @@ export async function magicDecode(input, opts = {}) {
       && coarseAdmitPlain(op, f, !!o.lenient)
   );
 
- // MT3：参数网格扫描预算。白名单 op（caesar/affine/railFence 等无 detect 的经典密码）
+ // 参数网格扫描预算。白名单 op（caesar/affine/railFence 等无 detect 的经典密码）
  // 绕过 detect 要求直接扫描。只在 depth 0 跑（cur.text === input），网格按 input 长度
  // 动态截断。总组合数超 paramScanLimit 只扫 P0（防爆）。
   let sweepGrids = null;
@@ -968,7 +968,7 @@ export async function magicDecode(input, opts = {}) {
       if (cur.depth === 0) maybePartial(true);  // 阶段收尾补一次快照
     }
 
- // ---- MT3 参数网格扫描（白名单 op 绕过 detect）——depth≤1 的可信链上跑 ----
+ // ---- 参数网格扫描（白名单 op 绕过 detect）——depth≤1 的可信链上跑 ----
  // caesar/affine/railFence 等核心 CTF 密码无 detect，常规流程不碰；这里按 PARAM_SWEEP
  // 全参数网格跑 decode，用 compositeScore 筛选。chain id 形如 caesar(shift=3) 对齐
  // 同类工具 [解码N次] 明文 格式。候选只记录不入队（不再自产深层节点，防 BFS 组合爆炸）。

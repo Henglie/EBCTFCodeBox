@@ -1,8 +1,8 @@
 /*
- * zipCreate.js — 创建 ZIP 压缩包（出题）（cat:'archive'，P1 批，单向 run）。
+ * zipCreate.js — 创建 ZIP 压缩包（出题）（cat:'archive'，单向 run）。
  *
  * 解决什么：把一段数据（文本或任意字节）打包成单文件 ZIP，可选内部文件名与
- * 压缩方式（Deflated / Stored）。出 misc 题的收口工具——把 flag 塞进压缩包，
+ * 压缩方式（Deflated / Stored）。出 misc 题的打包工具——把 flag 塞进压缩包，
  * 再接「ZIP 伪加密（置位）」（zipRepair 同文件的逆操作 op）做伪加密题，或直接
  * 给出压缩包。
  *

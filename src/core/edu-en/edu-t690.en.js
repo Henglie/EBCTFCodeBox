@@ -1,6 +1,6 @@
 /*
- * edu_t690_en.js — English edu cards for the 5 ops (candidates, not wired).
- * Source: edu_t690_zh.js (Chinese), translated 1:1. Example vectors (in/param/out)
+ * English edu cards for the 5 ops.
+ * Source: the Chinese shard, translated 1:1. Example vectors (in/param/out)
  * and TeX formulas are copied verbatim; only prose is translated. Aka lists keep
  * every Chinese alias and add English ones.
  */

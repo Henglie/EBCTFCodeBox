@@ -1,5 +1,5 @@
 /*
- * edu-t720.en.js — English edu card for x509Verify. Examples come from OpenSSL 3.5.7 fixtures and verify_t720 runs.
+ * English edu card for x509Verify. Examples come from OpenSSL 3.5.7 fixtures and verification runs.
  */
 export default {
   "x509Verify": {

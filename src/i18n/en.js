@@ -2842,7 +2842,7 @@ export default {
   "ui.io.placeholder.hex": "48 65 6c 6c 6f (hex, whitespace allowed)",
   "ui.io.err.unknownView": "Unknown view {0}; choose {1}.",
   "ui.io.err.area": "attachIoCodingToolbar: area must not be empty",
-  "ui.io.err.dom": "attachIoCodingToolbar needs a DOM; for pure algorithm tests use core/ioCoding.js directly.",
+  "ui.io.err.dom": "attachIoCodingToolbar needs a DOM; for pure algorithm calls use the core module directly.",
   "ui.io.err.utf32": "Detected UTF-32 BOM {0} ({1} bytes): UTF-32 codec is not provided and it is not treated as UTF-16. Convert to UTF-8 or UTF-16 first.",
   "ui.io.err.bomMismatch": "BOM does not match the selected charset: bytes start with {0} BOM {1} ({2} bytes), but {3} is selected. Use auto / {0}, or remove the BOM first; no silent decoding with the wrong charset.",
   "ui.recipe.control.register.name": "Register (regex capture)",

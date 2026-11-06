@@ -1,5 +1,5 @@
 /*
- * edu-t821.js — 21 个新 op 的中文科普卡（CyberChef 对齐）。
+ * 21 个新 op 的中文科普卡（CyberChef 对齐）。
  * 纯数据，无 import、无副作用，export default { [opId]: EduEntry }。
  *
  * 权威依据（逐卡注明）：

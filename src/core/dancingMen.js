@@ -27,7 +27,7 @@
  *    (https://en.wikipedia.org/wiki/The_Adventure_of_the_Dancing_Men)：
  *    确认单表替换 + 频率分析破译；第五条（最后一条）消息解得 "ELSIE PREPARE TO MEET
  *    THY GOD"，并明言「第一、二次小人举旗表示词的结束，两词都以 e 结尾」（ELSIE 与
- *    PREPARE）。本实现默认参数即复现该消息的旗标结构（见 verify_classic2_b.mjs）。
+ *    PREPARE）。本实现默认参数即复现该消息的旗标结构。
  *  - dCode「Dancing Men Cipher」(https://www.dcode.fr/dancing-men-cipher)：
  *    确认 18 原作字母 / 8 个无符号字母（FJKQUWXZ）/ P≈V 近同形 / 旗标分词三档；
  *    其「补全变体」（互联网流传，来源不明）补齐 26 字母——本实现 complete 档即此口径。

@@ -548,7 +548,7 @@ function runExpr() {
 }
 
 // ---- 基址 + 偏移(RVA) = 绝对地址(VA) ----
-// 产品负责人给的验收场景：逆向时汇编里的相对地址换成绝对地址。任填两个算第三个。
+// 典型场景：逆向时汇编里的相对地址换成绝对地址。任填两个算第三个。
 function renderRvaTool() {
   const box = el("div", { class: "qc-rva" });
   box.append(el("div", { class: "qc-rva-title" }, msym("swap_horiz"), el("span", {}, tt("ui.qc.rvaTitle"))));

@@ -152,7 +152,7 @@ let _panel = null;
 let _detecting = false;
 let _offDocClick = null;   // 点外关闭监听（性能审计 M3：所有关闭路径统一自摘，防随开合次数累积）
 
-// ---- 离线包缺失全局提示（T709）----
+// ---- 离线包缺失全局提示 ----
 // 离线包管理 UI 已迁至扩展面板（pluginPanel.js）；此监听在模块加载时绑定
 // （envPanel 由 main.js 静态引入），保证任意页面缺包都能提示，不依赖是否打开过扩展面板。
 let _packsMissBound = false;

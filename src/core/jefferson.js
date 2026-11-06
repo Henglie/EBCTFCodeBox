@@ -12,7 +12,7 @@
  * 权威来源：
  *  - Wikipedia「Jefferson disk」(https://en.wikipedia.org/wiki/Jefferson_disk)，访问日期 2026-09-20：
  *    给出 10 盘玩具例（key 7,9,5,10,1,6,3,8,2,4；明文 retreatnow；密文 OMKEGWPDFN；偏移 6 行）。
- *    本实现默认参数即该例，encode("retreatnow") = "OMKEGWPDFN"（见 verify_classic1.mjs）。
+ *    本实现默认参数即该例，encode("retreatnow") = "OMKEGWPDFN"。
  *  - dCode「Cylindre de Jefferson」(https://www.dcode.fr/cylindre-jefferson)，访问日期 2026-09-20：
  *    其界面参数「Ligne à lire (rang 1 en dessous, -1 au dessus)」与本实现 offset 同义。
  *

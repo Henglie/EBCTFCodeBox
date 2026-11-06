@@ -1,5 +1,5 @@
 /*
- * engEncoding.js — 批四·工程编码组（E1/E3/E4/E5/E6/E9）。
+ * engEncoding.js — 工程编码组。
  *
  * 6 个 op：hexdump / modhex / citrixCtx1 / scriptDecoder / rison / unixPerms。
  * 口径来源（逐项，均以本地快照+权威源核实，自研实现、行为对拍）：

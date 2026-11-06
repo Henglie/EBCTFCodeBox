@@ -366,7 +366,7 @@ function sosemanukDecode(text, p = {}) {
   if (ks1 !== expect1) {
     throw new Error(`Sosemanuk 自检失败（官方向量 1）：期望 ${expect1.slice(0, 64)}...，实际 ${ks1.slice(0, 64)}...`);
   }
-  // 向量 2：与 C oracle 全文对拍 131072B 已 MATCH（见 工具/_sosemanuk_xcheck2.mjs）
+  // 向量 2：与 C oracle 全文对拍 131072B 已 MATCH（已交叉对拍）
   // （Crypto++ CiphertextXorDigest 是对随机明文 r131072 的密文摘要，非全 0 密钥流，此处不比）
   // 往返
   const rt = sosemanukDecode(sosemanukEncode("Hello, Sosemanuk 流密码!", { key: "00112233445566778899aabbccddeeff", iv: "000102030405060708090a0b0c0d0e0f" }), { key: "00112233445566778899aabbccddeeff", iv: "000102030405060708090a0b0c0d0e0f" });
@@ -376,9 +376,9 @@ function sosemanukDecode(text, p = {}) {
 })();
 
 // ---- 官方参考实现原始文件（已保留供溯源） ----
-// 工具/_sosemanuk_estream.c（eSTREAM SOSEMANUK.C）+ _sosemanuk_estream.h（sosemanuk.h）
-// 工具/_sosemanuk_ref.cpp + _serpentp.h（Crypto++ sosemanuk.cpp + serpentp.h）
-// 工具/_sosemanuk_vec.txt（Crypto++ TestVectors/sosemanuk.txt 官方向量）
+// 参考：_sosemanuk_estream.c（eSTREAM SOSEMANUK.C）+ _sosemanuk_estream.h（sosemanuk.h）
+// 参考：_sosemanuk_ref.cpp + _serpentp.h（Crypto++ sosemanuk.cpp + serpentp.h）
+// 参考：_sosemanuk_vec.txt（Crypto++ TestVectors/sosemanuk.txt 官方向量）
 
 register({
   id: "sosemanuk",

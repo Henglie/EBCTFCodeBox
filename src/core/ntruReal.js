@@ -1,5 +1,5 @@
 /*
- * ntruReal.js — 真 NTRU 公钥加密（EESS/NTRU Encrypt 产品式规范口径，PQC 批A）。
+ * ntruReal.js — 真 NTRU 公钥加密（EESS/NTRU Encrypt 产品式规范口径）。
  * 与 pqcLite.js 的 ntruToy（玩具参数 n=8, q=257）完全独立，本文件为产品级参数。
  *
  * ============ 规范来源（查证记录，2026-09-05） ============

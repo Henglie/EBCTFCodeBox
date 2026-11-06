@@ -7,7 +7,7 @@
  *
  * 红线（不变）：
  * - 不改 detectExt.js / detect.js / magic.js，不碰 main.js import 清单（机制四）。
- * - 件内自注册：import 时自动 patch OPS，入口 import 行写回执交汇总流程归并。
+ * - 件内自注册：import 时自动 patch OPS，入口 import 行由汇总流程统一归并。
  * - detect 只读不写；置信度策略沿用 detectExt.js：固定变换/字符集明确 0.3-0.5
  * 需密钥/参数 0.1-0.2，自反变换 0.1，纯数字长度特征 0.2-0.4，二进制图像不适用 0。
  * - 编码特征基于公开格式常识与各 op desc，不编造编码表。

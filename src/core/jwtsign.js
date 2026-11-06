@@ -1,5 +1,5 @@
 /*
- * jwtsign.js — JWT 签发 / 验签（批B2，cat:'crypto'）。
+ * jwtsign.js — JWT 签发 / 验签（cat:'crypto'）。
  *
  * op：
  *   - jwtSign   HS256/HS384/HS512（HMAC）+ RS256（RSA PKCS#1 v1.5）+ ES256（ECDSA P-256）

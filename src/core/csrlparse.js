@@ -1,6 +1,6 @@
 /*
  * csrlparse.js — CSR（PKCS#10 证书请求）+ X.509 CRL（证书吊销列表）解析
- * （v0.1.6beta 批A5 补全）。单向 run 解析器（对标 CyberChef ParseCSR / ParseX509CRL）。
+ * （v0.1.6beta 补全）。单向 run 解析器（对标 CyberChef ParseCSR / ParseX509CRL）。
  *
  * 标准依据（注释随行标注）：
  *   - RFC 2986（PKCS#10 CertificationRequest：§4 ASN.1 结构）
@@ -13,7 +13,7 @@
  *
  * 复用：rsagen.js 的 derDecode/derBytesToBigint/bytesToBase64、pemkeys.js 的
  *   parsePem/oidString、hash.js 的 md5Bytes（与 certparse.js 同款用法）。
- *   DN/OID 友好名小表本地实现（certparse.js 未导出内部函数，按任务卡勿改他人文件）。
+ *   DN/OID 友好名小表本地实现（certparse.js 未导出内部函数，不修改其它文件）。
  * CRL 性能：revokedCertificates 循环纯解析无哈希/大数运算，10 万条内可接受（desc 注明）。
  * 算法层零 UI 依赖，node 直跑。
  */
@@ -842,5 +842,5 @@ register({
   run: crlParseRun,
 });
 
-// 供回归脚本与后续任务卡复用
+// 供回归测试与后续扩展复用
 export { csrParseRun, crlParseRun };

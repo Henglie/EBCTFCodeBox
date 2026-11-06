@@ -1,5 +1,5 @@
 /*
- * dcode-extras · 记数系统补遗批（2026-10 · Agent A）
+ * dcode-extras · 记数系统补遗批（2026-10）
  * 希腊字母记数（Ionian）、希伯来字母记数、Unicode 各文字十进制数字。
  */
 

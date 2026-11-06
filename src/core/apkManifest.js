@@ -1,5 +1,5 @@
 /*
- * apkManifest.js — APK AndroidManifest.xml 解析（P1 批，cat:'filefmt'，单向 run）。
+ * apkManifest.js — APK AndroidManifest.xml 解析（cat:'filefmt'，单向 run）。
  *
  * 解决什么：APK（ZIP 容器）里的 AndroidManifest.xml 多数是二进制 AXML 格式，
  * 纯文本正则挖不了；本工具直接把 manifest 解出来：包名 package、权限

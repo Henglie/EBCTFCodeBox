@@ -1,7 +1,7 @@
 /*
  * asmDisasm.js — 机器码反汇编核心（供「快速换算 · 机器码&汇编互转」面板调用，非独立 op）。
  *
- * 引擎：WASM 反汇编引擎（本地懒加载、零外发、失败明确报错；引擎与许可信息仅存工程文档 PROGRESS.md）。
+ * 引擎：WASM 反汇编引擎（本地懒加载、零外发、失败明确报错；引擎与许可信息见第三方许可说明）。
  *       实际可用的只有 x86(x86-64)/ARM(Thumb)/ARM64——随包 capstone wasm 只编译了这三族；
  *       glue 里的 CS_ARCH_* 常量是头文件全集，不能当作「已支持」的证据（MIPS/PPC/SPARC/
  *       SystemZ/M68K/TMS320C64X/XCore 均 cs_open 报 CS_ERR_ARCH；有的架构连常量都没有）。

@@ -16,7 +16,7 @@
  * 自反流密码：密文 = 明文 ⊕ 密钥流。encode 文本→hex，decode hex→文本。
  *
  * 红线：照参考实现不编造；纯本地零外发；core 层零 UI 依赖（仅 registry）。
- * 自检：与 Python 参考实现（工具/_e0_ref.py）交叉验证，5 组测试向量全过。
+ * 自检：与 Python 参考实现（Python 参考实现）交叉验证，5 组测试向量全过。
  *
  * 契约：register({ id:"e0", cat:"modern", name, desc, params, encode, decode })。
  */
@@ -256,7 +256,7 @@ function e0Decode(text, p = {}) {
   return finishBytesDecode(out, { textMode: "hex", name: "e0" });
 }
 
-// ---- 载入自校验：与 Python 参考实现（工具/_e0_ref.py）交叉验证 ----
+// ---- 载入自校验：与 Python 参考实现交叉验证 ----
 (() => {
   // Case 1: 全 0 输入
   const kc1 = new Uint8Array(16);

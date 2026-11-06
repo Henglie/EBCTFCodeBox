@@ -1,5 +1,5 @@
 /*
- * deepsoundExtract.js — DeepSound 音频隐写提取（cat:'audio'，P1 批）。
+ * deepsoundExtract.js — DeepSound 音频隐写提取（cat:'audio'）。
  *
  * DeepSound（Windows 端音频隐写工具）把文件藏进 16-bit PCM WAV 采样的低位：
  * - 载体为 WAV data 块的原始字节；头 104 载体字节内藏 26 秘密字节（mode=4 提取）：

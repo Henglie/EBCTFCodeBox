@@ -5,7 +5,7 @@
  * vigenere / hill / affine / bifid / polybius / adfgvx
  * otp / multiplicative / keywordcipher / simplesub / runningkey
  *
- * 样例值由 _probe_classic.mjs 实跑取得（输入 'HELLO'）。
+ * 样例值由实跑取得（输入 'HELLO'）。
  * 纯数据导出，无 import / 无副作用 / 无 register。
  */
 export default {

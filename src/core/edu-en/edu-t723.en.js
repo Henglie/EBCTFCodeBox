@@ -1,5 +1,5 @@
 /*
- * edu-t723.en.js — English edu card for sigVerify (unified signature verification entry).
+ * English edu card for sigVerify (unified signature verification entry).
  */
 export default {
   sigVerify: {

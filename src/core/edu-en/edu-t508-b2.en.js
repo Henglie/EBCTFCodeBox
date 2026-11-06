@@ -1,7 +1,7 @@
 /*
- * edu-t508-b2.en.js — English edu cards for batch 2 (encodingExt3.js).
+ * English edu cards for the encoding-mapping ops (encodingExt3.js).
  * crockford32 / alienAlphabet / futhark / countingRods / chuckUnary / wingdings / cardanGrille
- * Example outputs mirror the zh shard (real runs, test.mjs of 批2_编码映射).
+ * Example outputs mirror the zh shard (real runs).
  */
 export default {
   crockford32: {

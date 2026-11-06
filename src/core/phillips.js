@@ -18,7 +18,7 @@
  *    DIAGOCBSLNEFHKMUTRQPVWXYZ，明文 "Squares one and five are actually the same as
  *    are squares two and eight. The overall period is forty."
  *    → 密文 KZWLYTGEDTQETARBTYGTLFXWLPPOXLTYKUTKGKYTKZWLYTGXSEQETIRZQAAQTCITYKPPVBLHEFHGREYXO。
- *    本实现默认参数即该例（见 verify_classic2_a.mjs）。
+ *    本实现默认参数即该例。
  *  - dCode「Phillips Cipher」(https://www.dcode.fr/phillips-cipher)，访问日期 2026-09-22：
  *    确认 (1,1) 位移与块参数化（Number of characters per block / Horizontal shift /
  *    Vertical shift）。注意：dCode 页面文字算例 DCODEPHILLIPS→JIPJFVDERROVY 与其自身

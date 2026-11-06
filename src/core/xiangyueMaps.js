@@ -1,7 +1,7 @@
 /*
  * xiangyueMaps.js — 想曰 XiangYue 6 套映射表 + 零宽表（自动生成，勿手改）。
  * 来源：XiangYue 项目算法（Python 3.4）。
- * 生成：工具/_xy_gen_js.mjs 读 工具/_xy_maps.json（Python 权威 exec 解析产出）。
+ * 生成：由构建脚本读取映射数据（Python 权威 exec 解析产出）。
  * 想曰官方：https://github.com/fzxx/XiangYue
  *
  * 键序 A-Z a-z 0-9 + / =（65 键）。中文/emoji/韩/象形每键 10 候选，日文 3 候选。

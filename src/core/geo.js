@@ -5,7 +5,7 @@
 // - Plus Code (OLC): Google Open Location Code 规范（字母表 "23456789CFGHJMPQRVWX"，20 字符）
 // - Maidenhead: IARU Region 1 VHF Handbook（field 18°/格×20格经度、9°/格×10格纬度 → 但实际为经度20°×18格、纬度10°×18格字母A-R；square 2°/1° 数字0-9；subsquare 5'/2.5' 字母a-x）
 // - UTM: WGS84 椭球 + 标准 Snyder 公式（USGS "Map Projections - A Working Manual"）
-// 注册契约：见 T2 回执。cat:'radix'，每 op encode+decode 双向。
+// 注册契约：cat:'radix'，每 op encode+decode 双向。
 // i18n key（请 M 并入 zh.js/en.js 防抢）：
 // op.geoDms.name / op.geoHash.name / op.geoPlusCode.name / op.geoMaidenhead.name / op.geoUtm.name
 

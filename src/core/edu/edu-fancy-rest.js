@@ -1,7 +1,7 @@
 /*
  * edu-fancy-rest.js — fancy 花式编码科普补全。
  * 覆盖 55 个 fancy 分类 op。
- * 样例值由 _probe_fancy.mjs 实跑取得。
+ * 样例值由实跑取得。
  * 纯数据导出，无 import / 无副作用 / 无 register。
  */
 export default {

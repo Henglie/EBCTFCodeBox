@@ -15,7 +15,7 @@
  * - 密钥可由口令派生（derive_key）：i 循环 0..6，每字符把第 i 行右旋 ix(c).col 格、
  *   第 i 列下旋 ix(c).row 格。
  *
- * 红线：纯函数本地，零外发；对照官方 ls47.py 输出逐字对拍（见回执）。
+ * 红线：纯函数本地，零外发；对照官方 ls47.py 输出逐字对拍。
  */
 
 import { register } from "./registry.js";

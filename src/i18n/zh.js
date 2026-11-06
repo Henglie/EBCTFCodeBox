@@ -2849,7 +2849,7 @@ export default {
   "ui.io.placeholder.hex": "48 65 6c 6c 6f（十六进制，可含空白）",
   "ui.io.err.unknownView": "未知视图 {0}；可选 {1}。",
   "ui.io.err.area": "attachIoCodingToolbar: area 不能为空",
-  "ui.io.err.dom": "attachIoCodingToolbar 需要 DOM 环境；纯算法验收请直接使用 core/ioCoding.js。",
+  "ui.io.err.dom": "attachIoCodingToolbar 需要 DOM 环境；纯算法调用请直接使用核心模块。",
   "ui.io.err.utf32": "检测到 UTF-32 BOM {0}（{1} 字节）：本模块不提供 UTF-32 编解码，也不会把它当 UTF-16 处理。请先转码为 UTF-8 或 UTF-16。",
   "ui.io.err.bomMismatch": "BOM 与所选字符集不符：字节以 {0} BOM {1}（{2} 字节）开头，但当前选择的是 {3}。请改为 auto / {0}，或先移除 BOM；本模块不会按错误字符集静默解码。",
   "ui.recipe.control.register.name": "Register（正则捕获）",

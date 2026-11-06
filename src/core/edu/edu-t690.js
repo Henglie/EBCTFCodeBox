@@ -1,9 +1,8 @@
 /*
- * edu_t690_zh.js — 五 op 科普卡候选（中文）。
+ * 五 op 科普卡（中文）。
  *
- * 候选文件，未接线：归并到 edu 分片聚合时按现有契约合入。
  * EduEntry 契约见 eduContent.js 头注释；aka 经 eduAliases() 注入搜索别名索引。
- * 示例 out 值全部来自本项目三文件实跑（verify_t690.mjs 177/0），未编造。
+ * 示例 out 值全部来自本项目实跑，未编造。
  */
 export default {
   // ============ 素数域 ECDH ============

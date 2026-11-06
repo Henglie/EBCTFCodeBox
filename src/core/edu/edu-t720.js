@@ -1,5 +1,5 @@
 /*
- * edu-t720.js — x509Verify（X.509 证书链验签）科普卡。示例值来自 OpenSSL 3.5.7 样例与 verify_t720 实跑。
+ * x509Verify（X.509 证书链验签）科普卡。示例值来自 OpenSSL 3.5.7 样例与实跑。
  */
 export default {
   "x509Verify": {

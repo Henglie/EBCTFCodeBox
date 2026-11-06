@@ -1,6 +1,6 @@
 /*
- * edu-t813.en.js — English edu cards for the ten CyberChef-aligned ops.
- * Source: edu/edu-t813.js; examples are kept verbatim (in/out/param are real data).
+ * English edu cards for the ten CyberChef-aligned ops.
+ * Source: the Chinese shard; examples are kept verbatim (in/out/param are real data).
  *
  * Authoritative sources (same as the Chinese shard):
  *   ipChecksum       — RFC 1071 "Computing the Internet Checksum"; CyberChef "TCP/IP Checksum"

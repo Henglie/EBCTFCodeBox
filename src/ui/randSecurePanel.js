@@ -226,7 +226,7 @@ export function currentRandMode() {
 /**
  * 完整配置：core 内存单例（mode/seed/endpoint/auth/mouse 权威）叠加本地存储中的
  * UI 专有字段（count/customField/serverOn）——core 单例不含这三者，直接读会导致
- * 结构重建时丢失「确认启用」状态、订阅回写时抹掉取数量等配置（浏览器验收发现，此处修复）。
+ * 结构重建时丢失「确认启用」状态、订阅回写时抹掉取数量等配置（已修复）。
  */
 export function currentFullConfig() {
   return normalizeRandConfig({ ...loadRandConfig(), ...getRandConfig() });

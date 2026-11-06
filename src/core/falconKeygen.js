@@ -1,7 +1,7 @@
 /*
  * falconKeygen.js — Falcon（FN-DSA）密钥生成：采样 f, g → Berd 判界 → NTRU 方程求解 → 公钥 h。
  *
- * 依据（逐式对照，来源 URL 与访问日期见证据目录 SOURCES.md）：
+ * 依据（逐式对照，来源 URL 与访问日期见 SOURCES.md）：
  *   - 规范：Falcon Specification v1.2 §3.8（密钥生成）、算法 5/6/7（NTRU 求解递归）、
  *     §3.6（Berd，向量 (q·adj(f)/(f·adj(f)+g·adj(g)), q·adj(g)/(…)) 的范数上界 1.17²·q）。
  *   - 官方 C 参考实现（Reference_Implementation/falcon512/falcon512int）：
@@ -1079,6 +1079,6 @@ export function checkPrivateKey(key) {
   return { ok: true, h };
 }
 
-// 说明：本文件不注册 op；keygen/sign 的共享入口与 i18n/edu 由收口流程接线。
+// 说明：本文件不注册 op；keygen/sign 的共享入口与 i18n/edu 由上层接入。
 // Berd 判界、NTRU 求解与 falconSign.js 的 ffSampling 已通过 NIST KAT 签名逐字节对拍
-// （见开发档案 kat_t711.mjs 与收口报告.md）。
+// （测试向量逐字节对拍）。

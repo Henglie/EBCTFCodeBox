@@ -1,5 +1,5 @@
 /*
- * edu-t721.en.js — English edu card for cmsVerify. Examples come from OpenSSL 3.5.7 fixtures and verify_t721 runs.
+ * English edu card for cmsVerify. Examples come from OpenSSL 3.5.7 fixtures and verification runs.
  */
 export default {
   "cmsVerify": {

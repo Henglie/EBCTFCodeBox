@@ -15,7 +15,7 @@
  * 本文件已整体替换为原版格式，旧产物不可再解（取舍见版本更新记录）。
  *
  * 算法来源：github.com/mattkwan/snow（encode.c/main.c/compress.c/encrypt.c/ice.c）。
- * 对拍验证：与 tools/exe/cli/snow.exe 三档（明文 / -C / -p）双向互通，见回执。
+ * 对拍验证：与 snow.exe 三档（明文 / -C / -p）双向互通。
  */
 import { register } from "./registry.js";
 import { decodeUtf8Lossless } from "./bytesIo.js";

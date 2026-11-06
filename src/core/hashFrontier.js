@@ -1,13 +1,13 @@
 /*
- * hashFrontier.js — 哈希边界补全三件（· 批B）。
+ * hashFrontier.js — 哈希边界补全三件。
  *
  * 覆盖：Argon2 KDF（RFC 9106，Argon2d/i/id）/ Tiger & Tiger2（192-bit，Anderson-Biham）/
  * Kupyna（乌克兰 DSTU 7564:2014，256/384/512）。全部单向 run，输入 text/hex 可选，输出小写 hex。
  *
  * 红线与出处：
  * - Argon2：RFC 9106（v=0x13）。Blake2b 直接 import 自 argon2id.js（该实现的 BLAKE2b 已被
- *   argon2-cffi 25.1.0 向量对拍验证，见 工具/rt_argon2_test.mjs 与 argon2id.js 头注）。
- *   H' 变长哈希与压缩函数 G 在本文件内置（argon2id.js 未导出这两块，按任务约定内置并注明）。
+ *   argon2-cffi 25.1.0 向量对拍验证，见 argon2id.js 头注）。
+ *   H' 变长哈希与压缩函数 G 在本文件内置（argon2id.js 未导出这两块，按约定内置并注明）。
  *   内存矩阵用 Uint32Array（每块 1024B = 256×uint32，64-bit 字拆 lo/hi 对），
  *   64MiB 上限实测 ~67MB 内存，杜绝 BigInt 矩阵（同规模要 300MB+）把页面打爆。
  *   护栏：m ≤ 65536 KiB（64MiB）、t ≤ 1024、p ≤ 254、tagLen ≤ 1024。

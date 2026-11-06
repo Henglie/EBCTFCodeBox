@@ -33,7 +33,7 @@
  *  - chars="keep" 时保留非字母字符原位（对应 dCode 页面的「Conserver la ponctuation」档）。
  *  - 密钥中非字母字符被忽略；密钥为空或过滤后无字母时**显式报错**（不静默原样返回——
  *    静默返回会让用户把「未加密的明文」当成密文，属误导；本 op 为新候选，采用显式拒绝口径，
- *    与既有 beaufort 的静默返回不同，差异已在报告「待确认」列出）。
+ *    与既有 beaufort 的静默返回不同，差异已注明）。
  *
  * 契约：register({id, cat:"classic", name, desc, params, encode, decode})。
  */

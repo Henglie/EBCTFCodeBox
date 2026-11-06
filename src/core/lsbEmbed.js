@@ -1,5 +1,5 @@
 /*
- * lsbEmbed.js — LSB 嵌入（出题）（cat:'image'，P1 批，单向 run）。
+ * lsbEmbed.js — LSB 嵌入（出题）（cat:'image'，单向 run）。
  *
  * 解决什么：把一段载荷（文本）写进封面图指定位平面的最低有效位，生成隐写图
  * （PNG）。用于出 misc 题——先做一张 LSB 隐写图，配合本工具另一张

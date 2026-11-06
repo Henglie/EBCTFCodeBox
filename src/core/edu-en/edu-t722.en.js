@@ -1,6 +1,6 @@
 /*
- * edu-t722.en.js — English edu card for sshsigVerify (OpenSSH SSHSIG verification).
- * Examples come from local ssh-keygen -Y sign/verify runs and verify_t722.
+ * English edu card for sshsigVerify (OpenSSH SSHSIG verification).
+ * Examples come from local ssh-keygen -Y sign/verify runs.
  */
 export default {
   sshsigVerify: {

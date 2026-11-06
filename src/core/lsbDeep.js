@@ -1,5 +1,5 @@
 /*
- * lsbDeep.js — LSB 深度分析（R6，纯算法层，零 UI 依赖）。
+ * lsbDeep.js — LSB 深度分析（纯算法层，零 UI 依赖）。
  *
  * 与 zstegScan 的区别：zstegScan 默认只看 bit0 / 行优先，本模块把
  *   通道 {R,G,B,A,RGB,BGR,RGBA,BGRA}

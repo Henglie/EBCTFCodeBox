@@ -1,5 +1,5 @@
 /*
- * bigmath.js — BigInt 大数计算器（批E1+E2，cat:'radix'）。
+ * bigmath.js — BigInt 大数计算器（cat:'radix'）。
  *
  * 覆盖：四则 add/sub/mul/div/mod、整数幂 pow、模幂 modpow、模逆 modinv、
  *       gcd/extgcd/lcm、素性检验 isPrime、邻素数 nextPrime/prevPrime、

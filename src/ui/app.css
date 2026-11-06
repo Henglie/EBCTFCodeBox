@@ -2241,7 +2241,7 @@ html.spring-motion .workspace { will-change: transform, opacity; }
 .rand-mouse-out.error { color: var(--error); }
 
 
-/* 惰执行 pending 高亮（MT720 2026-10-12）：图像重 op 拖入/调参后不自动跑，
+/* 惰执行 pending 高亮：图像重 op 拖入/调参后不自动跑，
    转换按钮温和呼吸提示「点我执行」；应用内减动效开关（html.reduce-motion）下静止。 */
 .act-btn.pending-run {
   animation: pending-run-pulse 1.6s ease-in-out infinite;
@@ -2252,7 +2252,7 @@ html.spring-motion .workspace { will-change: transform, opacity; }
 }
 html.reduce-motion .act-btn.pending-run { animation: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 30%, transparent); }
 
-/* T700 候选裁决与证据 chips：四态徽标 + 信号标签，避免「最佳摘要」只给分数不给依据。 */
+/* 候选裁决与证据 chips：四态徽标 + 信号标签，避免「最佳摘要」只给分数不给依据。 */
 .ok-verdict { display:inline-flex; align-items:center; padding:1px 6px; border-radius:4px; font-size:var(--fs-xs); font-weight:600; margin-inline-end:var(--sp-2); vertical-align:middle; }
 .ok-verdict-confirmed { background:var(--success); color:#fff; }
 .ok-verdict-likely { background:var(--primary); color:var(--on-primary,#fff); }

@@ -1,5 +1,5 @@
 /*
- * rsasign.js — RSASSA PKCS#1 v1.5 / RSASSA-PSS 签名与验签（ · 批B1）
+ * rsasign.js — RSASSA PKCS#1 v1.5 / RSASSA-PSS 签名与验签
  *
  * 标准引用：
  * - RFC 8017 §9.2   EMSA-PKCS1-v1_5：EM = 0x00 || 0x01 || PS(0xFF×≥8) || 0x00 || DigestInfo

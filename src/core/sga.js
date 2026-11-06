@@ -25,7 +25,7 @@
  *    decode：逐 token 反查，未知字符原样保留。
  *
  * dCode 页面例：STANDARD 与 MINECRAFT 均以图片给出（无文本串），本 op 的
- * 权威文本向量 = FAQ 26 字母 Unicode 串逐字复现（见 verify_enc1_b.mjs）。
+ * 权威文本向量 = FAQ 26 字母 Unicode 串逐字复现。
  *
  * 权威来源（访问日期均为 2026-09-22）：
  *  - dCode「Alphabet Galactique Standard」

@@ -14,8 +14,8 @@ dCode.fr 的独立插件复刻包：不进入主工具箱 890 op 计数，默认
 
 - **implemented**：插件内有真实纯 JS 实现，并通过批内自测。
 - **mapped**：主工具箱或既有插件已有精确对应 op，直接建立映射，不重复造轮子。
-- **blocked**：图片/OCR/音频/外部数据库/站点导航/版权字体/未公开规则等，无法在不伪造的前提下离线实现；逐条原因见 `coverage-all.json` 与 `report-d*.md` / `report-e*.md`。
-- 本轮由 D1–D4、E1–E4 八个批次补齐；全量台账与阻塞原因见 [COVERAGE.md](./COVERAGE.md)。
+- **blocked**：图片/OCR/音频/外部数据库/站点导航/版权字体/未公开规则等，无法在不伪造的前提下离线实现；逐条原因见 `coverage-all.json`。
+- 全量台账与阻塞原因见 [COVERAGE.md](./COVERAGE.md)。
 
 ## 加载
 

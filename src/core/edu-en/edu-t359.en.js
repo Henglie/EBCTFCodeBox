@@ -1,10 +1,10 @@
 /*
- * edu-t359.en.js — English edu shard for the t359 group (RSA sign/verify + JWT/PASETO signing family).
+ * English edu cards for the RSA sign/verify + JWT/PASETO signing family.
  *
  * Partial shard by design: the English layer only covers ops that have been translated;
  * anything missing falls back to Chinese automatically (see getEdu in eduContent.js).
  * This shard currently covers: rsaSign (added 2026-10-11 together with the eNFS deployment tip).
- * The remaining ops of edu/edu-t359.js stay on the Chinese fallback until translated.
+ * The remaining ops of this family stay on the Chinese fallback until translated.
  *
  * Pure data, no side effects. Export contract matches eduContent.js header.
  */

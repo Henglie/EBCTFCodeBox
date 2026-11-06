@@ -1,6 +1,6 @@
 /*
- * edu-t760.en.js — English edu cards for bzip2Enc / extractAll.
- * Source: edu/edu-t760.js; examples are kept verbatim.
+ * English edu cards for bzip2Enc / extractAll.
+ * Source: the Chinese shard; examples are kept verbatim.
  */
 export default {
   bzip2Enc: {

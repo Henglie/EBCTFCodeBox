@@ -1,5 +1,5 @@
 /*
- * edu-t723.js — sigVerify（统一验签入口）科普卡。
+ * sigVerify（统一验签入口）科普卡。
  */
 export default {
   sigVerify: {

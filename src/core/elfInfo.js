@@ -1,5 +1,5 @@
 /*
- * elfInfo.js — ELF 可执行文件信息（P1 批，cat:'bin'，单向 run）。
+ * elfInfo.js — ELF 可执行文件信息（cat:'bin'，单向 run）。
  *
  * 解决什么：ELF 头信息一眼概览——格式/架构/位数/字节序/类型/入口点，
  * 顺带挖出动态链接细节：PT_INTERP 解释器路径、PT_DYNAMIC 里 DT_NEEDED 依赖库、
