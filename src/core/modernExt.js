@@ -2,7 +2,8 @@
  * modernExt.js — 现代加密扩展组。
  *
  * 覆盖：TEA / XTEA / XXTEA / SM4（国密）—— WebCrypto 没有的纯 JS 分组/流密码。
- * 与 modern.js 解耦（内嵌≠耦合红线），自写编码工具 + PKCS7 + 分组模式，不依赖 modern.js 内部函数。
+ * 编码工具自写；填充统一复用 modern.js 导出的 padBytes/unpadBytes（全项目唯一事实来源），
+ * 分组模式仍自写，避免循环依赖。
  *
  * 红线：
  * - TEA/XTEA/XXTEA 走标准算法（Wheeler 1994 / Needham 1997），用权威测试向量验证。
@@ -13,17 +14,18 @@
  *
  * 分层：
  * [TEA 内核] teaEncryptBlock / teaDecryptBlock — 8 字节块级变换（64位块，128位密钥，32轮 Feistel）
- * [XTEA 内核] xteaEncryptBlock / xteaDecryptBlock — 8 字节块级变换（改进密钥调度）
+ * [XTEA 内核] xteaEncryptBlock / xteaDecryptBlock — 8 字节块级变换（改进密钥调度，轮数可调）
  * [XXTEA 内核] xxteaEncryptBytes / xxteaDecryptBytes — 可变长度块（n×32位，n≥2），整个数据一次性加密
  * [SM4 内核] sm4EncryptBlock / sm4DecryptBlock — 16 字节块级变换（GB/T 32907-2016，32轮非线性迭代）
  * [分组模式] ecb/cbc/cfb/ofb/ctr（自写，避免依赖 modern.js）+ GCM（SP 800-38D 构造）
- * [填充] pkcs7 pad/unpad（自写）
+ * [填充] 复用 modern.js 的 padBytes/unpadBytes（pkcs7/none/zero/bit/iso10126/ansix923）
  * [高层 API] teaEncrypt/teaDecrypt / xteaEncrypt/xteaDecrypt / xxteaEncrypt/xxteaDecrypt / sm4Encrypt/sm4Decrypt
  * [register] 编码解析（key/iv/data 的 hex|base64|utf8|latin1）+ 双向注册
  *
  * 供「密钥+密文一键尝试」后续扩展复用。
  */
 import { register } from "./registry.js";
+import { padBytes, unpadBytes, PADDING_OPTIONS } from "./modern.js";
 
 const te = (s) => new TextEncoder().encode(s);
 const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(b));
@@ -32,7 +34,8 @@ const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Arr
 // 字节 <-> 编码 工具（hex / base64 / utf8 / latin1）
 // ============================================================
 function hexToBytes(s) {
-  const clean = s.replace(/[^0-9a-fA-F]/g, "");
+  const clean = String(s == null ? "" : s).replace(/\s+/g, "");
+  if (!/^[0-9a-fA-F]*$/.test(clean)) throw new Error("非法 hex 字符（仅允许 0-9/A-F 与空白）");
   if (clean.length % 2) throw new Error("hex 长度必须为偶数");
   const out = new Uint8Array(clean.length / 2);
   for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);
@@ -91,37 +94,15 @@ function writeU32BE(bytes, off, v) {
 function rotl(x, n) { return ((x << n) | (x >>> (32 - n))) >>> 0; }
 
 // ============================================================
-// PKCS#7 填充（自写，避免依赖 modern.js）
+// 分组模式（ECB/CBC，自写避免依赖 modern.js；填充走统一实现）
 // ============================================================
-function pkcs7Pad(data, blockSize) {
-  const padLen = blockSize - (data.length % blockSize);
-  const out = new Uint8Array(data.length + padLen);
-  out.set(data);
-  out.fill(padLen, data.length);
-  return out;
-}
-function pkcs7Unpad(data, blockSize) {
-  if (data.length === 0 || data.length % blockSize !== 0) throw new Error("密文长度非块大小整数倍，无法去填充");
-  const padLen = data[data.length - 1];
-  if (padLen < 1 || padLen > blockSize) throw new Error("PKCS7 填充非法（可能密钥/模式错误）");
-  for (let i = data.length - padLen; i < data.length; i++) {
-    if (data[i] !== padLen) throw new Error("PKCS7 填充校验失败（可能密钥/模式错误）");
-  }
-  return data.subarray(0, data.length - padLen);
-}
-
 function xorBytes(a, b) {
   const o = new Uint8Array(a.length);
   for (let i = 0; i < a.length; i++) o[i] = a[i] ^ b[i];
   return o;
 }
-
-// ============================================================
-// 分组模式（ECB/CBC，自写避免依赖 modern.js）
-// ============================================================
 function ecbEncrypt(data, encBlock, bs, pad = true) {
-  const d = pad ? pkcs7Pad(data, bs) : data;
-  if (d.length % bs) throw new Error(`明文需为 ${bs} 字节整数倍（或开启填充）`);
+  const d = padBytes(data, bs, pad);
   const out = new Uint8Array(d.length);
   for (let i = 0; i < d.length; i += bs) out.set(encBlock(d.subarray(i, i + bs)), i);
   return out;
@@ -130,11 +111,10 @@ function ecbDecrypt(data, decBlock, bs, pad = true) {
   if (data.length % bs) throw new Error(`密文需为 ${bs} 字节整数倍`);
   const out = new Uint8Array(data.length);
   for (let i = 0; i < data.length; i += bs) out.set(decBlock(data.subarray(i, i + bs)), i);
-  return pad ? pkcs7Unpad(out, bs) : out;
+  return unpadBytes(out, bs, pad);
 }
 function cbcEncrypt(data, encBlock, bs, iv, pad = true) {
-  const d = pad ? pkcs7Pad(data, bs) : data;
-  if (d.length % bs) throw new Error(`明文需为 ${bs} 字节整数倍（或开启填充）`);
+  const d = padBytes(data, bs, pad);
   const out = new Uint8Array(d.length);
   let prev = iv.subarray(0, bs);
   for (let i = 0; i < d.length; i += bs) {
@@ -153,7 +133,7 @@ function cbcDecrypt(data, decBlock, bs, iv, pad = true) {
     out.set(xorBytes(decBlock(cblk), prev), i);
     prev = cblk;
   }
-  return pad ? pkcs7Unpad(out, bs) : out;
+  return unpadBytes(out, bs, pad);
 }
 
 // ============================================================
@@ -199,14 +179,21 @@ function teaDecryptBlock(block, key) {
 
 // ============================================================
 // XTEA 内核（Needham 1997，扩展 TEA，改进密钥调度）
-// 64 位块，128 位密钥（4×uint32），32 轮 Feistel
+// 64 位块，128 位密钥（4×uint32），轮数可调（默认 32）
 // ============================================================
-function xteaEncryptBlock(block, key) {
+function xteaNormRounds(rounds) {
+  if (rounds == null || rounds === "") return TEA_ROUNDS;
+  const n = Number(rounds);
+  if (!Number.isInteger(n) || n < 1 || n > 255) throw new Error("XTEA rounds 需为 1..255 的整数");
+  return n;
+}
+function xteaEncryptBlock(block, key, rounds = TEA_ROUNDS) {
+  const R = xteaNormRounds(rounds);
   const k = [readU32BE(key, 0), readU32BE(key, 4), readU32BE(key, 8), readU32BE(key, 12)];
   let v0 = readU32BE(block, 0);
   let v1 = readU32BE(block, 4);
   let sum = 0;
-  for (let i = 0; i < TEA_ROUNDS; i++) {
+  for (let i = 0; i < R; i++) {
     v0 = (v0 + (((((v1 << 4) >>> 0) ^ (v1 >>> 5)) + v1) ^ (sum + k[sum & 3]))) >>> 0;
     sum = (sum + TEA_DELTA) >>> 0;
     v1 = (v1 + (((((v0 << 4) >>> 0) ^ (v0 >>> 5)) + v0) ^ (sum + k[(sum >>> 11) & 3]))) >>> 0;
@@ -217,12 +204,13 @@ function xteaEncryptBlock(block, key) {
   return out;
 }
 
-function xteaDecryptBlock(block, key) {
+function xteaDecryptBlock(block, key, rounds = TEA_ROUNDS) {
+  const R = xteaNormRounds(rounds);
   const k = [readU32BE(key, 0), readU32BE(key, 4), readU32BE(key, 8), readU32BE(key, 12)];
   let v0 = readU32BE(block, 0);
   let v1 = readU32BE(block, 4);
-  let sum = TEA_SUM_FINAL;
-  for (let i = 0; i < TEA_ROUNDS; i++) {
+  let sum = (TEA_DELTA * R) >>> 0;
+  for (let i = 0; i < R; i++) {
     v1 = (v1 - (((((v0 << 4) >>> 0) ^ (v0 >>> 5)) + v0) ^ (sum + k[(sum >>> 11) & 3]))) >>> 0;
     sum = (sum - TEA_DELTA) >>> 0;
     v0 = (v0 - (((((v1 << 4) >>> 0) ^ (v1 >>> 5)) + v1) ^ (sum + k[sum & 3]))) >>> 0;
@@ -424,10 +412,20 @@ function writeU32LE(bytes, off, v) {
 const SALSA_SIGMA = [0x61707865, 0x3320646e, 0x79622d32, 0x6b206574]; // "expand 32-byte k"
 const SALSA_TAU   = [0x61707865, 0x3120646e, 0x79622d36, 0x6b206574]; // "expand 16-byte k"
 
+const STREAM_ROUNDS = new Set([20, 12, 8]);
+function salsaNormRounds(rounds) {
+  if (rounds == null || rounds === "") return 20;
+  const n = Number(rounds);
+  if (!STREAM_ROUNDS.has(n)) throw new Error("Rounds must be 20/12/8");
+  return n;
+}
+
 // Salsa20 核心变换：state(16 words) -> keystream block(64 字节)
-function salsa20Block(state) {
+// rounds 为总轮数（8/12/20），内部按双轮（列轮+行轮）循环 rounds/2 次。
+function salsa20Block(state, rounds = 20) {
+  const R = salsaNormRounds(rounds);
   const x = state.slice();
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < R / 2; i++) {
  // 列轮
     x[4]  = (x[4]  ^ rotl((x[0]  + x[12]) >>> 0, 7)) >>> 0;
     x[8]  = (x[8]  ^ rotl((x[4]  + x[0])  >>> 0, 9)) >>> 0;
@@ -485,15 +483,16 @@ function salsa20State(key, nonce, counter) {
   return s;
 }
 
-/** Salsa20/20 流加密（自反）。key 16 或 32 字节，nonce 8 字节，counter 起始块号。 */
-export function salsa20(data, key, nonce, counter = 0) {
+/** Salsa20 流加密（自反）。key 16 或 32 字节，nonce 8 字节，counter 起始块号，rounds 总轮数 20/12/8。 */
+export function salsa20(data, key, nonce, counter = 0, rounds = 20) {
   if (key.length !== 16 && key.length !== 32) throw new Error("Salsa20 密钥须为 16 或 32 字节");
   if (nonce.length !== 8) throw new Error("Salsa20 nonce 须为 8 字节");
+  const R = salsaNormRounds(rounds);
   const out = new Uint8Array(data.length);
   let blk = counter;
   for (let i = 0; i < data.length; i += 64) {
     const state = salsa20State(key, nonce, blk);
-    const ks = salsa20Block(state);
+    const ks = salsa20Block(state, R);
     const n = Math.min(64, data.length - i);
     for (let j = 0; j < n; j++) out[i + j] = data[i + j] ^ ks[j];
     blk++;
@@ -515,9 +514,10 @@ function chachaQR(x, a, b, c, d) {
   x[c] = (x[c] + x[d]) >>> 0; x[b] = rotl(x[b] ^ x[c], 7);
 }
 
-function chacha20Block(state) {
+function chacha20Block(state, rounds = 20) {
+  const R = salsaNormRounds(rounds);
   const x = state.slice();
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < R / 2; i++) {
  // 列轮
     chachaQR(x, 0, 4, 8, 12);
     chachaQR(x, 1, 5, 9, 13);
@@ -534,30 +534,40 @@ function chacha20Block(state) {
   return out;
 }
 
-// 由密钥(32 字节)+nonce(12 字节)+counter 构造 ChaCha20 初始状态
+// 由密钥(32 字节)+nonce 构造 ChaCha20 初始状态
+// nonce = 12 字节 → RFC 8439（32 位块计数器 + 96 位 nonce）
+// nonce = 8 字节  → 原版 ChaCha（64 位块计数器 + 64 位 nonce）
 function chacha20State(key, nonce, counter) {
   const s = new Array(16);
   s[0] = CHACHA_CONST[0]; s[1] = CHACHA_CONST[1]; s[2] = CHACHA_CONST[2]; s[3] = CHACHA_CONST[3];
   for (let i = 0; i < 8; i++) s[4 + i] = readU32LE(key, i * 4);
   s[12] = counter >>> 0;
-  s[13] = readU32LE(nonce, 0);
-  s[14] = readU32LE(nonce, 4);
-  s[15] = readU32LE(nonce, 8);
+  if (nonce.length === 12) {
+    s[13] = readU32LE(nonce, 0);
+    s[14] = readU32LE(nonce, 4);
+    s[15] = readU32LE(nonce, 8);
+  } else {
+    s[13] = Math.floor(counter / 0x100000000) >>> 0;
+    s[14] = readU32LE(nonce, 0);
+    s[15] = readU32LE(nonce, 4);
+  }
   return s;
 }
 
-/** ChaCha20 流加密（RFC 8439，自反）。key 32 字节，nonce 12 字节，counter 起始块号。 */
-export function chacha20(data, key, nonce, counter = 0) {
+/** ChaCha20 流加密（自反）。key 32 字节；nonce 12 字节（RFC 8439）或 8 字节（原版 64 位计数器）；rounds 20/12/8。 */
+export function chacha20(data, key, nonce, counter = 0, rounds = 20) {
   if (key.length !== 32) throw new Error("ChaCha20 密钥须为 32 字节");
-  if (nonce.length !== 12) throw new Error("ChaCha20 nonce 须为 12 字节（RFC 8439）");
+  if (nonce.length !== 12 && nonce.length !== 8) throw new Error("ChaCha20 nonce 须为 12 字节（RFC 8439）或 8 字节（原版）");
+  const R = salsaNormRounds(rounds);
   const out = new Uint8Array(data.length);
-  let blk = counter >>> 0;
+  let blk = Number(counter) || 0;
+  if (blk < 0 || !Number.isInteger(blk)) throw new Error("ChaCha20 初始计数器须为非负整数");
   for (let i = 0; i < data.length; i += 64) {
     const state = chacha20State(key, nonce, blk);
-    const ks = chacha20Block(state);
+    const ks = chacha20Block(state, R);
     const n = Math.min(64, data.length - i);
     for (let j = 0; j < n; j++) out[i + j] = data[i + j] ^ ks[j];
-    blk = (blk + 1) >>> 0;
+    blk = nonce.length === 8 ? blk + 1 : (blk + 1) >>> 0;
   }
   return out;
 }
@@ -608,80 +618,84 @@ function decryptBlockMode(data, encBlock, decBlock, bs, mode, iv, pad) {
   }
 }
 
-export function teaEncrypt(data, key, { mode = "ECB", iv, pad = true } = {}) {
+export function teaEncrypt(data, key, { mode = "ECB", iv, pad = true, padding } = {}) {
   mode = mode.toUpperCase();
   if (!BLOCK_MODES.has(mode)) throw new Error(`不支持的 TEA 模式: ${mode}`);
   if (key.length !== 16) throw new Error("TEA 密钥需 16 字节");
-  return encryptBlockMode(data, (b) => teaEncryptBlock(b, key), 8, mode, iv, pad);
+  return encryptBlockMode(data, (b) => teaEncryptBlock(b, key), 8, mode, iv, padding === undefined ? pad : padding);
 }
-export function teaDecrypt(data, key, { mode = "ECB", iv, pad = true } = {}) {
+export function teaDecrypt(data, key, { mode = "ECB", iv, pad = true, padding } = {}) {
   mode = mode.toUpperCase();
   if (!BLOCK_MODES.has(mode)) throw new Error(`不支持的 TEA 模式: ${mode}`);
   if (key.length !== 16) throw new Error("TEA 密钥需 16 字节");
-  return decryptBlockMode(data, (b) => teaEncryptBlock(b, key), (b) => teaDecryptBlock(b, key), 8, mode, iv, pad);
+  return decryptBlockMode(data, (b) => teaEncryptBlock(b, key), (b) => teaDecryptBlock(b, key), 8, mode, iv, padding === undefined ? pad : padding);
 }
 
-export function xteaEncrypt(data, key, { mode = "ECB", iv, pad = true } = {}) {
+export function xteaEncrypt(data, key, { mode = "ECB", iv, pad = true, padding, rounds = TEA_ROUNDS } = {}) {
   mode = mode.toUpperCase();
   if (!BLOCK_MODES.has(mode)) throw new Error(`不支持的 XTEA 模式: ${mode}`);
   if (key.length !== 16) throw new Error("XTEA 密钥需 16 字节");
-  return encryptBlockMode(data, (b) => xteaEncryptBlock(b, key), 8, mode, iv, pad);
+  const R = xteaNormRounds(rounds);
+  return encryptBlockMode(data, (b) => xteaEncryptBlock(b, key, R), 8, mode, iv, padding === undefined ? pad : padding);
 }
-export function xteaDecrypt(data, key, { mode = "ECB", iv, pad = true } = {}) {
+export function xteaDecrypt(data, key, { mode = "ECB", iv, pad = true, padding, rounds = TEA_ROUNDS } = {}) {
   mode = mode.toUpperCase();
   if (!BLOCK_MODES.has(mode)) throw new Error(`不支持的 XTEA 模式: ${mode}`);
   if (key.length !== 16) throw new Error("XTEA 密钥需 16 字节");
-  return decryptBlockMode(data, (b) => xteaEncryptBlock(b, key), (b) => xteaDecryptBlock(b, key), 8, mode, iv, pad);
+  const R = xteaNormRounds(rounds);
+  return decryptBlockMode(data, (b) => xteaEncryptBlock(b, key, R), (b) => xteaDecryptBlock(b, key, R), 8, mode, iv, padding === undefined ? pad : padding);
 }
 
 export function xxteaEncrypt(data, key) {
   if (key.length !== 16) throw new Error("XXTEA 密钥需 16 字节");
  // PKCS7 padding 到 8 字节块，保证 ≥ 8 字节且 4 字节对齐
-  const padded = pkcs7Pad(data, 8);
+  const padded = padBytes(data, 8, "pkcs7");
   return xxteaEncryptBytes(padded, key);
 }
 export function xxteaDecrypt(data, key) {
   if (key.length !== 16) throw new Error("XXTEA 密钥需 16 字节");
   const decrypted = xxteaDecryptBytes(data, key);
-  return pkcs7Unpad(decrypted, 8);
+  return unpadBytes(decrypted, 8, "pkcs7");
 }
 
 const SM4_MODES = new Set(["ECB", "CBC", "CFB", "OFB", "CTR", "GCM"]);
 
-export function sm4Encrypt(data, key, { mode = "ECB", iv, aad, pad = true } = {}) {
+export function sm4Encrypt(data, key, { mode = "ECB", iv, aad, pad = true, padding, tagLen = 16 } = {}) {
   mode = mode.toUpperCase();
   if (key.length !== 16) throw new Error("SM4 密钥需 16 字节");
+  const padOpt = padding === undefined ? pad : padding;
   if (mode === "GCM") {
     if (!iv || iv.length === 0) throw new Error("SM4-GCM 需提供非空 nonce（IV）");
-    return sm4GcmEncrypt(data, key, iv, aad);
+    return sm4GcmEncrypt(data, key, iv, aad, tagLen);
   }
   if (!SM4_MODES.has(mode)) throw new Error(`不支持的 SM4 模式: ${mode}`);
   if (mode !== "ECB" && (!iv || iv.length !== 16)) throw new Error(`SM4-${mode} IV 需 16 字节`);
   const encBlock = (b) => sm4EncryptBlock(b, key);
   const ivv = iv || new Uint8Array(16);
   switch (mode) {
-    case "ECB": return ecbEncrypt(data, encBlock, 16, pad);
-    case "CBC": return cbcEncrypt(data, encBlock, 16, ivv, pad);
+    case "ECB": return ecbEncrypt(data, encBlock, 16, padOpt);
+    case "CBC": return cbcEncrypt(data, encBlock, 16, ivv, padOpt);
     case "CFB": return cfbEncrypt(data, encBlock, 16, ivv); // 流模式，无填充
     case "OFB": return ofbCrypt(data, encBlock, 16, ivv);
     case "CTR": return ctrCrypt(data, encBlock, 16, ivv);
     default: throw new Error(`不支持的 SM4 模式: ${mode}`);
   }
 }
-export function sm4Decrypt(data, key, { mode = "ECB", iv, aad, pad = true } = {}) {
+export function sm4Decrypt(data, key, { mode = "ECB", iv, aad, pad = true, padding, tagLen = 16 } = {}) {
   mode = mode.toUpperCase();
   if (key.length !== 16) throw new Error("SM4 密钥需 16 字节");
+  const padOpt = padding === undefined ? pad : padding;
   if (mode === "GCM") {
     if (!iv || iv.length === 0) throw new Error("SM4-GCM 需提供非空 nonce（IV）");
-    return sm4GcmDecrypt(data, key, iv, aad);
+    return sm4GcmDecrypt(data, key, iv, aad, tagLen);
   }
   if (!SM4_MODES.has(mode)) throw new Error(`不支持的 SM4 模式: ${mode}`);
   if (mode !== "ECB" && (!iv || iv.length !== 16)) throw new Error(`SM4-${mode} IV 需 16 字节`);
   const encBlock = (b) => sm4EncryptBlock(b, key);
   const ivv = iv || new Uint8Array(16);
   switch (mode) {
-    case "ECB": return ecbDecrypt(data, (b) => sm4DecryptBlock(b, key), 16, pad);
-    case "CBC": return cbcDecrypt(data, (b) => sm4DecryptBlock(b, key), 16, ivv, pad);
+    case "ECB": return ecbDecrypt(data, (b) => sm4DecryptBlock(b, key), 16, padOpt);
+    case "CBC": return cbcDecrypt(data, (b) => sm4DecryptBlock(b, key), 16, ivv, padOpt);
     case "CFB": return cfbDecrypt(data, encBlock, 16, ivv); // CFB 解密也用加密函数（反馈 XOR）
     case "OFB": return ofbCrypt(data, encBlock, 16, ivv);
     case "CTR": return ctrCrypt(data, encBlock, 16, ivv);
@@ -841,32 +855,41 @@ function gcmJ0(encBlock, iv) {
   }
   return acc;
 }
-// SM4-GCM 加密：返回 ciphertext ‖ tag（16 字节，常量 tag 长）
-export function sm4GcmEncrypt(data, key, iv, aad) {
+// SM4-GCM tag 长度（字节），与 SP 800-38D 允许的截断档一致
+const SM4_GCM_TAG_LENS = new Set([4, 8, 12, 13, 14, 15, 16]);
+function sm4NormTagLen(tagLen) {
+  if (tagLen == null || tagLen === "") return 16;
+  const n = Number(tagLen);
+  if (!SM4_GCM_TAG_LENS.has(n)) throw new Error("SM4-GCM tag 长度仅支持 4/8/12/13/14/15/16 字节");
+  return n;
+}
+// SM4-GCM 加密：返回 ciphertext ‖ tag（tagLen 字节，默认 16）
+export function sm4GcmEncrypt(data, key, iv, aad, tagLen = 16) {
+  const tl = sm4NormTagLen(tagLen);
   const encBlock = (b) => sm4EncryptBlock(b, key);
   const h = encBlock(new Uint8Array(16));
   const j0 = gcmJ0(encBlock, iv);
   const c = gcmGctr(encBlock, inc32(j0), data);
   const s = gcmGhash(h, aad || new Uint8Array(0), c);
-  const t = gcmGctr(encBlock, j0, s);
-  const out = new Uint8Array(c.length + 16);
+  const t = gcmGctr(encBlock, j0, s).subarray(0, tl);
+  const out = new Uint8Array(c.length + tl);
   out.set(c, 0);
   out.set(t, c.length);
   return out;
 }
 // SM4-GCM 解密：输入 ciphertext ‖ tag，tag 校验失败抛错
 export function sm4GcmDecrypt(data, key, iv, aad, tagLen = 16) {
-  if (![4, 8, 12, 13, 14, 15, 16].includes(tagLen)) throw new Error("SM4-GCM tag 长度仅支持 4/8/12/13/14/15/16 字节");
-  if (data.length < tagLen) throw new Error("SM4-GCM 密文过短（需含 tag）");
-  const c = data.subarray(0, data.length - tagLen);
-  const tag = data.subarray(data.length - tagLen);
+  const tl = sm4NormTagLen(tagLen);
+  if (data.length < tl) throw new Error("SM4-GCM 密文过短（需含 tag）");
+  const c = data.subarray(0, data.length - tl);
+  const tag = data.subarray(data.length - tl);
   const encBlock = (b) => sm4EncryptBlock(b, key);
   const h = encBlock(new Uint8Array(16));
   const j0 = gcmJ0(encBlock, iv);
   const s = gcmGhash(h, aad || new Uint8Array(0), c);
-  const t = gcmGctr(encBlock, j0, s).subarray(0, tagLen);
+  const t = gcmGctr(encBlock, j0, s).subarray(0, tl);
   let diff = 0;
-  for (let i = 0; i < tagLen; i++) diff |= tag[i] ^ t[i];
+  for (let i = 0; i < tl; i++) diff |= tag[i] ^ t[i];
   if (diff !== 0) throw new Error("SM4-GCM tag 校验失败（密钥/IV/密文可能错误）");
   return gcmGctr(encBlock, inc32(j0), c);
 }
@@ -888,29 +911,109 @@ function blockParams(modes, keyHint) {
     { key: "mode", label: "模式", type: "select", default: "ECB", options: modes.map((m) => ({ value: m, label: m })) },
     { key: "iv", label: "IV / Nonce", type: "text", default: "", placeholder: "hex（CBC/CFB/OFB/CTR 需 IV，GCM 为 12 字节 nonce）" },
     { key: "ivEnc", label: "IV 编码", type: "select", default: "hex", options: ENC_OPTS },
+    { key: "padding", label: "填充（ECB/CBC 用；流模式忽略）", type: "select", default: "pkcs7", options: PADDING_OPTIONS },
   ];
   if (modes.includes("GCM")) {
-    params.push({ key: "aad", label: "AAD（仅 GCM）", type: "text", default: "", placeholder: "认证附加数据（GCM 模式用）" });
+    params.push(
+      { key: "aad", label: "AAD（仅 GCM）", type: "text", default: "", placeholder: "认证附加数据（UTF-8，可空）" },
+      { key: "includeIv", label: "IV 包含方式（仅 GCM）", type: "select", default: "off",
+        options: [
+          { value: "off", label: "不包含（默认，ct‖tag）" },
+          { value: "prepend", label: "前置（iv‖ct‖tag）" },
+          { value: "append", label: "后置（ct‖tag‖iv）" },
+        ] },
+      { key: "tagLen", label: "GCM tag 位数", type: "select", default: "128",
+        options: [128, 120, 112, 104, 96, 64, 32].map((n) => ({ value: String(n), label: `${n} 位` })) },
+      { key: "ivLen", label: "Include IV 长度（解密用）", type: "select", default: "12",
+        options: [12, 16].map((n) => ({ value: String(n), label: `${n} 字节` })) },
+      { key: "tag", label: "tag（仅 GCM 解密可选）", type: "text", default: "", placeholder: "留空取密文末；独立 tag 时单独粘贴" },
+      { key: "tagEnc", label: "tag 编码（仅独立 tag）", type: "select", default: "hex", options: ENC_OPTS },
+    );
   }
   params.push({ key: "outEnc", label: "密文编码", type: "select", default: "base64", options: ENC_OPTS });
   return params;
 }
 
+function normIncludeIv(v) {
+  const s = String(v == null || v === "" ? "off" : v).toLowerCase();
+  if (s === "off" || s === "prepend" || s === "append") return s;
+  throw new Error(`IV 包含方式仅支持 off/prepend/append（当前 ${v}）`);
+}
+function concatBytes(...arrs) {
+  let n = 0;
+  for (const a of arrs) n += a.length;
+  const out = new Uint8Array(n);
+  let off = 0;
+  for (const a of arrs) { out.set(a, off); off += a.length; }
+  return out;
+}
+
 function makeBlockOp(encFn, decFn) {
-  const encode = (text, p) => {
-    const key = decodeInput(p.key || "", p.keyEnc || "utf8");
+  const opts = (p) => {
     const mode = (p.mode || "ECB").toUpperCase();
     const iv = p.iv ? decodeInput(p.iv, p.ivEnc || "hex") : undefined;
     const aad = p.aad ? te(p.aad) : undefined;
-    return encodeOutput(encFn(te(text), key, { mode, iv, aad }), p.outEnc || "base64");
+    const padding = p.padding || "pkcs7";
+    const tagLen = p.tagLen ? Number(p.tagLen) / 8 : undefined; // 位 → 字节
+    const rounds = p.rounds != null && p.rounds !== "" ? Number(p.rounds) : undefined;
+    const includeIv = normIncludeIv(p.includeIv);
+    return { mode, iv, aad, padding, tagLen, rounds, includeIv };
+  };
+  const encode = (text, p) => {
+    const key = decodeInput(p.key || "", p.keyEnc || "utf8");
+    const o = opts(p);
+    let out = encFn(te(text), key, o);
+    if (o.mode === "GCM" && o.includeIv !== "off") {
+      if (!o.iv) throw new Error("GCM 需提供 nonce（IV）");
+      out = o.includeIv === "prepend" ? concatBytes(o.iv, out) : concatBytes(out, o.iv);
+    }
+    return encodeOutput(out, p.outEnc || "base64");
   };
   const decode = (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
-    const mode = (p.mode || "ECB").toUpperCase();
-    const iv = p.iv ? decodeInput(p.iv, p.ivEnc || "hex") : undefined;
-    const aad = p.aad ? te(p.aad) : undefined;
-    const data = decodeInput(text.trim(), p.outEnc || "base64");
-    return td(decFn(data, key, { mode, iv, aad }));
+    let data = decodeInput(text.trim(), p.outEnc || "base64");
+    const o = opts(p);
+    const tagRaw = String(p.tag == null ? "" : p.tag);
+    const tagEnc = p.tagEnc || "hex";
+    const sepTag = (tagEnc === "hex" || tagEnc === "base64") ? tagRaw.trim() : tagRaw;
+    if (o.mode === "GCM" && o.includeIv !== "off" && !o.iv && !sepTag) {
+      const tl = o.tagLen != null ? o.tagLen : 16;
+      const candidates = [...new Set([Number(p.ivLen) || 12, 12, 16])];
+      let lastErr = null;
+      for (const ivLen of candidates) {
+        if (data.length < ivLen + tl) continue;
+        const iv = o.includeIv === "prepend" ? data.subarray(0, ivLen) : data.subarray(data.length - ivLen);
+        const body = o.includeIv === "prepend" ? data.subarray(ivLen) : data.subarray(0, data.length - ivLen);
+        try { return td(decFn(body, key, { ...o, iv })); }
+        catch (e) { lastErr = e; }
+      }
+      throw lastErr || new Error("GCM Include IV 解密失败：无法确定 IV 长度");
+    }
+    if (o.mode === "GCM" && o.includeIv !== "off") {
+      const explicit = o.iv;
+      const ivLen = explicit ? explicit.length : (Number(p.ivLen) || 12);
+      const tl = o.tagLen != null ? o.tagLen : 16;
+      const need = ivLen + (sepTag ? 0 : tl);
+      if (data.length < need) throw new Error(sepTag
+        ? `密文过短，无法取出 ${ivLen} 字节 IV`
+        : `密文过短，无法取出 ${ivLen} 字节 IV 与 ${tl} 字节 tag`);
+      let iv;
+      if (o.includeIv === "prepend") {
+        iv = data.subarray(0, ivLen);
+        data = data.subarray(ivLen);
+      } else {
+        iv = data.subarray(data.length - ivLen);
+        data = data.subarray(0, data.length - ivLen);
+      }
+      o.iv = explicit || iv;
+    }
+    if (o.mode === "GCM" && sepTag) {
+      const tl = o.tagLen != null ? o.tagLen : 16;
+      const tag = decodeInput(sepTag, tagEnc);
+      if (tag.length !== tl) throw new Error(`GCM 独立 tag 需 ${tl} 字节（当前 ${tag.length} 字节）`);
+      data = concatBytes(data, tag);
+    }
+    return td(decFn(data, key, o));
   };
   return { encode, decode };
 }
@@ -919,7 +1022,7 @@ function makeBlockOp(encFn, decFn) {
 {
   const { encode, decode } = makeBlockOp(teaEncrypt, teaDecrypt);
   register({
-    id: "tea", family: "tea", familyLabel: "tea", cat: "block", name: "TEA", desc: "Tiny Encryption Algorithm（64位块，128位密钥，32轮 Feistel，Wheeler 1994；支持 ECB/CBC/CFB/OFB/CTR）",
+    id: "tea", family: "tea", familyLabel: "tea", cat: "block", name: "TEA", desc: "Tiny Encryption Algorithm（64位块，128位密钥，32轮 Feistel，Wheeler 1994；支持 ECB/CBC/CFB/OFB/CTR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
     params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "16 字节密钥"),
     encode, decode,
   });
@@ -928,8 +1031,11 @@ function makeBlockOp(encFn, decFn) {
 {
   const { encode, decode } = makeBlockOp(xteaEncrypt, xteaDecrypt);
   register({
-    id: "xtea", family: "tea", familyLabel: "xtea", cat: "block", name: "XTEA", desc: "扩展 TEA（改进密钥调度，64位块，128位密钥，32轮，Needham 1997；支持 ECB/CBC/CFB/OFB/CTR）",
-    params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "16 字节密钥"),
+    id: "xtea", family: "tea", familyLabel: "xtea", cat: "block", name: "XTEA", desc: "扩展 TEA（改进密钥调度，64位块，128位密钥，Needham 1997；支持 ECB/CBC/CFB/OFB/CTR 与 rounds 1-255）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
+    params: [
+      ...blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "16 字节密钥"),
+      { key: "rounds", label: "轮数（默认 32）", type: "number", default: 32, min: 1, max: 255, step: 1 },
+    ],
     encode, decode,
   });
 }
@@ -960,14 +1066,14 @@ function makeBlockOp(encFn, decFn) {
   const { encode, decode } = makeBlockOp(sm4Encrypt, sm4Decrypt);
   register({
     id: "sm4", family: "sm4", familyLabel: "encdec", cat: "block", name: "SM4",
-    desc: "国密分组密码（GB/T 32907-2016，前身 GM/T 0002-2012；128位块，128位密钥，32轮非线性迭代。模式：ECB/CBC/CFB/OFB/CTR + GCM 认证加密）",
+    desc: "国密分组密码（GB/T 32907-2016，前身 GM/T 0002-2012；128位块，128位密钥，32轮非线性迭代。模式：ECB/CBC/CFB/OFB/CTR + GCM 认证加密）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；GCM 支持 AAD、tagLen(128…32 位)、Include IV(off/prepend/append) 与解密独立 tag；流模式忽略填充",
     params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR", "GCM"], "16 字节密钥（hex 32 字符）"),
     encode, decode,
   });
 }
 
 // Salsa20 / ChaCha20（流密码，自反：encode=decode）
-// nonce/counter 由 register 层解析；nonce 编码默认 hex（CTF 常见给 hex nonce）。
+// nonce/counter 由 register 层解析；nonce 编码默认 hex（CTF 常见给 hex nonce）。rounds = 20/12/8。
 function makeStreamCipherOp(fn, keyHint, nonceHint) {
   const params = [
     { key: "key", label: "密钥", type: "text", default: "", placeholder: keyHint },
@@ -975,34 +1081,38 @@ function makeStreamCipherOp(fn, keyHint, nonceHint) {
     { key: "nonce", label: "Nonce", type: "text", default: "", placeholder: nonceHint },
     { key: "nonceEnc", label: "Nonce 编码", type: "select", default: "hex", options: ENC_OPTS },
     { key: "counter", label: "初始计数器", type: "number", default: 0 },
+    { key: "rounds", label: "轮数", type: "select", default: "20",
+      options: [{ value: "20", label: "20" }, { value: "12", label: "12" }, { value: "8", label: "8" }] },
     { key: "outEnc", label: "密文编码", type: "select", default: "base64", options: ENC_OPTS },
   ];
   const encode = (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "hex");
     const nonce = decodeInput(p.nonce || "", p.nonceEnc || "hex");
     const counter = Number(p.counter) || 0;
-    return encodeOutput(fn(te(text), key, nonce, counter), p.outEnc || "base64");
+    const rounds = p.rounds ? Number(p.rounds) : 20;
+    return encodeOutput(fn(te(text), key, nonce, counter, rounds), p.outEnc || "base64");
   };
   const decode = (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "hex");
     const nonce = decodeInput(p.nonce || "", p.nonceEnc || "hex");
     const counter = Number(p.counter) || 0;
+    const rounds = p.rounds ? Number(p.rounds) : 20;
     const data = decodeInput(text.trim(), p.outEnc || "base64");
-    return td(fn(data, key, nonce, counter));
+    return td(fn(data, key, nonce, counter, rounds));
   };
   return { params, encode, decode };
 }
 {
   const { params, encode, decode } = makeStreamCipherOp(salsa20, "16 或 32 字节密钥", "8 字节 nonce");
   register({
-    id: "salsa20", cat: "stream", name: "Salsa20", desc: "Salsa20/20 流密码（Bernstein，key 16/32 字节，nonce 8 字节，64位块计数器）",
+    id: "salsa20", cat: "stream", name: "Salsa20", desc: "Salsa20 流密码（Bernstein，key 16/32 字节，nonce 8 字节，64位块计数器；rounds 20/12/8）",
     params, encode, decode,
   });
 }
 {
-  const { params, encode, decode } = makeStreamCipherOp(chacha20, "32 字节密钥", "12 字节 nonce");
+  const { params, encode, decode } = makeStreamCipherOp(chacha20, "32 字节密钥", "12 字节（RFC 8439）或 8 字节（原版）nonce");
   register({
-    id: "chacha20", cat: "stream", name: "ChaCha20", desc: "ChaCha20 流密码（RFC 8439，key 32 字节，nonce 12 字节，32位块计数器）",
+    id: "chacha20", cat: "stream", name: "ChaCha20", desc: "ChaCha20 流密码（key 32 字节；nonce 12 字节 RFC 8439 / 8 字节原版 64 位计数器；rounds 20/12/8）",
     params, encode, decode,
   });
 }

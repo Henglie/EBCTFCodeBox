@@ -529,7 +529,7 @@ register({
     { key: "m", label: "明文整数 m（0 ≤ m < t）", type: "number", default: 42 },
     { key: "ctA", label: "密文 A（hex，decrypt/add/mul 用）", type: "text", default: "", placeholder: "分量之间用 ; 分隔" },
     { key: "ctB", label: "密文 B（hex，add/mul 用）", type: "text", default: "", placeholder: "分量之间用 ; 分隔" },
-    { key: "seed", label: "随机种子（decrypt/add/mul 必填）", type: "text", default: "bfv-toy", placeholder: "同 seed 完全复现；留空则用当前随机档位" },
+    { sensitive: true, key: "seed", label: "随机种子（decrypt/add/mul 必填）", type: "text", default: "bfv-toy", placeholder: "同 seed 完全复现；留空则用当前随机档位" },
   ],
   run: (_text, p) => bfvRun(p).text,
 });

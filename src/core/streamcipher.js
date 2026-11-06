@@ -580,7 +580,7 @@ register({
         { value: "standard", label: "CryptoJS 标准" },
         { value: "rfc", label: "RFC 4503 文档方向（0.1.9 及更早）" },
       ] },
-    { key: "key", label: "密钥 / 口令", type: "text", default: "", placeholder: "32 位 hex 密钥；其他内容按口令（CryptoJS 封装）处理" },
+    { sensitive: true, key: "key", label: "密钥 / 口令", type: "password", default: "", placeholder: "32 位 hex 密钥；其他内容按口令（CryptoJS 封装）处理" },
     { key: "iv", label: "IV（hex，8 字节，可留空）", type: "text", default: "", placeholder: "仅密钥模式使用；留空 = 无 IV" },
     { key: "crackList", label: "口令爆破候选（可选）", type: "textarea", default: "", rows: 3,
       placeholder: "每行一条（或逗号分隔）。输入为 CryptoJS 密文且未直接命中时，连同内置常见口令逐条尝试，只列出可读结果" },

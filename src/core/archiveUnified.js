@@ -564,7 +564,7 @@ register({
         { value: "extract", label: "解压（x）" },
       ],
     },
-    { key: "password", label: "密码（7z/RAR 加密档案，可空）", type: "text", default: "", placeholder: "7z 加密档案填密码" },
+    { sensitive: true, key: "password", label: "密码（7z/RAR 加密档案，可空）", type: "password", default: "", placeholder: "7z 加密档案填密码" },
   ],
   run: archiveUnifiedReport,
   detect: archiveUnifiedDetect,

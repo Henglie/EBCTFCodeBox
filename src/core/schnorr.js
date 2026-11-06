@@ -263,7 +263,7 @@ register({
   desc: "经典 Schnorr 签名（secp256k1，挑战 e=H(R.x‖P.x‖m) mod n）：R=k·G，s=(k+e·d) mod n，签名=(e,s)。私钥留空随机。⚠ 两条消息复用同一 nonce k 会泄露私钥（教学可用）",
   params: [
     { key: "msgMode", label: "消息形式", type: "select", default: "text", options: [{ value: "text", label: "文本" }, { value: "hex", label: "Hex" }] },
-    { key: "priv", label: "私钥 d (hex)", type: "text", default: "", placeholder: "留空随机" },
+    { sensitive: true, key: "priv", label: "私钥 d (hex)", type: "text", default: "", placeholder: "留空随机" },
     { key: "nonce", label: "nonce k (hex, 可选)", type: "text", default: "", placeholder: "留空随机；固定值用于演示重用攻击" },
   ],
   run: (text, p) => {

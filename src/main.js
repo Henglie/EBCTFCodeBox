@@ -26,6 +26,8 @@ import { magicFilterReset, filterMagicCands, filterBruteCands, magicFilterBar } 
 import { magicDecode } from "./core/magic/magic.js";
 import { runMagic, cancelMagic, pauseMagic, resumeMagic } from "./core/magic/magicClient.js"; // 真多线程调度（Worker 优先，降级主线程）+ 中断/暂停接管
 import { createResultToc } from "./ui/resultToc.js"; // 一键解码结果右侧浮动缩略目录
+import { batchPanel } from "./ui/batchPanel.js"; // 批处理面板（多文件 / 目录 + ZIP，T696）
+import { planBatch as batchPlanBatch, runBatch as batchRunBatch, buildZip as batchBuildZip, makeCancelToken as batchMakeCancelToken } from "./core/batchRun.js"; // 批处理内核
 // fileAnalysis / imageAnalysis / audioAnalysis（智能分析三链，含 QR·pcap·inflate·音频子树）已改懒载，见 ensureAnalysisChains()
 import { loadLicense, OPENSOURCE_LICENSE } from "./core/license.js";
 import { analyze7zFile } from "./core/sevenzip.js"; // 7z 拖入文件真列表/解压（wasm 缺失降级）
@@ -50,13 +52,15 @@ import { renderRandSecureToggle, installRandConfig, currentRandMode, serverArmed
 import { opUsesRandom, opExternalRand, externalRandLib } from "./core/randOps.js"; // 随机性 op 白名单 + 「随机来自内置库」清单
 import { RAND_MODES, warmupServer } from "./core/randSource.js";
 import { resolveDecodeConfig, loadLastConfig, saveLastConfig } from "./core/decodeProfile.js"; // 解码强度档 → op 白名单 + 预算
-import { isExplicitRunOp, explicitRunHint, isLazyRunOp, lazyRunHint } from "./core/explicitRun.js"; // 重运算 op 显式触发白名单 + 图像惰执行清单
+import { isExplicitRunOp, explicitRunHint, isLazyRunOp, lazyRunHint, manualRunHint } from "./core/explicitRun.js"; // 重运算 op 显式触发白名单 + 图像惰执行清单
 import { runOpOffThread, cancelOpRun, opRunBusy } from "./core/opRunClient.js"; // 重 op 独立线程执行（可取消/超时）
 import { openDecodeStrength } from "./ui/decodeStrength.js"; // 「解码强度」弹窗（5 档滑块 + 参与算法多选 + 命名方案）
 import { applyAccent, enableHctEngine, DEFAULT_ACCENT, resetAccent } from "./ui/dynamicColor.js"; // M3 动态取色（HSL 近似 + HCT 精确引擎）
 import { themeVariant } from "./ui/themePicker.js";
 import { attachEditorToolbar } from "./ui/editorToolbar.js"; // 通用编辑框工具条（记事本化，全站复用）
+import { attachIoCodingToolbar } from "./ui/ioCodingToolbar.js"; // T701 全局 I/O 编码 + 文本/字节双模
 import { attachTextContextMenu } from "./ui/textContextMenu.js"; // 编辑框右键文本处理菜单
+import { attachEditHistory } from "./ui/editHistory.js"; // 通用编辑框撤销/重做（contenteditable/textarea）
 import { loadFavorites, isFavorite, toggleFavorite, openFavMenu } from "./ui/favorites.js";
 // 自定义算法（魔改）——UI 开关/编辑器 + Worker 沙箱执行（magic/穷举侧排除）
 import { renderCustomToggle } from "./ui/customImplEditor.js";
@@ -95,11 +99,18 @@ function opDesc(op) {
   const s = t(k);
   return s === k ? op.desc : s;
 }
+function allOpsLabel() {
+  const k = "ui.nav.allOps";
+  const s = t(k);
+  if (s !== k) return s;
+  return String(getLocale()).toLowerCase().startsWith("zh") ? "全部算法" : "All Operations";
+}
 
 // 副作用导入：各算法模块在加载时 register 自己。新增算法模块时在此加一行。
 // 古典补全组（古典二：VIC/Phillips/Bellaso/Slidefair/Collon/DancingMen/Zodiac/Three-square/Monome-Binome，classic 双向，多源向量对拍）
 // 编码补全组（编码一：Kuznyechik/IBAN/镜像字母/玛雅·巴比伦·埃及数字/圣书体/SGA/神秘学字母/信号旗，radix+fancy+block，多源向量对拍）
 // 取证补全组（取证一：SSDEEP 模糊哈希/LZNT1 解压/注释域提取，hash+forensic，多源对拍）
+import "./core/opensslDec.js"; // OpenSSL Salted__ 一步式口令加解密
 import "./core/opStubs.js"; // 惰载 stub 播种（须先于 detect 四件套求值）
 import "./core/detectExt.js"; // detect 补全扩展层
 import "./core/detectExt2.js"; // detect 大表补强（82 op 补 detect，提升一把梭命中率）
@@ -137,6 +148,8 @@ function disposeStegSolveView() {
   }
 }
 import { renderCodeImageViewer } from "./ui/codeImageViewer.js"; // 编码图鉴查询器（图形编码对照图）
+import { renderAllOpsView } from "./ui/allOpsView.js"; // 全部算法平铺矩阵页
+import { refreshMobileDrawerLabels } from "./ui/mobileDrawer.js"; // ≤860px 导航抽屉：自注入汉堡/遮罩；navRail() 窄屏返回 false 配合完整导航
 import { synonymsOf, expandAliases } from "./ui/searchSynonyms.js"; // 图像/视频/编码等同义词检索（只改检索，不改 op 名）
 import { exhaustiveDecode } from "./core/exhaustiveDecode.js"; // 穷举全解并入首页智能解码（末尾追加可折叠区）
 import { expandableInput, ensureExpStyles, openExpandModal } from "./ui/expandableInput.js";
@@ -275,6 +288,7 @@ function ioArea(attrs = {}) {
  // Ctrl/Meta+Enter 放行给上层的 convert 快捷键；Shift+Enter 也走纯换行。
  // 同粘贴：execCommand("insertText", "\n") 在 Chromium 吞换行 → Range 直插 + 补发 input。
     div.addEventListener("keydown", (e) => {
+      if (e.isComposing || e.keyCode === 229) return;
       if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         const sel = window.getSelection();
@@ -294,6 +308,7 @@ function ioArea(attrs = {}) {
       if (div.textContent === "") div.innerHTML = "";
     });
   }
+  if (!ro) attachEditHistory(div);
   return div;
 }
 
@@ -342,6 +357,7 @@ function buildOpReport(op) {
   const output = outEl ? outEl.value : "";
   const failed = /^✗/.test(output);
   const paramRows = (op.params || [])
+    .filter((d) => !d.sensitive)
     .map((d) => [d.key, state.params[d.key]])
     .filter(([, v]) => v !== undefined && v !== null && String(v) !== "")
     .map(([k, v]) => [k, String(v)]);
@@ -616,12 +632,13 @@ function recipeFamilyDoubleClick(event, familyId) {
 // 结构：顶部折叠开关（rail toggle）+ 分类列表。
 // 每个分类是可展开的手风琴：点分类头 → 展开二级菜单（该分类全部 op），再点某 op → selectOp。
 // 折叠态（rail）：只留图标，hover 出 tooltip；点分类图标直接跳该分类首个 op（无处摆二级）。
-// 窄屏（≤860px）CSS 强制 rail（topbar-responsive.css），JS 侧必须同步此态，否则二级菜单在 60px 宽的
-// rail 里渲染成横向溢出（穿模）。navRail() = 用户手动折叠 或 视口窄到断点。断点值与 topbar-responsive.css
-// / customImplEditor 一致（860px）。
+// 窄屏（≤860px）不再收成 rail：topbar-responsive.css 把侧栏改成默认隐藏的抽屉，mobileDrawer.js 管开合。
+// 此处窄屏返回 false，renderNav 才会渲染完整分类名/计数/二级算法名；桌面沿用用户手动折叠状态。
+// 断点值与 topbar-responsive.css / customImplEditor 一致（860px）。
 const NAV_RAIL_BP = 860;
 function navRail() {
-  return state.navCollapsed || window.innerWidth <= NAV_RAIL_BP;
+  if (window.innerWidth <= NAV_RAIL_BP) return false;
+  return state.navCollapsed;
 }
 function renderNav() {
   $nav.innerHTML = "";
@@ -638,7 +655,13 @@ function renderNav() {
   );
   $nav.append(toggle);
 
+  let pluginGroupStarted = false;
   for (const cat of CATEGORIES) {
+    if (cat.plugin && !pluginGroupStarted) {
+      pluginGroupStarted = true;
+      $nav.append(el("div", { class: "nav-plugin-sep" }));
+      if (!navRail()) $nav.append(el("div", { class: "nav-plugin-title" }, String(getLocale()).toLowerCase().startsWith("zh") ? "扩展算法" : "Extension algorithms"));
+    }
     if (cat.id === "base") $nav.append(renderFavNav());
     const isHome = cat.id === "home";
     const count = isHome ? 0 : opsByCat(cat.id).length;
@@ -946,6 +969,15 @@ function goHome() {
   renderWorkspace();
 }
 
+function goAllOps() {
+  state.view = "all";
+  state.opId = null;
+  state.expandedCats = [];
+  writeHash("#/all");
+  renderNav();
+  renderWorkspace();
+}
+
 function selectOp(id) {
   const op = getOp(id);
   if (!op) return;
@@ -988,7 +1020,13 @@ function writeHash(h) {
 function applyRoute() {
   const h = location.hash || "";
   const m = h.match(/^#\/op\/(.+)$/);
-  if (h === "#/recipe" || h.startsWith("#/recipe?")) {
+  if (h === "#/all") {
+    state.view = "all";
+    state.opId = null;
+    state.expandedCats = [];
+    renderNav();
+    renderWorkspace();
+  } else if (h === "#/recipe" || h.startsWith("#/recipe?")) {
     state.view = "recipe";
     state.opId = null;
     state.expandedCats = [];
@@ -1076,7 +1114,19 @@ window.addEventListener("hashchange", () => {
 // ============ 工作区渲染 ============
 // 上次渲染的 view/opId——用于「真实视图切换才取消」的判定（见 renderWorkspaceInner 内）。
 let _wsView = null, _wsOpId = null;
+let _docTitleAll = false;
+function syncDocTitle() {
+  const base = appDisplayName() || t("ui.brand.title");
+  if (state.view === "all") {
+    document.title = allOpsLabel() + " · " + base;
+    _docTitleAll = true;
+  } else if (_docTitleAll) {
+    document.title = base;
+    _docTitleAll = false;
+  }
+}
 function renderWorkspaceInner() {
+  syncDocTitle();
   // 离开字符显示器视图：释放 _rerender 闭包对旧视图 DOM 的引用（性能审计 H3，
   // hex 满载可达 13.9 万节点，不释放则逛其他视图的整段时间不可回收）
   if (state.view !== "inspect") disposeInspectView();
@@ -1104,6 +1154,7 @@ function renderWorkspaceInner() {
   }
   $ws.innerHTML = "";
   if (state.view === "home") return renderHome();
+  if (state.view === "all") return renderAllOpsView($ws);
   if (state.view === "recipe") return renderRecipe($ws);
   if (state.view === "exhaust") return renderExhaustive($ws);
   if (state.view === "inspect") {
@@ -1206,6 +1257,109 @@ function renderPluginsView(host) {
     });
 }
 
+// ---- 批处理入口（T696）----
+// 多文件 / 目录拖入 → 批处理面板；单文件仍走原有 processFile / loadFileIntoArea，路径不变。
+// 面板用独立 modal 承载，不改工作区布局；op 页入口把当前 op + 参数快照传给面板。
+let _batchOverlay = null;
+
+// 把当前 op 包装成面板认的执行器：显式定方向（state.dir），并暴露 acceptsBytes。
+function currentBatchOp() {
+  const op = getOp(state.opId);
+  if (!op || op.__stub || op.requiresBridge) return null;
+  const dir = state.dir === "encode" ? "encode" : "decode";
+  const fn = (dir === "encode" ? op.encode : op.decode) || op.run;
+  if (typeof fn !== "function") return null;
+  return {
+    id: op.id,
+    name: opName(op),
+    acceptsBytes: !!op.acceptsBytes,
+    run: (text, params) => fn(text, params),
+  };
+}
+
+// 单文件保持原路径；只有 2+ 文件或含目录才分流到批处理。
+function isBatchDrop(dt) {
+  if (!dt) return false;
+  if (dt.files && dt.files.length > 1) return true;
+  const items = dt.items;
+  if (!items || !items.length) return false;
+  let fileCount = 0;
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (!it || it.kind !== "file") continue;
+    fileCount++;
+    if (typeof it.webkitGetAsEntry !== "function") continue;
+    try {
+      const entry = it.webkitGetAsEntry();
+      if (entry && entry.isDirectory) return true;
+    } catch { /* 未知条目按普通文件处理 */ }
+  }
+  return fileCount > 1;
+}
+
+function openBatchDialog(dt, opts) {
+  if (_batchOverlay) return null;
+  ensureExpStyles();
+  const o = opts || {};
+  const title = (o.op && o.op.name) ? "批量处理 · " + o.op.name : "批量处理";
+  const previousFocus = document.activeElement;
+  const overlay = el("div", { class: "exp-overlay batch-overlay" });
+  const dialog = el("div", { class: "exp-dialog batch-dialog", role: "dialog", "aria-modal": "true", "aria-label": title });
+  const closeBtn = el("button", { type: "button", class: "exp-close", title: "关闭", "aria-label": "关闭" }, msym("close"));
+  const host = el("div", { class: "batch-host" });
+  dialog.append(el("div", { class: "exp-head" }, el("div", { class: "exp-title" }, title), closeBtn), host);
+  overlay.append(dialog);
+  document.body.append(overlay);
+
+  let panel;
+  try {
+    panel = batchPanel({
+      planBatch: batchPlanBatch,
+      runBatch: batchRunBatch,
+      buildZip: batchBuildZip,
+      makeCancelToken: batchMakeCancelToken,
+      op: o.op || null,
+      params: o.params || {},
+      t,
+      download: (bytes, name, mime) => cloudWarnGate(() => downloadBytes(bytes, name, mime)),
+    });
+  } catch (e) {
+    overlay.remove();
+    toast("批处理面板初始化失败：" + ((e && e.message) ? e.message : String(e)));
+    return null;
+  }
+  host.append(panel);
+  _batchOverlay = overlay;
+
+  let closed = false;
+  let life = null;
+  function close() {
+    if (closed) return;
+    // 运行中关窗会让批处理变成看不见的后台任务，先要求取消或等完成。
+    if (panel.isBusy && panel.isBusy()) {
+      toast("批处理进行中：请先取消或等待完成");
+      return;
+    }
+    closed = true;
+    overlay.classList.add("exp-closing");
+    if (life) life.release();
+    setTimeout(() => {
+      overlay.remove();
+      if (_batchOverlay === overlay) _batchOverlay = null;
+    }, 250);
+  }
+  life = attachModalLifecycle(overlay, { dialog, onClose: close, initialFocus: ".bp-drop", restoreFocusTo: previousFocus });
+  closeBtn.addEventListener("click", close);
+
+  if (dt) {
+    Promise.resolve(panel.acceptDataTransfer(dt)).catch((e) => {
+      toast("读取拖入条目失败：" + ((e && e.message) ? e.message : String(e)));
+    });
+  }
+  if (Array.isArray(o.files) && o.files.length) panel.setFiles(o.files);
+  return panel;
+}
+
 // ---- 一把梭首页（Magic 智能识别）----
 function renderHome() {
   const wrap = el("div", { class: "home-hero" });
@@ -1267,6 +1421,11 @@ function renderHome() {
     class: "chip-btn", type: "button", title: t("ui.home.uploadFile"),
     onclick: () => { if (filePicker) filePicker.click(); },
   }, msym("attach_file"), el("span", {}, t("ui.home.uploadFile")));
+  // 批量处理入口：不抢占单文件按钮，单独一个 chip；也可直接把多个文件/文件夹拖进输入框。
+  const batchBtn = el("button", {
+    class: "chip-btn batch-open", type: "button", title: "批量处理",
+    onclick: () => openBatchDialog(null, {}),
+  }, msym("layers"), el("span", {}, "批量处理"));
   const toolbar = el("div", { class: "magic-toolbar" },
  // 第一行：目标特征
     el("div", { class: "magic-row" },
@@ -1280,6 +1439,7 @@ function renderHome() {
     el("div", { class: "magic-row magic-row-actions" },
       strengthBtn,
       uploadBtn,
+      batchBtn,
       runBtn,
     ),
   );
@@ -1373,6 +1533,7 @@ function renderHome() {
   input.addEventListener("drop", async (e) => {
     e.preventDefault();
     input.classList.remove("dragover");
+    if (isBatchDrop(e.dataTransfer)) { openBatchDialog(e.dataTransfer, {}); return; }
     const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (f) await processFile(f);
   });
@@ -1623,12 +1784,9 @@ async function runOneKey(text, outWrap, crib, strengthCfg, force = false, topBan
 
   renderMagicCands(outWrap, q, cands, crib);
   runBar.setDone(cands.length);
-  setTimeout(() => {
-    if (!runBar.isStopped() && outWrap.__runbar === runBar) {
-      runBar.dispose();
-      outWrap.__runbar = null;
-    }
-  }, 2500);
+  // 保留外层「一键解码」运行条直到下一次运行：多段解码（文本→图片→图片分析）
+  // 期间嵌套 handleFile 会再生成自己的运行条，两层进度都可见；不再 2.5s 后提前销毁。
+  // 条本身 position:static，会随页面滚动离开视口，不再始终悬浮遮挡内容。
 
  // 暴力爆破独立通道（decodeProfile 独立池勾选的 op）：主排序之外单独归组跑，
  // 结果追加在候选区末尾、不参与 magic 综合分排序。每个 op 30s 兜底超时。
@@ -2899,7 +3057,7 @@ function pickFileIntoArea(ta, onLoaded) {
   inp.click();
 }
 
-function attachDropDecode(ta, onLoaded) {
+function attachDropDecode(ta, onLoaded, batchCtx) {
   ta.addEventListener("dragover", (e) => { e.preventDefault(); ta.classList.add("dragover"); });
   ta.addEventListener("dragleave", () => ta.classList.remove("dragover"));
  // 手动编辑 → 原始字节缓存失效（拖入的文件字节已与框内文本脱钩），占位态也一并解除
@@ -2907,6 +3065,12 @@ function attachDropDecode(ta, onLoaded) {
   ta.addEventListener("drop", async (e) => {
     e.preventDefault();
     ta.classList.remove("dragover");
+    // 多文件 / 目录 → 批处理面板；单文件完全沿用原 loadFileIntoArea 路径。
+    if (isBatchDrop(e.dataTransfer)) {
+      const b = (typeof batchCtx === "function") ? batchCtx() : {};
+      openBatchDialog(e.dataTransfer, b || {});
+      return;
+    }
     const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (f) await loadFileIntoArea(ta, f, onLoaded);
   });
@@ -2914,7 +3078,7 @@ function attachDropDecode(ta, onLoaded) {
 
 // ---- 单 op 操作面板 ----
 // Shared by workspace family tabs and the search index.
-const FAM_LBL_ZH = { "fam.lbl.attack": "重用 k 攻击", "fam.lbl.sharedPub": "由公钥推导", "fam.lbl.homAdd": "同态加", "fam.lbl.scan": "扫描", "fam.lbl.formatBrute": "爆破", "fam.lbl.smartReport": "智能报告" };
+const FAM_LBL_ZH = { "fam.lbl.attack": "重用 k 攻击", "fam.lbl.sharedPub": "由公钥推导", "fam.lbl.homAdd": "同态加", "fam.lbl.scan": "扫描", "fam.lbl.formatBrute": "爆破", "fam.lbl.smartReport": "智能报告", "fam.lbl.rail": "经典栅栏", "fam.lbl.redefence": "Redefence 重排", "fam.lbl.compress": "压缩", "fam.lbl.decompress": "解压" };
 // 弹簧动效总开关：默认开（产品负责人 2026-09-12 真机验演示后批准第一批灰度）；'0'=整体回退 CSS 动画
 document.documentElement.classList.toggle("spring-motion", localStorage.getItem("ebctf.springMotion") !== "0");
 const _segThumbPos = new Map(); // 族滑块指示器跨渲染位置记忆
@@ -3136,9 +3300,20 @@ function renderOp() {
   if (!op) return renderHome();
   if (op.id === "cryptoTryAll") return renderCryptoTryAll(op);
 
+  const versionBits = [
+    op.isNew ? `新增于 ${op.addedIn || op.since || "本版"}` : "",
+    op.updatedIn ? `更新于 ${op.updatedIn}` : "",
+    op.since ? `批次 ${op.since}` : "",
+  ].filter(Boolean);
+  const versionBadge = (op.isNew || op.updatedIn)
+    ? el("span", {
+        class: "op-new-badge" + (op.isNew ? "" : " op-updated-badge"),
+        title: versionBits.join(" · "),
+      }, t(op.isNew ? "ui.op.newBadge" : "ui.op.updatedBadge"))
+    : null;
   const head = el("div", { class: "op-head" },
     el("div", { class: "op-title" }, msym(CATEGORIES.find((c) => c.id === op.cat)?.icon || "tag"),
-      op.requiresBridge ? el("span", { class: "exe-badge" }, "EXE") : null, opName(op)),
+      op.requiresBridge ? el("span", { class: "exe-badge" }, "EXE") : null, opName(op), versionBadge),
     opDescEl(op),
   );
   $ws.append(head);
@@ -3306,6 +3481,7 @@ function renderOp() {
     : ioArea({ class: "io-area", placeholder: t("ui.op.inPlaceholder") });
   const outArea = ioArea({ class: "io-area", placeholder: t("ui.op.outPlaceholder"), readonly: true });
   inArea.id = "ioIn"; outArea.id = "ioOut";
+  attachEditHistory(inArea); // verbatimInput 的 textarea 也走统一撤销；ioArea 已挂则幂等
  // 会话态字号（不持久化）
   inArea.style.fontSize = state.ioFont + "px";
   outArea.style.fontSize = state.ioFont + "px";
@@ -3351,7 +3527,9 @@ function renderOp() {
    // 重运算 op（explicitRun 白名单）：独立线程跑，主线程零阻塞；运行卡 = 读秒 + 取消。
    // 随机源非 system 档时**强制走主线程**（Worker 拿不到用户熵，否则会静默退回
    // system 档 —— 违反「禁静默降级」）。此处是唯一的 Worker 入口，加档位守卫即可全覆盖。
-    if (isExplicitRunOp(op.id) && op.run && !op.requiresBridge && currentRandMode() === RAND_MODES.SYSTEM) {
+    const customImpl = getCustomImpl(op.id);
+    const useCustomImpl = customImpl && customImpl.enabled && customImpl.code && customImpl.code.trim();
+    if (isExplicitRunOp(op.id) && op.run && !op.requiresBridge && currentRandMode() === RAND_MODES.SYSTEM && !useCustomImpl) {
       const outArea = document.getElementById("ioOut");
       const mediaBox = document.getElementById("ioOutMedia");
       if (!outArea) { convert(); return; }
@@ -3368,17 +3546,31 @@ function renderOp() {
         const runParams = (op.acceptsBytes && !hasFields && inArea && inArea._rawBytes)
           ? { ...state.params, rawBytes: inArea._rawBytes, rawFileName: inArea._rawFileName }
           : { ...state.params };
-        const out = await runOpOffThread(op.id, inArea.value, runParams, { dir: state.dir });
+        const ioCtl = inArea && inArea.__ioCoding;
+        let runInput = inArea.value;
+        if (ioCtl) {
+          const prepared = ioCtl.prepareInput(runInput, {
+            params: runParams,
+            acceptsBytes: !!op.acceptsBytes,
+            rawBytes: !hasFields && inArea ? inArea._rawBytes : null,
+          });
+          runInput = prepared.text;
+          ioCtl.reportWarnings(prepared.warnings);
+          if (op.acceptsBytes && prepared.bytes) {
+            runParams.rawBytes = prepared.bytes;
+            runParams.rawFileName = inArea && inArea._rawFileName;
+          }
+        }
+        const out = await runOpOffThread(op.id, runInput, runParams, { dir: state.dir });
         clearInterval(tick); busy.remove();
        // 对象产物协议与 convert() 同口径：text 进输出框，files 渲染下载按钮。
         let outText = out, outFiles = null;
         if (out && typeof out === "object") { outText = out.text != null ? out.text : ""; outFiles = "files" in out ? productFileEntries(out) : null; }
-        outArea.value = outText;
-        outArea.classList.remove("error");
-        renderOutMedia(mediaBox, outText);
-        renderOutFiles(mediaBox, outFiles);
+        rememberOpOutput(op.id, out, outText, outFiles, runParams);
+        applyOpOutput(_lastOpOutput);
       } catch (e) {
         clearInterval(tick); busy.remove();
+        _lastOpOutput = null;
         const msg = e.message === "timeout" ? "已超时中止" : (e.message === "cancelled" ? "已取消" : "✗ " + e.message);
         outArea.value = msg;
         outArea.classList.toggle("error", e.message !== "cancelled");
@@ -3451,6 +3643,13 @@ function renderOp() {
         el("span", { class: "io-pane-title" }, t("ui.op.inTitle")),
         el("div", { class: "io-pane-tools" },
           fontDec, fontInc,
+          el("button", {
+            class: "tool-btn batch-open", type: "button", title: "批量处理（当前 op）",
+            "aria-label": "批量处理（当前 op）",
+            onclick: () => openBatchDialog(null, { op: currentBatchOp(), params: { ...state.params } }),
+          }, msym("layers")),
+          hasFields ? null : toolBtn("undo", t("ui.op.undo"), () => inArea.__editHistory?.undo()),
+          hasFields ? null : toolBtn("redo", t("ui.op.redo"), () => inArea.__editHistory?.redo()),
           hasFields ? null : toolBtn("content_paste", t("ui.op.paste"), async () => { try { inArea.value = await navigator.clipboard.readText(); invalidateFileBytes(inArea); } catch { toast(t("ui.toast.clipFail")); } }),
           hasFields ? null : toolBtn("cloud_upload", t("ui.op.pickFile"), () => pickFileIntoArea(inArea, triggerConvert)),
           hasFields ? null : toolBtn("select_all", t("ui.op.selectAll"), () => selectAllIO(inArea)),
@@ -3479,6 +3678,22 @@ function renderOp() {
   );
   $ws.append(io);
 
+  // T701 全局 I/O 编码工具栏：只在主输入框存在时挂；输出框引用交给 controller 统一格式化。
+  if (!hasFields && showInput) {
+    attachIoCodingToolbar(inArea, {
+      outArea,
+      onChange: () => triggerConvert(),
+      getOp: () => op,
+      getParams: () => state.params,
+    });
+    attachIoCodingToolbar(outArea, {
+      scope: "output",
+      onChange: () => rerenderOpOutput(),
+      getOp: () => op,
+      getParams: () => state.params,
+    });
+  }
+
  // 不做 input 实时转换（增删过程性能浪费）。Ctrl+Enter 快捷触发。
   inArea.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); triggerConvert(); }
@@ -3489,7 +3704,7 @@ function renderOp() {
 
  // 所有 op 输入框都继承首页智能框——无条件支持拖入文件（isTextFile 判定：文本读进框
  // 二进制才转 hex）。原先只在 !hasFields 时挂，导致带参 op（加密/编码带 key 的）拖文件无智能识别。
-  attachDropDecode(inArea, triggerConvert);
+  attachDropDecode(inArea, triggerConvert, () => ({ op: currentBatchOp(), params: { ...state.params } }));
 
  // 编辑框右键文本处理菜单（智能分段/删空格换行/大小写/反转/金额转中文…）。
  // op 框不走 editorToolbar，故在此直接挂 attachTextContextMenu。输入框可写（onChange 触发转换）
@@ -3841,6 +4056,76 @@ function updateDirSeg() {
   HLSpring.to(thumb, { x: onBtn.offsetLeft }, { stiffness: 1422, damping: 57 });
 }
 
+function attachTextFileDrop(target, apply, accept) {
+  const over = (e) => { e.preventDefault(); target.classList.add("dragover"); };
+  const leave = () => target.classList.remove("dragover");
+  const drop = (e) => {
+    e.preventDefault();
+    target.classList.remove("dragover");
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => apply(String(rd.result || ""));
+    rd.readAsText(f);
+  };
+  target.addEventListener("dragover", over);
+  target.addEventListener("dragleave", leave);
+  target.addEventListener("drop", drop);
+  return target;
+}
+
+const MASK_CSS_SUPPORTED = typeof document !== "undefined" && (() => {
+  try { const i = document.createElement("input"); return "webkitTextSecurity" in i.style; } catch { return false; }
+})();
+// 遮罩态读取：textarea / CSS 遮罩输入框看 .is-masked；不支持的浏览器 input 看原生 type=password。
+function isMasked(input) {
+  if (!input) return false;
+  if (input.tagName === "TEXTAREA") return input.classList.contains("is-masked");
+  if (input.dataset && input.dataset.maskCss === "1") return input.classList.contains("is-masked");
+  return input.type === "password";
+}
+// 遮罩切换：支持 -webkit-text-security 时统一加/去 .is-masked（样式层遮蔽，value 仍为明文供运算）；
+// 不支持时 input 退回 type=password（原生圆点），textarea 由 app.css 的 @supports 分支做等价遮蔽。
+function applyMask(input, masked) {
+  if (!input) return;
+  if (input.tagName === "TEXTAREA") { input.classList.toggle("is-masked", !!masked); return; }
+  if (input.dataset && input.dataset.maskCss === "1") { input.classList.toggle("is-masked", !!masked); return; }
+  input.type = masked ? "password" : "text";
+}
+function makeMaskedInput(attrs) {
+  const cssMask = MASK_CSS_SUPPORTED;
+  const inp = el("input", { ...attrs, type: cssMask ? "text" : "password" });
+  if (cssMask) { inp.dataset.maskCss = "1"; inp.classList.add("is-masked"); }
+  return inp;
+}
+// 眼睛按钮：当前遮罩→显示「眼睛」(点=显示)，当前可见→显示「闭眼」(点=隐藏)。
+// aria-pressed=true 表示处于遮罩态；点击时先读当前态取反，再同步图标/title/aria 三处。
+function secretEyeButton(getInput, getWrap, opts = {}) {
+  const defaultHidden = opts.defaultHidden !== false;
+  const sync = (masked) => {
+    btn.innerHTML = "";
+    btn.append(msym(masked ? "visibility" : "visibility_off"));
+    btn.title = t(masked ? "ui.io.showSecret" : "ui.io.hideSecret");
+    btn.setAttribute("aria-label", btn.title);
+    btn.setAttribute("aria-pressed", String(!masked));
+  };
+  const btn = el("button", {
+    type: "button", class: "exp-btn param-bigta-btn secret-eye-btn",
+    title: t(defaultHidden ? "ui.io.showSecret" : "ui.io.hideSecret"),
+    "aria-label": t(defaultHidden ? "ui.io.showSecret" : "ui.io.hideSecret"),
+    "aria-pressed": String(!defaultHidden),
+  }, msym(defaultHidden ? "visibility" : "visibility_off"));
+  btn.addEventListener("click", () => {
+    const input = getInput();
+    if (!input) return;
+    const nextMasked = !isMasked(input);
+    applyMask(input, nextMasked);
+    sync(nextMasked);
+  });
+  return btn;
+}
+const REVEALABLE_KEY_RE = /^(key|keys|dict|seed|salt|keyword|alphabet|pass|pwd|password|secret|token|nonce|iv)$/i;
+
 function renderParam(op, d) {
   const wrap = el("div", { class: "param" });
   const id = "p_" + d.key;
@@ -3861,7 +4146,10 @@ function renderParam(op, d) {
   } else if (d.type === "number") {
  // M3 stepper 自实现，替代浏览器原生 spinner。[−][input][＋] flex 容器。
     const min = d.min ?? null, max = d.max ?? null, step = d.step ?? 1;
-    const inp = el("input", { type: "text", inputmode: "numeric", id, class: "stepper-inp", placeholder: d.placeholder || "" });
+    const numericSecret = !!d.sensitive || REVEALABLE_KEY_RE.test(String(d.key));
+    const inp = numericSecret
+      ? makeMaskedInput({ id, inputmode: "numeric", class: "stepper-inp", placeholder: d.placeholder || "", autocomplete: "off" })
+      : el("input", { type: "text", inputmode: "numeric", id, class: "stepper-inp", placeholder: d.placeholder || "", autocomplete: "on" });
     inp.value = state.params[d.key] ?? "";
     const clamp = (n) => {
       if (Number.isNaN(n)) return n;
@@ -3888,23 +4176,45 @@ function renderParam(op, d) {
       return b;
     };
     const box = el("div", { class: "stepper" }, btn("remove", -1, "减"), inp, btn("add", 1, "加"));
-    wrap.append(el("label", { for: id }, d.label), box);
+    if (numericSecret) wrap.append(el("label", { for: id }, d.label), el("div", { class: "param-bigbox secret-field" }, box, secretEyeButton(() => inp, () => wrap, { defaultHidden: true })));
+    else wrap.append(el("label", { for: id }, d.label), box);
   } else if (d.ui === "bigText" || d.type === "textarea") {
     wrap.classList.add("param-big");
+    if (d.sensitive) wrap.classList.add("param-sensitive");
     const ta = el("textarea", { id, class: "param-bigta", rows: String(Math.min(10, Math.max(3, d.rows ?? 5))),
       placeholder: d.placeholder || "", spellcheck: "false", autocomplete: "off" });
     ta.value = state.params[d.key] ?? "";
+    if (d.sensitive) applyMask(ta, true); // 敏感 textarea 初始遮罩（圆点，非模糊）
+    attachEditHistory(ta);
     ta.addEventListener("input", () => { state.params[d.key] = ta.value; convert("param"); });
+    const setValue = (value) => { ta.value = value; state.params[d.key] = value; convert("param"); };
+    if (d.acceptFile) attachTextFileDrop(ta, setValue);
     const btn = el("button", { type: "button", class: "exp-btn param-bigta-btn",
       title: t("ui.expand.title"), "aria-label": t("ui.expand.title") }, msym("open_in_full"));
     btn.addEventListener("click", () => {
       openExpandModal(ta.value, value => {
-        ta.value = value;
-        state.params[d.key] = value;
-        convert("param");
+        setValue(value);
       }, { modalTitle: d.label, cancelLabel: t("ui.expand.cancel"), saveLabel: t("ui.expand.save") });
     });
-    wrap.append(el("label", { for: id }, d.label), el("div", { class: "param-bigbox" }, ta, btn));
+    const box = el("div", { class: "param-bigbox" + (d.sensitive ? " secret-field" : "") }, ta, d.sensitive ? secretEyeButton(() => ta, () => wrap) : null);
+    if (d.acceptFile) {
+      const fi = el("input", { type: "file", accept: ".asc,.txt,.key,.pub,.gpg,text/plain" });
+      fi.style.display = "none";
+      fi.addEventListener("change", () => { const f = fi.files && fi.files[0]; if (f) { const rd = new FileReader(); rd.onload = () => setValue(String(rd.result || "")); rd.readAsText(f); } });
+      const pick = t("ui.op.pickFile");
+      const ub = el("button", { type: "button", class: "exp-btn param-bigta-btn", title: pick, "aria-label": pick }, msym("upload"));
+      ub.addEventListener("click", () => fi.click());
+      box.append(ub, fi);
+    }
+    box.append(btn);
+    wrap.append(el("label", { for: id }, d.label), box);
+  } else if (d.type === "password") {
+    const inp = makeMaskedInput({ id, placeholder: d.placeholder || "", autocomplete: "off", spellcheck: "false" });
+    inp.value = state.params[d.key] ?? "";
+    inp.addEventListener("input", () => { state.params[d.key] = inp.value; convert("param"); });
+    if (d.acceptFile) attachTextFileDrop(inp, (v) => { inp.value = v; state.params[d.key] = v; convert("param"); });
+    wrap.append(el("label", { for: id }, d.label),
+      el("div", { class: "param-bigbox secret-field" }, inp, secretEyeButton(() => inp, () => wrap)));
   } else if (d.type === "image") {
  // 图片参数：可点按钮选文件、可直接拖图进框，也可粘贴 base64/dataURL（值仍是字符串）
     const inp = el("input", { type: "text", id, placeholder: d.placeholder || "", spellcheck: "false", autocomplete: "off" });
@@ -3938,10 +4248,27 @@ function renderParam(op, d) {
       cancelLabel: t("ui.expand.cancel"), saveLabel: t("ui.expand.save"),
       onInput: (v) => { state.params[d.key] = v; convert("param"); },
     });
-    wrap.append(el("label", { for: id }, d.label), box);
+    const expInput = box.querySelector(".exp-input");
+    const secret = !!d.sensitive || REVEALABLE_KEY_RE.test(String(d.key));
+    if (secret) {
+      if (MASK_CSS_SUPPORTED && expInput) expInput.dataset.maskCss = "1";
+      const defaultHidden = !!d.sensitive;
+      if (defaultHidden && expInput) applyMask(expInput, true);
+      wrap.append(el("label", { for: id }, d.label), el("div", { class: "param-bigbox secret-field" }, box, secretEyeButton(() => expInput, () => box, { defaultHidden })));
+    } else {
+      wrap.append(el("label", { for: id }, d.label), box);
+    }
   } else {
-    const inp = el("input", { type: d.type === "number" ? "number" : "text", id, placeholder: d.placeholder || "" });
+    const numericSecret = d.type === "number" && (!!d.sensitive || REVEALABLE_KEY_RE.test(String(d.key)));
+    const maskText = !!d.sensitive && d.type !== "number";
+    const revealText = !d.sensitive && (d.type === "text" || d.type == null) && REVEALABLE_KEY_RE.test(String(d.key));
+    const maskedField = numericSecret || maskText;
+    // 遮罩字段走 makeMaskedInput（统一圆点遮罩；不支持 CSS 时退原生 password）；可显示密钥用普通 text 起（默认可见）。
+    const inp = maskedField
+      ? makeMaskedInput({ id, inputmode: numericSecret ? "numeric" : "text", placeholder: d.placeholder || "", autocomplete: "off", spellcheck: "false" })
+      : el("input", { type: "text", inputmode: numericSecret ? "numeric" : "text", id, placeholder: d.placeholder || "", autocomplete: "on", spellcheck: "false" });
     inp.value = state.params[d.key] ?? "";
+    if (d.acceptFile) attachTextFileDrop(inp, (v) => { inp.value = v; state.params[d.key] = v; convert("param"); });
     inp.addEventListener("input", () => { state.params[d.key] = d.type === "number" ? Number(inp.value) : inp.value; convert("param"); });
     let dl = null;
     if (Array.isArray(d.datalist) && d.datalist.length) {
@@ -3966,7 +4293,13 @@ function renderParam(op, d) {
         return wrap;
       }
     }
-    wrap.append(el("label", { for: id }, d.label), inp);
+    if (maskText || numericSecret) {
+      wrap.append(el("label", { for: id }, d.label), el("div", { class: "param-bigbox secret-field" }, inp, secretEyeButton(() => inp, () => wrap, { defaultHidden: true })));
+    } else if (revealText) {
+      wrap.append(el("label", { for: id }, d.label), el("div", { class: "param-bigbox secret-field" }, inp, secretEyeButton(() => inp, () => wrap, { defaultHidden: false })));
+    } else {
+      wrap.append(el("label", { for: id }, d.label), inp);
+    }
     if (dl) wrap.append(dl);
   }
   return wrap;
@@ -3985,11 +4318,75 @@ const EXPANDABLE_KEYS = new Set([
 // op 的 encode/decode/run 可返回值或 Promise（WebCrypto 类算法异步）。
 // 用 _convSeq 防竞态：慢的异步结果回来时若已不是最新一次调用，丢弃。
 let _convSeq = 0;
+let _paramConvertTimer = 0;
+let _paramFlush = false;
+
+// 参数框输入防抖：不再每敲一个字符就跑一次转换。
+function scheduleParamConvert() {
+  clearTimeout(_paramConvertTimer);
+  _paramConvertTimer = setTimeout(() => {
+    _paramConvertTimer = 0;
+    _paramFlush = true;
+    try { convert("param"); } finally { _paramFlush = false; }
+  }, 240);
+}
+
+let _lastOpOutput = null;
+
+function rememberOpOutput(opId, value, outText, outFiles, params) {
+  const p = { ...(params || {}) };
+  delete p.rawBytes;
+  delete p.rawFileName;
+  _lastOpOutput = { opId, value, outText, outFiles, params: p };
+}
+
+function applyOpOutput(entry) {
+  const outArea = document.getElementById("ioOut");
+  if (!outArea || !entry) return;
+  const inArea = document.getElementById("ioIn");
+  const ctl = outArea.__ioCoding || (inArea && inArea.__ioCoding);
+  if (ctl) {
+    const formatted = ctl.formatOutput(entry.value, { params: entry.params, op: getOp(entry.opId) });
+    outArea.value = formatted.text;
+    if (formatted.warnings && formatted.warnings.length) ctl.reportWarnings(formatted.warnings);
+  } else {
+    outArea.value = entry.outText;
+  }
+  outArea.style.color = "";
+  outArea.classList.remove("error");
+  const mediaBox = document.getElementById("ioOutMedia");
+  renderOutMedia(mediaBox, entry.outText);
+  renderOutFiles(mediaBox, entry.outFiles);
+}
+
+function rerenderOpOutput() {
+  if (!_lastOpOutput) return;
+  if (_lastOpOutput.opId !== state.opId) return;
+  applyOpOutput(_lastOpOutput);
+}
+
 async function convert(src) {
+  if (src !== "param") clearTimeout(_paramConvertTimer);
+  // 所有参数框的自动路径统一防抖；显式按钮/Ctrl+Enter 不走这里。
+  if (src === "param" && !_paramFlush) { scheduleParamConvert(); return; }
   const seq = ++_convSeq;
   const operationDir = state.dir;
   const op = getOp(state.opId);
   if (!op) return;
+  // 插件可声明 autoRun:false：参数改动只更新状态，不自动运算，等显式按钮/Ctrl+Enter。
+  // 适用于数学/数论等「边输边算毫无意义且可能极重」的 op。
+  if (src === "param" && op.autoRun === false) {
+    const outAreaHint = document.getElementById("ioOut");
+    if (outAreaHint) {
+      const localized = t("ui.op.manualRunHint", opName(op));
+      outAreaHint.value = localized === "ui.op.manualRunHint" ? manualRunHint(opName(op)) : localized;
+      outAreaHint.style.color = "";
+      outAreaHint.classList.remove("error");
+      renderOutMedia(document.getElementById("ioOutMedia"), "");
+    }
+    document.querySelector(".act-btn.primary")?.classList.add("pending-run");
+    return;
+  }
   // 重运算 op 显式触发：src="param"（参数框逐键等自动路径）命中白名单不跑，
   // 输出区给「点击运行」占位；显式路径（转换按钮 / Ctrl+Enter，src 省略）照旧执行。
   // 仅 system 档走 Worker 通道（非 system 档在 runAct 里已改走主线程 convert）。
@@ -4019,6 +4416,13 @@ async function convert(src) {
   if (!outArea) return;
  // 多字段模式下，从各字段框收集值，按 op.fieldsJoin（默认换行）拼成单一输入串。
   const hasFields = Array.isArray(op.fields) && op.fields.length > 0;
+  const ioCtl = inArea && inArea.__ioCoding;
+  let ioEffectiveView = ioCtl ? ioCtl.state.view : "text";
+  if (ioCtl) {
+    try { ioEffectiveView = ioCtl.resolveOptions({ params: state.params }).view; }
+    catch { ioEffectiveView = ioCtl.state.view; }
+  }
+  const ioViewIsText = ioEffectiveView === "text";
   let text;
   if (hasFields) {
     const vals = op.fields.map((f) => (document.getElementById("fld_" + f.key)?.value ?? ""));
@@ -4028,7 +4432,8 @@ async function convert(src) {
     text = vals.join(op.fieldsJoin ?? "\n");
   } else if (inArea) {
     text = inArea.value;
-    if (text === "" && (op.encode || op.decode)) { outArea.value = ""; renderOutMedia(document.getElementById("ioOutMedia"), ""); return; }
+    // T701：hex/base64/escaped 视图下空串是合法字节输入，不能按「空输入」早退。
+    if (text === "" && ioViewIsText && (op.encode || op.decode)) { outArea.value = ""; renderOutMedia(document.getElementById("ioOutMedia"), ""); return; }
   } else {
  // ：主输入框隐藏（io=none 且未启用自定义实现）→ 空输入直跑 run-only（keygen 类合法调用）。
     text = "";
@@ -4052,6 +4457,28 @@ async function convert(src) {
   let callParams = { ...state.params };
   if (op.acceptsBytes && !hasFields && inArea && inArea._rawBytes) {
     callParams = { ...state.params, rawBytes: inArea._rawBytes, rawFileName: inArea._rawFileName };
+  }
+  if (ioCtl) {
+    let prepared;
+    try {
+      prepared = ioCtl.prepareInput(text, {
+        params: callParams,
+        acceptsBytes: !!op.acceptsBytes,
+        rawBytes: !hasFields && inArea ? inArea._rawBytes : null,
+      });
+    } catch (e) {
+      outArea.value = "✗ " + (e.message || t("ui.toast.convertFail"));
+      outArea.style.color = "var(--error)";
+      outArea.classList.add("error");
+      ioCtl.showError(e);
+      renderOutMedia(document.getElementById("ioOutMedia"), "");
+      return;
+    }
+    text = prepared.text;
+    ioCtl.reportWarnings(prepared.warnings);
+    if (op.acceptsBytes && !hasFields && prepared.bytes) {
+      callParams = { ...callParams, rawBytes: prepared.bytes, rawFileName: inArea && inArea._rawFileName };
+    }
   }
   try {
     // server 档每次运行前异步取一次 → 填预取池 → core 同步消费。
@@ -4078,17 +4505,15 @@ async function convert(src) {
       outText = out.text != null ? out.text : "";
       outFiles = "files" in out ? productFileEntries(out) : null;
     }
-    outArea.value = outText;
-    outArea.style.color = "";
-    outArea.classList.remove("error");
-    const mediaBox = document.getElementById("ioOutMedia");
-    renderOutMedia(mediaBox, outText);
-    renderOutFiles(mediaBox, outFiles); // 在 renderOutMedia 之后追加（其会清容器）
+    rememberOpOutput(op.id, out, outText, outFiles, callParams);
+    applyOpOutput(_lastOpOutput);
   } catch (e) {
     if (seq !== _convSeq || !outArea.isConnected) return;
+    _lastOpOutput = null;
     outArea.value = "✗ " + (e.message || t("ui.toast.convertFail"));
     outArea.style.color = "var(--error)";
     outArea.classList.add("error");
+    if (ioCtl) ioCtl.showError(e);
     renderOutMedia(document.getElementById("ioOutMedia"), "");
   }
 }
@@ -4257,15 +4682,25 @@ function initPwa() {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("sw.js", { scope: "./", updateViaCache: "none" })
       .then((reg) => {
-        // 已有 waiting（此前错过提示的）直接补提示；本次安装完成的新 worker 也提示。
+        // updatefound 可能早于 register 兑现；先挂监听，再补查已在 installing 的 worker。
+        const watchInstalling = (worker) => {
+          if (!worker) return;
+          const onChange = () => {
+            if (worker.state === "installed" && navigator.serviceWorker.controller) notifyNewVersion(reg);
+          };
+          if (worker.state === "installed") onChange();
+          else worker.addEventListener("statechange", onChange);
+        };
+        reg.addEventListener("updatefound", () => watchInstalling(reg.installing));
+        watchInstalling(reg.installing);
         if (reg.waiting && navigator.serviceWorker.controller) notifyNewVersion(reg);
-        reg.addEventListener("updatefound", () => {
-          const w = reg.installing;
-          if (!w) return;
-          w.addEventListener("statechange", () => {
-            if (w.state === "installed" && navigator.serviceWorker.controller) notifyNewVersion(reg);
-          });
-        });
+        // 每次启动显式检查本地资源/SW 新版本；离线失败只记日志，不阻塞 UI。
+        reg.update()
+          .then(() => {
+            if (reg.waiting && navigator.serviceWorker.controller) notifyNewVersion(reg);
+            watchInstalling(reg.installing);
+          })
+          .catch((e) => console.warn("[sw] 启动更新检查失败（离线或服务器不支持）：", e));
       })
       .catch((e) => console.warn("[sw] Service Worker 注册失败（PWA 离线不可用）：", e));
   }, { once: true });
@@ -4351,7 +4786,7 @@ function initTopbar() {
   if (appVerEl) appVerEl.textContent = "v" + APP_VERSION;
 
   document.getElementById("btnTheme").addEventListener("click", () => { cycleTheme(); });
-  document.getElementById("btnUpdate").addEventListener("click", checkForUpdate);
+  // 检查更新已是 Quark 外链，不再绑定本地 SW 检查；SW 更新在 initPwa 启动时自动检查。
 
  // 语言切换：点开下拉菜单选 20 语言（各显自称名）。选中 setLocale 按需加载 + 全量重渲染。
   const btnLang = document.getElementById("btnLang");
@@ -4365,7 +4800,18 @@ function initTopbar() {
     btnFont.addEventListener("click", (e) => { e.stopPropagation(); openEnvPanel(btnFont); });
   }
 
- // 插件：跳独立插件/MCP 页（#/plugins，工作区内渲染，非弹窗）。
+  const actions = document.querySelector(".topbar-actions");
+  if (actions && !document.getElementById("btnAllOps")) {
+    const btnAllOps = el("button",
+      { class: "icon-btn", id: "btnAllOps", title: allOpsLabel(), "aria-label": allOpsLabel() },
+      msym("apps"),
+      el("span", { class: "icon-btn-label", id: "btnAllOpsLabel" }, allOpsLabel()),
+    );
+    btnAllOps.addEventListener("click", (e) => { e.stopPropagation(); goAllOps(); });
+    actions.insertBefore(btnAllOps, document.getElementById("btnAbout"));
+  }
+
+  // 插件：跳独立插件/MCP 页（#/plugins，工作区内渲染，非弹窗）。
   const btnPlugins = document.getElementById("btnPlugins");
   if (btnPlugins) {
     btnPlugins.addEventListener("click", (e) => { e.stopPropagation(); goPlugins(); });
@@ -4969,6 +5415,8 @@ function renderAbout(host) {
     { name: "qinling072", tierKey: "ui.about.tierContributor", note: String(getLocale()).toLowerCase().startsWith("zh") ? "提出补充 OutGuess 等图像隐写算法" : "Proposed adding OutGuess and other image-steganography algorithms" },
     { name: "cnui6", tierKey: "ui.about.tierContributor", note: String(getLocale()).toLowerCase().startsWith("zh") ? "提出 Rabbit 兼容性修复（Legacy 变体与口令支持）" : "Proposed the Rabbit compatibility fix (Legacy variant + passphrase support)" },
     { name: "二月犬", tierKey: "ui.about.tierContributor", note: String(getLocale()).toLowerCase().startsWith("zh") ? "提出哦齁编码、哈基米加密与杂鱼密语" : "Suggested the Ohou, Hakimi and Zako meme codecs" },
+    { name: "橙子", tierKey: "ui.about.tierContributor", note: String(getLocale()).toLowerCase().startsWith("zh") ? "提出多个 Misc 逻辑代码修复" : "Proposed multiple Misc logic fixes" },
+    { name: "Tokeii", tierKey: "ui.about.tierContributor", note: String(getLocale()).toLowerCase().startsWith("zh") ? "贡献改版图标，提供各类识别模型权重支持，项目下游优化作者" : "Contributed the redesigned icon and downstream direction suggestions" },
   ];
   for (const c of OTHER_CONTRIBUTORS) {
     const cap = el("span", { class: c.avatar ? "about-capsule about-capsule-founder" : "about-capsule" });
@@ -5078,6 +5526,7 @@ function applyStaticI18n() {
   setIcon("#btnLang .msym", "translate");
   setIcon("#btnFont .msym", "tune");
   setIcon("#btnPlugins .msym", "extension");
+  setIcon("#btnAllOps .msym", "apps");
   setIcon("#btnAbout .msym", "info");
   setIcon("#topbarSearch .topbar-search-icon", "search");
   setIcon("#btnUpdate .msym", "update");
@@ -5091,6 +5540,7 @@ function applyStaticI18n() {
   set("#btnLang .icon-btn-label", t("ui.topbar.lang"));
   set("#btnFont .icon-btn-label", t("ui.env.btn"));
   set("#btnPlugins .icon-btn-label", t("ui.plugin.btn"));
+  set("#btnAllOps .icon-btn-label", allOpsLabel());
   set("#btnAbout .icon-btn-label", t("ui.about.btn"));
   const searchInput = document.getElementById("opSearchInput");
   if (searchInput) searchInput.setAttribute("placeholder", t("ui.search.placeholder"));
@@ -5100,6 +5550,10 @@ function applyStaticI18n() {
   setAttr("#btnTheme", "title", t("ui.topbar.theme"));
   setAttr("#btnLang", "title", t("ui.topbar.lang"));
   setAttr("#btnFont", "title", t("ui.env.btn"));
+  setAttr("#btnAllOps", "title", allOpsLabel());
+  setAttr("#btnAllOps", "aria-label", allOpsLabel());
+  // 抽屉汉堡的 title/aria 也需随启动懒加载语言与手动切换同步（模块自初始化时 en 字典可能未就绪）。
+  refreshMobileDrawerLabels();
 }
 
 // 语言切换 → 全量重渲染（顶栏静态文案 + 导航 + 当前工作区）。
@@ -5173,8 +5627,8 @@ setLoadingProgress(60, "ui.loading.ui");
 applyStaticI18n();
 initTopbar();
 initNavResizer();
-// 窄屏边界交叉时重渲导航：rail 态随视口宽度切换（navRail()），否则已展开的二级菜单
-// 在 resize 后仍残留 260px 宽渲染、rail 60px 里横向溢出（穿模）。
+// 窄屏边界交叉时重渲导航：桌面 rail 态与窄屏完整抽屉态随视口宽度切换（navRail()），
+// 否则已展开的二级菜单会残留旧布局（rail 60px 里横向溢出，或抽屉里缺分类名）。
 let _lastNavRail = null;
 function trackNavRail() {
   const r = navRail();
@@ -5321,6 +5775,16 @@ window.__ebctfResetAccentToOriginal = () => {
 
 // window.__ebctfRuntime 供 envPanel 等读取当前形态（"local" | "server"，探测前 null）。
 window.__ebctfRuntime = null;
+// 与 envPanel 的 PACK_STATE_KEY 同源；只读判断用户是否真的装过可选的 fonts 包。
+function offlinePackInstalled(id) {
+  try {
+    const raw = localStorage.getItem("ebctf.offlinePacks.v1");
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    const v = s && s.installed && s.installed[id];
+    return !!(v && (v === true || (Array.isArray(v.entries) && v.entries.length > 0)));
+  } catch { return false; }
+}
 async function detectRuntimeAndPreload() {
   let isLocal = false;
   try {
@@ -5329,7 +5793,9 @@ async function detectRuntimeAndPreload() {
   } catch { isLocal = false; }
   window.__ebctfRuntime = isLocal ? "local" : "server";
   if (isLocal) {
-    preloadAllPlanes();   // 仅本地版后台补全量字库；服务器版留子集 + 手动加载
+    // 全量字体是 T709 的可选离线包，不能因本地桥在线就自动拉 31MB。
+    // 用户装过 fonts 包才后台补全量；未装时仍可用首屏子集与手动加载。
+    if (offlinePackInstalled("fonts")) preloadAllPlanes();
     initSystemAccent();   // 仅本地版且用户未选色时，用系统强调色做默认动态取色（失败静默降级）
   }
   restorePlugins();       // 后台恢复上次启用的插件（动态 import，不进主 bundle、不拖首屏）
@@ -5346,12 +5812,38 @@ async function restorePlugins() {
     const builtins = {};
  // 内置参考插件（默认不启用，用户在插件面板可一键启用；此处只登记免 URL 供恢复）
     builtins["hello-cipher"] = await import("./plugin/examples/hello-cipher/index.js");
+    host.onPluginsChange(() => {
+      try { renderNav(); } catch { /* 忽略 */ }
+      if (state.view === "all") { try { renderWorkspace(); } catch { /* 忽略 */ } }
+    });
     await host.restoreEnabled(builtins);
-    host.onPluginsChange(() => { try { renderNav(); } catch { /* 忽略 */ } });
   } catch (e) {
     console.warn("[plugin] 宿主加载失败，已跳过（不影响主功能）：", e && e.message ? e.message : e);
   }
 }
+// 配方页 Magic 薄钩子：UI 层只负责「候选 → 节点」，magic 全量候选/强度/预算仍留在主入口。
+window.__ebctfRecipeMagic = async function (text, opts = {}) {
+  const q = String(text || "");
+  if (!q.trim()) return [];
+  await ensureAll().catch(() => { /* 缺模块时 magic 自行降级 */ });
+  const cands = await magicDecode(q, {
+    maxDepth: opts.maxDepth || 2,
+    paramScan: opts.paramScan !== false,
+    lenient: true,
+    timeBudget: opts.timeBudget || 5000,
+    maxCandidates: opts.maxCandidates || 20,
+  });
+  return (cands || []).slice(0, 10).map((c) => ({
+    confidence: c.confidence,
+    result: c.result,
+    steps: (c.steps || []).map((s) => ({
+      opId: s.opId,
+      params: s.params || {},
+      paramLabel: s.paramLabel || "",
+    })),
+  }));
+};
+
 if (document.readyState === "complete") detectRuntimeAndPreload();
 else window.addEventListener("load", detectRuntimeAndPreload, { once: true });
 

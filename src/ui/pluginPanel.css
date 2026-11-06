@@ -33,6 +33,35 @@
   line-height: 1.5;
 }
 
+/* ============ 一级分区（扩展 / 离线能力 / 字库 / MCP 接入） ============ */
+.plugin-group {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  margin: 0 0 var(--sp-5);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--outline-var);
+}
+.plugin-group:first-of-type { padding-top: 0; border-top: 0; }
+.plugin-group-title {
+  display: flex; align-items: center; gap: var(--sp-2);
+  margin: 0;
+  font-size: var(--fs-lg); font-weight: 700; color: var(--on-surface);
+  letter-spacing: .01em;
+}
+.plugin-group-title::before {
+  content: ""; flex: none;
+  width: 3px; height: 1.05em; border-radius: var(--r-full);
+  background: var(--primary);
+}
+.plugin-group-note {
+  margin: 0;
+  font-size: var(--fs-sm); color: var(--on-surface-var); line-height: 1.5;
+}
+/* 子组：同一分区内的批量区 / 明细区，保持同一视觉分组 */
+.plugin-subgroup {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+}
+.plugin-group .plugin-sect { margin: 0; }
+
 /* ============ 分区块（插件区 / MCP 区） ============ */
 .plugin-sect {
   display: flex; flex-direction: column; gap: var(--sp-2);
@@ -180,4 +209,209 @@
     align-items: flex-start;
   }
   .plugin-item-actions { align-self: flex-start; }
+}
+
+/* ==================================================================
+ * 扩展面板内新增区（离线增强包 / 批量操作 / 天珩字库）
+ * 令牌全取 theme.css，深浅色自动适配。
+ * ================================================================== */
+.plugin-sect-host { display: block; }
+.ext-sub-title {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-sm); font-weight: 700; color: var(--on-surface);
+}
+.ext-sect { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-3); }
+
+/* 批量操作卡片 */
+.ext-card {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-md);
+}
+.ext-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ext-card-title { font-size: var(--fs-sm); font-weight: 700; color: var(--on-surface); }
+.ext-card-note { margin: 0; font-size: var(--fs-xs); color: var(--on-surface-var); line-height: 1.55; }
+.ext-card-freed { margin: 2px 0 0; font-size: var(--fs-xs); font-weight: 600; color: var(--primary); }
+
+/* 扩展面板按钮（比 chip-btn 更实心，用于主/危险操作） */
+.ext-btn {
+  flex: none; height: 34px; padding: 0 var(--sp-3);
+  border: 1px solid var(--outline-var); border-radius: var(--r-full);
+  background: var(--surface-3); color: var(--on-surface);
+  font-size: var(--fs-sm); font-weight: 600; cursor: pointer;
+  transition: background var(--dur-short) var(--ease), transform var(--dur-short) var(--ease), color var(--dur-short) var(--ease);
+}
+.ext-btn:hover:not(:disabled) { background: var(--surface-hi); }
+.ext-btn:active:not(:disabled) { transform: scale(.96); }
+.ext-btn:disabled { opacity: .55; cursor: default; }
+.ext-btn.primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.ext-btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+.ext-btn.danger {
+  color: var(--error); border-color: color-mix(in srgb, var(--error) 45%, transparent);
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+}
+.ext-btn.danger:hover:not(:disabled) { background: var(--error); color: #fff; }
+.ext-btn.ghost { background: transparent; }
+@media (pointer: coarse), (max-width: 600px) { .ext-btn { min-height: 44px; } }
+
+/* 批量进度 / 结果 / 失败原因 */
+.ext-batch-host:empty { display: none; }
+.ext-batch-status {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface-1));
+  border-radius: var(--r-md);
+}
+.ext-batch-text { font-size: var(--fs-sm); font-weight: 600; color: var(--on-surface); }
+.ext-batch-sub { font-size: var(--fs-xs); color: var(--on-surface-var); font-family: var(--mono); }
+.ext-batch-hint { margin: 0; font-size: var(--fs-xs); color: var(--on-surface-var); }
+.ext-batch-result { margin: 0; font-size: var(--fs-sm); font-weight: 600; color: var(--on-surface); }
+.ext-batch-fail-title { margin: var(--sp-1) 0 0; font-size: var(--fs-xs); font-weight: 700; color: var(--error); }
+.ext-fail-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+.ext-fail-item { font-size: var(--fs-xs); color: var(--on-surface-var); }
+.ext-fail-item strong { color: var(--on-surface); }
+.ext-batch-status .ext-btn { align-self: flex-start; }
+
+/* 通用进度条 */
+.ext-progress {
+  height: 6px; width: 100%; border-radius: var(--r-full);
+  background: var(--surface-3); overflow: hidden;
+}
+.ext-progress-fill {
+  height: 100%; border-radius: var(--r-full);
+  background: var(--primary); transition: width var(--dur-short) var(--ease);
+}
+
+/* ============ 离线包明细（offlinePackPanel 复用） ============ */
+.offline-pack-panel { display: flex; flex-direction: column; gap: var(--sp-2); }
+.offline-pack-header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.offline-pack-title { margin: 0; font-size: var(--fs-sm); font-weight: 700; color: var(--on-surface); }
+.offline-pack-summary { margin: 0; font-size: var(--fs-xs); color: var(--on-surface-var); }
+.offline-pack-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.offline-pack-item {
+  display: flex; flex-direction: column; gap: var(--sp-1);
+  padding: var(--sp-3);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-md);
+}
+.offline-pack-head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.offline-pack-name { font-size: var(--fs-sm); font-weight: 700; color: var(--on-surface); }
+.offline-pack-size {
+  font-size: var(--fs-xs); color: var(--on-surface-var);
+  font-family: var(--mono); padding: 1px var(--sp-2);
+  background: var(--surface-3); border-radius: var(--r-full);
+}
+.offline-pack-state {
+  margin-inline-start: auto;
+  font-size: var(--fs-xs); font-weight: 600;
+  padding: 2px var(--sp-2); border-radius: var(--r-full);
+}
+.offline-pack-state.is-installed { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
+.offline-pack-state.is-partial { background: color-mix(in srgb, var(--primary) 16%, transparent); color: var(--primary); }
+.offline-pack-state.is-missing { background: var(--surface-3); color: var(--on-surface-var); }
+.offline-pack-meta { font-size: var(--fs-xs); color: var(--on-surface-var); }
+.offline-pack-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-1); }
+.offline-pack-install, .offline-pack-remove {
+  height: 32px; padding: 0 var(--sp-3);
+  border-radius: var(--r-full); font-size: var(--fs-xs); font-weight: 600; cursor: pointer;
+  border: 1px solid var(--outline-var);
+  transition: background var(--dur-short) var(--ease), transform var(--dur-short) var(--ease);
+}
+.offline-pack-install { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.offline-pack-install:hover:not(:disabled) { filter: brightness(1.08); }
+.offline-pack-remove { background: transparent; color: var(--on-surface); }
+.offline-pack-remove:hover:not(:disabled) { background: var(--surface-hi); }
+.offline-pack-install:active:not(:disabled), .offline-pack-remove:active:not(:disabled) { transform: scale(.95); }
+.offline-pack-install:disabled, .offline-pack-remove:disabled { opacity: .5; cursor: default; }
+.offline-pack-progress {
+  font-size: var(--fs-xs); color: var(--primary); font-family: var(--mono);
+}
+.offline-pack-error { margin: 0; font-size: var(--fs-xs); color: var(--error); line-height: 1.5; }
+.offline-pack-notice {
+  display: flex; flex-direction: column; gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2); border-radius: var(--r-sm);
+}
+.offline-pack-notice:empty { display: none; }
+.offline-pack-ready { margin: 0; font-size: var(--fs-xs); font-weight: 600; color: var(--success); }
+.offline-pack-offline-hint { margin: 0; font-size: var(--fs-xs); color: var(--on-surface-var); }
+.offline-pack-degradations { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: var(--sp-1); }
+.offline-pack-degradations li { font-size: var(--fs-xs); color: var(--on-surface-var); line-height: 1.5; }
+.offline-pack-degradations strong { color: var(--on-surface); }
+.offline-pack-degrade-fallback { color: var(--on-surface-var); }
+
+/* ============ 天珩字库区（扩展面板） ============ */
+.ext-font-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+.ext-font-row {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-1);
+  border-radius: var(--r-sm);
+}
+.ext-font-row.subset { background: color-mix(in srgb, var(--success) 6%, var(--surface-1)); }
+.ext-font-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ext-font-name {
+  font-size: var(--fs-sm); font-weight: 600; color: var(--on-surface);
+  display: flex; align-items: baseline; gap: var(--sp-2);
+}
+.ext-font-size { font-size: var(--fs-xs); color: var(--on-surface-var); font-weight: 400; flex: none; }
+.ext-font-desc { font-size: var(--fs-xs); color: var(--on-surface-var); line-height: 1.4; }
+.ext-font-badge {
+  flex: none; font-size: var(--fs-xs); font-weight: 600;
+  padding: 2px var(--sp-2); border-radius: var(--r-full);
+}
+.ext-font-badge.loaded { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
+.ext-font-btn {
+  flex: none; height: 30px; padding: 0 var(--sp-3);
+  border-radius: var(--r-full);
+  font-size: var(--fs-xs); font-weight: 600;
+  background: var(--surface-3); color: var(--on-surface);
+  transition: background var(--dur-short) var(--ease), transform var(--dur-short) var(--ease);
+}
+.ext-font-btn:hover:not(:disabled) { background: var(--surface-hi); }
+.ext-font-btn:active:not(:disabled) { transform: scale(.94); }
+.ext-font-btn:disabled { opacity: .6; cursor: default; }
+.ext-font-btn.loaded { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
+.ext-font-btn.error { background: color-mix(in srgb, var(--error) 16%, transparent); color: var(--error); }
+
+@media (max-width: 520px) {
+  .plugin-group-title { font-size: var(--fs-md); }
+  .ext-card { flex-direction: column; align-items: stretch; }
+  .offline-pack-head { flex-wrap: wrap; }
+  .offline-pack-state { margin-inline-start: 0; }
+}
+
+/* ============ 侧栏插件分区（内置分类与插件分类的分隔） ============ */
+/* 仅当 CATEGORIES 中存在带 plugin:true 的分类时，main.js 才渲染以下两个节点；
+   无插件时 DOM 不生成，不会出现空标题或多余线。 */
+.nav-plugin-sep {
+  height: 2px;
+  margin: 10px 11px 6px;
+  border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--primary) 40%, var(--outline-var));
+}
+.nav-plugin-title {
+  margin: 0 11px 6px;
+  padding: 2px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--on-surface-var);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+
+/* 折叠 rail 态：标题无空间，只留分割线。 */
+.sidenav.collapsed .nav-plugin-title { display: none; }
+.sidenav.collapsed .nav-plugin-sep { margin-inline: 11px; }
+
+/* 窄屏 CSS 强制 rail（topbar-responsive.css），JS 的 navRail() 与断点一致。 */
+@media (max-width: 860px) {
+  .sidenav .nav-plugin-title { display: none; }
+  .sidenav .nav-plugin-sep { margin-inline: 11px; }
 }

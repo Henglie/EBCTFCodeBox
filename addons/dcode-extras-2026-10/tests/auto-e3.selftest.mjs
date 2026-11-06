@@ -29,6 +29,10 @@ function thrown(fn, label) {
   try { fn(); ok(false, label, "expected throw"); }
   catch { pass++; }
 }
+function thrownMsg(fn, sub, label) {
+  try { fn(); ok(false, label, "expected throw"); }
+  catch (e) { const msg = String((e && e.message) || e); ok(msg.includes(sub), label, `message=${msg}`); }
+}
 
 const by = new Map(OPS.map((o) => [o.id, o]));
 const run = (id, text, p) => by.get(id).run(text, p);
@@ -148,6 +152,9 @@ const kr2 = run("e3-keyrecover", "LWLEORHLOD\n===\nhello\nworld", { maxlen: "3" 
 has(kr2, "HELLOWORLD", "keyrecover wordlist only");
 has(kr2, "词表覆盖评分", "keyrecover word score");
 thrown(() => run("e3-keyrecover", "ABC", { maxlen: "3" }), "keyrecover short ciphertext throws");
+has(run("e3-keyrecover", "LWLEORHLOD\n===\nhello\nworld", { maxlen: "8" }), "HELLOWORLD", "keyrecover maxlen=8 正常");
+thrownMsg(() => run("e3-keyrecover", "LWLEORHLOD\n===\nhello\nworld", { maxlen: "9" }), "maxlen", "keyrecover maxlen=9 显式报错");
+thrownMsg(() => run("e3-keyrecover", "LWLEORHLOD\n===\nhello\nworld", { maxlen: "1" }), "maxlen", "keyrecover maxlen=1 显式报错");
 
 // ---------- 5 MRZ ----------
 missing("e3-mrz");
@@ -201,6 +208,9 @@ has(hw, "dog (3)", "hexword dog");
 notHas(hw, "zzz", "hexword excludes absent word");
 thrown(() => run("e3-hexword", "C A T\n A R E\nD O G"), "hexword missing wordlist throws");
 thrown(() => run("e3-hexword", "CAT\nAR\n===\ncat"), "hexword short rows throws");
+has(run("e3-hexword", "C A T\n A R E\nD O G\n===\ncat\nare\ndog", { min: "6" }), "（无）", "hexword min=6 正常（无 6 字母词）");
+thrownMsg(() => run("e3-hexword", "C A T\n A R E\nD O G\n===\ncat\nare\ndog", { min: "7" }), "min", "hexword min=7 显式报错");
+thrownMsg(() => run("e3-hexword", "C A T\n A R E\nD O G\n===\ncat\nare\ndog", { min: "1" }), "min", "hexword min=1 显式报错");
 
 // ---------- 8 填字网格 ----------
 missing("e3-crossword");

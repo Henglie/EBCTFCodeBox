@@ -1,14 +1,251 @@
-// BUILD-STAMP: 12218f8bc0d37098
-importScripts("./sw-assets.js");
+// BUILD-STAMP: 263163e90de701a1
+importScripts("./sw-assets.js", "./sw-packs.js");
 
 // The asset generator synchronizes BUILD-STAMP with the resource revision.
 
-const APP_VERSION = "0.1.12";
+const APP_VERSION = "0.1.14";
 const CACHE_PREFIX = "ebctf-shell-";
 const CACHE_NAME = `${CACHE_PREFIX}${APP_VERSION}-${self.__EBCTF_ASSET_REV}`;
 const ASSETS = self.__EBCTF_ASSETS;
 const BATCH_SIZE = 32;
 const ASSET_SET = new Set(ASSETS);
+
+// ---------------------------------------------------------------------------
+// 离线增强包（T709）：包条目已全部被 EXCLUDE_RULES 剔除，默认首屏预缓存不受影响。
+// 包只在用户点「安装」时下载，install / activate 都不预取（44.39 MiB 不能回到首屏）。
+// 缓存独立前缀 + rev：条目一变 rev 变，旧包缓存由 activate 清理，不参与 shell 增量协商。
+// ---------------------------------------------------------------------------
+const PACK_CACHE_PREFIX = "ebctf-pack-";
+const PACKS = self.__EBCTF_PACKS || [];
+const PACK_BY_ID = new Map(PACKS.map((p) => [p.id, p]));
+const PACK_ENTRY_OWNER = new Map();
+for (const p of PACKS) for (const e of p.entries) PACK_ENTRY_OWNER.set(e, p.id);
+const packCacheName = (p) => `${PACK_CACHE_PREFIX}${p.id}-${p.rev}`;
+const PACK_CONCURRENCY = 4;
+const PACK_JOBS = new Map();  // id -> { listeners, done, total, bytesDone, failed, result, promise }
+const PACK_SCOPE = (self.registration && self.registration.scope)
+  || (self.location && self.location.href)
+  || "/";
+const PACK_SCOPE_DIR = new URL(PACK_SCOPE).pathname.replace(/\/+$/, "");
+const packEntryUrl = (entry) => new URL(entry.replace(/^\/+/, ""), PACK_SCOPE).href;
+const siteRelPath = (pathname) =>
+  pathname.startsWith(PACK_SCOPE_DIR + "/") ? pathname.slice(PACK_SCOPE_DIR.length) : pathname;
+
+function packReply(port, source, message) {
+  try {
+    if (port && typeof port.postMessage === "function") port.postMessage(message);
+    else if (source && typeof source.postMessage === "function") source.postMessage(message);
+  } catch (e) {
+    console.error("离线包消息回执失败:", e && e.message);
+  }
+}
+
+function packBroadcast(job, message) {
+  if (message.type === "cache-pack-done" || message.type === "cache-pack-error") job.result = message;
+  for (const send of job.listeners) {
+    try { send(message); } catch (e) { console.error("离线包进度回执失败:", e && e.message); }
+  }
+}
+
+function packResponseBytes(res) {
+  const n = Number(res.headers.get("content-length"));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+async function installPack(msg, port, source) {
+  const id = msg && msg.id;
+  const pack = PACK_BY_ID.get(id);
+  const send = (m) => packReply(port, source, m);
+  if (!pack) {
+    send({ type: "cache-pack-error", id, reason: "未知离线包: " + String(id) });
+    return;
+  }
+  if (msg.rev !== pack.rev) {
+    send({
+      type: "cache-pack-error",
+      id,
+      reason: "清单版本不一致（页面 " + String(msg.rev) + " / 缓存 " + pack.rev + "），请刷新页面后重试",
+    });
+    return;
+  }
+
+  let job = PACK_JOBS.get(id);
+  if (job) {
+    job.listeners.add(send);
+    send(job.result || {
+      type: "cache-pack-progress",
+      id,
+      done: job.done,
+      total: job.total,
+      bytesDone: job.bytesDone,
+      reused: true,
+    });
+    try { await job.promise; } finally { job.listeners.delete(send); }
+    return;
+  }
+
+  job = {
+    listeners: new Set([send]),
+    done: 0,
+    total: pack.entries.length,
+    bytesDone: 0,
+    failed: [],
+    result: null,
+    promise: null,
+  };
+  PACK_JOBS.set(id, job);
+
+  const run = async () => {
+    const cache = await caches.open(packCacheName(pack));
+    let cursor = 0;
+    let fatal = null;
+    const progress = () => packBroadcast(job, {
+      type: "cache-pack-progress",
+      id: pack.id,
+      done: job.done,
+      total: job.total,
+      bytesDone: job.bytesDone,
+      failed: job.failed.length,
+    });
+    const worker = async () => {
+      while (!fatal) {
+        const index = cursor++;
+        if (index >= pack.entries.length) return;
+        const entry = pack.entries[index];
+        const url = packEntryUrl(entry);
+        try {
+          const hit = await cache.match(url);
+          if (hit) {
+            job.done++;
+            job.bytesDone += packResponseBytes(hit);
+            progress();
+            continue;
+          }
+          let res;
+          try {
+            res = await fetch(new Request(url, { cache: "reload" }));
+          } catch (e) {
+            job.failed.push({ url: entry, status: 0, reason: (e && e.name) + ": " + (e && e.message) });
+            job.done++;
+            progress();
+            continue;
+          }
+          if (!res.ok) {
+            job.failed.push({ url: entry, status: res.status });
+            try { if (res.body) await res.body.cancel(); } catch { /* 已消费或不可取消 */ }
+            job.done++;
+            progress();
+            continue;
+          }
+          await cache.put(url, res);
+          job.done++;
+          job.bytesDone += packResponseBytes(res);
+          progress();
+        } catch (e) {
+          fatal = e;
+          return;
+        }
+      }
+    };
+    await Promise.all(Array.from(
+      { length: Math.min(PACK_CONCURRENCY, pack.entries.length) },
+      worker,
+    ));
+    if (fatal) {
+      packBroadcast(job, {
+        type: "cache-pack-error",
+        id: pack.id,
+        reason: (fatal && fatal.name ? fatal.name + ": " : "") + (fatal && fatal.message ? fatal.message : String(fatal)),
+        done: job.done,
+        total: job.total,
+        failed: job.failed,
+      });
+      return;
+    }
+    packBroadcast(job, {
+      type: "cache-pack-done",
+      id: pack.id,
+      ok: job.failed.length === 0,
+      done: job.done,
+      total: job.total,
+      failed: job.failed,
+    });
+  };
+
+  job.promise = run().catch((e) => {
+    packBroadcast(job, {
+      type: "cache-pack-error",
+      id: pack.id,
+      reason: (e && e.name ? e.name + ": " : "") + (e && e.message ? e.message : String(e)),
+      done: job.done,
+      total: job.total,
+      failed: job.failed,
+    });
+  }).finally(() => {
+    PACK_JOBS.delete(id);
+  });
+  try { await job.promise; } finally { job.listeners.delete(send); }
+}
+
+async function removePack(msg, port, source) {
+  const id = msg && msg.id;
+  const send = (m) => packReply(port, source, m);
+  if (!PACK_BY_ID.has(id)) {
+    send({ type: "uncache-pack-done", id, ok: false, reason: "未知离线包" });
+    return;
+  }
+  try {
+    const prefix = `${PACK_CACHE_PREFIX}${id}-`;
+    const keys = await caches.keys();
+    const owned = keys.filter((key) => key.startsWith(prefix));
+    await Promise.all(owned.map((key) => caches.delete(key)));
+    send({ type: "uncache-pack-done", id, ok: true, removed: owned.length });
+  } catch (e) {
+    send({
+      type: "uncache-pack-done",
+      id,
+      ok: false,
+      reason: (e && e.name ? e.name + ": " : "") + (e && e.message ? e.message : String(e)),
+    });
+  }
+}
+
+async function reportPackStatus(msg, port, source) {
+  const id = msg && msg.id;
+  const send = (m) => packReply(port, source, m);
+  const pack = PACK_BY_ID.get(id);
+  if (!pack) {
+    send({ type: "pack-status", id, ok: false, reason: "未知离线包", cached: [], total: 0 });
+    return;
+  }
+  try {
+    const cacheName = packCacheName(pack);
+    let cached = [];
+    if (await caches.has(cacheName)) {
+      const cache = await caches.open(cacheName);
+      const keys = await cache.keys();
+      const owned = new Set(pack.entries);
+      cached = keys.map((request) => siteRelPath(new URL(request.url).pathname)).filter((p) => owned.has(p));
+    }
+    send({
+      type: "pack-status",
+      id: pack.id,
+      rev: pack.rev,
+      ok: true,
+      cached,
+      total: pack.entries.length,
+    });
+  } catch (e) {
+    send({
+      type: "pack-status",
+      id,
+      ok: false,
+      reason: (e && e.name ? e.name + ": " : "") + (e && e.message ? e.message : String(e)),
+      cached: [],
+      total: pack.entries.length,
+    });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // 按需资产（M4，2026-08-26）：下列前缀/路径的内容不变资产已从预缓存清单剔除
@@ -101,11 +338,25 @@ self.addEventListener("activate", (event) => {
     await Promise.all(keys
       .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
       .map((key) => caches.delete(key)));
+
+    // 旧 rev 的包缓存必须清掉：字体包一份就 31 MiB，不能永久占配额。
+    // 升级后旧包会被判为未安装，由页面侧 pack-status 对账兜住（localStorage 不当作已装判据）。
+    const keepPack = new Set(PACKS.map(packCacheName));
+    const packKeys = await caches.keys();
+    await Promise.all(packKeys
+      .filter((key) => key.startsWith(PACK_CACHE_PREFIX) && !keepPack.has(key))
+      .map((key) => caches.delete(key)));
   })());
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data === "SKIP_WAITING") self.skipWaiting();
+  const data = event.data;
+  if (data === "SKIP_WAITING") { self.skipWaiting(); return; }
+  if (!data || typeof data !== "object") return;
+  const port = event.ports && event.ports[0];
+  if (data.type === "cache-pack") event.waitUntil(installPack(data, port, event.source));
+  else if (data.type === "uncache-pack") event.waitUntil(removePack(data, port, event.source));
+  else if (data.type === "pack-status") event.waitUntil(reportPackStatus(data, port, event.source));
 });
 
 self.addEventListener("fetch", (event) => {
@@ -154,7 +405,29 @@ self.addEventListener("fetch", (event) => {
       }
       return response;
     } catch {
-      return new Response("", { status: 504 });
+      // 包条目未命中且断网：不能静默 504（页面只会看到 Failed to fetch）。
+      // 503 + JSON + X-EBCTF-Offline-Pack + pack-miss 消息，三者齐备才算可解释。
+      const packId = PACK_ENTRY_OWNER.get(siteRel);
+      if (packId) {
+        try {
+          const clients = await self.clients.matchAll({ type: "window" });
+          for (const client of clients) client.postMessage({ type: "pack-miss", packId, url: siteRel });
+        } catch { /* 页面已关闭时忽略 */ }
+        return new Response(
+          JSON.stringify({ error: "offline-pack-missing", packId, url: siteRel }),
+          {
+            status: 503,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "X-EBCTF-Offline-Pack": packId,
+            },
+          },
+        );
+      }
+      return new Response("离线且未缓存：" + siteRel, {
+        status: 504,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
     }
   })());
 });

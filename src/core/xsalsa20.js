@@ -32,6 +32,7 @@
  *  - key / keyEnc：密钥，32 字节（XSalsa20 固定 32 字节；原版 Salsa20 的 16 字节密钥不适用于 XSalsa20）。
  *  - nonce / nonceEnc：24 字节 nonce。
  *  - counter：起始块计数器（64 位，整数 ≥ 0，默认 0）。
+ *  - rounds：20/12/8（默认 20）；HSalsa20 与 Salsa20 使用同一轮数。
  *  - outEnc：密文编码（base64 / hex）。
  *
  * 约定：
@@ -50,10 +51,19 @@ function wrU32(b, o, v) {
   b[o] = v & 0xff; b[o + 1] = (v >>> 8) & 0xff; b[o + 2] = (v >>> 16) & 0xff; b[o + 3] = (v >>> 24) & 0xff;
 }
 
-/** Salsa20 20 轮（10 个双轮），返回 16 个字的**原始**结果（不喂回初始状态）。 */
-function salsaRounds(state) {
+/** 轮数归一化：XSalsa20 支持 20/12/8 轮（Salsa20/20、Salsa20/12、Salsa20/8）。 */
+function normRounds(rounds) {
+  if (rounds == null || rounds === "") return 20;
+  const n = Number(rounds);
+  if (n !== 20 && n !== 12 && n !== 8) throw new Error(`XSalsa20 rounds 仅支持 20/12/8（当前 ${rounds}）`);
+  return n;
+}
+
+/** Salsa20 轮函数（每 2 轮一个双轮），返回 16 个字的**原始**结果（不喂回初始状态）。 */
+function salsaRounds(state, rounds = 20) {
+  const R = normRounds(rounds);
   const x = state.slice();
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < R / 2; i++) {
     x[4]  = (x[4]  ^ rotl((x[0]  + x[12]) >>> 0, 7))  >>> 0;
     x[8]  = (x[8]  ^ rotl((x[4]  + x[0])  >>> 0, 9))  >>> 0;
     x[12] = (x[12] ^ rotl((x[8]  + x[4])  >>> 0, 13)) >>> 0;
@@ -91,16 +101,16 @@ function salsaRounds(state) {
   return x;
 }
 
-/** Salsa20 核心 20 轮（10 个双轮），返回 64 字节（x + 初始状态，即带喂回的 PRF 块）。 */
-function salsa20Block(state) {
-  const x = salsaRounds(state);
+/** Salsa20 核心（默认 20 轮），返回 64 字节（x + 初始状态，即带喂回的 PRF 块）。 */
+function salsa20Block(state, rounds = 20) {
+  const x = salsaRounds(state, rounds);
   const out = new Uint8Array(64);
   for (let i = 0; i < 16; i++) wrU32(out, i * 4, (x[i] + state[i]) >>> 0);
   return out;
 }
 
 /** libsodium crypto_core_salsa20 口径：in(16) / key(32) / c(16) → 64 字节核心输出。 */
-function salsa20Core(inBytes, keyBytes, constBytes) {
+function salsa20Core(inBytes, keyBytes, constBytes, rounds = 20) {
   const s = new Array(16);
   s[0] = rdU32(constBytes, 0);
   s[1] = rdU32(keyBytes, 0); s[2] = rdU32(keyBytes, 4); s[3] = rdU32(keyBytes, 8); s[4] = rdU32(keyBytes, 12);
@@ -109,11 +119,11 @@ function salsa20Core(inBytes, keyBytes, constBytes) {
   s[10] = rdU32(constBytes, 8);
   s[11] = rdU32(keyBytes, 16); s[12] = rdU32(keyBytes, 20); s[13] = rdU32(keyBytes, 24); s[14] = rdU32(keyBytes, 28);
   s[15] = rdU32(constBytes, 12);
-  return salsa20Block(s);
+  return salsa20Block(s, rounds);
 }
 
 /** HSalsa20：key(32) + in(16) → 32 字节子密钥（输出 8 个字，不加回初始状态）。 */
-function hsalsa20(keyBytes, inBytes) {
+function hsalsa20(keyBytes, inBytes, rounds = 20) {
   const s = new Array(16);
   s[0] = SIGMA[0];
   s[1] = rdU32(keyBytes, 0); s[2] = rdU32(keyBytes, 4); s[3] = rdU32(keyBytes, 8); s[4] = rdU32(keyBytes, 12);
@@ -122,7 +132,7 @@ function hsalsa20(keyBytes, inBytes) {
   s[10] = SIGMA[2];
   s[11] = rdU32(keyBytes, 16); s[12] = rdU32(keyBytes, 20); s[13] = rdU32(keyBytes, 24); s[14] = rdU32(keyBytes, 28);
   s[15] = SIGMA[3];
-  const x = salsaRounds(s);
+  const x = salsaRounds(s, rounds);
   const words = [0, 5, 10, 15, 6, 7, 8, 9].map((i) => x[i]);
   const out = new Uint8Array(32);
   for (let i = 0; i < 8; i++) wrU32(out, i * 4, words[i]);
@@ -130,12 +140,13 @@ function hsalsa20(keyBytes, inBytes) {
 }
 
 /** XSalsa20 密钥流（length 字节）。 */
-function xsalsa20Keystream(length, key, nonce, counter) {
+function xsalsa20Keystream(length, key, nonce, counter, rounds = 20) {
   if (key.length !== 32) throw new Error(`XSalsa20：密钥须为 32 字节（当前 ${key.length}）。`);
   if (nonce.length !== 24) throw new Error(`XSalsa20：nonce 须为 24 字节（当前 ${nonce.length}）。`);
   const c = Number(counter);
   if (!Number.isInteger(c) || c < 0) throw new Error(`XSalsa20：计数器须为 ≥0 的整数（当前 ${counter}）。`);
-  const subkey = hsalsa20(key, nonce.subarray(0, 16));
+  const R = normRounds(rounds);
+  const subkey = hsalsa20(key, nonce.subarray(0, 16), R);
   const s = new Array(16);
   s[0] = SIGMA[0]; s[5] = SIGMA[1]; s[10] = SIGMA[2]; s[15] = SIGMA[3];
   s[1] = rdU32(subkey, 0); s[2] = rdU32(subkey, 4); s[3] = rdU32(subkey, 8); s[4] = rdU32(subkey, 12);
@@ -144,7 +155,7 @@ function xsalsa20Keystream(length, key, nonce, counter) {
   s[8] = c >>> 0; s[9] = Math.floor(c / 0x100000000) >>> 0;
   const out = new Uint8Array(length);
   for (let off = 0; off < length; off += 64) {
-    const ks = salsa20Block(s);
+    const ks = salsa20Block(s, R);
     const n = Math.min(64, length - off);
     for (let j = 0; j < n; j++) out[off + j] = ks[j];
     s[8] = (s[8] + 1) >>> 0;
@@ -154,8 +165,8 @@ function xsalsa20Keystream(length, key, nonce, counter) {
 }
 
 /** XSalsa20 加解密（自反）。 */
-function xsalsa20(data, key, nonce, counter = 0) {
-  const ks = xsalsa20Keystream(data.length, key, nonce, counter);
+function xsalsa20(data, key, nonce, counter = 0, rounds = 20) {
+  const ks = xsalsa20Keystream(data.length, key, nonce, counter, rounds);
   const out = new Uint8Array(data.length);
   for (let k = 0; k < data.length; k++) out[k] = data[k] ^ ks[k];
   return out;
@@ -234,25 +245,27 @@ const OUT_OPTS = [
 
 register({
   id: "xsalsa20", cat: "stream", name: "XSalsa20",
-  desc: "XSalsa20 流密码（Bernstein「Extending the Salsa20 nonce」）：HSalsa20 派生 32 字节子密钥 + Salsa20/20，密钥 32 字节、nonce 24 字节、64 位块计数器（自反）",
+  desc: "XSalsa20 流密码（Bernstein「Extending the Salsa20 nonce」）：HSalsa20 派生 32 字节子密钥 + Salsa20，密钥 32 字节、nonce 24 字节、64 位块计数器（自反）。rounds 支持 20/12/8（默认 20；HSalsa20 与 Salsa20 同步降轮）",
   params: [
     { key: "key", label: "密钥", type: "text", default: "", placeholder: "32 字节" },
     { key: "keyEnc", label: "密钥编码", type: "select", default: "hex", options: ENC_OPTS },
     { key: "nonce", label: "Nonce", type: "text", default: "", placeholder: "24 字节" },
     { key: "nonceEnc", label: "Nonce 编码", type: "select", default: "hex", options: ENC_OPTS },
     { key: "counter", label: "初始计数器", type: "number", default: 0 },
+    { key: "rounds", label: "轮数", type: "select", default: "20",
+      options: [{ value: "20", label: "20" }, { value: "12", label: "12" }, { value: "8", label: "8" }] },
     { key: "outEnc", label: "密文编码", type: "select", default: "base64", options: OUT_OPTS },
   ],
   encode: (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "hex");
     const nonce = decodeInput(p.nonce || "", p.nonceEnc || "hex");
-    return encodeOutput(xsalsa20(te(text), key, nonce, Number((p && p.counter) || 0)), p.outEnc || "base64");
+    return encodeOutput(xsalsa20(te(text), key, nonce, Number((p && p.counter) || 0), Number((p && p.rounds) || 20)), p.outEnc || "base64");
   },
   decode: (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "hex");
     const nonce = decodeInput(p.nonce || "", p.nonceEnc || "hex");
     const data = decodeInput(String(text).trim(), p.outEnc || "base64");
-    return td(xsalsa20(data, key, nonce, Number((p && p.counter) || 0)));
+    return td(xsalsa20(data, key, nonce, Number((p && p.counter) || 0), Number((p && p.rounds) || 20)));
   },
 });
 

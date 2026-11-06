@@ -22,6 +22,7 @@
 
 import { icon as iconSvg } from "./icons.js";
 import { attachModalLifecycle } from "./modalLifecycle.js";
+import { attachEditHistory } from "./editHistory.js";
 
 // ---- 样式一次性注入（幂等） ----
 // export：main.js 的 openSectionView 也复用 .exp-* 遮罩/卡片样式，需在无输入框实例化的
@@ -78,6 +79,7 @@ export function expandableInput(opts = {}) {
   if (id) input.id = id;
   input.placeholder = placeholder;
   input.value = value == null ? "" : String(value);
+  attachEditHistory(input);
   if (typeof onInput === "function") {
     input.addEventListener("input", () => onInput(input.value));
   }
@@ -150,6 +152,7 @@ export function openExpandModal(initialValue = "", onSave, labels = {}) {
   ta.value = initialValue == null ? "" : String(initialValue);
   ta.spellcheck = false;
   ta.setAttribute("autocomplete", "off");
+  attachEditHistory(ta);
 
  // 底部：取消 / 保存
   const foot = document.createElement("div");
@@ -173,6 +176,8 @@ export function openExpandModal(initialValue = "", onSave, labels = {}) {
     if (closed) return;
     closed = true;
     document.removeEventListener("keydown", onKey);
+    window.removeEventListener("hashchange", close);
+    window.removeEventListener("popstate", close);
     overlay.classList.add("exp-closing");
  // 出场动画后移除
     setTimeout(() => {
@@ -193,6 +198,8 @@ export function openExpandModal(initialValue = "", onSave, labels = {}) {
   save.addEventListener("click", commit);
  // 点遮罩关闭（仅点在 overlay 本身，非冒泡自 dialog）
   document.addEventListener("keydown", onKey);
+  window.addEventListener("hashchange", close);
+  window.addEventListener("popstate", close);
   attachModalLifecycle(overlay, { dialog, onClose: close, initialFocus: ta, restoreFocusTo: previousFocus });
 
  // 聚焦 + 光标置末尾

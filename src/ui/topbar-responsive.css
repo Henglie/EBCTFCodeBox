@@ -62,31 +62,14 @@
   .icon-btn { padding: 0 var(--sp-1); }
 }
 
-/* === 4. 窄屏导航抽屉化（跨平台移动端） === */
+/* === 4. 窄屏导航抽屉化（≤860px；桌面 >860px 保持 rail/折叠原行为） === */
 /*
- * 窄屏（≤860px）sidenav 从 flex 列转 fixed overlay 抽屉，默认左移隐藏
- * 点顶栏汉堡按钮弹出，点遮罩或选中 op 后收起。
- *
- * 注：断点 860px 与全站窄屏断点对齐（customImplEditor / decodeStrength / recipeView 同用 860）。
- * 抽屉方案历史上未接线（main.js/index.html 从未实现 btnNavDrawer/navDrawerMask），
- * 故实际行为是：窄屏强制收成 60px rail 图标态（见下方 92 行块），抽屉 CSS 保留注释以防未来启用。
- *
- * DOM 需求（归并进 index.html）：
- * 1. <header class="topbar"> 内最前（topbar-brand 之前）加：
- * <button class="icon-btn nav-drawer-toggle" id="btnNavDrawer" title="菜单">
- * <span class="msym">menu</span>
- * </button>
- * 2. </body> 之前加：
- * <div class="nav-drawer-mask" id="navDrawerMask"></div>
- *
- * JS 需求（归并进 main.js）：
- * - btnNavDrawer.click → sidenav.classList.toggle("drawer-open") + mask.classList.toggle("show")
- * - navDrawerMask.click → 移除 drawer-open + show（点遮罩关抽屉）
- * - selectOp(id) 末尾 → 若 window.innerWidth <= 860 则移除 drawer-open + show（选完即关）
- * - 窄屏初次进入若 sidenav.collapsed 残留，建议清掉（抽屉模式下 collapsed 无意义，CSS 已覆盖宽度）
- *
- * 令牌：顶栏高 56px 取 app.css .topbar height（硬编码，未抽 --topbar-h 变量，这里复用）；
- * 阴影/圆角/间距/动效全走 theme.css 令牌，不引入新硬编码。
+ * 窄屏不再把 sidenav 常驻成 60px rail：改为 fixed 抽屉，默认关闭。
+ * - 汉堡按钮由 src/ui/mobileDrawer.js DOM 注入顶栏（不改 index.html，避免与主线冲突）。
+ * - 抽屉宽度 min(86vw, 340px)，从顶栏下方滑出；遮罩点击 / Esc / 选中 op 后关闭。
+ * - 抽屉内强制显示分类名、计数、二级算法名与展开箭头；分类展开沿用 main.js 的
+ *   .nav-sub 渲染（需 main.js 的 navRail() 在 ≤860px 返回 false，见接线补丁）。
+ * - 断点 860px 与全站窄屏断点对齐（customImplEditor / decodeStrength / recipeView 同用）。
  */
 
 /* 宽屏默认：汉堡按钮 + 遮罩层隐藏（不占空间不响应） */
@@ -94,30 +77,101 @@
 .nav-drawer-mask { display: none; }
 
 @media (max-width: 860px) {
- /* 窄屏侧栏不再抽屉化。原抽屉方案（fixed + translateX(-100%) + 汉堡/遮罩）
- * 依赖 btnNavDrawer/navDrawerMask 的 JS 接线，而 main.js/index.html 从未实现
- * 导致 sidenav 被推出屏外且无从召回 = 视觉消失。
- * 改为：窄屏强制收缩成 60px rail 图标态，留在 layout flex 内常驻可见
- * 无论有无 .collapsed class 都表现为图标条（复用 app.css 既有 rail 视觉）。 */
+ /* 顶栏汉堡：44px 触控热区；注入在最前（topbar-brand 之前） */
+  .nav-drawer-toggle {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    margin-inline-end: var(--sp-1);
+  }
+  .nav-drawer-toggle .msym { font-size: 22px; }
+  .nav-drawer-toggle:focus-visible,
+  .sidenav .nav-item:focus-visible,
+  .sidenav .nav-subitem:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+  }
+  .nav-drawer-toggle:focus-visible { outline-offset: 2px; }
+
+ /* 遮罩：只盖顶栏以下，顶部搜索/按钮保持可点、不被抽屉压住 */
+  .nav-drawer-mask {
+    display: block;
+    position: fixed;
+    inset: 56px 0 0 0;
+    z-index: 30;
+    background: rgba(0, 0, 0, .45);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 180ms var(--ease), visibility 0s linear 180ms;
+  }
+  .nav-drawer-mask.show {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 180ms var(--ease), visibility 0s;
+  }
+
+ /* 抽屉本体：脱离 flex 布局，默认移出屏幕（visibility 隐藏同时移出 Tab 序） */
   .sidenav,
   .sidenav.collapsed {
-    width: 60px;
+    position: fixed;
+    top: 56px;
+    bottom: 0;
+    inset-inline-start: 0;
+    inset-inline-end: auto;
+    width: min(86vw, 340px);
+    max-width: 340px;
+    z-index: 40;
+    transform: translateX(calc(-100% - 8px));
+    visibility: hidden;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .35);
+    padding: 7px 7px calc(15px + env(safe-area-inset-bottom, 0px));
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    transition: transform 200ms var(--ease-emph-dec), visibility 0s linear 200ms;
   }
- /* 窄屏 rail 态：隐藏文字/计数/箭头、nav-item 居中。
- * 对齐 app.css .sidenav.collapsed 内部行为——因窄屏 sidenav 未必带 .collapsed，此处显式补齐。 */
-  .sidenav .nav-label,
-  .sidenav .nav-count,
-  .sidenav .nav-caret {
-    display: none;
+  html[dir="rtl"] .sidenav,
+  html[dir="rtl"] .sidenav.collapsed {
+    transform: translateX(calc(100% + 8px));
   }
-  .sidenav .nav-item {
-    justify-content: center;
-    padding: 0;
-    gap: 0;
+  .sidenav.drawer-open,
+  html[dir="rtl"] .sidenav.drawer-open {
+    transform: translateX(0);
+    visibility: visible;
+    transition: transform 200ms var(--ease-emph-dec), visibility 0s;
   }
- /* 窄屏隐藏 sidenav 内的折叠开关（rail 常驻，手动折叠无意义） */
+  /* 关闭态强制退出可访问树；仅靠 visibility 过渡在部分 Chromium 会残留 visible。 */
+  .sidenav:not(.drawer-open) { visibility: hidden !important; }
+
+ /* 减动效：直切，不播位移/透明度过渡 */
+  html.reduce-motion .sidenav,
+  html.reduce-motion .sidenav.collapsed,
+  html.reduce-motion .sidenav.drawer-open { transition: none !important; }
+  html.reduce-motion .nav-drawer-mask,
+  html.reduce-motion .nav-drawer-mask.show { transition: none !important; }
+
+ /* 抽屉内解锁 app.css 的 rail 收缩规则（兼容 main.js 仍带 .collapsed 的过渡期） */
+  .sidenav.collapsed .nav-label { display: block; }
+  .sidenav.collapsed .nav-count { display: inline; }
+  .sidenav.collapsed .nav-caret { display: inline-flex; }
+  .sidenav.collapsed .nav-item {
+    width: auto;
+    height: 48px;
+    margin-inline: 0;
+    padding: 0 11px;
+    gap: 11px;
+    justify-content: flex-start;
+    border-radius: var(--r-full);
+  }
+ /* 触屏可点区 ≥44px；分类标题略高，二级算法项 44px */
+  .sidenav .nav-item { min-height: 48px; }
+  .sidenav .nav-subitem { min-height: 44px; padding-inline: 24px var(--sp-3); }
+
+ /* 抽屉内没有手动折叠/拖宽：隐藏 rail 折叠开关与拖拽把手 */
   .nav-toggle { display: none; }
- /* 拖拽把手窄屏隐藏（rail 宽度锁定 60px 不可调） */
   .nav-resizer { display: none; }
 }
 

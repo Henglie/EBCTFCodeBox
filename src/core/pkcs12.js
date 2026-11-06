@@ -705,7 +705,7 @@ register({
   name: "PKCS#12/PFX 解析",
   desc: "PKCS#12/PFX 容器解析（RFC 7292）：版本/结构树、macData 口令完整性校验、口令解密 encryptedData 与 pkcs8ShroudedKeyBag（传统 pbeWithSHAAnd3-Key/2-KeyTripleDES、SHA/RC2-128/40 及 PBES2+PBKDF2+AES/3DES），证书列序列号/主题/有效期并输出 PEM，私钥输出 PKCS#8 PEM；不做证书链验证，口令只在本地处理零外发",
   params: [
-    { key: "pass", label: "口令（加密内容才填）", type: "text", default: "", placeholder: "PFX 口令，留空按空口令尝试" },
+    { sensitive: true, key: "pass", label: "口令（加密内容才填）", type: "password", default: "", placeholder: "PFX 口令，留空按空口令尝试" },
   ],
   run: async (_text, p) => {
     const raw = String(_text || "");

@@ -565,7 +565,7 @@ register({
   name: "SM2 解密",
   desc: "SM2 私钥解密（GB/T 32918.4-2016）：输入 SM2 密文（04 前缀，hex/base64），用私钥 d 解出明文。自动适配 C1||C3||C2 / C1||C2||C3 序",
   params: [
-    { key: "privKey", label: "私钥 d（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
+    { sensitive: true, key: "privKey", label: "私钥 d（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
     { key: "format", label: "密文格式", type: "select", default: "c1c3c2", options: [
       { value: "c1c3c2", label: "C1||C3||C2（GB/T 32918.4 序）" },
       { value: "c1c2c3", label: "C1||C2||C3（GM/T 0009-2023 序）" },
@@ -589,7 +589,7 @@ register({
   name: "SM2 签名",
   desc: "SM2 数字签名（GB/T 32918.2-2016）：ZA=SM3(ENTL||ID_A||a||b||G||P||d)，e=SM3(ZA||M)，输出 r||s（各 32 字节 hex 拼接）。填公钥 (x,y) 可按标准推导 Za，不填则按旧口径直接对 M 签",
   params: [
-    { key: "privKey", label: "私钥 d（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
+    { sensitive: true, key: "privKey", label: "私钥 d（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
     { key: "ida", label: "标识 ID_A", type: "text", default: "1234567812345678", placeholder: "签名用（默认官方样例 ID）" },
     { key: "pubX", label: "公钥 X（hex，可选）", type: "text", default: "", placeholder: "填了按标准 Za 签（推荐）" },
     { key: "pubY", label: "公钥 Y（hex，可选）", type: "text", default: "", placeholder: "同上" },
@@ -641,8 +641,8 @@ register({
   name: "SM2 密钥交换",
   desc: "SM2 密钥交换协议（GB/T 32918.3-2016）：双方私钥 + ID 推导会话密钥 K（1..65536 bit 可选），输出临时点 R_A/R_B 与 S1/S2 确认值（演示口径：临时随机数内部生成）",
   params: [
-    { key: "privKey", label: "本方私钥 d_A（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
-    { key: "privKeyB", label: "对方私钥 d_B（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
+    { sensitive: true, key: "privKey", label: "本方私钥 d_A（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
+    { sensitive: true, key: "privKeyB", label: "对方私钥 d_B（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
     { key: "ida", label: "本方标识 ID_A", type: "text", default: "1234567812345678", placeholder: "默认官方样例 ID" },
     { key: "idaB", label: "对方标识 ID_B", type: "text", default: "ALICE123@YAHOO.COM", placeholder: "默认官方样例" },
     { key: "klen", label: "共享密钥长度(bit)", type: "number", default: 128, placeholder: "KDF 输出位长 1..65536" },

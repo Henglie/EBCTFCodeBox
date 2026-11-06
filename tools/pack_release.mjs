@@ -56,6 +56,7 @@ const INCLUDE_FILES = [
   "manifest.json",
   "sw.js",
   "sw-assets.js",
+  "sw-packs.js",
   "README.md",
   "README_EN.md",
   "CHANGELOG.md",
@@ -83,12 +84,16 @@ const DIR_EXCLUDE = (rel) =>
   // 残留 / .bak* 备份——运行时零引用（material-color vendor 的 TS 标注与 map 共 90 个 ≈ -864KB）。
   rel.endsWith(".d.ts") || rel.endsWith(".js.map") ||
   rel.endsWith(".orig") || /\.bak(-\d{8,12})?$/.test(rel) ||
+  // addons 内的内部交付报告（含本机路径/代理代号/任务号）不进发行包
+  (rel.startsWith("addons/") && (/\/AGENT_[^/]+\.md$/.test(rel) || /\/report-[^/]+\.md$/.test(rel))) ||
   // tools/ 在发行包里只带 exe/（bridge.py 的 EXE_BASE，运行时必需）。
   // 构建期脚本（subset_fonts.py 字体切分 / build_bkcrack.* / gen_*.mjs /
   // pack_release.mjs 本体）只留 git 仓库供复现构建，
   // 不进成品包（2026-08-26 恒烈指出：字体切分等构建脚本不该混进发行包）。
   // 注意 rel !== "tools" —— 目录本身必须放行，否则 exe/ 整个被丢掉。
-  (rel.startsWith("tools/") && rel !== "tools" && !rel.startsWith("tools/exe"));
+  (rel.startsWith("tools/") && rel !== "tools" && !rel.startsWith("tools/exe")) ||
+  // mcp 扩展桥/本地 worker 是 .gitignore 保留的本机文件，不随发行包（避免内部卡号/本机路径泄漏）
+  rel === "mcp/extension_bridge.py" || rel === "mcp/extension_worker.mjs" || rel.startsWith("mcp/worker/");
 
 // ==================== 渠道表（PROGRESS「🔑 分渠道打包」段） ====================
 // 渠道泛化（2026-09-13 恒烈「我要制作更多授权文件了，可能后续不是5个了」）：

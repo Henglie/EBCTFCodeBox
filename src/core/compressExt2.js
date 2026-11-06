@@ -2,7 +2,7 @@
  * compressExt2.js — 批三·压缩校验卡（B3-B6 + E7-E8，6 op）。
  *
  * rle / lzw / elias（forensic，压缩编码族，与 gzipCodec 同分类）
- * verhoeff（hash，校验族）lz4Dec / bzip2Dec（forensic，解压族）。
+ * verhoeff（hash，校验族）lz4Dec / bzip2Dec（archive，解压族；lz4Dec 新增 dir=compress 块压缩）。
  *
  * 口径来源（逐项）：
  *   rle      — dcode.fr/compression-rle（2026-09 抓取核实）：
@@ -23,6 +23,10 @@
  *              1-65535、minmatch=4、末序列仅字面量）+ 帧格式（lz4_Frame_format.md：
  *              magic 0x184D2204、FLG/BD、8 字节内容长、HC=(xxh32(descriptor)>>8)&0xff、
  *              块高位置位=未压缩、0x00000000 EndMark、xxh32 内容校验）。
+ *              dir=compress 复用 lz4CompressBlock（哈希链贪心 + MFLIMIT=12/LASTLITERALS=5），
+ *              只输出裸 block，明确不伪造 frame。
+ *   bzip2Dec — 压缩方向 BLOCKED：纯 JS 需 BWT+MTF+RLE1+Huffman 全链，且无内置压缩器可对拍，
+ *              按「写不清宁缺」不提供假压缩；详见 资料/工程留存/T750/A3.md。
  *   bzip2Dec — bzip2 流格式（BZh+级别；块 magic 0x314159265359 / 尾 magic
  *              0x177245385090；CRC-32/BZIP2 poly 0x04C11DB7 MSB-first；24 位 origPtr；
  *              16×16 符号位图；2-6 棵 Huffman 树 + 50 符号换树选择子 MTF+一元码；
@@ -39,6 +43,29 @@ import { inputToBytes, bytesToOutput } from "./compress.js";
 
 const te = (s) => new TextEncoder().encode(s);
 const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(b));
+
+/** 字节 → 连续 hex（LZ4 压缩输出用，不截断）。 */
+function bytesToHexStr(bytes) {
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += bytes[i].toString(16).padStart(2, "0");
+  return s;
+}
+
+/** 字节 → 标准 Base64（LZ4 压缩输出用）。 */
+function bytesToB64Str(bytes) {
+  const A = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i];
+    const b1 = i + 1 < bytes.length ? bytes[i + 1] : 0;
+    const b2 = i + 2 < bytes.length ? bytes[i + 2] : 0;
+    s += A[b0 >> 2];
+    s += A[((b0 & 3) << 4) | (b1 >> 4)];
+    s += i + 1 < bytes.length ? A[((b1 & 0x0f) << 2) | (b2 >> 6)] : "=";
+    s += i + 2 < bytes.length ? A[b2 & 0x3f] : "=";
+  }
+  return s;
+}
 
 /* ================================================================
  * B3 RLE 行程编码 rle
@@ -876,46 +903,96 @@ function lz4DecompressFrame(bytes, dict, info) {
   return out;
 }
 
-/** 简易 LZ4 块压缩（测试工具：贪心最长匹配 + 规范末段约束），导出供对拍。 */
+/**
+ * LZ4 块压缩（规范 v1.9 块格式）。
+ * 哈希链贪心最长匹配：4 字节哈希 + prev 链，链深上限 64，offset ≤ 65535。
+ * 末段约束：MFLIMIT=12（末 12 字节内不再开新匹配）、LASTLITERALS=5（末 5 字节恒为字面量）。
+ * 输出为裸 block（token/字面量/2 字节小端 offset/匹配长度续位），不生成 frame。
+ * 返回 number[]（与既有导出/调用方一致）。
+ */
 function lz4CompressBlock(bytes) {
+  const n = bytes.length;
   const out = [];
-  const emitSeq = (literals, offset, matchLen) => {
-    let litLen = literals.length;
-    const token = (litLen >= 15 ? 15 : litLen) << 4 | ((matchLen || 0) >= 19 ? 15 : (matchLen ? matchLen - 4 : 0));
+  if (n === 0) return out;
+
+  const emitSeq = (start, litLen, offset, matchLen) => {
+    const token = (litLen >= 15 ? 15 : litLen) << 4 | (matchLen ? (matchLen - 4 >= 15 ? 15 : matchLen - 4) : 0);
     out.push(token);
-    if (litLen >= 15) { litLen -= 15; while (litLen >= 255) { out.push(255); litLen -= 255; } out.push(litLen); }
-    for (const b of literals) out.push(b);
+    if (litLen >= 15) {
+      let v = litLen - 15;
+      while (v >= 255) { out.push(255); v -= 255; }
+      out.push(v);
+    }
+    for (let k = 0; k < litLen; k++) out.push(bytes[start + k]);
     if (matchLen) {
       out.push(offset & 0xff, (offset >>> 8) & 0xff);
       let ml = matchLen - 4;
-      if (ml >= 15) { ml -= 15; while (ml >= 255) { out.push(255); ml -= 255; } out.push(ml); }
+      if (ml >= 15) {
+        ml -= 15;
+        while (ml >= 255) { out.push(255); ml -= 255; }
+        out.push(ml);
+      }
     }
   };
-  let lit = [];
+
+  if (n <= 12) {
+    emitSeq(0, n, 0, 0);
+    return out;
+  }
+
+  const HASH_BITS = 16;
+  const HASH_SIZE = 1 << HASH_BITS;
+  const head = new Int32Array(HASH_SIZE).fill(-1);
+  const prev = new Int32Array(n).fill(-1);
+  const hashAt = (p) => {
+    const v = bytes[p] | (bytes[p + 1] << 8) | (bytes[p + 2] << 16) | (bytes[p + 3] << 24);
+    return (Math.imul(v, 2654435761) >>> (32 - HASH_BITS)) & (HASH_SIZE - 1);
+  };
+  const insert = (p) => {
+    if (p + 4 > n) return;
+    const h = hashAt(p);
+    prev[p] = head[h];
+    head[h] = p;
+  };
+
+  const mflimit = n - 12;
+  const matchlimit = n - 5;
+  let anchor = 0;
   let i = 0;
-  const n = bytes.length;
-  while (i < n) {
-    // 末 12 字节内不开新匹配；末 5 字节恒为字面量（块格式规范）
-    if (i + 12 >= n) break;
-    let bestLen = 0, bestOff = 0;
-    const maxOff = Math.min(65535, i);
-    for (let off = 1; off <= maxOff; off++) {
-      let l = 0;
-      const pos = i - off;
-      while (i + l < n - 5 && bytes[pos + (l % off)] === bytes[i + l] && l < 260) l++;
-      if (l > bestLen) { bestLen = l; bestOff = off; }
+
+  while (i <= mflimit) {
+    insert(i);
+    let cand = prev[i];
+    let bestLen = 0;
+    let bestOff = 0;
+    let chain = 64;
+    while (cand >= 0 && chain-- > 0) {
+      const off = i - cand;
+      if (off > 65535) break;
+      if (bytes[cand + bestLen] === bytes[i + bestLen] && bytes[cand] === bytes[i]) {
+        let l = 0;
+        while (i + l < matchlimit && l < 260 && bytes[cand + l] === bytes[i + l]) l++;
+        if (l > bestLen) {
+          bestLen = l;
+          bestOff = off;
+          if (l >= 260) break;
+        }
+      }
+      cand = prev[cand];
     }
-    if (bestLen >= 4 && bestLen >= 4) {
-      emitSeq(lit, bestOff, bestLen);
-      lit = [];
-      i += bestLen;
+
+    if (bestLen >= 4) {
+      emitSeq(anchor, i - anchor, bestOff, bestLen);
+      const end = i + bestLen;
+      for (let p = i + 1; p < end; p++) insert(p);
+      i = end;
+      anchor = i;
     } else {
-      lit.push(bytes[i]);
       i++;
     }
   }
-  while (i < n) lit.push(bytes[i++]);
-  emitSeq(lit, 0, 0);
+
+  emitSeq(anchor, n - anchor, 0, 0);
   return out;
 }
 
@@ -960,33 +1037,77 @@ function lz4DecRun(text, p) {
   return r.mode === "text" ? r.text : "(解压成功，结果为二进制 " + outU8.length + " 字节，输出 hex)\n" + r.text;
 }
 
+const LZ4_MAX_COMPRESS_BYTES = 4 * 1024 * 1024;
+
+/** LZ4 压缩：只产出裸 block（不伪造 frame），输出 hex 或 base64。 */
+function lz4CompressRun(text, p) {
+  const fmt = (p && p.fmt) || "auto";
+  if (fmt === "frame") {
+    throw new Error("LZ4 压缩仅支持块格式（block）：本实现不生成 LZ4 Frame（无帧头/xxh32 校验），请改选 auto 或 block");
+  }
+  let bytes;
+  try {
+    bytes = inputToBytes(text, p);
+  } catch {
+    throw new Error("LZ4 压缩：输入不是合法 hex/base64（文本请把「输入编码」设为 UTF-8）");
+  }
+  if (bytes.length === 0) throw new Error("LZ4 压缩：输入为空。");
+  if (bytes.length > LZ4_MAX_COMPRESS_BYTES) {
+    throw new Error(`LZ4 压缩：输入 ${bytes.length} 字节超过上限 ${LZ4_MAX_COMPRESS_BYTES} 字节（4 MiB）`);
+  }
+  const block = Uint8Array.from(lz4CompressBlock(bytes));
+  const outEnc = (p && p.outEnc) || "hex";
+  if (outEnc === "base64") return bytesToB64Str(block);
+  if (outEnc === "hex") return bytesToHexStr(block);
+  throw new Error(`LZ4 压缩：未知输出编码 ${JSON.stringify(outEnc)}，仅支持 hex / base64`);
+}
+
+/** 方向分流：dir=decompress（默认，旧行为）/ compress。 */
+function lz4Run(text, p) {
+  const dir = (p && p.dir) || "decompress";
+  if (dir === "compress") return lz4CompressRun(text, p);
+  if (dir === "decompress") return lz4DecRun(text, p);
+  throw new Error(`LZ4：未知方向 ${JSON.stringify(dir)}，仅支持 compress / decompress`);
+}
+
 register({
-  id: "lz4Dec", cat: "archive", name: "LZ4 解压",
-  desc: "块格式（token 高 4 位字面量/低 4 位匹配 + 255 续位 + 2 字节小端偏移）与帧格式（magic 0x184D2204、xxh32 头/块/内容校验）解压；支持帧外部字典（Dict-ID + 「外部字典」参数），hex/base64 输入自动识别",
+  id: "lz4Dec", cat: "archive", name: "LZ4 压缩 / 解压",
+  desc: "dir=decompress（默认）：块格式（token 高 4 位字面量/低 4 位匹配 + 255 续位 + 2 字节小端偏移）与帧格式（magic 0x184D2204、xxh32 头/块/内容校验）解压，支持帧外部字典；" +
+    "dir=compress：复用内部 lz4CompressBlock 产出裸块格式（block），不生成帧（frame），输出 hex/base64。hex/base64 输入自动识别",
   params: [
+    { key: "dir", label: "方向", type: "select", default: "decompress",
+      options: [
+        { value: "decompress", label: "解压（decompress）" },
+        { value: "compress", label: "压缩（compress，仅块格式）" },
+      ] },
     { key: "fmt", label: "格式", type: "select", default: "auto",
       options: [
         { value: "auto", label: "自动（magic 判帧/块）" },
         { value: "block", label: "块格式（裸 block）" },
         { value: "frame", label: "帧格式（LZ4 Frame）" },
       ] },
-    { key: "inputEnc", label: "输入编码", type: "select", default: "auto",
+    { key: "inputEnc", label: "输入编码（dir=compress 时文本请选 UTF-8）", type: "select", default: "auto",
       options: [
         { value: "auto", label: "自动（hex/base64/UTF-8）" },
         { value: "hex", label: "Hex" },
         { value: "base64", label: "Base64" },
         { value: "utf8", label: "UTF-8 文本" },
       ] },
-    { key: "dict", label: "外部字典（帧带 Dict-ID 时，与压缩同源的字典字节；hex/base64 自动识别）", type: "textarea", rows: 4, placeholder: "可选：提供帧描述符声明的外部字典" },
+    { key: "outEnc", label: "压缩输出编码（dir=compress）", type: "select", default: "hex",
+      options: [
+        { value: "hex", label: "Hex" },
+        { value: "base64", label: "Base64" },
+      ] },
+    { key: "dict", label: "外部字典（仅解压；帧带 Dict-ID 时，与压缩同源的字典字节；hex/base64 自动识别）", type: "textarea", rows: 4, placeholder: "可选：提供帧描述符声明的外部字典" },
     { key: "dictEnc", label: "外部字典编码", type: "select", default: "auto",
       options: [
         { value: "auto", label: "自动（hex/base64/UTF-8）" },
         { value: "hex", label: "Hex" },
         { value: "base64", label: "Base64" },
       ] },
-    { key: "toFile", label: "二进制结果输出为文件", type: "bool", default: false },
+    { key: "toFile", label: "二进制结果输出为文件（dir=decompress）", type: "bool", default: false },
   ],
-  run: lz4DecRun,
+  run: lz4Run,
 });
 
 /* ================================================================
@@ -1327,7 +1448,7 @@ function bzip2DecRun(text, p) {
 }
 
 register({
-  id: "bzip2Dec", cat: "archive", name: "bzip2 解压",
+  id: "bzip2Dec", family: "bzip2", familyLabel: "decompress", cat: "archive", name: "bzip2 解压",
   desc: "完整解压链：BZh 头 + π/√2 magic + Huffman(MTF+RUNA/RUNB) + BWT 逆变换 + RLE1 尾游程 + 块/文件 CRC 校验；含 0.9.0 时代已废弃的 randomized 档（按参考实现 BZ2_rNums 表逐字节反随机化）；纯 JS 自研，hex/base64 输入自动识别",
   params: [
     { key: "inputEnc", label: "输入编码", type: "select", default: "auto",
@@ -1349,6 +1470,6 @@ export {
   lzwEncodeTiffCore, lzwDecodeTiffCore,
   eliasGammaCode, eliasDeltaCode, eliasEncode, eliasDecode,
   verhoeffChecksum, verhoeffRun,
-  xxh32, lz4DecompressBlockInto, lz4DecompressFrame, lz4CompressBlock, lz4DecRun,
+  xxh32, lz4DecompressBlockInto, lz4DecompressFrame, lz4CompressBlock, lz4DecRun, lz4CompressRun, lz4Run,
   bz2Crc, bz2Decompress, bzip2DecRun,
 };

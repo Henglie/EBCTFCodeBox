@@ -279,7 +279,7 @@ register({
   // 排除出一键解码的批量遍历，仅在用户主动选择时运行。
   noAuto: true,
   params: [
-    { key: "password", label: "口令", type: "text", default: DEFAULT_PASSWORD, placeholder: "解密口令（默认内置）" },
+    { sensitive: true, key: "password", label: "口令", type: "password", default: DEFAULT_PASSWORD, placeholder: "解密口令（默认内置）" },
     { key: "showMeta", label: "附带识别信息", type: "bool", default: false },
   ],
   run: async (t, p) => {
@@ -459,7 +459,7 @@ register({
   familyLabel: "encrypt",
   noAuto: true,
   params: [
-    { key: "password", label: "口令", type: "text", default: DEFAULT_PASSWORD, placeholder: "加密口令（默认内置；解密须用同一口令）" },
+    { sensitive: true, key: "password", label: "口令", type: "password", default: DEFAULT_PASSWORD, placeholder: "加密口令（默认内置；解密须用同一口令）" },
     { key: "format", label: "密文格式", type: "select", default: "2", options: [
       { value: "2", label: "format2 · PBKDF2（快，推荐）" },
       { value: "1", label: "format1 · Argon2id 64MiB（慢，单次数秒）" },

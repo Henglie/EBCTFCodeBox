@@ -382,7 +382,7 @@ register({
     },
     { key: "n", label: "项数 n（gen 模式）", type: "number", default: 8, placeholder: "2..4096，每块 bit 数" },
     { key: "beta", label: "公钥 β（manual 加密）", type: "text", default: "", placeholder: "逗号分隔十进制，或改填 w/q/r 自动算" },
-    { key: "w", label: "私钥 w 超递增序列（manual/解密）", type: "text", default: "", placeholder: "逗号分隔十进制" },
+    { sensitive: true, key: "w", label: "私钥 w 超递增序列（manual/解密）", type: "text", default: "", placeholder: "逗号分隔十进制" },
     { key: "q", label: "模数 q（manual/解密）", type: "text", default: "", placeholder: "十进制，q > Σw" },
     { key: "r", label: "乘数 r（manual/解密）", type: "text", default: "", placeholder: "十进制，gcd(r,q)=1" },
     { key: "dataEnc", label: "明文编码", type: "select", default: "utf8", options: DATA_ENC },

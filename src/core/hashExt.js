@@ -1,12 +1,13 @@
 /*
  * hashExt.js — 哈希扩展组（交付）。
  *
- * 覆盖：SM3（国密）/ RIPEMD-160 / BLAKE2b / BLAKE2s —— WebCrypto 没有的纯 JS 哈希。
+ * 覆盖：SM3（国密）/ RIPEMD-128/160/256/320 / BLAKE2b / BLAKE2s —— WebCrypto 没有的纯 JS 哈希。
  * 与 hash.js 解耦（内嵌≠耦合红线），自写工具，不依赖 hash.js 内部函数。
  *
  * 红线：
  * - SM3 走国密标准 GB/T 32905-2016（前身 GM/T 0004-2012），IV/常量照抄标准不许编造。权威向量验证。
- * - RIPEMD-160 走 RFC 1320 附录（RIPEMD-160 spec），权威向量验证。
+ * - RIPEMD 系列走 Dobbertin/Bosselaers/Preneel 原规范与 Bosselaers 官方 RIPEMD-160 页面
+ *   （rmd128/rmd256/rmd320 伪代码 + 官方测试向量），权威向量验证。
  * - BLAKE2b/s 走 RFC 7693，IV/常量照抄标准，权威向量验证。
  * - 零外发：全部本地纯 JS 计算。
  * - 契约：单向 run(text) → hex 串（契约）。
@@ -231,6 +232,170 @@ function ripemd160Bytes(bytes) {
 
 function ripemd160(text) {
   return toHex(ripemd160Bytes(te(text)));
+}
+
+// ============================================================
+// RIPEMD-128 / RIPEMD-256 / RIPEMD-320（原规范，Bosselaers 官方伪代码）
+// 32 位小端；RIPEMD-128 与 256 共用 64 轮双线结构，256 每轮后交换一个链变量；
+// RIPEMD-320 为 RIPEMD-160 的 80 轮扩展，5 轮后依次交换 B/D/A/C/E。
+// ============================================================
+const RIPEMD128_RL = RIPEMD160_RL.slice(0, 64);
+const RIPEMD128_RR = RIPEMD160_RR.slice(0, 64);
+const RIPEMD128_SL = RIPEMD160_SL.slice(0, 64);
+const RIPEMD128_SR = RIPEMD160_SR.slice(0, 64);
+const RIPEMD128_KL = [0x00000000, 0x5A827999, 0x6ED9EBA1, 0x8F1BBCDC];
+const RIPEMD128_KR = [0x50A28BE6, 0x5C4DD124, 0x6D703EF3, 0x00000000];
+
+function ripemd128f(x, y, z, j) {
+  if (j < 16) return (x ^ y ^ z) >>> 0;
+  if (j < 32) return ((x & y) | (~x & z)) >>> 0;
+  if (j < 48) return ((x | ~y) ^ z) >>> 0;
+  return ((x & z) | (y & ~z)) >>> 0;
+}
+
+// RIPEMD-128/256 共用填充：0x80 + 0x00... + 64 位小端长度（位）
+function ripemdPad(bytes) {
+  const origLen = bytes.length;
+  const withOne = origLen + 1;
+  const k = (56 - (withOne % 64) + 64) % 64;
+  const total = withOne + k + 8;
+  const msg = new Uint8Array(total);
+  msg.set(bytes, 0);
+  msg[origLen] = 0x80;
+  const bitLen = BigInt(origLen) * 8n;
+  const dv = new DataView(msg.buffer);
+  dv.setUint32(total - 8, Number(bitLen & 0xffffffffn), true);
+  dv.setUint32(total - 4, Number((bitLen >> 32n) & 0xffffffffn), true);
+  return msg;
+}
+
+// wide=false → RIPEMD-128；wide=true → RIPEMD-256
+function ripemd128_256Bytes(bytes, wide) {
+  const msg = ripemdPad(bytes);
+  const h = wide
+    ? [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476,
+       0x76543210, 0xFEDCBA98, 0x89ABCDEF, 0x01234567]
+    : [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476];
+
+  for (let i = 0; i < msg.length; i += 64) {
+    const X = new Array(16);
+    for (let j = 0; j < 16; j++) {
+      const p = i + j * 4;
+      X[j] = (msg[p] | (msg[p + 1] << 8) | (msg[p + 2] << 16) | (msg[p + 3] << 24)) >>> 0;
+    }
+
+    let A = h[0], B = h[1], C = h[2], D = h[3];
+    let Ap = wide ? h[4] : h[0];
+    let Bp = wide ? h[5] : h[1];
+    let Cp = wide ? h[6] : h[2];
+    let Dp = wide ? h[7] : h[3];
+
+    for (let j = 0; j < 64; j++) {
+      let T = (A + ripemd128f(B, C, D, j) + X[RIPEMD128_RL[j]] + RIPEMD128_KL[j >> 4]) >>> 0;
+      T = rotl32(T, RIPEMD128_SL[j]);
+      A = D; D = C; C = B; B = T;
+
+      T = (Ap + ripemd128f(Bp, Cp, Dp, 63 - j) + X[RIPEMD128_RR[j]] + RIPEMD128_KR[j >> 4]) >>> 0;
+      T = rotl32(T, RIPEMD128_SR[j]);
+      Ap = Dp; Dp = Cp; Cp = Bp; Bp = T;
+
+      if (wide) {
+        if (j === 15) { const t = A; A = Ap; Ap = t; }
+        else if (j === 31) { const t = B; B = Bp; Bp = t; }
+        else if (j === 47) { const t = C; C = Cp; Cp = t; }
+        else if (j === 63) { const t = D; D = Dp; Dp = t; }
+      }
+    }
+
+    if (wide) {
+      h[0] = (h[0] + A) >>> 0; h[1] = (h[1] + B) >>> 0;
+      h[2] = (h[2] + C) >>> 0; h[3] = (h[3] + D) >>> 0;
+      h[4] = (h[4] + Ap) >>> 0; h[5] = (h[5] + Bp) >>> 0;
+      h[6] = (h[6] + Cp) >>> 0; h[7] = (h[7] + Dp) >>> 0;
+    } else {
+      const T = (h[1] + C + Dp) >>> 0;
+      h[1] = (h[2] + D + Ap) >>> 0;
+      h[2] = (h[3] + A + Bp) >>> 0;
+      h[3] = (h[0] + B + Cp) >>> 0;
+      h[0] = T;
+    }
+  }
+
+  const words = wide ? 8 : 4;
+  const out = new Uint8Array(words * 4);
+  for (let i = 0; i < words; i++) {
+    out[i * 4] = h[i] & 0xff;
+    out[i * 4 + 1] = (h[i] >>> 8) & 0xff;
+    out[i * 4 + 2] = (h[i] >>> 16) & 0xff;
+    out[i * 4 + 3] = (h[i] >>> 24) & 0xff;
+  }
+  return out;
+}
+
+function ripemd128Bytes(bytes) { return ripemd128_256Bytes(bytes, false); }
+function ripemd256Bytes(bytes) { return ripemd128_256Bytes(bytes, true); }
+
+function ripemd320Bytes(bytes) {
+  const msg = ripemdPad(bytes);
+  const h = [
+    0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0,
+    0x76543210, 0xFEDCBA98, 0x89ABCDEF, 0x01234567, 0x3C2D1E0F,
+  ];
+
+  for (let i = 0; i < msg.length; i += 64) {
+    const X = new Array(16);
+    for (let j = 0; j < 16; j++) {
+      const p = i + j * 4;
+      X[j] = (msg[p] | (msg[p + 1] << 8) | (msg[p + 2] << 16) | (msg[p + 3] << 24)) >>> 0;
+    }
+
+    let A = h[0], B = h[1], C = h[2], D = h[3], E = h[4];
+    let Ap = h[5], Bp = h[6], Cp = h[7], Dp = h[8], Ep = h[9];
+
+    for (let j = 0; j < 80; j++) {
+      let T = (A + ripemd160f(B, C, D, j) + X[RIPEMD160_RL[j]] + RIPEMD160_KL[j >> 4]) >>> 0;
+      T = (rotl32(T, RIPEMD160_SL[j]) + E) >>> 0;
+      A = E; E = D; D = rotl32(C, 10); C = B; B = T;
+
+      T = (Ap + ripemd160f(Bp, Cp, Dp, 79 - j) + X[RIPEMD160_RR[j]] + RIPEMD160_KR[j >> 4]) >>> 0;
+      T = (rotl32(T, RIPEMD160_SR[j]) + Ep) >>> 0;
+      Ap = Ep; Ep = Dp; Dp = rotl32(Cp, 10); Cp = Bp; Bp = T;
+
+      if (j === 15) { const t = B; B = Bp; Bp = t; }
+      else if (j === 31) { const t = D; D = Dp; Dp = t; }
+      else if (j === 47) { const t = A; A = Ap; Ap = t; }
+      else if (j === 63) { const t = C; C = Cp; Cp = t; }
+      else if (j === 79) { const t = E; E = Ep; Ep = t; }
+    }
+
+    h[0] = (h[0] + A) >>> 0; h[1] = (h[1] + B) >>> 0;
+    h[2] = (h[2] + C) >>> 0; h[3] = (h[3] + D) >>> 0;
+    h[4] = (h[4] + E) >>> 0; h[5] = (h[5] + Ap) >>> 0;
+    h[6] = (h[6] + Bp) >>> 0; h[7] = (h[7] + Cp) >>> 0;
+    h[8] = (h[8] + Dp) >>> 0; h[9] = (h[9] + Ep) >>> 0;
+  }
+
+  const out = new Uint8Array(40);
+  for (let i = 0; i < 10; i++) {
+    out[i * 4] = h[i] & 0xff;
+    out[i * 4 + 1] = (h[i] >>> 8) & 0xff;
+    out[i * 4 + 2] = (h[i] >>> 16) & 0xff;
+    out[i * 4 + 3] = (h[i] >>> 24) & 0xff;
+  }
+  return out;
+}
+
+function ripemd128(text) { return toHex(ripemd128Bytes(te(text))); }
+function ripemd256(text) { return toHex(ripemd256Bytes(te(text))); }
+function ripemd320(text) { return toHex(ripemd320Bytes(te(text))); }
+
+function ripemdByBits(bits, text) {
+  const b = Number(bits);
+  if (b === 128) return ripemd128(text);
+  if (b === 160) return ripemd160(text);
+  if (b === 256) return ripemd256(text);
+  if (b === 320) return ripemd320(text);
+  throw new Error(`RIPEMD 输出位数只支持 128/160/256/320（拿到 ${JSON.stringify(bits)}）`);
 }
 
 // ============================================================
@@ -660,8 +825,17 @@ register({
 });
 
 register({
-  id: "ripemd160", cat: "hash", name: "RIPEMD-160", desc: "RIPEMD-160 消息摘要（160 位，比特币地址用）",
-  run: (t, p) => ripemd160(p?.rawBytes ?? t),
+  id: "ripemd160", cat: "hash", name: "RIPEMD（多档）",
+  desc: "RIPEMD 消息摘要（位宽 128/160/256/320，默认 160；160 位比特币地址用）",
+  params: [
+    { key: "size", label: "输出位数", type: "select", default: 160, options: [
+      { value: 128, label: "128" },
+      { value: 160, label: "160" },
+      { value: 256, label: "256" },
+      { value: 320, label: "320" },
+    ] },
+  ],
+  run: (t, p) => ripemdByBits(Number((p && p.size != null) ? p.size : 160), p?.rawBytes ?? t),
 });
 
 register({
@@ -735,6 +909,10 @@ register({
 export {
   sm3, sm3Bytes,
   ripemd160, ripemd160Bytes,
+  ripemd128, ripemd128Bytes,
+  ripemd256, ripemd256Bytes,
+  ripemd320, ripemd320Bytes,
+  ripemdByBits,
   blake2b, blake2bBytes,
   blake2s, blake2sBytes,
  // 扩展

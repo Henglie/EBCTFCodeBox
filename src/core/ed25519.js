@@ -258,7 +258,7 @@ register({
   name: "Ed25519 密钥生成",
   desc: "Ed25519 密钥生成（RFC 8032 §5.1.5）：私钥 32 字节随机（或给定）→ h=SHA-512(私钥)，a=clamp(h[0:32])，公钥 = encodePoint(a·B)。配套「签名/验签」档使用",
   params: [
-    { key: "priv", label: "私钥 (32B hex)", type: "text", default: "", placeholder: "64 hex 字符，留空随机" },
+    { sensitive: true, key: "priv", label: "私钥 (32B hex)", type: "text", default: "", placeholder: "64 hex 字符，留空随机" },
   ],
   run: (_text, p) => {
     const skRaw = (p && p.priv && String(p.priv).trim());
@@ -297,7 +297,7 @@ register({
         { value: "hex", label: "Hex 字节" },
       ],
     },
-    { key: "priv", label: "私钥 (32B hex)", type: "text", default: "", placeholder: "64 hex 字符" },
+    { sensitive: true, key: "priv", label: "私钥 (32B hex)", type: "text", default: "", placeholder: "64 hex 字符" },
   ],
   run: (text, p) => {
     const msgMode = (p && p.msgMode) || "text";

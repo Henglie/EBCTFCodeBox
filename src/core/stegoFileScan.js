@@ -286,7 +286,13 @@ export async function scanStegoFile(bytes, name = "", opts = {}) {
       });
       const images = scan && Array.isArray(scan.images) ? scan.images : [];
       if (images.length) {
-        const previews = images.slice(0, 8).map((im) => ({
+        // 每个轴至少预览 4 张，避免 x 轴占满前 8 个让用户误以为没有横图。
+        const picked = [];
+        for (const axis of ["x", "y"]) {
+          const list = images.filter((im) => im.axis === axis);
+          picked.push(...list.slice(0, 4));
+        }
+        const previews = (picked.length ? picked : images).slice(0, 8).map((im) => ({
           type: "preview",
           label: im.name,
           filename: im.name,

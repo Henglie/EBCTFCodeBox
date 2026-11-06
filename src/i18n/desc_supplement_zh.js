@@ -61,7 +61,7 @@ export default {
   "op.crc16.desc": "CRC16 校验，CCITT-FALSE 标准，多项式 0x1021。",
   "op.ntlm.desc": "NTLM 哈希，对 UTF-16LE 编码的密码做 MD4，Windows 密码存储格式。",
   "op.sha3.desc": "SHA-3 哈希（FIPS 202 标准），位宽可选 224/256/384/512，纯 JS Keccak 实现。",
-  "op.keccak256.desc": "Keccak-256 哈希，以太坊常用，padding 为 0x01（与 SHA3-256 的 0x06 不同）。",
+  "op.keccak256.desc": "Keccak 海绵函数（原 Keccak padding 0x01），位宽 224/256/384/512，默认 256；256 位与以太坊 Keccak-256 一致（与 SHA3-256 的 0x06 不同）。",
   "op.shake128.desc": "SHAKE128 可扩展输出哈希（FIPS 202），输出长度可由参数指定。",
   "op.shake256.desc": "SHAKE256 可扩展输出哈希（FIPS 202），输出长度可由参数指定。",
 
@@ -100,6 +100,8 @@ export default {
   "op.sha224.desc": "SHA-224 消息摘要（FIPS 180-4，纯 JS——WebCrypto 不支持 SHA-224）：SHA-256 压缩函数 + 专属 IV + 输出截断 224 位；与 node:crypto/OpenSSL 逐字节对拍；参数：bits",
   "op.cshake.desc": "cSHAKE128/256 可定制 XOF（NIST SP 800-185 §3.3）：SHAKE 加函数名 N 与定制串 S 的域分隔；N=S 为空时等价 SHAKE；复用 Keccak-f[1600]；参数：bits + 函数名 + 定制串 + 输入编码 + 输出长度",
   "op.falconPkParse.desc": "Falcon/FN-DSA 公钥解析（spec §3.11.4）：头字节 0000 nnnn（0x09=Falcon-512 / 0x0A=Falcon-1024）+ 每系数 14bit 大端位流（897/1793 字节），解出档位/N/q=12289/多项式 h 系数与 SHA256 指纹；长度/头字节/系数越界（≥12289）分类显式报错。验签第一步，公钥为公开材料",
+  "op.falconKeyGen.desc": "Falcon/FN-DSA 密钥生成（规范 v1.2）：logn=9/10 对应 n=512/1024；采样 f,g，Berd 判界，解 NTRU 方程 f·G−g·F=q，输出公钥（0x09/0x0A + 14bit 系数流）与官方三段私钥（0x59/0x5A + trim_i8(f,g,F)）。纯 JS；种子留空走统一随机源，固定 48 字节 seed 可复现。",
+  "op.falconSign.desc": "Falcon/FN-DSA 签名（规范 v1.2 算法 15）：输入消息与官方三段私钥（0x59/0x5A）或本工具四段私钥；SHAKE256 哈希到点，ffSampling 动态 LDL 取样，范数 ≤⌊β²⌋ 才输出；签名 = 0x39/0x3A ‖ nonce(40B) ‖ comp(s2)，可直接交给 Falcon 验签。nonce/种子留空走统一随机源，显式给出可复现 KAT。",
   "op.falconVerify.desc": "Falcon/FN-DSA 签名验证（spec v1.2 算法 16，仅验签方向）：c = SHAKE256(nonce‖消息) 哈希到点（16bit 大端采样、t<61445 拒绝采样）；s1 = c − s2·h mod (x^n+1, 12289) 居中；‖(s1,s2)‖² ≤ ⌊β²⌋（512 档 34034726 / 1024 档 70265242 含等号）则有效。自动识别规范压缩（0x39/0x3A）/CT 定长（0x59/0x5A）/NIST API signed-message（KAT 风格）三种封装；格式错与签名错分列报出；纯 JS O(n²) 卷积（1024 档约 2~4ms），确定性计算零随机",
   "op.poseidon.desc": "Poseidon 素域哈希（HADES 结构原版，ZK/Merkle 树常用）：状态为素域元素向量，全轮全宽 S-box x^5、部分轮仅对 1 个元素做 S-box，线性层为 Cauchy MDS 矩阵乘法——面向素域 Z/p 的 ZK 哈希，不是 SHA-3（Keccak 比特海绵）。含 BN254（circomlib 事实标准 + 参考实现双口径）与 BLS12-381 实例，常量来自官方实例文件并经官方测试向量逐字验证",
   "op.poseidon2.desc": "Poseidon2 素域哈希（Poseidon 的改进版，ZK/Merkle 树常用）：外部全轮用 M_E 线性层、内部部分轮用稀疏 M_I（部分轮仅 1 个 S-box），RF=8——面向素域 Z/p 的 ZK 哈希，不是 SHA-3（Keccak 比特海绵）。含 BN254 t=3 与 BLS12-381 t=2/3/4 实例，常量与向量取自论文作者团队官方仓库参考实现",

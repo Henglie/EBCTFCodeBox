@@ -1,7 +1,7 @@
 /*
  * dcode-extras-2026-10 — dCode 风格扩展包（官方插件）
  *
- * 定位：选取 dCode.fr 风格、且主工具箱 878 op 未覆盖的纯 JS 算法子集；
+ * 定位：选取 dCode.fr 风格、且主工具箱 890 op 未覆盖的纯 JS 算法子集；
  * 不声称复刻全站。每个 op 均有已知向量/往返自测，见 tests/selftest.mjs。
  *
  * 契约：export const manifest + export default setup(ctx)。
@@ -11,9 +11,9 @@
 
 export const manifest = {
   id: "dcode-extras-2026-10",
-  name: "dCode 扩展包 Beta · 2026-10 · 408 op",
-  version: "2026.10.3-beta.1",
-  description: "dCode.fr 风格纯 JS 算法扩展包 Beta：988 个工具逐条入账，408 op；WASM/无限大数/自动运行策略下版优化。覆盖缺口见 COVERAGE.md。",
+  name: "dCode 扩展包 Beta · 2026-11 · 409 op",
+  version: "2026.11.0-beta.1",
+  description: "dCode.fr 风格纯 JS 算法扩展包 Beta：988 个工具逐条入账，409 op；2026-11 批次取消参数边输边算，数学/数论移除人为小上限，阶乘改分治大数并按内存预算展开。覆盖缺口见 COVERAGE.md。",
   author: "恒烈CTF编码工具箱",
   apiVersion: 1,
 };
@@ -55,13 +55,26 @@ export default async function setup(ctx) {
   await loadLexicon();
   for (const c of CATS) ctx.addCategory(c);
   let n = 0;
-  for (const op of STATIC_OPS) { ctx.registerOp({ ...op, since: op.since || "2026.10.0", addedIn: "v0.1.12-beta" }); n++; }
+  for (const op of STATIC_OPS) {
+    ctx.registerOp({
+      ...op,
+      since: op.since || "2026.10.0",
+      addedIn: op.addedIn || "v0.1.12-beta",
+      autoRun: false,
+    });
+    n++;
+  }
   for (const name of AUTO_BATCHES) {
     try {
       const mod = await import("./ops/" + name);
       for (const raw of mod.OPS || []) {
         const base = String(raw.id || "").startsWith("dcode-extras-2026-10/") ? raw : { ...raw, id: "dcode-extras-2026-10/" + raw.id };
-        const op = { ...base, since: base.since || "2026.10.3", addedIn: "v0.1.12-beta" };
+        const op = {
+          ...base,
+          since: base.since || "2026.10.3",
+          addedIn: base.addedIn || "v0.1.12-beta",
+          autoRun: false,
+        };
         ctx.registerOp(op); n++;
       }
     } catch (e) {
@@ -74,5 +87,5 @@ export default async function setup(ctx) {
     zh: Object.fromEntries(CATS.map((c) => [`cat.${c.id}`, c.name])),
     en: Object.fromEntries(CATS.map((c) => [`cat.${c.id}`, EN_CAT[c.id.split("/").pop()] || "Extras"])),
   });
-  ctx.log(`已注册 ${n} 个 op（dCode 扩展包 Beta · 2026-10）`);
+  ctx.log(`已注册 ${n} 个 op（dCode 扩展包 Beta · 2026-11）`);
 }

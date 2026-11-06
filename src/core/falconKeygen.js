@@ -22,6 +22,7 @@
 import { register } from "./registry.js";
 import { keccak } from "./hash.js";
 import { randomBytes } from "./randSource.js";
+import { solveNtruRef, FPR_GM_TAB_B64 } from "./falconKeygenRef.js";
 
 export const FALCON_Q = 12289;
 const Q = FALCON_Q;
@@ -80,7 +81,9 @@ class ShakeStream {
       throw fail("SHAKE 种子必须是非空字节串");
     }
     this.seed = seed;
-    this.chunk = chunkBytes || 4096;
+    // 默认块取 64 KiB：keygen 单次采样 n=1024 需要约 32 KiB SHAKE 输出，
+    // 小块会反复从种子重算海绵（O(n²)）；64 KiB 一次覆盖，输出字节不变。
+    this.chunk = chunkBytes || 65536;
     this.buf = new Uint8Array(0);
     this.pos = 0;
     this.round = 0;
@@ -128,26 +131,26 @@ export function shakeStream(seed) {
 
 const _gmCache = new Map();
 
-function revBits(k, bits) {
-  let r = 0;
-  for (let i = 0; i < bits; i++) {
-    r = (r << 1) | (k & 1);
-    k >>= 1;
-  }
-  return r;
+// 参考 fpr_gm_tab 的原始 double 位型（base64 小端），避免 Math.cos/sin 的 ulp 偏差
+// 在 keygen Babai 的整数取整处放大成接受路径分叉。
+function decodeGmTable() {
+  const bin = atob(FPR_GM_TAB_B64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const dv = new DataView(bytes.buffer);
+  const out = new Float64Array(bin.length / 8);
+  for (let i = 0; i < out.length; i++) out[i] = dv.getFloat64(8 * i, true);
+  return out;
 }
+
+let _gmRef = null;
 
 function gmTab(logn) {
   const hit = _gmCache.get(logn);
   if (hit) return hit;
+  if (_gmRef === null) _gmRef = decodeGmTable();
   const n = 1 << logn;
-  const t = new Float64Array(2 * n);
-  for (let k = 0; k < n; k++) {
-    const r = revBits(k, logn);
-    const ang = (Math.PI * r) / n;
-    t[2 * k] = Math.cos(ang);
-    t[2 * k + 1] = Math.sin(ang);
-  }
+  const t = _gmRef.slice(0, 2 * n);
   _gmCache.set(logn, t);
   return t;
 }
@@ -235,13 +238,13 @@ export function polyNeg(a) {
   for (let i = 0; i < a.length; i++) a[i] = -a[i];
 }
 
-// 伴随（adjoint）多项式 h*(x) = h(−x)：系数域把奇次项取反后再变换。
-// 说明：本实现的 FFT 点序与参考实现 C 代码的打包下标不同（同一变换的另一种点序），
-// 因此不沿用「虚部取反」的下标技巧，而是显式回到系数域取伴随，数学上与 h(−x) 严格一致。
+// 伴随（adjoint）多项式。参考实现 fft.c 的 poly_adj_fft：FFT 打包表示中
+// 实部在 [0,n/2)、虚部在 [n/2,n)，伴随 = 逐点共轭 = 仅虚部取反。
+// 注意：Falcon 的 FFT 点是 X^n+1 的根 w_j = w^(2j+1)，伴随不是「系数域 h(−x)」；
+// 早期实现按系数域取伴随会导致 invnorm2/LDL/Berd 全部差一个共轭口径（本卡修复点）。
 export function polyAdjFft(a, logn) {
-  ifft(a, logn);
-  for (let i = 1; i < a.length; i += 2) a[i] = -a[i];
-  fft(a, logn);
+  const n = 1 << logn;
+  for (let u = n >> 1; u < n; u++) a[u] = -a[u];
 }
 
 export function polyMulFft(a, b, logn) {
@@ -268,17 +271,14 @@ export function polyMulAdjFft(a, b, logn) {
   }
 }
 
+// 自伴随乘法 a·adj(a)：结果逐点只有实部 |a|²（fft.c poly_mulselfadj_fft）。
 export function polyMulSelfAdjFft(a, logn) {
   const hn = (1 << logn) >> 1;
-  const b = Float64Array.from(a);
-  polyAdjFft(b, logn);
   for (let u = 0; u < hn; u++) {
     const ar = a[u];
     const ai = a[u + hn];
-    const br = b[u];
-    const bi = b[u + hn];
-    a[u] = ar * br - ai * bi;
-    a[u + hn] = ar * bi + ai * br;
+    a[u] = ar * ar + ai * ai;
+    a[u + hn] = 0;
   }
 }
 
@@ -286,53 +286,46 @@ export function polyMulConst(a, x) {
   for (let i = 0; i < a.length; i++) a[i] *= x;
 }
 
-// d = 1/(a·adj(a) + b·adj(b))（自伴实多项式的 FFT，逐点复数除法）
+// d = 1/(|a|² + |b|²)，结果为自伴实值（fft.c poly_invnorm2_fft）：
+// d[u] 为实数，d[u+hn] 恒为 0。
 export function polyInvNorm2Fft(d, a, b, logn) {
   const hn = (1 << logn) >> 1;
-  const aAdj = Float64Array.from(a);
-  polyAdjFft(aAdj, logn);
-  const bAdj = Float64Array.from(b);
-  polyAdjFft(bAdj, logn);
   for (let u = 0; u < hn; u++) {
-    const dRe = a[u] * aAdj[u] - a[u + hn] * aAdj[u + hn] + b[u] * bAdj[u] - b[u + hn] * bAdj[u + hn];
-    const dIm = a[u] * aAdj[u + hn] + a[u + hn] * aAdj[u] + b[u] * bAdj[u + hn] + b[u + hn] * bAdj[u];
-    const m = dRe * dRe + dIm * dIm;
-    d[u] = dRe / m;
-    d[u + hn] = -dIm / m;
+    const m = a[u] * a[u] + a[u + hn] * a[u + hn] + b[u] * b[u] + b[u + hn] * b[u + hn];
+    d[u] = 1 / m;
+    d[u + hn] = 0;
   }
 }
 
+// 乘以自伴实多项式 b：b 的虚部恒为 0（fft.c poly_mul_autoadj_fft）。
 export function polyMulAutoAdjFft(a, b, logn) {
   const hn = (1 << logn) >> 1;
   for (let u = 0; u < hn; u++) {
-    const ar = a[u];
-    const ai = a[u + hn];
-    const br = b[u];
-    const bi = b[u + hn];
-    a[u] = ar * br - ai * bi;
-    a[u + hn] = ar * bi + ai * br;
+    a[u] *= b[u];
+    a[u + hn] *= b[u];
   }
 }
 
-// LDL 分解：mu = adj(g01)/g00，d11 = g11 − mu·g01；mu 写回 g01，d11 写回 g11
+// LDL 分解（fft.c poly_LDL_fft）：
+//   mu = g01/g00；d11 = g11 − mu·adj(g01)；mu 写回 g01 且虚部取反，d11 写回 g11。
 export function polyLDLFft(g00, g01, g11, logn) {
   const hn = (1 << logn) >> 1;
-  const g10 = Float64Array.from(g01);
-  polyAdjFft(g10, logn);
   for (let u = 0; u < hn; u++) {
-    const ar = g00[u];
-    const ai = g00[u + hn];
-    const m = ar * ar + ai * ai;
-    const xr = g10[u];
-    const xi = g10[u + hn];
-    const muRe = (xr * ar + xi * ai) / m;
-    const muIm = (xi * ar - xr * ai) / m;
-    const tRe = muRe * g01[u] - muIm * g01[u + hn];
-    const tIm = muRe * g01[u + hn] + muIm * g01[u];
-    g11[u] -= tRe;
-    g11[u + hn] -= tIm;
+    const g00Re = g00[u];
+    const g00Im = g00[u + hn];
+    const g01Re = g01[u];
+    const g01Im = g01[u + hn];
+    const g11Re = g11[u];
+    const g11Im = g11[u + hn];
+    const m = g00Re * g00Re + g00Im * g00Im;
+    const muRe = (g01Re * g00Re + g01Im * g00Im) / m;
+    const muIm = (g01Im * g00Re - g01Re * g00Im) / m;
+    const tRe = muRe * g01Re + muIm * g01Im;
+    const tIm = muIm * g01Re - muRe * g01Im;
+    g11[u] = g11Re - tRe;
+    g11[u + hn] = g11Im - tIm;
     g01[u] = muRe;
-    g01[u + hn] = muIm;
+    g01[u + hn] = -muIm;
   }
 }
 
@@ -474,8 +467,12 @@ export function negacyclicIntt(a, logn) {
 // h = g/f mod (x^n+1, q)；f 不可逆时返回 null（调用方重新采样）
 export function divModQ(g, f, logn) {
   const n = 1 << logn;
-  const F = negacyclicNtt(f, logn);
-  const G = negacyclicNtt(g, logn);
+  // f/g 常以有符号系数传入（Int8Array）；先归一到 0..q−1，否则 NTT 中间量会带负号，
+  // 逆变换后 h 可能出现负系数，导致 encodePublicKey 误报「不在 0..q−1」。
+  const fn = Array.from(f, (v) => ((v % Q) + Q) % Q);
+  const gn = Array.from(g, (v) => ((v % Q) + Q) % Q);
+  const F = negacyclicNtt(fn, logn);
+  const G = negacyclicNtt(gn, logn);
   const out = new Array(n);
   for (let i = 0; i < n; i++) {
     if (F[i] === 0) return null;
@@ -915,7 +912,10 @@ function sqNormSmall(f) {
   return s;
 }
 
-function berdOk(f, g, logn) {
+// 规范 §3.6 的 Berd 判界：‖(q·adj(f)/D, q·adj(g)/D)‖²，D = f·adj(f)+g·adj(g)。
+// 与 keygen.c 的 Berd 判界逐行对应（poly_invnorm2_fft / poly_adj_fft /
+// poly_mul_autoadj_fft），返回实测 bnorm 供自验/基准读取。
+export function berdNormValue(f, g, logn) {
   const n = 1 << logn;
   const rf = new Float64Array(n);
   const rg = new Float64Array(n);
@@ -937,7 +937,11 @@ function berdOk(f, g, logn) {
   ifft(rg, logn);
   let bnorm = 0;
   for (let i = 0; i < n; i++) bnorm += rf[i] * rf[i] + rg[i] * rg[i];
-  return bnorm < FPR_BNORM_MAX;
+  return bnorm;
+}
+
+function berdOk(f, g, logn) {
+  return berdNormValue(f, g, logn) < FPR_BNORM_MAX;
 }
 
 /**
@@ -961,8 +965,10 @@ export function falconKeygenCore(logn, seed, onProgress) {
   const stream = new ShakeStream(sd);
   const lim = 1 << (MAX_FG_BITS[logn] - 1);
   const maxAttempts = 20000;
+  const stats = { attempts: 0, coeffPass: 0, normPass: 0, berdPass: 0, hPass: 0, ntruPass: 0 };
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    stats.attempts = attempt;
     const f = sampleSmall(stream, logn);
     const g = sampleSmall(stream, logn);
     let ok = true;
@@ -973,13 +979,22 @@ export function falconKeygenCore(logn, seed, onProgress) {
       }
     }
     if (!ok) continue;
-    if (sqNormSmall(f) + sqNormSmall(g) >= 16823) continue;
+    stats.coeffPass++;
+    const nf = sqNormSmall(f);
+    const ng = sqNormSmall(g);
+    if (nf + ng >= 16823) continue;
+    stats.normPass++;
     if (!berdOk(f, g, logn)) continue;
+    stats.berdPass++;
     const h = divModQ(g, f, logn);
     if (h === null) continue;
+    stats.hPass++;
     if (onProgress) onProgress(`第 ${attempt} 次采样通过判界，求解 NTRU 方程…`);
-    const sol = solveNtru(f, g, logn);
+    // 512/1024 走参考 keygen.c 的接受路径（固定 scale_k 调度 + k 越界保守拒绝），
+    // 使 keygen KAT 公钥的接受/拒绝序列与 NIST 向量一致；小档保留自适应求解器。
+    const sol = logn >= 9 ? solveNtruRef(f, g, logn) : solveNtru(f, g, logn);
     if (sol === null) continue;
+    stats.ntruPass++;
     return {
       logn,
       n,
@@ -990,6 +1005,7 @@ export function falconKeygenCore(logn, seed, onProgress) {
       h: Uint16Array.from(h),
       attempts: attempt,
       seed: sd,
+      stats,
     };
   }
   throw fail(`连续 ${maxAttempts} 次采样均未得到可用密钥（判界过严或参数异常）`);
@@ -1063,5 +1079,6 @@ export function checkPrivateKey(key) {
   return { ok: true, h };
 }
 
-// 说明：本文件当前不注册 op（Berd 判界未达标，注册会出现「永不返回」的功能项）。
-// 待 Berd/采样树修正并通过端到端验签后，再按 registry 契约补 register({ id: "falconKeygen", ... })。
+// 说明：本文件按 T711 写锁约定不注册 op；keygen/sign 的共享入口与 i18n/edu 由 M 在收口时接线。
+// Berd 判界、NTRU 求解与 falconSign.js 的 ffSampling 已通过 NIST KAT 签名逐字节对拍
+// （见 资料/工程留存/T711/kat_t711.mjs 与 收口报告.md）。

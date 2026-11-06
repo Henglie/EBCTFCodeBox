@@ -1707,11 +1707,21 @@ export async function analyzeFile(bytes, name = "", opts = {}) { // pcap 人话�
     const failed = pc.chunks.filter((c) => c.crcOk === false);
     const passed = pc.chunks.filter((c) => c.crcOk === true).length;
     const unknown = pc.chunks.filter((c) => c.crcOk === null).length;
+    const invalid = pc.chunks.filter((c) => c.lenInvalid);
     const fullLines = ["共 " + pc.chunks.length + " 个 chunk:"];
     for (const c of pc.chunks) {
       const crc = c.crcOk === null ? "?" : (c.crcOk ? "通过" : "失败");
-      fullLines.push("  [" + c.type + "] 长度 " + c.len + "  CRC " +
-        (c.storedCrc !== null ? pc.hex4(c.storedCrc) : "----") + " " + crc);
+      if (c.lenInvalid) {
+        // 长度越界块：声明长度吞掉了真实 IEND，按文件实际字节展开块内数据。
+        fullLines.push("  [" + c.type + "] 声明长度 " + c.len + "  实际 " + c.dataLen + " 字节  CRC " +
+          (c.storedCrc !== null ? pc.hex4(c.storedCrc) : "----") + " " + crc + "（长度越界）");
+        if (c.hiddenText) fullLines.push("    块内可打印: " + c.hiddenText);
+        if (c.hiddenHex) fullLines.push("    块内 hex: " + c.hiddenHex);
+        if (c.hasIend) fullLines.push("    块内含 IEND：真实结束标记被长度字段吞入");
+      } else {
+        fullLines.push("  [" + c.type + "] 长度 " + c.len + "  CRC " +
+          (c.storedCrc !== null ? pc.hex4(c.storedCrc) : "----") + " " + crc);
+      }
     }
     if (pc.texts.length) {
       fullLines.push("文本块内容:");
@@ -1730,12 +1740,22 @@ export async function analyzeFile(bytes, name = "", opts = {}) { // pcap 人话�
     } else {
       bodyLines.push("共 " + pc.chunks.length + " 个 chunk，全部 CRC 通过（完整清单双击查看）");
     }
+    // 越界块必须进正文：unknown 只计数会让「最后一个块显示未知」把块内关键数据藏掉。
+    if (invalid.length) {
+      bodyLines.push("⚠ 检测到 " + invalid.length + " 个长度越界块（疑似伪造块头 / 尾部隐藏数据）：");
+      for (const c of invalid) {
+        bodyLines.push("  [" + c.type + "] 声明长度 " + c.len + "，文件实际 " + c.dataLen + " 字节");
+        if (c.hiddenText) bodyLines.push("    块内可打印: " + c.hiddenText);
+        if (c.hiddenHex) bodyLines.push("    块内 hex: " + c.hiddenHex);
+        if (c.hasIend) bodyLines.push("    块内含 IEND：真实结束标记被长度字段吞入");
+      }
+    }
     sections.push({
       id: "png-chunks", title: "PNG 逐块 CRC 校验",
-      level: pc.anyCrcFail ? "alert" : "info", icon: "data_object",
-      priority: 930, collapsed: !pc.anyCrcFail, defaultOpen: pc.anyCrcFail,
+      level: (pc.anyCrcFail || pc.hasLenInvalid) ? "alert" : "info", icon: "data_object",
+      priority: 930, collapsed: !(pc.anyCrcFail || pc.hasLenInvalid), defaultOpen: !!(pc.anyCrcFail || pc.hasLenInvalid),
       tocTitle: "PNG chunk CRC", source: "fileAnalysis",
-      badge: pc.anyCrcFail ? "CRC失败" : "CRC",
+      badge: pc.hasLenInvalid ? "越界块" : (pc.anyCrcFail ? "CRC失败" : "CRC"),
       body: bodyLines.join("\n"),
       actions: [{ type: "view", label: "双击查看完整 chunk 清单", text: fullLines.join("\n") }],
     });

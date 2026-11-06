@@ -1,4 +1,4 @@
-// offlinePackPanel.js — 离线包管理面板（UI 候选，尚未接线）。
+// offlinePackPanel.js — 离线包管理面板（由扩展面板 pluginPanel 接线）。
 //
 // 约束：
 //   - 不 import main.js，不读全局 state，不直接调用 Service Worker / Cache API；
@@ -65,6 +65,7 @@ export function offlinePackPanel(ctx = {}) {
   let state = ctx.state || { installed: {}, errors: {} };
   let pending = null;
   let actionError = null;
+  const progress = new Map();  // packId -> { text, ratio }
 
   function collectError(packId) {
     if (actionError && actionError.packId === packId) return actionError.reason;
@@ -81,6 +82,7 @@ export function offlinePackPanel(ctx = {}) {
     }
     pending = id;
     actionError = null;
+    progress.delete(id);
     render();
     try {
       await fn(id);
@@ -91,6 +93,7 @@ export function offlinePackPanel(ctx = {}) {
       };
     } finally {
       pending = null;
+      progress.delete(id);
       render();
     }
   }
@@ -99,10 +102,14 @@ export function offlinePackPanel(ctx = {}) {
     const error = collectError(pack.id);
     const busy = pending === pack.id;
     const installed = pack.state === "installed";
+    const job = progress.get(pack.id);
+    const installLabel = pack.state === "partial"
+      ? tr("ui.offlinePack.continue", "继续安装")
+      : tr("ui.offlinePack.install", "安装");
 
     return el("li", { class: "offline-pack-item", "data-pack-id": pack.id, "data-state": pack.state },
       el("div", { class: "offline-pack-head" },
-        el("strong", { class: "offline-pack-name", text: tr(`ui.offlinePack.pack.${pack.id}.name`, pack.name) }),
+        el("strong", { class: "offline-pack-name", text: tr(`ui.offlinePack.pack.${pack.id}.name`, pack.name || pack.id) }),
         el("span", { class: "offline-pack-size", text: formatBytes(pack.bytes) }),
         el("span", { class: `offline-pack-state is-${pack.state}`, text: tr(`ui.offlinePack.state.${pack.state}`, STATE_LABEL[pack.state]) }),
       ),
@@ -116,7 +123,7 @@ export function offlinePackPanel(ctx = {}) {
           disabled: installed || busy,
           "data-action": "install",
           onclick: () => run("install", pack.id),
-        }, busy ? tr("ui.offlinePack.installing", "安装中…") : tr("ui.offlinePack.install", "安装")),
+        }, busy ? (job && job.text ? job.text : tr("ui.offlinePack.installing", "安装中…")) : installLabel),
         el("button", {
           type: "button",
           class: "offline-pack-remove",
@@ -125,6 +132,16 @@ export function offlinePackPanel(ctx = {}) {
           onclick: () => run("remove", pack.id),
         }, tr("ui.offlinePack.remove", "移除")),
       ),
+      job
+        ? el("div", {
+            class: "offline-pack-progress",
+            role: "progressbar",
+            "aria-valuemin": "0",
+            "aria-valuemax": "100",
+            "aria-valuenow": String(Math.round((job.ratio || 0) * 100)),
+            text: job.text,
+          })
+        : null,
       error
         ? el("p", { class: "offline-pack-error", role: "alert", text: `${tr("ui.offlinePack.failed", "安装失败")}：${error}` })
         : null,
@@ -137,6 +154,14 @@ export function offlinePackPanel(ctx = {}) {
     const installedBytes = plan.packs.reduce((n, p) => n + p.installedBytes, 0);
 
     const notice = el("div", { class: "offline-pack-notice", "data-role": "offline-pack-notice" });
+    const stateError = state && state.errors && state.errors._state;
+    if (stateError && stateError.reason) {
+      notice.append(el("p", {
+        class: "offline-pack-error",
+        role: "alert",
+        text: `${tr("ui.offlinePack.failed", "安装失败")}：${stateError.reason}`,
+      }));
+    }
     if (ctx.offline === true) {
       notice.append(el("p", { class: "offline-pack-offline-hint", text: tr("ui.offlinePack.offlineNow", "当前处于离线状态，以下能力取决于已安装的离线包。") }));
     }
@@ -166,6 +191,13 @@ export function offlinePackPanel(ctx = {}) {
       notice,
     );
   }
+
+  root.setProgress = (packId, text, ratio) => {
+    if (!packId) return;
+    if (text == null) progress.delete(packId);
+    else progress.set(packId, { text: String(text), ratio: Number.isFinite(ratio) ? ratio : 0 });
+    render();
+  };
 
   root.refresh = (nextState) => {
     state = nextState || { installed: {}, errors: {} };

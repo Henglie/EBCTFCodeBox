@@ -24,6 +24,7 @@
  * 红线：core 层零 UI 依赖；输入约定 text 为 base64（可带 dataURL 前缀），UI 层 app.js 适配。
  */
 import { register } from "./registry.js";
+import { carve as foremostCarve } from "./foremostJs.js";
 
 // ============ 通用工具（自包含） ============
 function b64ToBytes(b64) {
@@ -348,13 +349,31 @@ function trailerReport(bytes, fmt) {
   return lines.join("\n");
 }
 
+// 2 字节 magic 的结构校验：避免把压缩流里的 "BM"/"MZ" 当文件头。
+function binwalkValidate(bytes, off, name) {
+  if (name === "BMP") {
+    if (off + 26 > bytes.length) return false;
+    const size = u32le(bytes, off + 2);
+    const dataOff = u32le(bytes, off + 10);
+    return size >= 26 && off + size <= bytes.length && dataOff >= 26 && dataOff < size;
+  }
+  if (name === "PE") {
+    if (off + 0x40 > bytes.length) return false;
+    const lfanew = u32le(bytes, off + 0x3C);
+    if (lfanew < 4 || off + lfanew + 4 > bytes.length) return false;
+    const p = off + lfanew;
+    return bytes[p] === 0x50 && bytes[p + 1] === 0x45 && bytes[p + 2] === 0 && bytes[p + 3] === 0;
+  }
+  return true;
+}
+
 // ============ binwalk 模式：全文魔数扫描 ============
 function binwalkReport(bytes) {
   const lines = [];
   lines.push(`文件大小: ${bytes.length} 字节`);
   lines.push("全文魔数扫描（binwalk 式，列出所有已知格式头命中偏移）:");
   lines.push("");
-  const hits = [];
+  const raw = [];
   for (let i = 0; i < bytes.length; i++) {
  // 优先匹配最长 magic，命中即记录并跳过该 magic 长度，减少重叠误报
     let matched = null;
@@ -364,31 +383,74 @@ function binwalkReport(bytes) {
       }
     }
     if (matched) {
-      hits.push({ offset: i, name: matched.name, desc: matched.desc });
+      raw.push({ offset: i, name: matched.name, desc: matched.desc });
       i += matched.magic.length - 1;
     }
   }
+ // BMP("BM") / PE("MZ") 只有 2 字节 magic，压缩数据里误报极多；用结构字段二次校验。
+  const hits = raw.filter((h) => binwalkValidate(bytes, h.offset, h.name));
+  const dropped = raw.length - hits.length;
   if (hits.length === 0) {
     lines.push("(无已知格式魔数命中)");
     return lines.join("\n");
   }
-  lines.push(`命中 ${hits.length} 处:`);
+  lines.push(`命中 ${hits.length} 处${dropped ? `（另过滤 ${dropped} 处低置信度 BMP/PE 命中）` : ""}:`);
   for (const h of hits) {
     lines.push(`  0x${h.offset.toString(16).padStart(8, "0")}  (${h.offset})  ${h.name} — ${h.desc}`);
   }
- // CTF 提示：偏移 0 之外的命中往往是尾部/内嵌文件
+ // 偏移 0 之外的命中往往是尾部粘连 / 内嵌文件：直接雕复成可下载产物。
+ // 复用 foremost 的头尾配对与畸形头修正，避免这里再写一套结束定位。
   const embedded = hits.filter((h) => h.offset > 0);
+  const files = [];
   if (embedded.length > 0) {
     lines.push("");
-    lines.push(`▸ 偏移 0 之外命中 ${embedded.length} 处，可能是尾部粘连 / 内嵌文件。`);
-    lines.push("  取 base64（从命中偏移到文件末尾）可剥离：");
-    const first = embedded[0];
-    const slice = bytes.subarray(first.offset, bytes.length);
-    lines.push(`  首个内嵌（${first.name} @ 0x${first.offset.toString(16)}，${slice.length} 字节）base64:`);
-    lines.push(bytesToB64(slice));
+    lines.push(`▸ 偏移 0 之外命中 ${embedded.length} 处，尝试雕复内嵌文件：`);
+    let produced = 0;
+    for (const h of embedded) {
+      if (produced >= 12) { lines.push("  （已达单次 12 个产物上限，其余仅列偏移）"); break; }
+      const ext = BINWALK_EXT[h.name];
+      if (!ext) {
+        lines.push(`  - ${h.name} @ 0x${h.offset.toString(16)}：该格式暂无自动雕刻器，可用下方偏移手动切`);
+        continue;
+      }
+      try {
+        const r = foremostCarve(bytes.subarray(h.offset), { formats: [ext], minSize: 16 });
+        const f = r.found && r.found[0];
+        if (f && f.bytes && f.bytes.length) {
+          const name = `carved_0x${h.offset.toString(16).padStart(8, "0")}.${f.ext}`;
+          files.push({ name, mime: BINWALK_MIME[f.ext] || "application/octet-stream", bytes: f.bytes });
+          lines.push(`  - ${h.name} @ 0x${h.offset.toString(16)} → ${name}（${f.bytes.length} 字节${f.truncated ? "，截断" : ""}）`);
+          produced++;
+        } else {
+          lines.push(`  - ${h.name} @ 0x${h.offset.toString(16)}：未配对到合法尾，未产出`);
+        }
+      } catch (e) {
+        lines.push(`  - ${h.name} @ 0x${h.offset.toString(16)}：雕刻失败（${(e && e.message) || e}）`);
+      }
+    }
+    if (!produced) {
+      const first = embedded[0];
+      const slice = bytes.subarray(first.offset, bytes.length);
+      lines.push("  （未产出可下载文件，保留首个内嵌偏移的 base64 以便手动处理）");
+      lines.push(`  首个内嵌（${first.name} @ 0x${first.offset.toString(16)}，${slice.length} 字节）base64:`);
+      lines.push(bytesToB64(slice));
+    }
   }
+  if (files.length) return { text: lines.join("\n"), files };
   return lines.join("\n");
 }
+
+// binwalk 命中名 → foremost 雕刻器格式（仅这些能直接产出文件）
+const BINWALK_EXT = {
+  PNG: "png", JPEG: "jpg", GIF87: "gif", GIF89: "gif",
+  ZIP: "zip", "ZIP-EOCD": "zip", RAR5: "rar", RAR4: "rar", "7Z": "7z",
+  PDF: "pdf", RIFF: "wav", ID3: "mp3",
+};
+const BINWALK_MIME = {
+  png: "image/png", jpg: "image/jpeg", gif: "image/gif", zip: "application/zip",
+  rar: "application/vnd.rar", "7z": "application/x-7z-compressed", pdf: "application/pdf",
+  wav: "audio/wav", mp3: "audio/mpeg",
+};
 
 // ============ op run ============
 function trailerCarveRun(text, p = {}) {

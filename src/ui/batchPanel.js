@@ -1,8 +1,7 @@
 /*
- * batchPanel.js — 批处理面板（候选模块，待 M 在 main.js 接线）。
+ * batchPanel.js — 批处理面板（已由 main.js 接线：首页按钮 / 多文件拖入 / op 页按钮）。
  *
- * 本文件是**候选 UI 模块**：不被任何既有文件 import，主线程 M 决定挂在哪里之后
- * 再 import 并接线。不 import main.js，不读全局 state，不碰 localStorage，
+ * 本文件不 import main.js，不读全局 state，不碰 localStorage，
  * 所有能力一律从传入的 ctx 取：
  *
  *   ctx = {
@@ -16,9 +15,11 @@
  *     download,    // 可选：(bytes, filename, mime) => void；缺省走 <a download> 兜底
  *   }
  *
- * 返回值：一个 <div class="batch-panel">，同时挂了两个方法便于接线：
- *   panel.setFiles(FileList | File[])  重新装载条目（拖入多文件/文件夹时用）
+ * 返回值：一个 <div class="batch-panel">，同时挂了四个方法便于接线：
+ *   panel.setFiles(FileList | File[])  重新装载条目（文件选择框 / 已有文件数组）
+ *   panel.acceptDataTransfer(dt)       接管拖入的 DataTransfer（含目录递归）
  *   panel.getState()                   只读快照，便于主线程调试与测试
+ *   panel.isBusy()                     是否正在执行（接线层据此阻止运行中关窗）
  *
  * 样式用局部 <style> 内联（全部规则以 .batch-panel 前缀收窄），不新增 css 文件、
  * 不改 app.css。M 若要把样式挪进 app.css，删掉 ensureStyles() 即可。
@@ -57,9 +58,13 @@ const FALLBACK = {
   "ui.batch.needCore": "batchPanel 缺少核心依赖：{0}",
   "ui.batch.readFail": "读取失败：{0}",
   "ui.batch.walkFail": "目录遍历失败：{0}",
+  "ui.batch.emptyDir": "文件夹里没有可处理的文件：{0}",
+  "ui.batch.noRelPath": "无法保留目录路径，按文件名打包：{0}",
+  "ui.batch.multiOut": "该 op 产出 {0} 个文件，批处理每条只保留第 1 个",
   "ui.batch.unsupported": "不支持的文件系统条目：{0}",
   "ui.batch.tooMany": "条目过多，只接收前 {0} 条，其余已丢弃（原因：超出面板队列上限）",
   "ui.batch.noOp": "未配置 op，仅原样打包",
+  "ui.batch.noResult": "op 未返回可识别的结果，原样打包",
   "ui.batch.cancelReason": "用户点击取消",
   "ui.batch.zipName": "batch-{0}.zip",
   "ui.batch.zipFail": "打包失败：{0}",
@@ -123,6 +128,8 @@ function ensureStyles() {
     ".batch-panel .bp-fail{color:#ff8a8a}",
     ".batch-panel .bp-skip{opacity:.6}",
     ".batch-panel .bp-err{font-size:11px;opacity:.8;word-break:break-all}",
+    ".batch-dialog{max-width:min(1040px,96vw)}",
+    ".batch-dialog .batch-panel{overflow:auto;min-height:0;max-height:calc(82vh - 92px);padding-right:2px}",
   ].join("\n");
   const style = document.createElement("style");
   style.id = "batch-panel-style";
@@ -261,7 +268,9 @@ export function batchPanel(ctx) {
     for (let i = 0; i < take.length; i++) {
       const f = take[i];
       const inner = (f && f.file) ? f.file : f;
-      const rel = (typeof f.name === "string" && f.name) ? f.name
+      // 显式 { name, file } 用自己的 name；裸 File 优先 webkitRelativePath，
+      // 否则目录拖入/目录选择会把所有子文件压成同名 basename，ZIP 里目录结构全丢。
+      const rel = (f && f.file && typeof f.name === "string" && f.name) ? f.name
         : ((typeof inner.webkitRelativePath === "string" && inner.webkitRelativePath) ? inner.webkitRelativePath : inner.name);
       entries.push({
         id: "b" + (seq++),
@@ -289,7 +298,7 @@ export function batchPanel(ctx) {
         Object.defineProperty(file, "webkitRelativePath", { value: rel, configurable: true });
       } catch (e) {
         // 只读属性环境：退化为文件名，不影响打包，但要把差异说出来。
-        note(t("ui.batch.unsupported", rel));
+        note(t("ui.batch.noRelPath", rel));
       }
       out.push(file);
       return;
@@ -311,26 +320,44 @@ export function batchPanel(ctx) {
   async function addDataTransfer(dt) {
     if (!dt) return;
     const items = dt.items;
-    const canWalk = items && items.length && typeof items[0].webkitGetAsEntry === "function";
-    if (!canWalk) {
+    const collected = [];
+    const jobs = [];
+    // webkitGetAsEntry / getAsFile 只在 drop 事件同步阶段可靠；必须在任何 await 之前
+    // 把所有条目一次性取下来，否则第二个及之后的 DataTransferItem 会被浏览器失效。
+    if (items && items.length) {
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (!it || it.kind !== "file") continue;
+        const entry = (typeof it.webkitGetAsEntry === "function") ? it.webkitGetAsEntry() : null;
+        if (entry) {
+          jobs.push({ entry, name: entry.name || "(未命名)" });
+          continue;
+        }
+        const f = (typeof it.getAsFile === "function") ? it.getAsFile() : null;
+        if (f) jobs.push({ file: f });
+        else note(t("ui.batch.unsupported", "(无法读取的拖入项)"));
+      }
+    }
+    if (!jobs.length) {
       if (dt.files && dt.files.length) addFiles(dt.files);
+      else note(t("ui.batch.emptyDir", "(拖入项)"));
       return;
     }
-    const collected = [];
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-      if (!it || it.kind !== "file") continue;
-      const entry = it.webkitGetAsEntry();
-      if (!entry) {
-        const f = it.getAsFile ? it.getAsFile() : null;
-        if (f) collected.push(f);
-        else note(t("ui.batch.unsupported", "(无法读取的拖入项)"));
+    for (let i = 0; i < jobs.length; i++) {
+      const job = jobs[i];
+      if (job.file) {
+        collected.push(job.file);
         continue;
       }
+      const before = collected.length;
       try {
-        await collectEntry(entry, "", collected);
+        await collectEntry(job.entry, "", collected);
       } catch (e) {
         note(t("ui.batch.walkFail", (e && e.message) ? e.message : String(e)));
+      }
+      // 空目录不能静默消失：明确告诉用户该文件夹里一个文件都没收到。
+      if (job.entry.isDirectory && collected.length === before) {
+        note(t("ui.batch.emptyDir", job.name));
       }
     }
     if (collected.length) addFiles(collected);
@@ -435,7 +462,7 @@ export function batchPanel(ctx) {
     }
   }
 
-  function applyOp(bytes) {
+  async function applyOp(bytes) {
     const op = c.op;
     if (!op || (typeof op.run !== "function" && typeof op.encode !== "function" && typeof op.decode !== "function")) {
       return { bytes, text: "", note: t("ui.batch.noOp") };
@@ -452,7 +479,10 @@ export function batchPanel(ctx) {
       if (!dec.ok) return { bytes, text: "", note: t("ui.batch.st.binary") };
       input = dec.text;
     }
-    const res = fn(input, params);
+    let res = fn(input, params);
+    // 部分 op（bzip2Enc / scrypt / bcrypt 等）是异步实现；不 await 会把 Promise
+    // 当未知返回，静默退化成「原样打包」，等于伪造成功。
+    if (res && typeof res.then === "function") res = await res;
     if (typeof res === "string") {
       const enc = new TextEncoder().encode(res);
       return { bytes: enc, text: res, note: "" };
@@ -460,15 +490,17 @@ export function batchPanel(ctx) {
     if (res && typeof res === "object") {
       const text = (typeof res.text === "string") ? res.text : "";
       let outBytes = null;
+      let note = "";
       if (Array.isArray(res.files) && res.files.length) {
         const f0 = res.files[0];
         if (f0 && f0.bytes) outBytes = (f0.bytes instanceof Uint8Array) ? f0.bytes : new Uint8Array(f0.bytes);
+        if (res.files.length > 1) note = t("ui.batch.multiOut", res.files.length);
       }
       if (!outBytes) outBytes = new TextEncoder().encode(text);
-      return { bytes: outBytes, text, note: "" };
+      return { bytes: outBytes, text, note };
     }
     if (res instanceof Uint8Array) return { bytes: res, text: "", note: "" };
-    return { bytes, text: "", note: t("ui.batch.noOp") };
+    return { bytes, text: "", note: t("ui.batch.noResult") };
   }
 
   async function start() {
@@ -521,10 +553,13 @@ export function batchPanel(ctx) {
           throw new Error(t("ui.batch.readFail", (e && e.message) ? e.message : String(e)));
         }
         const bytes = new Uint8Array(buf);
-        const applied = applyOp(bytes, owner.name);
+        const applied = await applyOp(bytes, owner.name);
         owner.out = { name: owner.name, text: applied.text, note: applied.note };
         owner.bytes = applied.bytes;
         if (applied.note) owner.reason = applied.note;
+        // 让出一次事件循环：纯 JS op 与 File.arrayBuffer 的 Promise 会连成微任务链，
+        // 不让出的话定时器/取消点击要等整批跑完才处理，取消按钮形同虚设。
+        await new Promise((resolve) => setTimeout(resolve, 0));
         return { size: applied.bytes.length };
       }, { concurrency: 1, cancelToken: token });
     } catch (e) {
@@ -539,8 +574,10 @@ export function batchPanel(ctx) {
       const owner = byId.get(r.id);
       if (!owner) continue;
       owner.ms = r.ms;
-      if (r.skipped) owner.status = "skipped";
-      else if (r.ok) owner.status = "ok";
+      if (r.skipped) {
+        owner.status = "skipped";
+        owner.reason = r.error || "";
+      } else if (r.ok) owner.status = "ok";
       else {
         owner.status = "fail";
         owner.reason = r.error;
@@ -579,6 +616,7 @@ export function batchPanel(ctx) {
   dirInput.addEventListener("change", (ev) => {
     const fl = ev.target.files;
     if (fl && fl.length) addFiles(fl);
+    else note(t("ui.batch.emptyDir", "(文件夹)"));
     ev.target.value = "";
   });
   btnRun.addEventListener("click", () => { start(); });
@@ -626,8 +664,17 @@ export function batchPanel(ctx) {
     if (busy) return;
     addFiles(files);
   };
+  root.acceptDataTransfer = (dt) => {
+    if (busy) return Promise.resolve();
+    return addDataTransfer(dt);
+  };
+  root.isBusy = () => busy;
   root.getState = () => ({
-    entries: entries.map((e) => ({ id: e.id, name: e.name, size: e.size, status: e.status, reason: e.reason, ms: e.ms })),
+    entries: entries.map((e) => ({
+      id: e.id, name: e.name, size: e.size, status: e.status, reason: e.reason, ms: e.ms,
+      bytes: e.bytes ? e.bytes.length : 0,
+      out: e.out ? { name: e.out.name, text: e.out.text, note: e.out.note } : null,
+    })),
     plan: lastPlan ? lastPlan.stats : null,
     run: lastRun ? lastRun.stats : null,
     notes: notes.slice(),

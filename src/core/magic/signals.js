@@ -46,6 +46,19 @@ function isFlagPrefixCode(code) {
     || (code >= 97 && code <= 122);
 }
 
+function isAsciiWordCode(code) {
+  return (code >= 48 && code <= 57)
+    || (code >= 65 && code <= 90)
+    || (code >= 97 && code <= 122)
+    || code === 95;
+}
+
+function hasKeywordBoundary(text, start, end) {
+  const before = start > 0 ? text.charCodeAt(start - 1) : -1;
+  const after = end < text.length ? text.charCodeAt(end) : -1;
+  return (before < 0 || !isAsciiWordCode(before)) && (after < 0 || !isAsciiWordCode(after));
+}
+
 function findFlagFormatSpan(text) {
   let candidateStart = -1;
   let bodyStart = -1;
@@ -221,7 +234,9 @@ export function computeSignals(text, opts = {}) {
   const kwRe = new RegExp(KEYWORD_RE.source, "gi");
   let kwHits = 0, km;
   while ((km = kwRe.exec(s)) && kwHits < SIGNAL_LIMITS.maxKeywordHits) {
-    out.push({ kind: "flagKeyword", label: km[0].toLowerCase(), span: [km.index, km.index + km[0].length], weight: SIGNAL_WEIGHTS.flagKeyword });
+    const start = km.index, end = start + km[0].length;
+    if (!hasKeywordBoundary(s, start, end)) continue;
+    out.push({ kind: "flagKeyword", label: km[0].toLowerCase(), span: [start, end], weight: SIGNAL_WEIGHTS.flagKeyword });
     kwHits++;
   }
   let stHits = 0;

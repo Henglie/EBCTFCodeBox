@@ -166,7 +166,7 @@ register({
   desc: "JWS 签发（RFC 7515 compact）：HS256/384/512 对称、RS256（RSA PKCS#1 v1.5）、ES256（P-256）。header/payload JSON + 密钥 → JWS；产物 token.jws。RFC 7515 A.2.1 官方向量逐字验证",
   params: [
     { key: "alg", label: "算法", type: "select", default: "HS256", options: ["HS256", "HS384", "HS512", "RS256", "ES256"].map((v) => ({ value: v, label: v })) },
-    { key: "key", label: "密钥（HS=口令；RS=n 与 d 两行十进制；ES=P-256 JWK JSON）", type: "textarea", default: "" },
+    { sensitive: true, acceptFile: "text", key: "key", label: "密钥（HS=口令；RS=n 与 d 两行十进制；ES=P-256 JWK JSON）", type: "textarea", default: "" },
     { key: "extraHeader", label: "额外 header 字段（JSON，可空）", type: "text", default: "" },
   ],
   run: async (text, p) => {
@@ -200,7 +200,7 @@ register({
   family: "jws", familyLabel: "verify", name: "JWS 验签",
   desc: "JWS 验签（RFC 7515 compact）：重算签名逐字节比对，输出合法/不合法 + payload + header 全字段",
   params: [
-    { key: "key", label: "密钥（同签发形态）", type: "textarea", default: "" },
+    { acceptFile: "text", key: "key", label: "密钥（同签发形态）", type: "textarea", default: "" },
   ],
   run: async (text, p) => {
     const [hSeg, pSeg, sSeg] = parseCompact(String(text ?? "").trim(), 3);
@@ -310,7 +310,7 @@ register({
   family: "paseto", familyLabel: "sign", name: "PASETO v4 签发（public）",
   desc: "PASETO v4.public 签发（协议规范 §4.1，Ed25519）：payload JSON + Ed25519 私钥 hex（64B 种子‖公钥）+ 可选 footer/implicit → v4.public token。v4.local（XChaCha20）暂不支持",
   params: [
-    { key: "skHex", label: "Ed25519 私钥（64B hex = 种子‖公钥）", type: "text", default: "" },
+    { sensitive: true, key: "skHex", label: "Ed25519 私钥（64B hex = 种子‖公钥）", type: "text", default: "" },
     { key: "footer", label: "footer（JSON 或文本，可空）", type: "text", default: "" },
     { key: "implicit", label: "implicit assertion（可空）", type: "text", default: "" },
   ],

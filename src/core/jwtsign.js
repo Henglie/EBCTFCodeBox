@@ -321,10 +321,10 @@ register({
   desc: "JWT 签发（HS256/384/512 + RS256 + ES256，RFC 7519/7518）",
   params: [
     { key: "alg", label: "算法 alg", type: "select", default: "HS256", options: ["HS256", "HS384", "HS512", "RS256", "ES256"] },
-    { key: "secret", label: "HMAC 密钥 secret（HS* 用，text）", type: "text", default: "", placeholder: "HS256/384/512 必填" },
+    { sensitive: true, key: "secret", label: "HMAC 密钥 secret（HS* 用，text）", type: "text", default: "", placeholder: "HS256/384/512 必填" },
     { key: "rsaN", label: "RSA 模数 n（RS256 用，hex 或十进制）", type: "text", default: "", placeholder: "RS256 必填" },
-    { key: "rsaD", label: "RSA 私钥指数 d（RS256 用）", type: "text", default: "", placeholder: "RS256 必填" },
-    { key: "ecPriv", label: "P-256 私钥 d（ES256 用，hex 或十进制）", type: "text", default: "", placeholder: "ES256 必填" },
+    { sensitive: true, key: "rsaD", label: "RSA 私钥指数 d（RS256 用）", type: "text", default: "", placeholder: "RS256 必填" },
+    { sensitive: true, key: "ecPriv", label: "P-256 私钥 d（ES256 用，hex 或十进制）", type: "text", default: "", placeholder: "ES256 必填" },
     { key: "kid", label: "key id（可选，写入 header）", type: "text", default: "" },
   ],
   run: jwtSignRun,
@@ -336,7 +336,7 @@ register({
   name: "JWT 验签",
   desc: "JWT 三段解析 + 重算签名比对（HS*/RS256/ES256），指出不匹配段",
   params: [
-    { key: "secret", label: "HMAC 密钥 secret（HS* 用）", type: "text", default: "" },
+    { sensitive: true, key: "secret", label: "HMAC 密钥 secret（HS* 用）", type: "text", default: "" },
     { key: "rsaN", label: "RSA 模数 n（RS256 用）", type: "text", default: "" },
     { key: "rsaE", label: "RSA 公钥指数 e（RS256 用，默认 65537）", type: "text", default: "65537" },
     { key: "ecPub", label: "P-256 公钥（ES256 用，04||X||Y hex）", type: "text", default: "" },

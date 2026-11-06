@@ -403,7 +403,7 @@ register({
     { key: "inputEnc", label: "输入编码", type: "select", default: "hex", options: [
       { value: "hex", label: "Hex 十六进制" }, { value: "base64", label: "Base64" }, { value: "auto", label: "自动识别" },
     ] },
-    { key: "keylog", label: "keylog（NSS CLIENT_RANDOM 行）", type: "textarea", default: "", placeholder: "CLIENT_RANDOM <64hex> <64hex>，每行一条" },
+    { acceptFile: "text", key: "keylog", label: "keylog（NSS CLIENT_RANDOM 行）", type: "textarea", default: "", placeholder: "CLIENT_RANDOM <64hex> <64hex>，每行一条" },
     { key: "previewBytes", label: "明文预览字节", type: "number", default: 400 },
   ],
   run: tlsDecryptRun,

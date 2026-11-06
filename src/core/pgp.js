@@ -67,7 +67,7 @@ register({
   params: [
     { key: "name", label: "用户名", type: "text", default: "EBCTFCodeBox" },
     { key: "email", label: "邮箱", type: "text", default: "user@local.dev" },
-    { key: "passphrase", label: "私钥口令（可空）", type: "text", default: "" },
+    { key: "passphrase", label: "私钥口令（可空）", type: "password", default: "", sensitive: true },
     { key: "alg", label: "算法", type: "select", default: "ecc", options: [
       { value: "ecc", label: "Curve25519（ECDH/EdDSA，推荐）" },
       { value: "rsa3072", label: "RSA-3072（兼容老客户端）" },
@@ -99,9 +99,9 @@ register({
   family: "pgp", familyLabel: "encrypt", name: "PGP 加密",
   desc: "PGP 加密（RFC 4880 CFB/EAX，openpgp.js）：明文 + 公钥块 → ASCII Armor 密文；可选附带私钥签名（先签后加）",
   params: [
-    { key: "pubKey", label: "对方公钥块（ASCII Armor）", type: "textarea", default: "", placeholder: "-----BEGIN PGP PUBLIC KEY BLOCK-----" },
-    { key: "signPriv", label: "附带签名的私钥块（可选）", type: "textarea", default: "" },
-    { key: "signPass", label: "签名私钥口令（可选）", type: "text", default: "" },
+    { key: "pubKey", label: "对方公钥块（ASCII Armor）", type: "textarea", default: "", acceptFile: "text", placeholder: "-----BEGIN PGP PUBLIC KEY BLOCK-----" },
+    { key: "signPriv", label: "附带签名的私钥块（可选）", type: "textarea", default: "", sensitive: true, acceptFile: "text" },
+    { key: "signPass", label: "签名私钥口令（可选）", type: "password", default: "", sensitive: true },
   ],
   run: async (text, p) => {
     const o = await lib();
@@ -129,8 +129,8 @@ register({
   family: "pgp", familyLabel: "decrypt", name: "PGP 解密",
   desc: "PGP 解密（openpgp.js）：ASCII Armor 密文 + 私钥块（+口令）→ 明文；密文若带签名顺带给出验签结果",
   params: [
-    { key: "privKey", label: "私钥块（ASCII Armor）", type: "textarea", default: "" },
-    { key: "passphrase", label: "私钥口令（可空）", type: "text", default: "" },
+    { key: "privKey", label: "私钥块（ASCII Armor）", type: "textarea", default: "", sensitive: true, acceptFile: "text" },
+    { key: "passphrase", label: "私钥口令（可空）", type: "password", default: "", sensitive: true },
   ],
   run: async (text, p) => {
     const o = await lib();
@@ -162,8 +162,8 @@ register({
   family: "pgp", familyLabel: "sign", name: "PGP 签名",
   desc: "PGP 签名（RFC 4880，openpgp.js）：明文 + 私钥块 → cleartext signed（可读签名文本）；产物 .sig",
   params: [
-    { key: "privKey", label: "私钥块（ASCII Armor）", type: "textarea", default: "" },
-    { key: "passphrase", label: "私钥口令（可空）", type: "text", default: "" },
+    { key: "privKey", label: "私钥块（ASCII Armor）", type: "textarea", default: "", sensitive: true, acceptFile: "text" },
+    { key: "passphrase", label: "私钥口令（可空）", type: "password", default: "", sensitive: true },
     { key: "mode", label: "签名形态", type: "select", default: "clear", options: [
       { value: "clear", label: "Cleartext（原文可读）" },
       { value: "detached", label: "Detached（分离签名）" },
@@ -191,8 +191,8 @@ register({
   family: "pgp", familyLabel: "verify", name: "PGP 验签",
   desc: "PGP 验签（openpgp.js）：签名文本/分离签名 + 公钥块 → 合法/不合法 + 签名人",
   params: [
-    { key: "signedOrSig", label: "签名文本 / 分离签名块", type: "textarea", default: "", placeholder: "-----BEGIN PGP SIGNED MESSAGE----- 或 -----BEGIN PGP SIGNATURE-----" },
-    { key: "pubKey", label: "签名者公钥块", type: "textarea", default: "" },
+    { key: "signedOrSig", label: "签名文本 / 分离签名块", type: "textarea", default: "", acceptFile: "text", placeholder: "-----BEGIN PGP SIGNED MESSAGE----- 或 -----BEGIN PGP SIGNATURE-----" },
+    { key: "pubKey", label: "签名者公钥块", type: "textarea", default: "", acceptFile: "text" },
   ],
   run: async (text, p) => {
     const o = await lib();
@@ -230,9 +230,9 @@ register({
   family: "pgp", familyLabel: "encSign", name: "PGP 加密并签名",
   desc: "PGP 加密并签名（先签后加密，openpgp.js）：明文 + 对方公钥 + 本方私钥 → 密文（内嵌签名）",
   params: [
-    { key: "pubKey", label: "对方公钥块", type: "textarea", default: "" },
-    { key: "signPriv", label: "本方私钥块（签名用）", type: "textarea", default: "" },
-    { key: "signPass", label: "本方私钥口令（可空）", type: "text", default: "" },
+    { key: "pubKey", label: "对方公钥块", type: "textarea", default: "", acceptFile: "text" },
+    { key: "signPriv", label: "本方私钥块（签名用）", type: "textarea", default: "", sensitive: true, acceptFile: "text" },
+    { key: "signPass", label: "本方私钥口令（可空）", type: "password", default: "", sensitive: true },
   ],
   run: async (text, p) => {
     const o = await lib();
@@ -252,9 +252,9 @@ register({
   family: "pgp", familyLabel: "decVerify", name: "PGP 解密并验签",
   desc: "PGP 解密并验签（openpgp.js）：密文 + 本方私钥 + 签名者公钥 → 明文 + 验签结论",
   params: [
-    { key: "privKey", label: "本方私钥块", type: "textarea", default: "" },
-    { key: "passphrase", label: "私钥口令（可空）", type: "text", default: "" },
-    { key: "pubKey", label: "签名者公钥块", type: "textarea", default: "" },
+    { key: "privKey", label: "本方私钥块", type: "textarea", default: "", sensitive: true, acceptFile: "text" },
+    { key: "passphrase", label: "私钥口令（可空）", type: "password", default: "", sensitive: true },
+    { key: "pubKey", label: "签名者公钥块", type: "textarea", default: "", acceptFile: "text" },
   ],
   run: async (text, p) => {
     const o = await lib();
@@ -279,7 +279,7 @@ register({
   family: "pgp", familyLabel: "parse", name: "PGP 密钥解析",
   desc: "PGP 密钥解析（RFC 4880 包结构，openpgp.js）：公/私钥块 → KeyID/算法/创建时间/指纹/用户ID/子钥表/能力标志",
   params: [
-    { key: "armored", label: "公钥或私钥块（ASCII Armor）", type: "textarea", default: "", placeholder: "-----BEGIN PGP PUBLIC KEY BLOCK-----" },
+    { key: "armored", label: "公钥或私钥块（ASCII Armor）", type: "textarea", default: "", acceptFile: "text", placeholder: "-----BEGIN PGP PUBLIC KEY BLOCK-----" },
   ],
   run: async (_t, p) => {
     const o = await lib();

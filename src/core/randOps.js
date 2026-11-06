@@ -24,21 +24,21 @@
 export const RAND_OPS = Object.freeze(new Set([
   // —— 现代密码·非对称：密钥生成 / 参数生成 ——
   "blsKeyGen", "dsaParamGen", "ecdsaKeyGen", "ed25519KeyGen", "x448KeyGen",
-  "elgamalKeyGen", "hqcKeyGen", "mldsaKeyGen", "mlkemKeyGen", "ntruKeyGen", "paillierKeyGen",
+  "elgamalKeyGen", "falconKeyGen", "hqcKeyGen", "mldsaKeyGen", "mlkemKeyGen", "ntruKeyGen", "paillierKeyGen",
   "primeGen", "schnorrKeyGen", "slhdsaKeyGen", "sm2KeyGen", "x25519KeyGen",
   "xmssKeyGen", "xwingKeyGen",
   // —— 现代密码·非对称：签名 / 加密 / 封装 / 交换（含随机 nonce、salt、IV）——
-  "dsaSign", "ecdsaSign", "ed448Sign", "gostSign", "mldsaSign", "rsaSign",
+  "dsaSign", "ecdsaSign", "ed448Sign", "falconSign", "gostSign", "mldsaSign", "rsaSign",
   "schnorrSign", "slhdsaSign", "sm2Sign", "sm2Encrypt", "sm2KeyExchange",
   "hqcEncrypt", "mlkemEncaps", "ntruEncrypt", "paillierEncrypt", "xwingEncaps",
   "x25519Shared", "lsagSign", "pedersenCommit", "feldmanVss", "jweEncrypt",
   "rsaOaepEnc", "hpkeSeal",
   // —— 分组 / 流密码与对称封装（随机 IV / salt）——
-  "ascon", "fernet", "emojiAes", "yueChang", "dxBase64", "rabbit",
+  "ascon", "fernet", "emojiAes", "yueChang", "dxBase64", "rabbit", "opensslDec",
   // —— 口令 / 派生 / 隐写 / 共享（随机 salt / 系数）——
   "bcrypt", "shamir", "stegpy", "txtmoji", "fuyouyue", "tianshu",
   // —— 随机数工具本体 ——
-  "randomSeed",
+  "randomSeed", "generateUuid",
   // —— 自研 / 复古编码 / 分析工具中带随机成分（2026-10-11 已统一接入 randSource）——
   "elgamal", "knapsack", "xiangyueEnc", "foyu", "bigCalc", "bb84Qkd", "primeInspector", "hajimiCode",
 ]));

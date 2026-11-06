@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
-import { extname } from "node:path";
+import { statSync } from "node:fs";
+import { extname, join } from "node:path";
 import { execFileSync, execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { PACKS } from "../src/core/offlinePacks.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -21,7 +23,7 @@ async function gitLsFiles() {
 }
 
 const runtimeExts = new Set([
-  ".js", ".css", ".json", ".wasm", ".woff2", ".png", ".webp",
+  ".js", ".mjs", ".css", ".json", ".wasm", ".woff2", ".png", ".webp",
   ".jpg", ".svg", ".ico", ".txt", ".bin", ".dat", ".tsv",
 ]);
 
@@ -59,6 +61,7 @@ const EXCLUDE_RULES = [
   // KaTeX：真·懒加载（katexLoader.js 单例 Promise，首次公式渲染才插 script/link；缺失降级为
   // 原始 TeX 文本 <code class="katex-fallback">，不白屏）
   [/^public\/vendor\/katex\//, "KaTeX dist（首次公式渲染才加载）"],
+  [/^public\/vendor\/ocr\//, "OCR 引擎/语言模型（离线包，按需安装）"],
   // 编辑器 / PGP / 条码内核：三者都是「打开对应功能才 dynamic import」
   // （customImplEditor.js / pgp.js / barcodeGen.js），缺失时各自降级或显式报错。
   // 首次在线使用后由 SW runtime cache 回填，此后离线可用——与 sw.js 的
@@ -90,7 +93,46 @@ const isExcluded = (file) => EXCLUDE_RULES.find(([re]) => re.test(file));
 const kept = tracked.filter((file) => !isExcluded(file));
 const dropped = tracked.filter(isExcluded);
 
-const assets = ["./", "./index.html", "./manifest.json", "./sw.js", "./sw-assets.js"]
+// ---------------------------------------------------------------------------
+// T709 离线增强包清单：条目与 src/core/offlinePacks.js 的 PACKS 完全一致。
+// rev = 包内 (name + "\0" + bytes) 逐条拼接后的 sha256 前 8 位；缓存名带 rev，
+// 条目一变旧包缓存即失效。包条目不在预缓存清单里，只在用户点安装时由 SW 下载。
+// ---------------------------------------------------------------------------
+const packRev = (p) => {
+  const h = createHash("sha256");
+  for (const e of p.entries) {
+    h.update(e.name);
+    h.update("\0");
+    h.update(String(e.bytes));
+  }
+  return h.digest("hex").slice(0, 8);
+};
+const packsOut = PACKS.map((p) => ({
+  id: p.id,
+  rev: packRev(p),
+  bytes: p.bytes,
+  entries: p.entries.map((e) => e.name),
+}));
+const packsSource = `self.__EBCTF_PACK_REV = ${JSON.stringify(packsOut.map((p) => p.id + ":" + p.rev).join(","))};\n`
+  + `self.__EBCTF_PACKS = ${JSON.stringify(packsOut, null, 2)};\n`;
+
+// ① 包条目不得留在预缓存清单里（漏剔 = 首屏回涨 44MB）
+const leaked = PACKS.flatMap((p) => p.entries.map((e) => e.name.slice(1)))
+  .filter((file) => !isExcluded(file));
+if (leaked.length) {
+  throw new Error(`离线包条目仍在预缓存清单（EXCLUDE_RULES 失配）：${leaked.join(", ")}`);
+}
+// ② 声明字节必须等于磁盘实际（防止资产更新后 PACKS 数字过期）
+for (const p of PACKS) {
+  for (const e of p.entries) {
+    const actual = statSync(join(process.cwd(), e.name.slice(1))).size;
+    if (actual !== e.bytes) {
+      throw new Error(`离线包体积漂移：${e.name} 声明 ${e.bytes}，实际 ${actual}（请重跑 collect_packs.mjs 并更新 PACKS）`);
+    }
+  }
+}
+
+const assets = ["./", "./index.html", "./manifest.json", "./sw.js", "./sw-assets.js", "./sw-packs.js"]
   .concat(kept.map((file) => `./${file.replaceAll("\\", "/")}`));
 
 const hash = createHash("sha256");
@@ -108,11 +150,17 @@ for (const file of dropped) {
   hash.update(file);
   hash.update(await readFile(file));
 }
+// sw-packs.js 以本轮内存内容入哈希，而不是磁盘上一轮的旧文件：
+// 否则「只改 PACKS 不改其它资产」时 ASSET_REV 不变，SW 不会更新，清单停在旧内容。
+hash.update("sw-packs.js");
+hash.update(packsSource);
 const revision = hash.digest("hex").slice(0, 16);
 const source = `self.__EBCTF_ASSET_REV = ${JSON.stringify(revision)};\nself.__EBCTF_ASSETS = ${JSON.stringify(assets, null, 2)};\n`;
+await writeFile("sw-packs.js", packsSource);
 await writeFile("sw-assets.js", source);
 await writeFile("sw.js", `// BUILD-STAMP: ${revision}\n${swWithoutStamp}`);
 console.log(`sw-assets.js: ${assets.length} files, revision ${revision}`);
+console.log(`sw-packs.js: ${packsOut.map((p) => `${p.id}@${p.rev} (${p.entries.length})`).join(", ")}`);
 console.log(`按需资产剔除 ${dropped.length} 项（运行时回填 + cache-first 兜底）:`);
 const byReason = new Map();
 for (const file of dropped) {

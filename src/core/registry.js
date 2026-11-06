@@ -199,6 +199,9 @@ export const FAMILY_NAMES = {
   ed448: "Ed448",
   x448: "X448",
   gost: "GOST 签名",
+  railfence: "Rail Fence",
+  bzip2: "bzip2",
+  falcon: "Falcon / FN-DSA",
   jws: "JWS",
   jwe: "JWE",
   paseto: "PASETO",
@@ -294,7 +297,10 @@ export function inferIoMode(op) {
     try {
       const src = op.run.toString().trim();
       const first = runFirstParam(src);
-      const body = src.slice(src.indexOf("{") + 1);
+      const arrow = src.indexOf("=>");
+      const body = arrow >= 0
+        ? src.slice(arrow + 2)
+        : src.slice(src.indexOf("{") + 1);
       if (first !== null && (!first || first === "p" || !new RegExp("\\b" + first + "\\b").test(body))) mode = "none";
     } catch { /* toString/解析异常按 text 处理，宁可多显示 */ }
   }
@@ -342,7 +348,8 @@ export function addCategory(cat) {
     throw new Error(`分类必须有非空字符串 id`);
   }
   if (_catIds.has(cat.id)) return CATEGORIES.find((c) => c.id === cat.id);
-  const rec = { id: cat.id, name: cat.name || cat.id, icon: cat.icon || "extension" };
+  // plugin: true 让 UI 把动态分类归入「插件算法」分区（内置分类无此标记）。
+  const rec = { id: cat.id, name: cat.name || cat.id, icon: cat.icon || "extension", plugin: true };
   CATEGORIES.push(rec);
   _catIds.add(cat.id);
   return rec;

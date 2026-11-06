@@ -386,7 +386,7 @@ register({
         { value: "verify", label: "验证（离线，默认）" },
         { value: "fetch", label: "拉取（联网，需显式允许）" },
       ] },
-    { key: "pubkey", label: "链公钥 / 证书 PEM（留空用内置 drand 主网公钥）", type: "textarea", default: "",
+    { acceptFile: "text", key: "pubkey", label: "链公钥 / 证书 PEM（留空用内置 drand 主网公钥）", type: "textarea", default: "",
       placeholder: "drand：48B G1 群公钥 hex；NIST：X.509 证书 PEM 或 SPKI 公钥 PEM（用于 RSA 验签）" },
     { key: "prev", label: "上一轮凭证（可选：drand previous_signature / NIST 上一脉冲 outputValue）", type: "text", default: "",
       placeholder: "留空则以记录内 previous_signature 为准" },

@@ -16,6 +16,10 @@ function has(out, sub, label) {
 function throws(fn, label) {
   try { fn(); ok(false, label, "expected throw"); } catch { pass++; }
 }
+function throwsMsg(fn, sub, label) {
+  try { fn(); ok(false, label, "expected throw"); }
+  catch (e) { const msg = String((e && e.message) || e); ok(msg.includes(sub), label, `message=${msg}`); }
+}
 
 const NS = "dcode-extras-2026-10/";
 const by = new Map(OPS.map((o) => [o.id, o]));
@@ -88,6 +92,9 @@ eq(run("crypt", "dCode", { salt: "$5$secret$" }), "$5$secret$BG4MkQdYxdLv2KOoRkK
 eq(run("crypt", "dCode", { salt: "$5$rounds=1000$secret$" }), "$5$rounds=1000$secret$u7jT3DrLqkzDTW.cDH1cbH/rTlzBzORpz21lXFJWkUD", "crypt SHA-256 rounds=1000 已知向量");
 eq(run("crypt", "dCode", { salt: "secret", algo: "sha256" }), "$5$secret$BG4MkQdYxdLv2KOoRkK.3omTkZhME3rKNpREJ3pgmI8", "crypt plain salt + sha256");
 throws(() => run("crypt", "dCode", { salt: "$2y$10$abcdefghijklmnopqrstuv" }), "crypt bcrypt 明确报错");
+throwsMsg(() => run("crypt", "dCode", { salt: "$5$rounds=999$secret$" }), "rounds", "crypt rounds=999 显式报错");
+throwsMsg(() => run("crypt", "dCode", { salt: "$5$rounds=1000000000$secret$" }), "rounds", "crypt rounds=1000000000 显式报错");
+has(run("crypt", "dCode", { salt: "$5$rounds=1001$secret$" }), "$5$rounds=1001$secret$", "crypt rounds=1001 正常");
 
 const geek = "GCS d-- s:+ a22 C+++ UB++ PGP t+ 5? tv+ b+ DI+ D+ e* h! r-- y?";
 has(run("geek", geek), "d-- → 着装 (Dress): -2", "Geek Code d-- 解析");

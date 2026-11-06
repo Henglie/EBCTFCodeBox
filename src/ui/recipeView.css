@@ -7,16 +7,60 @@
   padding: var(--sp-2) 0;
 }
 
-/* 工具条 */
+/* 页头：标题/说明 + 右上角快捷键入口 */
+.recipe-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.recipe-head-main { min-width: 0; }
+.recipe-help-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--on-surface-var);
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-full, 999px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.recipe-help-btn:hover { color: var(--primary); border-color: var(--primary); background: var(--surface-2); }
+.recipe-help-btn .msym { font-size: 18px; }
+
+/* 工具条：按构建 / 执行 / 编辑 / 管理分行 */
 .recipe-bar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--sp-2);
   padding: var(--sp-3);
   background: var(--surface-1);
   border: 1px solid var(--outline-var);
   border-radius: var(--r-lg);
+}
+.recipe-bar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.recipe-bar-row + .recipe-bar-row {
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--outline-var);
+}
+.recipe-bar-label {
+  flex: 0 0 auto;
+  min-width: 2.2em;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--on-surface-var);
 }
 .recipe-preset-picker {
   flex: 1 1 180px;
@@ -364,7 +408,10 @@
 
 /* ============ 窄屏（<860px 与全站断点对齐）：工具条收窄 / 节点头换行 / 参数单列 ============ */
 @media (max-width: 860px) {
+  .recipe-head { gap: var(--sp-2); }
+  .recipe-help-btn { padding: var(--sp-1) var(--sp-2); }
   .recipe-bar { padding: var(--sp-2); gap: var(--sp-1); }
+  .recipe-bar-label { flex-basis: 100%; min-width: 0; }
   .recipe-preset-picker { flex: 1 1 100%; min-width: 0; }
   .recipe-op-search { flex: 1 1 100%; min-width: 0; }
   .recipe-node-head { flex-wrap: wrap; row-gap: var(--sp-1); }
@@ -385,4 +432,75 @@
 .recipe-saved-picker { max-width: 14rem; }
 @media (max-width: 860px) {
   .recipe-store-status { flex-basis: 100%; white-space: normal; }
+}
+
+/* P0-3：配方参数补齐 textarea / image / datalist / 长文本展开 */
+.recipe-param.param-big { width: 100%; min-width: 0; flex-wrap: wrap; }
+.recipe-param .param-bigbox { width: min(560px, 100%); }
+.recipe-param textarea.recipe-param-ta {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--on-surface);
+  background: var(--field-bg);
+  border: 1px solid var(--outline);
+  border-radius: var(--r-sm);
+  padding: var(--sp-1) var(--sp-2);
+}
+.recipe-param textarea.recipe-param-ta:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+.recipe-param-img-preview {
+  display: block;
+  max-width: 120px;
+  max-height: 80px;
+  margin-top: var(--sp-1);
+  object-fit: contain;
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.recipe-param .exp-wrap { flex: 1 1 auto; min-width: 0; }
+
+/* M3 敏感参数（口令 / 私钥 / seed / secret）：遮罩统一 -webkit-text-security: disc（非 blur）。
+   .secret-field 外框 + 小眼睛来自 app.css（全局已加载）；此处补 recipe 专属的 textarea 口径。 */
+.recipe-param textarea.is-masked { -webkit-text-security: disc; }
+.recipe-param .secret-field > textarea.recipe-param-ta {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* P0-2：Magic 多候选面板 */
+.recipe-magic-menu {
+  min-width: min(420px, 92vw);
+  max-width: min(620px, 94vw);
+}
+.recipe-magic-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.recipe-magic-item.invalid { opacity: .62; cursor: not-allowed; }
+.recipe-magic-item.invalid:hover { background: transparent; color: inherit; }
+.recipe-magic-steps {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.recipe-magic-preview {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--on-surface-var);
 }

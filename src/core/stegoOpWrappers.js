@@ -264,8 +264,12 @@ function rasterReport(scan, opts) {
     `上限 maxImages=${opts.maxImages}、maxTotalPixels=${opts.maxTotalPixels}。`,
   );
   if (scan.images.length) {
-    const names = scan.images.slice(0, 12).map((im) => im.name).join("、");
-    lines.push(`文件：${names}${scan.images.length > 12 ? ` … 等 ${scan.images.length} 个` : ""}`);
+    for (const axis of ["x", "y"]) {
+      const list = scan.images.filter((im) => im.axis === axis);
+      if (!list.length) continue;
+      const names = list.slice(0, 6).map((im) => im.name).join("、");
+      lines.push(`${axis} 轴（${list.length} 张）：${names}${list.length > 6 ? ` … 等 ${list.length} 个` : ""}`);
+    }
   }
   return lines.join("\n");
 }
@@ -275,7 +279,7 @@ export const RASTER_STEGO_OP = register({
   cat: "stegoFile",
   name: "光栅隐写拆图（zbRasterTerminator）",
   desc:
-    "复刻 zbRasterTerminator：对 PNG/BMP 的宽/高枚举 2..maxDivisor 的因数，按 x/y 轴和相位把其余行列清零，输出每张相位图 PNG（文件名如 x-5-1.png）。用于把光栅图里的隐藏文字/图案拆出来；产物直接列入可下载文件，张数/单张/总像素均有上限，超限明确报错不静默截断。",
+    "复刻 zbRasterTerminator：对 PNG/BMP 的宽/高枚举 2..maxDivisor 的因数，按 x/y 轴和相位拆出每张相位图 PNG（文件名如 x-5-1.png、y-5-1.png）。默认中灰 #808080 填充，黑/白笔画都可见，也可选深灰/黑/透明；用于把光栅图里的隐藏文字/图案拆出来；产物直接列入可下载文件，张数/单张/总像素均有上限，超限明确报错不静默截断。",
   acceptsBytes: true,
   aka: [
     "光栅隐写", "光栅图拆图", "zbRasterTerminator", "光栅终止器", "相位拆图",
@@ -285,10 +289,12 @@ export const RASTER_STEGO_OP = register({
   params: [
     { key: "maxDivisor", label: "最大因数（2-64，参考实现默认 10）", type: "number", default: 10 },
     { key: "both", label: "同时拆 x/y 两轴", type: "bool", default: true },
-    { key: "axes", label: "轴（both=false 时生效：x,y / x / y）", type: "text", default: "x" },
-    { key: "fillMode", label: "空白填充", type: "select", default: "auto", options: [
-      { value: "auto", label: "自动（含 alpha 用透明）" },
-      { value: "black", label: "黑色" },
+    { key: "axes", label: "轴（both=false 时生效：x,y / x / y）", type: "text", default: "x,y" },
+    { key: "fillMode", label: "空白填充（默认中灰，黑白笔画都可见）", type: "select", default: "gray", options: [
+      { value: "gray", label: "中灰 #808080（推荐）" },
+      { value: "darkgray", label: "深灰 #404040" },
+      { value: "black", label: "黑色 #000000" },
+      { value: "auto", label: "自动（实际含透明像素才透明，否则中灰）" },
       { value: "transparent", label: "透明" },
     ] },
     { key: "maxImages", label: "产物张数上限", type: "number", default: DEFAULT_RASTER_IMAGES },
@@ -308,7 +314,7 @@ export const RASTER_STEGO_OP = register({
       maxDivisor: clampInt(p.maxDivisor, 2, 64, 10),
       both,
       axes,
-      fillMode: ["auto", "black", "transparent"].includes(String(p.fillMode)) ? String(p.fillMode) : "auto",
+      fillMode: ["auto", "gray", "darkgray", "black", "transparent"].includes(String(p.fillMode)) ? String(p.fillMode) : "gray",
       maxImages: clampInt(p.maxImages, 1, 1024, DEFAULT_RASTER_IMAGES),
       maxPixelsPerImage: clampInt(p.maxPixelsPerImage, 1, 1_000_000_000, 8_000_000),
       maxTotalPixels: clampInt(p.maxTotalPixels, 1, 2_000_000_000, DEFAULT_RASTER_TOTAL_PIXELS),
@@ -376,7 +382,7 @@ export const MP3_STEGO_OP = register({
     "MP3Stego 密码", "mp3stego.exe",
   ],
   params: [
-    { key: "password", label: "密码（-P）", type: "text", default: "", placeholder: "MP3Stego 编码时使用的口令" },
+    { sensitive: true, key: "password", label: "密码（-P）", type: "password", default: "", placeholder: "MP3Stego 编码时使用的口令" },
     { key: "extract", label: "解密并解压（false=只取加密负载）", type: "bool", default: true },
     { key: "maxPayloadBytes", label: "负载字节上限", type: "number", default: DEFAULT_MP3_PAYLOAD },
   ],

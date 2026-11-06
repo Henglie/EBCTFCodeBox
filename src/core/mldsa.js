@@ -818,7 +818,7 @@ register({
   desc: "FIPS 204 ML-DSA-44/65/87（后量子签名）密钥对生成，种子 ξ 可固定复现（FIPS 204 §6.1 种子扩展），纯 JS 实现毫秒级",
   params: [
     { key: "set", label: "参数集", type: "select", default: "65", options: SET_OPTIONS },
-    { key: "zeta", label: "种子 ξ (hex 32B，留空随机)", type: "text", default: "", placeholder: "教学复现可固定" },
+    { sensitive: true, key: "zeta", label: "种子 ξ (hex 32B，留空随机)", type: "text", default: "", placeholder: "教学复现可固定" },
   ],
   run: (t, p = {}) => {
     const r = mldsaKeyGenBytes(p.set, p.zeta);
@@ -849,7 +849,7 @@ register({
   desc: "FIPS 204 签名：私钥 sk + 消息（text/hex）+ 上下文 ctx(≤255B)；hedged 随机 rnd（§5.4 推荐）或确定性 rnd=0；Fiat–Shamir with aborts",
   params: [
     { key: "set", label: "参数集", type: "select", default: "65", options: SET_OPTIONS },
-    { key: "sk", label: "私钥 sk (hex)", type: "text", default: "", placeholder: "密钥生成输出的 sk hex" },
+    { sensitive: true, key: "sk", label: "私钥 sk (hex)", type: "textarea", default: "", placeholder: "密钥生成输出的 sk hex" },
     { key: "msgMode", label: "消息形式", type: "select", default: "text", options: MSG_MODE_OPTIONS },
     { key: "ctx", label: "上下文 ctx (≤255B，默认空)", type: "text", default: "", placeholder: "FIPS 204 §5.4 域分隔上下文" },
     { key: "rndMode", label: "随机性模式", type: "select", default: "hedged", options: [

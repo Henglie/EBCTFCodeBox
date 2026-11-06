@@ -14,6 +14,7 @@
  */
 
 import { registerEduEn } from "./eduContent.js";
+import EDU_EN_OPENSSL from "./edu-en/edu-openssl.en.js";
 import E_EN_CTF_CIPHER_EXT from "./edu-en/edu-ctf-cipher-ext.en.js";
 
 // ---- Translated shards (add import here as each shard is completed) ----
@@ -108,6 +109,9 @@ import EDU_EN_T693 from "./edu-en/edu-t693.en.js"; // T693：Mach-O/WASM
 import EDU_EN_T694 from "./edu-en/edu-t694.en.js"; // T694：UTF-32/GB18030
 import EDU_EN_T703 from "./edu-en/edu-t703.en.js"; // T703：SHA-224/cSHAKE
 import EDU_EN_REGEX from "./edu-en/edu-regex.en.js"; // regexTool: generic regex extract/replace
+import EDU_EN_DATA_CONVERT from "./edu-en/edu-dataConvert.en.js"; // dataConvert: JSON/CSV/XML/YAML
+import EDU_EN_T760 from "./edu-en/edu-t760.en.js"; // bzip2Enc / extractAll
+import EDU_EN_T711 from "./edu-en/edu-t711.en.js"; // Falcon keygen/sign
 import EDU_EN_TEACH from "./edu-en/edu-teach.en.js"; // teaching trio: BFV/MPC/quantum
 import EDU_EN_T689T710 from "./edu-en/edu-t689t710.en.js";
 import EDU_EN_T723 from "./edu-en/edu-t723.en.js";
@@ -115,6 +119,8 @@ import EDU_EN_T722 from "./edu-en/edu-t722.en.js";
 import EDU_EN_T720 from "./edu-en/edu-t720.en.js";
 import EDU_EN_R18 from "./edu-en/edu-r18.en.js"; // R18: lsbDeep/rasterStego/mp3stego/imageThumb
 import EDU_EN_T721 from "./edu-en/edu-t721.en.js"; // 2026-10-26: Falcon/Poseidon/KZG/SSH·PKCS12·JWK/GCM·NTRU/Xoodyak/ECC (17 ops)
+import EDU_EN_HISTORICAL from "./edu-en/edu-historical-machines.en.js"; // typex/sigaba/lorenz 3
+import EDU_EN_HISTORICAL_ATTACKS from "./edu-en/edu-historical-attacks.en.js"; // bombe/multipleBombe/colossus 3
 
 const EDU_EN = Object.assign(
   {},
@@ -207,6 +213,9 @@ const EDU_EN = Object.assign(
   EDU_EN_T694,
   EDU_EN_T703,
   EDU_EN_REGEX,
+  EDU_EN_DATA_CONVERT,
+  EDU_EN_T760,
+  EDU_EN_T711,
   EDU_EN_TEACH,
   EDU_EN_T689T710,
   EDU_EN_T723,
@@ -214,6 +223,8 @@ const EDU_EN = Object.assign(
   EDU_EN_T720,
   EDU_EN_R18,
   EDU_EN_T721,
+  EDU_EN_HISTORICAL,
+  EDU_EN_HISTORICAL_ATTACKS,
 );
 
 import { EN as INTEGRATED, HASH_VECTORS, BASE_NOTES, EXTRA_ALIASES, CRC_PARAMS } from "./edu/edu-integrated.js";
@@ -250,5 +261,6 @@ for (const [id, out] of Object.entries(HASH_VECTORS)) {
   };
 }
 Object.assign(EDU_EN, E_EN_TOKEN_SIGNING);
+Object.assign(EDU_EN, EDU_EN_OPENSSL);
 registerEduEn(EDU_EN);
 export default EDU_EN;

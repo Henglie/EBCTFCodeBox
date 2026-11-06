@@ -147,10 +147,36 @@ function extractJpg(b, off, fmt) {
   return { end: Math.min(b.length, off + fmt.max), truncated: true, why: "未找到 FF D9 (EOI)" };
 }
 
+// PNG 头合法性：签名后必须紧跟 len(4) + type(4 个 ASCII 字母)，且 len 不越界。
+// 畸形前缀（如 sig+len13+sig+len13+IHDR）会让标准解析错位，切出的文件打不开。
+function pngHeadOk(b, off) {
+  if (off + 16 > b.length) return false;
+  for (let k = off + 12; k < off + 16; k++) {
+    const c = b[k];
+    if (!((c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A))) return false;
+  }
+  const len = b[off + 8] * 0x1000000 + ((b[off + 9] << 16) | (b[off + 10] << 8) | b[off + 11]);
+  return len <= b.length - off - 12;
+}
+
+// 在畸形前缀之后寻找真正合法的 PNG 起点（签名 + 合法头），找不到就保留原偏移。
+function pngRealStart(b, off, end) {
+  const sig = FORMATS.png.headers[0];
+  for (let i = off + 8; i + 16 <= end; i++) {
+    if (matchAt(b, i, sig) && pngHeadOk(b, i)) return i;
+  }
+  return off;
+}
+
 function extractPng(b, off, fmt) {
   // IEND chunk：len(4,=0) + "IEND" + CRC(4)；从 "IEND" 字样定位，尾部再吃 4 字节 CRC
   const i = findBytes(b, off + 8, IEND);
-  if (i >= 0) return { end: Math.min(i + 8, b.length), truncated: false };
+  if (i >= 0) {
+    const end = Math.min(i + 8, b.length);
+    // 头部畸形时把起点后移到真正可解码的位置，产物才能被图片查看器打开。
+    const start = pngHeadOk(b, off) ? off : pngRealStart(b, off, end);
+    return { start, end, truncated: false };
+  }
   return { end: Math.min(b.length, off + fmt.max), truncated: true, why: "未找到 IEND chunk" };
 }
 
@@ -258,16 +284,18 @@ export function carve(bytes, opts = {}) {
     const fmt = FORMATS[hit.ext];
     const res = EXTRACTORS[hit.ext](bytes, pos, fmt);
     if (!res) { pos++; continue; }
-    const end = Math.max(res.end, pos + 1); // 防御：end 至少越过头部
+    // 起点可被 extractor 修正（PNG 畸形前缀）；offset 报告真实可用起点。
+    const start = Number.isFinite(res.start) ? res.start : pos;
+    const end = Math.max(res.end, start + 1); // 防御：end 至少越过头部
     const nested = res.truncated && pos < reportedEnd;
-    const size = end - pos;
+    const size = end - start;
     if (!nested && size >= minSize && size <= fmt.max) {
-      const slice = bytes.subarray(pos, end);
+      const slice = bytes.subarray(start, end);
       const key = dedupKey(slice);
       if (!seen.has(key)) {
         seen.add(key);
         found.push({
-          ext: hit.ext, offset: pos, size,
+          ext: hit.ext, offset: start, size,
           bytes: new Uint8Array(slice), // 拷贝，脱离原缓冲独立存在
           truncated: !!res.truncated,
         });

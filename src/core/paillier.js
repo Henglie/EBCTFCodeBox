@@ -200,8 +200,8 @@ register({
   desc: "Paillier 私钥解密：m = L(c^λ mod n²)·μ mod n，其中 L(x)=(x-1)/n。输入密文 c（十进制 / 0x hex）",
   params: [
     { key: "n", label: "公钥 n", type: "text", default: "", placeholder: "十进制 / 0x hex" },
-    { key: "lambda", label: "私钥 λ", type: "text", default: "", placeholder: "lcm(p-1, q-1)" },
-    { key: "mu", label: "私钥 μ", type: "text", default: "", placeholder: "(L(g^λ mod n²))⁻¹ mod n" },
+    { sensitive: true, key: "lambda", label: "私钥 λ", type: "text", default: "", placeholder: "lcm(p-1, q-1)" },
+    { sensitive: true, key: "mu", label: "私钥 μ", type: "text", default: "", placeholder: "(L(g^λ mod n²))⁻¹ mod n" },
   ],
   run: (text, p) => {
     const n = parseBig(p.n, "n");

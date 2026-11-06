@@ -133,6 +133,8 @@ op 结构与主项目 `registry.js` 完全同构：
 | `encode(text, p)` / `decode(text, p)` | 双向；只有一向填一个。 |
 | `run(text, p)` | 单向工具（哈希/分析类）。填了 `run` 不显示双向切换。 |
 | `detect(text)` | 可选。一键解码识别指纹，返回 `0..1` 置信度。 |
+| `autoRun` | 可选，默认 `true`；`false` = 参数改动只更新状态，点「转换 / 解码」或 Ctrl+Enter 才运行。数学/数论/重运算插件建议关闭。参数框本身另有 240ms 防抖。 |
+| `since` / `addedIn` / `updatedIn` / `isNew` | 可选版本元数据。`since` 写批次时间（如 `2026.11.0`），`addedIn`/`updatedIn` 写工具箱版本；`isNew:true` 在 op 页显示「新增」徽标。 |
 
 `encode` / `decode` / `run` **至少有一个**，否则注册抛错。
 

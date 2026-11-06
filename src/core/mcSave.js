@@ -434,6 +434,13 @@ function summarizeLevelDat(root) {
   const time = childVal(data, "Time");
   if (dayTime !== undefined) lines.push(`DayTime: ${dayTime.toString()}`);
   if (time !== undefined) lines.push(`Time: ${time.toString()}`);
+
+ // 内嵌玩家数据（旧版单人存档会把背包/成书直接写在 level.dat 的 Data.Player 下）
+  const playerEntry = child(data, "Player");
+  if (playerEntry && playerEntry.__t === 10) {
+    lines.push("内嵌玩家数据 Player: 存在（背包物品/成书可能直接藏在 level.dat 内）");
+    warns.push("level.dat 内嵌 Player 数据：成书 pages、物品名等线索可拖入「Minecraft 文本情报提取」一键扫描，或勾选「转储完整 NBT 树」查看。");
+  }
   const hardcore = childVal(data, "hardcore");
   if (hardcore !== undefined) lines.push(`hardcore: ${hardcore}`);
   const gameType = childVal(data, "GameType");

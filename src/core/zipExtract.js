@@ -723,7 +723,7 @@ register({
   params: [
     INPUT_ENC_PARAM,
     { key: "entry", label: "条目名（留空=全部；多个用逗号/分号分隔；#N 按序号）", type: "text", default: "", placeholder: "flag.txt 或留空" },
-    { key: "password", label: "ZipCrypto 密码（可空；AES 条目暂不支持）", type: "text", default: "", placeholder: "先 zipBrute 取口令" },
+    { sensitive: true, key: "password", label: "ZipCrypto 密码（可空；AES 条目暂不支持）", type: "password", default: "", placeholder: "先 zipBrute 取口令" },
   ],
   run: zipExtractRun,
   acceptsBytes: true,

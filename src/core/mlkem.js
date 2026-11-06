@@ -492,8 +492,8 @@ register({
   desc: "FIPS 203 ML-KEM-512/768/1024（后量子 KEM）密钥对生成，d/z 种子可固定复现（含 FO 变换）。纯 JS 实现，单次毫秒级",
   params: [
     { key: "set", label: "参数集", type: "select", default: "768", options: SET_OPTIONS },
-    { key: "d", label: "种子 d (hex 32B，留空随机)", type: "text", default: "", placeholder: "教学复现可固定" },
-    { key: "z", label: "种子 z (hex 32B，留空随机)", type: "text", default: "", placeholder: "教学复现可固定" },
+    { sensitive: true, key: "d", label: "种子 d (hex 32B，留空随机)", type: "text", default: "", placeholder: "教学复现可固定" },
+    { sensitive: true, key: "z", label: "种子 z (hex 32B，留空随机)", type: "text", default: "", placeholder: "教学复现可固定" },
   ],
   run: (t, p = {}) => {
     const r = mlkemKeyGenBytes(p.set, p.d, p.z);

@@ -73,6 +73,7 @@ import "./stegoImage.js";
 import "./stegoImage2.js"; // 图像隐写扩展（PNG全块/JPEG APPn/GIF注释/GIF多帧/ICC剥离）
 import "./imagefix.js"; // 图像尺寸修复（pngSizeRecover/jpegSizeRead/gifSizeRead，替代 pngFix，更全）
 import "./trailerCarve.js"; // 文件附加数据剥离 + binwalk 式全文魔数扫描（替代 carve）
+import "./opensslDec.js"; // OpenSSL Salted__ 一步式口令加解密
 import "./foremostJs.js"; // 文件雕刻（Foremost 纯 JS 版）foremostCarve（forensic, run, 头尾魔数雕刻内嵌文件, 无 detect）
 import "./hashFrontier.js"; // 哈希前沿补遗（批B）argon2/tiger/tiger2/kupyna（hash, run, 无 detect）
 import "./stegoText.js"; // 隐写文本检测组（零宽/同形字/规范化/空格/Bidi/字符透视，检测类 run 单向）
@@ -143,6 +144,7 @@ import "./classicExt3.js"; // 古典补全组3（otp/multiplicative/keywordciphe
 import "./classicExt4.js"; // 批一古典（homophonic/doubleTrans/pollux/morbit/bookCipher/turningGrille/kenny，dCode 双例对拍）
 import "./engEncoding.js"; // 批四工程编码（hexdump/modhex/citrixCtx1/scriptDecoder/rison/unixPerms，xxd+CyberChef 向量对拍）
 import "./encodingExt3.js"; // 批二编码映射（crockford32/alienAlphabet/futhark/countingRods/chuckUnary/wingdings/cardanGrille，dCode/Wikipedia/字体 cmap 三源对拍）
+import "./bzip2Codec.js"; // bzip2 压缩 bzip2Enc（archive, run, WASM；与 bzip2Dec 同族）
 import "./compressExt2.js"; // 批三压缩校验（rle/lzw/elias/verhoeff/lz4Dec/bzip2Dec，PIL/CLI/规范三源对拍，bzip2 全链）
 import "./fracmorse.js"; // 分数摩斯 Fractionated Morse
 import "./hamming.js"; // 海明码纠错编解码
@@ -160,6 +162,12 @@ import "./qqxiuzi_misc.js"; // QQ秀异构族（braille/chinese/music）
 import "./lolcode.js"; // LOLCODE 语言映射
 import "./enigma.js"; // Enigma 恩尼格玛机
 import "./m209.js"; // M-209 转轮密码机
+import "./typex.js"; // Typex 英国转轮密码机
+import "./sigaba.js"; // SIGABA / ECM Mark II 密码机
+import "./lorenz.js"; // Lorenz SZ40/42 密码附件
+import "./colossus.js"; // Colossus 计数破译机
+import "./bombe.js"; // Bombe 图灵炸弹机
+import "./multipleBombe.js"; // Multiple Bombe 批量炸弹机
 import "./bwt.js"; // BWT 块排序变换
 import "./clockcipher.js"; // 表盘码 / 时钟码
 import "./bech32.js"; // Bech32 编码
@@ -179,6 +187,10 @@ import "./sm.js"; // 国密 ZUC 流密码（GB/T 33133.1-2016 完整实现；SM2
 import "./pairing.js"; // SM9 双线性对内核（BN 曲线 R-ate pairing：Fp2/Fp4/Fp12 扩域塔 + Miller + finalExp）
 import "./sm9ops.js"; // 国密 SM9 完整运算（GB/T 38635-2020：标识密钥生成/签名/验签/加密/解密五档族）
 import "./archiveUnified.js"; // 压缩/归档归一（analysis, run 型, 复用 compress+sevenzip 纯函数）
+import "./ccP0Ops.js"; // CyberChef P0 对齐：COBS / LZMA / Tar
+import "./serialEnc.js"; // CyberChef 结构化出站编码：CBOR/MessagePack/BSON/PHP/Protobuf
+import "./textUtilsOps.js"; // CyberChef 文本/字节缺失 op（textUtils.js 批量注册）
+import "./ocrOp.js"; // 中英文 OCR（tesseract.js 本地资产）
 import "./spoon.js"; // Spoon 语言（BF 前缀码变体, fancy）
 import "./ssti.js"; // SSTI 关键字识别（analysis, run 型, 只识别不执行）
 import "./pinyin.js"; // 数字转拼音 + 汉字转拼音（cn）
@@ -390,6 +402,7 @@ import "./objectIdTime.js"; // ObjectID 时间戳解析 objectIdTime（radix, ru
 import "./rc4Drop.js"; // RC4-drop / CipherSaber-2 rc4Drop（stream, 双向, RFC 6229 + cstest.cs2 向量, 无 detect）
 import "./xsalsa20.js"; // XSalsa20 xsalsa20（stream, 双向, libsodium stream3/core3/core4 向量, 无 detect）
 import "./imageToolbox.js"; // 图像处理工具组 imageCompress/imageGray/imagePixelate/imageFrosted/imageSketch/imageToText/gifCompose（image, run, 纯 JS, 无 detect）
+import "./falconOps.js"; // T711：Falcon 密钥生成 + 签名 falconKeyGen+falconSign（asym, run）
 import "./falconVerify.js"; // Falcon-512/1024 公钥解析 + 验签 falconPkParse+falconVerify（asym, run, spec 算法16, SHAKE256）
 import "./poseidon.js"; // Poseidon/Poseidon2 哈希 poseidon+poseidon2（hash, run, BN254/BLS12-381 官方实例）
 import "./kzg.js"; // KZG/EIP-4844 kzgVerify+kzgCommit+kzgBlobParse（asym/filefmt, 主网可信设置）
@@ -405,6 +418,9 @@ import "./x509Verify.js"; // X.509 证书链验签 x509Verify（asym, run, RFC 5
 import "./sshsigVerify.js"; // OpenSSH SSHSIG 验签 sshsigVerify（asym, run, Ed25519/RSA/ECDSA）
 import "./sigVerify.js"; // 统一验签入口 sigVerify（asym, run, JWT/PGP/X.509/CMS/SSHSIG 分诊）
 import "./regexTool.js"; // 通用正则提取/替换 regexTool（text, run, 编译前结构白名单）
+import "./dataConvertOp.js"; // JSON/CSV/XML/YAML 转换 dataConvert（data, run，纯函数在 dataConvert.js）
+import "./extractAll.js"; // 专用文本提取器 extractAll（analysis, run）
+import "./gostKeyWrap.js"; // GOST 28147-89 Key Wrap gostKeyWrap（block, run, RFC 4357）
 import "./bfvToy.js"; // BFV 玩具同态加密 bfvToy（block, run, 教学：噪声账本/同态加乘）
 import "./mpcToy.js"; // 安全多方计算玩具 mpcToy（modern, run, 教学：Beaver 三元组/1-of-2 OT 模拟）
 import "./quantumToy.js"; // 量子算法玩具 quantumToy（modern, run, 教学：Grover/Shor statevector）

@@ -5,14 +5,13 @@
  * 一切输入有界，超限显式报错；无外部 CAS/网络。
  */
 
-import { runOp, big, isPrime, factorizeBounded, powmod, binom, parseNums } from "../lib/util.js";
+import { runOp, big, isPrime, factorizeBounded, powmod, binom, parseNums, assertBudget, BUDGET_LIMITS, log10Factorial } from "../lib/util.js";
 
 const CAT = "dcode-extras-2026-10/cat-math";
 const P = (key, label, ph) => ({ key, label, type: "text", default: "", placeholder: ph || "" });
 const SEL = (key, label, def, opts) => ({ key, label, type: "select", default: def, options: opts.map((o) => (typeof o === "string" ? { value: o, label: o } : o)) });
 
 const MAX_N = 40;
-const MAX_MATRIX = 10;
 
 function err(msg) { throw new Error(msg); }
 function absB(x) { return x < 0n ? -x : x; }
@@ -56,9 +55,37 @@ function parseRat(src, what = "有理数") {
   err(`无法解析${what}「${src}」`);
 }
 
+function parseExactSafeInt(t) {
+  const m = t.match(/^([+-]?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/);
+  if (!m) return null;
+  const frac = m[3] || "";
+  const exp = Number(m[4] || 0);
+  if (!Number.isSafeInteger(exp)) return "range";
+  const digits = (m[2] + frac).replace(/^0+/, "");
+  if (!digits) return 0n;
+  const shift = exp - frac.length;
+  if (shift >= 0) {
+    if (digits.length + shift > 16) return "range";
+    const b = BigInt(digits) * 10n ** BigInt(shift);
+    return m[1] === "-" ? -b : b;
+  }
+  const drop = -shift;
+  if (drop >= digits.length) {
+    const tail = digits.slice(digits.length - drop);
+    if (!/^0+$/.test(tail)) return null;
+    return 0n;
+  }
+  if (!/^0*$/.test(digits.slice(digits.length - drop))) return null;
+  const b = BigInt(digits.slice(0, digits.length - drop));
+  return m[1] === "-" ? -b : b;
+}
+
 function parseIntVal(src, what, lo, hi) {
-  const v = Number(String(src).trim());
-  if (!Number.isInteger(v)) err(`${what}必须为整数`);
+  const t = String(src).trim().replace(/−/g, "-");
+  const b = parseExactSafeInt(t);
+  if (b === null) err(`${what}必须为整数`);
+  if (b === "range" || b > 9007199254740991n || b < -9007199254740991n) err(`${what}超出 JS 精确整数范围（需 ≤ 2^53−1）`);
+  const v = Number(b);
   if (v < lo || v > hi) err(`${what}需在 ${lo}..${hi}`);
   return v;
 }
@@ -179,7 +206,8 @@ function seriesParser(src, N, varName) {
       const t = eat();
       if (t.t !== "num" || !/^\d+$/.test(t.v)) err("指数必须是非负整数");
       const e = Number(t.v) * sign;
-      if (e < 0 || e > 64) err("指数需在 0..64");
+      if (!Number.isSafeInteger(e) || e < 0) err("指数必须是非负且可计算的安全整数");
+      assertBudget("bigSteps", Math.max(1, e) * (N + 1) * (N + 1), "级数幂运算");
       v = sPow(v, e, N);
     }
     return v;
@@ -414,6 +442,7 @@ function divisorsOf(n) {
       for (const d of base) out.push(d * mul);
     }
   }
+  assertBudget("items", out.length, "有理根常数/首项因子");
   return out;
 }
 
@@ -428,7 +457,7 @@ function ratRootsOf(p) {
   const lead = ints[ints.length - 1], cons = ints[0];
   if (cons === 0n || lead === 0n) err("有理根枚举失败：常数为 0");
   const pd = divisorsOf(cons), qd = divisorsOf(lead);
-  if (pd.length * qd.length > 40000) err("有理根候选过多，请缩小系数");
+  assertBudget("items", pd.length * qd.length, "有理根候选");
   const seen = new Set();
   const cands = [];
   for (const a of pd) for (const b of qd) for (const s of [1n, -1n]) {
@@ -493,13 +522,21 @@ function expFactor(root) {
 }
 
 function invLaplace(src) {
-  const [ns, ds] = splitTopSlash(String(src).trim());
+  const source = String(src).trim();
+  assertBudget("chars", source.length, "逆 Laplace 输入");
+  const [ns, ds] = splitTopSlash(source);
   if (!ns.trim() || !ds.trim()) err("分式不完整");
-  const N = pTrim(parsePolyExpr(ns, "s"));
-  const D = pTrim(parsePolyExpr(ds, "s"));
+  const maxDeg = Math.max(12, Math.floor(Math.cbrt(BUDGET_LIMITS.bigSteps / 8)));
+  for (const m of source.matchAll(/(?:s|\))\s*\^\s*(\d+)/gi)) {
+    if (Number(m[1]) > maxDeg) err(`分母/分子次数超出当前计算预算（上限 ${maxDeg} 次；更高次需 CAS/模算）`);
+  }
+  const N = pTrim(parsePolyExpr(ns, "s", maxDeg + 1));
+  const D = pTrim(parsePolyExpr(ds, "s", maxDeg + 1));
   if (pDeg(D) < 1) err("分母必须是非常数多项式");
   if (pDeg(N) >= pDeg(D)) err("只支持真分式（分子次数 < 分母次数）");
-  if (pDeg(D) > 10) err("分母次数上限 10");
+  if (pDeg(D) > maxDeg) err(`分母次数超出当前计算预算（上限 ${maxDeg} 次；更高次需 CAS/模算）`);
+  const degD = pDeg(D);
+  assertBudget("bigSteps", (degD + 1) ** 3 * 8, "逆 Laplace 部分分式方程");
   const { roots, rem } = ratRootsOf(D);
   const factors = roots.map((r) => ({ type: "lin", root: r.root, mult: r.mult }));
   let quad = null;
@@ -592,19 +629,27 @@ function invLaplace(src) {
     }
   }
   const body = terms.length ? terms.join(" + ").replace(/\+ -/g, "- ") : "0";
-  return `F(s) = (${pStr(N)}) / (${pStr(D)})\nf(t) = ${body}`;
+  const out = `F(s) = (${pStr(N)}) / (${pStr(D)})\nf(t) = ${body}`;
+  assertBudget("chars", out.length, "逆 Laplace 输出");
+  return out;
 }
 
 const OPS_CORE = [
   runOp("e2-taylor", CAT, "泰勒/幂级数展开（有理系数）", "对 sin/cos/tan/exp/log/sqrt/atan/sinh/cosh/tanh 及四则、整数幂表达式在 x=0 处展开到指定阶；系数为精确有理数", (text, p) => {
     const src = String(text || "").trim() || String(p.expr || "").trim();
     if (!src) err("请输入函数表达式，如 sin(x)");
-    const N = parseIntVal(p.n || 8, "展开阶数", 1, 30);
+    assertBudget("chars", src.length, "泰勒表达式输入");
+    const N = parseIntVal(p.n || 8, "展开阶数", 1, 1000000);
+    assertBudget("bigSteps", (N + 1) ** 3, "泰勒级数展开");
+    const outChars = 3 * (N + 1) * (N + 1) * Math.log10(N + 2);
+    assertBudget("chars", outChars, "泰勒展开输出");
     const a = seriesParser(src, N, "x");
-    return `f(x) = ${seriesStr(a, N)} + O(x^${N + 1})`;
+    const body = seriesStr(a, N);
+    assertBudget("chars", body.length, "泰勒展开输出");
+    return `f(x) = ${body} + O(x^${N + 1})`;
   }, [P("expr", "函数表达式", "sin(x)"), P("n", "展开阶数", "8")]),
 
-  runOp("e2-invlaplace", CAT, "逆 Laplace 变换（有理函数）", "对真分式 F(s)=P(s)/Q(s) 做部分分式分解，分母限一次/共轭二次因子（次数≤10），输出 e^(rt)、t^n e^(rt)、e^(at)(cos+sin) 组合", (text, p) => {
+  runOp("e2-invlaplace", CAT, "逆 Laplace 变换（有理函数）", "对真分式 F(s)=P(s)/Q(s) 做部分分式分解，分母限一次/共轭二次因子（次数按计算预算与有理根可解性），输出 e^(rt)、t^n e^(rt)、e^(at)(cos+sin) 组合", (text, p) => {
     const src = String(text || "").trim() || String(p.expr || "").trim();
     if (!src) err("请输入 F(s)，如 1/(s^2+1)");
     return invLaplace(src);
@@ -612,9 +657,10 @@ const OPS_CORE = [
 ];
 
 function parseMatrix(text, what = "矩阵") {
-  const lines = String(text || "").trim().split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+  const src = String(text || "");
+  assertBudget("chars", src.length, `${what}文本`);
+  const lines = src.trim().split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
   if (!lines.length) err(`请输入${what}`);
-  if (lines.length > MAX_MATRIX) err(`${what}行数上限 ${MAX_MATRIX}`);
   const m = lines.map((line) => line.split(/[\s,]+/).map((x) => {
     const v = Number(x);
     if (!Number.isFinite(v)) err(`${what}含非数字项「${x}」`);
@@ -622,8 +668,9 @@ function parseMatrix(text, what = "矩阵") {
   }));
   const n = m[0].length;
   if (!n) err(`${what}为空`);
-  if (n > MAX_MATRIX) err(`${what}列数上限 ${MAX_MATRIX}`);
   if (!m.every((r) => r.length === n)) err(`${what}各行长度不一致`);
+  assertBudget("items", m.length * n, `${what}元素`);
+  assertBudget("chars", m.length * n * 24, `${what}输出`);
   return m;
 }
 
@@ -792,13 +839,16 @@ function parseComplex(src) {
   err(`无法解析复数「${src}」`);
 }
 function parseComplexMatrix(text) {
-  const lines = String(text || "").trim().split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+  const src = String(text || "");
+  assertBudget("chars", src.length, "复矩阵文本");
+  const lines = src.trim().split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
   if (!lines.length) err("请输入复矩阵");
-  if (lines.length > MAX_MATRIX) err(`矩阵行数上限 ${MAX_MATRIX}`);
   const m = lines.map((line) => line.split(/[\s,]+/).filter(Boolean).map(parseComplex));
   const n = m[0].length;
-  if (!n || n > MAX_MATRIX) err(`矩阵列数需在 1..${MAX_MATRIX}`);
+  if (!n) err("复矩阵为空");
   if (!m.every((r) => r.length === n)) err("复矩阵各行长度不一致");
+  assertBudget("items", m.length * n, "复矩阵元素");
+  assertBudget("chars", m.length * n * 32, "复矩阵输出");
   return m;
 }
 function cmatStr(a) { return a.map((r) => r.map((z) => cfmt(z)).join(" ")).join("\n"); }
@@ -897,7 +947,9 @@ function egcdBig(a, b) {
 }
 
 function parseBigMatrix(text) {
-  const lines = String(text || "").trim().split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+  const src = String(text || "");
+  assertBudget("chars", src.length, "整数矩阵文本");
+  const lines = src.trim().split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
   if (!lines.length) err("请输入整数矩阵");
   const m = lines.map((line) => line.split(/[\s,]+/).filter(Boolean).map((x) => {
     const v = big(x);
@@ -905,8 +957,9 @@ function parseBigMatrix(text) {
     return v;
   }));
   const n = m[0].length;
-  if (!n || n > MAX_MATRIX || m.length > MAX_MATRIX) err(`矩阵尺寸上限 ${MAX_MATRIX}×${MAX_MATRIX}`);
+  if (!n) err("整数矩阵为空");
   if (!m.every((r) => r.length === n)) err("矩阵各行长度不一致");
+  assertBudget("items", m.length * n, "整数矩阵元素");
   return m;
 }
 
@@ -963,6 +1016,7 @@ const OPS_MATRIX = [
   runOp("e2-schur", CAT, "实 Schur 分解（数值）", "对实矩阵做 QR 迭代，返回正交 Q 与准上三角 T（QᵀAQ=T）；对称矩阵走 Jacobi，复特征值保留 2×2 块。数值结果，非符号精确", (text, p) => {
     const A = parseMatrix(text, "实矩阵");
     const tol = Number(p.tol || 1e-10);
+    assertBudget("steps", A.length ** 3 * 2000, "实 Schur QR 迭代");
     const { T, Q } = schurReal(A, Number.isFinite(tol) && tol > 0 ? tol : 1e-10);
     const errQ = matMaxAbs(matMulN(matT(Q), Q).map((r, i) => r.map((x, j) => x - (i === j ? 1 : 0))));
     return `Q =\n${matStr(Q)}\nT =\n${matStr(T)}\n正交误差 ‖QᵀQ−I‖∞ = ${fmtNum(errQ, 10)}`;
@@ -970,6 +1024,7 @@ const OPS_MATRIX = [
 
   runOp("e2-trigonal", CAT, "复三角化 / 复 Schur（数值）", "复数域 QR 迭代把矩阵化为上三角 T，返回酉矩阵 Q 使 QᴴAQ=T；输入为实矩阵，允许复特征值", (text, p) => {
     const A = parseMatrix(text, "实矩阵");
+    assertBudget("steps", A.length ** 3 * 3000, "复三角化 QR 迭代");
     const { T, Q } = trigonalComplexReal(A);
     const prod = cmatMul(cmatAdj(Q), Q);
     let errQ = 0;
@@ -979,6 +1034,7 @@ const OPS_MATRIX = [
 
   runOp("e2-hermite", CAT, "Hermite 标准形（整数矩阵）", "行 Hermite 标准形 H=U·M：欧几里得行变换，主元为正、主元上方约化到 [0,pivot)，输出 H 与幺模矩阵 U", (text) => {
     const M = parseBigMatrix(text);
+    assertBudget("bigSteps", M.length * M[0].length * Math.max(M.length, M[0].length) * 16, "Hermite 行变换");
     const { H, U } = hermiteNormalForm(M);
     const check = U.map((row) => {
       const out = Array(M[0].length).fill(0n);
@@ -987,18 +1043,32 @@ const OPS_MATRIX = [
     });
     const ok = check.every((r, i) => r.every((x, j) => x === H[i][j]));
     if (!ok) err("Hermite 内部校验失败");
-    return `H =\n${bigMatStr(H)}\nU =\n${bigMatStr(U)}\nU·M = H 校验通过`;
+    const out = `H =\n${bigMatStr(H)}\nU =\n${bigMatStr(U)}\nU·M = H 校验通过`;
+    assertBudget("chars", out.length, "Hermite 输出");
+    return out;
   }),
 
   runOp("e2-cmatconj", CAT, "复矩阵共轭 / 共轭转置", "逐项取共轭或转置后取共轭；输入如 1+i, 2, -3i，每行一项用空格/逗号分隔", (text, p) => {
     const A = parseComplexMatrix(text);
     const mode = String(p.mode || "conj");
     const out = mode === "adjoint" ? cmatAdj(A) : cmatConj(A);
-    return `${mode === "adjoint" ? "Aᴴ" : "conj(A)"} =\n${cmatStr(out)}`;
+    const body = `${mode === "adjoint" ? "Aᴴ" : "conj(A)"} =\n${cmatStr(out)}`;
+    assertBudget("chars", body.length, "复矩阵输出");
+    return body;
   }, [SEL("mode", "模式", "conj", ["conj", "adjoint"])]),
 ];
 
-function combinationsOf(n, k) {
+function combinationCount(n, k, label) {
+  if (!Number.isSafeInteger(n) || !Number.isSafeInteger(k) || n < 0 || k < 0 || k > n) err(`${label}需为非负安全整数且 k ≤ n`);
+  const lg = Math.max(0, log10Factorial(n) - log10Factorial(k) - log10Factorial(n - k));
+  const amount = Number.isFinite(lg) ? Math.min(10 ** lg, 1e15) : 1e15;
+  assertBudget("items", Math.round(amount), label);
+  return binom(BigInt(n), BigInt(k));
+}
+
+function combinationsOf(n, k, label) {
+  const total = combinationCount(n, k, label);
+  const limit = Number(total);
   const out = [];
   const cur = [];
   const rec = (start) => {
@@ -1007,20 +1077,23 @@ function combinationsOf(n, k) {
       cur.push(i);
       rec(i + 1);
       cur.pop();
-      if (out.length > 200000) err("组合数量超过上限 200000");
+      if (out.length > limit) err(`${label}生成数量超过预算`);
     }
   };
   rec(1);
+  assertBudget("items", out.length, label);
   return out;
 }
 
 function wheelingSystem(n, k, g) {
   if (!(n >= 1 && k >= 1 && g >= 1 && g <= k && k <= n)) err("需满足 1 ≤ g ≤ k ≤ n");
-  if (n > 16) err("号码池 n 上限 16");
-  const tickets = combinationsOf(n, k);
-  if (tickets.length > 50000) err("票面候选超过 50000，请缩小 n/k");
-  const groups = combinationsOf(n, g);
-  if (groups.length > 200000) err("保证组合超过 200000，请缩小 n/g");
+  if (!Number.isSafeInteger(n) || !Number.isSafeInteger(k) || !Number.isSafeInteger(g)) err("n/k/g 必须为安全整数");
+  const ticketCount = Number(combinationCount(n, k, "票面候选"));
+  const groupCount = Number(combinationCount(n, g, "保证组合"));
+  const perTicket = Number(binom(BigInt(k), BigInt(g)));
+  assertBudget("steps", ticketCount * (perTicket + ticketCount) + groupCount, "轮转覆盖贪心");
+  const tickets = combinationsOf(n, k, "票面候选");
+  const groups = combinationsOf(n, g, "保证组合");
   const gIndex = new Map(groups.map((gset, i) => [gset.join(","), i]));
   const cov = tickets.map((t) => {
     const idx = [];
@@ -1050,6 +1123,8 @@ function wheelingSystem(n, k, g) {
 }
 
 function negafibTable(K = 300) {
+  assertBudget("items", K, "NegaFibonacci 表项");
+  assertBudget("bigSteps", (K + 1) * (K + 1) / 8, "NegaFibonacci 表构造");
   const f = [0n];
   const fib = [0n, 1n, 1n];
   for (let i = 3; i <= K; i++) fib[i] = fib[i - 1] + fib[i - 2];
@@ -1063,12 +1138,21 @@ function negafibTable(K = 300) {
   return { f, odd, even, K };
 }
 
+function negafibKFor(x) {
+  const digits = absB(x).toString().length;
+  const bits = Math.ceil(digits * Math.log2(10));
+  return Math.max(300, Math.ceil(bits * 1.6) + 64);
+}
+
 function negafibEncode(x) {
   if (x === 0n) return { bits: "0", set: [] };
-  const { f, odd, even, K } = negafibTable();
+  const K = negafibKFor(x);
+  assertBudget("chars", K, "NegaFibonacci 码长");
+  const { f, odd, even } = negafibTable(K);
   const bits = new Set();
   let guard = 0;
-  while (x !== 0n && guard++ < 10000) {
+  while (x !== 0n) {
+    if (++guard > K + 2) err("NegaFibonacci 编码未收敛");
     if (x > 0n) {
       let k = 1;
       while (k + 2 <= K && odd[k] < x) k += 2;
@@ -1083,8 +1167,8 @@ function negafibEncode(x) {
       x -= f[k];
     }
   }
-  if (x !== 0n) err("NegaFibonacci 编码未收敛");
-  const max = Math.max(...bits);
+  let max = 0;
+  for (const k of bits) if (k > max) max = k;
   let s = "";
   for (let i = max; i >= 1; i--) s += bits.has(i) ? "1" : "0";
   return { bits: s, set: [...bits].sort((a, b) => a - b) };
@@ -1093,6 +1177,7 @@ function negafibEncode(x) {
 function negafibDecode(s) {
   s = String(s).trim().replace(/\s+/g, "");
   if (!/^[01]+$/.test(s)) err("NegaFibonacci 码只能是 0/1");
+  assertBudget("chars", s.length, "NegaFibonacci 码长");
   const { f } = negafibTable(Math.max(300, s.length + 10));
   let sum = 0n;
   for (let i = 0; i < s.length; i++) {
@@ -1218,12 +1303,15 @@ const OPS_MATH2 = [
     const [n, k, g] = nums;
     const { tickets, total } = wheelingSystem(n, k, g);
     const body = tickets.map((t) => t.join(" ")).join("\n");
-    return `号码池 1..${n}，每注 ${k} 个，保证任意 ${g} 个号全覆盖\n票面数 = ${tickets.length}\n${body}\n覆盖 ${total} 个 ${g}-组合 = ${tickets.length ? "全部" : "空"}`;
+    const out = `号码池 1..${n}，每注 ${k} 个，保证任意 ${g} 个号全覆盖\n票面数 = ${tickets.length}\n${body}\n覆盖 ${total} 个 ${g}-组合 = ${tickets.length ? "全部" : "空"}`;
+    assertBudget("chars", out.length, "轮转覆盖输出");
+    return out;
   }, [P("n", "号码池 n", "8"), P("k", "每注个数 k", "4"), P("g", "保证 g 个号", "3")]),
 
   runOp("e2-negafib", CAT, "NegaFibonacci 编码/解码", "dCode/Wikipedia 约定：n=Σβ_iF_{-i}，输出 β_k..β_1 二进制串（无连续 1）；解码按位累加广义 Fibonacci 数", (text, p) => {
     const src = String(text || "").trim();
     if (!src) err("请输入整数或二进制码");
+    assertBudget("chars", src.length, "NegaFibonacci 输入");
     if (String(p.mode || "encode") === "decode") {
       const n = negafibDecode(src);
       return `NegaFibonacci 码 ${src.replace(/\s+/g, "")} = ${n}`;
@@ -1237,6 +1325,7 @@ const OPS_MATH2 = [
   runOp("e2-shapes", CAT, "几何图形名称（多边形/多面体）", "按边数/面数给出 2D 多边形与 3D 多面体名称，支持 1..40、整十、100..900、1000/10000/1000000；也可按名称反查", (text, p) => {
     const src = String(text || "").trim();
     if (!src) err("请输入边数/面数或图形名称");
+    assertBudget("chars", src.length, "图形名称输入");
     const dim = String(p.dim || "both");
     const norm = src.toLowerCase().replace(/[éè]/g, "e");
     if (/^[+-]?\d+$/.test(norm)) {
@@ -1256,9 +1345,11 @@ const OPS_MATH2 = [
   runOp("e2-ode", CAT, "常微分方程数值解（RK4）", "y'=f(x,y) 的四阶 Runge–Kutta 数值解；输出节点表与终点值。明确是数值解，不是符号解析解", (text, p) => {
     const src = String(text || "").trim() || String(p.expr || "").trim();
     if (!src) err("请输入 y'=f(x,y) 的右端表达式");
+    assertBudget("chars", src.length, "ODE 表达式输入");
     const x0 = Number(p.x0 ?? 0), y0 = Number(p.y0 ?? 1), x1 = Number(p.x1 ?? 1);
     if (![x0, y0, x1].every(Number.isFinite)) err("x0/y0/x1 必须是数字");
-    const steps = parseIntVal(p.steps || 100, "步数", 1, 100000);
+    const steps = parseIntVal(p.steps || 100, "步数", 1, 1000000000000000);
+    assertBudget("steps", steps * 32, "RK4 迭代");
     const h = (x1 - x0) / steps;
     if (h === 0) err("区间长度不能为 0");
     const f = (x, y) => evalNumExpr(src, { x, y, t: x });
@@ -1271,6 +1362,7 @@ const OPS_MATH2 = [
       const k4 = f(x + h, y + h * k3);
       y += h * (k1 + 2 * k2 + 2 * k3 + k4) / 6;
       x += h;
+      if (!Number.isFinite(y) || !Number.isFinite(x)) err("RK4 数值溢出（解含 NaN/Infinity），请缩小步长或区间");
       if (steps <= 40 || i === steps - 1 || i % Math.ceil(steps / 20) === 0) rows.push(`x=${fmtNum(x, 8)} y=${fmtNum(y, 8)}`);
     }
     return `RK4 数值解（非符号 CAS）\n${rows.join("\n")}\ny(${fmtNum(x1, 8)}) ≈ ${fmtNum(y, 12)}`;
@@ -1279,10 +1371,12 @@ const OPS_MATH2 = [
 
 const SUDOKU_CHARS = "123456789ABCDEFG";
 
-function gridLines(text, what) {
-  const lines = String(text || "").trim().split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+function gridLines(text, what, maxLines = 0) {
+  const src = String(text || "");
+  assertBudget("chars", src.length, `${what}文本`);
+  const lines = src.trim().split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
   if (!lines.length) err(`请输入${what}`);
-  if (lines.length > 16) err(`${what}尺寸上限 16`);
+  if (maxLines && lines.length > maxLines) err(`${what}尺寸上限 ${maxLines}`);
   return lines;
 }
 function splitGridLine(line) {
@@ -1316,8 +1410,9 @@ function parseRegionGrid(text, n) {
   return reg;
 }
 function solveSudokuGrid(text, regionText) {
-  const lines = gridLines(text, "数独盘面");
+  const lines = gridLines(text, "数独盘面", 16);
   const n = lines.length;
+  assertBudget("items", n * n, "数独盘面格数");
   const rows = lines.map((line) => {
     const cells = splitGridLine(line);
     if (cells.length !== n) err(`盘面每行应有 ${n} 格`);
@@ -1344,7 +1439,7 @@ function solveSudokuGrid(text, regionText) {
   const popcount = (x) => { let c = 0; while (x) { x &= x - 1; c++; } return c; };
   function dfs(left) {
     if (left === 0) return true;
-    if (++nodes > 2000000) err("数独搜索节点超过 2000000，已中止");
+    assertBudget("nodes", ++nodes, "数独搜索节点");
     let br = -1, bc = -1, best = 99, bestMask = 0;
     for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
       if (grid[r][c]) continue;
@@ -1380,7 +1475,9 @@ function solveSudokuGrid(text, regionText) {
 function fillapixSolve(text) {
   const lines = gridLines(text, "Fill-A-Pix 线索盘面");
   const n = lines.length;
-  if (n > 8) err("Fill-A-Pix 尺寸上限 8×8");
+  assertBudget("items", n * n, "Fill-A-Pix 盘面格数");
+  assertBudget("items", n * n * 9, "Fill-A-Pix 邻接表");
+  assertBudget("chars", n * n * 2, "Fill-A-Pix 输出");
   const clues = lines.map((line) => {
     const cells = splitGridLine(line);
     if (cells.length !== n) err(`线索盘面每行应有 ${n} 格`);
@@ -1399,10 +1496,13 @@ function fillapixSolve(text) {
   }));
   const flatClues = [];
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) flatClues[r * n + c] = clues[r][c];
+  let work = 0;
   const propagate = (st) => {
-    let changed = true, guard = 0;
-    while (changed && guard++ < 20000) {
+    let changed = true;
+    while (changed) {
       changed = false;
+      work += n * n;
+      assertBudget("steps", work, "Fill-A-Pix 约束传播");
       for (let idx = 0; idx < n * n; idx++) {
         const clue = flatClues[idx];
         let black = 0, unk = [];
@@ -1418,8 +1518,9 @@ function fillapixSolve(text) {
     return true;
   };
   let nodes = 0;
-  const dfs = (st) => {
-    if (++nodes > 1000000) err("Fill-A-Pix 搜索节点超过 1000000，已中止");
+  const dfs = (st, depth = 0) => {
+    assertBudget("nodes", ++nodes, "Fill-A-Pix 搜索节点");
+    if (depth > 5000) err("Fill-A-Pix 回溯深度超出 JS 安全栈（请增加线索或缩小盘面）");
     if (!propagate(st)) return null;
     let best = -1, bestDeg = -1;
     for (let i = 0; i < n * n; i++) if (st[i] === -1) {
@@ -1430,7 +1531,7 @@ function fillapixSolve(text) {
     if (best < 0) return st;
     for (const val of [1, 0]) {
       const cp = st.slice(); cp[best] = val;
-      const r = dfs(cp);
+      const r = dfs(cp, depth + 1);
       if (r) return r;
     }
     return null;
@@ -1457,6 +1558,14 @@ function bernoulliNumbers(n) {
   }
   return out;
 }
+function bernoulliEstimate(n) {
+  const digits = Math.max(1, Math.ceil(n * Math.log10(n + 2) + 0.44 * n));
+  return {
+    digits,
+    chars: (n + 1) * (digits + 8),
+    steps: (n + 1) * (n + 1) * digits,
+  };
+}
 function eulerianRow(n) {
   let row = [1n];
   for (let m = 1; m <= n; m++) {
@@ -1476,7 +1585,10 @@ function stirling1Row(n) {
   return row;
 }
 function ulamSpiral(n) {
-  if (n % 2 === 0 || n < 3 || n > 51) err("Ulam 螺旋尺寸需为 3..51 的奇数");
+  if (n % 2 === 0 || n < 3) err("Ulam 螺旋尺寸需为奇数且 ≥3");
+  assertBudget("items", n * n, "Ulam 螺旋格数");
+  assertBudget("chars", n * n + n * 2, "Ulam 螺旋输出");
+  assertBudget("steps", n * n * 8, "Ulam 螺旋填充与素数筛");
   const g = Array.from({ length: n }, () => Array(n).fill(0));
   let r = Math.floor(n / 2), c = r, v = 1;
   g[r][c] = 1;
@@ -1491,11 +1603,19 @@ function ulamSpiral(n) {
     }
     len++;
   }
+  const limit = n * n;
+  const sieve = new Uint8Array(limit + 1);
+  if (limit >= 0) sieve[0] = 1;
+  if (limit >= 1) sieve[1] = 1;
+  for (let i = 2; i * i <= limit; i++) {
+    if (sieve[i]) continue;
+    for (let j = i * i; j <= limit; j += i) sieve[j] = 1;
+  }
   let out = "", primes = 0;
   for (let i = 0; i < n; i++) {
     let line = "";
     for (let j = 0; j < n; j++) {
-      const p = g[i][j] > 1 && isPrime(BigInt(g[i][j]));
+      const p = g[i][j] > 1 && !sieve[g[i][j]];
       if (p) primes++;
       line += p ? "#" : ".";
     }
@@ -1505,11 +1625,34 @@ function ulamSpiral(n) {
 }
 function reverseDigits(n) { return Number(String(n).split("").reverse().join("")); }
 function emirpsUpTo(n) {
+  const logN = Math.max(2, Math.log(n));
+  const primeEstimate = Math.ceil(n / logN) + 10;
+  assertBudget("items", primeEstimate, "Emirp 候选素数");
+  assertBudget("chars", primeEstimate * 12, "Emirp 输出");
+  assertBudget("steps", n * 4 + primeEstimate * 400, "Emirp 分段筛与反转素性");
+  const baseLimit = Math.floor(Math.sqrt(n)) + 1;
+  const baseSieve = new Uint8Array(baseLimit + 1);
+  const base = [];
+  for (let i = 2; i <= baseLimit; i++) {
+    if (baseSieve[i]) continue;
+    base.push(i);
+    if (i * i <= baseLimit) for (let j = i * i; j <= baseLimit; j += i) baseSieve[j] = 1;
+  }
   const out = [];
-  for (let i = 2; i <= n; i++) {
-    if (!isPrime(BigInt(i))) continue;
-    const r = reverseDigits(i);
-    if (r !== i && isPrime(BigInt(r))) out.push(i);
+  const block = 1 << 20;
+  for (let lo = 2; lo <= n; lo += block) {
+    const hi = Math.min(n, lo + block - 1);
+    const seg = new Uint8Array(hi - lo + 1);
+    for (const p of base) {
+      if (p * p > hi) break;
+      const start = Math.max(p * p, Math.ceil(lo / p) * p);
+      for (let j = start; j <= hi; j += p) seg[j - lo] = 1;
+    }
+    for (let i = Math.max(lo, 2); i <= hi; i++) {
+      if (seg[i - lo]) continue;
+      const r = reverseDigits(i);
+      if (r !== i && isPrime(BigInt(r))) out.push(i);
+    }
   }
   return out;
 }
@@ -1518,8 +1661,10 @@ function matExpNumeric(a, t, terms = 20) {
   let M = a.map((r) => r.map((x) => x * t));
   let norm = 0;
   for (const row of M) norm = Math.max(norm, row.reduce((s, x) => s + Math.abs(x), 0));
+  if (!Number.isFinite(norm)) err("矩阵指数范数溢出（输入或 t 过大）");
   let s = 0;
   while (norm > 0.5) { norm /= 2; s++; }
+  assertBudget("steps", a.length ** 3 * (terms + s + 1), "矩阵指数 Taylor/缩放平方");
   const scale = 2 ** s;
   const B = M.map((r) => r.map((x) => x / scale));
   let sum = matId(a.length);
@@ -1529,12 +1674,17 @@ function matExpNumeric(a, t, terms = 20) {
     sum = matAddN(sum, term);
   }
   for (let i = 0; i < s; i++) sum = matMulN(sum, sum);
+  for (const row of sum) for (const x of row) {
+    if (!Number.isFinite(x)) err("矩阵指数数值溢出（结果含 NaN/Infinity），请缩小 t 或检查输入");
+  }
   return sum;
 }
 function parseEdges(text) {
+  const src = String(text || "");
+  assertBudget("chars", src.length, "图边列表输入");
   const names = new Map();
   const edges = [];
-  for (const line of String(text || "").split(/\r?\n/).map((x) => x.trim()).filter(Boolean)) {
+  for (const line of src.split(/\r?\n/).map((x) => x.trim()).filter(Boolean)) {
     const m = line.match(/^([A-Za-z0-9_]+)\s*(?:-|->)\s*([A-Za-z0-9_]+)(?:\s*[:=]\s*(-?\d+(?:\.\d+)?))?$/);
     if (!m) err(`边格式错误：${line}（示例 A-B:3 或 A->B:3）`);
     const [, u, v, w] = m;
@@ -1542,8 +1692,10 @@ function parseEdges(text) {
     const weight = w === undefined ? 1 : Number(w);
     if (!Number.isFinite(weight)) err(`边权不是数字：${line}`);
     edges.push({ u: names.get(u), v: names.get(v), w: weight, un: u, vn: v });
+    assertBudget("items", edges.length, "图边数");
   }
   const rev = [...names.keys()];
+  assertBudget("items", rev.length, "图节点数");
   return { n: rev.length, rev, edges };
 }
 function dijkstraGraph(n, edges, src, dst) {
@@ -1570,59 +1722,97 @@ const OPS_EXTRA = [
   runOp("e2-sudoku-regions", CAT, "任意 N×N 数独/不规则宫求解", "支持 4..16 阶；可用区域图定义任意不规则宫（每行 N 个标签，每个标签 N 格）。5×5/7×7/不规则数独均可解；MRV + 位掩码回溯", (text, p) => {
     const { n, grid, regions, nodes } = solveSudokuGrid(text, p.regions);
     const out = grid.map((r) => r.map((v) => SUDOKU_CHARS[v - 1]).join("")).join("\n");
-    return `${n}×${n} 数独解\n${out}\n回溯节点 = ${nodes}`;
+    const body = `${n}×${n} 数独解\n${out}\n回溯节点 = ${nodes}`;
+    assertBudget("chars", body.length, "数独输出");
+    return body;
   }, [P("regions", "区域图（可空）", "AABBC\nAABBC\n...")]),
 
   runOp("e2-fillapix", CAT, "Fill-A-Pix 填色推理", "每个线索格给出其 3×3 邻域内黑格数量；用约束传播 + 回溯求黑白盘面，输出 # 黑 / . 白", (text) => {
     const { n, grid, nodes } = fillapixSolve(text);
-    return `${n}×${n} Fill-A-Pix 解\n${grid.join("\n")}\n搜索节点 = ${nodes}`;
+    const out = `${n}×${n} Fill-A-Pix 解\n${grid.join("\n")}\n搜索节点 = ${nodes}`;
+    assertBudget("chars", out.length, "Fill-A-Pix 输出");
+    return out;
   }),
 
   runOp("e2-bernoulli", CAT, "Bernoulli 数（精确分数）", "Akiyama–Tanigawa 算法输出 B0..Bn 的精确有理数；约定 B1=+1/2", (text, p) => {
-    const n = parseIntVal(String(text || "").trim() || p.n || 10, "n", 0, 80);
+    const n = parseIntVal(String(text || "").trim() || p.n || 10, "n", 0, Number.MAX_SAFE_INTEGER);
+    const est = bernoulliEstimate(n);
+    assertBudget("chars", est.chars, "Bernoulli 输出（按分子/分母增长估算）");
+    assertBudget("bigSteps", est.steps, "Bernoulli 有理数递推（按分子/分母增长估算）");
     const b = bernoulliNumbers(n);
-    return b.map((x, i) => `B${i} = ${rStr(x)}`).join("\n");
+    const out = b.map((x, i) => `B${i} = ${rStr(x)}`).join("\n");
+    assertBudget("chars", out.length, "Bernoulli 输出");
+    return out;
   }, [P("n", "n", "10")]),
 
   runOp("e2-eulerian", CAT, "Eulerian 数", "递推 A(n,k)=(n−k)A(n−1,k−1)+(k+1)A(n−1,k)，输出第 n 行与行和 n!", (text, p) => {
-    const n = parseIntVal(String(text || "").trim() || p.n || 6, "n", 0, 80);
+    const n = parseIntVal(String(text || "").trim() || p.n || 6, "n", 0, 1000000);
+    assertBudget("bigSteps", n * n * n * Math.log10(n + 2) / 64 + n * n, "Eulerian 行计算");
+    assertBudget("chars", n * n * Math.log10(n + 2) + n, "Eulerian 输出");
     const row = eulerianRow(n);
     const sum = row.reduce((a, b) => a + b, 0n);
-    return `n=${n}: ${row.join(", ")}\n行和 = ${sum}（应等于 ${n}!）`;
+    const out = `n=${n}: ${row.join(", ")}\n行和 = ${sum}（应等于 ${n}!）`;
+    assertBudget("chars", out.length, "Eulerian 输出");
+    return out;
   }, [P("n", "n", "6")]),
 
   runOp("e2-stirling1", CAT, "第一类 Stirling 数", "带符号第一类 Stirling 数 s(n,k)，输出 k=1..n 一行、绝对值行与行和 n!", (text, p) => {
-    const n = parseIntVal(String(text || "").trim() || p.n || 6, "n", 0, 80);
+    const n = parseIntVal(String(text || "").trim() || p.n || 6, "n", 0, 1000000);
+    assertBudget("bigSteps", n * n * n * Math.log10(n + 2) / 64 + n * n, "Stirling 行计算");
+    assertBudget("chars", n * n * Math.log10(n + 2) + n, "Stirling 输出");
     const row = stirling1Row(n).slice(1);
     const abs = row.map((x) => (x < 0n ? -x : x));
     const sum = abs.reduce((a, b) => a + b, 0n);
-    return `s(${n},k) = ${row.join(", ")}\n|s(${n},k)| = ${abs.join(", ")}\n行和 = ${sum}（应等于 ${n}!）`;
+    const out = `s(${n},k) = ${row.join(", ")}\n|s(${n},k)| = ${abs.join(", ")}\n行和 = ${sum}（应等于 ${n}!）`;
+    assertBudget("chars", out.length, "Stirling 输出");
+    return out;
   }, [P("n", "n", "6")]),
 
-  runOp("e2-ulam", CAT, "Ulam 素数螺旋", "生成 n×n（奇数）Ulam 螺旋，# 表示素数、. 表示合数/1，并给出素数计数", (text, p) => {
-    const n = parseIntVal(String(text || "").trim() || p.n || 7, "n", 3, 51);
+  runOp("e2-ulam", CAT, "Ulam 素数螺旋", "生成 n×n（奇数）Ulam 螺旋，# 表示素数、. 表示合数/1，并给出素数计数；输入上限受预算自动限制", (text, p) => {
+    const n = parseIntVal(String(text || "").trim() || p.n || 7, "n", 3, 1000000000);
+    assertBudget("items", n * n, "Ulam 螺旋格数");
+    assertBudget("chars", n * n * 2 + 64, "Ulam 螺旋输出");
     const { out, primes } = ulamSpiral(n);
-    return `${n}×${n} Ulam 螺旋\n${out}\n素数个数 = ${primes}`;
-  }, [P("n", "n（奇数）", "7")]),
+    const body = `${n}×${n} Ulam 螺旋\n${out}\n素数个数 = ${primes}`;
+    assertBudget("chars", body.length, "Ulam 螺旋输出");
+    return body;
+  }, [P("n", "n（奇数，受预算自动限制）", "7（受预算自动限制）")]),
 
-  runOp("e2-emirp", CAT, "Emirp（反素数）", "列出 ≤n 的 emirp：本身是素数、十进制反转后仍是不同素数；上限 200000", (text, p) => {
-    const n = parseIntVal(String(text || "").trim() || p.n || 1000, "n", 2, 200000);
+  runOp("e2-emirp", CAT, "Emirp（反素数）", "列出 ≤n 的 emirp：本身是素数、十进制反转后仍是不同素数；上限由分段筛与输出预算决定，不静默截断", (text, p) => {
+    const n = parseIntVal(String(text || "").trim() || p.n || 1000, "n", 2, 1000000000);
+    const primeBound = Math.ceil(n / Math.max(2, Math.log(n))) + 10;
+    assertBudget("items", primeBound, "Emirp 候选素数");
+    assertBudget("chars", primeBound * 12, "Emirp 输出");
+    assertBudget("steps", n * 4 + primeBound * 400, "Emirp 分段筛与反转素性");
     const list = emirpsUpTo(n);
-    return `≤${n} 的 emirp（${list.length} 个）\n${list.join(", ")}`;
-  }, [P("n", "上限 n", "1000")]),
+    const out = `≤${n} 的 emirp（${list.length} 个）\n${list.join(", ")}`;
+    assertBudget("chars", out.length, "Emirp 输出");
+    return out;
+  }, [P("n", "上限 n（受预算自动限制）", "1000（受预算自动限制）")]),
 
   runOp("e2-matrixexp", CAT, "矩阵指数 exp(A·t)（数值）", "缩放-平方 + Taylor 级数计算矩阵指数；输出数值矩阵，适合小矩阵线性 ODE/旋转验证", (text, p) => {
     const A = parseMatrix(text, "矩阵");
+    if (A.length !== A[0].length) err("矩阵指数需要方阵");
     const t = Number(p.t ?? 1);
     if (!Number.isFinite(t)) err("t 必须是数字");
-    const terms = parseIntVal(p.terms || 20, "Taylor 项数", 4, 60);
+    const terms = parseIntVal(p.terms || 20, "Taylor 项数", 4, 1000000000);
     const out = matExpNumeric(A, t, terms);
-    return `exp(A·${fmtNum(t)}) =\n${matStr(out, (x) => fmtNum(x, 10))}`;
+    const body = `exp(A·${fmtNum(t)}) =\n${matStr(out, (x) => fmtNum(x, 10))}`;
+    assertBudget("chars", body.length, "矩阵指数输出");
+    return body;
   }, [P("t", "t", "1"), P("terms", "Taylor 项数", "20")]),
 
   runOp("e2-graphalgo", CAT, "图算法（Dijkstra/MST/拓扑/连通）", "边列表 A-B:权重（无向；拓扑模式按 A->B 有向）。支持最短路、最小生成树、拓扑排序、连通分量、全源最短路", (text, p) => {
     const { n, rev, edges } = parseEdges(text);
     const mode = String(p.mode || "dijkstra");
+    if (mode === "dijkstra") assertBudget("steps", n * n + edges.length, "Dijkstra 工作量");
+    if (mode === "mst") assertBudget("steps", Math.max(1, edges.length) * Math.log2(Math.max(2, edges.length)) + n, "Kruskal 排序/并查集");
+    if (mode === "topo" || mode === "components") assertBudget("steps", n + edges.length, "图遍历");
+    if (mode === "floyd") {
+      assertBudget("items", n * n, "Floyd 距离矩阵");
+      assertBudget("chars", n * n * 12, "Floyd 输出");
+      assertBudget("steps", n * n * n, "Floyd 全源最短路");
+    }
     if (mode === "dijkstra") {
       const s = rev.indexOf(String(p.source || "").trim());
       const t = rev.indexOf(String(p.target || "").trim());
@@ -1680,7 +1870,9 @@ const OPS_EXTRA = [
       for (const e of edges) { d[e.u][e.v] = Math.min(d[e.u][e.v], e.w); d[e.v][e.u] = Math.min(d[e.v][e.u], e.w); }
       for (let k = 0; k < n; k++) for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) d[i][j] = Math.min(d[i][j], d[i][k] + d[k][j]);
       const body = d.map((row) => row.map((x) => (Number.isFinite(x) ? fmtNum(x) : "∞")).join(" ")).join("\n");
-      return `节点：${rev.join(" ")}\n全源最短路：\n${body}`;
+      const out = `节点：${rev.join(" ")}\n全源最短路：\n${body}`;
+      assertBudget("chars", out.length, "Floyd 输出");
+      return out;
     }
     err("未知图算法模式");
   }, [SEL("mode", "模式", "dijkstra", ["dijkstra", "floyd", "mst", "topo", "components"]), P("source", "起点", "A"), P("target", "终点", "C")]),

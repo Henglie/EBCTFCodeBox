@@ -12,7 +12,7 @@
  *       12 implemented / 7 mapped / 23 blocked。
  */
 
-import { runOp, parseList } from "../lib/util.js";
+import { runOp, parseList, assertBudget } from "../lib/util.js";
 
 const CAT_GAME = "dcode-extras-2026-10/cat-game";
 const CAT_TEXT = "dcode-extras-2026-10/cat-text";
@@ -508,7 +508,9 @@ const opKeyRecover = runOp(
     if (ct.length < 4) throw new Error("密文至少 4 个字母");
     if (ct.length > 240) throw new Error("密文长度需 ≤240（防枚举爆炸）");
     const crib = String((p && p.crib) || "").toUpperCase().replace(/[^A-Z]/g, "");
-    const maxlen = Math.max(2, Math.min(8, Number((p && p.maxlen) || 8) || 8));
+    const maxlenRaw = String((p && p.maxlen) != null && String(p.maxlen).trim() !== "" ? p.maxlen : "8").trim();
+    const maxlen = Number(maxlenRaw);
+    if (!Number.isInteger(maxlen) || maxlen < 2 || maxlen > 8) throw new Error("maxlen 需为 2..8 的整数（超界不自动夹断）");
     const words = tail ? parseList(tail).map((w) => w.toLowerCase().replace(/[^a-z]/g, "")).filter((w) => w.length >= 2) : [];
     const wordSet = words.length ? new Set(words) : null;
     const maxWordLen = words.length ? Math.max(...words.map((w) => w.length)) : 0;
@@ -865,7 +867,9 @@ const opHexword = runOp(
     const { main, tail } = splitDoc(t);
     const rows = hexRows(main);
     const words = requireWords(tail, "六边形词盘");
-    const min = Math.max(2, Math.min(6, Number((p && p.min) || 2) || 2));
+    const minRaw = String((p && p.min) != null && String(p.min).trim() !== "" ? p.min : "2").trim();
+    const min = Number(minRaw);
+    if (!Number.isInteger(min) || min < 2 || min > 6) throw new Error("min 需为 2..6 的整数（超界不自动夹断）");
     const R = rows.length, C = rows[0].length;
     const trie = new Map();
     for (const w of words) {
@@ -1043,10 +1047,13 @@ for (let mask = 0; mask < 512; mask++) {
 }
 
 function parseKakuro(main) {
+  const source = String(main || "");
+  assertBudget("chars", source.length, "Kakuro 输入");
   const rows = linesOf(main).map((l) => l.split(/\s+/));
   if (rows.length < 3) throw new Error("Kakuro 至少 3 行");
   const C = rows[0].length;
   if (C < 3 || !rows.every((r) => r.length === C)) throw new Error("每行 token 数需一致且 ≥3");
+  assertBudget("items", rows.length * C, "Kakuro 网格格数");
   const isWhite = [], clues = [];
   for (let r = 0; r < rows.length; r++) {
     isWhite.push([]);
@@ -1079,9 +1086,11 @@ function parseKakuro(main) {
       if (!seen.has(key)) { seen.add(key); runs.push({ dir: "D", cells, sum: cl.down, r: cl.r, c: cl.c }); }
     }
   }
+  assertBudget("items", runs.length, "Kakuro 词槽数");
   const whiteIdx = new Map();
   let next = 0;
   for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (isWhite[r][c]) whiteIdx.set(r * C + c, next++);
+  assertBudget("items", whiteIdx.size, "Kakuro 白格变量");
   for (const run of runs) {
     if (run.cells.length > 9) throw new Error(`Kakuro 词槽长度需 ≤9（${run.dir} ${run.r + 1},${run.c + 1}）`);
     const min = run.cells.length * (run.cells.length + 1) / 2;
@@ -1128,10 +1137,13 @@ function solveKakuro(parsed) {
     }
     return mask;
   }
-  let nodes = 0;
-  function search() {
-    if (++nodes > 2000000) throw new Error("Kakuro 搜索超 2e6 节点，请增加线索或缩小网格");
+  let nodes = 0, work = 0;
+  function search(depth = 0) {
+    assertBudget("nodes", ++nodes, "Kakuro 搜索节点");
+    if (depth > 5000) throw new Error("Kakuro 回溯深度超出 JS 安全栈（请增加线索或缩小网格）");
     if (!feasible()) return false;
+    work += count * 9 * 5;
+    assertBudget("steps", work, "Kakuro 候选与可行性计算");
     let best = -1, bestMask = 0, bestCount = 99;
     for (let v = 0; v < count; v++) {
       if (assign[v] >= 0) continue;
@@ -1144,7 +1156,7 @@ function solveKakuro(parsed) {
     for (let x = 1; x <= 9; x++) {
       if (!(bestMask & (1 << x))) continue;
       assign[best] = x;
-      if (search()) return true;
+      if (search(depth + 1)) return true;
       assign[best] = -1;
     }
     return false;
@@ -1170,7 +1182,9 @@ const opKakuro = runOp(
       }
       out.push(row.join(" "));
     }
-    return `Kakuro ${parsed.R}×${parsed.C} 解：\n${out.join("\n")}\n词槽 ${parsed.runs.length} 段，全部满足和与不重复约束`;
+    const body = `Kakuro ${parsed.R}×${parsed.C} 解：\n${out.join("\n")}\n词槽 ${parsed.runs.length} 段，全部满足和与不重复约束`;
+    assertBudget("chars", body.length, "Kakuro 输出");
+    return body;
   }
 );
 

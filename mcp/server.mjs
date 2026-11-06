@@ -60,7 +60,8 @@ rl.on("line", async (line) => {
           "恒烈 CTF 编码工具箱：本地编解码 / 密码学算法集（全在本地运行、零外发）。推荐路径：ebctf_detect 先识别编码类型 → ebctf_magic_decode 一键解码（多层链式用 maxDepth:3）→ 不够再用 ebctf_list_ops / ebctf_op_schema 下钻、ebctf_run_op 精确执行。资源 ebctf://guide 是同一引导的常驻版本，适合直接挂进对话。",
       });
     }
-    if (method === "notifications/initialized") return; // 通知无需回应
+    // JSON-RPC 通知没有 id，服务端不得回响应；包括 notifications/cancelled。
+    if (method && method.startsWith("notifications/")) return;
     if (method === "tools/list") return ok({ tools: MCP_TOOLS });
     if (method === "tools/call") {
       const { name, arguments: args } = params || {};

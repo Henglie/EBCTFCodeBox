@@ -14,7 +14,7 @@
  *     Serpent S2 盒扩散；每 20 步输出 80 字节。
  *   - 32 位乘法 mul32 用低字拆分防 JS 浮点溢出（同 MARS 教训）。
  *
- * 参数：key（hex，128-256 位）+ iv（hex，128 位）。自反 XOR：
+ * 参数：key（hex，1-32 字节，官方变长语义；含 80-bit 官方向量）+ iv（hex，128 位）。自反 XOR：
  *   encode 文本→密文 hex，decode 密文 hex→文本。
  *
  * 红线：照 eSTREAM 官方参考实现逐行移植不编造；纯本地零外发；
@@ -316,12 +316,14 @@ function sosemanukKeystream(keyBytes, ivBytes, numBytes) {
 }
 
 // ---- 参数解析 ----
-function parseHex(s, name, expectLen) {
+function parseHex(s, name, expectLen, pad = true) {
   const raw = String(s != null ? s : "").trim().replace(/^0x/i, "").replace(/\s+/g, "");
   if (!raw) throw new Error(`请填写${name}（hex）`);
   if (!/^[0-9a-fA-F]+$/.test(raw)) throw new Error(`${name}必须为十六进制：${raw}`);
   if (expectLen && raw.length > expectLen) throw new Error(`${name}最长 ${expectLen} 个十六进制字符`);
-  const hex = expectLen ? raw.padStart(expectLen, "0") : raw;
+  // pad=false：key 按官方变长语义原样交给核心调度（1-32 字节，Serpent 规范 0x01 补位）。
+  // 入口再左填充会静默改变 key 实质内容——短 key 全部错位，见 MT701 报告。
+  const hex = pad && expectLen ? raw.padStart(expectLen, "0") : raw;
   if (hex.length % 2) throw new Error(`${name}十六进制长度必须为偶数`);
   const out = new Uint8Array(hex.length / 2);
   for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
@@ -334,7 +336,7 @@ const bytesToHex = (bytes) => { let s = ""; for (const b of bytes) s += (b & 0xf
 
 // encode：文本 → 密文 hex（明文 ⊕ 密钥流）
 function sosemanukEncode(text, p = {}) {
-  const key = parseHex(p && p.key, "密钥 key", 64);
+  const key = parseHex(p && p.key, "密钥 key", 64, false);
   const iv = parseHex(p && p.iv, "IV", 32);
   const data = te(text);
   const ks = sosemanukKeystream(key, iv, data.length);
@@ -345,7 +347,7 @@ function sosemanukEncode(text, p = {}) {
 
 // decode：密文 hex → 文本（同一密钥流 XOR 回明文）
 function sosemanukDecode(text, p = {}) {
-  const key = parseHex(p && p.key, "密钥 key", 64);
+  const key = parseHex(p && p.key, "密钥 key", 64, false);
   const iv = parseHex(p && p.iv, "IV", 32);
   const data = parseHex(text, "密文");
   const ks = sosemanukKeystream(key, iv, data.length);
@@ -382,9 +384,9 @@ register({
   id: "sosemanuk",
   cat: "stream",
   name: "Sosemanuk",
-  desc: "Sosemanuk 流密码（eSTREAM 决赛算法，Berbain 2008）：LFSR（10×32bit 字，α 乘法反馈）+ FSM（r1/r2 + 条件选择）+ Serpent S2 盒扩散。key 128-256 位 + IV 128 位。自反 XOR：encode 文本→密文 hex，decode 密文 hex→文本。照 eSTREAM 官方参考实现逐行移植，官方向量 2 组自检。",
+  desc: "Sosemanuk 流密码（eSTREAM 决赛算法，Berbain 2008）：LFSR（10×32bit 字，α 乘法反馈）+ FSM（r1/r2 + 条件选择）+ Serpent S2 盒扩散。key 1-32 字节（2-64 个 hex，官方变长语义，含 80-bit 官方向量）+ IV 128 位。自反 XOR：encode 文本→密文 hex，decode 密文 hex→文本。照 eSTREAM 官方参考实现逐行移植，官方向量 2 组自检。注意：v0.1.13 起短 key 不再左填充到 32 字节；旧版用短 key（含默认 128-bit key）产生的密文需按旧口径处理。",
   params: [
-    { key: "key", type: "text", label: "密钥 key（hex）", default: "00112233445566778899aabbccddeeff", placeholder: "128-256 位，32-64 个十六进制字符" },
+    { key: "key", type: "text", label: "密钥 key（hex）", default: "00112233445566778899aabbccddeeff", placeholder: "1-32 字节，2-64 个十六进制字符" },
     { key: "iv", type: "text", label: "IV（hex）", default: "00000000000000000000000000000000", placeholder: "128 位，32 个十六进制字符" },
   ],
   encode: sosemanukEncode,

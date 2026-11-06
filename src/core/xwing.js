@@ -197,7 +197,7 @@ register({
   name: "X-Wing 密钥生成",
   desc: "X-Wing 混合 KEM（X25519+ML-KEM-768，draft-connolly-cfrg-xwing-kem）密钥生成：32B 种子 SHAKE256 扩展 96B 派生双组件，pk=ML-KEM ek(1184B)‖X25519 公钥(32B)。种子可固定复现",
   params: [
-    { key: "seed", label: "种子 sk (hex 32B，留空随机)", type: "text", default: "", placeholder: "教学复现可固定，官方向量见 tips" },
+    { sensitive: true, key: "seed", label: "种子 sk (hex 32B，留空随机)", type: "text", default: "", placeholder: "教学复现可固定，官方向量见 tips" },
   ],
   run: (_t, p = {}) => {
     const r = xwingKeyGenBytes(p.seed && String(p.seed).trim() ? hexToBytes(p.seed) : null);
@@ -260,7 +260,7 @@ register({
   name: "X-Wing 解封装",
   desc: "X-Wing 解封装：输入密文 ct(1120B) + 私钥 sk(32B 种子)，从种子重扩展双组件解出 ss。密文被篡改时走 ML-KEM 隐式拒绝路径（输出不可预测值）",
   params: [
-    { key: "sk", label: "私钥 sk (hex 32B 种子)", type: "text", default: "", placeholder: "密钥生成档输出的 sk hex" },
+    { sensitive: true, key: "sk", label: "私钥 sk (hex 32B 种子)", type: "text", default: "", placeholder: "密钥生成档输出的 sk hex" },
   ],
   run: (t, p = {}) => {
     if (!p.sk || !String(p.sk).trim()) throw new Error("请在参数区填入私钥 sk（32B hex 种子）");

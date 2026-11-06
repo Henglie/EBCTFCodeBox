@@ -1308,8 +1308,8 @@ register({
   acceptsBytes: true,
   noAuto: true,
   params: [
-    {
-      key: "key", label: "密钥(F5 种子)", type: "text", default: "",
+    { sensitive: true,
+      key: "key", label: "密钥(F5 种子)", type: "password", default: "",
       placeholder: "整数列表如 1,2,3,4,5,6,7 或口令文本",
     },
     {

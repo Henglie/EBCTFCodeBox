@@ -213,7 +213,7 @@ register({
     "已知口令隐写", "统计保真隐写", "foiling隐写", "Golay纠错隐写", "outguess解密",
   ],
   params: [
-    { key: "key", label: "口令（空串是合法口令）", type: "text", default: "", placeholder: "encode/decode 两侧须一致" },
+    { sensitive: true, key: "key", label: "口令（空串是合法口令）", type: "password", default: "", placeholder: "encode/decode 两侧须一致" },
     { key: "message", label: "要嵌入的消息（encode 用）", type: "text", default: "", placeholder: "如 flag{...}（按 UTF-8 编码为字节）" },
     { key: "quality", label: "JPEG 重编码质量（下限 75）", type: "number", default: 75 },
     { key: "foil", label: "统计保真（抗卡方检测）", type: "bool", default: true },

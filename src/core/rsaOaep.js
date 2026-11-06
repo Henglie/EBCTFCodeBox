@@ -238,7 +238,7 @@ const PUB_PARAMS = [
   ] },
   { key: "n", label: "模数 n（dec 档）", type: "text", default: "", placeholder: "十进制或 0x hex" },
   { key: "e", label: "指数 e（dec 档）", type: "text", default: "65537", placeholder: "十进制，常用 65537" },
-  { key: "pem", label: "公钥 PEM（pem 档）", type: "text", default: "", placeholder: "-----BEGIN PUBLIC KEY-----…" },
+  { acceptFile: "text", key: "pem", label: "公钥 PEM（pem 档）", type: "textarea", default: "", placeholder: "-----BEGIN PUBLIC KEY-----…" },
   { key: "seed", label: "seed（可选，hLen 字节 hex）", type: "text", default: "", placeholder: "留空取随机；给定则密文可复现" },
 ];
 
@@ -250,8 +250,8 @@ const PRIV_PARAMS = [
   ] },
   { key: "n", label: "模数 n（dec 档）", type: "text", default: "", placeholder: "十进制或 0x hex" },
   { key: "e", label: "指数 e（dec 档）", type: "text", default: "", placeholder: "十进制" },
-  { key: "d", label: "私钥指数 d（dec 档）", type: "text", default: "", placeholder: "十进制或 0x hex" },
-  { key: "pem", label: "私钥 PEM（pem 档）", type: "text", default: "", placeholder: "-----BEGIN PRIVATE KEY-----…" },
+  { sensitive: true, key: "d", label: "私钥指数 d（dec 档）", type: "text", default: "", placeholder: "十进制或 0x hex" },
+  { sensitive: true, acceptFile: "text", key: "pem", label: "私钥 PEM（pem 档）", type: "textarea", default: "", placeholder: "-----BEGIN PRIVATE KEY-----…" },
 ];
 
 // ============================================================

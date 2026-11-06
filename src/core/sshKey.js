@@ -565,7 +565,7 @@ register({
   name: "OpenSSH 私钥解析",
   desc: "OpenSSH openssh-key-v1 容器解析/解密转 PEM（PROTOCOL.key）：支持 aes256-ctr/aes256-cbc + bcrypt KDF（bcrypt_pbkdf）与未加密档；ssh-ed25519/ssh-rsa/ecdsa-nistp256/384/521；输出结构报告、SHA256 指纹与 PKCS#8/SEC1 私钥 PEM（RFC 5958/8017/SEC1）。口令只在本地处理，零外发",
   params: [
-    { key: "pass", label: "口令（加密私钥才填）", type: "text", default: "", placeholder: "加密私钥的 passphrase，留空仅支持未加密" },
+    { sensitive: true, key: "pass", label: "口令（加密私钥才填）", type: "password", default: "", placeholder: "加密私钥的 passphrase，留空仅支持未加密" },
   ],
   run: async (_text, p) => {
     const raw = String(_text || "");

@@ -502,7 +502,7 @@ register({
       { value: "hex", label: "Hex 十六进制" }, { value: "base64", label: "Base64" }, { value: "auto", label: "自动识别" },
     ] },
     { key: "ssid", label: "SSID", type: "text", default: "", placeholder: "无线网络名（PMK 派生用）" },
-    { key: "passphrase", label: "口令（逐个验证，不无界爆破）", type: "text", default: "", placeholder: "已知口令" },
+    { sensitive: true, key: "passphrase", label: "口令（逐个验证，不无界爆破）", type: "password", default: "", placeholder: "已知口令" },
     { key: "decrypt", label: "CCMP 解密", type: "select", default: "auto", options: [
       { value: "auto", label: "口令正确即解密" }, { value: "on", label: "强制解密" }, { value: "off", label: "仅握手分析" },
     ] },

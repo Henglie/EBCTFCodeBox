@@ -125,7 +125,7 @@ async function decodeSingleFrame(bytes, mime) {
 export async function decodeToPixelFrames(bytes, opts = {}) {
   if (!bytes || bytes.length === 0) return null;
   const u8a = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  const mime = detectCanvasMime(u8a);
+  const mime = opts.mime || detectCanvasMime(u8a);
   if (!mime) return null;
   const maxFrames = opts.maxFrames || 30;
 

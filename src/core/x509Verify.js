@@ -1589,7 +1589,7 @@ register({
   desc: "X.509 证书链验签：解析 PEM 多证书或单张 DER，逐级用签发者公钥验签（RSA PKCS#1 v1.5 SHA-256/384/512、ECDSA P-256/384/521、Ed25519），检查有效期、issuer/subject 衔接、CA 位/keyCertSign/pathLen，可自备信任锚证书或 SHA-256 指纹；不联网、不内置系统根、不做 CRL/OCSP。",
   acceptsBytes: true,
   params: [
-    {
+    { acceptFile: "text",
       key: "anchor",
       label: "信任锚（PEM 证书或 SHA-256 指纹，留空则只验链不判信任）",
       type: "text",

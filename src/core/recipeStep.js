@@ -129,36 +129,87 @@ function errText(err) {
   return err && err.message ? err.message : String(err);
 }
 
+/** 节点是否被禁用（禁用 = 执行时跳过，输入原样传给下一步）。 */
+export function isNodeDisabled(node) {
+  return !!(node && node.disabled);
+}
+
+/** 控制节点（Fork/Merge/Label/Jump/Register…）：本模块不解释其语义。 */
+export function isControlNode(node) {
+  return !!(node && node.kind === "control");
+}
+
+// 本模块只驱动线性单步；控制节点需要标签表、寄存器、分支状态与跳转预算，
+// 由 core/recipe.js 的 executeRecipeSteps 统一解释。遇到就显式拒绝，绝不按普通节点硬跑。
+function assertNoControlNodes(recipe) {
+  for (let i = 0; i < recipe.nodes.length; i++) {
+    if (isControlNode(recipe.nodes[i])) {
+      const ctl = (recipe.nodes[i] && recipe.nodes[i].control) || "control";
+      throw new Error(
+        "recipeStep: 配方含控制节点（第 " + i + " 个，" + ctl + "），" +
+        "请用 core/recipe.js 的 executeRecipeSteps 执行"
+      );
+    }
+  }
+}
+
 const EMPTY = { ok: false, reason: "empty-recipe", outputs: [], stoppedAt: -1, elapsedMs: 0 };
 
 /**
  * 顺序执行 nodes[0..nodeIndex]（含 nodeIndex）。
  * 任一步抛错则停在该步：已完成的输出全部保留，出错步以 { error } 记入 outputs。
  *
- * @returns {Promise<{ok:boolean, reason:string, outputs:Array<{nodeId:string,text:string,error?:string,ms:number}>, stoppedAt:number, error?:string, elapsedMs:number}>}
+ * @param {object} [opts]
+ * @param {boolean} [opts.skipDisabled=true] 跳过 node.disabled 节点并原样传递输入
+ * @param {(index:number,node:object)=>boolean} [opts.shouldBreakBefore] 在第 index 步执行前中断（断点）
+ * @param {(step:object)=>void} [opts.onStep] 每步完成（含跳过/失败）回调
+ * @returns {Promise<{ok:boolean, reason:string, outputs:Array<{nodeId:string,text:string,skipped?:boolean,error?:string,ms:number}>, stoppedAt:number, error?:string, elapsedMs:number}>}
  */
-export async function runToNode(recipe, nodeIndex, input, exec) {
+export async function runToNode(recipe, nodeIndex, input, exec, opts) {
   assertRecipe(recipe);
   assertExec(exec);
   if (recipe.nodes.length === 0) return { ...EMPTY, outputs: [] };
 
   assertIndex(recipe, nodeIndex);
   assertAcyclic(recipe);
+  assertNoControlNodes(recipe);
 
+  const o = opts || {};
+  const skipDisabled = o.skipDisabled !== false;
   const outputs = [];
   let text = normalizeInput(input);
   const t0 = nowMs();
 
   for (let i = 0; i <= nodeIndex; i++) {
     const node = recipe.nodes[i];
+    if (typeof o.shouldBreakBefore === "function" && o.shouldBreakBefore(i, node)) {
+      const paused = {
+        ok: false,
+        reason: "breakpoint",
+        outputs,
+        stoppedAt: i,
+        elapsedMs: round3(nowMs() - t0),
+      };
+      return paused;
+    }
+    if (skipDisabled && isNodeDisabled(node)) {
+      const step = { nodeId: nodeIdOf(node, i), text, skipped: true, ms: 0 };
+      outputs.push(step);
+      if (typeof o.onStep === "function") o.onStep(step);
+      continue;
+    }
     const started = nowMs();
     try {
       const out = textOf(await exec(node, text));
-      outputs.push({ nodeId: nodeIdOf(node, i), text: out, ms: round3(nowMs() - started) });
+      const step = { nodeId: nodeIdOf(node, i), text: out, ms: round3(nowMs() - started) };
+      outputs.push(step);
+      if (typeof o.onStep === "function") o.onStep(step);
       text = out;
     } catch (err) {
       const msg = errText(err);
-      outputs.push({ nodeId: nodeIdOf(node, i), text: "", error: msg, ms: round3(nowMs() - started) });
+      const step = { nodeId: nodeIdOf(node, i), text: "", error: msg, ms: round3(nowMs() - started) };
+      outputs.push(step);
+      if (typeof o.onStep === "function") o.onStep(step);
       return {
         ok: false,
         reason: "exec-error",
@@ -179,32 +230,43 @@ export async function runToNode(recipe, nodeIndex, input, exec) {
  *
  * @returns {Promise<{ok:boolean, reason:string, outputs:Array, stoppedAt:number, error?:string, elapsedMs:number}>}
  */
-export async function stepOnce(recipe, nodeIndex, input, exec) {
+export async function stepOnce(recipe, nodeIndex, input, exec, opts) {
   assertRecipe(recipe);
   assertExec(exec);
   if (recipe.nodes.length === 0) return { ...EMPTY, outputs: [] };
 
   assertIndex(recipe, nodeIndex);
   assertAcyclic(recipe);
+  assertNoControlNodes(recipe);
 
+  const o = opts || {};
   const node = recipe.nodes[nodeIndex];
   const text = normalizeInput(input);
+  if (o.skipDisabled !== false && isNodeDisabled(node)) {
+    const step = { nodeId: nodeIdOf(node, nodeIndex), text, skipped: true, ms: 0 };
+    if (typeof o.onStep === "function") o.onStep(step);
+    return { ok: true, reason: "skipped", outputs: [step], stoppedAt: nodeIndex, elapsedMs: 0 };
+  }
   const started = nowMs();
   try {
     const out = textOf(await exec(node, text));
+    const step = { nodeId: nodeIdOf(node, nodeIndex), text: out, ms: round3(nowMs() - started) };
+    if (typeof o.onStep === "function") o.onStep(step);
     return {
       ok: true,
       reason: "ok",
-      outputs: [{ nodeId: nodeIdOf(node, nodeIndex), text: out, ms: round3(nowMs() - started) }],
+      outputs: [step],
       stoppedAt: nodeIndex,
       elapsedMs: round3(nowMs() - started),
     };
   } catch (err) {
     const msg = errText(err);
+    const step = { nodeId: nodeIdOf(node, nodeIndex), text: "", error: msg, ms: round3(nowMs() - started) };
+    if (typeof o.onStep === "function") o.onStep(step);
     return {
       ok: false,
       reason: "exec-error",
-      outputs: [{ nodeId: nodeIdOf(node, nodeIndex), text: "", error: msg, ms: round3(nowMs() - started) }],
+      outputs: [step],
       stoppedAt: nodeIndex,
       error: msg,
       elapsedMs: round3(nowMs() - started),

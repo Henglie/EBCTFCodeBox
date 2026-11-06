@@ -722,7 +722,7 @@ register({
   desc: "HQC-128/192/256（NIST 第四轮后量子 KEM，基于准循环伴随式译码）密钥对生成，seed 可固定复现。纯 JS 实现",
   params: [
     { key: "set", label: "参数集", type: "select", default: "128", options: SET_OPTIONS },
-    { key: "seed", label: "seed_kem (hex 32B，留空随机)", type: "text", default: "", placeholder: "教学复现可固定" },
+    { sensitive: true, key: "seed", label: "seed_kem (hex 32B，留空随机)", type: "text", default: "", placeholder: "教学复现可固定" },
   ],
   run: (t, p = {}) => {
     const r = hqcKeyGenBytes(p.set, p.seed);
@@ -792,7 +792,7 @@ register({
   desc: "HQC KEM 解封装：输入私钥 dk + 密文 c，输出共享密钥 SS(32B) 与明文；密文篡改走隐式拒绝返回伪随机 K̄（含纠错译码）",
   params: [
     { key: "set", label: "参数集", type: "select", default: "128", options: SET_OPTIONS },
-    { key: "dk", label: "私钥 dk (hex)", type: "text", default: "", placeholder: "密钥生成输出的 dk hex" },
+    { sensitive: true, key: "dk", label: "私钥 dk (hex)", type: "textarea", default: "", placeholder: "密钥生成输出的 dk hex" },
   ],
   run: (t, p = {}) => {
     const r = hqcDecapsBytes(p.set, p.dk, t);

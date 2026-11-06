@@ -83,6 +83,8 @@ import EDU_BATCH6 from "./edu/edu-batch6.js";                // 补缺：9 新�
 // ---- 扩展模块交付但从未 import 的孤儿科普分片归并（44 个已注册 op 缺科普）----
 // 跨分片重复已清零（二批摘除 cast5/twofish/bwt 输家块，2026-09-13）。
 import EDU_BATCH5_NEW from "./edu/edu-batch5-new.js";        // enigma/m209/bazeries/fenham/pizzini/kamasutra/lolcode/clockCipher/snow/qqxiuzi*/huoxingwen/jianfan/fuyouyue/tianshu 20
+import EDU_HISTORICAL from "./edu/edu-historical-machines.js"; // typex/sigaba/lorenz 3
+import EDU_HISTORICAL_ATTACKS from "./edu/edu-historical-attacks.js"; // bombe/multipleBombe/colossus 3
 import EDU_BATCH5_MODERN from "./edu/edu-batch5-modern.js";  // ror13Hash/byteArith/bwt/lzstring/hotp/totp/zuc/sm2/sm9 9
 import EDU_CLASSIC_REST from "./edu/edu-classic-rest.js";    // otp/keywordcipher/simplesub/runingkey 4
 import EDU_ANA_TOOLS2 from "./edu/edu-ana-tools2.js";        // pngSizeRecover/trailerCarve 2（jpegSizeRead/gifSizeRead 已并入 imageStructUnified）
@@ -193,7 +195,11 @@ import EDU_T693 from "./edu/edu-t693.js"; // T693：Mach-O/WASM
 import EDU_T694 from "./edu/edu-t694.js"; // T694：UTF-32/GB18030
 import EDU_T703 from "./edu/edu-t703.js"; // T703：SHA-224/cSHAKE
 import EDU_REGEX from "./edu/edu-regex.js"; // 通用正则提取/替换 regexTool
+import EDU_DATA_CONVERT from "./edu/edu-dataConvert.js"; // JSON / CSV / XML / YAML 转换 dataConvert
+import EDU_T760 from "./edu/edu-t760.js"; // T760：bzip2Enc / extractAll
+import EDU_T711 from "./edu/edu-t711.js"; // T711：Falcon keygen/sign
 import EDU_TEACH from "./edu/edu-teach.js"; // BFV/MPC/量子 教学三件
+import EDU_T706 from "./edu/edu-t706.js";
 import EDU_T689T710 from "./edu/edu-t689t710.js";
 import EDU_T723 from "./edu/edu-t723.js";
 import EDU_T722 from "./edu/edu-t722.js";
@@ -201,6 +207,9 @@ import EDU_T720 from "./edu/edu-t720.js";
 import EDU_T721 from "./edu/edu-t721.js"; // 2026-10-26：Falcon/Poseidon/KZG/SSH·PKCS12·JWK/GCM·NTRU/Xoodyak/ECC 共 17 op
 import EDU_PLAUSIBAER from "./edu/edu-plausibaer.js"; // guballa Plausibär 坐标公式求解
 import EDU_R18 from "./edu/edu-r18.js"; // R18：lsbDeep/rasterStego/mp3stego/imageThumb
+import EDU_CC_PARITY from "./edu/edu-cc-parity.js"; // CyberChef P0：cobs/lzma/tar
+import EDU_CC_P0B from "./edu/edu-cc-p0b.js"; // CyberChef P0-B：serialEnc 5 + textUtils 28 + ocr
+import EDU_OPENSSL from "./edu/edu-openssl.js"; // OpenSSL Salted__ 一步式口令加解密
 
 // 合并所有分片。后者不覆盖前者（分区不重叠）；重叠时以后者为准，构建期应避免。
 const EDU = Object.assign(
@@ -248,6 +257,8 @@ const EDU = Object.assign(
   EDU_STEGO_DETECT,
   EDU_BATCH6,
   EDU_BATCH5_NEW,
+  EDU_HISTORICAL,
+  EDU_HISTORICAL_ATTACKS,
   EDU_BATCH5_MODERN,
   EDU_CLASSIC_REST,
   EDU_ANA_TOOLS2,
@@ -354,7 +365,11 @@ const EDU = Object.assign(
   EDU_T694,
   EDU_T703,
   EDU_REGEX,
+  EDU_DATA_CONVERT,
+  EDU_T760,
+  EDU_T711,
   EDU_TEACH,
+  EDU_T706,
   EDU_T689T710,
   EDU_T723,
   EDU_T722,
@@ -362,6 +377,9 @@ const EDU = Object.assign(
   EDU_T721,
   EDU_PLAUSIBAER,
   EDU_R18,
+  EDU_CC_PARITY,
+  EDU_CC_P0B,
+  EDU_OPENSSL,
 );
 
 import { ZH as INTEGRATED, HASH_VECTORS, BASE_NOTES, EXTRA_ALIASES, CRC_PARAMS } from "./edu/edu-integrated.js";

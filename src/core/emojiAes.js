@@ -193,7 +193,7 @@ register({
   name: "emoji-aes 加密",
   desc: "emoji-aes 完整版：AES-256-CBC(OpenSSL) 加密后 base64 → 65 emoji 表替换（对标 Aaron Horler emoji-aes）",
   params: [
-    { key: "password", label: "密码", type: "text", default: "", placeholder: "AES 口令" },
+    { sensitive: true, key: "password", label: "密码", type: "password", default: "", placeholder: "AES 口令" },
     { key: "rotation", label: "旋转", type: "number", default: 0, placeholder: "0-64（emoji 表旋转）" },
   ],
   encode: emojiAesEncode,

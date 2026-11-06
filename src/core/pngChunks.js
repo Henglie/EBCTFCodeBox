@@ -75,7 +75,37 @@ function _extractText(bytes, c) {
   return null;
 }
 
-/** PNG 逐块 CRC 校验 + 文本提取。非 PNG 返回 null。 */
+// 可打印 ASCII 串（≥min 个连续字符）：暴露越界块里的明文片段。
+function _asciiRuns(b, min = 4) {
+  const out = [];
+  let cur = "";
+  for (let i = 0; i < b.length; i++) {
+    const c = b[i];
+    if (c >= 0x20 && c < 0x7F) cur += String.fromCharCode(c);
+    else { if (cur.length >= min) out.push(cur); cur = ""; }
+  }
+  if (cur.length >= min) out.push(cur);
+  return out;
+}
+function _findSeq(b, s) {
+  const m = Array.from(s, (c) => c.charCodeAt(0));
+  outer: for (let i = 0; i + m.length <= b.length; i++) {
+    for (let k = 0; k < m.length; k++) if (b[i + k] !== m[k]) continue outer;
+    return i;
+  }
+  return -1;
+}
+function _hexBytes(b, n) {
+  let s = "";
+  const end = Math.min(b.length, n);
+  for (let i = 0; i < end; i++) s += b[i].toString(16).padStart(2, "0");
+  return s;
+}
+
+/** PNG 逐块 CRC 校验 + 文本提取。非 PNG 返回 null。
+ *  lenInvalid=true 表示块声明长度超出文件剩余字节（伪造块 / 尾部隐藏数据）：
+ *  此时 dataLen 为文件里真实可用的字节数，hiddenHex/hiddenText 暴露块内明文，
+ *  hasIend 表示真实 IEND 被该块长度吞入。 */
 function pngChunkCrcReport(bytes) {
   if (!pngCheckSig(bytes)) return null;
   const chunks = pngParseChunks(bytes);
@@ -84,6 +114,7 @@ function pngChunkCrcReport(bytes) {
   let anyCrcFail = false;
   for (const c of chunks) {
     const crcPos = c.dataOff + c.len;
+    const lenInvalid = c.lenInvalid === true || crcPos + 4 > bytes.length;
     let storedCrc = null, calcCrc = null, crcOk = null;
     if (crcPos + 4 <= bytes.length) {
       storedCrc = _u32be(bytes, crcPos);
@@ -92,13 +123,21 @@ function pngChunkCrcReport(bytes) {
       crcOk = storedCrc === calcCrc;
       if (!crcOk) anyCrcFail = true;
     }
-    out.push({ type: c.type, len: c.len, offset: c.totalOff, crcOk, storedCrc, calcCrc });
+    const dataLen = Math.min(c.len, Math.max(0, bytes.length - c.dataOff));
+    const item = { type: c.type, len: c.len, offset: c.totalOff, crcOk, storedCrc, calcCrc, lenInvalid, dataLen };
+    if (lenInvalid) {
+      const d = bytes.subarray(c.dataOff, c.dataOff + dataLen);
+      item.hiddenHex = _hexBytes(d, 64);
+      item.hiddenText = _asciiRuns(d).join(" | ");
+      item.hasIend = _findSeq(d, "IEND") >= 0;
+    }
+    out.push(item);
     if (c.type === "tEXt" || c.type === "zTXt" || c.type === "iTXt") {
       const t = _extractText(bytes, c);
       if (t) texts.push(t);
     }
   }
-  return { chunks: out, texts, anyCrcFail, hex4: _hex4 };
+  return { chunks: out, texts, anyCrcFail, hasLenInvalid: out.some((c) => c.lenInvalid), hex4: _hex4 };
 }
 
 // ============================================================

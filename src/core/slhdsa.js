@@ -838,7 +838,7 @@ register({
   desc: "FIPS 205 SLH-DSA-SHA2（后量子哈希签名）密钥对生成，种子 3n 字节可固定复现（Alg 18），纯 JS。顶层子树建房 2^树高 个 WOTS 叶子，秒级起",
   params: [
     { key: "set", label: "参数集", type: "select", default: "128s", options: SET_OPTIONS },
-    { key: "seed", label: "种子 (hex 3n B，留空随机)", type: "text", default: "", placeholder: "SK.seed‖SK.PRF‖PK.seed，教学可固定" },
+    { sensitive: true, key: "seed", label: "种子 (hex 3n B，留空随机)", type: "text", default: "", placeholder: "SK.seed‖SK.PRF‖PK.seed，教学可固定" },
   ],
   run: (t, p = {}) => {
     const r = slhdsaKeyGenBytes(p.set, p.seed);
@@ -868,7 +868,7 @@ register({
   desc: "FIPS 205 签名：私钥 sk + 消息（text/hex）+ 上下文 ctx(≤255B)；hedged 随机 rnd 或确定性 rnd=空（Alg 22，R=HMAC(sk_prf, addrnd‖0x00‖|ctx|‖ctx‖M)）。纯哈希树 WOTS+/FORS/hypertree 逐层建房，128s/192s/256s 生成秒级起（~10^5 次哈希），128f 快但签名大",
   params: [
     { key: "set", label: "参数集", type: "select", default: "128s", options: SET_OPTIONS },
-    { key: "sk", label: "私钥 sk (hex)", type: "text", default: "", placeholder: "密钥生成的 sk hex" },
+    { sensitive: true, key: "sk", label: "私钥 sk (hex)", type: "textarea", default: "", placeholder: "密钥生成的 sk hex" },
     { key: "msgMode", label: "消息形式", type: "select", default: "text", options: MSG_MODE_OPTIONS },
     { key: "ctx", label: "上下文 ctx (≤255B，默认空)", type: "text", default: "", placeholder: "FIPS 205 §10.2 域分隔上下文" },
     { key: "rndMode", label: "随机性模式", type: "select", default: "hedged", options: [

@@ -844,7 +844,7 @@ register({
         { value: "base64", label: "Base64" },
       ],
     },
-    {
+    { acceptFile: "text",
       key: "key",
       label: "期望公钥（authorized_keys 行 / SHA256 指纹，留空=只验签不判身份）",
       type: "text",

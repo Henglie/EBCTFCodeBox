@@ -4,9 +4,24 @@
  * 欧甘 U+1681-、提非纳 U+2D30-，均以 unicodedata 官方字符名核对）。
  */
 
-import { big, makeMapOp, runOp, A26 } from "../lib/util.js";
+import { big, makeMapOp, assertBudget, BUDGET_LIMITS } from "../lib/util.js";
 
 const CAT = "dcode-extras-2026-10/cat-numeral";
+
+function decimalDigits(src) {
+  return String(src).replace(/^[+-]/, "").replace(/^0+/, "").length || 1;
+}
+
+function outputCharsBudget(est, label) {
+  const limit = BigInt(BUDGET_LIMITS.chars);
+  if (est > limit) {
+    if (est > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new Error(`${label}规模超过安全整数上限，远超当前 ${BUDGET_LIMITS.chars.toLocaleString("en-US")} 字符预算；请减小输入或分段处理。`);
+    }
+    throw new Error(`${label}约 ${est.toLocaleString("en-US")} 字符，超过当前 ${BUDGET_LIMITS.chars.toLocaleString("en-US")} 字符预算；请减小输入或分段处理。`);
+  }
+  return assertBudget("chars", Number(est), label);
+}
 
 // ---------- 骰子 / 多米诺 / 孟加拉数字（Unicode 直映） ----------
 const diceOps = makeMapOp({
@@ -99,18 +114,30 @@ export const tallyOps = {
   desc: "n ↔ 计数符：每 5 个一组记作 4 竖杠加 1 斜杠「||||/」，余数补竖杠；双向",
   params: [],
   encode(text) {
-    const n = big(text);
-    if (n === null || n < 0n) throw new Error("需要非负整数");
-    if (n > 10000n) throw new Error("n ≤ 10000（防输出爆炸）");
+    const src = String(text).trim();
+    assertBudget("chars", src.length, "num-tally 输入");
+    if (!/^\+?\d+$/.test(src)) throw new Error("需要非负整数");
+    const d = decimalDigits(src);
+    if (d >= 9) {
+      const lower = d <= 30 ? (6n * 10n ** BigInt(d - 1)) / 5n : BigInt(Number.MAX_SAFE_INTEGER) + 1n;
+      outputCharsBudget(lower, "num-tally 输出");
+    }
+    const n = big(src);
+    if (n === 0n) return "0";
     const groups = n / 5n, rem = n % 5n;
+    outputCharsBudget(groups * 6n + rem, "num-tally 输出");
     return ("||||/ ".repeat(Number(groups)).trim() + (rem ? " " + "|".repeat(Number(rem)) : "")).trim();
   },
   decode(text) {
-    const s = String(text);
+    const s = String(text).trim();
+    assertBudget("chars", s.length, "num-tally 输入");
+    if (s === "0") return "0";
+    if (!s) throw new Error("需要计数符（零写作 0；或 4 竖杠+斜杠=5、竖杠=1）");
     let total = 0;
-    for (const tok of s.trim().split(/\s+/)) {
+    for (const tok of s.split(/\s+/)) {
       if (/^\|\|\|\|\/$/.test(tok)) total += 5;
       else if (/^\|+$/.test(tok)) total += tok.length;
+      else if (tok === "0") throw new Error("零编码「0」不能与其他计数组混用");
       else throw new Error(`无法识别的计数组「${tok}」（约定：4 竖杠+斜杠=5，竖杠=1）`);
     }
     return String(total);
@@ -125,9 +152,12 @@ export const bibiOps = {
   desc: "十六进制每位的 4 比特拆「高 2 位→辅音 B/K/D/F + 低 2 位→元音 A/E/I/O」拼成音节（0=BA…15=FO）；十进制 ↔ Bibi 音节，双向",
   params: [],
   encode(text) {
-    const n = big(text);
-    if (n === null || n < 0n) throw new Error("需要非负整数");
-    if (n > 10n ** 24n) throw new Error("n ≤ 10^24");
+    const src = String(text).trim();
+    assertBudget("chars", src.length, "num-bibi 输入");
+    if (!/^\+?\d+$/.test(src)) throw new Error("需要非负整数");
+    const hexDigits = Math.ceil((decimalDigits(src) * Math.log2(10)) / 4) + 1;
+    outputCharsBudget(BigInt(2 * hexDigits), "num-bibi 输出");
+    const n = big(src);
     if (n === 0n) return "BA";
     const hex = n.toString(16).toUpperCase();
     return [...hex].map((h) => {
@@ -136,6 +166,7 @@ export const bibiOps = {
     }).join("");
   },
   decode(text) {
+    assertBudget("chars", String(text).length, "num-bibi 输入");
     const s = String(text).trim().toUpperCase().replace(/\s+/g, "");
     if (!s) throw new Error("需要 Bibi 音节串（如 KOFEBABIBA）");
     if (s.length % 2 !== 0) throw new Error("Bibi 每个音节 2 个字母，总长需为偶数");
@@ -158,14 +189,18 @@ export const shadokOps = {
   desc: "四进制记数：GA=0 BU=1 ZO=2 MEU=3（Les Shadoks 动画记数法）；十进制 ↔ Shadok 词串，双向",
   params: [],
   encode(text) {
-    const n = big(text);
-    if (n === null || n < 0n) throw new Error("需要非负整数");
-    if (n > 10n ** 12n) throw new Error("n ≤ 10^12");
+    const src = String(text).trim();
+    assertBudget("chars", src.length, "num-shadok 输入");
+    if (!/^\+?\d+$/.test(src)) throw new Error("需要非负整数");
+    const base4Digits = Math.ceil((decimalDigits(src) * Math.log2(10)) / 2) + 1;
+    outputCharsBudget(BigInt(4 * base4Digits), "num-shadok 输出");
+    const n = big(src);
     if (n === 0n) return "GA";
     const q4 = n.toString(4);
     return [...q4].map((d) => SHADOK[+d]).join(" ");
   },
   decode(text) {
+    assertBudget("chars", String(text).length, "num-shadok 输入");
     const toks = String(text).trim().toUpperCase().split(/[\s,;]+/).filter(Boolean);
     if (!toks.length) throw new Error("需要 Shadok 词串（GA/BU/ZO/MEU）");
     let v = 0n;
@@ -222,10 +257,13 @@ export const sorobanOps = {
   desc: "非负整数 ↔ 日式算盘 ASCII 图：每列上珠 1 颗（值 5，拨下靠梁）+ 下珠 4 颗（值 1，拨上靠梁）；列宽 4；双向",
   params: [],
   encode(text) {
-    const n = big(text);
-    if (n === null || n < 0n) throw new Error("需要非负整数");
+    const src = String(text).trim();
+    assertBudget("chars", src.length, "num-soroban 输入");
+    if (!/^\+?\d+$/.test(src)) throw new Error("需要非负整数");
+    const digits = decimalDigits(src);
+    outputCharsBudget(BigInt(6 * (digits * 4 + 3) + 5), "num-soroban 输出");
+    const n = big(src);
     const s = n.toString();
-    if (s.length > 12) throw new Error("最多 12 位（防输出爆炸）");
     const cols = [...s].map((d) => +d);
     const w = cols.length;
     const bar = "━".repeat(w * 4 + 1);
@@ -235,7 +273,9 @@ export const sorobanOps = {
     return ["┌" + bar + "┐", heaven, bar, up, down, "└" + bar + "┘"].join("\n");
   },
   decode(text) {
-    const lines = String(text).replace(/\r/g, "").split("\n").map((l) => l.trimEnd()).filter((l) => l !== "");
+    const raw = String(text).replace(/\r/g, "");
+    assertBudget("chars", raw.length, "num-soroban 输入");
+    const lines = raw.split("\n").map((l) => l.trimEnd()).filter((l) => l !== "");
     const hi = lines.findIndex((l) => l.includes("|"));
     if (hi < 0) throw new Error("算盘图中没有珠列行");
     const heaven = lines[hi];
@@ -243,7 +283,8 @@ export const sorobanOps = {
     if (upIdx < 0) throw new Error("算盘图缺少下珠行");
     const up = lines[upIdx];
     const n = Math.floor((heaven.length - 1) / 5);
-    if (n < 1 || n > 12) throw new Error("算盘列数异常");
+    if (n < 1) throw new Error("算盘图缺少珠列（列数需 ≥1）");
+    assertBudget("chars", n + 64, "num-soroban 解码输出");
     const out = [];
     for (let i = 0; i < n; i++) {
       const h = heaven.slice(i * 5 + 1, i * 5 + 5).includes("●") ? 5 : 0;
@@ -308,9 +349,13 @@ export const kaktovikOps = {
   desc: "十进制 ↔ 二十进制 Kaktovik 结构式：每位记「上:5 的笔数 下:余量笔数」（0 记作 X）；20 = [1|0] 即「上0下1 + X」",
   params: [],
   encode(text) {
-    const n = big(text);
-    if (n === null || n < 0n) throw new Error("需要非负整数");
-    if (n > 10n ** 15n) throw new Error("n ≤ 10^15");
+    const src = String(text).trim();
+    assertBudget("chars", src.length, "num-kaktovik 输入");
+    if (!/^\+?\d+$/.test(src)) throw new Error("需要非负整数");
+    const d = decimalDigits(src);
+    const base20Digits = Math.ceil((d * Math.log2(10)) / Math.log2(20)) + 1;
+    outputCharsBudget(BigInt(d + 3 + base20Digits * 11), "num-kaktovik 输出");
+    const n = big(src);
     if (n === 0n) return "0 = [X]";
     const b20 = [];
     let x = n;
@@ -324,6 +369,7 @@ export const kaktovikOps = {
     return `${n} = ` + blocks.join(" ");
   },
   decode(text) {
+    assertBudget("chars", String(text).length, "num-kaktovik 输入");
     const s = String(text).trim();
     if (/^\d+$/.test(s)) return s;
     const toks = s.split(/\s+/).filter((t) => t.startsWith("[") || t === "X" || t === "[X]");

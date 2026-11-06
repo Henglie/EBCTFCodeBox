@@ -313,7 +313,8 @@ function zlibFixed(raw) {
  * 光栅扫描。同步返回全部 PNG 产物（Uint8Array）。
  * @param {Uint8Array|ArrayBuffer} src
  * @param {object} opts {maxDivisor=10, both=true, axes, maxImages=128,
- *   maxPixelsPerImage=8e6, maxTotalPixels=192e6, fillMode="auto"|"black"|"transparent"}
+ *   maxPixelsPerImage=8e6, maxTotalPixels=192e6,
+ *   fillMode="gray"|"darkgray"|"black"|"auto"|"transparent"}
  */
 export function rasterStegoScan(src, opts = {}) {
   const maxDivisor = opts.maxDivisor == null ? 10 : Number(opts.maxDivisor);
@@ -324,9 +325,9 @@ export function rasterStegoScan(src, opts = {}) {
   const maxImages = opts.maxImages == null ? 128 : Number(opts.maxImages);
   const maxPixelsPerImage = opts.maxPixelsPerImage == null ? 8_000_000 : Number(opts.maxPixelsPerImage);
   const maxTotalPixels = opts.maxTotalPixels == null ? 192_000_000 : Number(opts.maxTotalPixels);
-  const fillMode = opts.fillMode || "auto";
-  if (!["auto", "black", "transparent"].includes(fillMode)) {
-    throw limitError("RASTER_BAD_FILL", "fillMode 仅支持 auto/black/transparent");
+  const fillMode = opts.fillMode || "gray";
+  if (!["auto", "gray", "darkgray", "black", "transparent"].includes(fillMode)) {
+    throw limitError("RASTER_BAD_FILL", "fillMode 仅支持 auto/gray/darkgray/black/transparent");
   }
   if (!(maxImages > 0) || !(maxPixelsPerImage > 0) || !(maxTotalPixels > 0)) {
     throw limitError("RASTER_BAD_LIMIT", "maxImages / maxPixelsPerImage / maxTotalPixels 必须为正数");
@@ -342,6 +343,10 @@ export function rasterStegoScan(src, opts = {}) {
   }
   const img = readImage(bytes);
   const { width, height, data } = img;
+  // 头部声明有 alpha ≠ 实际存在透明像素：以解码后的真实 alpha 为准。
+  let realAlpha = false;
+  for (let i = 3; i < data.length; i += 4) if (data[i] !== 255) { realAlpha = true; break; }
+  img.hasAlpha = realAlpha;
   const px = width * height;
   if (px > maxPixelsPerImage) {
     throw limitError("RASTER_LIMIT_PIXELS_PER_IMAGE",
@@ -349,7 +354,8 @@ export function rasterStegoScan(src, opts = {}) {
       { width, height, pixels: px, limit: maxPixelsPerImage });
   }
 
-  const axes = opts.axes ? opts.axes.slice() : (both ? ["x", "y"] : ["x"]);
+  // both 是最高优先级：只要 both=true 就同时产出 x/y，axes 只在 both=false 时生效。
+  const axes = both ? ["x", "y"] : (Array.isArray(opts.axes) && opts.axes.length ? opts.axes.slice() : ["x"]);
   for (const a of axes) if (a !== "x" && a !== "y") throw limitError("RASTER_BAD_AXIS", "axes 只能是 x/y");
 
   const plan = [];
@@ -372,27 +378,42 @@ export function rasterStegoScan(src, opts = {}) {
       { totalPixels: plan.length * px, limit: maxTotalPixels });
   }
 
-  const transparent = fillMode === "transparent" || (fillMode === "auto" && img.hasAlpha);
+  const transparent = fillMode === "transparent" || (fillMode === "auto" && realAlpha);
+  const fillGray = fillMode === "black" ? 0 : fillMode === "darkgray" ? 64 : 128;
+  const fillName = transparent ? "透明" : fillMode === "black" ? "黑 #000000" : fillMode === "darkgray" ? "深灰 #404040" : "中灰 #808080";
   const images = [];
   for (const p of plan) {
     const out = new Uint8ClampedArray(px * 4);
+    if (!transparent) {
+      // 先铺满不透明填充色，再把前景按 source-over 合成上去。
+      // 这样黑/白两色笔画在灰底上都能看清，也不会把透明前景误涂黑。
+      for (let i = 0; i < out.length; i += 4) {
+        out[i] = fillGray; out[i + 1] = fillGray; out[i + 2] = fillGray; out[i + 3] = 255;
+      }
+    }
+    const put = (si) => {
+      const a = data[si + 3];
+      if (a === 255 || transparent) {
+        out[si] = data[si]; out[si + 1] = data[si + 1];
+        out[si + 2] = data[si + 2]; out[si + 3] = a;
+        return;
+      }
+      const af = a / 255;
+      out[si] = Math.round(data[si] * af + fillGray * (1 - af));
+      out[si + 1] = Math.round(data[si + 1] * af + fillGray * (1 - af));
+      out[si + 2] = Math.round(data[si + 2] * af + fillGray * (1 - af));
+      out[si + 3] = 255;
+    };
     if (p.axis === "x") {
       for (let y = 0; y < height; y++) {
         const row = y * width;
-        for (let x = p.phase; x < width; x += p.divisor) {
-          const si = (row + x) * 4;
-          out[si] = data[si]; out[si + 1] = data[si + 1];
-          out[si + 2] = data[si + 2]; out[si + 3] = data[si + 3];
-        }
+        for (let x = p.phase; x < width; x += p.divisor) put((row + x) * 4);
       }
     } else {
       for (let y = p.phase; y < height; y += p.divisor) {
-        const so = y * width * 4;
-        out.set(data.subarray(so, so + width * 4), so);
+        const row = y * width;
+        for (let x = 0; x < width; x++) put((row + x) * 4);
       }
-    }
-    if (!transparent) {
-      for (let i = 3; i < out.length; i += 4) if (!out[i]) out[i] = 255;
     }
     const name = `${p.axis}-${p.divisor}-${p.phase + 1}.png`;
     const png = encodePNG(out, width, height, zlibFixed);
@@ -409,7 +430,7 @@ export function rasterStegoScan(src, opts = {}) {
   }
 
   const notes = [
-    `源图 ${img.format.toUpperCase()} ${width}×${height}（${img.hasAlpha ? "含 alpha" : "无 alpha"}），填充=${transparent ? "透明" : "黑"}`,
+    `源图 ${img.format.toUpperCase()} ${width}×${height}（${img.hasAlpha ? "实际含透明像素" : "实际无透明像素"}），填充=${fillName}`,
     `因数顺序按 Python insert(1,x)：x=[${(divs.x || []).join(",") || "无"}]，y=[${(divs.y || []).join(",") || "无"}]`,
     `产物 x=${images.filter(i => i.axis === "x").length} 张 / y=${images.filter(i => i.axis === "y").length} 张，共 ${images.length} 张；phase 字段 0 基，文件名相位 1 基`,
     `上限：张数 ${maxImages}，单张 ${maxPixelsPerImage} 像素，总计 ${maxTotalPixels} 像素`,

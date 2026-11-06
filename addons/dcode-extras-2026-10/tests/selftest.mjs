@@ -4,6 +4,7 @@
  */
 
 import plugin, { manifest } from "../index.js";
+import { OPS as MATH_OPS } from "../ops/mathfun.js";
 import { OPS as MATH_MORE } from "../ops/mathmore.js";
 import { OPS as TEXT_MORE } from "../ops/textmore.js";
 import { OPS as NUM_MORE } from "../ops/numeralmore.js";
@@ -118,10 +119,25 @@ const qc = enc(qg, "ATTACKATDAWN", { mode: "III", key1: "CIPHER", key2: "SECRET"
 eq(dec(qg, qc, { mode: "III", key1: "CIPHER", key2: "SECRET", ind: "KEY" }), "ATTACKATDAWN", "quagmire roundtrip");
 thrown(() => enc(qg, "A", { mode: "III", key1: "CIPHER", key2: "SECRET", ind: "" }), "quagmire empty indicator throws");
 
+const mfBy = new Map(MATH_OPS.map((o) => [o.id, o]));
+const mfRun = (id, text, p) => mfBy.get("dcode-extras-2026-10/" + id).run(text, p);
+has(await mfRun("math-factorial", "", { n: "10" }), "10! = 3628800", "factorial 10");
+has(await mfRun("math-factorial", "", { n: "100000" }), "456,574", "factorial 100000 digits");
+has(await mfRun("math-factorialscale", "", { n: "3999999990" }), "36,671,061,947", "factorialscale digits");
+try {
+  await mfRun("math-factorial", "", { n: "3999999990" });
+  ok(false, "factorial huge must reject");
+} catch (e) {
+  has(e.message, "超过 V8 单字符串上限", "factorial huge rejection message");
+}
+has(await mfRun("math-harshad", "18446744073709551617", {}), "不是 Harshad", "harshad bigint precision");
+has(await mfRun("math-primorial", "", { k: "10000" }), "第 10000 个素数 = 104729", "primorial 10000");
+
 const cats = [], ops = [], msgs = [];
 await plugin({ addCategory: (c) => cats.push(c), registerOp: (o) => ops.push(o), addMessages: (m) => msgs.push(m), log: () => {} });
 eq(manifest.id, "dcode-extras-2026-10", "manifest id");
-eq(ops.length, 408, "index 总注册数 = 408");
+eq(ops.length, 409, "index 总注册数 = 409");
+eq(ops.filter((o) => o.autoRun === false).length, 409, "全部 op 关闭边输边算");
 eq(cats.length, 6, "分类数 = 6");
 ok(msgs[0] && msgs[0].zh && msgs[0].en, "i18n messages");
 const ids = new Set(ops.map((o) => o.id));

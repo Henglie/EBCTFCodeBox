@@ -349,7 +349,7 @@ register({
         { value: "utf8", label: "UTF-8 文本" },
       ],
     },
-    { key: "password", label: "密码（加密时填）", type: "text", default: "", placeholder: "AES 加密的 DeepSound 填密码" },
+    { sensitive: true, key: "password", label: "密码（加密时填）", type: "password", default: "", placeholder: "AES 加密的 DeepSound 填密码" },
   ],
   run: deepsoundRun,
   acceptsBytes: true,

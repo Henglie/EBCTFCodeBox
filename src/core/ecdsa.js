@@ -791,7 +791,7 @@ register({
       { value: "text", label: "文本" },
       { value: "hex", label: "hex 字节" },
     ] },
-    { key: "d", label: "私钥 d", type: "text", default: "", placeholder: "十进制或 0x hex（1 ≤ d < n）" },
+    { sensitive: true, key: "d", label: "私钥 d", type: "text", default: "", placeholder: "十进制或 0x hex（1 ≤ d < n）" },
   ],
   run: ecdsaSignRun,
 });

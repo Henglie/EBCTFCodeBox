@@ -125,7 +125,7 @@ register({
       { value: "password", label: "口令派生（derive_key）" },
       { value: "raw", label: "49 字符原始牌面" },
     ] },
-    { key: "key", label: "密钥 / 口令", type: "text", default: "s3cret_p4ssw0rd/31337", placeholder: "口令任意长；raw 模式须 49 字符排列" },
+    { sensitive: true, key: "key", label: "密钥 / 口令", type: "password", default: "s3cret_p4ssw0rd/31337", placeholder: "口令任意长；raw 模式须 49 字符排列" },
   ],
   encode: (text, p) => {
     const key = (p && p.mode) === "raw"

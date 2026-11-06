@@ -1395,7 +1395,7 @@ register({
     { key: "m", label: "内存 m（KiB，≤65536）", type: "number", default: 16384 },
     { key: "p", label: "并行度 p", type: "number", default: 1 },
     { key: "tagLen", label: "输出字节数", type: "number", default: 32 },
-    { key: "secret", label: "secret（hex，可空）", type: "text", default: "" },
+    { sensitive: true, key: "secret", label: "secret（hex，可空）", type: "text", default: "" },
     { key: "ad", label: "associated data（hex，可空）", type: "text", default: "" },
   ],
   run(text, p) {

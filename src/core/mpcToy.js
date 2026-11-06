@@ -289,7 +289,7 @@ register({
     ] },
     { key: "a", label: "a（beaver：Alice 输入 / ot：选择位 0|1）", type: "number", default: 7 },
     { key: "b", label: "b（beaver：Bob 输入 / ot：消息基准值）", type: "number", default: 9 },
-    { key: "seed", label: "随机种子", type: "text", default: "mpc-toy", placeholder: "同 seed 完全复现；留空则从统一随机层取" },
+    { sensitive: true, key: "seed", label: "随机种子", type: "text", default: "mpc-toy", placeholder: "同 seed 完全复现；留空则从统一随机层取" },
   ],
   run: (_text, p) => mpcRun(p).text,
 });

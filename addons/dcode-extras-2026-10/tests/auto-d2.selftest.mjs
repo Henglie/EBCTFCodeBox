@@ -15,6 +15,15 @@ function has(out, sub, label) {
 function thrown(fn, label) {
   try { fn(); ok(false, label, "expected throw"); } catch { pass++; }
 }
+function throwsWith(fn, sub, label) {
+  try {
+    fn();
+    ok(false, label, "expected throw");
+  } catch (e) {
+    const msg = e && e.message ? String(e.message) : String(e);
+    ok(msg.includes(sub), label, `missing=${JSON.stringify(sub)} msg=${JSON.stringify(msg.slice(0, 300))}`);
+  }
+}
 
 const by = new Map(OPS.map((o) => [o.id, o]));
 const run = (id, text, p) => by.get(id).run(text, p || {});
@@ -48,6 +57,10 @@ eq(run("d2-baseconv", "FF", { mode: "from", base: "16" }).split("\n").pop(), "25
 eq(run("d2-baseconv", "-5", { mode: "to", base: "-2" }).split("\n").pop(), "1111", "baseconv negabinary");
 eq(run("d2-baseconv", "1111", { mode: "from", base: "-2" }).split("\n").pop(), "-5", "baseconv negabinary back");
 has(run("d2-baseconv", "-1", { mode: "complement", width: "8" }), "11111111", "baseconv two's complement");
+eq(run("d2-baseconv", "255", { mode: "complement", width: "+8" }).split("\n")[0], "8 位补码：11111111", "baseconv width 前导 + 仍合法");
+throwsWith(() => run("d2-baseconv", "255", { mode: "complement", width: "9007199254740993" }), "超出 JS 精确整数范围（需 ≤ 2^53−1）", "baseconv width >2^53 拒绝");
+throwsWith(() => run("d2-baseconv", "255", { mode: "complement", width: "9007199254740992" }), "超出 JS 精确整数范围（需 ≤ 2^53−1）", "baseconv width =2^53 拒绝");
+throwsWith(() => run("d2-constants", "", { mode: "pi", digits: "9007199254740993" }), "超出 JS 精确整数范围（需 ≤ 2^53−1）", "constants digits >2^53 拒绝");
 
 const zc = run("d2-zeckendorf", "100", { mode: "encode" });
 has(zc, "1000010100", "zeckendorf encode");
@@ -68,6 +81,9 @@ has(run("d2-modular", "", { mode: "inverse", a: "3", m: "11" }), "= 4", "mod inv
 has(run("d2-modular", "", { mode: "crt", sys: "2,3;3,5;2,7" }), "x ≡ 23", "CRT");
 has(run("d2-modular", "", { mode: "dlog", a: "2", b: "8", m: "13" }), "x = 3", "discrete log");
 has(run("d2-modular", "", { mode: "dh", m: "23", a: "5", b: "6", c: "15" }), "共享密钥 = 2", "Diffie-Hellman");
+const cong0 = run("d2-modular", "", { mode: "congruence", a: "0", b: "0", m: "5000" });
+has(cong0, "有 5000 个解", "线性同余 a≡0 解数");
+eq(cong0.split("\n")[1].split(",").length, 5000, "线性同余 a≡0 实列 5000");
 
 has(run("d2-quadratic", "", { a: "1", b: "-3", c: "2" }), "x₁ = 1，x₂ = 2", "quadratic roots");
 has(run("d2-quadratic", "", { a: "1", b: "-3", c: "2" }), "Δ = b²−4ac = 1", "quadratic discriminant");
@@ -100,6 +116,16 @@ has(run("d2-constants", "", { mode: "e", digits: "20" }), "2.7182818284590452353
 has(run("d2-constants", "", { mode: "phi", digits: "20" }), "1.61803398874989484820", "phi 20 digits");
 has(run("d2-constants", "", { mode: "tau", digits: "10" }), "6.2831853071", "tau 10 digits");
 has(run("d2-constants", "", { mode: "search", query: "14159" }), "第 1 位", "pi digit search");
+const PI100 = "3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679";
+const E100 = "2.7182818284590452353602874713526624977572470936999595749669676277240766303535475945713821785251664274";
+has(run("d2-constants", "", { mode: "pi", digits: "100" }), PI100, "pi 100 digits exact");
+has(run("d2-constants", "", { mode: "e", digits: "100" }), E100, "e 100 digits exact");
+const pi5000 = run("d2-constants", "", { mode: "pi", digits: "5000" });
+const e5000 = run("d2-constants", "", { mode: "e", digits: "5000" });
+has(pi5000, PI100, "pi 5000 digits prefix");
+has(e5000, E100, "e 5000 digits prefix");
+has(pi5000, "（5000 位小数）", "pi 5000 not truncated");
+has(e5000, "（5000 位小数）", "e 5000 not truncated");
 
 const s24 = run("d2-solver24", "4 1 8 7");
 has(s24, "= 24", "24 game");
@@ -136,6 +162,13 @@ has(run("d2-probability", "", { mode: "birthday", n: "23" }), "0.5072972343", "b
 has(run("d2-probability", "", { mode: "binomial", n: "10", p: "0.5", k: "5" }), "0.24609375", "binomial n=10 k=5");
 has(run("d2-probability", "", { mode: "conditional", pab: "0.2", pb: "0.5" }), "= 0.4", "conditional probability");
 has(run("d2-probability", "", { mode: "expectation", values: "1,2,3,4,5,6", probs: "0.1,0.1,0.1,0.1,0.1,0.5" }), "期望 E = 4", "expectation die");
+const hgBig = run("d2-probability", "", { mode: "draw", n: "1000000000000000", k: "500000000000000", draws: "2", hits: "1" });
+const hgBigVal = Number((hgBig.match(/= ([\d.eE+-]+)$/) || [])[1]);
+ok(Math.abs(hgBigVal - 0.5) < 1e-9, "超几何 N=1e15 精度", hgBig);
+const hgMid = run("d2-probability", "", { mode: "draw", n: "100000", k: "50000", draws: "50000", hits: "25000" });
+const hgMidVal = Number((hgMid.match(/= ([\d.eE+-]+)$/) || [])[1]);
+ok(Math.abs(hgMidVal - 0.005046227197194418) < 1e-11, "超几何 N=100000 精度", hgMid);
+has(run("d2-probability", "", { mode: "binomial", n: "100000", k: "500", p: "0.5" }), "< 1e-308（下溢）", "二项 n=100000 下溢标注");
 
 const rr = run("d2-schedule", "A B C D", { mode: "roundrobin" });
 has(rr, "共 3 轮 6 场", "round robin count");
@@ -157,11 +190,17 @@ has(run("d2-matrix", "1 2\n2 4", { mode: "nullspace" }), "零空间维数 1", "m
 has(run("d2-matrix", "1 2\n3 4", { mode: "lu" }), "校验 P·A = L·U：通过", "matrix LU");
 has(run("d2-matrix", "1 0 0", { mode: "cross", m2: "0 0 1" }), "(0, -1, 0)", "matrix cross");
 has(run("d2-matrix", "1 2\n3 4", { mode: "permanent" }), "= 10", "matrix permanent");
+const mat13 = Array.from({ length: 13 }, () => Array(13).fill("1").join(" ")).join("\n");
+throwsWith(() => run("d2-matrix", mat13, { mode: "det", m: mat13 }), "矩阵最大 12×12", "matrix 13×13 上限保持");
+throwsWith(() => run("d2-matrix", mat13, { mode: "det", m: mat13 }), "同步有理数精确消元的耗时/内存硬边界", "matrix 13×13 错误含硬边界");
 
 has(run("d2-eigen", "2 1\n1 2", { mode: "values" }), "1, 3", "eigenvalues");
 has(run("d2-eigen", "2 1\n1 2", { mode: "spectral" }), "= 3", "spectral radius");
 has(run("d2-eigen", "2 1\n1 2", { mode: "vectors" }), "λ = 1", "eigenvectors");
 has(run("d2-eigen", "2 1\n1 2", { mode: "diagonalize" }), "P =", "diagonalization");
+const id7 = Array.from({ length: 7 }, (_, i) => Array.from({ length: 7 }, (_, j) => (i === j ? "1" : "0")).join(" ")).join("\n");
+throwsWith(() => run("d2-eigen", id7, { mode: "values", m: id7 }), "可能存在重根/病态系数", "eigen 7 重根错误提示重根");
+throwsWith(() => run("d2-eigen", id7, { mode: "values", m: id7 }), "无平方分解或分离重因式", "eigen 7 重根错误给分解建议");
 
 has(run("d2-poly", "x^2-3x+2", { mode: "roots" }), "1", "poly roots");
 has(run("d2-poly", "x^2-3x+2", { mode: "derivative" }), "2x - 3", "poly derivative");
@@ -212,6 +251,9 @@ has(run("d2-line", "", { mode: "intersection", x1: "0", y1: "0", x2: "1", y2: "1
 has(run("d2-root", "2"), "1.414213562373", "sqrt 2");
 has(run("d2-root", "27", { mode: "cbrt" }), "3", "cbrt 27");
 has(run("d2-root", "32", { mode: "nth", n: "5" }), "2", "5th root 32");
+throwsWith(() => run("d2-root", "8", { mode: "nth", n: "9007199254740993" }), "超出 JS 精确整数范围（需 ≤ 2^53−1）", "d2-root n >2^53 拒绝");
+const hugeRoot = "9".repeat(100000);
+throwsWith(() => run("d2-root", hugeRoot, { mode: "sqrt", value: hugeRoot }), "预算", "d2-root 10 万位被开方数预算拒绝");
 
 has(run("d2-angle", "180", { mode: "deg" }), "3.14159265359 rad", "angle deg→rad");
 has(run("d2-angle", "100", { mode: "grad" }), "90°", "angle grad→deg");

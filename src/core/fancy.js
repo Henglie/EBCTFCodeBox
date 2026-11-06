@@ -587,7 +587,7 @@ register({
 });
 
 register({
-  id: "railFence", cat: "classic", name: "栅栏密码", desc: "两种走法：W 型锯齿 zigzag（可带偏移量）/ Z 型传统分栏（按列写、按行读）；参数：栏数 + 模式 + 偏移量",
+  id: "railFence", family: "railfence", familyLabel: "rail", cat: "classic", name: "栅栏密码", desc: "两种走法：W 型锯齿 zigzag（可带偏移量）/ Z 型传统分栏（按列写、按行读）；参数：栏数 + 模式 + 偏移量",
   params: [
     { key: "rails", label: "栏数", type: "number", default: 2, placeholder: "2-64" },
     { key: "mode", label: "模式", type: "select", default: "w",

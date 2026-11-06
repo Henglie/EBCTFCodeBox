@@ -205,7 +205,7 @@ register({
     { key: "p", label: "素数 p", type: "text", default: "", placeholder: "十进制大素数" },
     { key: "g", label: "原根 g", type: "text", default: "", placeholder: "十进制" },
     { key: "y", label: "公钥 y", type: "text", default: "", placeholder: "y=g^x mod p（加密用）" },
-    { key: "x", label: "私钥 x", type: "text", default: "", placeholder: "x ∈ [1,p-2]（解密用）" },
+    { sensitive: true, key: "x", label: "私钥 x", type: "text", default: "", placeholder: "x ∈ [1,p-2]（解密用）" },
     { key: "dataEnc", label: "明文编码", type: "select", default: "dec", options: ELGAMAL_DATA_ENC },
     { key: "outEnc", label: "解密输出", type: "select", default: "dec", options: ELGAMAL_DATA_ENC },
   ],

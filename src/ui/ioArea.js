@@ -14,6 +14,8 @@
  * 零依赖（自带极简 el），供 main.js / recipeView / exhaustiveView 共用。
  */
 
+import { attachEditHistory } from "./editHistory.js";
+
 /* 极简元素工厂（与 main.js el 语义一致的子集，够 ioArea 用）。 */
 function el(tag, attrs = {}) {
   const n = document.createElement(tag);
@@ -67,6 +69,7 @@ export function ioArea(attrs = {}) {
  // Ctrl/Meta+Enter 放行给上层的 convert 快捷键；Shift+Enter 也走纯换行。
  // 同粘贴：execCommand("insertText", "\n") 在 Chromium 吞换行 → Range 直插 + 补发 input。
     div.addEventListener("keydown", (e) => {
+      if (e.isComposing || e.keyCode === 229) return;
       if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         const sel = window.getSelection();
@@ -86,5 +89,6 @@ export function ioArea(attrs = {}) {
       if (div.textContent === "") div.innerHTML = "";
     });
   }
+  if (!ro) attachEditHistory(div);
   return div;
 }

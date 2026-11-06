@@ -3,16 +3,34 @@
  * 纯 JS 确定性实现；输入、搜索、输出数量均有界，超限显式报错。
  */
 
-import { runOp, big, isPrime, factorizeBounded, powmod, binom, parseNums, randInt } from "../lib/util.js";
+import { runOp, big, isPrime, factorizeBounded, powmod, binom, parseNums, randInt, log10Factorial, assertBudget, BUDGET_LIMITS } from "../lib/util.js";
 
 const CAT = "dcode-extras-2026-10/cat-math";
 const P = (key, label, ph) => ({ key, label, type: "text", default: "", placeholder: ph || "" });
 const SEL = (key, label, def, opts) => ({ key, label, type: "select", default: def, options: opts.map((o) => (typeof o === "string" ? { value: o, label: o } : o)) });
 
-const MAX_OUT = 20000;
-const MAX_DIGITS = 100000;
-
 function err(msg) { throw new Error(msg); }
+function budgetChars(n, label) { return assertBudget("chars", n, label); }
+function budgetItems(n, label) { return assertBudget("items", n, label); }
+function budgetSteps(n, label) { return assertBudget("steps", n, label); }
+function budgetBigSteps(n, label) { return assertBudget("bigSteps", n, label); }
+function budgetNodes(n, label) { return assertBudget("nodes", n, label); }
+function bigDigits(n) { return absB(n).toString().length; }
+function log10Big(n) {
+  const s = absB(n).toString();
+  const lead = s.slice(0, 15);
+  return Math.log10(Number(lead)) + (s.length - lead.length);
+}
+function powDigitsEstimate(base, exp) {
+  const a = absB(base);
+  if (a <= 1n) return 1;
+  const e = Number(exp);
+  return Math.floor(e * log10Big(a)) + 1;
+}
+function requireSafeInt(v, what) {
+  if (!Number.isSafeInteger(v)) err(`${what}超出 JS 精确整数范围（需 ≤ 2^53−1）`);
+  return v;
+}
 function absB(x) { return x < 0n ? -x : x; }
 function gcdB(a, b) { a = absB(a); b = absB(b); while (b) { const t = a % b; a = b; b = t; } return a; }
 function lcmB(a, b) { if (a === 0n || b === 0n) return 0n; return absB(a / gcdB(a, b) * b); }
@@ -24,8 +42,10 @@ function parseBig(src, what = "整数") {
   return v;
 }
 function parseSmall(src, what = "整数") {
-  const v = Number(String(src).trim());
-  if (!Number.isInteger(v)) err(`${what}需为整数`);
+  const s = String(src).trim();
+  if (!/^[+-]?\d+$/.test(s)) err(`${what}需为整数`);
+  const v = Number(s);
+  if (!Number.isSafeInteger(v)) err(`${what}超出 JS 精确整数范围（需 ≤ 2^53−1）`);
   return v;
 }
 function boundedInt(src, what, lo, hi) {
@@ -52,6 +72,85 @@ function irootB(n, k) {
     if (mid ** BigInt(k) <= n) lo = mid; else hi = mid;
   }
   return lo;
+}
+function log10Choose(n, k) {
+  if (!Number.isInteger(n) || !Number.isInteger(k) || k < 0 || k > n) return -Infinity;
+  const kk = Math.min(k, n - k);
+  let s = 0, c = 0;
+  for (let i = 1; i <= kk; i++) {
+    const term = Math.log1p((n - kk) / i) / Math.LN10;
+    const y = term - c;
+    const t = s + y;
+    c = (t - s) - y;
+    s = t;
+  }
+  return s;
+}
+function log10FallingRatio(numStart, denStart, count) {
+  if (!Number.isInteger(count) || count < 0 || numStart < count || denStart < count || numStart > denStart) {
+    return { log10: -Infinity, impossible: true };
+  }
+  let s = 0, c = 0;
+  for (let i = 0; i < count; i++) {
+    const num = numStart - i, den = denStart - i;
+    if (num <= 0 || den <= 0) return { log10: -Infinity, impossible: true };
+    const gap = den - num;
+    const ln = gap === 0 ? 0 : (gap * 2 < den ? Math.log1p(-gap / den) : Math.log(num) - Math.log(den));
+    const term = ln / Math.LN10;
+    const y = term - c;
+    const t = s + y;
+    c = (t - s) - y;
+    s = t;
+  }
+  return { log10: s, impossible: false };
+}
+function ratioBigToNumber(num, den) {
+  if (den === 0n) err("概率分母为 0");
+  if (num === 0n) return 0;
+  if (num > den) err("概率分子大于分母（内部错误）");
+  const scale = 1n << 128n;
+  const q = (num * scale) / den;
+  return Number(q) / 18446744073709551616 / 18446744073709551616;
+}
+function fmtProbability(x) {
+  if (!Number.isFinite(x)) err("概率计算得到非有限值，请检查输入规模");
+  if (x < 0) { if (x > -1e-12) x = 0; else err("概率为负（内部数值错误）"); }
+  if (x > 1) { if (x < 1 + 1e-12) x = 1; else err("概率大于 1（内部数值错误）"); }
+  if (x === 0) return "0";
+  if (x < 1e-6) return x.toExponential(10).replace(/0+e/, "e").replace(/\.e/, "e");
+  return fmt(x, 12);
+}
+function hypergeometricPmf(N, K, n, k) {
+  const kMin = Math.max(0, n - (N - K));
+  const kMax = Math.min(n, K);
+  if (k < kMin || k > kMax) return { prob: 0, underflow: false, impossible: true, kMin, kMax };
+  assertBudget("bigSteps", (n + 8) * 6, "超几何概率稳定计算");
+  const logC = log10Choose(n, k);
+  const r1 = log10FallingRatio(K, N, k);
+  const r2 = log10FallingRatio(N - K, N - k, n - k);
+  if (r1.impossible || r2.impossible) return { prob: 0, underflow: false, impossible: true, kMin, kMax };
+  if (!Number.isFinite(logC) || !Number.isFinite(r1.log10) || !Number.isFinite(r2.log10)) {
+    err("超几何概率规模无法估算，请检查 N,K,n,k");
+  }
+  let logP = logC + r1.log10 + r2.log10;
+  if (logP > 0) {
+    if (logP < 1e-12) logP = 0;
+    else err("超几何概率计算得到 P>1（内部数值错误）");
+  }
+  if (n <= 10000 && logP >= -10) {
+    const numDigits = log10Choose(K, k) + log10Choose(N - K, n - k);
+    const denDigits = log10Choose(N, n);
+    if (Number.isFinite(numDigits) && Number.isFinite(denDigits) && numDigits <= 4000 && denDigits <= 4000) {
+      const num = binom(K, k) * binom(N - K, n - k);
+      const den = binom(N, n);
+      const prob = ratioBigToNumber(num, den);
+      if (!Number.isFinite(prob)) err("超几何概率精确分支得到非有限值");
+      return { prob, underflow: prob === 0 && num !== 0n, impossible: false, kMin, kMax };
+    }
+  }
+  const prob = 10 ** logP;
+  if (!Number.isFinite(prob)) err("超几何概率在对数域溢出，请检查输入规模");
+  return { prob, underflow: prob === 0, impossible: false, kMin, kMax };
 }
 function egcdB(a, b) {
   let oldR = a, r = b, oldS = 1n, s = 0n, oldT = 0n, t = 1n;
@@ -87,6 +186,18 @@ const rMul = (a, b) => R(a[0] * b[0], a[1] * b[1]);
 const rDiv = (a, b) => { if (rIsZero(b)) err("有理数除数为 0"); return R(a[0] * b[1], a[1] * b[0]); };
 const rStr = (a) => (a[1] === 1n ? a[0].toString() : `${a[0]}/${a[1]}`);
 const rNum = (a) => Number(a[0]) / Number(a[1]);
+function rNumApprox(a) {
+  const v = rNum(a);
+  if (Number.isFinite(v)) return v;
+  if (a[0] === 0n) return 0;
+  const n = absB(a[0]), d = a[1];
+  const sn = n.toString(), sd = d.toString();
+  const lead = Number(sn.slice(0, 15)) / Number(sd.slice(0, 15));
+  const exp = sn.length - sd.length;
+  if (!Number.isFinite(lead) || exp > 400 || exp < -400) return v;
+  const out = lead * 10 ** exp;
+  return a[0] < 0n ? -out : out;
+}
 function parseRat(src) {
   const t = String(src).trim().replace(/−/g, "-");
   let m = t.match(/^(-?\d+)\s*\/\s*(-?\d+)$/);
@@ -106,7 +217,7 @@ function polyTrim(a) { while (a.length > 1 && rIsZero(a[a.length - 1])) a.pop();
 function parsePoly(src) {
   let s = String(src).replace(/\s+/g, "").replace(/−/g, "-").replace(/\*/g, "").replace(/X/g, "x");
   if (!s) err("多项式为空");
-  if (s.length > 500) err("多项式表达式过长（上限 500 字符）");
+  budgetChars(s.length, "多项式表达式");
   const terms = s.match(/[+-]?[^+-]+/g);
   if (!terms) err("无法解析多项式");
   let out = [RZERO];
@@ -117,7 +228,8 @@ function parsePoly(src) {
     if (m[1] === "-") coef = rNeg(coef);
     let deg = 0;
     if (m[3]) deg = m[4] ? Number(m[4]) : 1;
-    if (deg < 0 || deg > 200) err("多项式次数需在 0..200");
+    if (!Number.isSafeInteger(deg) || deg < 0) err("多项式次数需为非负整数");
+    budgetItems(deg + 1, "多项式系数");
     while (out.length <= deg) out.push(RZERO);
     out[deg] = rAdd(out[deg], coef);
   }
@@ -127,7 +239,7 @@ function polyDeg(a) { const t = polyTrim(a.slice()); return t.length - 1; }
 function polyAdd(a, b) { const n = Math.max(a.length, b.length), o = []; for (let i = 0; i < n; i++) o.push(rAdd(a[i] || RZERO, b[i] || RZERO)); return polyTrim(o); }
 function polySub(a, b) { const n = Math.max(a.length, b.length), o = []; for (let i = 0; i < n; i++) o.push(rSub(a[i] || RZERO, b[i] || RZERO)); return polyTrim(o); }
 function polyMul(a, b) {
-  if (a.length + b.length > 420) err("多项式乘积次数过大");
+  budgetBigSteps(a.length * b.length, "多项式乘法（有理系数）");
   const o = Array.from({ length: a.length + b.length }, () => RZERO);
   for (let i = 0; i < a.length; i++) for (let j = 0; j < b.length; j++) o[i + j] = rAdd(o[i + j], rMul(a[i], b[j]));
   return polyTrim(o);
@@ -179,7 +291,7 @@ function polyStr(a) {
 function parsePolyExpr(src) {
   let s = String(src).replace(/\s+/g, "").replace(/−/g, "-").replace(/X/g, "x").replace(/\*\*/g, "^");
   if (!s) err("多项式表达式为空");
-  if (s.length > 800) err("多项式表达式过长");
+  budgetChars(s.length, "多项式表达式");
   const toks = [];
   let i = 0;
   while (i < s.length) {
@@ -236,7 +348,8 @@ function parsePolyExpr(src) {
       const e = peek();
       if (!e || e.t !== "num" || !/^\d+$/.test(e.v)) err("幂指数需为非负整数");
       const k = Number(take().v);
-      if (k > 50) err("多项式幂次上限 50");
+      requireSafeInt(k, "多项式幂次");
+      budgetBigSteps((k ** 3) * Math.max(1, a.length) ** 2 / 3, "多项式幂运算");
       let r = [RONE];
       for (let i = 0; i < k; i++) r = polyMul(r, a);
       a = r;
@@ -253,7 +366,7 @@ function parsePolyExpr(src) {
   };
   const out = parseE();
   if (pos !== withMul.length) err("多项式表达式有多余内容");
-  if (polyDeg(out) > 100) err("多项式次数上限 100");
+  budgetItems(polyDeg(out) + 1, "多项式系数");
   return polyTrim(out);
 }
 
@@ -263,7 +376,7 @@ function parseMatrix(src) {
   const m = lines.map((line) => line.split(/[\s,]+/).filter(Boolean).map(parseRat));
   const cols = m[0].length;
   if (!cols || !m.every((r) => r.length === cols)) err("矩阵每行列数必须一致");
-  if (m.length > 12 || cols > 12) err("矩阵最大 12×12");
+  if (m.length > 12 || cols > 12) err("矩阵最大 12×12（同步有理数精确消元的耗时/内存硬边界；更大规模需改用模算或数值实现）");
   return m;
 }
 function matCopy(m) { return m.map((r) => r.map((x) => x.slice())); }
@@ -390,7 +503,8 @@ function matCharpoly(m) {
 function matPermanent(m) {
   const n = m.length;
   if (!n || m.some((r) => r.length !== n)) err("permanent 需要方阵");
-  if (n > 12) err("permanent 上限 12×12");
+  budgetItems(2 ** n, "permanent 子集枚举");
+  budgetBigSteps((2 ** n) * n * n + 64, "permanent 计算");
   let total = RZERO;
   for (let mask = 0; mask < (1 << n); mask++) {
     let bits = 0;
@@ -432,20 +546,21 @@ function fmt(x, d = 10) {
 function numList(src, what = "数字列表") {
   const a = parseNums(src);
   if (!a.length) err(`需要${what}`);
-  if (a.length > 100000) err(`${what}过长（上限 100000 项）`);
+  budgetItems(a.length, what);
   return a;
 }
 function intList(src, what = "整数列表") {
-  const a = String(src).split(/[\s,;]+/).filter(Boolean).map((x) => parseBig(x, what));
-  if (!a.length) err(`需要${what}`);
-  if (a.length > 1000) err(`${what}过长（上限 1000 项）`);
-  return a;
+  const parts = String(src).split(/[\s,;]+/).filter(Boolean);
+  if (!parts.length) err(`需要${what}`);
+  budgetItems(parts.length, what);
+  budgetChars(parts.reduce((s, x) => s + x.length + 1, 0), what);
+  return parts.map((x) => parseBig(x, what));
 }
 
 function tokenizeExpr(src) {
   const s = String(src).replace(/−/g, "-").replace(/\s+/g, "");
   if (!s) err("表达式为空");
-  if (s.length > 1000) err("表达式过长（上限 1000 字符）");
+  budgetChars(s.length, "表达式");
   const out = [];
   let i = 0;
   const isDigit = (c) => c >= "0" && c <= "9";
@@ -523,9 +638,13 @@ function compileExpr(src) {
     }
   }
   while (ops.length) { const o = ops.pop(); if (o.t === "(") err("括号不匹配"); out.push(o); }
+  budgetSteps(out.length * 8, "表达式求值");
+  const evalLimit = Math.max(256, out.length * 8);
   return function (vars = {}) {
     const st = [];
+    let steps = 0;
     for (const t of out) {
+      if (++steps > evalLimit) err(`表达式单次求值超过 ${evalLimit} 步（节点过多）`);
       if (t.t === "num") st.push(t.v);
       else if (t.t === "var") {
         if (!(t.v in vars)) err(`未知变量 ${t.v}`);
@@ -583,7 +702,10 @@ function dawson(x) {
   return x < 0 ? -f : f;
 }
 function gammaFn(x) {
-  if (Number.isInteger(x) && x > 0) { let r = 1; for (let i = 2; i < x; i++) r *= i; return r; }
+  if (Number.isInteger(x) && x > 0) {
+    if (x > 171) return Infinity;
+    let r = 1; for (let i = 2; i < x; i++) r *= i; return r;
+  }
   const g = 7;
   const c = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
   if (x < 0.5) return Math.PI / (Math.sin(Math.PI * x) * gammaFn(1 - x));
@@ -618,6 +740,7 @@ function parseComplex(src) {
   return { re, im };
 }
 function cfmt(z, d = 8) {
+  if (!Number.isFinite(z.re) || !Number.isFinite(z.im)) err("复数结果超出 double 范围，请缩小输入");
   const re = fmt(z.re, d), im = fmt(Math.abs(z.im), d);
   if (Math.abs(z.im) < 1e-10) return re;
   if (Math.abs(z.re) < 1e-10) return `${z.im < 0 ? "-" : ""}${im}i`;
@@ -627,12 +750,18 @@ function cadd(a, b) { return { re: a.re + b.re, im: a.im + b.im }; }
 function csub(a, b) { return { re: a.re - b.re, im: a.im - b.im }; }
 function cmul(a, b) { return { re: a.re * b.re - a.im * b.im, im: a.re * b.im + a.im * b.re }; }
 function cdiv(a, b) { const d = b.re * b.re + b.im * b.im; if (d === 0) err("复数除数为 0"); return { re: (a.re * b.re + a.im * b.im) / d, im: (a.im * b.re - a.re * b.im) / d }; }
-function cpow(a, n) { let r = { re: 1, im: 0 }; for (let i = 0; i < n; i++) r = cmul(r, a); return r; }
+function cpow(a, n) {
+  let r = { re: 1, im: 0 }, b = a, e = BigInt(n);
+  while (e > 0n) { if (e & 1n) r = cmul(r, b); e >>= 1n; if (e > 0n) b = cmul(b, b); }
+  return r;
+}
 function cabs(a) { return Math.hypot(a.re, a.im); }
 function carg(a) { return Math.atan2(a.im, a.re); }
 
 function polyRootsNumeric(p, lim = 100) {
-  let a = polyTrim(p.slice()).map((c) => Number(c[0]) / Number(c[1]));
+  budgetBigSteps(500 * Math.max(1, p.length) ** 2, "多项式数值求根");
+  let a = polyTrim(p.slice()).map(rNumApprox);
+  if (a.some((x) => !Number.isFinite(x))) err("多项式系数超出 double 数值范围，无法数值求根；请缩小系数或改用精确判别式");
   while (a.length > 1 && Math.abs(a[a.length - 1]) < 1e-14) a.pop();
   const deg = a.length - 1;
   if (deg <= 0) return [];
@@ -665,10 +794,26 @@ function polyRootsNumeric(p, lim = 100) {
       maxd = Math.max(maxd, cabs(q));
     }
     if (maxd < 1e-12) break;
-    if (it === 499) err("高次多项式求根未收敛（请降次）");
+    if (it === 499) err("高次多项式求根未收敛：可能存在重根/病态系数；请先做无平方分解或分离重因式，或改用精确判别式");
     if (roots.length > lim) break;
   }
   return roots.sort((x, y) => x.re - y.re || x.im - y.im);
+}
+
+function ratSqrt(r) {
+  if (r[0] < 0n) return null;
+  const s = r[0] * r[1];
+  const rt = isqrtB(s);
+  return rt * rt === s ? R(rt, r[1]) : null;
+}
+function fmtRat(r, d = 12) {
+  const v = rNum(r);
+  return Number.isFinite(v) ? fmt(v, d) : rStr(r);
+}
+function quadraticExact(a, b, c) {
+  const disc = rSub(rMul(b, b), rMul(R(4n), rMul(a, c)));
+  const sq = disc[0] >= 0n ? ratSqrt(disc) : null;
+  return { disc, sq };
 }
 
 function baseAlphabet(base) {
@@ -754,15 +899,35 @@ function zeckendorfDecode(bits) {
   return n;
 }
 
-function factorialN(n) { let r = 1; for (let i = 2; i <= n; i++) r *= i; return r; }
+function factorialN(n) { let r = 1n; for (let i = 2; i <= n; i++) r *= BigInt(i); return r; }
+function fibPairBig(n) {
+  if (n === 0) return [0n, 1n];
+  const [a, b] = fibPairBig(Math.floor(n / 2));
+  const c = a * (2n * b - a);
+  const d = a * a + b * b;
+  return n % 2 ? [d, c + d] : [c, d];
+}
+function partitionCountBig(n) {
+  const p = new Array(n + 1).fill(0n);
+  p[0] = 1n;
+  for (let k = 1; k <= n; k++) for (let x = k; x <= n; x++) p[x] += p[x - k];
+  return p[n];
+}
 function gcdNum(a, b) { a = Math.abs(a); b = Math.abs(b); while (b) { const t = a % b; a = b; b = t; } return a; }
 function isPalindromeStr(s) { s = String(s); return s === [...s].reverse().join(""); }
 function digitalRoot(n) { if (n < 0n) n = -n; if (n === 0n) return 0n; const r = n % 9n; return r === 0n ? 9n : r; }
+function assertFactorBudget(n) {
+  const bits = Math.max(1, Math.ceil(bigDigits(n) * Math.log2(10)));
+  budgetBigSteps(200000 * 12 * Math.ceil(bits / 64), "整数分解");
+}
 function divisorsBig(n) {
   if (n < 1n) err("n 需为正整数");
-  if (n > 10n ** 15n) err("n 过大（上限 10^15）");
+  assertFactorBudget(n);
   const f = factorizeBounded(n);
   if (!f.complete) err("n 无法完全分解，无法给出全部因子");
+  let divisorCount = 1n;
+  for (const [, e] of f.factors) divisorCount *= BigInt(e + 1);
+  budgetItems(divisorCount, "因子个数");
   let ds = [1n];
   for (const [p, e] of f.factors) {
     const cur = [];
@@ -774,6 +939,7 @@ function divisorsBig(n) {
 }
 function phiBig(n) {
   if (n < 1n) err("n 需为正整数");
+  assertFactorBudget(n);
   const f = factorizeBounded(n);
   if (!f.complete) err("n 无法完全分解");
   let r = n;
@@ -782,6 +948,7 @@ function phiBig(n) {
 }
 function mobiusBig(n) {
   if (n < 1n) err("n 需为正整数");
+  assertFactorBudget(n);
   const f = factorizeBounded(n);
   if (!f.complete) err("n 无法完全分解");
   for (const [, e] of f.factors) if (e > 1) return 0n;
@@ -789,6 +956,8 @@ function mobiusBig(n) {
 }
 function primeListUpTo(lim) {
   if (lim < 2) return [];
+  budgetItems(lim + 1, "素数筛表");
+  budgetSteps(lim, "素数筛");
   const sieve = new Uint8Array(lim + 1);
   for (let i = 2; i * i <= lim; i++) if (!sieve[i]) for (let j = i * i; j <= lim; j += i) sieve[j] = 1;
   const out = [];
@@ -796,16 +965,23 @@ function primeListUpTo(lim) {
   return out;
 }
 function nthPrime(n) {
-  if (n < 1 || n > 1000000) err("n 需在 1..10^6");
+  if (!Number.isSafeInteger(n) || n < 1) err("n 需为正整数");
+  budgetItems(n, "第 n 个素数");
   if (n < 6) return [2, 3, 5, 7, 11][n - 1];
   let lim = Math.ceil(n * (Math.log(n) + Math.log(Math.log(n)))) + 10;
+  budgetSteps(lim * 2, "第 n 个素数筛");
   for (; ;) { const ps = primeListUpTo(lim); if (ps.length >= n) return ps[n - 1]; lim *= 2; }
 }
 function nextPrime(n) {
   if (n < 2n) return 2n;
   let x = n + 1n;
   if (x % 2n === 0n) x++;
-  while (!isPrime(x)) x += 2n;
+  const bits = Math.max(1, bigDigits(n));
+  let guard = 0;
+  while (!isPrime(x)) {
+    x += 2n;
+    if ((++guard & 1023) === 0) budgetSteps(guard * bits, "后继素数搜索");
+  }
   return x;
 }
 function prevPrime(n) {
@@ -813,7 +989,12 @@ function prevPrime(n) {
   if (n === 3n) return 2n;
   let x = n - 1n;
   if (x % 2n === 0n) x--;
-  while (x >= 3n && !isPrime(x)) x -= 2n;
+  const bits = Math.max(1, bigDigits(n));
+  let guard = 0;
+  while (x >= 3n && !isPrime(x)) {
+    x -= 2n;
+    if ((++guard & 1023) === 0) budgetSteps(guard * bits, "前驱素数搜索");
+  }
   return x >= 3n ? x : 2n;
 }
 function nearestPrime(n) {
@@ -828,11 +1009,14 @@ function parseGrid(src) {
   if (!rows.length) err("网格为空");
   const w = rows[0].length;
   if (!rows.every((r) => r.length === w)) err("网格每行宽度必须一致");
-  if (rows.length > 200 || w > 200) err("网格最大 200×200");
+  budgetItems(rows.length * w, "网格单元");
+  budgetChars(rows.length * (w + 1), "网格");
   return rows;
 }
 
 function rootsScan(expr, a, b, count = 2000) {
+  budgetItems(count + 1, "数值求根采样点");
+  budgetSteps((count + 1) * Math.max(8, String(expr).length) * 4, "数值求根扫描");
   const f = (x) => evalF(expr, x);
   const out = [];
   let prevX = a, prevY = f(a);
@@ -884,6 +1068,8 @@ function parseFractionInput(src) {
 function fractionToDecimal(n, d) {
   if (d === 0n) err("分母不能为 0");
   if (d < 0n) { n = -n; d = -d; }
+  const dDigits = bigDigits(d);
+  budgetChars(dDigits ** 2 + 1, "循环小数余数存储");
   const sign = n < 0n ? "-" : "";
   n = absB(n);
   const int = n / d;
@@ -898,8 +1084,13 @@ function fractionToDecimal(n, d) {
     rem *= 10n;
     frac += (rem / d).toString();
     rem %= d;
-    if (frac.length > 5000) err("小数展开超过 5000 位（可能分母过大）");
+    if ((seen.size & 4095) === 0) {
+      budgetItems(seen.size, "循环小数展开位数");
+      budgetChars(seen.size * dDigits + frac.length, "循环小数余数存储");
+    }
   }
+  budgetItems(seen.size, "循环小数展开位数");
+  budgetChars(seen.size * dDigits + frac.length + 1, "循环小数余数存储");
   if (cycleStart < 0) return `${sign}${int}.${frac}`;
   return `${sign}${int}.${frac.slice(0, cycleStart)}(${frac.slice(cycleStart)})`;
 }
@@ -921,7 +1112,7 @@ function parsePeriodicDecimal(src) {
 }
 
 function magicSquare(n) {
-  if (n < 3 || n > 60) err("阶数需在 3..60");
+  if (n < 3) err("幻方阶数需 ≥3");
   const a = Array.from({ length: n }, () => Array(n).fill(0));
   if (n % 2 === 1) {
     let i = 0, j = Math.floor(n / 2);
@@ -962,6 +1153,7 @@ function magicSquare(n) {
 }
 
 function quineMcCluskey(minterms, nvars) {
+  let qmNodes = 0;
   const all = [];
   const max = 1 << nvars;
   const terms = new Set(minterms);
@@ -979,6 +1171,7 @@ function quineMcCluskey(minterms, nvars) {
     const next = [];
     const seen = new Set();
     for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) {
+      if (++qmNodes > BUDGET_LIMITS.nodes) budgetNodes(qmNodes, "Quine–McCluskey 搜索");
       const a = arr[i], b = arr[j];
       if (a.care !== b.care) continue;
       const diff = a.mask ^ b.mask;
@@ -1089,7 +1282,7 @@ function parseBoolExpr(src) {
   }
   toks = withAnd;
   const vars = [...new Set(toks.filter((t) => /^[A-Z]$/.test(t)))].sort();
-  if (vars.length > 10) err("布尔变量最多 10 个");
+  budgetItems(vars.length, "布尔变量");
   const prec = { "!": 4, "&": 3, "^": 2, "|": 1 };
   const out = [], ops = [];
   for (let i = 0; i < toks.length; i++) {
@@ -1120,6 +1313,8 @@ function parseBoolExpr(src) {
 function gridBFS(src) {
   const g = parseGrid(src);
   const h = g.length, w = g[0].length;
+  budgetSteps(h * w * 4, "网格 BFS");
+  budgetItems(h * w, "网格 BFS 访问单元");
   let start = null, goal = null;
   for (let i = 0; i < h; i++) for (let j = 0; j < w; j++) {
     if (g[i][j] === "S") start = [i, j];
@@ -1517,26 +1712,48 @@ Jeu de la Vie|jeu-de-la-vie
 };
 
 const OPS_CORE = [
-  runOp("d2-bignum", CAT, "大整数四则/模/幂", "BigInt 精确：加、减、乘、除（商余+小数）、欧几里得除法、取模、幂；结果位数上限 10^5",
+  runOp("d2-bignum", CAT, "大整数四则/模/幂", "BigInt 精确：加、减、乘、除（商余+小数）、欧几里得除法、取模、幂；按输出字符/大数步数物理预算限制",
     (t, p) => {
       const mode = String((p && p.mode) || "add");
-      const a = parseBig((p && p.a) || t, "a");
-      const bSrc = (p && p.b) || "";
+      const aSrc = String((p && p.a) || t || "").trim();
+      const bSrc = String((p && p.b) || "").trim();
+      budgetChars(aSrc.length, "a 的位数");
+      const a = parseBig(aSrc, "a");
       if (mode === "pow") {
-        const e = boundedInt(bSrc, "指数", 0, 100000);
-        if (e > 20000 && absB(a) > 1n) err("底数绝对值 >1 时指数上限 20000");
-        let r = 1n, base = a, exp = e;
-        while (exp) { if (exp & 1) r *= base; base *= base; exp >>= 1; if (r.toString().length > MAX_DIGITS) err("结果超过 10^5 位"); }
+        const eSrc = bSrc;
+        budgetChars(eSrc.length, "指数");
+        const exp = parseBig(eSrc, "指数");
+        if (exp < 0n) err("指数需为非负整数");
+        const bits = exp.toString(2).length;
+        const outDigits = powDigitsEstimate(a, exp);
+        budgetChars(outDigits + aSrc.length + eSrc.length + 64, "幂结果");
+        budgetBigSteps(bits * Math.max(1, Math.ceil(outDigits / 16)), "幂运算");
+        let r = 1n, base = a, e = exp;
+        while (e > 0n) { if (e & 1n) r *= base; e >>= 1n; if (e > 0n) base *= base; }
         const rs = r.toString();
-        return `${a}^${e} =\n${rs}${rs.length > 200 ? `\n（${rs.length} 位）` : ""}`;
+        return `${a}^${exp} =\n${rs}${rs.length > 200 ? `\n（${rs.length} 位）` : ""}`;
       }
+      budgetChars(bSrc.length, "b 的位数");
       const b = parseBig(bSrc, "b");
       if (["div", "euclid", "mod"].includes(mode) && b === 0n) err("除数不能为 0");
+      const da = aSrc.replace(/^[+-]/, "").length, db = bSrc.replace(/^[+-]/, "").length;
+      if (mode === "add" || mode === "sub") budgetChars(Math.max(da, db) + 1, "加减结果");
+      if (mode === "mul") {
+        budgetChars(da + db, "乘积结果");
+        budgetBigSteps(da * db, "大数乘法");
+      }
+      if (mode === "mod") budgetChars(da, "取模结果");
+      if (mode === "gcd") {
+        budgetChars(da + db, "gcd/lcm 结果");
+        budgetBigSteps((da + db) * Math.max(da, db), "gcd/lcm");
+      }
       if (mode === "add") return `${a} + ${b} = ${a + b}`;
       if (mode === "sub") return `${a} - ${b} = ${a - b}`;
       if (mode === "mul") return `${a} × ${b} = ${a * b}`;
       if (mode === "mod") return `${a} mod ${b} = ${modB(a, b)}`;
       if (mode === "div" || mode === "euclid") {
+        budgetChars(4 * (da + db) + 80, "除法结果");
+        budgetBigSteps((da + db) * Math.max(da, db), "大数除法");
         const q = a / b, r = a % b;
         let dec = "";
         if (mode === "div") {
@@ -1556,14 +1773,26 @@ const OPS_CORE = [
       const mode = String((p && p.mode) || "to");
       const base = Number((p && p.base) || 10);
       const v = String((p && p.value) || t || "").trim();
-      if (!Number.isInteger(base) || base === 0 || base === 1 || base < -36 || base > 62) err("进制需为 2..62 或 -2..-36");
-      if (mode === "to") return `十进制 ${v} → Base ${base}：\n${toBaseBig(parseBig(v, "数值"), base)}`;
+      if (!Number.isInteger(base) || base === 0 || base === 1 || base === -1 || base < -36 || base > 62) err("进制需为 2..62 或 -2..-36");
+      if (mode === "to") {
+        const n = parseBig(v, "数值");
+        budgetChars(v.length + 8, "输入数值");
+        budgetChars(Math.ceil(bigDigits(n) * Math.log2(10) / Math.log2(Math.abs(base))) + 8, "目标进制输出");
+        budgetBigSteps(bigDigits(n) ** 2, "进制转换");
+        return `十进制 ${v} → Base ${base}：\n${toBaseBig(n, base)}`;
+      }
       if (mode === "from") {
         if (base < 0 && v.includes("-")) err("负进制输入不使用负号，请直接给数字位");
+        budgetChars(v.length, "进制输入");
+        budgetChars(Math.ceil(v.length * Math.log2(Math.abs(base)) / Math.log2(10)) + 8, "十进制输出");
+        budgetBigSteps(v.length ** 2, "进制转换");
         return `Base ${base}「${v}」→ 十进制：\n${fromBaseBig(v, base)}`;
       }
       if (mode === "complement") {
-        const width = boundedInt((p && p.width) || "8", "位宽", 1, 128);
+        const width = parseSmall((p && p.width) || "8", "位宽");
+        if (width < 1) err("位宽需 ≥1");
+        budgetChars(width + v.length + 32, "补码输出");
+        budgetBigSteps(width * Math.max(1, Math.ceil(v.length / 16)), "补码运算");
         let x = parseBig(v, "数值");
         const lim = 1n << BigInt(width);
         if (x < 0n) x = lim + x;
@@ -1579,11 +1808,19 @@ const OPS_CORE = [
       const mode = String((p && p.mode) || "encode");
       const v = String((p && p.value) || t || "").trim();
       if (mode === "encode") {
+        budgetChars(v.length, "n 的位数");
         const n = parseBig(v, "n");
-        if (n < 1n || n > 10n ** 100n) err("n 需在 1..10^100");
+        if (n < 1n) err("Zeckendorf 表示需要正整数");
+        const fibIndex = Math.ceil(bigDigits(n) * Math.log2(10) / Math.log2((1 + Math.sqrt(5)) / 2)) + 2;
+        budgetChars(fibIndex + 8, "Zeckendorf 编码");
+        budgetBigSteps(fibIndex ** 2, "Zeckendorf 编码");
         return `${n} 的 Zeckendorf 表示：\n${zeckendorfEncode(n)}\n（从最高 Fibonacci 位到 1，禁止连续 1）`;
       }
-      if (mode === "decode") return `Zeckendorf「${v}」= ${zeckendorfDecode(v)}`;
+      if (mode === "decode") {
+        budgetChars(v.length, "Zeckendorf 编码");
+        budgetBigSteps(v.length ** 2, "Zeckendorf 解码");
+        return `Zeckendorf「${v}」= ${zeckendorfDecode(v)}`;
+      }
       err(`未知模式 ${mode}`);
     }, [SEL("mode", "方向", "encode", ["encode", "decode"]), P("value", "n 或 0/1 串", "100")]),
 
@@ -1598,8 +1835,16 @@ const OPS_CORE = [
       if (mode === "mul") return `${cfmt(z)} × ${cfmt(w)} = ${cfmt(cmul(z, w))}`;
       if (mode === "div") return `${cfmt(z)} ÷ ${cfmt(w)} = ${cfmt(cdiv(z, w))}`;
       if (mode === "pow") {
-        const n = boundedInt((p && p.n) || "2", "幂次", 0, 1000);
-        return `${cfmt(z)}^${n} = ${cfmt(cpow(z, n))}`;
+        const n = parseSmall((p && p.n) || "2", "幂次");
+        if (n < 0) err("幂次需为非负整数");
+        requireSafeInt(n, "幂次");
+        budgetSteps(Math.max(1, Math.ceil(Math.log2(n + 1))) * 8, "复数幂");
+        const mag = cabs(z);
+        const log10mag = mag > 0 ? Math.log10(mag) * n : 0;
+        if (log10mag > 308) err(`幂结果数量级约 10^${Math.round(log10mag)}，超出 double 范围；请减小幂次`);
+        const r = cpow(z, n);
+        if (!Number.isFinite(r.re) || !Number.isFinite(r.im)) err("复数幂结果超出 double 范围；请减小幂次");
+        return `${cfmt(z)}^${n} = ${cfmt(r)}`;
       }
       if (mode === "module") return `|${cfmt(z)}| = ${fmt(cabs(z), 12)}`;
       if (mode === "argument") return `arg(${cfmt(z)}) = ${fmt(deg, 10)}° = ${fmt(carg(z), 12)} rad`;
@@ -1616,63 +1861,101 @@ const OPS_CORE = [
       const mode = String((p && p.mode) || "divisors");
       const nSrc = (p && p.n) || t;
       if (mode === "divisors") {
+        budgetChars(String(nSrc).length, "n 的位数");
         const n = parseBig(nSrc, "n");
         const ds = divisorsBig(n);
+        budgetItems(ds.length, "因子个数");
+        budgetChars(ds.reduce((s, d) => s + d.toString().length + 2, 0), "因子列表");
         return `${n} 的因子（${ds.length} 个）：\n${ds.join(", ")}`;
       }
       if (mode === "multiples") {
+        budgetChars(String(nSrc).length, "n 的位数");
         const n = parseBig(nSrc, "n");
         const lim = parseBig((p && p.limit) || "1000", "上限");
         if (n === 0n) err("n 不能为 0");
-        if (lim / absB(n) > BigInt(MAX_OUT)) err("倍数数量超过上限");
+        const count = lim / absB(n);
+        budgetItems(count, "倍数个数");
+        const cnt = requireSafeInt(Number(count), "倍数个数");
+        budgetSteps(cnt, "倍数枚举");
+        budgetChars(cnt * (bigDigits(lim) + 2) + 64, "倍数列表");
         const out = [];
         for (let x = absB(n); x <= lim; x += absB(n)) out.push(x.toString());
         return `≤ ${lim} 的 ${n} 的倍数（${out.length} 个）：\n${out.join(", ") || "无"}`;
       }
       if (mode === "fermat") {
-        let n = parseBig(nSrc, "n");
+        budgetChars(String(nSrc).length, "n 的位数");
+        const n = parseBig(nSrc, "n");
         if (n < 3n || n % 2n === 0n) err("费马分解需要奇合数 n≥3");
+        const bits = Math.max(1, bigDigits(n));
+        const iterCap = Math.max(1000, Math.min(1000000, Math.floor(BUDGET_LIMITS.bigSteps / Math.max(1, bits * 2))));
+        budgetBigSteps(iterCap * bits * 2, "费马分解迭代");
         let a = isqrtB(n);
         if (a * a < n) a++;
-        for (let i = 0; i < 1000000; i++) {
+        for (let i = 0; i < iterCap; i++) {
           const b2 = a * a - n, b = isqrtB(b2);
           if (b * b === b2) return `${n} = (${a} + ${b}) × (${a} - ${b}) = ${a + b} × ${a - b}`;
           a++;
         }
-        err("费马分解迭代超过 10^6，未找到因子");
+        err(`费马分解在 ${iterCap} 次迭代（当前大数预算）内未找到因子；该数可能不是费马易分解形式`);
       }
       if (mode === "two-factors") {
+        budgetChars(String(nSrc).length, "n 的位数");
         const n = parseBig(nSrc, "n");
         if (n < 2n) err("n 需 ≥2");
         const ds = divisorsBig(n);
+        budgetItems(ds.length, "因子个数");
         for (const d of ds) if (d > 1n && d * d <= n && n % d === 0n) return `${n} = ${d} × ${n / d}`;
         return `${n} 是素数，只有 1 × ${n}`;
       }
       if (mode === "coprime") {
+        budgetChars(String(nSrc).length, "n 的位数");
         const n = parseBig(nSrc, "n");
-        if (n < 1n || n > 1000000n) err("n 需在 1..10^6");
+        if (n < 1n) err("n 需为正整数");
+        budgetSteps(n, "互素枚举项数");
+        const N = requireSafeInt(Number(n), "n");
+        budgetChars(N * (bigDigits(n) + 2) + 64, "互素列表");
         const out = [];
         for (let k = 1n; k <= n; k++) if (gcdB(k, n) === 1n) out.push(k.toString());
         return `≤ ${n} 且与 ${n} 互素（${out.length} 个）：\n${out.join(", ") || "无"}`;
       }
       if (mode === "endings") {
-        const lim = boundedInt((p && p.limit) || "1000", "上限", 1, 1000000);
+        const limBig = parseBig((p && p.limit) || "1000", "上限");
+        if (limBig < 0n) err("上限需为非负整数");
         const suf = String((p && p.digits) || "").trim();
         if (!/^\d+$/.test(suf)) err("尾数需为数字串");
+        budgetSteps(limBig + 1n, "尾数筛选范围");
+        const lim = requireSafeInt(Number(limBig), "上限");
+        const est = Math.floor((lim + 1) / 10 ** Math.min(15, suf.length)) + 1;
+        budgetItems(est, "尾数命中数");
+        budgetSteps(lim + 1, "尾数筛选");
+        budgetChars(est * (bigDigits(limBig) + 2) + 64, "尾数列表");
         const out = [];
         for (let x = 0; x <= lim; x++) if (String(x).endsWith(suf)) out.push(x);
         return `≤ ${lim} 且以 ${suf} 结尾（${out.length} 个）：\n${out.join(", ") || "无"}`;
       }
       if (mode === "palindromes") {
-        const lim = boundedInt((p && p.limit) || "1000", "上限", 0, 10000000);
+        const limBig = parseBig((p && p.limit) || "1000", "上限");
+        if (limBig < 0n) err("上限需为非负整数");
+        budgetSteps(limBig + 1n, "回文枚举范围");
+        const lim = requireSafeInt(Number(limBig), "上限");
+        const d = String(lim).length;
+        const est = Math.min(lim + 1, 2 * 10 ** Math.ceil(d / 2) + d);
+        budgetItems(est, "回文数个数");
+        budgetSteps(lim + 1, "回文枚举");
+        budgetChars(est * (d + 2) + 64, "回文列表");
         const out = [];
         for (let x = 0; x <= lim; x++) if (isPalindromeStr(String(x))) out.push(x);
         return `≤ ${lim} 的回文数（${out.length} 个）：\n${out.join(", ") || "无"}`;
       }
       if (mode === "sumsquares") {
-        const n = boundedInt(nSrc, "n", 0, 100000000);
+        const n = parseBig(nSrc, "n");
+        if (n < 0n) err("n 需为非负整数");
+        const N = requireSafeInt(Number(n), "n");
+        if (N > 0 && Math.floor(Math.sqrt(N)) ** 2 > N) err("n 超出数值范围");
+        let nodes = 0;
         const memo = new Map();
         const solve = (rem, k, min) => {
+          if (++nodes > BUDGET_LIMITS.nodes) budgetNodes(nodes, "平方和回溯");
           if (rem === 0) return [];
           if (k === 0) return null;
           const key = `${rem}:${k}:${min}`;
@@ -1686,10 +1969,10 @@ const OPS_CORE = [
           return null;
         };
         for (let k = 1; k <= 4; k++) {
-          const r = solve(n, k, 1);
-          if (r) return `${n} = ${r.map((x) => `${x}²`).join(" + ")}（${k} 个平方数）`;
+          const r = solve(N, k, 1);
+          if (r) return `${N} = ${r.map((x) => `${x}²`).join(" + ")}（${k} 个平方数）`;
         }
-        return `${n} = 0²`;
+        return `${N} = 0²`;
       }
       err(`未知模式 ${mode}`);
     }, [SEL("mode", "模式", "divisors", ["divisors", "multiples", "fermat", "two-factors", "coprime", "endings", "palindromes", "sumsquares"]), P("n", "n", "28"), P("limit", "上限", "1000"), P("digits", "结尾数字", "7")]),
@@ -1708,8 +1991,11 @@ const OPS_CORE = [
       }
       if (mode === "crt") {
         const src = String((p && p.sys) || t || "").trim();
+        budgetChars(src.length, "CRT 输入");
         const parts = src.split(/[;\n]+/).map((x) => x.trim()).filter(Boolean);
         if (parts.length < 2) err("CRT 输入格式：a1,m1;a2,m2;...");
+        budgetItems(parts.length, "CRT 方程个数");
+        budgetBigSteps(parts.length ** 2 * Math.max(1, Math.ceil(src.length / 16)), "CRT 求解");
         const rs = [], ms = [];
         for (const part of parts) {
           const m = part.match(/^(-?\d+)\s*,\s*(\d+)$/);
@@ -1731,15 +2017,21 @@ const OPS_CORE = [
         const g = gcdB(a, m);
         if (b % g !== 0n) return `${a}x ≡ ${b} (mod ${m}) 无解（gcd=${g} 不整除 ${b}）`;
         const aa = a / g, bb = b / g, mm = m / g;
-        const x0 = modB(bb * invModB(modB(aa, mm), mm), mm);
+        const x0 = mm === 1n ? 0n : modB(bb * invModB(modB(aa, mm), mm), mm);
+        budgetItems(g, "同余方程解的个数");
+        budgetChars(Number(g) * (bigDigits(m) + 2) + 128, "同余解列表");
+        budgetBigSteps(Number(g), "同余解枚举");
         const out = [];
-        for (let k = 0n; k < g && k < 1000n; k++) out.push(modB(x0 + k * mm, m).toString());
+        for (let k = 0n; k < g; k++) out.push(modB(x0 + k * mm, m).toString());
         return `${a}x ≡ ${b} (mod ${m}) 有 ${g} 个解：\n${out.join(", ")}`;
       }
       if (mode === "dlog") {
         const g = parseBig((p && p.a) || t, "g"), h = parseBig((p && p.b) || "0", "h"), p0 = parseBig((p && p.m) || "1", "p");
-        if (p0 < 2n || p0 > 10n ** 9n) err("p 需在 2..10^9");
-        const m = Number(isqrtB(p0) + 1n);
+        if (p0 < 2n) err("p 需 ≥2");
+        const m = requireSafeInt(Number(isqrtB(p0) + 1n), "√p");
+        budgetItems(m, "BSGS 表项");
+        budgetChars(m * (bigDigits(p0) + 2) + 64, "BSGS 表");
+        budgetBigSteps(m * 3, "BSGS 离散对数");
         const table = new Map();
         let e = 1n;
         for (let j = 0; j < m; j++) { const key = e.toString(); if (!table.has(key)) table.set(key, j); e = (e * g) % p0; }
@@ -1755,6 +2047,10 @@ const OPS_CORE = [
       if (mode === "dh") {
         const prime = parseBig((p && p.m) || "23", "p"), gen = parseBig((p && p.a) || "5", "g");
         const a = parseBig((p && p.b) || "6", "私钥 a"), b = parseBig((p && p.c) || "15", "私钥 b");
+        if (prime <= 1n) err("p 需 ≥2");
+        if (a < 0n || b < 0n) err("私钥需为非负整数");
+        const bits = Math.max(1, bigDigits(prime));
+        budgetBigSteps(bits ** 2, "DH 模幂");
         const A = powmod(gen, a, prime), B = powmod(gen, b, prime), s1 = powmod(B, a, prime), s2 = powmod(A, b, prime);
         if (s1 !== s2) err("DH 共享密钥不一致（内部错误）");
         return `p=${prime}, g=${gen}, a=${a}, b=${b}\nA = g^a mod p = ${A}\nB = g^b mod p = ${B}\n共享密钥 = ${s1}\n校验 B^a = A^b = ${s1}`;
@@ -1766,17 +2062,40 @@ const OPS_CORE = [
     (t, p) => {
       const a = parseRat((p && p.a) || "1"), b = parseRat((p && p.b) || "0"), c = parseRat((p && p.c) || "0");
       if (rIsZero(a)) err("a 不能为 0（这不是二次方程）");
-      const A = rNum(a), B = rNum(b), C = rNum(c);
-      const disc = B * B - 4 * A * C;
-      const h = -B / (2 * A), k = C - (B * B) / (4 * A);
-      const lines = [`方程：${polyStr([c, b, a])} = 0`, `判别式 Δ = b²−4ac = ${fmt(disc, 12)}`];
-      if (disc > 0) {
-        const s = Math.sqrt(disc);
-        lines.push(`两个实根：x₁ = ${fmt((-B - s) / (2 * A), 12)}，x₂ = ${fmt((-B + s) / (2 * A), 12)}`);
-      } else if (disc === 0) lines.push(`重根：x = ${fmt(h, 12)}`);
-      else { const s = Math.sqrt(-disc); lines.push(`两个共轭复根：x = ${fmt(h, 12)} ± ${fmt(s / (2 * Math.abs(A)), 12)}i`); }
-      lines.push(`标准形：${fmt(A, 10)}(x ${h < 0 ? "+" : "-"} ${fmt(Math.abs(h), 10)})² ${k < 0 ? "-" : "+"} ${fmt(Math.abs(k), 10)}`);
-      lines.push(`顶点：(${fmt(h, 10)}, ${fmt(k, 10)})`);
+      const { disc, sq } = quadraticExact(a, b, c);
+      const hRat = rDiv(rNeg(b), rMul(R(2n), a));
+      const kRat = rSub(c, rDiv(rMul(b, b), rMul(R(4n), a)));
+      const A = rNum(a), B = rNum(b), D = rNum(disc);
+      const h = rNum(hRat), k = rNum(kRat);
+      const dSign = disc[0] > 0n ? 1 : disc[0] < 0n ? -1 : 0;
+      const lines = [`方程：${polyStr([c, b, a])} = 0`, `判别式 Δ = b²−4ac = ${rStr(disc)}`];
+      if (dSign > 0) {
+        if (sq) {
+          const r1 = rDiv(rSub(rNeg(b), sq), rMul(R(2n), a));
+          const r2 = rDiv(rAdd(rNeg(b), sq), rMul(R(2n), a));
+          const ordered = rNum(r1) <= rNum(r2) ? [r1, r2] : [r2, r1];
+          lines.push(`两个实根：x₁ = ${rStr(ordered[0])}，x₂ = ${rStr(ordered[1])}（有理数精确）`);
+        } else if (Number.isFinite(D)) {
+          const s = Math.sqrt(D);
+          lines.push(`两个实根：x₁ = ${fmt((-B - s) / (2 * A), 12)}，x₂ = ${fmt((-B + s) / (2 * A), 12)}（近似；判别式非完全平方）`);
+        } else {
+          lines.push("判别式超出 double 数量级，数值根未计算（判别式已精确给出）");
+        }
+      } else if (dSign === 0) lines.push(`重根：x = ${rStr(hRat)}（有理数精确）`);
+      else {
+        const hStr = Number.isFinite(h) ? fmt(h, 12) : rStr(hRat);
+        if (Number.isFinite(D)) {
+          const s = Math.sqrt(-D);
+          lines.push(`两个共轭复根：x = ${hStr} ± ${fmt(s / (2 * Math.abs(A)), 12)}i（虚部近似）`);
+        } else {
+          lines.push(`两个共轭复根：实部 ${hStr}，虚部超出 double 数量级未计算`);
+        }
+      }
+      const hStr = Number.isFinite(h) ? fmt(Math.abs(h), 10) : `|${rStr(hRat)}|`;
+      const kStr = Number.isFinite(k) ? fmt(Math.abs(k), 10) : `|${rStr(kRat)}|`;
+      const aStr = Number.isFinite(A) && A !== 0 ? fmt(A, 10) : `(${rStr(a)})`;
+      lines.push(`标准形：${aStr}(x ${hRat[0] < 0n ? "+" : "-"} ${hStr})² ${kRat[0] < 0n ? "-" : "+"} ${kStr}`);
+      lines.push(`顶点：(${Number.isFinite(h) ? fmt(h, 10) : rStr(hRat)}, ${Number.isFinite(k) ? fmt(k, 10) : rStr(kRat)})`);
       return lines.join("\n");
     }, [P("a", "a", "1"), P("b", "b", "-3"), P("c", "c", "2")]),
 
@@ -1785,7 +2104,9 @@ const OPS_CORE = [
       const mode = String((p && p.mode) || "fraction");
       const v = String((p && p.value) || t || "").trim();
       if (mode === "fraction") {
+        budgetChars(v.length, "分数输入");
         const [n, d] = parseFractionInput(v);
+        budgetBigSteps(Math.max(1, Math.ceil(bigDigits(n) / 16)) * Math.max(1, Math.ceil(bigDigits(d) / 16)), "分数约分");
         const r = R(n, d);
         const dec = fractionToDecimal(r[0], r[1]);
         const whole = r[0] / r[1], rem = absB(r[0]) % r[1];
@@ -1793,6 +2114,8 @@ const OPS_CORE = [
         return `${v} = ${rStr(r)}${mixed}\n十进制：${dec}${dec.includes("(") ? `\n循环节长度 = ${dec.split("(")[1].slice(0, -1).length}` : ""}`;
       }
       if (mode === "decimal") {
+        budgetChars(v.length, "循环小数输入");
+        budgetBigSteps((v.length ** 2) / 4 + 1, "循环小数解析");
         const r = parsePeriodicDecimal(v);
         return `${v} = ${rStr(r)}\n小数形式：${fractionToDecimal(r[0], r[1])}`;
       }
@@ -1804,30 +2127,45 @@ const OPS_CORE = [
       const mode = String((p && p.mode) || "sum");
       if (mode === "sum" || mode === "product") {
         const a = intList((p && p.nums) || t);
+        const totalDigits = a.reduce((s, x) => s + bigDigits(x), 0) + a.length;
+        budgetChars(totalDigits + 16, mode === "sum" ? "求和结果" : "乘积结果");
+        if (mode === "product") budgetBigSteps(a.length * Math.max(1, totalDigits), "大数连乘");
         const r = a.reduce((s, x) => mode === "sum" ? s + x : s * x, mode === "sum" ? 0n : 1n);
         return `${mode === "sum" ? "Σ" : "∏"} = ${r}`;
       }
       if (mode === "subsetsum") {
-        const a = intList((p && p.nums) || t, "集合").map(Number);
-        const target = parseSmall((p && p.target) || "0", "目标和");
-        if (a.length > 22) err("子集和最多 22 个元素");
+        const a = intList((p && p.nums) || t, "集合");
+        const target = parseBig((p && p.target) || "0", "目标和");
+        const hasNeg = a.some((x) => x < 0n);
         const out = [];
-        const rec = (i, rem, chosen) => {
-          if (out.length >= 100) return;
-          if (rem === 0) { out.push(chosen.slice()); return; }
-          if (i >= a.length || rem < 0) return;
-          rec(i + 1, rem, chosen);
-          chosen.push(a[i]);
-          rec(i + 1, rem - a[i], chosen);
-          chosen.pop();
+        let nodes = 0;
+        let outChars = 0;
+        const add = (idx) => {
+          const text = idx.length ? `{${idx.map((j) => a[j]).join(", ")}}` : "{}";
+          out.push(text);
+          if (out.length > BUDGET_LIMITS.items) budgetItems(out.length, "子集和解的个数");
+          outChars += text.length + 1;
+          if (outChars > BUDGET_LIMITS.chars) budgetChars(outChars, "子集和输出");
         };
-        rec(0, target, []);
-        return `目标和 ${target} 的子集（最多列 100 个）：\n${out.map((s) => `{${s.join(", ")}}`).join("\n") || "无"}`;
+        const stack = [{ i: 0, rem: target, idx: [] }];
+        while (stack.length) {
+          if (++nodes > BUDGET_LIMITS.nodes) budgetNodes(nodes, "子集和搜索");
+          const cur = stack.pop();
+          if (cur.rem === 0n) { add(cur.idx); continue; }
+          if (cur.i >= a.length || (cur.rem < 0n && !hasNeg)) continue;
+          stack.push({ i: cur.i + 1, rem: cur.rem - a[cur.i], idx: [...cur.idx, cur.i] });
+          stack.push({ i: cur.i + 1, rem: cur.rem, idx: cur.idx });
+        }
+        return `目标和 ${target} 的子集（${out.length} 个）：\n${out.join("\n") || "无"}`;
       }
       if (mode === "coinchange") {
         const coins = String((p && p.coins) || "1,2,5").split(/[\s,;]+/).filter(Boolean).map((x) => parseSmall(x, "硬币面值"));
-        const amount = boundedInt((p && p.amount) || t, "金额", 0, 100000);
+        const amountBig = parseBig((p && p.amount) || t, "金额");
+        if (amountBig < 0n) err("金额需为非负整数");
+        budgetItems(amountBig + 1n, "找零 DP 状态数");
+        const amount = requireSafeInt(Number(amountBig), "金额");
         if (coins.some((c) => c <= 0)) err("硬币面值需为正整数");
+        budgetBigSteps(amount * (coins.length + 2), "找零 DP");
         const ways = new Array(amount + 1).fill(0n);
         ways[0] = 1n;
         for (const c of coins) for (let x = c; x <= amount; x++) ways[x] += ways[x - c];
@@ -1844,7 +2182,11 @@ const OPS_CORE = [
 
   runOp("d2-magic-square", CAT, "幻方生成/校验", "奇数阶 Siamese、4k 阶补全法、4k+2 阶 Strachey；输出方阵并校验行列对角线和",
     (t, p) => {
-      const n = boundedInt((p && p.n) || t, "阶数", 3, 30);
+      const n = parseSmall((p && p.n) || t, "阶数");
+      if (n < 3) err("幻方阶数需 ≥3");
+      budgetItems(n * n, "幻方格数");
+      budgetChars(n * n * (String(n * n).length + 1) + 64, "幻方输出");
+      budgetSteps(n * n, "幻方构造");
       const a = magicSquare(n);
       const target = n * (n * n + 1) / 2;
       const bad = [];
@@ -1870,6 +2212,7 @@ const OPS_CORE = [
       const letters = [...new Set((addends.join("") + result).split(""))];
       if (letters.length > 10) err("字母超过 10 个，无法唯一分配数字");
       const assign = new Map(), used = new Set();
+      let nodes = 0;
       const maxLen = Math.max(result.length, ...addends.map((w) => w.length));
       const wordAt = (w, col) => col < w.length ? w[w.length - 1 - col] : null;
       const isLeadingAt = (ch, col) => addends.some((w) => w.length - 1 === col && w[0] === ch) || (result.length - 1 === col && result[0] === ch);
@@ -1880,6 +2223,7 @@ const OPS_CORE = [
         const rch = wordAt(result, col);
         const unknown = [...new Set(cells.concat(rch ? [rch] : []).filter((ch) => !assign.has(ch)))];
         const rec = (idx) => {
+          if (++nodes > BUDGET_LIMITS.nodes) budgetNodes(nodes, "Cryptarithme 回溯");
           if (idx === unknown.length) {
             let sum = carry;
             for (const ch of cells) sum += assign.get(ch);
@@ -1916,12 +2260,13 @@ const OPS_CORE = [
       if (mode === "operator") {
         const m = src.match(/^(-?\d+)([?？])(-?\d+)=(-?\d+)$/);
         if (!m) err("格式：2?3=5（只能一个未知运算符）");
-        const a = Number(m[1]), b = Number(m[3]), c = Number(m[4]);
+        budgetChars(src.length, "算式");
+        const a = BigInt(m[1]), b = BigInt(m[3]), c = BigInt(m[4]);
         const hits = [];
         if (a + b === c) hits.push("+");
         if (a - b === c) hits.push("-");
         if (a * b === c) hits.push("×");
-        if (b !== 0 && a / b === c) hits.push("÷");
+        if (b !== 0n && a % b === 0n && a / b === c) hits.push("÷");
         if (!hits.length) return `${src} 无解（+ − × ÷ 均不成立）`;
         return `${src} 的运算符：${hits.join(" 或 ")}`;
       }
@@ -1929,7 +2274,12 @@ const OPS_CORE = [
         const idx = src.indexOf("?");
         if (idx < 0) err("等式需含一个 ?");
         if (src.indexOf("?", idx + 1) >= 0) err("只支持一个 ?");
-        for (let x = -1000; x <= 1000; x++) {
+        budgetChars(src.length, "算式");
+        const digitSlot = (idx > 0 && /\d/.test(src[idx - 1])) || (idx + 1 < src.length && /\d/.test(src[idx + 1]));
+        const radius = digitSlot ? 9 : Math.max(1000, Math.floor(BUDGET_LIMITS.steps / (80 * Math.max(8, src.length))));
+        const lo = digitSlot ? 0 : -radius, hi = digitSlot ? 9 : radius;
+        budgetSteps((hi - lo + 1) * Math.max(8, src.length) * 8, "缺失数搜索");
+        for (let x = lo; x <= hi; x++) {
           const expr = src.slice(0, idx) + x + src.slice(idx + 1);
           if (!expr.includes("=")) continue;
           const [l, r] = expr.split("=");
@@ -1938,7 +2288,7 @@ const OPS_CORE = [
             if (Math.abs(vl - vr) < 1e-9) return `${src} → ? = ${x}（${l} = ${r}）`;
           } catch { /* 继续枚举 */ }
         }
-        return `${src} 在 -1000..1000 内无解`;
+        return `${src} 在 ${lo}..${hi} 内无解`;
       }
       err(`未知模式 ${mode}`);
     }, [SEL("mode", "填空类型", "operator", ["operator", "number"]), P("eq", "算式", "2+?=5")]),
@@ -1960,8 +2310,13 @@ const OPS_CORE = [
         return `${x} = ${fmt(mant, 10)} × 10^${e}`;
       }
       if (mode === "powers10") {
-        const n = boundedInt(v, "指数", -300, 300);
-        return `10^${n} = ${n >= 0 ? (10n ** BigInt(n)).toString() : fmt(10 ** n, 20)}\nlog10(10^${n}) = ${n}`;
+        const nSrc = v.replace(/\s+/g, "");
+        if (!/^-?\d+$/.test(nSrc)) err("指数需为整数");
+        const nBig = BigInt(nSrc);
+        const k = absB(nBig);
+        if (k > BigInt(BUDGET_LIMITS.chars)) budgetChars(k, "10 的幂输出");
+        if (nBig >= 0n) return `10^${nBig} = ${(10n ** nBig).toString()}\nlog10(10^${nBig}) = ${nBig}`;
+        return `10^${nBig} = 1/10^${(-nBig).toString()}\nlog10(10^${nBig}) = ${nBig}`;
       }
       if (mode === "interval") {
         let m = v.match(/^([\[(])\s*(-?\d+(?:\.\d+)?)\s*[,;]\s*(-?\d+(?:\.\d+)?)\s*([\])])$/);
@@ -2019,22 +2374,28 @@ const OPS_CORE = [
       err(`未知模式 ${mode}`);
     }, [SEL("mode", "模式", "round", ["round", "scientific", "powers10", "interval", "encadrement", "sign", "parity", "digitrank", "set", "scale"]), P("value", "数值/区间/比例尺", "3.14159"), P("digits", "小数位", "3"), P("step", "步长", "1"), P("number", "数字串", "12345"), P("rank", "位序", "2"), P("distance", "图上距离 cm", "1")]),
 
-  runOp("d2-constants", CAT, "常数小数位（π/e/τ/φ）与检索", "Chudnovsky/级数/BigInt 生成 π、e、τ、φ 的十进制位（≤5000），支持在展开中检索数字串",
+  runOp("d2-constants", CAT, "常数小数位（π/e/τ/φ）与检索", "Machin/级数/BigInt 生成 π、e、τ、φ 的十进制位（按输出字符与大数步数预算），支持在展开中检索数字串",
     (t, p) => {
       const mode = String((p && p.mode) || "pi");
-      const digits = boundedInt((p && p.digits) || "50", "位数", 1, 5000);
+      const digits = parseSmall((p && p.digits) || "50", "位数");
+      if (digits < 1) err("位数需 ≥1");
+      budgetChars(digits + 32, "常数展开");
+      budgetBigSteps(digits * Math.max(64, Math.ceil(digits * Math.log2(10) / Math.log2(5))), "常数 BigInt 运算");
       const piDecimal = (n) => {
+        budgetChars(n + 64, "π 展开");
+        budgetBigSteps(n * Math.max(64, Math.ceil(n * Math.log2(10) / Math.log2(5))), "π Machin 级数");
         const guard = 20;
         const scale = 10n ** BigInt(n + guard);
         const atanInv = (q) => {
           const q2 = q * q;
+          const maxTerms = BigInt(Math.ceil((n + guard) * Math.LN10 / (2 * Math.log(Number(q)))) + 16);
           let pow = q, k = 0n, sum = 0n, sign = 1n;
           for (;;) {
             const term = scale / (pow * (2n * k + 1n));
             if (term === 0n) break;
             sum += sign * term;
             sign = -sign; pow *= q2; k++;
-            if (k > 20000n) err("π 级数未收敛");
+            if (k > maxTerms) err(`π 级数未在预算内收敛（${n} 位小数、分母 ${q}，已算 ${k} 项）`);
           }
           return sum;
         };
@@ -2044,8 +2405,10 @@ const OPS_CORE = [
       };
       const eDecimal = (n) => {
         const guard = 20, scale = 10n ** BigInt(n + guard);
+        const maxK = 4 * (n + guard) + 1000;
         let term = scale, sum = scale;
-        for (let k = 1; k < 100000; k++) { term /= BigInt(k); if (term === 0n) break; sum += term; }
+        for (let k = 1; k <= maxK; k++) { term /= BigInt(k); if (term === 0n) break; sum += term; }
+        if (term !== 0n) err(`e 级数未在预算内收敛（${n} 位小数，已算 ${maxK} 项）`);
         const s = sum.toString();
         return s[0] + "." + s.slice(1, n + 1);
       };
@@ -2058,10 +2421,12 @@ const OPS_CORE = [
       };
       if (mode === "search") {
         const q = String((p && p.query) || t || "").trim();
-        if (!/^\d+$/.test(q) || q.length > 20) err("检索串需为 1..20 位数字");
-        const hay = piDecimal(5000).replace(".", "");
+        if (!/^\d+$/.test(q) || !q.length) err("检索串需为数字串");
+        budgetChars(q.length, "检索串");
+        const hayLen = Math.max(digits, 5000);
+        const hay = piDecimal(hayLen).replace(".", "");
         const pos = hay.indexOf(q);
-        if (pos < 0) return `π 前 5000 位中未找到「${q}」`;
+        if (pos < 0) return `π 前 ${hayLen} 位中未找到「${q}」`;
         return `π 中「${q}」首次出现在小数点后第 ${pos} 位（0 起）\n上下文：${hay.slice(Math.max(0, pos - 10), pos + q.length + 10)}`;
       }
       let val, name;
@@ -2076,15 +2441,17 @@ const OPS_CORE = [
       return `${name} = ${val}\n（${digits} 位小数）`;
     }, [SEL("mode", "常数/检索", "pi", ["pi", "e", "tau", "phi", "search"]), P("digits", "小数位数", "50"), P("query", "检索数字串", "14159")]),
 
-  runOp("d2-solver24", CAT, "24 点 / Krypto / Mathador", "用 + − × ÷ 与括号把给定数字组合成目标值；递归配对，支持 1..6 个数字，输出表达式并校验",
+  runOp("d2-solver24", CAT, "24 点 / Krypto / Mathador", "用 + − × ÷ 与括号把给定数字组合成目标值；递归配对（节点预算），数字个数不限，输出表达式并校验",
     (t, p) => {
       const nums = numList((p && p.nums) || t, "数字").map((x) => Math.round(x));
-      if (nums.length < 1 || nums.length > 6) err("数字个数需 1..6");
+      if (nums.length < 1) err("至少需要 1 个数字");
       const target = Number((p && p.target) || 24);
       if (!Number.isFinite(target)) err("目标值非法");
       const items = nums.map((x) => ({ v: x, e: String(x) }));
       let found = null;
+      let nodes = 0;
       const rec = (arr) => {
+        if (++nodes > BUDGET_LIMITS.nodes) budgetNodes(nodes, "24 点表达式搜索");
         if (found) return;
         if (arr.length === 1) { if (Math.abs(arr[0].v - target) < 1e-9) found = arr[0].e; return; }
         for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) {
@@ -2115,23 +2482,31 @@ const OPS_CORE = [
         return `${n} ${isPrime(n) ? "是素数" : "不是素数"}${n > 2n ? `\n位长：${n.toString(2).length} bit` : ""}`;
       }
       if (mode === "factor") {
+        budgetChars(v.length, "n 的位数");
         const n = parseBig(v, "n");
-        if (n < 2n || n > 10n ** 30n) err("n 需在 2..10^30");
+        if (n < 2n) err("n 需 ≥2");
+        assertFactorBudget(n);
         const f = factorizeBounded(n);
         if (!f.complete) return `${n} 的部分分解：\n${[...f.factors].map(([p, e]) => e === 1 ? p.toString() : `${p}^${e}`).join(" × ")}\n（有因子未能完全分解）`;
         return `${n} = ${[...f.factors].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([p, e]) => e === 1 ? p.toString() : `${p}^${e}`).join(" × ")}`;
       }
       if (mode === "list" || mode === "count") {
-        const lim = boundedInt(v, "上限", 2, 1000000);
+        const limBig = parseBig(v, "上限");
+        if (limBig < 2n) err("上限需 ≥2");
+        budgetItems(limBig, "素数筛表长度");
+        const lim = requireSafeInt(Number(limBig), "上限");
         const ps = primeListUpTo(lim);
         if (mode === "count") return `π(${lim}) = ${ps.length}`;
-        if (ps.length > MAX_OUT) err("素数数量超过 20000，请降低上限或改用计数模式");
+        budgetItems(ps.length, "素数列表项数");
+        budgetChars(ps.reduce((s, p) => s + String(p).length + 2, 0) + 64, "素数列表");
         return `≤ ${lim} 的素数（${ps.length} 个）：\n${ps.join(", ")}`;
       }
       if (mode === "nth") {
-        const n = boundedInt(v, "n", 1, 1000000);
+        budgetChars(v.length, "n 的位数");
+        const n = requireSafeInt(Number(parseBig(v, "n")), "n");
         return `第 ${n} 个素数 = ${nthPrime(n)}`;
       }
+      budgetChars(v.length, "n 的位数");
       const n = parseBig(v, "n");
       if (mode === "next") return `大于 ${n} 的最小素数 = ${nextPrime(n)}`;
       if (mode === "prev") return `小于 ${n} 的最大素数 = ${prevPrime(n)}`;
@@ -2142,16 +2517,31 @@ const OPS_CORE = [
   runOp("d2-numbertheory", CAT, "数论函数：φ/μ/λ/τ/σ/ω/rad", "Euler φ、Möbius μ、Carmichael λ、因子个数 τ、因子和 σ、不同素因子数 ω、根号 rad、互素判定",
     (t, p) => {
       const mode = String((p && p.mode) || "phi");
-      const n = parseBig((p && p.n) || t, "n");
-      if (n < 1n || n > 10n ** 15n) err("n 需在 1..10^15");
+      const nSrc = String((p && p.n) || t || "").trim();
+      budgetChars(nSrc.length, "n 的位数");
+      const n = parseBig(nSrc, "n");
+      if (n < 1n) err("n 需为正整数");
+      assertFactorBudget(n);
       const f = factorizeBounded(n);
       if (!f.complete) err("n 无法完全分解");
       const fs = [...f.factors].sort((a, b) => (a[0] < b[0] ? -1 : 1));
-      if (mode === "phi") return `φ(${n}) = ${phiBig(n)}`;
-      if (mode === "mobius") return `μ(${n}) = ${mobiusBig(n)}`;
+      if (mode === "phi") {
+        let r = n;
+        for (const [p0] of fs) r = r / p0 * (p0 - 1n);
+        return `φ(${n}) = ${r}`;
+      }
+      if (mode === "mobius") {
+        let mu = 1n;
+        for (const [, e] of fs) if (e > 1) { mu = 0n; break; }
+        if (mu !== 0n && fs.length % 2) mu = -1n;
+        return `μ(${n}) = ${mu}`;
+      }
       if (mode === "tau") return `τ(${n}) = ${fs.reduce((s, [, e]) => s * BigInt(e + 1), 1n)}`;
       if (mode === "sigma") {
-        const k = boundedInt((p && p.k) || "1", "幂次 k", 0, 20);
+        const k = parseSmall((p && p.k) || "1", "幂次 k");
+        if (k < 0) err("幂次 k 需为非负整数");
+        budgetChars(k * bigDigits(n) + 64, "σ_k 结果");
+        budgetBigSteps(fs.length * Math.max(1, k) + Number(n.toString(2).length), "σ_k 计算");
         let s = 1n;
         for (const [p0, e] of fs) {
           let term = 1n, pw = 1n;
@@ -2185,20 +2575,29 @@ const OPS_CORE = [
       err(`未知模式 ${mode}`);
     }, [SEL("mode", "模式", "phi", ["phi", "mobius", "tau", "sigma", "omega", "rad", "lambda", "coprime", "aliquot"]), P("n", "n", "36"), P("k", "σ 的幂次 k", "1"), P("m", "互素判定的 m", "35")]),
 
-  runOp("d2-permutations", CAT, "排列/错排/带重复排列/秩", "nPr、全排列列表（≤9）、带重复序列（≤10000）、错排列表/计数、字典序秩与反秩（1 起）",
+  runOp("d2-permutations", CAT, "排列/错排/带重复排列/秩", "nPr、全排列/错排/带重复序列（按项与节点预算）、字典序秩与反秩（BigInt）",
     (t, p) => {
       const mode = String((p && p.mode) || "list");
       const items = String((p && p.items) || t || "").replace(/\s+/g, "");
+      budgetChars(items.length, "字符集");
       if (mode === "count") {
-        const n = boundedInt((p && p.n) || items.length || t, "n", 0, 100000);
-        const k = boundedInt((p && p.k) || String(n), "k", 0, n);
+        const n = requireSafeInt(parseSmall((p && p.n) || items.length || t, "n"), "n");
+        if (n < 0) err("n 需为非负整数");
+        const k = requireSafeInt(parseSmall((p && p.k) || String(n), "k"), "k");
+        if (k < 0 || k > n) err("k 需在 0..n");
+        budgetBigSteps(k, "排列计数");
+        budgetChars(k * Math.log10(Math.max(2, n)) + 8, "排列数结果");
         let r = 1n;
         for (let i = 0; i < k; i++) r *= BigInt(n - i);
         return `A(${n},${k}) = ${r}`;
       }
       if (mode === "arrangements" || mode === "arrangements-rep") {
-        const n = boundedInt((p && p.n) || items.length || t, "n", 1, 100);
-        const k = boundedInt((p && p.k) || "2", "k", 1, 20);
+        const n = requireSafeInt(parseSmall((p && p.n) || items.length || t, "n"), "n");
+        if (n < 1) err("n 需 ≥1");
+        const k = requireSafeInt(parseSmall((p && p.k) || "2", "k"), "k");
+        if (k < 1) err("k 需 ≥1");
+        budgetChars(k * Math.log10(Math.max(2, n)) + 8, "排列数结果");
+        budgetBigSteps(k, "排列计数");
         if (mode === "arrangements") {
           let r = 1n;
           for (let i = 0; i < k; i++) r *= BigInt(n - i);
@@ -2208,38 +2607,58 @@ const OPS_CORE = [
       }
       if (mode === "withrep") {
         const n = items.length;
-        const k = boundedInt((p && p.k) || "2", "长度 k", 1, 8);
-        const total = n ** k;
-        if (total > 10000) err(`带重复序列数 ${total} 超过 10000`);
+        const k = requireSafeInt(parseSmall((p && p.k) || "2", "长度 k"), "长度 k");
+        if (k < 1) err("长度 k 需 ≥1");
+        const total = BigInt(n) ** BigInt(k);
+        budgetItems(total, "带重复序列个数");
+        const cnt = requireSafeInt(Number(total), "带重复序列个数");
+        budgetSteps(cnt * k, "带重复序列生成");
+        budgetChars(cnt * (k + 1) + 64, "带重复序列输出");
         const out = [];
-        const rec = (s) => { if (s.length === k) { out.push(s); return; } for (const ch of items) rec(s + ch); };
-        rec("");
+        if (n > 0 && cnt > 0) {
+          const idx = new Array(k).fill(0);
+          for (let t = 0; t < cnt; t++) {
+            out.push(idx.map((i) => items[i]).join(""));
+            for (let pos = k - 1; pos >= 0; pos--) { if (++idx[pos] < n) break; idx[pos] = 0; }
+          }
+        }
         return `${n}^${k} = ${total} 个序列：\n${out.join(" ")}`;
       }
       if (mode === "rank" || mode === "unrank") {
-        const s = String((p && p.value) || t || "").replace(/\s+/g, "");
-        if (!s) err("需要字符序列");
-        if (new Set(s).size !== s.length) err("秩/反秩要求字符互异；重复元素请用 withrep 模式");
         if (mode === "rank") {
+          const s = String((p && p.value) || t || "").replace(/\s+/g, "");
+          if (!s) err("需要字符序列");
+          if (new Set(s).size !== s.length) err("排列秩要求字符互异；重复元素请用 withrep 模式");
+          budgetChars(s.length, "序列");
+          budgetSteps(s.length ** 2, "排列秩");
           const sorted = [...s].sort();
-          let rank = 1;
+          let rank = 1n;
           for (let i = 0; i < s.length; i++) {
             const smaller = sorted.filter((c) => c < s[i]).length;
-            let cnt = 1;
-            for (let j = 2; j <= s.length - i - 1; j++) cnt *= j;
-            rank += smaller * cnt;
+            let cnt = 1n;
+            for (let j = 2; j <= s.length - i - 1; j++) cnt *= BigInt(j);
+            rank += BigInt(smaller) * cnt;
             sorted.splice(sorted.indexOf(s[i]), 1);
           }
           return `排列 ${s} 的字典序秩 = ${rank}`;
         }
-        const rank = boundedInt((p && p.value) || t, "秩", 1, 362880);
+        budgetChars(items.length, "字符集");
+        if (!items) err("需要字符集");
+        if (new Set(items).size !== items.length) err("反秩要求字符集元素互异");
+        const rankStr = String((p && p.value) || t || "").trim();
+        if (!/^\d+$/.test(rankStr)) err("秩需为正整数");
+        const rank = BigInt(rankStr);
+        if (rank < 1n) err("秩需 ≥1");
         const sorted = [...items].sort();
-        if (!sorted.length) err("需要字符集");
-        if (rank > factorialN(sorted.length)) err("秩超过排列总数");
-        let r = rank - 1, out = "";
+        const n = sorted.length;
+        budgetItems(n, "反秩序列长度");
+        budgetBigSteps(n * n, "阶乘/反秩");
+        const factN = factorialN(n);
+        if (rank > factN) err(`秩超过排列总数 ${factN}`);
+        let r = rank - 1n, out = "";
         while (sorted.length) {
-          let f = factorialN(sorted.length - 1);
-          const idx = Math.floor(r / f);
+          const f = factorialN(sorted.length - 1);
+          const idx = Number(r / f);
           out += sorted.splice(idx, 1)[0];
           r %= f;
         }
@@ -2247,7 +2666,11 @@ const OPS_CORE = [
       }
       if (mode === "derangements") {
         const n = items.length;
-        if (n < 1 || n > 9) err("错排列举长度需 1..9");
+        if (n < 1) err("需要字符集");
+        const total = factorialN(n);
+        budgetNodes(total, "错排列举");
+        budgetItems(total, "错排数量");
+        budgetChars(Number(total) * (n + 1) + 64, "错排输出");
         const out = [];
         const perm = (arr, cur) => {
           if (!arr.length) { if (cur.every((c, i) => c !== items[i])) out.push(cur.join("")); return; }
@@ -2257,14 +2680,17 @@ const OPS_CORE = [
         return `${items} 的错排（${out.length} 个）：\n${out.join(" ")}`;
       }
       if (!items) err("需要字符集");
-      if (items.length > 9) err("全排列列举最多 9 个元素");
+      const n = items.length;
+      const total = factorialN(n);
+      budgetNodes(total, "全排列列举");
+      budgetItems(total, "全排列数量");
+      budgetChars(Number(total) * (n + 1) + 64, "全排列输出");
       const out = [];
       const perm = (arr, cur) => {
         if (!arr.length) { out.push(cur); return; }
         for (let i = 0; i < arr.length; i++) perm(arr.slice(0, i) + arr.slice(i + 1), cur + arr[i]);
       };
       perm(items, "");
-      if (out.length > MAX_OUT) err("排列数量超过上限");
       return `${items} 的全排列（${out.length} 个）：\n${out.join(" ")}`;
     }, [SEL("mode", "模式", "list", ["list", "count", "arrangements", "arrangements-rep", "withrep", "rank", "unrank", "derangements"]), P("items", "字符集/序列", "ABC"), P("n", "n", "5"), P("k", "k / 序列长度", "2"), P("value", "秩或序列", "2")]),
 
@@ -2272,33 +2698,43 @@ const OPS_CORE = [
     (t, p) => {
       const mode = String((p && p.mode) || "count");
       const items = String((p && p.items) || t || "").replace(/\s+/g, "");
+      budgetChars(items.length, "字符集");
       if (mode === "count") {
-        const n = boundedInt((p && p.n) || items.length || t, "n", 0, 100000);
-        const k = boundedInt((p && p.k) || "2", "k", 0, n);
+        const n = requireSafeInt(parseSmall((p && p.n) || items.length || t, "n"), "n");
+        if (n < 0) err("n 需为非负整数");
+        const k = requireSafeInt(parseSmall((p && p.k) || "2", "k"), "k");
+        if (k < 0 || k > n) err("k 需在 0..n");
+        budgetBigSteps(k, "组合计数");
+        budgetChars(k * Math.log10(Math.max(2, n)) + 8, "组合数结果");
         return `C(${n},${k}) = ${binom(n, k)}`;
       }
       if (mode === "rank" || mode === "unrank") {
-        const n = boundedInt((p && p.n) || items.length || t, "n", 1, 60);
-        const k = boundedInt((p && p.k) || "2", "k", 1, n);
+        const n = requireSafeInt(parseSmall((p && p.n) || items.length || t, "n"), "n");
+        if (n < 1) err("n 需 ≥1");
+        const k = requireSafeInt(parseSmall((p && p.k) || "2", "k"), "k");
+        if (k < 1 || k > n) err("k 需在 1..n");
+        budgetSteps(n * k, "组合秩/反秩");
         if (mode === "rank") {
           const raw = String((p && p.value) || t || "").trim();
           const parts = /[,\s]/.test(raw) ? raw.split(/[,\s]+/).filter(Boolean) : raw.split("");
           const sel = parts.map((c) => Number(c));
           if (sel.length !== k || sel.some((x) => !Number.isInteger(x) || x < 1 || x > n)) err(`需要 ${k} 个 1..${n} 的编号`);
-          let rank = 0, prev = 0;
+          let rank = 0n, prev = 0;
           for (let i = 0; i < k; i++) {
-            for (let x = prev + 1; x < sel[i]; x++) rank += Number(binom(n - x, k - i - 1));
+            for (let x = prev + 1; x < sel[i]; x++) rank += binom(n - x, k - i - 1);
             prev = sel[i];
           }
-          return `组合 {${sel.join(",")}} 的秩 = ${rank + 1}`;
+          return `组合 {${sel.join(",")}} 的秩 = ${rank + 1n}`;
         }
-        const want = boundedInt((p && p.value) || t, "秩", 1, 1000000);
-        let rank = want - 1;
+        const wantStr = String((p && p.value) || t || "").trim();
+        if (!/^\d+$/.test(wantStr)) err("秩需为正整数");
+        const want = BigInt(wantStr);
+        let rank = want - 1n;
         const out = [];
         let prev = 0;
         for (let i = 0; i < k; i++) {
           for (let x = prev + 1; x <= n; x++) {
-            const c = Number(binom(n - x, k - i - 1));
+            const c = binom(n - x, k - i - 1);
             if (rank < c) { out.push(x); prev = x; break; }
             rank -= c;
           }
@@ -2306,40 +2742,79 @@ const OPS_CORE = [
         return `第 ${want} 个组合 = {${out.join(",")}}`;
       }
       if (mode === "withrep") {
-        const n = items.length || boundedInt((p && p.n) || t, "n", 1, 30);
-        const k = boundedInt((p && p.k) || "2", "k", 1, 12);
-        const total = Number(binom(n + k - 1, k));
-        if (total > 10000) err("重复组合数超过 10000");
+        const n = items.length || requireSafeInt(parseSmall((p && p.n) || t, "n"), "n");
+        if (n < 1) err("n 需 ≥1");
+        const k = requireSafeInt(parseSmall((p && p.k) || "2", "k"), "k");
+        if (k < 1) err("k 需 ≥1");
+        const total = binom(n + k - 1, k);
+        budgetItems(total, "重复组合个数");
+        const cnt = requireSafeInt(Number(total), "重复组合个数");
+        budgetSteps(cnt * k, "重复组合生成");
+        budgetChars(cnt * (k + 1) + 64, "重复组合输出");
         const out = [];
-        const rec = (start, cur) => { if (cur.length === k) { out.push(cur.join("")); return; } for (let i = start; i < n; i++) rec(i, [...cur, items[i] || String(i + 1)]); };
-        rec(0, []);
+        const idx = new Array(k).fill(0);
+        for (let t = 0; t < cnt; t++) {
+          out.push(idx.map((i) => items[i] || String(i + 1)).join(""));
+          for (let pos = k - 1; pos >= 0; pos--) {
+            if (idx[pos] < n - 1) { const v = idx[pos] + 1; for (let j = pos; j < k; j++) idx[j] = v; break; }
+          }
+        }
         return `C(${n}+${k}-1,${k}) = ${total} 个重复组合：\n${out.join(" ")}`;
       }
       if (mode === "cartesian") {
         const a = String((p && p.a) || "AB").split("");
         const b = String((p && p.b) || "12").split("");
+        budgetItems(a.length * b.length, "笛卡尔积项数");
+        budgetChars(a.length * b.length * (Math.max(a.length, b.length) + 4) + 64, "笛卡尔积输出");
         const out = [];
         for (const x of a) for (const y of b) out.push(`(${x},${y})`);
         return `${a.length}×${b.length} = ${out.length} 个有序对：\n${out.join(" ")}`;
       }
       if (mode === "partitions") {
-        const n = boundedInt((p && p.n) || t, "n", 0, 100);
+        const n = requireSafeInt(parseSmall((p && p.n) || t, "n"), "n");
+        if (n < 0) err("n 需为非负整数");
+        const est = n < 1 ? 1 : Math.exp(Math.PI * Math.sqrt(2 * n / 3)) / (4 * n * Math.sqrt(3));
+        budgetItems(est * 1.1, "整数分拆数量");
+        budgetBigSteps(n * n, "整数分拆 DP");
+        const count = partitionCountBig(n);
+        budgetItems(count, "整数分拆数量");
+        budgetChars(Number(count) * (Math.ceil(Math.sqrt(n)) + 4) + 64, "整数分拆输出");
         const out = [];
+        let outChars = 0;
         const rec = (rem, max, cur) => {
-          if (out.length > 5000) err("分拆数量超过 5000");
-          if (rem === 0) { out.push(cur.join("+")); return; }
+          if (rem === 0) {
+            const text = cur.join("+");
+            out.push(text);
+            outChars += text.length + 1;
+            if (out.length > BUDGET_LIMITS.items) budgetItems(out.length, "整数分拆数量");
+            if (outChars > BUDGET_LIMITS.chars) budgetChars(outChars, "整数分拆输出");
+            return;
+          }
           for (let x = Math.min(rem, max); x >= 1; x--) rec(rem - x, x, [...cur, x]);
         };
         rec(n, n, []);
         return `${n} 的整数分拆（${out.length} 个）：\n${out.join("\n")}`;
       }
       if (!items) err("需要字符集");
-      const k = boundedInt((p && p.k) || "2", "k", 1, items.length);
-      const total = Number(binom(items.length, k));
-      if (total > 10000) err("组合数量超过 10000");
+      const k = requireSafeInt(parseSmall((p && p.k) || "2", "k"), "k");
+      if (k < 1 || k > items.length) err("k 需在 1..字符集长度");
+      const total = binom(items.length, k);
+      budgetItems(total, "组合个数");
+      const cnt = requireSafeInt(Number(total), "组合个数");
+      budgetSteps(cnt * k, "组合生成");
+      budgetChars(cnt * (k + 1) + 64, "组合输出");
       const out = [];
-      const rec = (start, cur) => { if (cur.length === k) { out.push(cur.join("")); return; } for (let i = start; i < items.length; i++) rec(i + 1, [...cur, items[i]]); };
-      rec(0, []);
+      if (cnt > 0) {
+        const idx = Array.from({ length: k }, (_, i) => i);
+        for (let t = 0; t < cnt; t++) {
+          out.push(idx.map((i) => items[i]).join(""));
+          let pos = k - 1;
+          while (pos >= 0 && idx[pos] === items.length - k + pos) pos--;
+          if (pos < 0) break;
+          idx[pos]++;
+          for (let j = pos + 1; j < k; j++) idx[j] = idx[j - 1] + 1;
+        }
+      }
       return `${items} 选 ${k}（${total} 个）：\n${out.join(" ")}`;
     }, [SEL("mode", "模式", "count", ["count", "list", "withrep", "rank", "unrank", "cartesian", "partitions"]), P("items", "字符集/编号", "ABCDE"), P("n", "n", "5"), P("k", "k", "2"), P("value", "秩", "2"), P("a", "笛卡尔积 A", "AB"), P("b", "笛卡尔积 B", "12")]),
 
@@ -2352,29 +2827,58 @@ const OPS_CORE = [
         return `P(A|B) = P(A∩B)/P(B) = ${fmt(pab, 10)} / ${fmt(pb, 10)} = ${fmt(pab / pb, 10)}`;
       }
       if (mode === "draw") {
-        const N = boundedInt((p && p.n) || "49", "总数 N", 1, 100000);
-        const K = boundedInt((p && p.k) || "6", "成功数 K", 0, N);
-        const n = boundedInt((p && p.draws) || "6", "抽取数 n", 0, N);
-        const k = boundedInt((p && p.hits) || "6", "命中数 k", 0, Math.min(n, K));
-        const prob = Number(binom(K, k) * binom(N - K, n - k)) / Number(binom(N, n));
-        return `超几何概率 P(X=${k}) = C(${K},${k})C(${N - K},${n - k})/C(${N},${n}) = ${fmt(prob, 12)}`;
+        const N = requireSafeInt(parseSmall((p && p.n) || "49", "总数 N"), "总数 N");
+        if (N < 1) err("总数 N 需 ≥1");
+        const K = requireSafeInt(parseSmall((p && p.k) || "6", "成功数 K"), "成功数 K");
+        if (K < 0 || K > N) err("成功数 K 需在 0..N");
+        const n = requireSafeInt(parseSmall((p && p.draws) || "6", "抽取数 n"), "抽取数 n");
+        if (n < 0 || n > N) err("抽取数 n 需在 0..N");
+        const k = requireSafeInt(parseSmall((p && p.hits) || "6", "命中数 k"), "命中数 k");
+        if (k < 0 || k > Math.min(n, K)) err("命中数 k 需在 0..min(n,K)");
+        const hp = hypergeometricPmf(N, K, n, k);
+        if (hp.impossible) return `超几何概率 P(X=${k}) = 0（命中数不在可行域 ${hp.kMin}..${hp.kMax}）`;
+        const shown = hp.underflow ? "< 1e-308（下溢）" : fmtProbability(hp.prob);
+        return `超几何概率 P(X=${k}) = C(${K},${k})C(${N - K},${n - k})/C(${N},${n}) = ${shown}`;
       }
       if (mode === "binomial") {
-        const n = boundedInt((p && p.n) || "10", "n", 0, 1000);
+        const n = requireSafeInt(parseSmall((p && p.n) || "10", "n"), "n");
+        if (n < 0) err("n 需为非负整数");
         const prob = Number((p && p.p) || "0.5");
         if (!(prob >= 0 && prob <= 1)) err("p 需在 0..1");
-        const k = boundedInt((p && p.k) || "5", "k", 0, n);
-        const pmf = (x) => Number(binom(n, x)) * prob ** x * (1 - prob) ** (n - x);
-        const lines = [`P(X=${k}) = ${fmt(pmf(k), 12)}`];
+        const k = requireSafeInt(parseSmall((p && p.k) || "5", "k"), "k");
+        if (k < 0 || k > n) err("k 需在 0..n");
+        const log10p = prob > 0 ? Math.log10(prob) : -Infinity;
+        const log10q = prob < 1 ? Math.log10(1 - prob) : -Infinity;
+        const pmf = (x) => {
+          if (prob === 0) return { prob: x === 0 ? 1 : 0, underflow: false };
+          if (prob === 1) return { prob: x === n ? 1 : 0, underflow: false };
+          const kk = Math.min(x, n - x);
+          assertBudget("bigSteps", (kk + 8) * 6, "二项概率稳定计算");
+          const lp = log10Choose(n, x) + x * log10p + (n - x) * log10q;
+          if (lp === -Infinity) return { prob: 0, underflow: false };
+          if (!Number.isFinite(lp)) err("二项概率在对数域未定义，请检查 n,p,k");
+          const v = 10 ** lp;
+          if (!Number.isFinite(v)) err("二项概率在对数域溢出，请检查 n,p,k");
+          return { prob: v, underflow: v === 0 };
+        };
+        const first = pmf(k);
+        const firstText = first.underflow ? "< 1e-308（下溢）" : fmtProbability(first.prob);
+        const lines = [`P(X=${k}) = ${firstText}`];
         const rows = [];
-        for (let x = 0; x <= n; x++) if (x <= 20) rows.push(`P(X=${x}) = ${fmt(pmf(x), 10)}`);
+        for (let x = 0; x <= Math.min(n, 20); x++) {
+          const pi = pmf(x);
+          rows.push(`P(X=${x}) = ${pi.underflow ? "< 1e-308（下溢）" : fmtProbability(pi.prob)}`);
+        }
         if (n > 20) lines.push(`期望 = ${fmt(n * prob, 10)}，方差 = ${fmt(n * prob * (1 - prob), 10)}`);
         else lines.push(...rows);
         return lines.join("\n");
       }
       if (mode === "birthday") {
-        const n = boundedInt((p && p.n) || "23", "人数 n", 1, 1000);
-        const days = boundedInt((p && p.days) || "365", "天数", 2, 100000);
+        const n = requireSafeInt(parseSmall((p && p.n) || "23", "人数 n"), "人数 n");
+        if (n < 1) err("人数 n 需 ≥1");
+        const days = requireSafeInt(parseSmall((p && p.days) || "365", "天数"), "天数");
+        if (days < 2) err("天数需 ≥2");
+        budgetSteps(n, "生日问题");
         let q = 1;
         for (let i = 0; i < n; i++) q *= (days - i) / days;
         return `${n} 人至少两人生日相同的概率 = ${fmt(1 - q, 10)}（${days} 天）`;
@@ -2382,6 +2886,7 @@ const OPS_CORE = [
       if (mode === "expectation") {
         const vals = String((p && p.values) || "1,2,3,4,5,6").split(/[\s,;]+/).filter(Boolean).map(Number);
         const probs = String((p && p.probs) || "0.1,0.1,0.1,0.1,0.1,0.5").split(/[\s,;]+/).filter(Boolean).map(Number);
+        budgetItems(Math.max(vals.length, probs.length), "期望值/概率列表");
         if (vals.length !== probs.length) err("值与概率数量需一致");
         if (probs.some((x) => x < 0) || Math.abs(probs.reduce((a, b) => a + b, 0) - 1) > 1e-9) err("概率需非负且和为 1");
         const ev = vals.reduce((s, x, i) => s + x * probs[i], 0);
@@ -2395,7 +2900,9 @@ const OPS_CORE = [
     (t, p) => {
       const mode = String((p && p.mode) || "roundrobin");
       const players = String((p && p.players) || t || "").split(/[\s,;]+/).filter(Boolean);
-      if (players.length < 2 || players.length > 64) err("选手数需 2..64");
+      if (players.length < 2) err("选手数需 ≥2");
+      budgetItems(players.length ** 2, "赛程场次");
+      budgetChars(players.length ** 2 * 12 + 128, "赛程输出");
       if (mode === "roundrobin") {
         const list = players.slice();
         if (list.length % 2) list.push("BYE");
@@ -2454,12 +2961,17 @@ const OPS_CORE = [
   runOp("d2-random", CAT, "随机数/抽签/不放回抽样", "可复现 LCG（给定 seed）或统一随机源；生成整数、抽签、唯一抽样；数量有界",
     (t, p) => {
       const mode = String((p && p.mode) || "numbers");
-      const count = boundedInt((p && p.count) || "6", "数量", 1, 10000);
-      const min = parseSmall((p && p.min) || "1", "最小值");
-      const max = parseSmall((p && p.max) || "49", "最大值");
+      const count = requireSafeInt(parseSmall((p && p.count) || "6", "数量"), "数量");
+      if (count < 1) err("数量需 ≥1");
+      budgetItems(count, "随机/抽签数量");
+      budgetChars(count * 16 + 64, "随机/抽签输出");
+      const min = requireSafeInt(parseSmall((p && p.min) || "1", "最小值"), "最小值");
+      const max = requireSafeInt(parseSmall((p && p.max) || "49", "最大值"), "最大值");
       if (max < min) err("最大值需 ≥ 最小值");
+      if (max - min + 1 > 0x80000000) err("取值区间超过统一随机源单次上限 2^31");
       const seedSrc = String((p && p.seed) || "").trim();
-      let state = seedSrc ? (Number(seedSrc) >>> 0) : null;
+      const seedState = seedSrc ? Number(parseBig(seedSrc, "随机种子") & 0xffffffffn) : null;
+      let state = seedState;
       const rnd = (n) => {
         if (state === null) return randInt(n);
         state = (Math.imul(1664525, state) + 1013904223) >>> 0;
@@ -2468,13 +2980,13 @@ const OPS_CORE = [
       if (mode === "numbers") {
         const out = [];
         for (let i = 0; i < count; i++) out.push(min + rnd(max - min + 1));
-        return `${count} 个 [${min},${max}] 随机整数：\n${out.join(", ")}${seedSrc ? `\n（seed=${seedSrc}，可复现）` : ""}`;
+        return `${count} 个 [${min},${max}] 随机整数：\n${out.join(", ")}${seedSrc ? `\n（seed=${seedState}，取低 32 位 uint32，可复现）` : ""}`;
       }
       const items = String((p && p.items) || "").split(/[\s,;]+/).filter(Boolean);
       if (!items.length) err("抽签需要候选项列表");
       if (mode === "pick") {
         const out = [];
-        for (let i = 0; i < Math.min(count, items.length * 1000); i++) out.push(items[rnd(items.length)]);
+        for (let i = 0; i < count; i++) out.push(items[rnd(items.length)]);
         return `${count} 次有放回抽签：\n${out.join(", ")}`;
       }
       if (mode === "draw") {
@@ -2499,10 +3011,18 @@ const OPS_CORE = [
       if (mode === "div") return matStr(matMul(m, matInverse(m2)));
       if (mode === "scalar") return matStr(matScale(m, scalar));
       if (mode === "power") {
-        const k = boundedInt((p && p.power) || "2", "幂次", 0, 30);
+        const k = requireSafeInt(parseSmall((p && p.power) || "2", "幂次"), "幂次");
+        if (k < 0) err("幂次需为非负整数");
         if (m.length !== m[0].length) err("矩阵幂需要方阵");
-        let r = Array.from({ length: m.length }, (_, i) => Array.from({ length: m.length }, (_, j) => R(i === j ? 1n : 0n)));
-        for (let i = 0; i < k; i++) r = matMul(r, m);
+        const n = m.length;
+        budgetBigSteps(k * n ** 3, "矩阵幂");
+        let r = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => R(i === j ? 1n : 0n)));
+        let base = m, e = k;
+        while (e > 0) {
+          if (e & 1) r = matMul(r, base);
+          e >>= 1;
+          if (e > 0) base = matMul(base, base);
+        }
         return matStr(r);
       }
       if (mode === "transpose") return matStr(m[0].map((_, j) => m.map((row) => row[j])));
@@ -2599,7 +3119,7 @@ const OPS_CORE = [
       const m = parseMatrix((p && p.m) || t);
       if (m.length !== m[0].length) err("需要方阵");
       const n = m.length;
-      if (n > 6) err("特征值数值求解上限 6×6");
+      budgetBigSteps(2 * n ** 4 + 500 * n * n, "特征多项式/特征值求解");
       const cp = matCharpoly(m);
       const roots = polyRootsNumeric(cp).map((z) => (typeof z === "number" ? { re: z, im: 0 } : z));
       const reals = roots.filter((z) => Math.abs(z.im) < 1e-8).map((z) => z.re);
@@ -2688,8 +3208,23 @@ const OPS_CORE = [
         return `gcd = ${polyStr(polyGcd(poly, p2))}`;
       }
       if (mode === "roots") {
+        const deg = polyDeg(poly);
+        if (deg === 2) {
+          const a = poly[2], b = poly[1], c = poly[0];
+          const { disc, sq } = quadraticExact(a, b, c);
+          const dSign = disc[0] > 0n ? 1 : disc[0] < 0n ? -1 : 0;
+          if (dSign < 0) return `判别式 ${rStr(disc)} < 0：无实根（复根请用 d2-quadratic）`;
+          if (dSign === 0) return `实根（重根，有理数精确）：\n${rStr(rDiv(rNeg(b), rMul(R(2n), a)))}`;
+          if (sq) {
+            const r1 = rDiv(rSub(rNeg(b), sq), rMul(R(2n), a));
+            const r2 = rDiv(rAdd(rNeg(b), sq), rMul(R(2n), a));
+            return `实根（有理数精确）：\n${rStr(r1)}\n${rStr(r2)}`;
+          }
+          const roots = polyRootsNumeric(poly);
+          return `实根（数值近似，判别式 ${rStr(disc)} 非完全平方）：\n${roots.map((x) => fmt(x, 10)).join("\n")}`;
+        }
         const roots = polyRootsNumeric(poly);
-        return roots.length ? `实根：\n${roots.map((x) => fmt(x, 10)).join("\n")}` : "在数值搜索中未找到实根（可能全为复根）";
+        return roots.length ? `实根（数值近似）：\n${roots.map((x) => fmt(x, 10)).join("\n")}` : "在数值搜索中未找到实根（可能全为复根）";
       }
       if (mode === "factor") return `因式分解：${factorPolynomial(poly)}`;
       if (mode === "discriminant") {
@@ -2748,7 +3283,7 @@ const OPS_CORE = [
         left = m[1]; op = m[2]; right = m[3];
         const poly = polySub(parsePolyExpr(left), parsePolyExpr(right));
         const deg = polyDeg(poly);
-        if (deg > 4) err("不等式数值求解上限 4 次");
+        budgetBigSteps(deg * deg * 8 + 256, "不等式数值求解");
         const roots = deg === 0 ? [] : polyRootsNumeric(poly).filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
         const cuts = [-Infinity, ...roots, Infinity];
         const segs = [];
@@ -2782,16 +3317,28 @@ const OPS_CORE = [
       if (deg === 0) return rIsZero(poly[0]) ? "任意 x 都是解（恒等式）" : "无解";
       if (deg === 1) return `一次方程解：x = ${rStr(rDiv(rNeg(poly[0]), poly[1]))}`;
       if (deg === 2) {
-        const a = rNum(poly[2]), b = rNum(poly[1]), c = rNum(poly[0]);
-        const d = b * b - 4 * a * c;
-        if (d < 0) {
-          const s = Math.sqrt(-d);
-          return `判别式 ${fmt(d, 10)} < 0\n复根：x = ${fmt(-b / (2 * a), 10)} ± ${fmt(s / (2 * Math.abs(a)), 10)}i`;
+        const a = poly[2], b = poly[1], c = poly[0];
+        const { disc, sq } = quadraticExact(a, b, c);
+        const dSign = disc[0] > 0n ? 1 : disc[0] < 0n ? -1 : 0;
+        const hRat = rDiv(rNeg(b), rMul(R(2n), a));
+        if (dSign < 0) {
+          const dNum = rNum(disc);
+          if (!Number.isFinite(dNum)) return `判别式 ${rStr(disc)} < 0\n复根实部 ${rStr(hRat)}，虚部超出 double 数量级未计算`;
+          const s = Math.sqrt(-dNum);
+          return `判别式 ${rStr(disc)} < 0\n复根：x = ${fmt(rNum(hRat), 10)} ± ${fmt(s / (2 * Math.abs(rNum(a))), 10)}i`;
         }
-        const s = Math.sqrt(d);
-        return `判别式 ${fmt(d, 10)}\n实根：x₁ = ${fmt((-b - s) / (2 * a), 12)}，x₂ = ${fmt((-b + s) / (2 * a), 12)}`;
+        if (dSign === 0) return `判别式 0\n重根：x = ${rStr(hRat)}（有理数精确）`;
+        if (sq) {
+          const r1 = rDiv(rSub(rNeg(b), sq), rMul(R(2n), a));
+          const r2 = rDiv(rAdd(rNeg(b), sq), rMul(R(2n), a));
+          return `判别式 ${rStr(disc)}\n实根：x₁ = ${rStr(r1)}，x₂ = ${rStr(r2)}（有理数精确）`;
+        }
+        const dNum = rNum(disc);
+        if (!Number.isFinite(dNum)) return `判别式 ${rStr(disc)}\n实根超出 double 数量级未计算（判别式非完全平方）`;
+        const s = Math.sqrt(dNum), an = rNum(a), bn = rNum(b);
+        return `判别式 ${rStr(disc)}\n实根：x₁ = ${fmt((-bn - s) / (2 * an), 12)}，x₂ = ${fmt((-bn + s) / (2 * an), 12)}（近似）`;
       }
-      if (deg > 8) err("高次方程数值求解上限 8 次");
+      budgetBigSteps(deg * deg * 8 + 256, "高次方程数值求根");
       const roots = polyRootsNumeric(poly);
       return `次数 ${deg}\n数值根：\n${roots.map((x) => fmt(x, 10)).join("\n") || "未找到实根"}`;
     }, [SEL("mode", "模式", "equation", ["equation", "inequality", "equality", "trig"]), P("eq", "方程/不等式", "x^2-3x+2=0")]),
@@ -2816,8 +3363,10 @@ const OPS_CORE = [
         return `对偶式：${s}`;
       }
       const n = pb.vars.length;
-      if (n > 8) err("真值表变量最多 8 个");
-      const rows = 1 << n;
+      const rows = 2 ** n;
+      budgetItems(rows, "真值表行数");
+      budgetSteps(rows * Math.max(1, n), "真值表逐行求值");
+      budgetChars(rows * (n + 8) + 128, "真值表输出");
       const truths = [];
       for (let m = 0; m < rows; m++) {
         const env = {};
@@ -2832,7 +3381,7 @@ const OPS_CORE = [
       }
       if (mode === "simplify") return `化简：${quineMcCluskey(truths, n)}\n（最小项：${truths.join(", ") || "无"}）`;
       if (mode === "karnaugh") {
-        if (n > 4) err("Karnaugh 表最多 4 变量");
+        budgetItems(rows, "Karnaugh 格数");
         const gray = (x) => x ^ (x >> 1);
         const rowVars = n <= 2 ? pb.vars : pb.vars.slice(0, Math.ceil(n / 2));
         const colVars = n <= 2 ? [] : pb.vars.slice(Math.ceil(n / 2));
@@ -2880,11 +3429,15 @@ const OPS_CORE = [
       }
       const a = Number((p && p.a) || "0"), b = Number((p && p.b) || "1");
       if (!Number.isFinite(a) || !Number.isFinite(b)) err("积分限非法");
-      if (mode === "single") return `∫[${a},${b}] ${expr} dx ≈ ${fmt(simpson(expr, a, b, 1000), 10)}`;
+      if (mode === "single") {
+        budgetSteps(1001 * Math.max(8, expr.length) * 2, "一元积分");
+        return `∫[${a},${b}] ${expr} dx ≈ ${fmt(simpson(expr, a, b, 1000), 10)}`;
+      }
       if (mode === "double") {
         const c = Number((p && p.c) || "0"), d = Number((p && p.d) || "1");
         const f = (x, y) => evalExpr(expr, { x, y });
         const n = 80, hx = (b - a) / n, hy = (d - c) / n;
+        budgetSteps(81 * 81 * Math.max(8, expr.length) * 2, "二重积分");
         let s = 0;
         for (let i = 0; i <= n; i++) for (let j = 0; j <= n; j++) {
           const w = (i === 0 || i === n ? 1 : i % 2 ? 4 : 2) * (j === 0 || j === n ? 1 : j % 2 ? 4 : 2);
@@ -2896,6 +3449,7 @@ const OPS_CORE = [
         const c = Number((p && p.c) || "0"), d = Number((p && p.d) || "1");
         const e = Number((p && p.e) || "0"), f2 = Number((p && p.f) || "1");
         const n = 30, hx = (b - a) / n, hy = (d - c) / n, hz = (f2 - e) / n;
+        budgetSteps(31 ** 3 * Math.max(8, expr.length) * 2, "三重积分");
         let s = 0;
         for (let i = 0; i <= n; i++) for (let j = 0; j <= n; j++) for (let k = 0; k <= n; k++) {
           const w = (i === 0 || i === n ? 1 : i % 2 ? 4 : 2) * (j === 0 || j === n ? 1 : j % 2 ? 4 : 2) * (k === 0 || k === n ? 1 : k % 2 ? 4 : 2);
@@ -2925,7 +3479,11 @@ const OPS_CORE = [
       }
       if (mode === "table") {
         const step = Number((p && p.step) || "1");
-        if (!(step > 0) || (b - a) / step > 500) err("步长非法或表行数超过 500");
+        if (!(step > 0)) err("步长需为正数");
+        const rowCount = Math.floor((b - a) / step) + 1;
+        budgetItems(rowCount, "函数表行数");
+        budgetChars(rowCount * (String(a).length + 28) + 64, "函数表输出");
+        budgetSteps(rowCount * Math.max(8, expr.length) * 2, "函数表求值");
         const rows = [];
         for (let x = a; x <= b + 1e-12; x += step) rows.push(`f(${fmt(x, 8)}) = ${fmt(evalF(expr, x), 8)}`);
         return `${expr} 在 [${a},${b}] 的数值表：\n${rows.join("\n")}`;
@@ -2945,6 +3503,7 @@ const OPS_CORE = [
         return `${isMax ? "极大" : "极小"}值点 x ≈ ${fmt(xm, 10)}\nf(x) ≈ ${fmt(evalF(expr, xm), 10)}\n（区间 [${a},${b}] 内数值搜索）`;
       }
       if (mode === "monotonic" || mode === "increasing" || mode === "decreasing") {
+        budgetSteps(2001 * Math.max(8, expr.length) * 6, "单调区间扫描");
         const segs = [];
         let prev = null, start = null;
         for (let i = 0; i <= 2000; i++) {
@@ -2976,6 +3535,7 @@ const OPS_CORE = [
       if (mode === "asymptote") {
         const ly = evalF(expr, 1e7), ry = evalF(expr, -1e7);
         const lines = [`x→+∞：y ≈ ${fmt(ly, 8)}`, `x→−∞：y ≈ ${fmt(ry, 8)}`];
+        budgetSteps(4001 * Math.max(8, expr.length) * 2, "渐近线扫描");
         const poles = [];
         for (let i = 1; i < 4000; i++) {
           const x = a + (b - a) * i / 4000;
@@ -2994,7 +3554,10 @@ const OPS_CORE = [
         const roots = rootsScan(`(${expr})-(${expr2})`, a, b, 4000);
         return roots.length ? `交点横坐标（[${a},${b}]）：\n${roots.map((x) => `x=${fmt(x, 8)}, y=${fmt(evalF(expr, x), 8)}`).join("\n")}` : "在区间内未找到交点";
       }
-      if (mode === "average") return `f 在 [${a},${b}] 上的平均值 ≈ ${fmt(simpson(expr, a, b, 1000) / (b - a), 10)}`;
+      if (mode === "average") {
+        budgetSteps(1001 * Math.max(8, expr.length) * 2, "函数平均值积分");
+        return `f 在 [${a},${b}] 上的平均值 ≈ ${fmt(simpson(expr, a, b, 1000) / (b - a), 10)}`;
+      }
       if (mode === "inverse") {
         const rows = [];
         for (let i = 0; i <= 20; i++) {
@@ -3004,6 +3567,7 @@ const OPS_CORE = [
         return `函数值表（反函数需按 y 查 x）：\n${rows.join("\n")}`;
       }
       if (mode === "domain" || mode === "domain-deriv") {
+        budgetSteps(2001 * Math.max(8, expr.length) * 2, "定义域扫描");
         const bad = [];
         for (let i = 0; i <= 2000; i++) {
           const x = a + (b - a) * i / 2000;
@@ -3013,6 +3577,7 @@ const OPS_CORE = [
         return bad.length ? `在 [${a},${b}] 检测到无定义点：${bad.slice(0, 20).map((x) => fmt(x, 5)).join(", ")}${bad.length > 20 ? "…" : ""}` : `在 [${a},${b}] 采样中未发现无定义点（不构成严格证明）`;
       }
       if (mode === "period") {
+        budgetSteps(2020 * 5 * Math.max(8, expr.length) * 2, "周期搜索");
         const candidates = [];
         for (let k = 1; k <= 10; k++) { candidates.push((2 * Math.PI) / k, Math.PI / k); }
         for (let k = 1; k <= 2000; k++) candidates.push(k / 200);
@@ -3027,11 +3592,15 @@ const OPS_CORE = [
       err(`未知模式 ${mode}`);
     }, [SEL("mode", "模式", "eval", ["eval", "image", "table", "roots", "antecedents", "derivative", "derivative2", "derivative3", "extremum", "maximum", "minimum", "critical", "stationary", "monotonic", "parity", "limit", "asymptote", "tangent", "intersection", "average", "inverse", "domain", "domain-deriv", "period"]), P("expr", "f(x)", "x^2-4"), P("x", "x", "3"), P("a", "区间左端 a", "-10"), P("b", "区间右端 b", "10"), P("y", "目标 y", "0"), P("step", "表格步长", "1"), P("expr2", "g(x)", "0"), P("at", "极限点（inf 表示无穷）", "0")]),
 
-  runOp("d2-interpolation", CAT, "多项式插值（Lagrange/Newton/Neville）", "给定点列 (x,y)：Lagrange/Newton/Neville 求值，输出插值多项式系数；点数 ≤ 30",
+  runOp("d2-interpolation", CAT, "多项式插值（Lagrange/Newton/Neville）", "给定点列 (x,y)：Lagrange/Newton/Neville 求值，输出插值多项式系数（按元素/大数步数预算）",
     (t, p) => {
       const mode = String((p && p.mode) || "lagrange");
       const pts = parsePointList((p && p.points) || t);
-      if (pts.length < 2 || pts.length > 30) err("点数量需 2..30");
+      if (pts.length < 2) err("点数量需 ≥2");
+      if (new Set(pts.map((q) => q[0])).size !== pts.length) err("插值点 x 坐标不能重复");
+      budgetItems(pts.length, "插值点");
+      budgetBigSteps(pts.length ** 3 + 64, "插值计算");
+      budgetChars(pts.length * 32 + 128, "插值输出");
       const x = Number((p && p.x) || "0");
       const lagrange = (xx) => {
         let s = 0;
@@ -3069,7 +3638,7 @@ const OPS_CORE = [
       return `插值多项式：${polyStrN(poly)}\nP(${x}) = ${fmt(polyEvalNum(poly, x), 10)}`;
     }, [SEL("mode", "模式", "lagrange", ["lagrange", "newton", "neville", "poly"]), P("points", "点列 x,y;x,y", "0,1;1,2;2,5"), P("x", "求值点 x", "3")]),
 
-  runOp("d2-line", CAT, "直线：斜率/方程/截距/垂直/交点/切线", "两点斜率与直线方程、x/y 截距、过点垂线、两线交点、曲线切线、系数方向", 
+  runOp("d2-line", CAT, "直线：斜率/方程/截距/垂直/交点/切线", "两点斜率与直线方程、x/y 截距、过点垂线、两线交点、曲线切线、系数方向",
     (t, p) => {
       const mode = String((p && p.mode) || "slope");
       const x1 = Number((p && p.x1) || "-1"), y1 = Number((p && p.y1) || "-1"), x2 = Number((p && p.x2) || "1"), y2 = Number((p && p.y2) || "1");
@@ -3114,22 +3683,53 @@ const OPS_CORE = [
       err(`未知模式 ${mode}`);
     }, [SEL("mode", "模式", "slope", ["slope", "coefficient", "equation", "intercepts", "abscissa", "ordinate", "perpendicular", "intersection", "tangent"]), P("x1", "x₁", "-1"), P("y1", "y₁", "-1"), P("x2", "x₂", "1"), P("y2", "y₂", "1"), P("px", "过点 P 的 x", "0"), P("py", "过点 P 的 y", "0"), P("x3", "第二线 x₃", "0"), P("y3", "第二线 y₃", "0"), P("x4", "第二线 x₄", "1"), P("y4", "第二线 y₄", "1"), P("expr", "曲线 f(x)", "x^2"), P("x", "切点 x", "1")]),
 
-  runOp("d2-root", CAT, "平方根/立方根/n 次根", "实数平方根、立方根、n 次根；整数完全根精确输出，否则 12 位近似；负数奇次根可用",
+  runOp("d2-root", CAT, "平方根/立方根/n 次根", "实数平方根、立方根、n 次根；整数完全根用 BigInt 精确输出（不受 2^53 限制），否则给出近似；负数奇次根可用",
     (t, p) => {
       const mode = String((p && p.mode) || "sqrt");
-      const x = Number((p && p.value) || t || 0);
+      const k = mode === "sqrt" ? 2 : mode === "cbrt" ? 3 : boundedInt((p && p.n) || "3", "根指数", 1, 64);
+      const raw = String((p && p.value) || t || "").trim();
+      if (/^-?\d+$/.test(raw)) {
+        budgetChars(raw.length, "被开方数");
+        const rawDigits = raw.replace(/^-/, "").length;
+        const bits = Math.ceil(rawDigits * Math.log2(10));
+        const rootBits = Math.max(1, Math.ceil(bits / k));
+        budgetBigSteps(rawDigits * rootBits, "被开方数 n 次根");
+        const n = big(raw);
+        if (n < 0n && k % 2 === 0) err("负数不能取偶次实根");
+        const abs = absB(n);
+        const root = irootB(abs, k);
+        const exact = root ** BigInt(k) === abs;
+        const sign = n < 0n ? "-" : "";
+        if (exact) {
+          if (mode === "sqrt") return `√${n} = ${sign}${root}`;
+          if (mode === "cbrt") return `∛${n} = ${sign}${root}`;
+          return `${k} 次根 ${n} = ${sign}${root}`;
+        }
+        const approx = (() => {
+          const s = abs.toString();
+          const lead = Number(s.slice(0, 15));
+          const log10 = Math.log10(lead) + (s.length - Math.min(15, s.length));
+          const lr = log10 / k;
+          const e = Math.floor(lr);
+          const m = 10 ** (lr - e);
+          return `${sign}${m.toFixed(12)}e${e}`;
+        })();
+        if (mode === "sqrt") return `√${n} ≈ ${approx}（非完全平方数，精确根为无理数）`;
+        if (mode === "cbrt") return `∛${n} ≈ ${approx}（非完全立方数，精确根为无理数）`;
+        return `${k} 次根 ${n} ≈ ${approx}（非完全 k 次方，精确根为无理数）`;
+      }
+      const x = Number(raw);
       if (!Number.isFinite(x)) err("数值非法");
       if (mode === "sqrt") {
         if (x < 0) err("实数平方根要求非负数");
         return `√${x} = ${fmt(Math.sqrt(x), 12)}`;
       }
       if (mode === "cbrt") return `∛${x} = ${fmt(Math.cbrt(x), 12)}`;
-      const k = boundedInt((p && p.n) || "3", "根指数", 1, 64);
       if (x < 0 && k % 2 === 0) err("负数不能取偶次实根");
       return `${k} 次根 ${x} = ${fmt(Math.sign(x) * Math.abs(x) ** (1 / k), 12)}`;
-    }, [SEL("mode", "模式", "sqrt", ["sqrt", "cbrt", "nth"]), P("value", "被开方数", "2"), P("n", "根指数 n", "3")]),
+    }, [SEL("mode", "模式", "sqrt", ["sqrt", "cbrt", "nth"]), P("value", "被开方数", "2"), P("n", "根指数 n", "3")], { updatedIn: "v0.1.13" }),
 
-  runOp("d2-angle", CAT, "角度单位换算", "度/弧度/百分度/转数互换；输出 12 位", 
+  runOp("d2-angle", CAT, "角度单位换算", "度/弧度/百分度/转数互换；输出 12 位",
     (t, p) => {
       const mode = String((p && p.mode) || "deg");
       const v = Number((p && p.value) || t || 0);
@@ -3182,19 +3782,26 @@ const OPS_CORE = [
 
   runOp("d2-pick", CAT, "Pick 定理（格点多边形面积）", "顶点为整数坐标的简单多边形：鞋带面积 A、边界格点数 B、内部格点数 I = A − B/2 + 1",
     (t, p) => {
-      const pts = parsePointList((p && p.points) || t);
-      if (pts.length < 3) err("至少 3 个顶点");
-      if (pts.some(([x, y]) => !Number.isInteger(x) || !Number.isInteger(y))) err("Pick 定理要求整数坐标");
-      let area2 = 0, boundary = 0;
+      const rawPts = String((p && p.points) || t).replace(/\r/g, "").split(/\n|;/).map((x) => x.trim()).filter(Boolean);
+      if (rawPts.length < 3) err("至少 3 个顶点");
+      budgetItems(rawPts.length, "多边形顶点");
+      budgetChars(rawPts.reduce((s, x) => s + x.length + 1, 0), "顶点坐标");
+      const pts = rawPts.map((line) => {
+        const m = line.match(/^\(?\s*(-?\d+)\s*[, ]\s*(-?\d+)\s*\)?$/);
+        if (!m) err(`Pick 定理要求整数坐标：${line}`);
+        return [BigInt(m[1]), BigInt(m[2])];
+      });
+      let area2 = 0n, boundary = 0n;
       for (let i = 0; i < pts.length; i++) {
         const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % pts.length];
         area2 += x1 * y2 - x2 * y1;
-        boundary += Math.abs(gcdNum(Math.abs(x2 - x1), Math.abs(y2 - y1)));
+        boundary += gcdB(absB(x2 - x1), absB(y2 - y1));
       }
-      const A = Math.abs(area2) / 2, B = boundary;
-      if (Math.abs(A - Math.round(A)) > 1e-9) err("鞋带面积非整数，顶点顺序可能自交");
-      const I = A - B / 2 + 1;
-      return `面积 A = ${A}\n边界格点 B = ${B}\n内部格点 I = ${I}\n校验 A = I + B/2 − 1 = ${I + B / 2 - 1}`;
+      const A2 = absB(area2);
+      if (A2 % 2n !== 0n) err("鞋带面积非整数，顶点顺序可能自交");
+      const A = A2 / 2n, B = boundary;
+      const I = A - B / 2n + 1n;
+      return `面积 A = ${A}\n边界格点 B = ${B}\n内部格点 I = ${I}\n校验 A = I + B/2 − 1 = ${I + B / 2n - 1n}`;
     }, [P("points", "顶点 x,y;...", "0,0;0,2;2,2;2,0")]),
 
   runOp("d2-coords", CAT, "坐标变换 2D/3D", "直角↔极坐标、直角↔柱坐标、直角↔球坐标；角度输出度与弧度",
@@ -3301,7 +3908,8 @@ const OPS_CORE = [
         return `变化率 = ${fmt(100 * (newV - oldV) / Math.abs(oldV), 10)}%`;
       }
       if (mode === "confidence") {
-        const ph = Number((p && p.p) || "0.5"), n = boundedInt((p && p.n) || "100", "样本量", 1, 1000000), level = Number((p && p.level) || "0.95");
+        const ph = Number((p && p.p) || "0.5"), n = requireSafeInt(parseSmall((p && p.n) || "100", "样本量"), "样本量"), level = Number((p && p.level) || "0.95");
+        if (n < 1) err("样本量需 ≥1");
         const z = level >= 0.99 ? 2.575829 : level >= 0.95 ? 1.959964 : level >= 0.9 ? 1.644854 : 1.281552;
         const se = Math.sqrt(ph * (1 - ph) / n);
         const wl = ph - z * se, wh = ph + z * se;
@@ -3309,7 +3917,8 @@ const OPS_CORE = [
         return `样本比例 = ${fmt(ph, 8)}，n = ${n}，置信水平 ${level}\nWald 区间：[${fmt(wl, 8)}, ${fmt(wh, 8)}]\nWilson 区间：[${fmt(center - half, 8)}, ${fmt(center + half, 8)}]\n误差边际 ≈ ${fmt(z * se, 8)}`;
       }
       if (mode === "margin") {
-        const ph = Number((p && p.p) || "0.5"), n = boundedInt((p && p.n) || "100", "样本量", 1, 1000000), level = Number((p && p.level) || "0.95");
+        const ph = Number((p && p.p) || "0.5"), n = requireSafeInt(parseSmall((p && p.n) || "100", "样本量"), "样本量"), level = Number((p && p.level) || "0.95");
+        if (n < 1) err("样本量需 ≥1");
         const z = level >= 0.99 ? 2.575829 : level >= 0.95 ? 1.959964 : 1.644854;
         return `误差边际 = ${fmt(z * Math.sqrt(ph * (1 - ph) / n), 10)}`;
       }
@@ -3480,41 +4089,62 @@ const OPS_CORE = [
       const mode = String((p && p.mode) || "fibonacci");
       const v = String((p && p.value) || t || "").trim();
       if (mode === "fibonacci" || mode === "lucas") {
-        const n = boundedInt(v, "n", 0, 10000);
-        let a = mode === "fibonacci" ? 0n : 2n, b = 1n;
-        if (n === 0) return `${mode === "fibonacci" ? "F" : "L"}(0) = ${a}`;
-        for (let i = 1; i < n; i++) { const c = a + b; a = b; b = c; }
-        return `${mode === "fibonacci" ? "F" : "L"}(${n}) = ${b}`;
+        const n = requireSafeInt(parseSmall(v, "n"), "n");
+        if (n < 0) err("n 需为非负整数");
+        const digits = Math.ceil(n * 0.2089876) + 2;
+        budgetChars(digits + 32, "Fibonacci/Lucas 结果");
+        budgetBigSteps(Math.max(64, Math.ceil((digits / 9) ** 2) * 8), "Fibonacci fast doubling");
+        const [fn, fn1] = fibPairBig(n);
+        const val = mode === "fibonacci" ? fn : 2n * fn1 - fn;
+        return `${mode === "fibonacci" ? "F" : "L"}(${n}) = ${val}`;
       }
       if (mode === "harmonic") {
-        const n = boundedInt(v, "n", 1, 2000);
+        const n = requireSafeInt(parseSmall(v, "n"), "n");
+        if (n < 1) err("n 需 ≥1");
+        const digits = Math.ceil(n * 0.4343) + 2;
+        budgetChars(digits * 2 + 64, "调和数分数");
+        budgetBigSteps(n * Math.max(1, (digits / 9) ** 2) / 2 + n, "调和数精确分数");
         let h = RZERO;
         for (let k = 1n; k <= BigInt(n); k++) h = rAdd(h, R(1n, k));
-        return `H_${n} = ${rStr(h)}\n十进制 ≈ ${fmt(rNum(h), 12)}`;
+        const scale = 10n ** 18n;
+        const dec = Number((h[0] * scale) / h[1]) / 1e18;
+        return `H_${n} = ${rStr(h)}\n十进制 ≈ ${fmt(dec, 12)}`;
       }
       if (mode === "cf") {
+        budgetChars(v.length, "分数输入");
         const [num, den] = parseFractionInput(v);
+        const bits = Math.max(bigDigits(num), bigDigits(den));
+        budgetBigSteps(Math.max(64, bits * bits), "连分数展开");
         let a = num, b = den;
         const out = [];
         while (b !== 0n) { const q = a / b; out.push(q.toString()); [a, b] = [b, a - q * b]; }
         return `连分数 = [${out.join("; ")}]`;
       }
       if (mode === "sqrtcf") {
-        const D = boundedInt(v, "D", 2, 1000000);
-        const a0 = Math.floor(Math.sqrt(D));
+        budgetChars(v.length, "D 的位数");
+        const D = parseBig(v, "D");
+        if (D < 2n) err("D 需 ≥2");
+        const a0 = isqrtB(D);
         if (a0 * a0 === D) return `√${D} = ${a0}（完全平方）`;
-        let m = 0, d = 1, a = a0;
+        budgetItems(2n * a0 + 1n, "连分数周期长度");
+        budgetSteps(2n * a0 + 2n, "连分数周期求解");
+        let m = 0n, d = 1n, a = a0;
         const period = [];
-        for (let i = 0; i < 10000; i++) {
-          m = d * a - m; d = (D - m * m) / d; a = Math.floor((a0 + m) / d);
+        const guard = 2n * a0 + 2n;
+        let i = 0n;
+        for (; i < guard; i++) {
+          m = d * a - m; d = (D - m * m) / d; a = (a0 + m) / d;
           period.push(a);
-          if (a === 2 * a0) break;
+          if (a === 2n * a0) break;
         }
+        if (a !== 2n * a0) err("连分数周期未在 2√D 步内收敛（输入可能非正整数）");
         return `√${D} = [${a0}; (${period.join(", ")})]\n周期长度 = ${period.length}`;
       }
       if (mode === "evalcf") {
         const parts = v.split(/[;,\s]+/).filter(Boolean).map(Number);
         if (!parts.length || parts.some((x) => !Number.isFinite(x))) err("连分数格式：4;2,6,7");
+        budgetItems(parts.length, "连分数项数");
+        if (parts[parts.length - 1] === 0) err("连分数末项不能为 0（会除以零）");
         let x = parts[parts.length - 1];
         for (let i = parts.length - 2; i >= 0; i--) x = parts[i] + 1 / x;
         return `连分数 [${parts.join("; ")}] = ${fmt(x, 12)}`;
@@ -3522,7 +4152,7 @@ const OPS_CORE = [
       err(`未知模式 ${mode}`);
     }, [SEL("mode", "模式", "fibonacci", ["fibonacci", "lucas", "harmonic", "cf", "sqrtcf", "evalcf"]), P("value", "n / a/b / D / 连分数", "10")]),
 
-  runOp("d2-graph", CAT, "网格最短路/数字金字塔路径", "网格 BFS 四邻域最短路（# 障碍、S 起点、E 终点）；数字金字塔自顶向下最大/最小路径和", 
+  runOp("d2-graph", CAT, "网格最短路/数字金字塔路径", "网格 BFS 四邻域最短路（# 障碍、S 起点、E 终点）；数字金字塔自顶向下最大/最小路径和",
     (t, p) => {
       const mode = String((p && p.mode) || "grid");
       if (mode === "grid") {
@@ -3533,7 +4163,9 @@ const OPS_CORE = [
       if (mode === "pyramid") {
         const rows = String((p && p.triangle) || t || "").replace(/\r/g, "").split(/\n/).map((x) => x.trim()).filter(Boolean).map((x) => x.split(/[\s,]+/).filter(Boolean).map(Number));
         if (!rows.length || rows.some((r, i) => r.length !== i + 1) || rows.some((r) => r.some((x) => !Number.isFinite(x)))) err("金字塔每行应有 1,2,3… 个数字");
-        if (rows.length > 100) err("金字塔高度上限 100");
+        budgetItems(rows.length * (rows.length + 1) / 2, "金字塔数字");
+        budgetChars(rows.length ** 2 * 16 + 64, "金字塔输出");
+        budgetSteps(rows.length ** 2, "金字塔 DP");
         const max = mode !== "min";
         let cur = rows[0].slice();
         for (let i = 1; i < rows.length; i++) {
@@ -3585,7 +4217,10 @@ const OPS_CORE = [
       }
       if (mode === "life") {
         const g0 = parseGrid((p && p.grid) || t).map((row) => [...row].map((c) => c === "#" || c === "1" || c === "O" ? 1 : 0));
-        const steps = boundedInt((p && p.steps) || "1", "迭代步数", 0, 100);
+        const steps = requireSafeInt(parseSmall((p && p.steps) || "1", "迭代步数"), "迭代步数");
+        if (steps < 0) err("迭代步数需为非负整数");
+        budgetSteps(steps * g0.length * g0[0].length * 9 + 1, "生命游戏迭代");
+        budgetChars(g0.length * (g0[0].length + 1) + 64, "生命游戏输出");
         let g = g0;
         for (let s = 0; s < steps; s++) {
           const h = g.length, w = g[0].length;
@@ -3606,16 +4241,22 @@ const OPS_CORE = [
       err(`未知模式 ${mode}`);
     }, [SEL("mode", "模式", "codon", ["codon", "translate", "reverse", "life"]), P("seq", "序列", "AUGGCCUUU"), P("grid", "生命游戏网格", ".....\n..#..\n...#.\n.###.\n....."), P("steps", "迭代步数", "1")]),
 
-  runOp("d2-plot", CAT, "点列绘图（SVG）", "把点列或函数采样输出为 SVG 折线/散点，坐标自动缩放；点数 ≤ 2000",
+  runOp("d2-plot", CAT, "点列绘图（SVG）", "把点列或函数采样输出为 SVG 折线/散点，坐标自动缩放（按 SVG 输出字符预算）",
     (t, p) => {
       const mode = String((p && p.mode) || "points");
       let pts;
       if (mode === "function") {
-        const expr = String((p && p.expr) || "x^2"), a = Number((p && p.a) || "-10"), b = Number((p && p.b) || "10"), n = boundedInt((p && p.n) || "200", "采样数", 2, 2000);
+        const expr = String((p && p.expr) || "x^2"), a = Number((p && p.a) || "-10"), b = Number((p && p.b) || "10");
+        const n = requireSafeInt(parseSmall((p && p.n) || "200", "采样数"), "采样数");
+        if (n < 2) err("采样数需 ≥2");
+        budgetItems(n + 1, "函数采样点");
+        budgetSteps((n + 1) * Math.max(8, expr.length) * 2, "函数采样");
         pts = [];
         for (let i = 0; i <= n; i++) { const x = a + (b - a) * i / n; pts.push([x, evalF(expr, x)]); }
       } else pts = parsePointList((p && p.points) || t);
-      if (pts.length < 1 || pts.length > 2000) err("点数需 1..2000");
+      if (pts.length < 1) err("点数需 ≥1");
+      budgetItems(pts.length, "绘图点数");
+      budgetChars(pts.length * 96 + 512, "SVG 输出");
       const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
       const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
       const W = 600, H = 360, pad = 30;
@@ -3625,11 +4266,14 @@ const OPS_CORE = [
       return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="white"/><polyline points="${poly}" fill="none" stroke="#2563eb" stroke-width="2"/>${pts.map(([x, y]) => `<circle cx="${fmt(sx(x), 3)}" cy="${fmt(sy(y), 3)}" r="2" fill="#dc2626"/>`).join("")}<text x="${pad}" y="${pad - 10}" font-size="12">x:[${fmt(minX, 3)},${fmt(maxX, 3)}] y:[${fmt(minY, 3)},${fmt(maxY, 3)}]</text></svg>`;
     }, [SEL("mode", "模式", "points", ["points", "function"]), P("points", "点列 x,y;...", "0,0;1,1;2,4;3,9"), P("expr", "函数 f(x)", "x^2"), P("a", "x 下限", "-10"), P("b", "x 上限", "10"), P("n", "采样数", "200")]),
 
-  runOp("d2-dft", CAT, "离散 Fourier 变换/逆变换", "DFT 与 IDFT（O(n²)，n ≤ 512），输出幅值/相位与逆变换校验；非 FFT", 
+  runOp("d2-dft", CAT, "离散 Fourier 变换/逆变换", "DFT 与 IDFT（O(n²)，按步数/输出字符预算），输出幅值/相位与逆变换校验；非 FFT，超预算显式报错不截断",
     (t, p) => {
       const mode = String((p && p.mode) || "dft");
-      const a = numList((p && p.signal) || t, "信号").slice(0, 512);
+      const a = numList((p && p.signal) || t, "信号");
+      if (!a.length) err("信号不能为空");
       const n = a.length;
+      budgetSteps(n * n, "DFT O(n²)");
+      budgetChars(n * 64 + 128, "DFT 输出");
       if (mode === "dft") {
         const out = [];
         for (let k = 0; k < n; k++) {
@@ -3658,18 +4302,27 @@ const OPS_CORE = [
       if (mode === "erf") return `erf(${x}) = ${fmt(erf(x), 12)}`;
       if (mode === "erfc") return `erfc(${x}) = ${fmt(erfc(x), 12)}`;
       if (mode === "dawson") return `Dawson F(${x}) = ${fmt(dawson(x), 12)}`;
-      if (mode === "gamma") return `Γ(${x}) = ${fmt(gammaFn(x), 12)}`;
-      if (mode === "factorial") return `${x}! = ${fmt(gammaFn(x + 1), 12)}`;
+      if (mode === "gamma") {
+        const g = gammaFn(x);
+        if (!Number.isFinite(g)) err(`Γ(${x}) 在定义域外或超出 double 范围（非正整数的极点 / 溢出）`);
+        return `Γ(${x}) = ${fmt(g, 12)}`;
+      }
+      if (mode === "factorial") {
+        const g = gammaFn(x + 1);
+        if (!Number.isFinite(g)) err(`${x}! 在 double 范围外（x 需 > −1，且结果不超过 1.8e308）`);
+        return `${x}! = ${fmt(g, 12)}`;
+      }
       err(`未知模式 ${mode}`);
     }, [SEL("mode", "模式", "erf", ["erf", "erfc", "dawson", "gamma", "factorial"]), P("value", "x", "1")]),
 
-  runOp("d2-laplace", CAT, "Laplace 变换（数值前向）", "数值计算 F(s)=∫₀^∞ f(t)e^(−st)dt（截断 T 可调）；逆 Laplace 需要 CAS，未实现", 
+  runOp("d2-laplace", CAT, "Laplace 变换（数值前向）", "数值计算 F(s)=∫₀^∞ f(t)e^(−st)dt（截断 T 可调）；逆 Laplace 需要 CAS，未实现",
     (t, p) => {
       const expr = String((p && p.expr) || t || "exp(-t)");
       const s = Number((p && p.s) || "1"), T = Number((p && p.T) || "50");
       if (!(s > 0) || !(T > 0)) err("s 与截断 T 需为正");
       const f = (tt) => evalExpr(expr, { t: tt }) * Math.exp(-s * tt);
       const n = 2000, h = T / n;
+      budgetSteps((n + 1) * Math.max(8, expr.length) * 2, "Laplace 数值积分");
       let sum = 0;
       for (let i = 0; i <= n; i++) {
         const w = i === 0 || i === n ? 1 : i % 2 ? 4 : 2;

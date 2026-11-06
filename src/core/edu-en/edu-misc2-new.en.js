@@ -35,19 +35,19 @@ export default {
   },
 
   suiYanSuiYu: {
-    what: "SuiYanSuiYu (随言随语, credited to Gamma): converts each character to base 4, then uses the four characters 「随波逐流」 as digit symbols, assembling text prefixed with 「随波逐流语录：」.",
+    what: "SuiYanSuiYu (随言随语, credited to Gamma): converts each character to base 4, then uses a four-character quote dictionary as digit symbols, assembling text prefixed with a fixed quote marker.",
     principle:
-      "The dictionary `随波逐流` (four chars) represents base-4 digits 0/1/2/3; the length table `江河洪浪湖泊海` (seven chars) represents base-4 digit counts 1-7.\n\n" +
-      "Encode: take each character's code point → convert to a base-4 string → map each digit to its corresponding character via the dictionary → prepend a length-prefix character (indicating how many digits this segment has). The whole thing is prefixed with a random 1-4 characters + 「随波逐流语录：」.\n\n" +
+      "The quote dictionary has four characters for base-4 digits 0/1/2/3; the length table `江河洪浪湖泊海` (seven chars) represents base-4 digit counts 1-7.\n\n" +
+      "Encode: take each character's code point → convert to a base-4 string → map each digit to its corresponding character via the dictionary → prepend a length-prefix character (indicating how many digits this segment has). The whole thing is prefixed with random 1-4 characters + a fixed quote marker.\n\n" +
       "The random prefix makes output non-fixed, but decode recovers any valid encoding. Because the length table has only 7 positions ($4^7=16384$), characters with code points above 16383 are unsupported.",
-    usage: "Encode: enter text, output a 「随波逐流语录：…」 string. Decode: paste that string to recover the original.",
+    usage: "Encode: enter text, output a string with the fixed quote marker. Decode: paste that string to recover the original.",
     examples: [
-      { in: "Hi", out: "随波逐流语录：… (random prefix + encoded segment)", desc: "Different random prefix each time" },
+      { in: "Hi", out: "fixed quote marker + … (random prefix + encoded segment)", desc: "Different random prefix each time" },
     ],
-    tips: ["A leading 「随波逐流语录：」, or a whole passage made only of the 11 characters 「随波逐流江河洪浪湖泊海」, is this.", "Rare characters/emoji with code points above 16383 can't be encoded; the original algorithm throws out-of-range."],
-    aka: ["随言随语", "随波逐流语录", "suiyansuiyu", "随波逐流编码", "伽马编码", "sui yan sui yu",
-      "四进制汉字编码", "随言随语编码", "随波逐流工具编码", "SBZL", "随语编码", "语录编码",
-      "base-4 chinese encoding"],
+    tips: ["A fixed quote marker at the start, or a passage made only of quote-dictionary and length-table characters, is this.", "Rare characters/emoji with code points above 16383 can't be encoded; the original algorithm throws out-of-range."],
+    aka: ["随言随语", "suiyansuiyu", "伽马编码", "sui yan sui yu",
+      "四进制汉字编码", "随言随语编码", "SBZL", "随语编码", "语录编码", "四进制语录编码",
+      "base-4 chinese encoding", "suiyansuiyu cipher"],
   },
 
   xiangyue: {

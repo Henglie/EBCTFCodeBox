@@ -122,7 +122,7 @@ register({
   name: "JWK OKP 导入",
   desc: "JWK OKP 导入（RFC 8037/7517/7515）：Ed25519/X25519 的 JSON JWK → 公钥/私钥 hex + SPKI 公钥 PEM + PKCS#8 私钥 PEM（RFC 8410 曲线 OID，RFC 5958）。Ed25519 自动做 d→x 一致性校验；X25519 结构校验。密钥材料只在本地处理零外发",
   params: [
-    { key: "jwk", label: "JWK JSON", type: "textarea", default: "", placeholder: '{"kty":"OKP","crv":"Ed25519","x":"…","d":"…"}' },
+    { acceptFile: "text", key: "jwk", label: "JWK JSON", type: "textarea", default: "", placeholder: '{"kty":"OKP","crv":"Ed25519","x":"…","d":"…"}' },
   ],
   run: (_text, p) => {
     const src = String((p && p.jwk) || _text || "").trim();

@@ -318,6 +318,7 @@ function unpackCoefs(bytes, count, bits) {
     cur &= (1 << curBits) - 1; // 截掉已消费的高位，防止再左移越界
   }
   if (vals.length < count) throw new Error("密钥/密文长度不足（hex 位流过短）");
+  if (bits === 2 && vals.some((v) => v > 2)) throw new Error("私钥系数编码非法（2 bit 口径只允许 0/1/10）");
   // 2 bit 口径：00→0, 01→1, 10→−1（见 packCoefs）
   return bits === 2 ? vals.map((v) => (v === 2 ? -1 : v)) : vals;
 }
@@ -515,7 +516,7 @@ register({
   desc: "EESS v3.1 口径真参数 NTRU（ees401ep1/ep2/ees439ep1/ees659ep1，q=2048）密钥对生成，产品式私钥 f=1+p·F1·F2+p·F3；与 ntruToy 玩具参数无关",
   params: [
     { key: "set", label: "参数集", type: "select", default: "ees401ep2", options: SET_OPTIONS },
-    { key: "seed", label: "seed (hex，留空随机；教学复现可固定)", type: "text", default: "", placeholder: "如 0011223344" },
+    { sensitive: true, key: "seed", label: "seed (hex，留空随机；教学复现可固定)", type: "text", default: "", placeholder: "如 0011223344" },
   ],
   run: (_t, p = {}) => {
     const set = getSet(p.set);
@@ -555,6 +556,8 @@ register({
     if (!p.ek || !String(p.ek).trim()) throw new Error("请先在「NTRU 密钥生成（真参数）」生成并粘贴公钥 h (hex)");
     const kb = hexToBytes(p.ek);
     if (kb[0] !== SETS.indexOf(set) + 1) throw new Error("公钥 tag 与所选参数集不符（确认生成时选的同一档）");
+    const pubBytes = 1 + Math.ceil((set.N * QBITS) / 8);
+    if (kb.length !== pubBytes) throw new Error(`公钥长度不符：期望 ${pubBytes} B（${set.name}），实际 ${kb.length} B`);
     const h = unpackCoefs(kb.subarray(1), set.N, QBITS);
     const msg = new TextEncoder().encode(String(t ?? ""));
     if (!msg.length) throw new Error("请输入明文");
@@ -583,7 +586,7 @@ register({
   desc: "EESS v3.1 真参数 NTRU 解密：a = f∗e mod q → 中心化 (−q/2,q/2] → mod 3 → SVES 逆映射还原明文（含零填充/长度校验）",
   params: [
     { key: "set", label: "参数集", type: "select", default: "ees401ep2", options: SET_OPTIONS },
-    { key: "dk", label: "私钥 (hex)", type: "text", default: "", placeholder: "密钥生成输出的私钥 hex" },
+    { sensitive: true, key: "dk", label: "私钥 (hex)", type: "textarea", default: "", placeholder: "密钥生成输出的私钥 hex" },
   ],
   run: (t, p = {}) => {
     const set = getSet(p.set);
@@ -602,6 +605,8 @@ register({
     if (!t || !String(t).trim()) throw new Error("请输入密文 hex（NTRU 加密输出）");
     const eb = hexToBytes(t);
     if (eb[0] !== SETS.indexOf(set) + 1) throw new Error("密文 tag 与所选参数集不符");
+    const ctBytes = 1 + Math.ceil((set.N * QBITS) / 8);
+    if (eb.length !== ctBytes) throw new Error(`密文长度不符：期望 ${ctBytes} B（${set.name}），实际 ${eb.length} B`);
     const e = unpackCoefs(eb.subarray(1), set.N, QBITS);
     const msg = ntruDecrypt(set, parts, e);
     let text;

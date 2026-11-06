@@ -1096,7 +1096,7 @@ register({
     { key: "n", label: "模数 n", type: "text", default: "", placeholder: "十进制模数" },
     { key: "e", label: "公钥指数 e", type: "text", default: "", placeholder: "十进制公钥指数" },
     { key: "c", label: "密文 c", type: "text", default: "", placeholder: "c = m^e mod n（m 须为合法 PKCS#1 v1.5 padding），十进制" },
-    { key: "serverKey", label: "serverKey（oracle 侧私钥，hex）", type: "text", default: "", placeholder: "私钥 d 单个 hex 大数；或 p,q 两个 hex 逗号分隔" },
+    { sensitive: true, key: "serverKey", label: "serverKey（oracle 侧私钥，hex）", type: "text", default: "", placeholder: "私钥 d 单个 hex 大数；或 p,q 两个 hex 逗号分隔" },
     { key: "maxS", label: "maxS 查询护栏", type: "number", default: 1000000, placeholder: "oracle 查询上限，防卡死（默认 100 万）" },
   ],
   run: runBleichenbacher,

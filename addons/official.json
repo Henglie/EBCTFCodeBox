@@ -3,9 +3,9 @@
   "plugins": [
     {
       "id": "dcode-extras-2026-10",
-      "name": "dCode 扩展包 Beta · 2026-10 · 408 op",
-      "version": "2026.10.3-beta.1",
-      "description": "dCode.fr 风格纯 JS 算法扩展包 Beta：988 个 dCode 工具逐条入账（490 implemented / 319 mapped / 179 blocked），当前 408 op；WASM/无限大数/自动运行策略下版优化。默认不启用。",
+      "name": "dCode 扩展包 Beta · 2026-11 · 409 op",
+      "version": "2026.11.0-beta.1",
+      "description": "dCode.fr 风格纯 JS 算法扩展包 Beta：988 个 dCode 工具逐条入账（490 implemented / 319 mapped / 179 blocked），当前 409 op；2026-11 批次取消参数边输边算，数学/数论移除人为小上限，阶乘改分治大数并按内存预算展开。默认不启用。",
       "author": "恒烈CTF编码工具箱",
       "url": "./addons/dcode-extras-2026-10/index.js",
       "official": true

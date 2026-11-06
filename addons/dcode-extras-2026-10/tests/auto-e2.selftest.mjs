@@ -16,6 +16,13 @@ function has(out, sub, label) {
 function thrown(fn, label) {
   try { fn(); ok(false, label, "expected throw"); } catch { pass++; }
 }
+function thrownMsg(fn, sub, label) {
+  try { fn(); ok(false, label, "expected throw"); }
+  catch (e) { const msg = String((e && e.message) || e); ok(msg.includes(sub), label, `message=${msg}`); }
+}
+function notHas(out, sub, label) {
+  ok(!String(out).includes(sub), label, `unexpected=${JSON.stringify(sub)} out=${String(out).slice(0, 300)}`);
+}
 
 const by = new Map(OPS.map((o) => [o.id, o]));
 const run = (id, text, p) => by.get(id).run(text, p || {});
@@ -107,6 +114,12 @@ thrown(() => run("e2-shapes", "0"), "shapes 0 报错");
 has(run("e2-ode", "y", { x0: "0", y0: "1", x1: "1", steps: "100" }), "2.718281828", "ode y'=y 终点 e");
 has(run("e2-ode", "x+y", { x0: "0", y0: "1", x1: "1", steps: "10" }), "3.4365594", "ode y'=x+y 终点");
 thrown(() => run("e2-ode", "y+", { x0: "0", y0: "1", x1: "1" }), "ode 非法表达式报错");
+thrownMsg(() => run("e2-ode", "y", { x0: "0", y0: "1", x1: "1", steps: "9007199254740993" }), "超出 JS 精确整数范围", "parseIntVal 拒绝 2^53+1 整数");
+thrownMsg(() => run("e2-ode", "y", { x0: "0", y0: "1", x1: "1", steps: "9007199254740992" }), "超出 JS 精确整数范围", "parseIntVal 拒绝 2^53");
+let odeSafeMsg = "";
+try { run("e2-ode", "y", { x0: "0", y0: "1", x1: "1", steps: "1e15" }); } catch (e) { odeSafeMsg = String((e && e.message) || e); }
+has(odeSafeMsg, "预算", "ode steps=1e15 通过安全整数校验后进入预算检查");
+notHas(odeSafeMsg, "精确整数范围", "ode steps=1e15 未被精确整数范围拒绝");
 
 function sudokuGrid(out) {
   const lines = out.split("\n");
@@ -177,7 +190,11 @@ has(ber, "B2 = 1/6", "bernoulli B2");
 has(ber, "B4 = -1/30", "bernoulli B4");
 has(ber, "B6 = 1/42", "bernoulli B6");
 has(ber, "B10 = 5/66", "bernoulli B10");
-thrown(() => run("e2-bernoulli", "81"), "bernoulli 上限报错");
+has(run("e2-bernoulli", "80"), "B80 = ", "bernoulli 80 成功");
+has(run("e2-bernoulli", "81"), "B81 = ", "bernoulli 81 预算内成功");
+let berBigMsg = "";
+try { run("e2-bernoulli", "100000"); } catch (e) { berBigMsg = e.message; }
+has(berBigMsg, "预算", "bernoulli 100000 预算拒绝");
 
 has(run("e2-eulerian", "5"), "1, 26, 66, 26, 1", "eulerian n=5 行");
 has(run("e2-eulerian", "5"), "行和 = 120", "eulerian n=5 行和");
@@ -195,11 +212,15 @@ const ulLines = ul.split("\n").filter((l) => /^[#.]+$/.test(l));
 eq(ulLines.length, 5, "ulam 5x5 行数");
 eq(ulLines.join("").split("").filter((c) => c === "#").length, 9, "ulam 5x5 # 数");
 thrown(() => run("e2-ulam", "6"), "ulam 偶数尺寸报错");
+thrownMsg(() => run("e2-ulam", "2000"), "预算", "ulam n=2000 生成前预算拒绝");
+thrownMsg(() => run("e2-ulam", "2000"), "Ulam 螺旋格数", "ulam 预算拒绝标明格数");
 
 has(run("e2-emirp", "1000"), "13, 17, 31, 37, 71, 73, 79, 97, 107, 113", "emirp 前 10 个");
 has(run("e2-emirp", "1000"), "36 个", "emirp <=1000 计数");
 has(run("e2-emirp", "20"), "13, 17", "emirp <=20");
 thrown(() => run("e2-emirp", "1"), "emirp n 下限报错");
+thrownMsg(() => run("e2-emirp", "1000000000"), "预算", "emirp n=1e9 生成前预算拒绝");
+thrownMsg(() => run("e2-emirp", "1000000000"), "Emirp 候选素数", "emirp 预算拒绝标明候选素数");
 
 const me = run("e2-matrixexp", "1 0\n0 2");
 has(me, "2.7182818285 0", "matrixexp diag(1,2) e");

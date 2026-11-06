@@ -635,7 +635,7 @@ register({
   id: "pixelJihad", cat: "stegoFile", name: "PixelJihad",
   desc: "PixelJihad 隐写（SHA-256 种子 + 伪随机 LSB + 可选 AES-CCM 加密）",
   params: [
-    { key: "password", label: "密码", type: "text", default: "", placeholder: "可选密码（空则不加密）" },
+    { sensitive: true, key: "password", label: "密码", type: "password", default: "", placeholder: "可选密码（空则不加密）" },
     { key: "message", label: "待隐藏文本", type: "text", default: "", placeholder: "编码方向要藏进图片的文本" },
   ],
   encode: pixelJihadEncodeOp, decode: pixelJihadDecodeOp,

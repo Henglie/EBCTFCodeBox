@@ -167,7 +167,7 @@ register({
     "已知口令隐写 steghide", "音频LSB steghide", "steghide密码",
   ],
   params: [
-    { key: "key", label: "口令（encode/decode 两侧须一致）", type: "text", default: "", placeholder: "空串按未设口令处理" },
+    { sensitive: true, key: "key", label: "口令（encode/decode 两侧须一致）", type: "password", default: "", placeholder: "空串按未设口令处理" },
     { key: "message", label: "要嵌入的消息（encode 用）", type: "text", default: "", placeholder: "如 flag{...}（按 UTF-8 编码为字节）" },
   ],
   encode: shEncode,

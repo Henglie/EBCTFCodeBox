@@ -20,6 +20,7 @@
  *   明文/密文/密钥均 hex；ECB 多块；encode 加密 / decode 解密。
  */
 import { register } from "./registry.js";
+import { PADDING_OPTIONS, ecbEncrypt, ecbDecrypt, cbcEncrypt, cbcDecrypt } from "./modern.js";
 
 const SBOX = [0xC, 0x5, 0x6, 0xB, 0x9, 0x0, 0xA, 0xD, 0x3, 0xE, 0xF, 0x8, 0x4, 0x7, 0x1, 0x2];
 const SBOX_INV = (() => { const inv = new Array(16); for (let i = 0; i < 16; i++) inv[SBOX[i]] = i; return inv; })();
@@ -119,9 +120,19 @@ function decryptBlock(ct, rk) {
 }
 
 // ---- hex/BigInt 工具 ----
-function cleanHex(s) { return String(s || "").replace(/[^0-9a-fA-F]/g, ""); }
+function cleanHex(s) {
+  const clean = String(s || "").replace(/\s+/g, "");
+  if (!/^[0-9a-fA-F]*$/.test(clean)) throw new Error("非法 hex 字符（仅允许 0-9/A-F 与空白）");
+  return clean;
+}
 function hexToBig(h) { return h === "" ? 0n : BigInt("0x" + h); }
 function bigToHex(v, bytes) { return v.toString(16).padStart(bytes * 2, "0"); }
+function bigToBytes(v, bytes = 8) {
+  const out = new Uint8Array(bytes);
+  let x = v;
+  for (let i = bytes - 1; i >= 0; i--) { out[i] = Number(x & 0xffn); x >>= 8n; }
+  return out;
+}
 
 function presentRun(text, p, dir) {
   const keyBits = (p && p.keyBits === "128") ? 128 : 80;
@@ -131,17 +142,43 @@ function presentRun(text, p, dir) {
     throw new Error(`PRESENT-${keyBits} 密钥须为 ${wantKeyHex} 个 hex 字符（${keyBits / 8} 字节）`);
   }
   const rk = keySchedule(hexToBig(keyHex), keyBits);
+  const mode = String((p && p.mode) || "ECB").toUpperCase();
+  if (mode !== "ECB" && mode !== "CBC") throw new Error(`PRESENT 不支持模式: ${mode}（仅 ECB/CBC）`);
+  const padding = (p && p.padding) || "none";
   const rawText = String(text == null ? "" : text);
   if (/[^0-9a-fA-F\s]/.test(rawText)) throw new Error("PRESENT：数据含非十六进制字符（仅允许 0-9a-fA-F）");
   const dataHex = cleanHex(rawText);
-  if (dataHex.length % 16 !== 0) throw new Error("数据须为 8 字节（16 hex）的整数倍（ECB 分组）");
-  let out = "";
-  for (let i = 0; i < dataHex.length; i += 16) {
-    const block = hexToBig(dataHex.slice(i, i + 16));
-    const res = dir === "enc" ? encryptBlock(block, rk) : decryptBlock(block, rk);
-    out += bigToHex(res, 8);
+  if (dataHex.length % 2 !== 0) throw new Error("PRESENT：hex 串长度须为偶数（整字节）");
+  const data = new Uint8Array(dataHex.length / 2);
+  for (let i = 0; i < data.length; i++) data[i] = parseInt(dataHex.substr(i * 2, 2), 16);
+
+  const encBlock = (blk) => {
+    let v = 0n;
+    for (const b of blk) v = (v << 8n) | BigInt(b);
+    return bigToBytes(encryptBlock(v, rk));
+  };
+  const decBlock = (blk) => {
+    let v = 0n;
+    for (const b of blk) v = (v << 8n) | BigInt(b);
+    return bigToBytes(decryptBlock(v, rk));
+  };
+
+  let out;
+  if (mode === "ECB") {
+    out = dir === "enc" ? ecbEncrypt(data, encBlock, 8, padding) : ecbDecrypt(data, decBlock, 8, padding);
+  } else {
+    const ivHex = cleanHex(p && p.iv);
+    if (ivHex.length !== 16) throw new Error("PRESENT-CBC 需提供 8 字节 IV（16 hex 字符）");
+    if (padding === "none" && data.length % 8 !== 0) {
+      throw new Error("NoPadding 要求数据长度为 8 字节整数倍");
+    }
+    const iv = new Uint8Array(8);
+    for (let i = 0; i < 8; i++) iv[i] = parseInt(ivHex.substr(i * 2, 2), 16);
+    out = dir === "enc" ? cbcEncrypt(data, encBlock, 8, iv, padding) : cbcDecrypt(data, decBlock, 8, iv, padding);
   }
-  return out;
+  let hex = "";
+  for (const b of out) hex += b.toString(16).padStart(2, "0");
+  return hex;
 }
 
 // 载入自校验：官方向量 PRESENT-80 key=0, pt=0 → 5579c1387b228445
@@ -157,7 +194,7 @@ register({
   id: "present",
   cat: "block",
   name: "PRESENT 轻量分组密码",
-  desc: "PRESENT 轻量级分组密码（Bogdanov 2007 / ISO/IEC 29192-2）：64 位分组，80/128 位密钥，31 轮 SPN（4-bit S 盒 + 比特置换）。明文/密文/密钥均 hex，ECB 多块。encode 加密 / decode 解密。已过官方全零测试向量。",
+  desc: "PRESENT 轻量级分组密码（Bogdanov 2007 / ISO/IEC 29192-2）：64 位分组，80/128 位密钥，31 轮 SPN（4-bit S 盒 + 比特置换）。明文/密文/密钥均 hex；支持 ECB/CBC 与 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23（默认 NoPadding，保持旧输出）。encode 加密 / decode 解密。已过官方全零测试向量。",
   params: [
     {
       key: "keyBits", label: "密钥长度", type: "select", default: "80",
@@ -167,6 +204,10 @@ register({
       ],
     },
     { key: "key", label: "密钥 (hex)", type: "text", default: "00000000000000000000", placeholder: "PRESENT-80: 20 hex / PRESENT-128: 32 hex" },
+    { key: "mode", label: "模式", type: "select", default: "ECB",
+      options: [{ value: "ECB", label: "ECB" }, { value: "CBC", label: "CBC" }] },
+    { key: "iv", label: "IV (hex)", type: "text", default: "", placeholder: "CBC 需 8 字节（16 hex）" },
+    { key: "padding", label: "填充（ECB/CBC 用）", type: "select", default: "none", options: PADDING_OPTIONS },
   ],
   encode: (text, p) => presentRun(text, p, "enc"),
   decode: (text, p) => presentRun(text, p, "dec"),

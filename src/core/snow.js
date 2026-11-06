@@ -1068,7 +1068,7 @@ register({
 	desc: "行尾空白隐写（原版 mattkwan/snow 格式）：TAB 标记数据起点，每 3bit 编码为 TAB+空格串，行宽 8 列对齐。支持 -C Huffman 压缩与 -p ICE 加密，与 snow.exe 双向互通。encode: 消息+容器→隐写文本；decode: 隐写文本→消息",
 	params: [
 		{ key: "text", label: "容器文本（隐写追加到各行尾）", type: "text", default: "" },
-		{ key: "password", label: "密码（-p，留空不加密）", type: "text", default: "" },
+		{ sensitive: true, key: "password", label: "密码（-p，留空不加密）", type: "password", default: "" },
 		{ key: "compress", label: "Huffman 压缩（-C）", type: "bool", default: false },
 		{ key: "lineLength", label: "最大行宽（默认 80，最小 8）", type: "number", default: 80 },
 	],

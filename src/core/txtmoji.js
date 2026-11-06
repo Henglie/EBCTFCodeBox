@@ -168,7 +168,7 @@ register({
   name: "txtmoji emoji 加密",
   desc: "txtmoji.com emoji 加密（AES-256-CBC OpenSSL + 65 emoji 表替换 + 切固定前缀）。密码为十进制/任意口令。CTF 常见「标题即密码」的表情符号密文",
   params: [
-    { key: "password", label: "密码", type: "text", default: "", placeholder: "口令（常为标题的十进制数）" },
+    { sensitive: true, key: "password", label: "密码", type: "password", default: "", placeholder: "口令（常为标题的十进制数）" },
   ],
   encode: txtmojiEncode,
   decode: txtmojiDecode,

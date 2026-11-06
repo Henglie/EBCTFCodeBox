@@ -17,9 +17,14 @@
  *   （§5 全部中间值：S 链 4 组、R 链 4 组、L 链 4 组、K1..K10、C1..C8、逐轮 LSX 输出，
  *     均在交付验证台逐字复现，见 ref/SOURCES.md。）
  *
- * 约定（与 magma.js 一致）：
- *   - encode: 明文 hex → 密文 hex（加密）；decode: 密文 hex → 明文 hex（解密）。ECB，可多块。
- *   - 明文/密文按 16 字节（32 hex）分块，最后不足块报错（ECB 不自动填充）。
+ * 模式（GOST R 34.13-2015）：
+ *   - ECB/CBC/CFB/OFB/CTR；CBC/CFB/OFB 支持多分组 IV 反馈寄存器。
+ *   - CTR：8 字节 nonce + 64 位低半计数器。
+ *   - padding：ECB/CBC 用统一填充（默认 none）；keyMeshing：NO/CP（RFC 4357 §2.3.2）。
+ *
+ * 约定：
+ *   - encode: 明文 hex → 密文 hex（加密）；decode: 密文 hex → 明文 hex（解密）。
+ *   - 默认 ECB + NoPadding 保持旧输出；CBC 默认不自动填充。
  *   - 密钥须 256 位（64 hex）。
  *
  * 红线：算法照 GOST R 34.12-2015 实现，不编造；建表后自校验 R/L/C1 与轮密钥（§5 锚点值）；
@@ -28,6 +33,8 @@
  * 契约：register({ id:"kuznyechik", cat:"block", name, desc, params, encode, decode })。
  */
 import { register } from "./registry.js";
+import { PADDING_OPTIONS } from "./modern.js";
+import { gostModeCrypt } from "./gostModes.js";
 
 // ============================================================
 // S 盒 Pi'（RFC 7801 §4.1 / GOST R 34.12-2015 §4.1，256 字节全表逐字转录）
@@ -123,7 +130,8 @@ function lTransformBlockInv(bytes) {
 
 // 字节串 hex ↔ 数组
 function hexToBytes(hex) {
-  const clean = String(hex).replace(/[^0-9a-fA-F]/g, "");
+  const clean = String(hex).replace(/\s+/g, "");
+  if (!/^[0-9a-fA-F]*$/.test(clean)) throw new Error("非法 hex 字符（仅允许 0-9/A-F 与空白）");
   if (clean.length % 2 !== 0) throw new Error("hex 串长度须为偶数");
   const out = [];
   for (let i = 0; i < clean.length; i += 2) out.push(parseInt(clean.substr(i, 2), 16));
@@ -131,7 +139,9 @@ function hexToBytes(hex) {
 }
 
 function bytesToHex(bytes) {
-  return bytes.map((b) => b.toString(16).padStart(2, "0")).join("");
+  let s = "";
+  for (const b of bytes) s += b.toString(16).padStart(2, "0");
+  return s;
 }
 
 function xorInto(a, k) {
@@ -150,12 +160,10 @@ function sBytesInv(bytes) {
 // ============================================================
 // 密钥排程：256 位 → K1..K10（Feistel，C_j = L(Vec_128(j))）
 // ============================================================
-function keySchedule(keyHex) {
-  const clean = String(keyHex).replace(/[^0-9a-fA-F]/g, "");
-  if (clean.length !== 64) throw new Error("Kuznyechik 密钥须为 256 位（64 hex 字符）");
-  const K = [];
-  K.push(hexToBytes(clean.substr(0, 32)));
-  K.push(hexToBytes(clean.substr(32, 32)));
+function keyScheduleBytes(keyBytes) {
+  if (!keyBytes || keyBytes.length !== 32) throw new Error("Kuznyechik 密钥须为 256 位（32 字节 / 64 hex 字符）");
+  const all = Array.from(keyBytes);
+  const K = [all.slice(0, 16), all.slice(16, 32)];
   let k1 = K[0], k2 = K[1];
   for (let i = 0; i < 4; i++) {
     for (let j = 1; j <= 8; j++) {
@@ -170,6 +178,12 @@ function keySchedule(keyHex) {
     K.push(k2.slice());
   }
   return K;
+}
+
+function keySchedule(keyHex) {
+  const clean = String(keyHex).replace(/[^0-9a-fA-F]/g, "");
+  if (clean.length !== 64) throw new Error("Kuznyechik 密钥须为 256 位（64 hex 字符）");
+  return keyScheduleBytes(hexToBytes(clean));
 }
 
 // ============================================================
@@ -192,21 +206,29 @@ function decryptBlock(block, K) {
 }
 
 // ============================================================
-// op 入口：ECB 多块
+// op 入口：ECB / CBC / CFB / OFB / CTR（块 128 位，可配置填充）
 // ============================================================
+const KUZ_MODES = new Set(["ECB", "CBC", "CFB", "OFB", "CTR"]);
+
 function kuznyechikCrypt(text, p, decrypt) {
   const keyHex = String((p && p.key) || "");
-  const K = keySchedule(keyHex);
-  const bytes = hexToBytes(String(text || ""));
-  if (bytes.length === 0) throw new Error("输入为空");
-  if (bytes.length % 16 !== 0) throw new Error("输入须为 16 字节（32 hex）的整数倍（ECB 不自动填充）");
-  let out = "";
-  for (let i = 0; i < bytes.length; i += 16) {
-    const blk = bytes.slice(i, i + 16);
-    const res = decrypt ? decryptBlock(blk, K) : encryptBlock(blk, K);
-    out += bytesToHex(res);
-  }
-  return out;
+  const keyBytes = Uint8Array.from(hexToBytes(keyHex));
+  if (keyBytes.length !== 32) throw new Error("Kuznyechik 密钥须为 256 位（32 字节 / 64 hex 字符）");
+  const mode = String((p && p.mode) || "ECB").toUpperCase();
+  if (!KUZ_MODES.has(mode)) throw new Error(`Kuznyechik 不支持模式: ${mode}`);
+  const ivHex = String((p && p.iv) || "").replace(/[^0-9a-fA-F]/g, "");
+  const iv = ivHex ? Uint8Array.from(hexToBytes(ivHex)) : undefined;
+  const data = Uint8Array.from(hexToBytes(String(text || "")));
+  const out = gostModeCrypt({
+    mode, decrypt, data, blockSize: 16, iv,
+    padding: (p && p.padding) || "none",
+    keyMeshing: (p && p.keyMeshing) || "NO",
+    keyBytes,
+    makeSchedule: (kb) => keyScheduleBytes(kb),
+    encryptBlock: (blk, sch) => Uint8Array.from(encryptBlock(blk, sch)),
+    decryptBlock: (blk, sch) => Uint8Array.from(decryptBlock(blk, sch)),
+  });
+  return bytesToHex(out);
 }
 
 function kuznyechikEncode(text, p) { return kuznyechikCrypt(text, p, false); }
@@ -241,9 +263,18 @@ register({
   id: "kuznyechik",
   cat: "block",
   name: "Kuznyechik（GOST R 34.12-2015）",
-  desc: "俄罗斯联邦标准 Kuznyechik（Grasshopper）分组密码：128 位分组 / 256 位密钥 / 10 轮 LSX-SPN，密钥排程 Feistel（C=L(Vec_128(i))）。ECB 多块，明文/密文/密钥均 hex。encode 加密 / decode 解密。过 GOST R 34.12-2015 §A.1（RFC 7801 §5 同源）向量。",
+  desc: "俄罗斯联邦标准 Kuznyechik（Grasshopper）分组密码：128 位分组 / 256 位密钥 / 10 轮 LSX-SPN，密钥排程 Feistel（C=L(Vec_128(i))）。模式按 GOST R 34.13-2015：CTR 半块 nonce + 低半 64 位计数器，CBC/CFB/OFB 支持多分组反馈寄存器。keyMeshing CP 按 RFC 4357 §2.3.2 每 1024 字节更新密钥。ECB/CBC 支持统一填充（默认 NoPadding，保持旧输出）。明文/密文/密钥均 hex。encode 加密 / decode 解密。过 GOST R 34.12-2015 §A.1（RFC 7801 §5 同源）向量与 §A 模式向量。",
   params: [
     { key: "key", label: "密钥 (hex, 256 位 / 64 字符)", type: "text", default: "8899aabbccddeeff0011223344556677fedcba98765432100123456789abcdef", placeholder: "64 hex 字符" },
+    { key: "mode", label: "模式", type: "select", default: "ECB",
+      options: ["ECB", "CBC", "CFB", "OFB", "CTR"].map((m) => ({ value: m, label: m })) },
+    { key: "iv", label: "IV (hex)", type: "text", default: "", placeholder: "CBC/CFB/OFB 为 16 字节整数倍；CTR 8 字节（或 16 字节取前 8）" },
+    { key: "padding", label: "填充（ECB/CBC 用；流模式忽略）", type: "select", default: "none", options: PADDING_OPTIONS },
+    { key: "keyMeshing", label: "密钥更新（key meshing）", type: "select", default: "NO",
+      options: [
+        { value: "NO", label: "NO（不更新，默认）" },
+        { value: "CP", label: "CP（CryptoPro，每 1024 字节；ECB 忽略）" },
+      ] },
   ],
   encode: kuznyechikEncode,
   decode: kuznyechikDecode,
@@ -251,7 +282,7 @@ register({
 
 export {
   kuznyechikEncode, kuznyechikDecode,
-  keySchedule, encryptBlock, decryptBlock,
+  keySchedule, keyScheduleBytes, encryptBlock, decryptBlock,
   lTransform, lTransformBlock, lTransformBlockInv, rTransform, rTransformInv,
   sBytes, sBytesInv, gmul, SBOX, SBOX_INV, L_COEFF,
   hexToBytes, bytesToHex,

@@ -14,6 +14,7 @@
  */
 import { decodePNG } from "./stegoPixels.js";
 import { zxingReadRgba } from "./qrZxing.js";
+import { buildModel, classifyGlyph, loadExternalWeights, DEFAULT_TOPK, DESCRIPTOR_VERSION } from "./codeImageModel.js";
 
 // ============================================================
 // 图片解码
@@ -214,6 +215,120 @@ function glyphBits(gray, w, h, box, threshold) {
 const GLYPH_MIN_AREA = 18;
 const GLYPH_MAX_AREA_RATIO = 0.12;
 
+/** 候选图打分权重；后续可按语料调参，UI 通过 opts.weights 覆盖。 */
+export const RECOGNIZE_WEIGHTS = Object.freeze({
+  glyph: 0.58,
+  hash: 0.24,
+  hist: 0.12,
+  aspect: 0.06,
+});
+
+function normalizeWeights(w) {
+  const src = { ...RECOGNIZE_WEIGHTS, ...(w || {}) };
+  const sum = src.glyph + src.hash + src.hist + src.aspect;
+  if (!(sum > 0)) return { ...RECOGNIZE_WEIGHTS };
+  return {
+    glyph: src.glyph / sum,
+    hash: src.hash / sum,
+    hist: src.hist / sum,
+    aspect: src.aspect / sum,
+  };
+}
+
+/** 按行聚类 + 行内从左到右，得到阅读顺序；返回带 line 字段的新数组。 */
+export function readingOrder(glyphs) {
+  if (!glyphs.length) return [];
+  const hs = glyphs.map((g) => g.y1 - g.y0).sort((a, b) => a - b);
+  const medianH = hs[Math.floor(hs.length / 2)] || 8;
+  const tol = Math.max(6, medianH * 0.55);
+  const sorted = glyphs.slice().sort((a, b) => {
+    const ca = (a.y0 + a.y1) / 2, cb = (b.y0 + b.y1) / 2;
+    return ca - cb || a.x0 - b.x0;
+  });
+  const lines = [];
+  for (const g of sorted) {
+    const cy = (g.y0 + g.y1) / 2;
+    let line = lines.find((l) => Math.abs(l.cy - cy) <= tol);
+    if (!line) { line = { cy, items: [] }; lines.push(line); }
+    line.items.push(g);
+  }
+  lines.sort((a, b) => a.cy - b.cy);
+  const out = [];
+  lines.forEach((line, li) => {
+    line.items.sort((a, b) => a.x0 - b.x0);
+    for (const g of line.items) out.push({ ...g, line: li });
+  });
+  return out;
+}
+
+/** 稳定字形键（跨刷新不变）：16×16 位图 + 宽高比一位小数。 */
+export function glyphShapeKey(g) {
+  return wordsToBase64(g.bits) + "|" + Number(g.aspect || 0).toFixed(1);
+}
+
+/**
+ * 稳定槽位 id（A0）：对照表 id + 指纹字形下标。
+ * 与现有 mapping 持久化键（chartId → labels[slot]）并存，不替代、不迁移。
+ */
+export function slotStableId(imageId, slot) {
+  return String(imageId == null ? "" : imageId) + "#s" + Number(slot);
+}
+
+/**
+ * 槽位分组（A0）：从字形 bbox 重建行/列/单元。
+ * 不合并位图（指纹按连通域存原型，合并会破坏 d=0 对齐），只给每个字形
+ * 标 row/col/cellId，并保留阅读顺序；多连通域符号各分量同属一个 cell。
+ * 返回 { rows, cols, glyphs }，glyphs 带 row/col/cellId/line。
+ */
+export function groupGlyphs(glyphs, opts = {}) {
+  const list = (Array.isArray(glyphs) ? glyphs : []).map((g) => ({
+    ...g,
+    cx: g.cx != null ? g.cx : (g.x0 + g.x1) / 2,
+    cy: g.cy != null ? g.cy : (g.y0 + g.y1) / 2,
+  }));
+  const imageId = opts.imageId || "";
+  if (!list.length) return { rows: 0, cols: 0, glyphs: [] };
+
+  const hs = list.map((g) => g.y1 - g.y0).sort((a, b) => a - b);
+  const ws = list.map((g) => g.x1 - g.x0).sort((a, b) => a - b);
+  const medH = hs[hs.length >> 1] || 8;
+  const medW = ws[ws.length >> 1] || 8;
+  const rowTol = Math.max(6, medH * 0.6);
+  const colTol = Math.max(6, medW * 0.9);
+
+  const sorted = list.slice().sort((a, b) => (a.cy - b.cy) || (a.x0 - b.x0));
+  const rows = [];
+  for (const g of sorted) {
+    let r = rows.find((x) => Math.abs(x.cy - g.cy) <= rowTol);
+    if (!r) { r = { cy: g.cy, items: [] }; rows.push(r); }
+    r.items.push(g);
+  }
+  rows.sort((a, b) => a.cy - b.cy);
+
+  const centers = list.map((g) => g.cx).sort((a, b) => a - b);
+  const cols = [];
+  let cur = null;
+  for (const c of centers) {
+    if (!cur || c - cur.last > colTol) { cur = { sum: c, n: 1, last: c }; cols.push(cur); }
+    else { cur.sum += c; cur.n++; cur.last = c; }
+  }
+  const colCenters = cols.map((c) => c.sum / c.n);
+
+  const out = [];
+  rows.forEach((row, ri) => {
+    row.items.sort((a, b) => a.x0 - b.x0);
+    for (const g of row.items) {
+      let ci = 0, best = Infinity;
+      for (let i = 0; i < colCenters.length; i++) {
+        const d = Math.abs(g.cx - colCenters[i]);
+        if (d < best) { best = d; ci = i; }
+      }
+      out.push({ ...g, row: ri, col: ci, line: ri, cellId: imageId ? imageId + "/r" + ri + "c" + ci : "r" + ri + "c" + ci });
+    }
+  });
+  return { rows: rows.length, cols: colCenters.length, glyphs: out };
+}
+
 export function extractGlyphs(gray, w, h) {
   const threshold = otsuThreshold(gray);
   const ink = new Uint8Array(w * h);
@@ -244,7 +359,12 @@ export function extractGlyphs(gray, w, h) {
     if (bw < 3 || bh < 3 || bw > w * 0.9 || bh > h * 0.9) continue;
     const aspect = bw / bh;
     if (aspect < 0.08 || aspect > 12) continue;
-    out.push({ x0, y0, x1: x1 + 1, y1: y1 + 1, aspect, area, bits: glyphBits(gray, w, h, { x0, y0, x1: x1 + 1, y1: y1 + 1 }, threshold) });
+    out.push({
+      x0, y0, x1: x1 + 1, y1: y1 + 1, aspect, area,
+      fill: area / Math.max(1, bw * bh),
+      cx: (x0 + x1 + 1) / 2, cy: (y0 + y1 + 1) / 2,
+      bits: glyphBits(gray, w, h, { x0, y0, x1: x1 + 1, y1: y1 + 1 }, threshold),
+    });
   }
   // 过大图限制：按面积取最大的 160 个，避免背景纹理淹没真字形
   if (out.length > 160) out.sort((a, b) => b.area - a.area), out.length = 160;
@@ -311,6 +431,23 @@ function histSimilarity(a, b) {
   return total ? inter / total : 0;
 }
 
+/**
+ * 纯函数：整图候选打分（A0 抽出，便于评估脚本复用）。
+ * fp = 查询整图指纹 { ahash, dhash, hist, aspect }；chart = 对照表指纹项；
+ * glyphSim = 字形投票归一化得分 0..1；weights = normalizeWeights 结果。
+ */
+export function scoreChartCandidate(fp, chart, glyphSim, weights) {
+  const dD = hashDistanceHex(fp.dhash, chart.dhash);
+  const dA = hashDistanceHex(fp.ahash, chart.ahash);
+  const hashSim = Math.max(0, 1 - (dD * 0.6 + dA * 0.4) / 64);
+  const hSim = histSimilarity(fp.hist, chart.hist);
+  const qA = Number(fp.aspect) > 0 ? Number(fp.aspect) : 1;
+  const cA = Number(chart.aspect) > 0 ? Number(chart.aspect) : 1;
+  const aspectSim = Math.min(qA, cA) / Math.max(qA, cA);
+  return Math.max(0, Math.min(1,
+    glyphSim * weights.glyph + hashSim * weights.hash + hSim * weights.hist + aspectSim * weights.aspect));
+}
+
 // 字形投票：每个 query 字形找全局最近邻，命中阈值内的最近邻给所属表计票。
 function matchGlyphs(queryGlyphs, charts) {
   const votes = new Map();
@@ -342,16 +479,122 @@ function matchGlyphs(queryGlyphs, charts) {
 // ============================================================
 // 主入口
 // ============================================================
+export function normalizeLabels(mapping) {
+  if (!mapping) return null;
+  if (Array.isArray(mapping)) return mapping.map((v) => (v == null ? "" : String(v)));
+  if (typeof mapping === "string") return mapping.split(",").map((v) => v);
+  if (typeof mapping === "object" && Array.isArray(mapping.labels)) return mapping.labels.map((v) => (v == null ? "" : String(v)));
+  return null;
+}
+
+/**
+ * 单字形候选：模型在该对照表内的 top slots + 已保存/传入映射。
+ * 没有 mapping 时 charCandidates 为空数组，slotCandidates 仍保留。
+ * 候选只是候选，不冒充确定文本。
+ */
+export function buildGlyphCandidates(glyph, imageId, mapping, model, topK = DEFAULT_TOPK, descriptor = undefined) {
+  const labels = normalizeLabels(mapping);
+  const hits = model && glyph
+    ? classifyGlyph(glyph.bits, glyph.aspect, model, topK, { imageId, descriptor })
+    : [];
+  const slotCandidates = hits.map((h) => ({
+    slot: h.slot,
+    distance: h.distance,
+    score: h.score,
+  }));
+  const charCandidates = [];
+  if (labels) {
+    const seen = new Set();
+    for (const h of hits) {
+      const value = labels[h.slot];
+      if (value == null || value === "") continue;
+      const ch = String(value);
+      if (seen.has(ch)) continue;
+      seen.add(ch);
+      charCandidates.push({ char: ch, score: h.score, slot: h.slot });
+      if (charCandidates.length >= 3) break;
+    }
+  }
+  return { slotCandidates, charCandidates };
+}
+
+/**
+ * 把查询字形按阅读顺序对到指定对照表的字形槽位，并用映射表组装文本。
+ * labels[slot] 为空 / 越界时输出 "?"，绝不按字母表顺序猜。
+ */
+function decodeChartSequence(chart, glyphs, mapping, model, topK = DEFAULT_TOPK, descriptor = undefined) {
+  const labels = normalizeLabels(mapping);
+  const out = [];
+  let mapped = 0, unknown = 0;
+  for (const g of glyphs) {
+    let slot = -1, dist = 256;
+    const hits = model && model.byImage && typeof model.byImage.has === "function" && model.byImage.has(chart.id)
+      ? classifyGlyph(g.bits, g.aspect, model, 1, { imageId: chart.id, descriptor })
+      : [];
+    if (hits.length) {
+      slot = hits[0].slot;
+      dist = hits[0].distance;
+    } else {
+      // 回退：模型缺失时用原始 v1 位图检索
+      let best = null;
+      for (let i = 0; i < chart.glyphs.length; i++) {
+        const ref = chart.glyphs[i];
+        const ra = ref.aspect, qa = g.aspect;
+        if (ra > qa * 2.2 || qa > ra * 2.2) continue;
+        const d = glyphDistance(g.bits, ref.words);
+        if (!best || d < best.d) best = { d, ref: i };
+        if (best.d <= 18) break;
+      }
+      if (best) { slot = best.ref; dist = best.d; }
+    }
+    const ch = labels && slot >= 0 && labels[slot] != null ? labels[slot] : "";
+    if (ch) mapped++; else unknown++;
+    const cand = buildGlyphCandidates(g, chart.id, labels, model, topK, descriptor);
+    out.push({
+      slot,
+      char: ch || "?",
+      distance: dist,
+      confidence: Math.max(0, 1 - dist / 256),
+      row: g.row, col: g.col, cellId: g.cellId,
+      line: g.line,
+      shapeKey: g.shapeKey,
+      slotCandidates: cand.slotCandidates,
+      charCandidates: cand.charCandidates,
+    });
+  }
+  let text = "", lastLine = -1;
+  for (const g of out) {
+    if (g.line !== lastLine) { if (lastLine >= 0) text += "\n"; lastLine = g.line; }
+    text += g.char;
+  }
+  return { glyphs: out, text, mapped, unknown, total: out.length };
+}
+
+const _externalWeightsCache = new Map();
+function getExternalWeights(opts) {
+  if (opts.modelWeights !== undefined) return Promise.resolve(opts.modelWeights);
+  if (opts.loadWeights === false) return Promise.resolve(null);
+  const baseUrl = opts.modelBaseUrl || "public/models/";
+  if (!_externalWeightsCache.has(baseUrl)) {
+    _externalWeightsCache.set(baseUrl, loadExternalWeights({
+      baseUrl,
+      fetchImpl: opts.fetchImpl,
+      cache: opts.modelCache,
+    }));
+  }
+  return _externalWeightsCache.get(baseUrl);
+}
+
 export async function recognizeCodeImage(bytes, opts = {}) {
+  const descriptor = Number(opts.descriptor) === 1 ? 1 : DESCRIPTOR_VERSION;
   const { width, height, data } = await bytesToRgba(bytes);
   const gray = toGray(data, width, height);
   const fp = globalFingerprint(gray, width, height);
-  const { glyphs } = extractGlyphs(gray, width, height);
-  const glyphKinds = new Set(glyphs.map((g) => {
-    let s = "";
-    for (const w of g.bits) s += w.toString(36) + ",";
-    return s;
-  })).size;
+  const extracted = extractGlyphs(gray, width, height);
+  const grouped = groupGlyphs(extracted.glyphs);
+  const glyphs = grouped.glyphs.map((g) => ({ ...g, shapeKey: glyphShapeKey(g) }));
+  const glyphKinds = new Set(glyphs.map((g) => g.shapeKey)).size;
+  const weights = normalizeWeights(opts.weights);
 
   // 二维码/条形码：ZXing 全格式。引擎缺失时静默降级。
   let barcodes = [];
@@ -367,11 +610,12 @@ export async function recognizeCodeImage(bytes, opts = {}) {
     }
   } catch { /* 读码失败不阻断视觉对照 */ }
 
+  const externalWeights = opts.model ? null : await getExternalWeights(opts);
+  const model = opts.model || buildModel(opts.fingerprints || {}, { weights: externalWeights, descriptor });
   const charts = buildIndex(opts.fingerprints || {});
   const manifest = opts.manifest || [];
   const byId = new Map(manifest.map((im) => [im.id, im]));
   const votes = matchGlyphs(glyphs, charts);
-  const qAspect = width / height;
   const maxVotes = Math.max(1, Math.sqrt(Math.max(1, glyphs.length)) * 3);
 
   const candidates = [];
@@ -381,28 +625,58 @@ export async function recognizeCodeImage(bytes, opts = {}) {
     const dD = hashDistanceHex(fp.dhash, c.dhash);
     const dA = hashDistanceHex(fp.ahash, c.ahash);
     const hashSim = Math.max(0, 1 - (dD * 0.6 + dA * 0.4) / 64);
-    const hSim = histSimilarity(fp.hist, c.hist);
-    const aspectSim = Math.min(qAspect, c.aspect) / Math.max(qAspect, c.aspect);
     const v = votes.get(c.id) || 0;
     const glyphSim = Math.min(1, v / maxVotes);
     if (v === 0 && hashSim < 0.72) continue;
-    const score = Math.max(0, Math.min(1,
-      glyphSim * 0.58 + hashSim * 0.24 + hSim * 0.12 + aspectSim * 0.06));
+    const score = scoreChartCandidate(fp, c, glyphSim, weights);
     if (score <= 0.12) continue;
     candidates.push({ image: im, score, glyphMatched: Math.round(v), hashSim });
   }
   candidates.sort((a, b) => b.score - a.score);
+  const top = candidates.slice(0, 6);
+  const chartById = new Map(charts.map((c) => [c.id, c]));
+  const mappings = opts.mappings || opts.glyphMaps || {};
+  const sequences = top.map((c) => {
+    const chart = chartById.get(c.image.id);
+    const dec = chart ? decodeChartSequence(chart, glyphs, mappings[c.image.id], model, DEFAULT_TOPK, descriptor) : { glyphs: [], text: "", mapped: 0, unknown: glyphs.length, total: glyphs.length };
+    return {
+      chartId: c.image.id,
+      image: c.image,
+      score: c.score,
+      text: dec.text,
+      mapped: dec.mapped,
+      unknown: dec.unknown,
+      total: dec.total,
+      chartGlyphCount: chart ? chart.glyphs.length : 0,
+      glyphs: dec.glyphs,
+    };
+  });
 
   return {
     width,
     height,
     barcodes,
-    candidates: candidates.slice(0, 6),
+    candidates: top,
+    sequences,
+    weights,
+    descriptor,
+    model: model.meta,
     glyphCount: glyphs.length,
     glyphKinds,
+    grid: { rows: grouped.rows, cols: grouped.cols },
+    glyphBoxes: glyphs.map((g) => ({
+      x0: g.x0, y0: g.y0, x1: g.x1, y1: g.y1,
+      line: g.line, row: g.row, col: g.col, cellId: g.cellId,
+      aspect: g.aspect, fill: g.fill, shapeKey: g.shapeKey,
+    })),
     fingerprint: fp,
   };
 }
 
-export default { recognizeCodeImage, bytesToRgba, globalFingerprint, extractGlyphs, toGray, resizeGray };
+export default {
+  recognizeCodeImage, bytesToRgba, globalFingerprint, extractGlyphs,
+  readingOrder, groupGlyphs, glyphShapeKey, slotStableId, scoreChartCandidate,
+  toGray, resizeGray, RECOGNIZE_WEIGHTS,
+  buildGlyphCandidates, normalizeLabels,
+};
 

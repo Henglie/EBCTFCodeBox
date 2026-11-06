@@ -2,6 +2,69 @@
 
 > 本文档记录完整更新历史。README.md「更新日志」仅保留最新版本变更。
 
+## v0.1.14（开发中）
+
+### 新增功能
+
+- 新增结构化出站编码
+- 新增文本处理工具组
+- 新增中英文 OCR 识别
+- 新增 OpenSSL 口令加解密（`Salted__`，AES 三档 + RC4，auto 8 组）
+- 编码图识图升级
+- 扩展面板重构
+- 离线包批量管理
+- Minecraft 文本情报提取支持拖入存档 ZIP 整包，深度扫描全部 NBT 字符串找 flag
+- 主 op 增至 928
+- 六门文案 2927 键
+
+### 修复
+
+- 敏感参数默认遮罩
+- 显式运行补齐重运算
+- 口令与私钥遮罩
+- BOM 工具条状态修复
+- 弹窗切路由自动关闭
+- PNG 尾块长度越界识别
+- PNG 畸形头分离修正
+- binwalk 模式直接雕复
+- 离线 OCR 缺包降级提示
+
+## v0.1.13-beta
+
+### 新增功能
+
+- dCode 扩展包升级到 2026-11 批次（409 op），新增「阶乘位数与规模估算」；op 页显示新增/更新徽标与批次时间。
+- 新增 12 个主 op（890）：`dataConvert`、`bzip2Enc`、`extractAll`、`gostKeyWrap`、`falconKeyGen` / `falconSign`、`typex`、`sigaba`、`lorenz`、`bombe`、`multipleBombe`、`colossus`。
+- 新增「全部算法」平铺页（890 卡、分类折叠、实时搜索）与 ≤860px 抽屉导航；配方工具栏重排为构建/执行/编辑/管理四行，F1 移至页头右上角。
+- 配方链补齐禁用/断点/单步/从某步、错误定位与前缀保留、撤销重做、复制节点、Auto Bake、Fork/Merge/Subsection/Register/Conditional Jump/Label/Return（不新增主 op）。
+- 输入/输出编码工具栏独立：字符集 10 种、文本/hex/base64/escaped 视图与 BOM 保留，输出切换即时重格式化。
+- 多文件/目录批处理（逐条状态、单条下载、ZIP 打包）与 wasm/字体/语言包/英文科普四个离线增强包。
+- 编码图识图：字形按阅读顺序切分、候选权重可配置、槽位→字符映射、逐字置信度与未知 `?`；无标注不按字母表猜字。
+- 分组密码补齐 PKCS#7/NoPadding/Zero/Bit/ISO 10126/ANSI X9.23；AES-GCM 加 AAD/Include IV/tagLen；SM4-GCM 独立 tag；XTEA/RC6 rounds、ChaCha/Salsa 8/12 轮、PRESENT CBC、Magma/Kuznyechik 全模式。
+- 通用编辑框统一 Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y（op 输入、一把梭、字符显示器、配方、可展开输入）。
+- LZString pieroxy 标准格式、LZ4 压缩方向、regex 预设；一把梭多段解码保留双层进度条，运行条不再 sticky。
+- 六门核心文案 2847 键同构，其余语言按实际完成度显示，不虚报 100%。
+
+### 修复
+
+- dCode 全部 409 op 关闭「边输边算」：参数输入统一 240ms 防抖，数学/数论等重运算只在点击「转换 / 解码」或 Ctrl+Enter 时执行。
+- 阶乘移除 `n≤20000` 人为上限，改分治 BigInt + 内存预算；超限返回精确位数/文本体积并明确拒绝，不静默截断。
+- 数学/数论人为上限预算化：Harshad 与整数根改 BigInt 精确、DFT 不丢输入点、超几何/二项改对数域、记数与区间类改输出/工作量预算，超限显式拒绝。
+- 光栅拆图默认中灰 `#808080`，`auto` 以真实 alpha 为准，x/y 双轴分组且可单独产轴。
+- 参数校验：AES/DES/3DES 校验 IV 长度，GCM 支持 12/16 字节 nonce，hex 非法字符显式报错，RC2 位数限 1..1024，Bombe 系列整数参数严格校验。
+- 修复 9 个仅有执行入口的算法被误判为无输入框；多行转子/反射器参数恢复可编辑并改 Worker 执行。
+- 修复配方链运行结束残留「执行中…」；链头文件载入即显示元数据与清除按钮。
+- 修复 SM4-GCM 独立 tag 末字节 `0x20` 被误删；一把梭 1/2/4/16-bit、索引色、隔行 PNG 改走 canvas→ZXing，1-bit `QR.png` 恢复识别。
+- CyberChef B 组补齐：Keccak 224/384/512、RIPEMD 128/256/320、bzip2 压缩（libbzip2 WASM）、专用文本提取器、YAML 美化/压缩/互转、GOST 28147-89 Key Wrap。
+- 算法合并：经典栅栏并入 `railfence`、bzip2 压缩/解压并入 `bzip2`、Falcon 四 op 并入 `Falcon` 族，保留 op ID、深链与配方。
+- 关于页与 README 新增贡献者：橙子、Tokeii。
+
+### 验证
+
+- 主 op 890；插件 op 409，自测 110/110；六门 i18n 2847 键同构（0 缺失、0 多余）。
+- padding/KAT 144、GOST 128、RC6 65、XSalsa20 11、SM4-GCM 28 项通过；Typex 3/3、SIGABA 2/2、Lorenz 6 组、Bombe 18/0、MultipleBombe 17/0、Colossus 215/0，三类攻击真浏览器 7/7。
+- 配方链 Node 43+23、Playwright 47+42、smoke 8；配方工具栏 1440/390 真浏览器 14/14；编辑框撤销 6/6；1-bit QR 实测命中；光栅 demo x=38/y=30/共 68 张。
+
 ## v0.1.12
 
 ### 新增功能
@@ -19,7 +82,7 @@
 
 ### 修复
 
-- 发行包不再包含 `.gz` 预压缩伴生文件和项目残留 `.zodeignore`；stage 清单与压缩包一致。
+- 发行包不再包含 `.gz` 预压缩伴生文件和项目残留 `.zodeignore`；发行包清单与压缩包一致。
 - 修复语言完成度虚高：移除英文 fallback 伪翻译；完成度按实际翻译键统计。
 - 语言支持固定中文第一、English 第二；弹窗切换路由自动关闭。
 - 云影解码对 0/000 等无有效字母段显式报错。
@@ -40,7 +103,7 @@
 - 题库 110 题 / 153 文件；云影四路 30/30；KNN 336 行 A=180/B=156。
 - pyc 747/747；F5 f5stegojs 往返、imageDiff alpha、StegSolve PNG/XOR 回归通过。
 - i18n：zh/en/fr/ja/ko/ru 100%；de 96.1%；其余按真实覆盖显示。
-- sw-assets 853 files / REV 12218f8bc0d37098；stage 白名单 1630 / 清单 1630；桌面包与 Release 资产另行生成。
+- 发行包清单 1630 项；桌面包与 Release 资产另行生成。
 
 ## v0.1.11
 

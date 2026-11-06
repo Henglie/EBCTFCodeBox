@@ -939,7 +939,7 @@ register({
     { key: "message", label: "待嵌入文本（编码时用）", type: "text", default: "" },
     { key: "msgEnc", label: "消息编码", type: "select", default: "text",
       options: [{ value: "text", label: "UTF-8 文本" }, { value: "hex", label: "Hex 字节" }] },
-    { key: "password", label: "口令（可选，ICE 加密）", type: "text", default: "" },
+    { sensitive: true, key: "password", label: "口令（可选，ICE 加密）", type: "password", default: "" },
     { key: "compress", label: "使用内置 Huffman 压缩", type: "bool", default: false },
     { key: "v1", label: "兼容 1.0 排序（口令下仍用自然序排色表）", type: "bool", default: false },
     { key: "inputEnc", label: "封面输入编码（文本输入时）", type: "select", default: "auto",

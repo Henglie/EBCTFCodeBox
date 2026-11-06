@@ -472,8 +472,8 @@ register({
     { key: "msgEnc", label: "消息输入", type: "select", default: "text", options: MSG_ENC_OPTIONS },
     { key: "keyEnc", label: "私钥形式", type: "select", default: "dec", options: KEY_ENC_OPTIONS },
     { key: "n", label: "模数 n（十进制）", type: "text", default: "", placeholder: "keyEnc=十进制参数时必填" },
-    { key: "d", label: "私钥指数 d（十进制）", type: "text", default: "", placeholder: "keyEnc=十进制参数时必填" },
-    { key: "privPem", label: "私钥 PEM", type: "text", default: "", placeholder: "keyEnc=PEM 时必填（-----BEGIN RSA PRIVATE KEY----- 或 PRIVATE KEY）" },
+    { sensitive: true, key: "d", label: "私钥指数 d（十进制）", type: "text", default: "", placeholder: "keyEnc=十进制参数时必填" },
+    { sensitive: true, acceptFile: "text", key: "privPem", label: "私钥 PEM", type: "textarea", default: "", placeholder: "keyEnc=PEM 时必填（-----BEGIN RSA PRIVATE KEY----- 或 PRIVATE KEY）" },
     { key: "saltLen", label: "盐长 sLen（仅 PSS）", type: "select", default: "hlen", options: SALT_OPTIONS_SIGN },
   ],
   run: async (text, p = {}) => {
@@ -542,7 +542,7 @@ register({
     { key: "keyEnc", label: "公钥形式", type: "select", default: "dec", options: KEY_ENC_OPTIONS },
     { key: "n", label: "模数 n（十进制）", type: "text", default: "", placeholder: "keyEnc=十进制参数时必填" },
     { key: "e", label: "公钥指数 e（十进制）", type: "text", default: "65537", placeholder: "常用 65537" },
-    { key: "pubPem", label: "公钥 PEM", type: "text", default: "", placeholder: "keyEnc=PEM 时必填（-----BEGIN PUBLIC KEY----- 或 RSA PUBLIC KEY）" },
+    { acceptFile: "text", key: "pubPem", label: "公钥 PEM", type: "textarea", default: "", placeholder: "keyEnc=PEM 时必填（-----BEGIN PUBLIC KEY----- 或 RSA PUBLIC KEY）" },
     { key: "saltLen", label: "盐长 sLen（仅 PSS）", type: "select", default: "hlen", options: SALT_OPTIONS_VERIFY },
   ],
   run: async (text, p = {}) => {

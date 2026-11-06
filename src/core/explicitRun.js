@@ -36,7 +36,7 @@ export const EXPLICIT_RUN_OPS = [
   // forensic：流量可读结论（大 pcap 轨迹图编码秒级起步，走 Worker 通道）
   "trafficReadable",
   // analysis：全排列 / 爬山破解
-  "getAllCasings", "playfairCrack",
+  "getAllCasings", "playfairCrack", "subCipherSolver",
   // crypto/hash：字典爆破与高迭代派生
   "hashDictCrack", "hmacKeyBrute", "pbeAesBrute", "pbkdf2",
   // block：2DES 中间相遇（keyBits 20 位实测 23s）
@@ -46,11 +46,35 @@ export const EXPLICIT_RUN_OPS = [
   // analysis：KNN 训练集可达百万行，避免改参数时自动重跑
   "knnClassify",
   // asym：纯 JS 素数搜索型密钥生成
-  "rsaGenKeyPair", "elgamalKeyGen", "dsaParamGen", "paillierKeyGen",
+  "rsaGenKeyPair", "elgamalKeyGen", "dsaParamGen", "paillierKeyGen", "falconKeyGen",
   // asym：KZG/EIP-4844（4096 点 MSM，blob 大输入逐键自动跑会冻结主线程）
   "kzgCommit", "kzgVerify",
+  // 历史密码机重 op：Bombe/MultipleBombe/Colossus 走 Worker + 显式触发
+  "bombe", "multipleBombe", "colossus",
+  "lzma", "tar", "ocr",
+  // PGP 全家：涉及私钥/口令且耗时，禁止边输边跑
+  "pgpGenKeyPair", "pgpEncrypt", "pgpDecrypt", "pgpSign", "pgpVerify",
+  "pgpEncryptAndSign", "pgpDecryptAndVerify", "pgpParseKey",
   // 作者已标注 noAuto 的重 op（工具页同样要显式触发）
   "qrFormatBrute", "xiangyue", "xiangyueEnc", "adsTool",
+  // ---- v0.1.14 全 op 审计补录（判定依据与实测见 资料/工程留存/v0.1.14-预研/sensitive_audit.md）----
+  // KDF（内存硬化，默认快、调参即重；与既有 pbkdf2 同口径）：argon2 默认档实测 2.7s，
+  //   scrypt 0.49s / yescrypt 0.60s / balloon 0.16s / bcrypt 0.11s / lyra2 0.03s；
+  //   N / 内存 / 轮数一调即秒级，禁止参数框逐键自动跑。
+  "argon2", "scrypt", "yescrypt", "lyra2", "balloon", "bcrypt",
+  // asym：大结构密钥生成（XMSS 建树默认 >8s 超时；SLH-DSA 超树默认 ~1s）
+  "xmssKeyGen", "slhdsaKeyGen",
+  // crypto：格基 / 预言机 / 分解类重分析（参数给足后秒级到分钟级；LLL / Boneh-Durfee 尤重）
+  "lllAttack", "rsaBonehDurfee", "rsaCoppersmith", "rsaLsbOracle",
+  "rsaBleichenbacher", "rsaPollard", "rsaPollardPm1",
+  // modern：离散对数 BSGS（表随参数膨胀）
+  "dlp",
+  // modern：JWT 字典爆破
+  "jwtCrack",
+  // 重型 WASM / 文件隐写引擎（改口令/密钥即整档重算；steghide/outguess 为 WASM 引擎）
+  "steghide", "outguess", "f5stego", "sevenZipExtract",
+  // 长耗时分析：LSB 全组合扫描 / 图像 FFT / 立体图解（整图重算）
+  "zstegScan", "stereogramSolver", "spectrogram", "imgFft",
 ];
 
 /** 某 op 是否显式触发（自动路径不跑，等用户点击）。 */
@@ -86,4 +110,9 @@ export function lazyRunHint(name) {
  */
 export function explicitRunHint(name) {
   return `【${name}】运算量大，已暂停自动运行。\n请点击下方「转换 / 解码」按钮（或 Ctrl+Enter）手动运行。\n点击前修改参数不会重复计算。`;
+}
+
+/** 插件声明 autoRun:false 时的提示：参数可先改完，再显式运行。 */
+export function manualRunHint(name) {
+  return `【${name}】已关闭边输边算。\n参数修改不会触发运算；点下方「转换 / 解码」按钮或 Ctrl+Enter 运行。`;
 }

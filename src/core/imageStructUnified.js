@@ -170,7 +170,15 @@ function analyzePng(bytes) {
     for (const c of pc.chunks) {
       const crc = c.crcOk === null ? "?" : (c.crcOk ? "通过" : "失败");
       const stored = c.storedCrc !== null ? pc.hex4(c.storedCrc) : "--------";
-      lines.push(`  [${c.type}] @0x${c.offset.toString(16)} 长度 ${c.len}  CRC ${stored} ${crc}`);
+      if (c.lenInvalid) {
+        // 长度越界：声明长度把后续字节（含真实 IEND）圈进数据区，CRC 无法按声明长度校验。
+        lines.push(`  [${c.type}] @0x${c.offset.toString(16)} 声明长度 ${c.len}  CRC ${stored} ${crc}（长度越界，实际 ${c.dataLen} 字节）`);
+        if (c.hiddenText) lines.push(`    块内可打印: ${c.hiddenText}`);
+        if (c.hiddenHex) lines.push(`    块内 hex: ${c.hiddenHex}`);
+        if (c.hasIend) lines.push("    块内含 IEND：真实结束标记被长度字段吞入");
+      } else {
+        lines.push(`  [${c.type}] @0x${c.offset.toString(16)} 长度 ${c.len}  CRC ${stored} ${crc}`);
+      }
     }
     if (pc.texts.length) {
       lines.push("文本块:");
@@ -180,9 +188,10 @@ function analyzePng(bytes) {
       }
     }
     if (pc.anyCrcFail) lines.push("⚠ 存在 CRC 校验失败的 chunk —— 可能藏数据 / 被篡改");
+    if (pc.hasLenInvalid) lines.push("⚠ 存在长度越界的 chunk —— 疑似伪造块头 / 尾部隐藏数据，块内明文见上");
     sections.push({
       id: "png-chunks", title: "PNG 逐块 CRC 校验",
-      level: pc.anyCrcFail ? "alert" : "info", icon: "data_object",
+      level: (pc.anyCrcFail || pc.hasLenInvalid) ? "alert" : "info", icon: "data_object",
       body: lines.join("\n"),
     });
    // PLTE / 索引位流摘要（调色板图常藏 LSB/索引隐写；压缩文本已由 pngChunks 内 inflate 解出）

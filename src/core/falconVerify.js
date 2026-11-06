@@ -402,7 +402,7 @@ export function falconVerifyCore(pkBytes, sigBytes, msgBytes, explicitMsgBytes) 
 // ============ op 注册 ============
 
 register({
-  id: "falconPkParse",
+  id: "falconPkParse", family: "falcon", familyLabel: "parse",
   cat: "asym",
   name: "Falcon 公钥解析",
   desc: "解析 Falcon/FN-DSA 公钥（规范 v1.2 §3.11.4：头字节 0000nnnn + n×14bit 大端系数流，q=12289）：档位、长度、系数统计与合法性逐项报告。支持 Falcon-512（897 字节）与 Falcon-1024（1793 字节），hex 或 base64 输入",
@@ -442,7 +442,7 @@ register({
 });
 
 register({
-  id: "falconVerify",
+  id: "falconVerify", family: "falcon", familyLabel: "verify",
   cat: "asym",
   name: "Falcon 验签",
   desc: "Falcon/FN-DSA 格签名验证（规范 v1.2 算法 16）：c = SHAKE256(nonce‖消息) 哈希到点（16bit 大端采样、t<61445 接受）；s1 = c − s2·h mod (x^n+1, 12289) 居中；‖(s1,s2)‖² ≤ ⌊β²⌋（512 档 34034726 / 1024 档 70265242）则有效。自动识别规范格式（0x39/0x3A 压缩、0x59/0x5A CT）与 NIST API signed-message（KAT/PQClean 风格）；格式错与签名错分列报出",

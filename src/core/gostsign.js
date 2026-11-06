@@ -188,7 +188,7 @@ register({
       { value: "text", label: "文本" },
       { value: "hex", label: "Hex" },
     ] },
-    { key: "priv", label: "私钥 d (hex, 可选)", type: "text", default: "", placeholder: "32/64B hex，留空随机生成" },
+    { sensitive: true, key: "priv", label: "私钥 d (hex, 可选)", type: "text", default: "", placeholder: "32/64B hex，留空随机生成" },
     { key: "k", label: "随机数 k (hex, 教学)", type: "text", default: "", placeholder: "32/64B hex，留空随机（固定 k 仅供对拍教学）" },
   ],
   run: (text, p) => {

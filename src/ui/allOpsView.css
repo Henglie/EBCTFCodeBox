@@ -1,0 +1,437 @@
+.nav-allops {
+  margin-bottom: 7px;
+}
+
+.nav-allops .msym {
+  color: var(--primary);
+}
+
+.allops-page {
+  max-width: 1560px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.allops-head {
+  position: sticky;
+  top: calc(-1 * var(--sp-5));
+  z-index: 6;
+  padding-block: var(--sp-2) var(--sp-3);
+  background: var(--surface);
+  border-bottom: 1px solid var(--outline-var);
+}
+
+.allops-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--sp-3);
+}
+
+.allops-title {
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--on-surface);
+}
+
+.allops-subtitle {
+  max-width: 880px;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--on-surface-var);
+}
+
+.allops-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.allops-search {
+  flex: 1 1 280px;
+  min-width: 0;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-inline: var(--sp-3);
+  background: var(--field-bg);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-full);
+  color: var(--on-surface-var);
+  transition: border-color var(--dur-short) var(--ease), background var(--dur-short) var(--ease);
+}
+
+.allops-search:focus-within {
+  border-color: var(--primary);
+  background: var(--surface-1);
+}
+
+.allops-search-icon {
+  flex: none;
+  font-size: 20px;
+  color: var(--on-surface-var);
+}
+
+.allops-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--on-surface);
+  font-family: var(--font);
+  font-size: var(--fs-base);
+}
+
+.allops-search-input::placeholder {
+  color: var(--on-surface-var);
+}
+
+.allops-search-input::-webkit-search-cancel-button,
+.allops-search-input::-webkit-search-decoration {
+  display: none;
+}
+
+.allops-clear {
+  flex: none;
+  height: 28px;
+  padding-inline: var(--sp-3);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--on-surface-var);
+  font-size: var(--fs-xs);
+  transition: background var(--dur-short) var(--ease), color var(--dur-short) var(--ease);
+}
+
+.allops-clear:hover:not(:disabled),
+.allops-clear:focus-visible {
+  background: var(--surface-hi);
+  color: var(--on-surface);
+}
+
+.allops-clear:disabled {
+  opacity: .35;
+}
+
+.allops-count {
+  flex: none;
+  font-size: var(--fs-xs);
+  color: var(--on-surface-var);
+  white-space: nowrap;
+}
+
+.allops-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.allops-section {
+  background: var(--surface-1);
+  border: 1px solid var(--outline-var);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.allops-section-head {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-inline: var(--sp-3) var(--sp-4);
+  background: transparent;
+  color: var(--on-surface);
+  text-align: start;
+  transition: background var(--dur-short) var(--ease);
+}
+
+.allops-section-head:hover {
+  background: var(--surface-2);
+}
+
+.allops-section-head:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.allops-caret {
+  flex: none;
+  font-size: 20px;
+  color: var(--on-surface-var);
+}
+
+.allops-section-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-base);
+  font-weight: 600;
+}
+
+.allops-section-count {
+  flex: none;
+  min-width: 30px;
+  height: 22px;
+  padding-inline: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-full);
+  background: var(--surface-3);
+  color: var(--on-surface-var);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.allops-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--outline-var);
+  background: var(--surface-1);
+}
+
+.allops-grid[hidden] {
+  display: none;
+}
+
+.allops-card {
+  min-width: 0;
+  min-height: 84px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--outline-var);
+  border-radius: 10px;
+  color: var(--on-surface);
+  text-decoration: none;
+  overflow: hidden;
+  transition: background var(--dur-short) var(--ease), border-color var(--dur-short) var(--ease);
+}
+
+.allops-card:hover {
+  background: var(--surface-3);
+  border-color: var(--outline);
+  color: var(--on-surface);
+}
+
+.allops-card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.allops-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.allops-card-name {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.allops-badge {
+  flex: none;
+  max-width: 46%;
+  height: 17px;
+  padding-inline: 6px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--r-full);
+  border: 1px solid currentColor;
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.allops-badge-exe {
+  color: var(--warning-text, var(--warning));
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+}
+
+.allops-badge-family {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.allops-card-id {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.25;
+  color: var(--on-surface-var);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: ltr;
+  text-align: start;
+}
+
+.allops-card-desc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin-top: 1px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--on-surface-var);
+  overflow-wrap: anywhere;
+}
+
+.allops-card-meta {
+  margin-top: auto;
+  padding-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--on-surface-var);
+}
+
+.allops-card-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.allops-card-cat::before {
+  content: "";
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: var(--r-full);
+  background: var(--outline);
+}
+
+.allops-card-famlbl {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: .8;
+}
+
+.allops-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: 260px;
+  padding: var(--sp-6) var(--sp-4);
+  border: 1px dashed var(--outline-var);
+  border-radius: var(--r-md);
+  color: var(--on-surface-var);
+  text-align: center;
+}
+
+.allops-empty-icon {
+  font-size: 44px;
+  opacity: .55;
+}
+
+.allops-empty-title {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+.allops-empty-hint {
+  max-width: 520px;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+@media (max-width: 860px) {
+  .allops-head {
+    top: calc(-1 * var(--sp-4));
+  }
+
+  .allops-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+
+  .allops-card {
+    min-height: 88px;
+  }
+}
+
+@media (max-width: 480px) {
+  .allops-title {
+    font-size: var(--fs-lg);
+  }
+
+  .allops-search-wrap {
+    gap: var(--sp-2);
+  }
+
+  .allops-search {
+    flex-basis: 100%;
+    height: 46px;
+  }
+
+  .allops-count {
+    margin-inline-start: auto;
+  }
+
+  .allops-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .allops-card {
+    min-height: 92px;
+    padding: 9px;
+  }
+
+  .allops-card-name {
+    font-size: 13px;
+  }
+
+  .allops-card-desc {
+    -webkit-line-clamp: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .allops-search,
+  .allops-clear,
+  .allops-section-head,
+  .allops-card {
+    transition: none;
+  }
+}

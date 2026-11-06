@@ -385,6 +385,72 @@
   cursor: pointer;
 }
 .ci-rec-copy:hover { background: var(--surface-hi); color: var(--on-surface); }
+/* 字形序列 / 槽位映射：只占结果区，不抢候选卡片 */
+.ci-rec-seq-block { display: flex; flex-direction: column; gap: var(--sp-2); }
+.ci-rec-seq {
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  padding: var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-hi);
+  word-break: break-all;
+  user-select: all;
+}
+.ci-rec-decoded {
+  margin: 0;
+  padding: var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-hi);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: all;
+}
+.ci-rec-map { display: flex; flex-direction: column; gap: var(--sp-2); }
+.ci-rec-map[hidden] { display: none; }
+.ci-rec-map-rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--sp-1) var(--sp-2);
+  max-height: 260px;
+  overflow: auto;
+}
+.ci-rec-map-row { display: flex; align-items: center; gap: var(--sp-1); min-width: 0; }
+.ci-rec-map-slot {
+  flex: none;
+  font-size: var(--fs-xs);
+  color: var(--on-surface-var);
+  font-family: var(--mono);
+}
+.ci-rec-map-inp {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--outline);
+  border-radius: var(--r-xs);
+  background: var(--surface);
+  color: var(--on-surface);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+}
+.ci-rec-map-btn,
+.ci-rec-map-save {
+  align-self: flex-start;
+  height: 30px;
+  padding: 0 var(--sp-3);
+  border: none;
+  border-radius: var(--r-full);
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.ci-rec-map-btn:hover,
+.ci-rec-map-save:hover { filter: brightness(1.05); }
 .ci-rec-cands {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

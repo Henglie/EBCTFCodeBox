@@ -74,7 +74,29 @@ const CI_FALLBACK = {
   "ui.ci.rec.reset": "重新选择",
   "ui.ci.rec.copy": "复制",
   "ui.ci.rec.copied": "已复制",
+  "ui.ci.rec.sequence": "字形序列与权重",
+  "ui.ci.rec.candidate": "候选",
+  "ui.ci.rec.seqHint": "当前还没有该对照表的字形映射。设置映射后才会输出文本；未填槽位显示 ?，不按字母表猜。",
+  "ui.ci.rec.setMap": "设置字形映射",
+  "ui.ci.rec.mapHint": "按左侧槽位填字符（留空=未知）。保存后立即用同一张图重新解码。",
+  "ui.ci.rec.saveMap": "保存映射并解码",
+  "ui.ci.rec.mapped": "已映射 {0}/{1}",
+  "ui.ci.rec.slot": "槽位 {0}",
+  "ui.ci.rec.mappingSaved": "字形映射已保存",
+  "ui.ci.rec.weights": "权重：字形 {0} / 哈希 {1} / 直方图 {2} / 比例 {3}",
 };
+
+// 字形槽位→字符映射：按对照表 id 存 localStorage；只存映射，不存用户图片/结果。
+const GLYPH_MAP_KEY = "ebctf.codeimage.glyphmaps";
+function loadGlyphMaps() {
+  try {
+    const v = JSON.parse(localStorage.getItem(GLYPH_MAP_KEY) || "{}");
+    return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  } catch { return {}; }
+}
+function saveGlyphMaps(maps) {
+  try { localStorage.setItem(GLYPH_MAP_KEY, JSON.stringify(maps)); } catch { /* 隐私模式忽略 */ }
+}
 
 const CAT_LABEL_KEY = {
   alien: "ui.ci.cat.alien",
@@ -297,7 +319,10 @@ function buildRecognizePanel() {
   const result = el("div", { class: "ci-rec-result" });
   const resetBtn = el("button", {
     class: "ci-rec-reset", type: "button", hidden: "hidden",
-    onclick: () => { input.value = ""; result.innerHTML = ""; status.textContent = ""; resetBtn.hidden = true; },
+    onclick: () => {
+      input.value = ""; result.innerHTML = ""; status.textContent = ""; resetBtn.hidden = true;
+      lastFile = null; lastBytes = null;
+    },
   }, tt("ui.ci.rec.reset"));
 
   const pick = () => { if (!busy) input.click(); };
@@ -312,17 +337,32 @@ function buildRecognizePanel() {
     if (f) handleFile(f);
   });
 
+  let lastFile = null;
+  let lastBytes = null;
+
   async function handleFile(file) {
     if (!file || !/^image\//i.test(file.type || "")) { status.textContent = tt("ui.ci.rec.fail", "不是图片文件"); return; }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    lastFile = file;
+    lastBytes = bytes;
+    await runRecognition();
+  }
+
+  async function runRecognition() {
+    if (!lastFile || !lastBytes) return;
     busy = true;
     result.innerHTML = "";
     status.textContent = tt("ui.ci.rec.running");
     resetBtn.hidden = false;
     try {
-      const [bytes, fp] = await Promise.all([file.arrayBuffer(), loadFingerprints()]);
+      const fp = await loadFingerprints();
       const { recognizeCodeImage } = await import("../core/codeImageRecognize.js");
-      const r = await recognizeCodeImage(new Uint8Array(bytes), { manifest, fingerprints: fp && fp.images });
-      renderResult(r, file);
+      const r = await recognizeCodeImage(lastBytes.slice(), {
+        manifest,
+        fingerprints: fp && fp.images,
+        mappings: loadGlyphMaps(),
+      });
+      renderResult(r, lastFile);
       status.textContent = "";
     } catch (e) {
       status.textContent = tt("ui.ci.rec.fail", e && e.message ? e.message : e);
@@ -397,7 +437,122 @@ function buildRecognizePanel() {
       box.append(list);
     }
     result.append(box);
+    appendSequenceBlock(result, r, (r.sequences || [])[0]);
     result.append(el("div", { class: "ci-rec-hint" }, tt("ui.ci.rec.hint")));
+  }
+
+  function appendSequenceBlock(host, r, seq) {
+    if (!seq) return;
+    const block = el("div", { class: "ci-rec-block ci-rec-seq-block" },
+      el("div", { class: "ci-rec-block-title" }, msym("data_array"), tt("ui.ci.rec.sequence")),
+    );
+    const w = r.weights || {};
+    block.append(el("div", { class: "ci-rec-muted" },
+      tt("ui.ci.rec.weights",
+        Math.round((w.glyph || 0) * 100), Math.round((w.hash || 0) * 100),
+        Math.round((w.hist || 0) * 100), Math.round((w.aspect || 0) * 100))));
+    block.append(el("div", { class: "ci-rec-seq" },
+      seq.glyphs.map((g) => (g.slot >= 0 ? String(g.slot) : "?")).join(" ")));
+
+    function applyCandidate(slot, ch) {
+      if (!(slot >= 0) || ch == null || ch === "") return;
+      const maps = loadGlyphMaps();
+      const labels = Array.isArray(maps[seq.chartId]) ? maps[seq.chartId].slice() : [];
+      labels[slot] = String(ch);
+      maps[seq.chartId] = labels;
+      saveGlyphMaps(maps);
+      toast(tt("ui.ci.rec.mappingSaved"));
+      runRecognition();
+    }
+
+    if (seq.glyphs.length) {
+      const candRow = el("div", {
+        class: "ci-rec-seq",
+        style: "display:flex;flex-wrap:wrap;gap:var(--sp-1);align-items:center;",
+      }, el("span", { class: "ci-rec-muted", style: "flex:none;" }, tt("ui.ci.rec.candidate")));
+      for (const g of seq.glyphs) {
+        const cands = Array.isArray(g.charCandidates) ? g.charCandidates : [];
+        const kids = [el("span", {
+          class: "ci-rec-map-slot",
+          title: g.cellId ? g.cellId : "",
+          "data-cell": g.cellId || "",
+        }, "#" + (g.slot >= 0 ? g.slot : "?"))];
+        cands.forEach((c, i) => {
+          if (i) kids.push(el("span", { class: "ci-rec-muted" }, "/"));
+          const targetSlot = g.slot >= 0 ? g.slot : c.slot;
+          kids.push(el("button", {
+            class: "ci-rec-map-btn", type: "button",
+            style: "height:22px;padding:0 7px;font-size:var(--fs-xs);line-height:1;",
+            title: tt("ui.ci.rec.slot", targetSlot) + " · " + Math.round((Number(c.score) || 0) * 100) + "%",
+            onclick: () => applyCandidate(targetSlot, c.char),
+          }, c.char));
+        });
+        if (!cands.length) kids.push(el("span", { class: "ci-rec-muted" }, "?"));
+        candRow.append(el("span", {
+          style: "display:inline-flex;align-items:center;gap:4px;padding:1px 6px;border:1px solid var(--outline-var);border-radius:var(--r-full);",
+        }, kids));
+      }
+      block.append(candRow);
+    }
+
+    if (seq.mapped > 0) {
+      block.append(el("pre", { class: "ci-rec-decoded" }, seq.text));
+      block.append(el("div", { class: "ci-rec-muted" },
+        tt("ui.ci.rec.mapped", seq.mapped, seq.total)));
+      const copy = el("button", {
+        class: "ci-rec-copy", type: "button", title: tt("ui.ci.rec.copy"),
+        onclick: async () => {
+          try { await navigator.clipboard.writeText(seq.text); toast(tt("ui.ci.rec.copied")); } catch { /* ignore */ }
+        },
+      }, msym("content_copy"));
+      block.append(copy);
+    } else {
+      block.append(el("div", { class: "ci-rec-muted" }, tt("ui.ci.rec.seqHint")));
+    }
+
+    const editor = el("div", { class: "ci-rec-map", hidden: "hidden" });
+    const mapBtn = el("button", { class: "ci-rec-map-btn", type: "button" }, tt("ui.ci.rec.setMap"));
+    mapBtn.addEventListener("click", () => {
+      editor.hidden = !editor.hidden;
+      if (!editor.childNodes.length) buildEditor();
+    });
+    block.append(mapBtn, editor);
+
+    function buildEditor() {
+      const maps = loadGlyphMaps();
+      const old = Array.isArray(maps[seq.chartId]) ? maps[seq.chartId] : [];
+      const used = [...new Set(seq.glyphs.map((g) => g.slot).filter((s) => s >= 0))].sort((a, b) => a - b);
+      editor.append(el("div", { class: "ci-rec-muted" }, tt("ui.ci.rec.mapHint")));
+      const rows = el("div", { class: "ci-rec-map-rows" });
+      const inputs = [];
+      for (const slot of used) {
+        const inp = el("input", {
+          class: "ci-rec-map-inp", type: "text", maxlength: "8",
+          placeholder: "?", value: old[slot] || "", "aria-label": tt("ui.ci.rec.slot", slot),
+        });
+        inp.dataset.slot = String(slot);
+        inputs.push(inp);
+        rows.append(el("label", { class: "ci-rec-map-row" },
+          el("span", { class: "ci-rec-map-slot" }, tt("ui.ci.rec.slot", slot)), inp));
+      }
+      const save = el("button", { class: "ci-rec-map-save", type: "button" }, tt("ui.ci.rec.saveMap"));
+      save.addEventListener("click", async () => {
+        const labels = Array.isArray(old) ? old.slice() : [];
+        for (const inp of inputs) {
+          const slot = Number(inp.dataset.slot);
+          const v = inp.value.trim();
+          if (v) labels[slot] = v; else delete labels[slot];
+        }
+        const next = loadGlyphMaps();
+        next[seq.chartId] = labels;
+        saveGlyphMaps(next);
+        toast(tt("ui.ci.rec.mappingSaved"));
+        await runRecognition();
+      });
+      editor.append(rows, save);
+    }
+
+    host.append(block);
   }
 
   const root = el("div", { class: "ci-rec" },

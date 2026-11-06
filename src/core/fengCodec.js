@@ -191,7 +191,7 @@ register({
   id: "yueChang", cat: "cn", name: "曰唱",
   desc: "风之暇想 曰唱：deflate + PBKDF2-SHA256(10万次) + AES-GCM-256，Base64 逐字符映射为中文拟声字（前缀「唱：」，口令可空则用默认 YueChang）",
   params: [
-    { key: "password", label: "口令", type: "text", default: "", placeholder: "留空用默认口令 YueChang" },
+    { sensitive: true, key: "password", label: "口令", type: "password", default: "", placeholder: "留空用默认口令 YueChang" },
   ],
   encode: ycEncode,
   decode: ycDecode,

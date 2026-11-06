@@ -152,6 +152,8 @@ function detectXml(text) {
 
 // 厂商密钥前缀：每族带具体前缀 + 长度/字符集约束，低误报。
 const SECRET_RES = [
+  // OpenAI 风格 sk- 令牌（短样本/教学密钥）
+  /\bsk-[0-9A-Za-z]{8,}\b/g,
   // Stripe 私密/受限密钥：sk_live_ / sk_test_ / rk_live_ / rk_test_ + ≥24 位字母数字
   /\b(?:sk|rk)_(?:live|test)_[0-9A-Za-z]{24,}/g,
   // AWS 访问密钥 ID：AKIA / ASIA + 16 位大写字母数字

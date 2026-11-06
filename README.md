@@ -9,7 +9,7 @@
   <span>恒烈 CTF 编码工具箱 · EBCTFCodeBox</span>
 </h1>
 <p align="center">
-  <span align="center">本地优先、零外发的编解码 / 加解密 / 隐写分析工具箱：878 个注册操作覆盖 23 类能力，绝大多数在浏览器本地运行，Windows 另可启用本地桥能力，macOS / Linux 提供双击启动器。</span>
+  <span align="center">本地优先、零外发的编解码 / 加解密 / 隐写分析工具箱：928 个注册操作覆盖 23 类能力，绝大多数在浏览器本地运行，Windows 另可启用本地桥能力，macOS / Linux 提供双击启动器。</span>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 - [项目简介](#项目简介)　　　　[特点](#特点)
 - [界面预览](#界面预览)　　　　[运行](#运行)
 - [平台兼容性](#平台兼容性)　　[性能要求](#性能要求)
-- [目录结构](#目录结构)　　　　[编解码全清单](#编解码全清单878-ops--23-分类)
+- [目录结构](#目录结构)　　　　[编解码全清单](#编解码全清单928-ops--23-分类)
 - [插件与 AI 接入](#插件与-ai-接入)　[开源协议](#开源协议)
 - [第三方资源与许可](#第三方资源与许可)　[隐私](#隐私)
 - [关键词 / Keywords](#关键词--keywords)
@@ -47,9 +47,49 @@
 | 百度网盘 | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
 | 夸克网盘 | https://pan.quark.cn/s/3b7e573b19c0 | 无 |
 
-当前版本 **v0.1.12**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
+当前版本 **v0.1.14**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
 
 ## 更新日志
+
+## v0.1.14（开发中）
+
+> 本版主要变化：新增结构化出站编码、文本处理工具组、中英文 OCR 与编码图识图升级；扩展面板重构并支持离线包批量管理；敏感参数默认遮罩、重运算显式运行、口令与私钥可隐藏；BOM 工具条状态与弹窗切路由修复；主 op 增至 928，六门文案 2927 键。
+
+## v0.1.13-beta
+
+### 新增
+
+- dCode 扩展包 2026-11 批次：409 op，新增「阶乘位数与规模估算」；op 页显示新增/更新徽标与批次时间。
+- 新增 12 个主 op，主 op 总数 890：`dataConvert`、`bzip2Enc`、`extractAll`、`gostKeyWrap`、`falconKeyGen` / `falconSign`、`typex`、`sigaba`、`lorenz`、`bombe`、`multipleBombe`、`colossus`；覆盖 JSON/CSV/XML/YAML 转换、bzip2、专用文本提取、GOST Key Wrap、Falcon 与六种历史密码机。
+- 新增「全部算法」平铺页（890 卡、分类折叠、实时搜索）与 ≤860px 抽屉导航；配方工具栏重排为构建 / 执行 / 编辑 / 管理四行，F1 快捷键移至页头右上角；输入 / 输出编码工具栏各自独立，输出视图切换即时重格式化最近结果，不重跑算法。
+- 多文件 / 目录批处理支持逐条状态、单条下载与 ZIP 打包；设置中可管理 wasm / 字体 / 语言包 / 英文科普四个离线增强包。
+- 中 / 英 / 法 / 日 / 韩 / 俄六门核心界面文案保持 2927 键同构；其余语言按实际完成度显示，不虚报 100%。
+- 编码图自动识图：字形按阅读顺序切分、候选权重可配置，支持槽位→字符映射、逐字置信度与未知 `?`；没有标注就不按字母表猜。
+- 分组密码补齐 NoPadding/PKCS#7/Zero/Bit/ISO 10126/ANSI X9.23；AES-GCM 加 AAD/Include IV/tagLen；XTEA/RC6 rounds、ChaCha/Salsa 8/12 轮、PRESENT CBC、GOST 全模式。
+- 配方链补齐禁用/断点/单步/从某步、错误定位与前缀保留、结构撤销/重做、复制节点、Auto Bake、Magic、Fork/Merge/Subsection/Register/Conditional Jump 控制节点；不新增主 op。
+- 通用编辑框统一 Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y：op 输入、首页一把梭、字符显示器、配方输入、可展开输入框；粘贴/清空/外部写入都可撤销。
+- LZString pieroxy 标准格式、LZ4 压缩、regex 预设提取；一把梭多段解码保留双层进度条，运行条不再 sticky，卡片间距修复。
+
+### 修复
+
+- dCode 全部 op 取消边输边算：参数输入防抖，数学/数论等重运算改为显式按钮或 Ctrl+Enter 触发。
+- 阶乘移除 `n≤20000` 人为上限，改分治乘积 + BigInt；按实际内存预算展开，超限返回精确位数/内存估算并明确拒绝，不静默截断。
+- 数学/数论 P0：Harshad 改用 BigInt 不再丢 >2^53 精度；DFT 不再静默丢弃输入点；平方根/立方根/n 次根用 BigInt 精确根；超几何/二项概率改对数域不再 NaN；记数/区间类小上限改为输出或工作量预算。
+- 光栅拆图默认中灰 `#808080` 填充，黑/白笔画都可见；x/y 两轴都生成并在报告与自动预览中分组呈现；`auto` 以真实 alpha 为准。
+- 分组密码与参数校验：AES/DES/3DES 的 IV 长度必须匹配块长；GCM Include IV 支持 12 / 16 字节 nonce；hex 密钥 / IV / 密文含非法字符、RC2 有效位数越界、Bombe / MultipleBombe / Colossus 数值参数非法时均显式报错，不再静默补零、截断或回退默认值。
+- 配方链运行结束不再残留「执行中…」；链头文件载入后立即显示文件元数据与清除按钮。
+- 修复 9 个仅有执行入口的算法被误判为无输入框；历史密码机的多行转子 / 反射器参数恢复可编辑，并改为显式运行 + Worker 执行，避免大转子池冻结页面。
+- SM4-GCM 独立 tag 按 Latin1 / UTF-8 解析时不再误删末字节空白，末字节为 `0x20` 的合法 tag 可正常解密。
+- 一把梭二维码：1/2/4/16-bit/索引色/隔行 PNG 改走浏览器 canvas 解 RGBA 再送 ZXing；1-bit `QR.png` 实测恢复识别，不再报「仅支持 8 位 LSB」。
+
+### 贡献者
+
+- 新增贡献者橙子（提出多个 Misc 逻辑代码修复）。
+- 新增贡献者 Tokeii（贡献改版图标、项目下游优化作者）。
+
+### 验证
+
+890 主 op；409 插件 op（全部关闭边输边算）；插件自测 110/110；padding/KAT 144、GOST 128、RC6 65、XSalsa20 11、SM4-GCM 28 项通过；配方链 Node 43+23、Playwright 47+42、既有 smoke 8 项通过；配方工具栏四行布局 1440/390 真浏览器 14/14；编辑框撤销 6/6；六门 i18n 2847 键同构；Typex 3/3、SIGABA 2/2、Lorenz SZ40/SZ42a 6 组公开向量、SZ42b 往返、Bombe 18/0、MultipleBombe 17/0、Colossus 215/0，三类攻击真浏览器 7/7；1-bit QR 实测命中；光栅 demo x=38/y=30/共 68 张，空白填充色 `#808080`。详见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## v0.1.12
 
@@ -70,7 +110,7 @@
 
 ### 验证
 
-878 主 op；408 插件 op；题库 110 题/153 文件；stage 白名单 1630、清单 1630。详见 [CHANGELOG.md](./CHANGELOG.md)。
+878 主 op；408 插件 op；题库 110 题/153 文件；发行包清单 1630 项。详见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 项目简介
 
@@ -92,7 +132,7 @@
 
 - **本地优先 · 零外发**：原生 ES module，无框架、无构建步骤。核心编解码在浏览器本地执行，不上传用户输入；「外链」只生成 URL。PWA 更新仅下载本站资源，本地桥只访问 `127.0.0.1`，外部 AI 仅在用户主动配置 endpoint 后启用。
 - **一把梭智能解码**：粘贴或拖入内容，自动识别可能的编码链并给出候选解码结果，支持 crib 目标特征过滤与深度爆破。
-- **878 个注册操作 · 23 分类**：覆盖 Base、文本传输、花式 CTF、深奥编程语言、中文本土、古典密码、现代加密（分组 / 流 / 非对称 / 其他）、哈希校验、进制字符集（含素数判定与筛选）、分析爆破、密码攻击、压缩归档、口令与归档破解、取证流量、文件格式结构、数据结构、图像与二维码、音频音视频、隐写及 4 个可选 Windows GUI 桥入口。完整清单由 registry 自动生成。
+- **928 个注册操作 · 23 分类**：覆盖 Base、文本传输、花式 CTF、深奥编程语言、中文本土、古典密码、现代加密（分组 / 流 / 非对称 / 其他）、哈希校验、进制字符集（含素数判定与筛选）、分析爆破、密码攻击、压缩归档、口令与归档破解、取证流量、文件格式结构、数据结构、图像与二维码、音频音视频、隐写及 4 个可选 Windows GUI 桥入口。完整清单由 registry 自动生成。
 - **解码强度四件套**（v0.1.2）：强度档位 + 自定义算法池 + **暴力爆破独立通道**（XOR/凯撒/字典/彩虹表/HMAC/PBE/Playfair/ZIP/CRC32/bkcrack，结果单独归组展示不污染主排序）+ **解析层数 1~3 选择**。
 - **宽松判定模式**（v0.1.2）：增强/极强/最强/自定义档只按字符种类数放行算法，变体编码题（「喵呜」表 0/1、emoji 表二进制）也能参与解码；默认/快速档保持严格定义域识别。
 - **密钥+密文一键尝试**：给定密文与密钥，自动枚举 AES/DES/3DES/RC4/XOR/Fernet × 多种模式 × 多种编码组合。
@@ -249,9 +289,11 @@ public/
 资料/              算法码表核对资料 + 研究成果（开发资料，不随发行包分发）
 ```
 
-## 编解码全清单（878 ops · 23 分类）
+## 编解码全清单（928 ops · 23 分类）
 
 > 本节由 `node tools/gen_readme_ops.mjs` 从主入口真实 import 闭包生成；opId 即注册表唯一标识。
+
+> 下表为 v0.1.13 基线（890 项），v0.1.14 新增 37 op 见更新日志。
 
 ### Base 系列（30 ops）
 
@@ -339,10 +381,10 @@ public/
 
 | opId | 名称 | 说明 |
 |---|---|---|
-| yunying | 云影密码（01248） | 0 分隔，1/2/4/8 数字和映射 A-Z；encode 仅 A-Z，decode 严格校验 1-26 |
 | scoutStick | 童子军木棍密码 |  |
 | morse | 摩斯电码 |  |
 | bacon | 培根密码 |  |
+| yunying | 云影密码（01248） |  |
 | rot13 | ROT13 |  |
 | rot5 | ROT5 |  |
 | rot18 | ROT18 |  |
@@ -473,7 +515,7 @@ public/
 | xiangyueEnc | 想曰 XiangYue 加密 |  |
 | yueChang | 曰唱 |  |
 
-### 古典密码（71 ops）
+### 古典密码（75 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -532,6 +574,10 @@ public/
 | kamasutra | Kamasutra 爱经密码 |  |
 | enigma | Enigma 恩尼格玛机 |  |
 | m209 | M-209 转轮密码机 |  |
+| typex | Typex 英国转轮密码机 |  |
+| sigaba | SIGABA / ECM Mark II 密码机 |  |
+| lorenz | Lorenz SZ40/42 密码附件 |  |
+| colossus | Colossus 计数破译机 |  |
 | rotSpecial | Rot 任意位移 |  |
 | goldbug | GoldBug 金甲虫密码 |  |
 | routeCipher | 曲路密码 |  |
@@ -549,13 +595,13 @@ public/
 | beaufortVariant | 变体 Beaufort |  |
 | redefence | Redefence 栅栏 |  |
 
-### 现代密码·分组（33 ops）
+### 现代密码·分组（34 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
-| aes | AES | 高级加密标准（ECB/CBC/CFB/OFB/CTR 纯 JS + GCM WebCrypto，key 16/24/32 字节） |
-| des | DES | 数据加密标准（FIPS-46-3，key 8 字节，块 8 字节） |
-| des3 | 3DES / TripleDES | 三重 DES（EDE，key 16 或 24 字节，块 8 字节） |
+| aes | AES | 高级加密标准（ECB/CBC/CFB/OFB/CTR 纯 JS + GCM WebCrypto，key 16/24/32 字节）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；GCM 支持 AAD、tagLen(128…32 位)、Include IV；流模式忽略填充 |
+| des | DES | 数据加密标准（FIPS-46-3，key 8 字节，块 8 字节）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充 |
+| des3 | 3DES / TripleDES | 三重 DES（EDE，key 16 或 24 字节，块 8 字节）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充 |
 | kuznyechik | Kuznyechik（GOST R 34.12-2015） |  |
 | tea | TEA |  |
 | xtea | XTEA |  |
@@ -585,6 +631,7 @@ public/
 | threefish | Threefish 可调分组密码 |  |
 | skipjack | Skipjack 分组密码 |  |
 | mars | MARS 分组密码 |  |
+| gostKeyWrap | GOST 28147-89 Key Wrap |  |
 | bfvToy | BFV 玩具同态加密（教学） |  |
 
 ### 现代密码·流（21 ops）
@@ -613,7 +660,7 @@ public/
 | rc4Drop | RC4-drop / CipherSaber-2 |  |
 | xsalsa20 | XSalsa20 |  |
 
-### 现代密码·非对称（126 ops）
+### 现代密码·非对称（128 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -730,6 +777,8 @@ public/
 | schnorrSign | Schnorr 签名 |  |
 | schnorrVerify | Schnorr 验签 |  |
 | schnorrReuseK | Schnorr nonce 重用攻击 |  |
+| falconKeyGen | Falcon 密钥生成 |  |
+| falconSign | Falcon 签名 |  |
 | falconPkParse | Falcon 公钥解析 |  |
 | falconVerify | Falcon 验签 |  |
 | kzgVerify | KZG 证明验证 |  |
@@ -797,12 +846,12 @@ public/
 | crc16 | CRC16 | CRC16 校验（CCITT-FALSE，多项式 0x1021） |
 | ntlm | NTLM | NTLM 哈希（MD4 of UTF-16LE 密码，Windows 密码存储） |
 | sha3 | SHA-3 | SHA-3（FIPS 202，纯 JS Keccak，位宽可选 224/256/384/512） |
-| keccak256 | Keccak-256 | Keccak-256（以太坊，padding 0x01，256 位） |
+| keccak256 | Keccak（多档） | Keccak 海绵函数（原 Keccak padding 0x01，位宽 224/256/384/512，默认 256；256 位与以太坊 Keccak-256 一致） |
 | shake128 | SHAKE128 | SHAKE128 可扩展输出（FIPS 202，参数：输出字节数） |
 | shake256 | SHAKE256 | SHAKE256 可扩展输出（FIPS 202，参数：输出字节数） |
 | ssdeep | SSDEEP 模糊哈希 |  |
 | sm3 | SM3 |  |
-| ripemd160 | RIPEMD-160 |  |
+| ripemd160 | RIPEMD（多档） |  |
 | blake2b | BLAKE2b |  |
 | blake2s | BLAKE2s |  |
 | adler32 | Adler-32 |  |
@@ -947,7 +996,7 @@ public/
 | progCalc | 程序员计算器 |  |
 | objectIdTime | ObjectID 时间戳解析 |  |
 
-### 分析 / 爆破（48 ops）
+### 分析 / 爆破（49 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -999,8 +1048,9 @@ public/
 | lfsrRecover | LFSR 序列恢复 |  |
 | xorshiftRecover | xorshift 状态恢复 |  |
 | rc4Visualize | RC4 KSA/PRGA 可视化 |  |
+| extractAll | 专用文本提取器 |  |
 
-### 密码攻击（22 ops）
+### 密码攻击（24 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1020,6 +1070,8 @@ public/
 | rsaBleichenbacher | RSA Bleichenbacher 攻击 |  |
 | rsaCoppersmith | RSA Coppersmith 小根攻击 |  |
 | rsaBonehDurfee | RSA Boneh-Durfee 提示 |  |
+| bombe | Bombe 图灵炸弹机 |  |
+| multipleBombe | Multiple Bombe 批量炸弹机 |  |
 | pbeAesBrute | PBE-AES 口令爆破（小字典演示） |  |
 | rsaBatchGcd | RSA 公共因子分解（批量 GCD） |  |
 | rsaHastad | RSA Hastad 广播攻击 |  |
@@ -1027,7 +1079,7 @@ public/
 | prngAttack | PRNG 破解（LCG / MT19937） |  |
 | hashLengthExtension | 哈希长度扩展攻击（MD5/SHA1/SHA256） |  |
 
-### 压缩 / 归档（18 ops）
+### 压缩 / 归档（19 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1036,12 +1088,13 @@ public/
 | deflateRawCodec | Raw Deflate 解压 / 压缩 | raw deflate（无 zlib 头）双向；浏览器实测 |
 | b64CompressedProbe | Base64 内嵌压缩流探测 | 扫文本中 base64 段 → 解码 → magic 识别 → 尝试 gzip/zlib/deflate 解压 |
 | lznt1 | LZNT1 解压 |  |
+| bzip2Enc | bzip2 压缩 |  |
 | rle | RLE 行程编码 |  |
 | lzw | 标准 LZW（GIF/TIFF） |  |
 | elias | Elias Gamma/Delta 编码 |  |
-| lz4Dec | LZ4 解压 |  |
+| lz4Dec | LZ4 压缩 / 解压 |  |
 | bzip2Dec | bzip2 解压 |  |
-| lzstring | LZString 压缩 (LZW) |  |
+| lzstring | LZString 压缩 / 解压 |  |
 | sevenZipExtract | 7z 归档解析 / 解压 | 识别 7z 签名 + 解析 SignatureHeader/StartHeader（CRC 校验）；放置 public/wasm/7zz.js 后可真列表/解压（LZMA 等，wasm 缺失自动降级） |
 | archiveUnified | 压缩 / 归档归一分析 |  |
 | zipRepair | ZIP 伪加密修复 |  |
@@ -1111,7 +1164,7 @@ public/
 | kzgBlobParse | EIP-4844 blob 解析 |  |
 | pkcs12Parse | PKCS#12/PFX 解析 |  |
 
-### 数据结构 / 序列化（21 ops）
+### 数据结构 / 序列化（22 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1136,6 +1189,7 @@ public/
 | cryptoAddrUnified | 加密货币地址解析 |  |
 | huffmanCodec | 哈夫曼编解码（通用） |  |
 | unitConv | 单位换算 |  |
+| dataConvert | JSON / CSV / XML / YAML 转换 |  |
 
 ### 图像 / 二维码（37 ops）
 
@@ -1248,6 +1302,8 @@ public/
 
 ## 插件与 AI 接入
 
+> 产品内统一称「扩展」，本节标题沿用「插件」以对应代码目录与 SDK 文档。
+
 工具箱是声明式注册表驱动的：每个算法就是一条 `{id, cat, name, params, encode/decode/run, detect}` 记录，UI 全自动渲染。这套契约同样对第三方开放。
 
 ### 插件 SDK
@@ -1256,7 +1312,7 @@ public/
 
 - 开发指南：[`src/plugin/README.md`](./src/plugin/README.md)
 - 参考插件（活样板，照抄改名即起步）：[`src/plugin/examples/hello-cipher/index.js`](./src/plugin/examples/hello-cipher/index.js)
-- 官方插件包（随发行包分发、**默认不启用**）：[`addons/dcode-extras-2026-10/`](./addons/dcode-extras-2026-10/)。在插件页「官方插件」区直接点击启用（自动读取 official.json，同源 addons/ 目录发现兜底）；不进主 op 计数、不进预缓存，首次在线加载后离线可用。当前 Beta 408 op，988 个 dCode 工具已逐条入账。
+- 官方扩展包（随发行包分发、**默认不启用**）：[`addons/dcode-extras-2026-10/`](./addons/dcode-extras-2026-10/)。在扩展面板「官方扩展」区直接点击启用（自动读取 official.json，同源 addons/ 目录发现兜底）；不进主 op 计数、不进预缓存，首次在线加载后离线可用。当前 Beta 409 op（2026-11 批次），988 个 dCode 工具已逐条入账。
 
 ### 给外部 AI 用（MCP / Skills）
 
@@ -1269,7 +1325,7 @@ AI 的联网出口只有可选的 `aiClient`，且必须用户自备 endpoint + 
 
 ## 贡献者
 
-以下名单与工具箱「关于」页的「作者与贡献者」完全一致，按关于页顺序列出。
+以下名单按工具箱「关于」页的「作者与贡献者」顺序列出。
 
 **创始人 · 作者**
 
@@ -1293,6 +1349,8 @@ AI 的联网出口只有可选的 `aiClient`，且必须用户自备 endpoint + 
 - qinling072：提出补充 OutGuess 等图像隐写算法。
 - cnui6：提出 Rabbit 兼容性修复，促成 CryptoJS 生态互解与口令支持。
 - 二月犬：提出补充哦齁编码（仙子曰）、哈基米加密（三进制）与杂鱼密语（官方版及 Base8 变体）。
+- 橙子：提出多个 Misc 逻辑代码修复。
+- Tokeii：贡献改版图标，项目下游优化作者。
 
 ## Community
 

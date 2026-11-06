@@ -222,7 +222,7 @@ register({
         { value: 2, label: "2 位（默认）" },
         { value: 4, label: "4 位（容量最大）" },
       ] },
-    { key: "password", label: "密码", type: "text", default: "", placeholder: "可选（PBKDF2-SHA256 10 万次 + Fernet）" },
+    { sensitive: true, key: "password", label: "密码", type: "password", default: "", placeholder: "可选（PBKDF2-SHA256 10 万次 + Fernet）" },
   ],
   encode: stegpyEncodeOp, decode: stegpyDecodeOp,
   acceptsBytes: true,

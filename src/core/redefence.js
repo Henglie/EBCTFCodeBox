@@ -145,7 +145,7 @@ function redefenceDecode(text, p) {
 }
 
 register({
-  id: "redefence", cat: "classic", name: "Redefence 栅栏",
+  id: "redefence", family: "railfence", familyLabel: "redefence", cat: "classic", name: "Redefence 栅栏",
   desc: "Redefence：栅栏（W 型 zig-zag）的行序变体——按指定行序或关键词读出行。行序为恒等序时退化为标准栅栏。参数：栏数 rails / 读行序 order / 关键词 key（order 与 key 二选一）",
   params: [
     { key: "rails", label: "栏数", type: "number", default: 3, placeholder: "2-64" },

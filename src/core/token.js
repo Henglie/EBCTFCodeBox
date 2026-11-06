@@ -294,7 +294,7 @@ function jwtDetect(t) {
 register({
   id: "jwt", family: "jwt", familyLabel: "parse", cat: "modern", name: "JWT", desc: "JSON Web Token 签发(HS256/384/512)/解析+验签",
   params: [
-    { key: "secret", label: "密钥", type: "text", default: "", placeholder: "HS* 验签/签发密钥" },
+    { sensitive: true, key: "secret", label: "密钥", type: "text", default: "", placeholder: "HS* 验签/签发密钥" },
     { key: "alg", label: "算法", type: "select", default: "HS256", options: ["HS256", "HS384", "HS512"] },
   ],
   encode: jwtEncode, decode: jwtDecode,

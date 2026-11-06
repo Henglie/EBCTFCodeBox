@@ -1134,7 +1134,7 @@ register({
       { value: "hex", label: "hex 字节" },
       { value: "base64", label: "base64" },
     ] },
-    { key: "certs", label: "补充证书（PEM，可多张）", type: "textarea", default: "", placeholder: "CMS 未内嵌证书（-nocerts）时使用" },
+    { acceptFile: "text", key: "certs", label: "补充证书（PEM，可多张）", type: "textarea", default: "", placeholder: "CMS 未内嵌证书（-nocerts）时使用" },
     { key: "requireSignedAttrs", label: "要求 signedAttrs", type: "bool", default: true },
   ],
   run: async (text, p) => cmsVerifyRun(text, p),

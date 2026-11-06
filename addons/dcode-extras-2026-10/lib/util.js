@@ -158,8 +158,10 @@ export function makeMapOp(opt) {
 }
 
 /** 单向工具 op 工厂（run 型）。 */
-export function runOp(id, cat, name, desc, run, params = []) {
-  return { id, cat, name, desc, params, run };
+export function runOp(id, cat, name, desc, run, params = [], meta = null) {
+  const op = { id, cat, name, desc, params, run };
+  if (meta && typeof meta === "object") Object.assign(op, meta);
+  return op;
 }
 
 /** 解析「每行一项」或自定义分隔符的列表。 */
@@ -175,6 +177,169 @@ export function parseNums(text) {
 }
 
 /** 组合数 C(n,k)（BigInt）。 */
+/**
+ * 物理预算（不是人为输入小上限）。
+ * 达到上限时显式拒绝并说明规模；预算内不截断、不静默降级。
+ */
+export const BUDGET_LIMITS = Object.freeze({
+  chars: 20_000_000,      // 输出字符
+  items: 2_000_000,       // 列表项/组合项
+  steps: 200_000_000,     // 普通数值循环
+  bigSteps: 50_000_000,   // BigInt/大数循环
+  nodes: 2_000_000,       // 搜索树节点
+});
+
+const BUDGET_UNITS = { chars: "字符", items: "项", steps: "次运算", bigSteps: "次大数运算", nodes: "个搜索节点" };
+
+/** 预算检查：超限抛可读错误；amount 不是有限数也直接拒绝。 */
+export function assertBudget(kind, amount, label = "本次计算") {
+  const limit = BUDGET_LIMITS[kind];
+  if (!Number.isFinite(limit)) throw new Error(`内部错误：未知预算类型 ${kind}`);
+  const n = Number(amount);
+  if (!Number.isFinite(n) || n < 0) throw new Error(`${label}规模无法估算（${amount}）`);
+  if (n > limit) {
+    throw new Error(
+      `${label}约 ${Math.round(n).toLocaleString("en-US")} ${BUDGET_UNITS[kind]}，` +
+      `超过当前 ${limit.toLocaleString("en-US")} ${BUDGET_UNITS[kind]}预算；请减小输入或分段处理。`,
+    );
+  }
+  return n;
+}
+
+/** 让出事件循环：长循环分块后调用，避免页面冻结。 */
+export function yieldToEventLoop() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+export function formatBytes(bytes) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n < 0) return "未知";
+  if (n < 1024) return `${Math.round(n)} B`;
+  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KiB`;
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MiB`;
+  return `${(n / 1024 ** 3).toFixed(2)} GiB`;
+}
+
+export function log10Factorial(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x) || x < 0) return NaN;
+  if (x < 10) {
+    let p = 1;
+    for (let i = 2; i <= x; i++) p *= i;
+    return Math.log10(p);
+  }
+  const ln = (x + 0.5) * Math.log(x) - x + 0.5 * Math.log(2 * Math.PI)
+    + 1 / (12 * x) - 1 / (360 * x ** 3) + 1 / (1260 * x ** 5);
+  return ln / Math.LN10;
+}
+
+export function estimateFactorialDigits(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x) || x < 0) throw new Error("n 必须是非负整数");
+  if (x < 2) return 1;
+  return Math.floor(log10Factorial(x)) + 1;
+}
+
+export function factorialBudgetBytes() {
+  let budget = 512 * 1024 * 1024;
+  try {
+    const heap = typeof performance !== "undefined" && performance.memory && performance.memory.jsHeapSizeLimit;
+    if (Number.isFinite(heap) && heap > 0) budget = heap * 0.45;
+    else if (typeof navigator !== "undefined" && Number.isFinite(navigator.deviceMemory) && navigator.deviceMemory > 0) {
+      budget = navigator.deviceMemory * 1024 ** 3 * 0.35;
+    }
+  } catch { /* 环境不提供内存信息，用保守默认值 */ }
+  return Math.min(3 * 1024 ** 3, Math.max(128 * 1024 ** 2, budget));
+}
+
+export function assertFactorialBudget(n) {
+  const x = Number(n);
+  if (!Number.isSafeInteger(x) || x < 0) {
+    throw new Error("n 超出 JS 可安全枚举的整数范围（需 ≤ 2^53-1）");
+  }
+  const digits = estimateFactorialDigits(x);
+  const bits = Math.ceil(log10Factorial(x) / Math.log10(2));
+  const textBytes = digits;
+  const needBytes = Math.ceil(digits * 3.2) + 8 * 1024 ** 2;
+  const budgetBytes = factorialBudgetBytes();
+  if (digits > 500_000_000) {
+    throw new Error(
+      `${x}! 约 ${digits.toLocaleString("en-US")} 位，超过 V8 单字符串上限（约 5 亿字符），无法在一次结果中展开。\n` +
+      `十进制文本约 ${formatBytes(textBytes)}；可改用「阶乘位数与规模估算」查看精确规模。`,
+    );
+  }
+  if (needBytes > budgetBytes) {
+    throw new Error(
+      `${x}! 约 ${digits.toLocaleString("en-US")} 位，估算需要 ${formatBytes(needBytes)} 内存，` +
+      `超过当前可用预算 ${formatBytes(budgetBytes)}，已拒绝展开（不静默截断）。\n` +
+      `十进制文本约 ${formatBytes(textBytes)}；可改用「阶乘位数与规模估算」查看规模，或换内存更大的设备。`,
+    );
+  }
+  return { digits, bits, textBytes, needBytes, budgetBytes };
+}
+
+function rangeProduct(lo, hi) {
+  if (lo > hi) return 1n;
+  if (lo === hi) return BigInt(lo);
+  if (hi === lo + 1) return BigInt(lo) * BigInt(hi);
+  const mid = Math.floor((lo + hi) / 2);
+  return rangeProduct(lo, mid) * rangeProduct(mid + 1, hi);
+}
+
+export function factorialBigSync(n, block = 65536) {
+  const x = Number(n);
+  let acc = 1n;
+  for (let start = 2; start <= x; start += block) {
+    acc *= rangeProduct(start, Math.min(x, start + block - 1));
+  }
+  return acc;
+}
+
+export async function factorialBigAsync(n, opts = {}) {
+  const x = Number(n);
+  const block = Math.max(1024, Number(opts.block) || 65536);
+  const onProgress = typeof opts.onProgress === "function" ? opts.onProgress : null;
+  let acc = 1n;
+  for (let start = 2; start <= x; start += block) {
+    acc *= rangeProduct(start, Math.min(x, start + block - 1));
+    if (onProgress) onProgress(Math.min(1, (Math.min(x, start + block - 1) - 1) / Math.max(1, x - 1)));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  return acc;
+}
+
+/** 前 k 个素数（埃氏筛）；k 很大时按当前内存预算直接拒绝，不静默截断。 */
+export function firstPrimes(k) {
+  const want = Number(k);
+  if (!Number.isSafeInteger(want) || want < 1) throw new Error("k 需为正整数");
+  const est = want < 6 ? 15 : Math.ceil(want * (Math.log(want) + Math.log(Math.log(want)))) + 10;
+  if (est * 2 > factorialBudgetBytes() * 0.5) {
+    throw new Error(`第 ${want.toLocaleString("en-US")} 个素数约在上限 ${est.toLocaleString("en-US")}，筛表需要约 ${formatBytes(est)} 内存，超过当前预算；请减小 k`);
+  }
+  const sieve = new Uint8Array(est + 1);
+  const out = [];
+  for (let i = 2; i <= est && out.length < want; i++) {
+    if (sieve[i]) continue;
+    out.push(i);
+    if (i * i <= est) for (let j = i * i; j <= est; j += i) sieve[j] = 1;
+  }
+  if (out.length < want) throw new Error(`筛表上限 ${est} 只得到 ${out.length} 个素数，请重试或减小 k`);
+  return out;
+}
+
+/** BigInt 数组的分治乘积（避免 O(n) 次巨型乘法）。 */
+export function productTreeBig(values) {
+  const a = values;
+  if (!a.length) return 1n;
+  const prod = (lo, hi) => {
+    if (lo === hi) return BigInt(a[lo]);
+    if (hi === lo + 1) return BigInt(a[lo]) * BigInt(a[hi]);
+    const mid = Math.floor((lo + hi) / 2);
+    return prod(lo, mid) * prod(mid + 1, hi);
+  };
+  return prod(0, a.length - 1);
+}
+
 export function binom(n, k) {
   n = BigInt(n); k = BigInt(k);
   if (k < 0n || k > n) return 0n;

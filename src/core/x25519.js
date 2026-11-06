@@ -137,7 +137,7 @@ register({
   name: "X25519 密钥生成",
   desc: "X25519 密钥生成（RFC 7748）：私钥 32 字节随机（或给定）→ 公钥 = X25519(clamp(私钥), 基点 9)。配套「共享密钥」两档做 ECDH",
   params: [
-    { key: "priv", label: "私钥 (32B hex)", type: "text", default: "", placeholder: "64 hex 字符，留空随机" },
+    { sensitive: true, key: "priv", label: "私钥 (32B hex)", type: "text", default: "", placeholder: "64 hex 字符，留空随机" },
   ],
   run: (_text, p) => {
     // 生成一对（或用给定私钥算公钥）
@@ -172,8 +172,8 @@ register({
   name: "X25519 共享密钥（双方私钥）",
   desc: "X25519 ECDH（RFC 7748 §6.2，教学口径：本地同时持有 A/B 双方私钥）：K = X25519(a, B公钥) == X25519(b, A公钥)，输出两侧互验一致",
   params: [
-    { key: "privA", label: "私钥 A (32B hex)", type: "text", default: "", placeholder: "64 hex 字符" },
-    { key: "privB", label: "私钥 B (32B hex)", type: "text", default: "", placeholder: "64 hex 字符" },
+    { sensitive: true, key: "privA", label: "私钥 A (32B hex)", type: "text", default: "", placeholder: "64 hex 字符" },
+    { sensitive: true, key: "privB", label: "私钥 B (32B hex)", type: "text", default: "", placeholder: "64 hex 字符" },
   ],
   run: (_text, p) => {
     const a = need32(hexToBytes((p && p.privA) || ""), "私钥 A");
@@ -204,7 +204,7 @@ register({
   name: "X25519 共享密钥（私钥+对方公钥）",
   desc: "X25519 ECDH（RFC 7748 §6.2，实战口径）：只持己方私钥 + 对方公钥，K = X25519(私钥, 对方公钥)。与「双方私钥」档结果一致",
   params: [
-    { key: "priv", label: "我的私钥 (32B hex)", type: "text", default: "", placeholder: "64 hex 字符" },
+    { sensitive: true, key: "priv", label: "我的私钥 (32B hex)", type: "text", default: "", placeholder: "64 hex 字符" },
     { key: "pub", label: "对方公钥 (32B hex)", type: "text", default: "", placeholder: "64 hex 字符" },
   ],
   run: (_text, p) => {

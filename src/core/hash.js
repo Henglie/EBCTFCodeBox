@@ -5,9 +5,9 @@
  *
  * 单向工具，用 run(text, params) 返回 hex 串。SHA/HMAC 走 WebCrypto（异步）
  * MD5/MD4/CRC/NTLM 纯 JS（同步）。每项用权威向量验证。
- * SHA3 家族（SHA3-224/256/384/512、Keccak-256、SHAKE128/256）纯 JS Keccak-f[1600]
+ * SHA3 家族（SHA3-224/256/384/512、Keccak-224/256/384/512、SHAKE128/256）纯 JS Keccak-f[1600]
  * 双 32 位字模拟 64 位；SHA3 与 Keccak 仅 padding 不同（0x06 vs 0x01），SHAKE 用 0x1f。
- * SHA3/Keccak 用 FIPS 202 权威向量验证。
+ * SHA3 用 FIPS 202 权威向量验证；Keccak 用以太坊常用向量与 Keccak 原规范交叉验证。
  */
 import { register } from "./registry.js";
 
@@ -426,9 +426,16 @@ function sha3(bits, text) {
   const rate = (1600 - bits * 2) / 8;
   return toHex(keccak(rate, 0x06, te(text), outLen));
 }
-// Keccak-256（以太坊）：rate 同 SHA3-256（136），但 padding 用 0x01
+// Keccak 原规范：rate=(1600-2*bits)/8，padding 0x01。默认 256 与以太坊 Keccak-256 完全一致。
+function keccakBits(bits, text) {
+  const b = Number(bits);
+  if (![224, 256, 384, 512].includes(b)) {
+    throw new Error(`Keccak 输出位数只支持 224/256/384/512（拿到 ${JSON.stringify(bits)}）`);
+  }
+  return toHex(keccak((1600 - 2 * b) / 8, 0x01, te(text), b / 8));
+}
 function keccak256(text) {
-  return toHex(keccak(136, 0x01, te(text), 32));
+  return keccakBits(256, text);
 }
 // SHAKE 可变长输出。security 位数决定 rate（128→rate 168 / 256→rate 136），pad 用 0x1f
 function shake(security, text, outLen) {
@@ -452,9 +459,18 @@ register({
   run: (t, p) => sha3(Number((p && p.bits != null) ? p.bits : 256), p?.rawBytes ?? t),
 });
 register({
-  id: "keccak256", cat: "hash", name: "Keccak-256", desc: "Keccak-256（以太坊，padding 0x01，256 位）",
+  id: "keccak256", cat: "hash", name: "Keccak（多档）",
+  desc: "Keccak 海绵函数（原 Keccak padding 0x01，位宽 224/256/384/512，默认 256；256 位与以太坊 Keccak-256 一致）",
+  params: [
+    { key: "bits", label: "输出位数", type: "select", default: 256, options: [
+      { value: 224, label: "224" },
+      { value: 256, label: "256" },
+      { value: 384, label: "384" },
+      { value: 512, label: "512" },
+    ] },
+  ],
   acceptsBytes: true, textTransit: true,
-  run: (t, p) => keccak256(p?.rawBytes ?? t),
+  run: (t, p) => keccakBits(Number((p && p.bits != null) ? p.bits : 256), p?.rawBytes ?? t),
 });
 register({
   id: "shake128", cat: "hash", name: "SHAKE128", family: "shake", familyLabel: "SHAKE128", desc: "SHAKE128 可扩展输出（FIPS 202，参数：输出字节数）",
@@ -477,5 +493,5 @@ export {
   md5, md5Bytes, md4, md4Bytes,
   crc32, crc16, ntlm,
   sha, hmac,
-  keccak, keccakF1600, sha3, keccak256, shake,
+  keccak, keccakF1600, sha3, keccakBits, keccak256, shake,
 };

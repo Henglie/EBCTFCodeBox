@@ -22,6 +22,8 @@
 import { register } from "./registry.js";
 import { inputToBytes } from "./pcapParse.js";
 import { parseNBT, decompressAndParseNBT } from "./mcSave.js";
+import { parseZip, extractOne } from "./zipExtract.js";
+import { inflateRaw } from "./pcapDeep.js";
 
 // ============================================================
 // Compound 取值助手（Compound 项形如 { __t, v }）
@@ -74,6 +76,21 @@ export function readableText(s) {
   return s;
 }
 
+// 文本组件专用：空组件（{"text":""} / [{text:""}]）返回 ""（readableText 会回退原文，
+// 用于展示没问题，但不能据此判断「有情报」）。
+function componentText(s) {
+  if (typeof s !== "string") return String(s);
+  const t = s.trim();
+  if (t.startsWith("{") || t.startsWith("[")) {
+    try {
+      const parts = [];
+      collectComp(JSON.parse(t), parts);
+      return parts.join("");
+    } catch { return s; }
+  }
+  return s;
+}
+
 // ============================================================
 // flag 检测：flag{...} + 通用 xxx{...} 变体 + 疑似 base64 解码再扫
 // ============================================================
@@ -91,7 +108,8 @@ const FLAG_RES = [
   /[A-Za-z_][A-Za-z0-9_]{1,24}\{[^}]{1,300}\}/g,    // 通用 xxx{...}（ctf{}/key{}/DASCTF{} 等）
 ];
 
-/** 在文本（含可读组件、base64 解码）里找所有 flag/疑似，去重返回。extraRe 为可选自定义正则串。 */
+/**
+ * 在文本（含可读组件、base64 解码）里找所有 flag/疑似，去重返回。extraRe 为可选自定义正则串。 */
 export function findFlags(text, extraRe) {
   const out = new Set();
   const scan = (s) => {
@@ -115,12 +133,180 @@ export function findFlags(text, extraRe) {
       } catch { /* 用户正则非法，忽略 */ }
     }
   };
-  scan(text);
-  const rd = readableText(text);
-  if (rd !== text) scan(rd);
-  const b = tryB64Decode(text);
+  // MC 格式化代码（§k 等）会粘在 flag 前（如 "§kflag{..."），先剥离再扫，
+  // 否则通用 xxx{...} 正则会误把 "kflag{...}" 当成一个独立 flag。
+  const clean = stripMcFormatCodes(text);
+  scan(clean);
+  const rd = readableText(clean);
+  if (rd !== clean) scan(rd);
+  const b = tryB64Decode(clean);
   if (b) scan(b);
   return [...out];
+}
+
+// ============================================================
+// 存档整包（ZIP）支持
+// ============================================================
+
+/** ZIP 魔数：本地文件头 50 4B 03 04 / 空档案 EOCD 50 4B 05 06。 */
+function isZipMagic(bytes) {
+  if (!bytes || bytes.length < 4) return false;
+  if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) return false;
+  return (bytes[2] === 0x03 && bytes[3] === 0x04) || (bytes[2] === 0x05 && bytes[3] === 0x06);
+}
+
+/** 按扩展名分类（只挑存档里有文本/NBT 语义的条目，PNG/lock 等二进制跳过）。 */
+function entryKind(name) {
+  const n = String(name || "").toLowerCase();
+  if (n.endsWith(".mca")) return "mca";
+  if (n.endsWith(".dat") || n.endsWith(".nbt") || n.endsWith(".dat_old")) return "nbt";
+  if (/\.(json|mcmeta|txt|mcfunction|log|csv|yml|yaml|md)$/.test(n)) return "text";
+  return "";
+}
+
+/** MC 格式化代码（§0-§f 颜色、§k 乱码、§l/§o/§n/§m/§r）：只影响渲染，不属于 flag 本体。 */
+function stripMcFormatCodes(s) {
+  return String(s).replace(/§[0-9a-fk-or]/gi, "");
+}
+
+/**
+ * 深度扫描单棵 NBT：只递归 Compound/List，遇 TAG_String 回调（不缓存大数组）。
+ * 用于整包找 flag，避免把成千上万条字符串全存进内存。
+ */
+function deepScanStrings(t, v, path, onString) {
+  if (t === 8) {
+    if (v) onString(path, v);
+    return;
+  }
+  if (t === 10) {
+    if (!v || typeof v !== "object") return;
+    for (const key of Object.keys(v)) {
+      if (key === "__nbtCompound") continue;
+      const e = v[key];
+      if (!e || typeof e !== "object" || !("__t" in e)) continue;
+      deepScanStrings(e.__t, e.v, path ? `${path}.${key}` : key, onString);
+    }
+    return;
+  }
+  if (t === 9) {
+    if (!Array.isArray(v)) return;
+    const et = v._elemType;
+    for (let i = 0; i < v.length; i++) deepScanStrings(et, v[i], `${path}[${i}]`, onString);
+  }
+}
+
+/** 从 NBT 根收集 flag 命中（含 §k 乱码页）。 */
+function collectRootFlags(root, source, extraRe, hits) {
+  if (!root || root.type !== 10) return;
+  deepScanStrings(root.type, root.value, "", (path, s) => {
+    const fl = findFlags(s, extraRe);
+    if (fl.length) hits.push({ source, path, text: s, flags: fl });
+  });
+}
+
+/**
+ * 同步解析单个 MCA chunk：1=gzip / 2=zlib / 3=未压缩（4=LZ4 暂不支持）。
+ * 整包扫描里 chunk 常上千，走纯 JS inflateRaw 避免逐块 DecompressionStream 的异步开销。
+ */
+function parseChunkNBT(compType, payload) {
+  if (compType === 3) return parseNBT(payload);
+  if (compType === 2) return parseNBT(inflateRaw(payload.subarray(2, payload.length - 4)));
+  if (compType === 1) {
+    let p = 10;
+    const flg = payload[3];
+    if (flg & 0x04) { // FEXTRA
+      const xlen = (payload[p] << 8) | payload[p + 1];
+      p += 2 + xlen;
+    }
+    if (flg & 0x08) { while (p < payload.length && payload[p] !== 0) p++; p++; } // FNAME
+    if (flg & 0x10) { while (p < payload.length && payload[p] !== 0) p++; p++; } // FCOMMENT
+    if (flg & 0x02) p += 2; // FHCRC
+    return parseNBT(inflateRaw(payload.subarray(p, payload.length - 8)));
+  }
+  throw new Error("不支持的 chunk 压缩类型 " + compType);
+}
+
+/**
+ * ZIP 存档整包扫描：解压每个条目 → 按扩展名分派 MCA/NBT/文本 → 提取情报 + 找 flag。
+ * 纯内存，不写磁盘。
+ */
+async function extractFromZip(bytes, opts, entries, allStrings, extraRe, out) {
+  const zip = parseZip(bytes);
+  out.zip = {
+    total: zip.entries.length, read: 0, skipped: 0, failed: 0,
+    nbt: 0, mca: 0, text: 0, chunks: 0, goodChunks: 0, failChunks: 0,
+    hits: [], errors: [],
+  };
+  for (const e of zip.entries) {
+    if (e.isDir) continue;
+    const kind = entryKind(e.name);
+    if (!kind) { out.zip.skipped++; continue; }
+    let data;
+    try {
+      data = extractOne(bytes, e).bytes;
+    } catch (err) {
+      out.zip.failed++;
+      out.zip.errors.push(`${e.name}: ${err && err.message ? err.message : String(err)}`);
+      continue;
+    }
+    out.zip.read++;
+    if (kind === "mca") {
+      out.zip.mca++;
+      let chunks;
+      try {
+        chunks = parseMCA(data);
+      } catch (err) {
+        out.zip.failed++;
+        out.zip.errors.push(`${e.name}: ${err && err.message ? err.message : String(err)}`);
+        continue;
+      }
+      out.zip.chunks += chunks.length;
+      for (const ch of chunks) {
+        let root;
+        try {
+          root = parseChunkNBT(ch.compType, ch.payload);
+        } catch {
+          out.zip.failChunks++;
+          continue;
+        }
+        out.zip.goodChunks++;
+        const ctx = { coord: `${e.name} chunk(${ch.localX},${ch.localZ})`, id: null, source: e.name };
+        extractFromRoot(root, ctx, entries, allStrings, opts.scanAll === true || opts.scanAll === "true");
+        collectRootFlags(root, ctx.coord, extraRe, out.zip.hits);
+      }
+    } else if (kind === "nbt") {
+      out.zip.nbt++;
+      let parsed;
+      try {
+        parsed = await decompressAndParseNBT(data);
+      } catch (err) {
+        out.zip.failed++;
+        out.zip.errors.push(`${e.name}: ${err && err.message ? err.message : String(err)}`);
+        continue;
+      }
+      extractFromRoot(parsed.root, { coord: null, id: null, source: e.name }, entries, allStrings, opts.scanAll === true || opts.scanAll === "true");
+      collectRootFlags(parsed.root, e.name, extraRe, out.zip.hits);
+      // level.dat 顺带取世界名/版本，作为整包概览
+      if (/level\.dat$/.test(e.name) && parsed.root && parsed.root.type === 10) {
+        const dataEntry = parsed.root.value.Data;
+        if (dataEntry && dataEntry.__t === 10) {
+          const lvl = dataEntry.v.LevelName;
+          if (lvl && lvl.__t === 8) out.zip.worldName = lvl.v;
+          const ver = dataEntry.v.Version;
+          if (ver && ver.__t === 10 && ver.v.Name && ver.v.Name.__t === 8) out.zip.worldVersion = ver.v.Name.v;
+        }
+      }
+    } else {
+      out.zip.text++;
+      if (data.length > 8 * 1024 * 1024) continue; // 超大文本条目跳过，避免刷屏
+      const text = new TextDecoder("utf-8", { fatal: false }).decode(data);
+      const fl = findFlags(text, extraRe);
+      if (fl.length) out.zip.hits.push({ source: e.name, path: "(整文件)", text, flags: fl });
+    }
+  }
+  out.note = `ZIP 存档整包：条目 ${out.zip.total}，读取 ${out.zip.read}（NBT ${out.zip.nbt} / MCA ${out.zip.mca} / 文本 ${out.zip.text}），` +
+    `跳过二进制 ${out.zip.skipped}，失败 ${out.zip.failed}` +
+    (out.zip.mca ? `；MCA chunk 解析 ${out.zip.goodChunks}/${out.zip.chunks} 成功` : "");
 }
 
 // ============================================================
@@ -183,14 +369,17 @@ const COMPONENT_NAME_KEYS = new Set(["minecraft:custom_name", "minecraft:item_na
 
 function addEntry(collect, kind, ctx, field, raw) {
   if (raw == null || raw === "") return;
-  collect.push({ kind, coord: ctx.coord || null, id: ctx.id || null, field, raw });
+  // 空文本组件（如 {"text":""}）只是占位，不产生情报；整本空页书不再刷屏
+  const rd = stripMcFormatCodes(componentText(raw)).trim();
+  if (!rd) return;
+  collect.push({ kind, coord: ctx.coord || null, id: ctx.id || null, source: ctx.source || null, field, raw });
 }
 
 function walkCompound(comp, ctx, collect) {
   if (!comp || typeof comp !== "object") return;
 
- // 继承并按本节点更新上下文（坐标 / id）
-  const nc = { coord: ctx.coord || null, id: ctx.id || null };
+ // 继承并按本节点更新上下文（坐标 / id / 来源文件）
+  const nc = { coord: ctx.coord || null, id: ctx.id || null, source: ctx.source || null };
   const id = strOf(comp, "id");
   if (id) nc.id = id;
   const x = numOf(comp, "x"), y = numOf(comp, "y"), z = numOf(comp, "z");
@@ -312,13 +501,16 @@ function extractFromRoot(root, ctx, collect, allStrings, wantAll) {
 export async function extractTextIntel(bytes, opts = {}) {
   const fmt = opts.fmt || "auto";
   const wantAll = opts.scanAll === true || opts.scanAll === "true";
+  const extraRe = opts.extraRe || "";
 
-  let form; // "mca" | "nbt"
+  let form; // "mca" | "nbt" | "zip"
   if (fmt === "mca") form = "mca";
   else if (fmt === "nbt") form = "nbt";
+  else if (fmt === "zip") form = "zip";
   else {
- // auto：gzip .dat 优先；否则像 MCA 就当 MCA；再否则当 NBT
-    if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b) form = "nbt";
+    // auto：ZIP 存档整包优先（避免被误判成 MCA）；其次 gzip .dat；再判 MCA；最后按 NBT。
+    if (isZipMagic(bytes)) form = "zip";
+    else if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b) form = "nbt";
     else if (looksLikeMCA(bytes)) form = "mca";
     else form = "nbt";
   }
@@ -327,8 +519,11 @@ export async function extractTextIntel(bytes, opts = {}) {
   const allStrings = [];
   let note = "";
   const chunkStats = { total: 0, ok: 0, fail: 0 };
+  const res = { form, note, chunkStats, entries, allStrings, zip: null };
 
-  if (form === "mca") {
+  if (form === "zip") {
+    await extractFromZip(bytes, { scanAll: wantAll }, entries, allStrings, extraRe, res);
+  } else if (form === "mca") {
     const chunks = parseMCA(bytes);
     chunkStats.total = chunks.length;
     for (const ch of chunks) {
@@ -344,13 +539,15 @@ export async function extractTextIntel(bytes, opts = {}) {
       extractFromRoot(parsed.root, ctx, entries, allStrings, wantAll);
     }
     note = `Anvil MCA：已生成 chunk ${chunkStats.total}，解析成功 ${chunkStats.ok}，失败 ${chunkStats.fail}`;
+    res.note = note;
   } else {
     const parsed = await decompressAndParseNBT(bytes);
     note = `单个 NBT（${parsed.note}）`;
+    res.note = note;
     extractFromRoot(parsed.root, { coord: null, id: null }, entries, allStrings, wantAll);
   }
 
-  return { form, note, chunkStats, entries, allStrings };
+  return res;
 }
 
 // ============================================================
@@ -367,6 +564,7 @@ const KIND_ORDER = ["sign", "book", "cmd", "name", "item"];
 
 function fmtEntryLine(e, flags) {
   const head = [];
+  if (e.source) head.push(e.source);
   if (e.coord) head.push(e.coord);
   if (e.id) head.push(`[${e.id}]`);
   const rd = readableText(e.raw);
@@ -380,7 +578,9 @@ function fmtEntryLine(e, flags) {
 // ============================================================
 async function mcTextExtractRun(text, p = {}) {
   if ((!text || !String(text).trim()) && !(p && p.rawBytes && p.rawBytes.length)) {
-    return "（空输入）请粘贴单个 region/*.mca（Anvil）或 .dat/.nbt 文件的 hex 或 base64。" +
+    return "（空输入）可直接拖入 Minecraft 世界存档 ZIP（如 file.zip），或单个 region/*.mca（Anvil）、" +
+      ".dat/.nbt 文件；也可粘贴 hex/base64。" +
+      "\nZIP 整包会自动解压并逐个扫描 level.dat / playerdata / region / advancements / stats。" +
       "\nMCA 内每个 chunk 是 zlib 压缩的 NBT；.dat 多为 gzip 压缩的 NBT。" +
       "\n本工具遍历 NBT 抽取告示牌 / 成书 / 命令方块 / CustomName / 物品名 Lore，并高亮 flag{...}。";
   }
@@ -393,22 +593,42 @@ async function mcTextExtractRun(text, p = {}) {
   } catch (e) {
     return "输入解析失败：" + (e && e.message ? e.message : String(e));
   }
-  if (bytes.length < 3) return "（输入过短）不足以构成 NBT / MCA。";
+  if (bytes.length < 3) return "（输入过短）不足以构成 NBT / MCA / ZIP。";
 
+  const extraRe = (p.flagPattern && String(p.flagPattern).trim()) ? String(p.flagPattern).trim() : "";
   let res;
   try {
-    res = await extractTextIntel(bytes, { fmt: p.fmt || "auto", scanAll: p.scanAll });
+    res = await extractTextIntel(bytes, { fmt: p.fmt || "auto", scanAll: p.scanAll, extraRe });
   } catch (e) {
     return "解析失败：" + (e && e.message ? e.message : String(e));
   }
 
-  const extraRe = (p.flagPattern && String(p.flagPattern).trim()) ? String(p.flagPattern).trim() : "";
   const lines = [];
   lines.push("=== Minecraft 文本情报提取 ===");
-  lines.push(`输入形态: ${res.form === "mca" ? "MCA (Anvil region/entities/poi)" : "单个 NBT (.dat/.nbt)"}`);
+  const FORM_LABEL = {
+    mca: "MCA (Anvil region/entities/poi)",
+    nbt: "单个 NBT (.dat/.nbt)",
+    zip: "ZIP 存档整包（自动解压逐文件扫描）",
+  };
+  lines.push(`输入形态: ${FORM_LABEL[res.form] || res.form}`);
   lines.push(res.note);
   lines.push(`共提取文本条目: ${res.entries.length}`);
   lines.push("");
+
+ // ZIP 整包概览
+  const zipHits = res.zip ? res.zip.hits : [];
+  if (res.zip) {
+    const z = res.zip;
+    const world = [z.worldName ? `LevelName=${JSON.stringify(z.worldName)}` : "", z.worldVersion ? `版本=${z.worldVersion}` : ""].filter(Boolean).join("，");
+    if (world) lines.push(`世界: ${world}`);
+    lines.push(`扫描: NBT ${z.nbt} 个 · MCA ${z.mca} 个（chunk ${z.goodChunks}/${z.chunks} 成功）· 文本 ${z.text} 个`);
+    lines.push(`命中位置: 存档内任意 NBT 字符串（含成书 pages、CustomName、Lore、JSON 文本）`);
+    if (z.errors.length) {
+      lines.push(`读取失败条目（${z.errors.length}，最多显示 5）:`);
+      for (const err of z.errors.slice(0, 5)) lines.push(`  ! ${err}`);
+    }
+    lines.push("");
+  }
 
  // 每条算 flag，并汇总
   const flagHits = [];
@@ -418,14 +638,26 @@ async function mcTextExtractRun(text, p = {}) {
     return fl;
   });
 
- // flag 汇总
-  const uniqFlags = [...new Set(flagHits.map((h) => h.flag))];
+ // flag 汇总（ZIP 命中带 文件+路径，优先展示）
+  const uniqFlags = [...new Set([...flagHits.map((h) => h.flag), ...zipHits.flatMap((h) => h.flags)])];
   if (uniqFlags.length) {
     lines.push(`--- ⚑ 命中 flag / 疑似（${uniqFlags.length}）---`);
     for (const f of uniqFlags) {
-      const src = flagHits.find((h) => h.flag === f);
-      const where = [KIND_LABEL[src.kind] || src.kind, src.coord || "", src.field].filter(Boolean).join(" ");
-      lines.push(`  ⚑ ${f}   ← ${where}`);
+      const zSrc = zipHits.filter((h) => h.flags.includes(f));
+      if (zSrc.length) {
+        for (const h of zSrc) {
+          const rd = readableText(h.text);
+          const clean = stripMcFormatCodes(rd);
+          let shown = JSON.stringify(clean);
+          if (rd !== h.text || clean !== rd) shown += `（原文: ${JSON.stringify(h.text).slice(0, 160)}）`;
+          lines.push(`  ⚑ ${f}   ← ${h.source}  ${h.path}`);
+          lines.push(`       值: ${shown}`);
+        }
+      } else {
+        const src = flagHits.find((h) => h.flag === f);
+        const where = [KIND_LABEL[src.kind] || src.kind, src.coord || "", src.field].filter(Boolean).join(" ");
+        lines.push(`  ⚑ ${f}   ← ${where}`);
+      }
     }
     lines.push("");
   } else {
@@ -433,10 +665,17 @@ async function mcTextExtractRun(text, p = {}) {
     lines.push("");
   }
 
- // 分组明细
+ // 分组明细（同坐标/同字段/同原文只显示一次：level.dat 与 level.dat_old 等重复副本不刷屏）
+  const seenDetail = new Set();
   for (const kind of KIND_ORDER) {
     const idxs = [];
-    res.entries.forEach((e, i) => { if (e.kind === kind) idxs.push(i); });
+    res.entries.forEach((e, i) => {
+      if (e.kind !== kind) return;
+      const key = `${kind}|${e.coord || ""}|${e.field}|${e.raw}`;
+      if (seenDetail.has(key)) return;
+      seenDetail.add(key);
+      idxs.push(i);
+    });
     if (!idxs.length) continue;
     lines.push(`--- ${KIND_LABEL[kind]}（${idxs.length}）---`);
     for (const i of idxs) lines.push(fmtEntryLine(res.entries[i], perEntryFlags[i]));
@@ -474,15 +713,16 @@ register({
   id: "mcTextExtract", family: "mc", familyLabel: "textextract",
   cat: "forensic",
   name: "Minecraft 文本情报提取",
-  desc: "遍历 Minecraft Java 版存档 region/*.mca（Anvil，chunk 内 zlib NBT）或单个 .dat/.nbt，" +
-    "抽取告示牌 / 成书 / 命令方块 / 实体与方块 CustomName / 物品 Name+Lore，按类型+坐标聚合，" +
-    "并高亮 flag{...} 及常见变体（含 base64 解码再扫）。复用 mcSave 的 NBT 解析器，纯前端零外发",
+  desc: "直接拖入 Minecraft Java 版世界存档 ZIP 整包（自动解压逐文件扫描 level.dat / playerdata / region / advancements / stats），" +
+    "或单个 region/*.mca（Anvil，chunk 内 zlib NBT）/ .dat/.nbt；抽取告示牌 / 成书 / 命令方块 / 实体与方块 CustomName / 物品 Name+Lore，" +
+    "并深度遍历全部 NBT 字符串高亮 flag{...} 及常见变体（含 §k 格式化代码剥离、base64 解码再扫）。复用 mcSave 的 NBT 解析器，纯前端零外发",
   params: [
     { key: "inputEnc", label: "输入编码", type: "select", default: "auto", options: [
       { value: "auto", label: "自动识别" }, { value: "hex", label: "Hex 十六进制" }, { value: "base64", label: "Base64" },
     ] },
     { key: "fmt", label: "文件类型", type: "select", default: "auto", options: [
-      { value: "auto", label: "自动识别" }, { value: "mca", label: "MCA (Anvil region)" }, { value: "nbt", label: "单个 NBT (.dat/.nbt)" },
+      { value: "auto", label: "自动识别" }, { value: "zip", label: "ZIP 存档整包" },
+      { value: "mca", label: "MCA (Anvil region)" }, { value: "nbt", label: "单个 NBT (.dat/.nbt)" },
     ] },
     { key: "scanAll", label: "兜底扫描全部字符串", type: "bool", default: false },
     { key: "flagPattern", label: "自定义 flag 正则（可空）", type: "text", default: "", placeholder: "如 [Dd]ASCTF\\{[^}]*\\}" },

@@ -11,7 +11,7 @@
  * validateRecipe — 校验（re-export 自 recipe.js）
  * topoSort — 拓扑排序（re-export 自 recipe.js）
  */
-import { topoSort, executeRecipe, validateRecipe, resolveRecipeHead, resolveTransitInput } from "./recipe.js";
+import { topoSort, executeRecipe, validateRecipe, resolveRecipeHead, resolveTransitInput, nodeDirection } from "./recipe.js";
 import { getOp } from "./registry.js";
 import { transitTextOf } from "./productResult.js";
 export { recipeDisplayText, recipeTerminalText, productFileEntries as recipeFileEntries } from "./productResult.js";
@@ -22,7 +22,7 @@ async function runNodeAsync(node, inputText, params) {
   const op = getOp(node.opId);
   if (!op) throw new Error(`unknown opId: ${node.opId}`);
   params = params || node.params || {};
-  const mode = params.mode;
+  const mode = nodeDirection(node, params);
   let result;
   if (mode === "decode") {
     if (typeof op.decode !== "function")

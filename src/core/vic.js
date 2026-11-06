@@ -381,7 +381,7 @@ register({
   id: "vic", cat: "classic", name: "VIC 密码",
   desc: "冷战铅笔密码：短语+日期+个人号+密钥组 链式相加派生密钥流 → 跨行棋盘化 → 列换位+三角扰乱双换位；默认即 Wikipedia 例（派生线 A-S 可复现）",
   params: [
-    { key: "phrase", label: "口令短语（≥20 字母）", type: "text", default: DEF.phrase },
+    { sensitive: true, key: "phrase", label: "口令短语（≥20 字母）", type: "password", default: DEF.phrase },
     { key: "date", label: "日期（≥6 位数字，前 5 位入钥）", type: "text", default: DEF.date },
     { key: "personal", label: "个人号（1-99）", type: "number", default: DEF.personal },
     { key: "keygroup", label: "密钥组（5 位数字）", type: "text", default: DEF.keygroup },

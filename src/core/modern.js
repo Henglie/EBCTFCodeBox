@@ -30,7 +30,8 @@ const te = (s) => new TextEncoder().encode(s);
 // 字节 <-> 编码 工具（hex / base64 / utf8 / latin1）
 // ============================================================
 function hexToBytes(s) {
-  const clean = s.replace(/[^0-9a-fA-F]/g, "");
+  const clean = String(s == null ? "" : s).replace(/\s+/g, "");
+  if (!/^[0-9a-fA-F]*$/.test(clean)) throw new Error("非法 hex 字符（仅允许 0-9/A-F 与空白）");
   if (clean.length % 2) throw new Error("hex 长度必须为偶数");
   const out = new Uint8Array(clean.length / 2);
   for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);
@@ -82,23 +83,121 @@ function encodeOutput(bytes, enc) {
 }
 
 // ============================================================
-// PKCS#7 填充
+// 填充（统一实现，供 AES/DES/3DES 与其余分组密码模块复用）
+//
+// 语义：
+// - none      : NoPadding。加密要求块对齐，否则显式报错；解密原样返回。
+// - pkcs7     : 末字节=填充长度（默认，兼容旧行为；块大小 ≤255）。
+// - zero      : 0x00 补齐到块边界；已对齐不追加。不可逆：原文末尾的 0x00 会被去掉。
+// - bit       : ISO/IEC 9797-1 padding method 2，0x80 后补 0x00；总是至少补 1 字节。
+// - iso10126  : 随机字节，末字节=填充长度（严格 ISO 10126；解密只信末字节）。
+// - ansix923  : 0x00…0x00 + 末字节=填充长度。
+//
+// 流模式（CFB/OFB/CTR/GCM）不调用本层，padding 参数被忽略。
 // ============================================================
-function pkcs7Pad(data, blockSize) {
+export const PADDING_OPTIONS = [
+  { value: "pkcs7", label: "PKCS#7（末字节=填充长度）" },
+  { value: "none", label: "NoPadding（要求块对齐）" },
+  { value: "zero", label: "Zero（0x00 补齐，不可逆）" },
+  { value: "bit", label: "Bit（0x80 + 0x00，ISO/IEC 9797-1 M2）" },
+  { value: "iso10126", label: "ISO 10126（随机字节 + 末字节长度）" },
+  { value: "ansix923", label: "ANSI X9.23（0x00… + 末字节长度）" },
+];
+const PADDING_NAMES = new Set(["none", "pkcs7", "zero", "bit", "iso10126", "ansix923"]);
+
+/** 归一化填充名；缺省/true→pkcs7，false→none。 */
+export function normalizePadding(pad) {
+  if (pad === false) return "none";
+  if (pad === true || pad == null || pad === "") return "pkcs7";
+  const s = String(pad).trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  switch (s) {
+    case "none": case "nopadding": case "no": return "none";
+    case "pkcs7": case "pkcs5": case "pkcs": return "pkcs7";
+    case "zero": case "zeros": case "zeropadding": return "zero";
+    case "bit": case "bitpadding": case "iso9797": case "iso97971": case "iso9797m2":
+    case "isoiec97971m2": case "iso7816": case "iso78164": return "bit";
+    case "iso10126": case "iso101262": return "iso10126";
+    case "ansix923": case "x923": case "ansix923padding": return "ansix923";
+    default: throw new Error(`不支持的填充: ${pad}（可用 none/pkcs7/zero/bit/iso10126/ansix923）`);
+  }
+}
+
+/** 按填充名补齐到块大小整数倍。none 非对齐时显式报错。 */
+export function padBytes(data, blockSize, pad = "pkcs7") {
+  const mode = normalizePadding(pad);
+  if (!PADDING_NAMES.has(mode)) throw new Error(`不支持的填充: ${pad}`);
+  if (mode === "none") {
+    if (data.length % blockSize !== 0) {
+      throw new Error(`NoPadding 要求数据长度为 ${blockSize} 字节整数倍（当前 ${data.length} 字节）`);
+    }
+    return data;
+  }
   const padLen = blockSize - (data.length % blockSize);
+  if (mode === "zero" && padLen === blockSize) return data;
   const out = new Uint8Array(data.length + padLen);
   out.set(data);
-  out.fill(padLen, data.length);
+  switch (mode) {
+    case "pkcs7":
+      out.fill(padLen, data.length);
+      break;
+    case "zero":
+      break;
+    case "bit":
+      out[data.length] = 0x80;
+      break;
+    case "iso10126": {
+      const rnd = randBytes(padLen);
+      out.set(rnd, data.length);
+      out[out.length - 1] = padLen;
+      break;
+    }
+    case "ansix923":
+      out[out.length - 1] = padLen;
+      break;
+    default:
+      throw new Error(`不支持的填充: ${pad}`);
+  }
   return out;
 }
-function pkcs7Unpad(data, blockSize) {
-  if (data.length === 0 || data.length % blockSize !== 0) throw new Error("密文长度非块大小整数倍，无法去填充");
-  const padLen = data[data.length - 1];
-  if (padLen < 1 || padLen > blockSize) throw new Error("PKCS7 填充非法（可能密钥/模式错误）");
-  for (let i = data.length - padLen; i < data.length; i++) {
-    if (data[i] !== padLen) throw new Error("PKCS7 填充校验失败（可能密钥/模式错误）");
+
+/** 按填充名去掉填充。none 原样返回；zero 去尾部 0x00；其余做结构校验。 */
+export function unpadBytes(data, blockSize, pad = "pkcs7") {
+  const mode = normalizePadding(pad);
+  if (mode === "none") return data;
+  if (data.length === 0 || data.length % blockSize !== 0) {
+    throw new Error(`密文长度非 ${blockSize} 字节整数倍，无法去填充`);
   }
-  return data.subarray(0, data.length - padLen);
+  switch (mode) {
+    case "zero": {
+      let i = data.length;
+      while (i > 0 && data[i - 1] === 0) i--;
+      return data.subarray(0, i);
+    }
+    case "bit": {
+      let i = data.length - 1;
+      while (i >= 0 && data[i] === 0) i--;
+      if (i < 0 || data[i] !== 0x80) throw new Error("Bit 填充非法（未找到 0x80 填充字节）");
+      return data.subarray(0, i);
+    }
+    case "pkcs7":
+    case "iso10126":
+    case "ansix923": {
+      const padLen = data[data.length - 1];
+      if (padLen < 1 || padLen > blockSize) throw new Error(`${mode} 填充非法（末字节=${padLen}，块大小=${blockSize}）`);
+      if (mode === "pkcs7") {
+        for (let i = data.length - padLen; i < data.length; i++) {
+          if (data[i] !== padLen) throw new Error("PKCS7 填充校验失败（可能密钥/模式错误）");
+        }
+      } else if (mode === "ansix923") {
+        for (let i = data.length - padLen; i < data.length - 1; i++) {
+          if (data[i] !== 0) throw new Error("ANSI X9.23 填充校验失败（长度前的字节必须为 0）");
+        }
+      }
+      return data.subarray(0, data.length - padLen);
+    }
+    default:
+      throw new Error(`不支持的填充: ${pad}`);
+  }
 }
 
 function xorBytes(a, b) {
@@ -119,8 +218,7 @@ function incCounter(ctr) {
 // 分组模式（通用，块密码传入 encBlock/decBlock，块大小 bs）
 // ============================================================
 function ecbEncrypt(data, encBlock, bs, pad = true) {
-  const d = pad ? pkcs7Pad(data, bs) : data;
-  if (d.length % bs) throw new Error(`明文需为 ${bs} 字节整数倍（或开启填充）`);
+  const d = padBytes(data, bs, pad);
   const out = new Uint8Array(d.length);
   for (let i = 0; i < d.length; i += bs) out.set(encBlock(d.subarray(i, i + bs)), i);
   return out;
@@ -129,11 +227,10 @@ function ecbDecrypt(data, decBlock, bs, pad = true) {
   if (data.length % bs) throw new Error(`密文需为 ${bs} 字节整数倍`);
   const out = new Uint8Array(data.length);
   for (let i = 0; i < data.length; i += bs) out.set(decBlock(data.subarray(i, i + bs)), i);
-  return pad ? pkcs7Unpad(out, bs) : out;
+  return unpadBytes(out, bs, pad);
 }
 function cbcEncrypt(data, encBlock, bs, iv, pad = true) {
-  const d = pad ? pkcs7Pad(data, bs) : data;
-  if (d.length % bs) throw new Error(`明文需为 ${bs} 字节整数倍（或开启填充）`);
+  const d = padBytes(data, bs, pad);
   const out = new Uint8Array(d.length);
   let prev = iv.subarray(0, bs);
   for (let i = 0; i < d.length; i += bs) {
@@ -152,7 +249,7 @@ function cbcDecrypt(data, decBlock, bs, iv, pad = true) {
     out.set(xorBytes(decBlock(cblk), prev), i);
     prev = cblk;
   }
-  return pad ? pkcs7Unpad(out, bs) : out;
+  return unpadBytes(out, bs, pad);
 }
 // CFB/OFB/CTR 为流模式，加解密都用块密码的 encBlock
 function cfbEncrypt(data, encBlock, bs, iv) {
@@ -199,6 +296,17 @@ function ctrCrypt(data, encBlock, bs, iv) {
     for (let j = 0; j < n; j++) out[i + j] = data[i + j] ^ ks[j];
     incCounter(ctr);
   }
+  return out;
+}
+// 供其它分组密码模块复用同一套分组模式与填充（避免各文件各写一份）
+export { ecbEncrypt, ecbDecrypt, cbcEncrypt, cbcDecrypt, cfbEncrypt, cfbDecrypt, ofbCrypt, ctrCrypt };
+
+function concatBytes(...arrs) {
+  let n = 0;
+  for (const a of arrs) n += a.length;
+  const out = new Uint8Array(n);
+  let o = 0;
+  for (const a of arrs) { out.set(a, o); o += a.length; }
   return out;
 }
 
@@ -344,31 +452,35 @@ const AES_MODES = new Set(["ECB", "CBC", "CFB", "OFB", "CTR"]);
  * AES 加密（非 GCM 模式，纯 JS）。
  * @param {Uint8Array} data 明文字节
  * @param {Uint8Array} key 16/24/32 字节
- * @param {{mode:string, iv?:Uint8Array, pad?:boolean}} opts
+ * @param {{mode:string, iv?:Uint8Array, pad?:boolean|string, padding?:string}} opts
  * @returns {Uint8Array} 密文字节
  */
-export function aesEncrypt(data, key, { mode = "CBC", iv, pad = true } = {}) {
+export function aesEncrypt(data, key, { mode = "CBC", iv, pad = true, padding } = {}) {
   mode = mode.toUpperCase();
   if (!AES_MODES.has(mode)) throw new Error(`不支持的 AES 模式: ${mode}（GCM 用 aesGcm*）`);
+  const padOpt = padding === undefined ? pad : padding;
   const { encBlock } = makeAes(key);
+  if (mode !== "ECB" && iv && iv.length !== 16) throw new Error(`AES-${mode} IV 必须为 16 字节，当前 ${iv.length} 字节`);
   const ivv = iv || new Uint8Array(16);
   switch (mode) {
-    case "ECB": return ecbEncrypt(data, encBlock, 16, pad);
-    case "CBC": return cbcEncrypt(data, encBlock, 16, ivv, pad);
+    case "ECB": return ecbEncrypt(data, encBlock, 16, padOpt);
+    case "CBC": return cbcEncrypt(data, encBlock, 16, ivv, padOpt);
     case "CFB": return cfbEncrypt(data, encBlock, 16, ivv);
     case "OFB": return ofbCrypt(data, encBlock, 16, ivv);
     case "CTR": return ctrCrypt(data, encBlock, 16, ivv);
   }
 }
 /** AES 解密（非 GCM）。 */
-export function aesDecrypt(data, key, { mode = "CBC", iv, pad = true } = {}) {
+export function aesDecrypt(data, key, { mode = "CBC", iv, pad = true, padding } = {}) {
   mode = mode.toUpperCase();
   if (!AES_MODES.has(mode)) throw new Error(`不支持的 AES 模式: ${mode}`);
+  const padOpt = padding === undefined ? pad : padding;
   const { encBlock, decBlock } = makeAes(key);
+  if (mode !== "ECB" && iv && iv.length !== 16) throw new Error(`AES-${mode} IV 必须为 16 字节，当前 ${iv.length} 字节`);
   const ivv = iv || new Uint8Array(16);
   switch (mode) {
-    case "ECB": return ecbDecrypt(data, decBlock, 16, pad);
-    case "CBC": return cbcDecrypt(data, decBlock, 16, ivv, pad);
+    case "ECB": return ecbDecrypt(data, decBlock, 16, padOpt);
+    case "CBC": return cbcDecrypt(data, decBlock, 16, ivv, padOpt);
     case "CFB": return cfbDecrypt(data, encBlock, 16, ivv); // 流模式解密用 encBlock
     case "OFB": return ofbCrypt(data, encBlock, 16, ivv);
     case "CTR": return ctrCrypt(data, encBlock, 16, ivv);
@@ -520,8 +632,9 @@ const DES_MODES = new Set(["ECB", "CBC", "CFB", "OFB", "CTR"]);
 function runBlockCipher(enc, data, blk, mode, iv, pad) {
   mode = mode.toUpperCase();
   if (!DES_MODES.has(mode)) throw new Error(`不支持的模式: ${mode}`);
-  const ivv = iv || new Uint8Array(8);
   const bs = 8;
+  if (mode !== "ECB" && iv && iv.length !== bs) throw new Error(`DES-${mode} IV 必须为 ${bs} 字节，当前 ${iv.length} 字节`);
+  const ivv = iv || new Uint8Array(8);
   if (enc) switch (mode) {
     case "ECB": return ecbEncrypt(data, blk.encBlock, bs, pad);
     case "CBC": return cbcEncrypt(data, blk.encBlock, bs, ivv, pad);
@@ -536,10 +649,10 @@ function runBlockCipher(enc, data, blk, mode, iv, pad) {
     case "CTR": return ctrCrypt(data, blk.encBlock, bs, ivv);
   }
 }
-export function desEncrypt(data, key, { mode = "CBC", iv, pad = true } = {}) { return runBlockCipher(true, data, makeDes(key), mode, iv, pad); }
-export function desDecrypt(data, key, { mode = "CBC", iv, pad = true } = {}) { return runBlockCipher(false, data, makeDes(key), mode, iv, pad); }
-export function des3Encrypt(data, key, { mode = "CBC", iv, pad = true } = {}) { return runBlockCipher(true, data, makeDes3(key), mode, iv, pad); }
-export function des3Decrypt(data, key, { mode = "CBC", iv, pad = true } = {}) { return runBlockCipher(false, data, makeDes3(key), mode, iv, pad); }
+export function desEncrypt(data, key, { mode = "CBC", iv, pad = true, padding } = {}) { return runBlockCipher(true, data, makeDes(key), mode, iv, padding === undefined ? pad : padding); }
+export function desDecrypt(data, key, { mode = "CBC", iv, pad = true, padding } = {}) { return runBlockCipher(false, data, makeDes(key), mode, iv, padding === undefined ? pad : padding); }
+export function des3Encrypt(data, key, { mode = "CBC", iv, pad = true, padding } = {}) { return runBlockCipher(true, data, makeDes3(key), mode, iv, padding === undefined ? pad : padding); }
+export function des3Decrypt(data, key, { mode = "CBC", iv, pad = true, padding } = {}) { return runBlockCipher(false, data, makeDes3(key), mode, iv, padding === undefined ? pad : padding); }
 
 // ============================================================
 // RC4（流密码，自反）
@@ -690,20 +803,36 @@ export function rsaDeriveD(p, q, e) {
 // ============================================================
 // AES-GCM（认证加密，走 WebCrypto）
 // ============================================================
-// 密文 = ciphertext ‖ tag(16B)（WebCrypto 输出格式）。CTF 场景 iv/nonce 通常已知，故要求显式提供。
-export async function aesGcmEncrypt(data, key, iv, aad) {
+// 密文 = ciphertext ‖ tag(tagLen 位，默认 128)。CTF 场景 iv/nonce 通常已知，故要求显式提供。
+const GCM_TAG_BITS = new Set([128, 120, 112, 104, 96, 64, 32]);
+function normGcmTagBits(tagLen) {
+  if (tagLen == null || tagLen === "") return 128;
+  const n = Number(tagLen);
+  if (!GCM_TAG_BITS.has(n)) throw new Error("GCM tagLen 仅支持 128/120/112/104/96/64/32 位");
+  return n;
+}
+export async function aesGcmEncrypt(data, key, iv, aad, { tagLen = 128 } = {}) {
   if (!globalThis.crypto?.subtle) throw new Error("当前环境不支持 WebCrypto（AES-GCM 需要）");
   const k = await crypto.subtle.importKey("raw", key, "AES-GCM", false, ["encrypt"]);
   const ct = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv, additionalData: aad || new Uint8Array(0) }, k, data);
+    { name: "AES-GCM", iv, additionalData: aad || new Uint8Array(0), tagLength: normGcmTagBits(tagLen) }, k, data);
   return new Uint8Array(ct);
 }
-export async function aesGcmDecrypt(data, key, iv, aad) {
+export async function aesGcmDecrypt(data, key, iv, aad, { tagLen = 128 } = {}) {
   if (!globalThis.crypto?.subtle) throw new Error("当前环境不支持 WebCrypto（AES-GCM 需要）");
+  const bits = normGcmTagBits(tagLen);
+  const tagBytes = bits / 8;
+  if (!data || data.length < tagBytes) {
+    throw new Error(`AES-GCM 密文过短：至少需包含 ${tagBytes} 字节 tag（当前 ${data ? data.length : 0} 字节）`);
+  }
   const k = await crypto.subtle.importKey("raw", key, "AES-GCM", false, ["decrypt"]);
-  const pt = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv, additionalData: aad || new Uint8Array(0) }, k, data);
-  return new Uint8Array(pt);
+  try {
+    const pt = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv, additionalData: aad || new Uint8Array(0), tagLength: bits }, k, data);
+    return new Uint8Array(pt);
+  } catch (e) {
+    throw new Error(`AES-GCM 解密失败：密钥/IV/AAD/tag 不匹配或密文被篡改${e && e.message ? `（${e.message}）` : ""}`);
+  }
 }
 
 // ============================================================
@@ -722,16 +851,76 @@ const OUT_OPTS = [
 ];
 
 // 分组密码参数（AES 含 GCM，DES/3DES 不含）。
-function blockParams(modes, keyPh) {
-  return [
+function blockParams(modes, keyPh, { gcm = false } = {}) {
+  const params = [
     { key: "key", label: "密钥", type: "text", default: "", placeholder: keyPh },
     { key: "keyEnc", label: "密钥编码", type: "select", default: "utf8", options: ENC_OPTS },
     { key: "mode", label: "模式", type: "select", default: "CBC",
       options: modes.map((m) => ({ value: m, label: m })) },
     { key: "iv", label: "IV / Nonce", type: "text", default: "", placeholder: "hex（GCM 为 12B nonce）" },
     { key: "ivEnc", label: "IV 编码", type: "select", default: "hex", options: ENC_OPTS },
-    { key: "outEnc", label: "密文编码", type: "select", default: "base64", options: OUT_OPTS },
+    { key: "padding", label: "填充（ECB/CBC 用；流模式忽略）", type: "select", default: "pkcs7", options: PADDING_OPTIONS },
   ];
+  if (gcm) {
+    params.push(
+      { key: "aad", label: "AAD（仅 GCM）", type: "text", default: "", placeholder: "认证附加数据（可空）" },
+      { key: "aadEnc", label: "AAD 编码（仅 GCM）", type: "select", default: "utf8", options: ENC_OPTS },
+      { key: "includeIv", label: "IV 包含方式（仅 GCM）", type: "select", default: "off",
+        options: [
+          { value: "off", label: "不包含（默认）" },
+          { value: "prepend", label: "前置（iv‖ct‖tag）" },
+          { value: "append", label: "后置（ct‖tag‖iv）" },
+        ] },
+      { key: "ivFromInput", label: "IV 来源（仅 GCM 解密）", type: "select", default: "off",
+        options: [
+          { value: "off", label: "Off（不自动取，默认）" },
+          { value: "start", label: "From start（从输入开头取）" },
+          { value: "end", label: "From end（从输入末尾取）" },
+        ] },
+      { key: "tagLen", label: "GCM tag 位数", type: "select", default: "128",
+        options: [128, 120, 112, 104, 96, 64, 32].map((n) => ({ value: String(n), label: `${n} 位` })) },
+      { key: "ivLen", label: "IV 长度（Include IV / ivFromInput 解密用）", type: "select", default: "12",
+        options: [12, 16].map((n) => ({ value: String(n), label: `${n} 字节` })) },
+      { key: "tag", label: "tag（仅 GCM 解密可选）", type: "text", default: "", placeholder: "留空取密文末；独立 tag 时单独粘贴" },
+      { key: "tagEnc", label: "tag 编码（仅独立 tag）", type: "select", default: "hex", options: ENC_OPTS },
+    );
+  }
+  params.push({ key: "outEnc", label: "密文编码", type: "select", default: "base64", options: OUT_OPTS });
+  return params;
+}
+
+function normIncludeIv(v) {
+  const s = String(v == null || v === "" ? "off" : v).toLowerCase();
+  if (s === "off" || s === "prepend" || s === "append") return s;
+  throw new Error(`IV 包含方式仅支持 off/prepend/append（当前 ${v}）`);
+}
+function normIvFromInput(v) {
+  const s = String(v == null || v === "" ? "off" : v).toLowerCase();
+  if (s === "off" || s === "start" || s === "end") return s;
+  throw new Error(`IV 来源（ivFromInput）仅支持 off/start/end（当前 ${v}）`);
+}
+// AAD 不再固定 UTF-8：hex/base64 允许首尾空白，UTF-8/Latin1 原样保留（尾空格可能是合法 AAD）。
+function parseGcmAad(p) {
+  const raw = p.aad;
+  if (raw == null || raw === "") return undefined;
+  const enc = p.aadEnc || "utf8";
+  const text = (enc === "hex" || enc === "base64") ? String(raw).trim() : String(raw);
+  return decodeInput(text, enc);
+}
+// 独立 tag：长度必须与 tagLen 一致；UTF-8/Latin1 不 trim（末字节可能是空白）。
+function parseGcmTag(p, tagBytes) {
+  const raw = p.tag;
+  if (raw == null || raw === "") return null;
+  const enc = p.tagEnc || "hex";
+  const text = (enc === "hex" || enc === "base64") ? String(raw).trim() : String(raw);
+  const tag = decodeInput(text, enc);
+  if (tag.length !== tagBytes) throw new Error(`GCM 独立 tag 需 ${tagBytes} 字节（当前 ${tag.length} 字节）`);
+  return tag;
+}
+function bytesEqual(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
 }
 
 // 由字节级 enc/dec 函数构造 register 用的 encode/decode（含 AES-GCM 分支）。
@@ -741,44 +930,83 @@ function makeBlockEncode(encFn, isAes) {
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
     const mode = (p.mode || "CBC").toUpperCase();
     const data = te(text);
+    const padding = p.padding || "pkcs7";
     if (isAes && mode === "GCM") {
       if (!p.iv) throw new Error("GCM 需提供 nonce（IV）");
       const iv = decodeInput(p.iv, p.ivEnc || "hex");
-      return encodeOutput(await aesGcmEncrypt(data, key, iv), p.outEnc || "base64");
+      const aad = parseGcmAad(p);
+      const tagLen = normGcmTagBits(p.tagLen);
+      let out = await aesGcmEncrypt(data, key, iv, aad, { tagLen });
+      const inc = normIncludeIv(p.includeIv);
+      if (inc === "prepend") out = concatBytes(iv, out);
+      else if (inc === "append") out = concatBytes(out, iv);
+      return encodeOutput(out, p.outEnc || "base64");
     }
     const iv = p.iv ? decodeInput(p.iv, p.ivEnc || "hex") : undefined;
-    return encodeOutput(encFn(data, key, { mode, iv }), p.outEnc || "base64");
+    return encodeOutput(encFn(data, key, { mode, iv, padding }), p.outEnc || "base64");
   };
 }
 function makeBlockDecode(decFn, isAes) {
   return async (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
     const mode = (p.mode || "CBC").toUpperCase();
-    const data = decodeInput(text.trim(), p.outEnc || "base64");
+    let data = decodeInput(text.trim(), p.outEnc || "base64");
+    const padding = p.padding || "pkcs7";
     if (isAes && mode === "GCM") {
-      if (!p.iv) throw new Error("GCM 需提供 nonce（IV）");
-      const iv = decodeInput(p.iv, p.ivEnc || "hex");
-      return encodeOutput(await aesGcmDecrypt(data, key, iv), "utf8");
+      const aad = parseGcmAad(p);
+      const tagLen = normGcmTagBits(p.tagLen);
+      const tagBytes = tagLen / 8;
+      const sepTag = parseGcmTag(p, tagBytes);
+      const inTagBytes = sepTag ? 0 : tagBytes;
+      const withTag = (body) => (sepTag ? concatBytes(body, sepTag) : body);
+      const explicit = p.iv ? decodeInput(p.iv, p.ivEnc || "hex") : undefined;
+      const ivFromInput = normIvFromInput(p.ivFromInput);
+      const inc = normIncludeIv(p.includeIv);
+      const dir = ivFromInput !== "off" ? ivFromInput
+        : (inc === "prepend" ? "start" : inc === "append" ? "end" : "off");
+      if (dir !== "off") {
+        const ladder = explicit
+          ? [explicit.length]
+          : [...new Set([Number(p.ivLen) || 12, 12, 16])];
+        let lastErr = null;
+        for (const ivLen of ladder) {
+          if (data.length < ivLen + inTagBytes) continue;
+          const iv = dir === "start" ? data.subarray(0, ivLen) : data.subarray(data.length - ivLen);
+          const body = dir === "start" ? data.subarray(ivLen) : data.subarray(0, data.length - ivLen);
+          if (ivFromInput !== "off" && explicit && !bytesEqual(iv, explicit)) {
+            lastErr = new Error(`IV 参数与输入${dir === "start" ? "开头" : "末尾"}的 ${ivLen} 字节 IV 不一致`);
+            continue;
+          }
+          try {
+            // 兼容旧 Include IV：显式 IV 优先用参数值；ivFromInput 时用输入中取出的 IV。
+            const useIv = ivFromInput === "off" && explicit ? explicit : iv;
+            return encodeOutput(await aesGcmDecrypt(withTag(body), key, useIv, aad, { tagLen }), "utf8");
+          } catch (e) { lastErr = e; }
+        }
+        throw lastErr || new Error(`GCM 无法从输入${dir === "start" ? "开头" : "末尾"}取出 IV（数据过短）`);
+      }
+      if (!explicit) throw new Error("GCM 需提供 nonce（IV）");
+      return encodeOutput(await aesGcmDecrypt(withTag(data), key, explicit, aad, { tagLen }), "utf8");
     }
     const iv = p.iv ? decodeInput(p.iv, p.ivEnc || "hex") : undefined;
-    return encodeOutput(decFn(data, key, { mode, iv }), "utf8");
+    return encodeOutput(decFn(data, key, { mode, iv, padding }), "utf8");
   };
 }
 
 register({
-  id: "aes", family: "aes", familyLabel: "encdec", cat: "block", name: "AES", desc: "高级加密标准（ECB/CBC/CFB/OFB/CTR 纯 JS + GCM WebCrypto，key 16/24/32 字节）",
-  params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR", "GCM"], "16/24/32 字节密钥"),
+  id: "aes", family: "aes", familyLabel: "encdec", cat: "block", name: "AES", desc: "高级加密标准（ECB/CBC/CFB/OFB/CTR 纯 JS + GCM WebCrypto，key 16/24/32 字节）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；GCM 支持 AAD（utf8/hex/base64/latin1）、tagLen(128…32 位)、Include IV、解密独立 tag 与 ivFromInput；流模式忽略填充",
+  params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR", "GCM"], "16/24/32 字节密钥", { gcm: true }),
   encode: makeBlockEncode(aesEncrypt, true),
   decode: makeBlockDecode(aesDecrypt, true),
 });
 register({
-  id: "des", family: "des", familyLabel: "des", cat: "block", name: "DES", desc: "数据加密标准（FIPS-46-3，key 8 字节，块 8 字节）",
+  id: "des", family: "des", familyLabel: "des", cat: "block", name: "DES", desc: "数据加密标准（FIPS-46-3，key 8 字节，块 8 字节）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "8 字节密钥"),
   encode: makeBlockEncode(desEncrypt, false),
   decode: makeBlockDecode(desDecrypt, false),
 });
 register({
-  id: "des3", family: "des", familyLabel: "3des", cat: "block", name: "3DES / TripleDES", desc: "三重 DES（EDE，key 16 或 24 字节，块 8 字节）",
+  id: "des3", family: "des", familyLabel: "3des", cat: "block", name: "3DES / TripleDES", desc: "三重 DES（EDE，key 16 或 24 字节，块 8 字节）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "16/24 字节密钥"),
   encode: makeBlockEncode(des3Encrypt, false),
   decode: makeBlockDecode(des3Decrypt, false),
@@ -810,7 +1038,7 @@ const XOR_PARAMS = [
 {
   const { enc, dec } = makeStreamOp(rc4);
   register({
-    id: "rc4", cat: "stream", name: "RC4", desc: "RC4 流密码（自反，key 任意长）",
+    id: "rc4", cat: "stream", name: "RC4", desc: "RC4 流密码（自反，key 任意长）。只接受 raw key；若密文以 U2FsdGVk 开头（OpenSSL/CryptoJS 的 Salted__ 封装），请改用「OpenSSL 口令加解密」并选 RC4",
     params: STREAM_PARAMS, encode: enc, decode: dec,
   });
 }
@@ -881,7 +1109,7 @@ register({
   params: [
     { key: "n", label: "模数 n", type: "text", default: "", placeholder: "十进制；留空则用 p·q" },
     { key: "e", label: "公钥指数 e", type: "text", default: "65537", placeholder: "加密/推 d 用" },
-    { key: "d", label: "私钥指数 d", type: "text", default: "", placeholder: "解密；留空则由 p,q 推" },
+    { sensitive: true, key: "d", label: "私钥指数 d", type: "text", default: "", placeholder: "解密；留空则由 p,q 推" },
     { key: "p", label: "素数 p（可选）", type: "text", default: "", placeholder: "填 p,q 自动算 n 和 d" },
     { key: "q", label: "素数 q（可选）", type: "text", default: "", placeholder: "填 p,q 自动算 n 和 d" },
     { key: "dataEnc", label: "输入编码", type: "select", default: "dec", options: RSA_DATA_ENC },

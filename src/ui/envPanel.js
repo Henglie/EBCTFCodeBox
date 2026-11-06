@@ -1,4 +1,4 @@
-// envPanel.js — 环境管理面板（顶栏下拉，懒检测本机环境 + 字库状态）。
+// envPanel.js — 环境管理面板（顶栏下拉，懒检测本机环境）。
 // 独立模块，自带轻量 el/msym，经 window.__ebctfT 取 i18n，不反向 import main.js。
 // 范式仿 recipeView.js / 现有 toggleFontPanel（main.js 第 1105-1157 行）。
 //
@@ -7,18 +7,13 @@
 // - 本地模式：fetch bridge /api/env 拿 Python/Node/Java/7z 版本 + 系统信息
 // - 服务端模式：仅显示浏览器信息 + 提示运行 bridge.py 可启用本机检测
 // - 面板顶部明确声明「以下信息仅本地显示、绝不外发」
-// - 字库项：显示天珩子集/全量加载状态（复用 fontLoader.js），把预载入口并进面板
+//
+// 已迁出：离线增强包 / 天珩字库管理 → 扩展面板（pluginPanel.js）。本面板仅保留
+// 环境检测、增强随机安全、外观（昼夜/强调色）、一键重置。pack-miss 全局提示仍在本模块绑定。
 //
 // 零外发红线：bridge 只在 localhost 起、只跑白名单版本参数、不联网、不上传任何信息。
 // 系统信息仅本地显示，前端不存储不外发。
 
-import {
-  FONT_PLANES,
-  allFontStatus,
-  loadFontPlane,
-  onFontStatusChange,
-  humanSize,
-} from "./fontLoader.js";
 // 动态取色：预设 + 默认 + 回退函数。ui 层平级 import；选色/清除走 window.__ebctfSetAccent / __ebctfClearAccent（main.js 暴露），不反向 import main.js。
 import { ACCENT_PRESETS, DEFAULT_ACCENT, resetAccent } from "./dynamicColor.js";
 import { icon as iconSvg } from "./icons.js";  // .msym 无字体 ligature，须 icon() 注入内联 SVG
@@ -27,6 +22,8 @@ import { attachModalLifecycle } from "./modalLifecycle.js";
 import { getLocale } from "../i18n/index.js";
 // 「增强随机安全」全局入口（并入本环境面板）。独立组件，自带轻量 el/i18n。
 import { renderRandSecureSection } from "./randSecurePanel.js";
+// 仅用于全局 pack-miss 提示（离线包缺失时告知用户）；离线包管理 UI 已迁至扩展面板。
+import { PACKS } from "../core/offlinePacks.js";
 
 const ACCENT_KEY = "ebctf.accent";  // 与 main.js 一致，仅读取判当前选中态
 
@@ -72,16 +69,6 @@ const _ZH = {
   "ui.env.toolName.7z": "7-Zip",
   "ui.env.installed": "已安装",
   "ui.env.notInstalled": "未安装",
-  "ui.env.fonts": "天珩字库",
-  "ui.env.fontSubset": "首屏子集",
-  "ui.env.fontSubsetNote": "已加载（秒开，覆盖 CTF 常用字 + GB2312）",
-  "ui.env.fontAll": "全量平面",
-  "ui.env.fontLoaded": "已加载",
-  "ui.env.fontLoading": "加载中…",
-  "ui.env.fontIdle": "未加载",
-  "ui.env.fontError": "加载失败",
-  "ui.env.fontRetry": "重试",
-  "ui.env.fontLoad": "加载",
   "ui.env.detecting": "检测中…",
   "ui.env.detectFailed": "检测失败（bridge 未响应）",
   "ui.env.platform": "平台",
@@ -162,9 +149,27 @@ async function detectEnvironment() {
 
 // ---- 面板状态 ----
 let _panel = null;
-let _offFont = null;       // fontLoader 订阅取消函数
 let _detecting = false;
 let _offDocClick = null;   // 点外关闭监听（性能审计 M3：所有关闭路径统一自摘，防随开合次数累积）
+
+// ---- 离线包缺失全局提示（T709）----
+// 离线包管理 UI 已迁至扩展面板（pluginPanel.js）；此监听在模块加载时绑定
+// （envPanel 由 main.js 静态引入），保证任意页面缺包都能提示，不依赖是否打开过扩展面板。
+let _packsMissBound = false;
+
+function bindPackMissListener() {
+  if (_packsMissBound || typeof navigator === "undefined" || !("serviceWorker" in navigator) || !navigator.serviceWorker) return;
+  _packsMissBound = true;
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    const data = event.data;
+    if (!data || data.type !== "pack-miss") return;
+    const pack = PACKS.find((p) => p.id === data.packId);
+    const name = pack ? pack.id : String(data.packId);
+    const text = `${name} 未安装，相关功能离线不可用：${data.url || ""}`;
+    try { if (window.__ebctfToast) window.__ebctfToast(text); } catch { /* 忽略 */ }
+  });
+}
+bindPackMissListener();
 
 /** 顶栏按钮触发：打开/切换下拉面板。anchor = 触发按钮元素（用于定位）。 */
 export function openEnvPanel(anchor) {
@@ -178,13 +183,9 @@ export function openEnvPanel(anchor) {
   });
   document.body.append(_panel);
   positionPanel(anchor);
- // 首次渲染：检测中态 + 字库区
+ // 首次渲染：检测中态
   _panel.append(renderPanelContent({ mode: "detecting" }));
- // 字库状态订阅（加载平面后实时刷新）
-  _offFont = onFontStatusChange(() => {
-    if (_panel) rerenderFonts();
-  });
- // 触发懒检测
+  // 触发懒检测
   runDetect();
  // 点面板外关闭
   setTimeout(() => {
@@ -208,7 +209,6 @@ export function openEnvPanel(anchor) {
 
 /** 关闭面板。 */
 export function closeEnvPanel() {
-  if (_offFont) { _offFont(); _offFont = null; }
   if (_offDocClick) { document.removeEventListener("click", _offDocClick); _offDocClick = null; }
   if (_panel) { _panel.remove(); _panel = null; }
   _detecting = false;
@@ -219,14 +219,9 @@ export function renderEnvPanel(container) {
   const host = container || document.getElementById("envHost");
   if (!host) return null;
   host.innerHTML = "";
-  if (_offFont) { _offFont(); _offFont = null; } // 重复渲染先退订旧订阅（性能审计 L5），防 fontLoader Set 里堆积死回调
   const root = el("div", { class: "env-panel env-panel-inline" });
   root.append(renderPanelContent({ mode: "detecting" }));
   host.append(root);
-  _offFont = onFontStatusChange(() => {
-    const fontsBox = root.querySelector(".env-fonts-box");
-    if (fontsBox) rerenderFonts(fontsBox);
-  });
   runDetect(root);
   return root;
 }
@@ -273,9 +268,7 @@ function renderPanelContent(state) {
   wrap.append(detectBox);
  // 增强随机安全区（全局随机源档位 + 配置 + 服务器测试连接）
   wrap.append(renderRandSecureSection());
- // 字库区
-  wrap.append(renderFontsSection());
- // 昼夜切换区（与强调色同属「外观」，放一起）
+  // 昼夜切换区（与强调色同属「外观」，放一起）
   wrap.append(renderThemeSection());
  // 强调色区（动态取色）
   wrap.append(renderAccentSection());
@@ -441,69 +434,6 @@ function toolRow(key, info) {
     );
   }
   return row;
-}
-
-// 字库区（复用 fontLoader，首屏子集 + 全量 4 平面）
-function renderFontsSection() {
-  const sec = el("div", { class: "env-section env-fonts-box" });
-  sec.append(el("div", { class: "env-section-title" }, msym("font_download"), t("ui.env.fonts")));
- // 首屏子集（fonts.css 挂载，默认已加载）
-  sec.append(el("div", { class: "env-font-row subset" },
-    el("div", { class: "env-font-info" },
-      el("div", { class: "env-font-label" }, t("ui.env.fontSubset"),
-        el("span", { class: "env-font-size" }, "1.5 MB")),
-      el("div", { class: "env-font-desc" }, t("ui.env.fontSubsetNote")),
-    ),
-    el("span", { class: "env-font-tag loaded" }, t("ui.env.fontLoaded")),
-  ));
- // 全量 4 平面
-  for (const p of allFontStatus()) {
-    sec.append(renderFontPlaneRow(p));
-  }
-  return sec;
-}
-
-function renderFontPlaneRow(p) {
-  const row = el("div", { class: "env-font-row" });
-  const isZh = !(typeof window !== "undefined" && window.__ebctfT && window.__ebctfT("ui.env.title") !== "ui.env.title" && window.__ebctfT("ui.env.title") === "Environment");
-  const label = isZh ? p.label : p.labelEn;
-  const desc = isZh ? p.desc : p.descEn;
-  const st = p.status;
-  const btn = el("button",
-    { class: "env-font-btn" + (st === "loaded" ? " loaded" : "") + (st === "error" ? " error" : ""),
-      disabled: st === "loaded" || st === "loading" },
-    st === "loaded" ? t("ui.env.fontLoaded")
-      : st === "loading" ? t("ui.env.fontLoading")
-      : st === "error" ? t("ui.env.fontRetry")
-      : t("ui.env.fontLoad"));
-  btn.addEventListener("click", () => { loadFontPlane(p.id); });
-  row.append(
-    el("div", { class: "env-font-info" },
-      el("div", { class: "env-font-label" }, label,
-        el("span", { class: "env-font-size" }, humanSize(p.bytes))),
-      el("div", { class: "env-font-desc" }, desc),
-    ),
-    btn,
-  );
-  return row;
-}
-
-// 字库区局部重渲染（fontLoader 状态变化时）
-function rerenderFonts(fontsBox) {
-  const box = fontsBox || (_panel && _panel.querySelector(".env-fonts-box"));
-  if (!box) return;
-  const title = box.querySelector(".env-section-title");
-  box.innerHTML = "";
-  if (title) box.append(title);
-  box.append(el("div", { class: "env-font-row subset" },
-    el("div", { class: "env-font-info" },
-      el("div", { class: "env-font-label" }, t("ui.env.fontSubset"),
-        el("span", { class: "env-font-size" }, "1.5 MB")),
-      el("div", { class: "env-font-desc" }, t("ui.env.fontSubsetNote")),
-    ),
-    el("span", { class: "env-font-tag loaded" }, t("ui.env.fontLoaded")),
-  ));
-  for (const p of allFontStatus()) box.append(renderFontPlaneRow(p));
 }
 
 // ---- 强调色区（动态取色）----

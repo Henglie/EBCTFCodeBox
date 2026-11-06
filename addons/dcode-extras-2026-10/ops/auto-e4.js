@@ -1,4 +1,4 @@
-import { runOp } from "../lib/util.js";
+import { runOp, assertBudget } from "../lib/util.js";
 
 const NS = "dcode-extras-2026-10/";
 const TEXT = NS + "cat-text";
@@ -605,7 +605,10 @@ function cryptRun(text, p) {
     if (rest.startsWith("rounds=")) {
       const m = rest.slice(7).match(/^(\d+)\$/);
       if (!m) throw new Error("crypt 的 rounds 格式应为 rounds=N$");
-      rounds = Math.max(1000, Math.min(999999999, Number(m[1])));
+      rounds = Number(m[1]);
+      if (!Number.isSafeInteger(rounds) || rounds < 1000 || rounds > 999999999) {
+        throw new Error("crypt 的 rounds 需在 1000..999999999（超界不自动夹断）");
+      }
       raw = rest.slice(7 + m[0].length);
     }
     const saltBody = raw.split("$")[0].slice(0, 16);
@@ -624,9 +627,11 @@ function cryptRun(text, p) {
 /* ================= fixed-pair round robin ================= */
 
 function pairsSchedule(text, p) {
-  let items = String(text).split(/[\r\n,;]+/).map((s) => s.trim()).filter(Boolean);
+  const source = String(text);
+  assertBudget("chars", source.length, "队伍列表输入");
+  let items = source.split(/[\r\n,;]+/).map((s) => s.trim()).filter(Boolean);
+  assertBudget("items", items.length, "队伍/人数");
   if (items.length < 2) throw new Error("至少需要 2 个队/人");
-  if (items.length > 64) throw new Error("队伍数上限 64");
   if (!items.some((s) => s.includes("/"))) {
     if (items.length % 2) throw new Error("未使用 A/B 队名时人数必须为偶数");
     const teams = [];
@@ -638,6 +643,11 @@ function pairsSchedule(text, p) {
   const bye = list.length % 2 === 1;
   if (bye) list.push("BYE");
   const n = list.length;
+  const avgLen = items.reduce((s, x) => s + x.length, 0) / items.length;
+  const matchesPerRound = Math.floor(items.length / 2);
+  assertBudget("steps", (n - 1) * n, "循环赛轮转");
+  assertBudget("items", n - 1, "循环赛轮数");
+  assertBudget("chars", (n - 1) * (matchesPerRound * (2 * avgLen + 8) + 16), "循环赛输出");
   const rounds = [];
   for (let r = 0; r < n - 1; r++) {
     const pairs = [];
@@ -648,7 +658,9 @@ function pairsSchedule(text, p) {
     rounds.push(`第 ${r + 1} 轮: ${pairs.join("；")}`);
     list.splice(1, 0, list.pop());
   }
-  return `队伍 (${items.length}): ${items.join(", ")}${bye ? "（含轮空）" : ""}\n${rounds.join("\n")}`;
+  const out = `队伍 (${items.length}): ${items.join(", ")}${bye ? "（含轮空）" : ""}\n${rounds.join("\n")}`;
+  assertBudget("chars", out.length, "循环赛输出");
+  return out;
 }
 
 /* ================= Geek Code ================= */

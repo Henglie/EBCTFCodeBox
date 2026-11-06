@@ -253,7 +253,7 @@ register({
   id: "hajimiCode", cat: "cn", name: "哈基米加密（三进制）",
   desc: "哈/基/米三进制混淆：每个 UTF-16 码元 → 6/9/12 位三进制，块头带 0..8 随机偏移与长度标识；可选私钥（字符码十进制数字循环）参与位移。同一明文每次输出不同。仅混淆、不是密码学加密",
   params: [
-    { key: "key", label: "私钥（可空）", type: "text", default: "", placeholder: "留空即无密钥；注意错误密钥解出乱码" },
+    { sensitive: true, key: "key", label: "私钥（可空）", type: "text", default: "", placeholder: "留空即无密钥；注意错误密钥解出乱码" },
     { key: "mapping", label: "三进制码表（3 个不同字符）", type: "text", default: "哈基米" },
   ],
   encode: hajimiEncode,

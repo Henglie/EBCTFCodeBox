@@ -446,7 +446,7 @@ register({
         { value: "extract", label: "解压（x）" },
       ],
     },
-    { key: "password", label: "密码（可空）", type: "text", default: "", placeholder: "加密档案填密码" },
+    { sensitive: true, key: "password", label: "密码（可空）", type: "password", default: "", placeholder: "加密档案填密码" },
   ],
   run: sevenZipRun,
   detect: sevenZipDetect,

@@ -62,6 +62,7 @@ export default {
       "RC4 is proven insecure (initial-byte bias, Fluhrer-Mantin-Shamir attack) — this is why WEP was deprecated.",
       "RC4 is a stream cipher; encrypt and decrypt are the same operation: encode(encode(m, k), k) = m.",
       "In CTF, RC4 shows up in legacy systems — identifying trait: ciphertext length = plaintext length (no padding, no block structure).",
+      "A `U2FsdGVkX1…` prefix means the OpenSSL/CryptoJS Salted__ wrapper: derive a 32-byte key from the passphrase with EVP_BytesToKey, skip the 8-byte header and 8-byte salt, then run RC4. This op accepts a raw key only — use OpenSSL Passphrase Encrypt/Decrypt with RC4 for that wrapper.",
     ],
     aka: ["RC4", "ARC4", "ARCFOUR", "Rivest Cipher 4", "RC4流密码", "流密码", "rivest密码4", "WEP加密", "KSA PRGA", "RC4 stream cipher"],
   },

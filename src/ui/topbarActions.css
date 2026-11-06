@@ -1,0 +1,36 @@
+/*
+ * topbarActions.css — 顶栏动作入口尺寸。
+ * 独立样式表，不改 app.css / topbar-responsive.css；index.html 中在
+ * topbar-responsive.css 之后加载，用 id 选择器覆盖窄屏断点的 padding。
+ *
+ * 目标：
+ * 1. #btnRepo 只留 octocat 图标，40×40 正圆；触屏（coarse）44×44。
+ * 2. #btnUpdate 已改为外部链接，去掉 a 默认下划线，尺寸仍走 .icon-btn。
+ */
+
+.topbar-actions > a.icon-btn {
+  text-decoration: none;
+}
+
+#btnRepo {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+
+#btnRepo .octocat {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
+@media (pointer: coarse), (any-pointer: coarse) {
+  #btnRepo {
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
+  }
+}

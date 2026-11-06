@@ -835,10 +835,20 @@ export function decodeText(bytes, opts) {
       const sn = sniffCharset(b, { sample: o.sample });
       charset = sn.best;
       const top = sn.candidates.find((c) => c.charset === charset) || sn.candidates[0];
-      warnings.push(
-        "按 " + charset + " 猜测解码，置信度 " + (top ? top.confidence.toFixed(3) : "0.000")
-        + "，理由：" + (top ? top.reason : "未给出判据") + " 这是猜测，不是事实；请按实际来源确认字符集。",
-      );
+      // 纯 ASCII 段：各字符集解码逐字节相同，0.500 只是「无判别信息」的中性值。
+      // 这条对用户没有决策价值，不再刷到 BOM 旁的状态栏（判据仍在 core 候选里可查）。
+      const neutralAscii = !!top && top.confidence === 0.5 && /全部 \d+ 字节 ≤ 0x7F/.test(String(top.reason || ""));
+      if (!neutralAscii) {
+        const conf = top ? top.confidence : 0;
+        // 低置信度只给短句（告知用了哪个字符集），长的判据推导不再刷状态栏；
+        // 高置信度才带完整 reason，避免把「猜的」写成「确定的」。
+        warnings.push(
+          conf >= 0.6
+            ? "按 " + charset + " 猜测解码，置信度 " + conf.toFixed(3)
+              + "，理由：" + (top ? top.reason : "未给出判据") + " 这是猜测，不是事实；请按实际来源确认字符集。"
+            : "按 " + charset + " 猜测解码（置信度 " + conf.toFixed(3) + "，低置信度，仅供参考）"
+        );
+      }
     }
   } else {
     charset = normalizeCharset(asked);

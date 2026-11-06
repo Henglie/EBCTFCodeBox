@@ -9,7 +9,7 @@
   <span>EternalBlaze CTF Codebox · EBCTFCodeBox</span>
 </h1>
 <p align="center">
-  <span align="center">A local-first, zero-upload codec / cryptography / steganalysis toolbox: 878 registered operations across 23 categories, most running entirely in your browser; Windows can additionally enable local-bridge capabilities, while macOS / Linux ship with double-click launchers.</span>
+  <span align="center">A local-first, zero-upload codec / cryptography / steganalysis toolbox: 928 registered operations across 23 categories, most running entirely in your browser; Windows can additionally enable local-bridge capabilities, while macOS / Linux ship with double-click launchers.</span>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 - [Introduction](#introduction)　　　　[Features](#features)
 - [Screenshots](#screenshots)　　　　[Running](#running)
 - [Platform Compatibility](#platform-compatibility)　　[Performance Requirements](#performance-requirements)
-- [Directory Structure](#directory-structure)　　　　[Full Codec List](#full-codec-list-878-ops--23-categories)
+- [Directory Structure](#directory-structure)　　　　[Full Codec List](#full-codec-list-928-ops--23-categories)
 - [Plugins & AI Access](#plugins--ai-access)　　[License](#license)
 - [Third-party Resources & Licenses](#third-party-resources--licenses)　　[Privacy](#privacy)
 - [Keywords](#keywords)
@@ -47,9 +47,49 @@
 | Baidu Netdisk | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
 | Quark | https://pan.quark.cn/s/3b7e573b19c0 | none |
 
-Current version **v0.1.12**. The source of truth is always the GitHub repository: [github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox).
+Current version **v0.1.14**. The source of truth is always the GitHub repository: [github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox).
 
 ## Changelog
+
+## v0.1.14 (in development)
+
+> This release: new structured outbound encoders, text utilities, EN/ZH OCR and code-image recognition upgrades; the extension panel is rebuilt with batch offline-pack management; sensitive params are masked by default, heavy ops run explicitly, passphrases and private keys can be hidden; BOM toolbar state and modal route cleanup are fixed; main ops reach 928 and six core locales align at 2927 keys.
+
+## v0.1.13-beta
+
+### New
+
+- dCode extras 2026-11 batch: 409 ops, plus a factorial digit/scale estimator; op pages show new/updated badges with batch timestamps.
+- 12 new main ops (890 total): `dataConvert`, `bzip2Enc`, `extractAll`, `gostKeyWrap`, `falconKeyGen` / `falconSign`, `typex`, `sigaba`, `lorenz`, `bombe`, `multipleBombe` and `colossus`, covering JSON/CSV/XML/YAML conversion, bzip2, dedicated text extraction, GOST Key Wrap, Falcon and six historical cipher machines.
+- New "All Algorithms" flat page (890 cards, collapsible categories, live search) and a ≤860px drawer navigation; the recipe toolbar is rearranged into Build / Run / Edit / Manage rows, F1 moves to the top-right of the page header, and the input/output encoding toolbars are independent — switching the output view reformats the latest result instantly without re-running the algorithm.
+- Multi-file / folder batch processing with per-item status, single downloads and ZIP packaging; Settings manages four optional offline packs (wasm / fonts / language packs / English education content).
+- Chinese / English / French / Japanese / Korean / Russian core UI copy is structurally aligned at 2927 keys; other languages show their real coverage instead of a false 100%.
+- Code-image auto-recognition: reading-order glyph segmentation, configurable candidate weights, slot→character mappings, per-glyph confidence and unknown `?`; no alphabet-order guessing without labels.
+- Block ciphers now expose NoPadding/PKCS#7/Zero/Bit/ISO 10126/ANSI X9.23; AES-GCM adds AAD/Include IV/tagLen; XTEA/RC6 rounds, ChaCha/Salsa 8/12 rounds, PRESENT CBC and GOST modes.
+- Recipe chain gains disabled nodes, breakpoints, single-step/run-from, step-localized errors with prefix retention, structural undo/redo, node duplicate, Auto Bake, Magic and Fork/Merge/Subsection/Register/Conditional Jump control nodes without new main ops.
+- Unified Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y for op inputs, home one-key, character viewer, recipe input and expandable inputs; paste/clear/external writes are undoable.
+- LZString pieroxy formats, LZ4 compression and regex presets; multi-stage one-key decoding keeps both progress bars, run bars no longer sticky, and card spacing is fixed.
+
+### Fixed
+
+- All dCode ops stop computing on every keystroke; parameter input is debounced and math/number-theory ops require an explicit Run/Ctrl+Enter.
+- Factorial no longer has an arbitrary `n<=20000` cap: divide-and-conquer BigInt product, memory-budgeted expansion, precise digit/memory estimate and explicit refusal when too large.
+- Math/number-theory P0: Harshad uses BigInt beyond 2^53; DFT no longer silently drops input points; square/cube/nth roots are exact for BigInt perfect powers; hypergeometric/binomial probabilities use log-space and no longer return NaN; small numeral/range caps became output/work budgets.
+- Raster split defaults to mid-gray `#808080` so black and white strokes both remain visible; x/y axes are both emitted and grouped in reports and auto previews; `auto` uses real alpha.
+- Block-cipher and parameter validation: AES/DES/3DES IV length must match the block size; GCM Include IV accepts 12- and 16-byte nonces; non-hex characters in keys / IVs / ciphertext, out-of-range RC2 effective bits, and invalid Bombe / MultipleBombe / Colossus numeric parameters now raise explicit errors instead of zero-padding, truncating or falling back to defaults.
+- The recipe run no longer leaves an "Executing…" banner behind; loading a chain-head file immediately shows its metadata and clear button.
+- Fixed 9 operations that only expose a run action being misclassified as input-less; multiline rotor / reflector parameters for the historical cipher machines are editable again, and those operations now run explicitly in a Worker so large rotor pools do not freeze the page.
+- SM4-GCM separate tags decoded as Latin1 / UTF-8 no longer have trailing whitespace trimmed, so a valid tag ending in `0x20` decrypts correctly.
+- One-key QR: 1/2/4/16-bit, indexed and interlaced PNGs now go through browser canvas to RGBA before ZXing; the 1-bit `QR.png` sample is recognized again instead of failing with "only 8-bit LSB".
+
+### Contributors
+
+- Added 橙子 (Chengzi) for multiple Misc logic fixes.
+- Added Tokeii for the redesigned icon and downstream optimizations.
+
+### Verification
+
+890 main ops; 409 plugin ops (all manual-run); plugin self-tests 110/110; padding/KAT 144, GOST 128, RC6 65, XSalsa20 11 and SM4-GCM 28 checks pass; recipe chain Node 43+23, Playwright 47+42 and existing smoke 8 pass; four-row recipe toolbar layout 14/14 at 1440/390; editor undo 6/6; six-language i18n aligned at 2847 keys; Typex 3/3, SIGABA 2/2, Lorenz SZ40/SZ42a 6 public vectors, SZ42b round-trip, Bombe 18/0, MultipleBombe 17/0, Colossus 215/0, and 7/7 in-browser attack tests; 1-bit QR recognized; raster demo x=38/y=30/68 with `#808080` blanks. See [CHANGELOG.md](./CHANGELOG.md).
 
 ## v0.1.12
 
@@ -70,7 +110,7 @@ Current version **v0.1.12**. The source of truth is always the GitHub repository
 
 ### Verification
 
-878 main ops; 408 plugin ops; 110 challenges / 153 files; stage 1630 / manifest 1630. See [CHANGELOG.md](./CHANGELOG.md).
+878 main ops; 408 plugin ops; 110 challenges / 153 files; release package manifest 1630 items. See [CHANGELOG.md](./CHANGELOG.md).
 
 ## Introduction
 
@@ -92,7 +132,7 @@ Core design:
 
 - **Local-first · zero upload**: Native ES modules, no framework, no build step. Core codecs run in-browser and never upload your input; "external link" ops only generate URLs. PWA updates fetch site assets only, the local bridge only talks to `127.0.0.1`, and external AI is only used after you configure an endpoint yourself.
 - **One-shot smart decoding**: Paste or drop content; it detects possible encoding chains and returns ranked decode candidates, with crib-based filtering and deep brute force.
-- **878 registered operations · 23 categories**: covering Base, text / transfer encodings, fancy CTF encodings, esoteric programming languages, Chinese / domestic encodings, classical ciphers, modern crypto (block / stream / asymmetric / other), hashes & checksums, radix & charsets (incl. primality testing and sieving), analysis / brute force, password attacks, compression & archives, password / archive cracking, forensics & traffic, file-format structures, data structures, images & QR codes, audio & video, steganography, plus 4 optional Windows GUI bridge entries. The complete list is generated automatically from the registry.
+- **928 registered operations · 23 categories**: covering Base, text / transfer encodings, fancy CTF encodings, esoteric programming languages, Chinese / domestic encodings, classical ciphers, modern crypto (block / stream / asymmetric / other), hashes & checksums, radix & charsets (incl. primality testing and sieving), analysis / brute force, password attacks, compression & archives, password / archive cracking, forensics & traffic, file-format structures, data structures, images & QR codes, audio & video, steganography, plus 4 optional Windows GUI bridge entries. The complete list is generated automatically from the registry.
 - **Decoding-strength quartet** (v0.1.2): strength levels + custom algorithm pool + a **separate brute-force channel** (XOR / Caesar / dictionary / rainbow-table / HMAC / PBE / Playfair / ZIP / CRC32 / bkcrack — results are grouped separately so they don't pollute the main ranking) + **decode depth 1–3**.
 - **Lenient matching mode** (v0.1.2): at the Enhanced / Very Strong / Maximum / Custom levels, algorithms are admitted by character-class count alone, so variant-encoding challenges (a "meow" table for 0/1, emoji-as-binary) also participate; Default / Fast keep strict domain detection.
 - **Key + ciphertext one-shot attack**: given ciphertext and a key, automatically enumerates AES / DES / 3DES / RC4 / XOR / Fernet × cipher modes × encoding combinations.
@@ -249,9 +289,11 @@ public/
 资料/               algorithm cross-check tables + research artifacts (dev-only; not shipped in release packages)
 ```
 
-## Full Codec List (878 ops · 23 categories)
+## Full Codec List (928 ops · 23 categories)
 
 > This section is generated from the real import closure; opId is the unique registry identifier.
+
+> The table below is the v0.1.13 baseline (890 ops); 37 ops added in v0.1.14 are listed in the changelog.
 
 ### Base (30 ops)
 
@@ -333,7 +375,7 @@ public/
 | mimeMultipart | MIME Multipart Parser | Parses multipart/mixed mail/HTTP bodies: splits parts at the boundary, recognizes Content-Type/Transfer-Encoding (base64/QP/7bit) and decodes the body; the encode direction combines with \| separators |
 | yenc | yEnc Encode / Decode | yEnc (Usenet binary transfer encoding, yEnc-1.3 spec): each byte +42 mod 256, the critical bytes NUL/CR/LF/'=' escaped with '=' +64. Leading TAB/space/'.' conservatively escaped. encode takes UTF-8 bytes, decode auto-skips =ybegin/=yend control lines |
 | binhex | BinHex 4.0 Encode / Decode | Mac BinHex 4.0 (Yves Lempereur spec + Python binhex): 6-bit alphabet + RLE90 compression + CRC-16-CCITT. decode parses filename/type/creator/data fork/resource fork and verifies all three CRCs; encode wraps UTF-8 text into a compliant BinHex (data fork, empty resource fork) |
-| regexTool | Generic Regex Extract / Replace | Regex extract or replace with a pre-compile structural whitelist: extract takes whole match / n-th group / all groups (tab-joined), with dedupe and first-only, joined by a configurable separator; replace expands $1..$9, $&amp;, $$. Backreferences, dangerous nested quantifiers, lookbehind and non-standard extensions are rejected before compilation (ReDoS defence); empty pattern, invalid regex and zero matches raise explicitly |
+| regexTool | Generic Regex Extract / Replace | Regex extract or replace: extract takes the whole match (group 0), the n-th capture group (1..n) or all groups (all, tab-joined), with optional dedupe and first-only, joined by sep; replace expands $1..$9, $&, $$ across the whole text and keeps unknown $x verbatim; empty pattern, invalid regex and zero matches always raise. A structural whitelist rejects backreferences, dangerous nested quantifiers, lookbehind and non-standard extensions before compilation. Parameters: mode + pattern + flags + group + dedupe + firstOnly + sep + replacement |
 
 ### Fancy / CTF Encodings (79 ops)
 
@@ -342,7 +384,7 @@ public/
 | scoutStick | Scout Stick Cipher (Chinese Code) | dCode's Code Chinois, also called the Samurai/scout stick cipher: horizontal bars encode the vowel index (A/E/I/O/U/Y = 1-6) and vertical bars the consonant offset after that vowel; DCODE = `\|\|\|- \|\|- ---- \|\|\|- --` (vertical bars first). Supports the Samurai role swap and horizontal-first notation; non-letters pass through |
 | morse | Morse Code | Morse code (ITU-R M.1677): letters/digits/punctuation mapped to dots and dashes, / separates words. The table adds a few non-ITU punctuation marks (! ; & _ $ and { } * # %; & and % share shapes with ITU prosigns but differ in meaning); a token that is neither dots/dashes nor a table code is ignored as a whole. |
 | bacon | Bacon Cipher | Bacon cipher: each letter as 5-bit a/b string, supports 24-letter (I=J, U=V) and 26-letter versions. |
-| yunying | Yunying Cipher (01248) | 0 separates letters; 1/2/4/8 weights sum to A-Z; encoding accepts A-Z only, decoding rejects sums outside 1-26. |
+| yunying | Yunying Cipher (01248) | 01248/Yunying cipher: 0 separates letters; digits 1/2/4/8 sum to A=1..Z=26. encode accepts A-Z only; decode rejects sums outside 1-26. |
 | rot13 | ROT13 | ROT13: shifts letters by 13, self-reciprocal (applying twice restores original). |
 | rot5 | ROT5 | ROT5: shifts digits by 5, self-reciprocal. |
 | rot18 | ROT18 | ROT18: combination of ROT13 and ROT5, handles both letters and digits, self-reciprocal. |
@@ -473,7 +515,7 @@ public/
 | xiangyueEnc | XiangYue Encrypt | XiangYue encryption direction: plaintext → zlib + AES-CTR + ChaCha20-Poly1305 → Chinese/Japanese/Korean/pictographic/Emoji/zero-width/Base64 ciphertext, auto-recognized and restored by this toolbox's 'XiangYue' decryption (format2 fast; format1 Argon2id 64MiB, several seconds per run) |
 | yueChang | YueChang | 风之暇想 YueChang: deflate + PBKDF2-SHA256 (100k iterations) + AES-GCM-256, Base64 mapped character-by-character to Chinese onomatopoeia (prefix '唱：', empty passphrase falls back to the default YueChang) |
 
-### Classical Ciphers (71 ops)
+### Classical Ciphers (75 ops)
 
 | opId | Name | Notes |
 |---|---|---|
@@ -532,6 +574,10 @@ public/
 | kamasutra | Kamasutra Cipher | Paired-table substitution (self-reciprocal: A↔B, C↔D..., encrypt = decrypt) |
 | enigma | Enigma Machine | German Enigma I three-rotor cipher machine (rotors I-V + reflectors B/C + ring settings + plugboard, self-reciprocal) |
 | m209 | M-209 Cipher Machine | WWII US M-209 (Hagelin) mechanical cipher machine (6 key wheels + 27-bar lug cage + pin settings, Beaufort self-reciprocal) |
+| typex | Typex Cipher Machine | WWII British Typex Mark 22: five rotors (two static) + reflector/input plugboards + keyboard emulation, self-reciprocal |
+| sigaba | SIGABA / ECM Mark II | WWII US SIGABA: five cipher rotors + five control rotors + five index rotors, 15-rotor stepping; encrypt/decrypt are directional |
+| lorenz | Lorenz SZ40/42 Cipher Attachment | WWII German Lorenz SZ40/42a/42b: twelve chi/psi/mu wheels, ITA2 five-unit XOR, KH/ZMUG/BREAM patterns |
+| colossus | Colossus Codebreaking Computer | WWII Colossus simulation for Lorenz SZ40/42: KH/ZMUG/BREAM, QBus, limitations, four preset programs and counters |
 | rotSpecial | Rot Special | Cyclic shift by any amount N (letters/alnum/ascii94), decode reverses |
 | goldbug | Goldbug Cipher | Poe's 'The Gold-Bug' Kidd cipher symbol substitution (one unique symbol per each of the 26 letters, reversible teaching edition) |
 | routeCipher | Route Cipher | Plaintext fills a W-column matrix, read out along serpentine/vertical routes (transposition cipher) |
@@ -549,7 +595,7 @@ public/
 | beaufortVariant | Variant Beaufort | Variant Beaufort (the German variant of Beaufort): c = p − k (mod 26); encrypting = Vigenère decrypting, decrypting = Vigenère encrypting; not self-reciprocal (the mirror direction of the self-reciprocal standard Beaufort) |
 | redefence | Redefence (Rail Fence) | Redefence: a row-order variant of the rail fence (W-shaped zig-zag) — rows read out in a given order or by keyword. The identity order degenerates to the standard rail fence. Parameters: rails / read order order / keyword key (order or key, one of the two) |
 
-### Modern Crypto · Block (33 ops)
+### Modern Crypto · Block (34 ops)
 
 | opId | Name | Notes |
 |---|---|---|
@@ -560,7 +606,7 @@ public/
 | tea | TEA | Tiny Encryption Algorithm (64-bit block, 128-bit key, 32-round Feistel, Wheeler 1994; supports ECB/CBC/CFB/OFB/CTR) |
 | xtea | XTEA | Extended TEA (improved key schedule, 64-bit block, 128-bit key, 32 rounds, Needham 1997; supports ECB/CBC/CFB/OFB/CTR) |
 | xxtea | XXTEA | Variable-length-block TEA (encrypts the whole data at once, ≥8 bytes, 128-bit key, Wheeler 1998) |
-| sm4 | SM4 | Chinese national-standard block cipher (GB/T 32907-2016, formerly GM/T 0002-2012; 128-bit block, 128-bit key, 32 rounds of nonlinear iteration. Modes: ECB/CBC/CFB/OFB/CTR + GCM authenticated encryption) |
+| sm4 | SM4 | Chinese national-standard block cipher (GB/T 32907-2016, formerly GM/T 0002-2012; 128-bit block, 128-bit key, 32 rounds of nonlinear iteration. Modes: ECB/CBC/CFB/OFB/CTR + GCM authenticated encryption; GCM decryption accepts a separate tag) |
 | noekeon | Noekeon | Noekeon block cipher (NESSIE nominee, 128-bit block/128-bit key, 16-round SPN direct round order). ECB/CBC, hex input/output, no padding. Passes botan noekeon.vec and NESSIE vectors (1029 single-block KATs, exact match) |
 | shacal2 | SHACAL-2 | SHACAL-2 block cipher (NESSIE selected, 256-bit block, key up to 512 bits, based on the SHA-256 compression function). ECB/CBC, hex input/output, no padding. Passes botan shacal2.vec (1019 single-block KATs, exact match) |
 | cast6 | CAST-256 | CAST-256/CAST6 block cipher (RFC 2612, 128-bit block, 128/192/256-bit key, 6 forward + 6 backward quad-rounds). ECB/CBC, hex input/output, no padding. Passes the three final-state KATs of RFC 2612 Appendix A |
@@ -585,8 +631,8 @@ public/
 | threefish | Threefish Tweakable Block Cipher | Threefish tweakable block cipher (built into Skein v1.3): 256/512/1024-bit blocks, same-length keys, 72/80 rounds with no separate key schedule (subkey injection every 4 rounds) + 128-bit tweak. Plaintext/ciphertext/key/tweak all hex, multi-block ECB. encode encrypts / decode decrypts. Passes the official Crypto++ threefish.txt vectors |
 | skipjack | Skipjack Block Cipher | Skipjack block cipher (NSA, declassified 1998, heart of the Clipper chip): 64-bit block, 80-bit key, 32 rounds (8A+8B+8A+8B). Plaintext/ciphertext/key all hex, multi-block ECB. encode encrypts / decode decrypts. Passes the official NIST SP800-17 Table 6 vectors |
 | mars | MARS Block Cipher | MARS block cipher (IBM 1998, AES finalist): 128-bit block, 128/192/256-bit key, 32 rounds (forward mixing + cryptographic core + backward mixing). Plaintext/ciphertext/key all hex, multi-block ECB. encode encrypts / decode decrypts. Passes the official Crypto++ marsval.dat vectors |
-
-| bfvToy | BFV Toy Homomorphic Encryption (teaching) | BFV teaching implementation (ePrint 2012/144): negacyclic ring R_q, ternary secret, Δ=⌊q/t⌋ scaling; encrypt/decrypt/homomorphic add/mul (no relinearisation, ciphertext grows to 3 components). Each step prints noise ‖e‖∞ against the Δ/2 = q/(2t) budget; overflow fails explicitly instead of returning garbage. Teaching demo, not production: n≤16, q≤2^32, t≤2^16, no NTT/relin/mod-switch, directly breakable at this size |
+| gostKeyWrap | GOST 28147-89 Key Wrap | RFC 4357 §6.1-§6.5 GOST 28147-89 Key Wrap/Unwrap: UKM(8B)\|\|CEK_ENC(32B)\|\|CEK_MAC(4B), optional CryptoPro KEK diversification, CryptoPro-A S-box; unwrap strictly checks length and MAC. |
+| bfvToy | BFV Toy Homomorphic Encryption (teaching) | Teaching implementation of BFV (ePrint 2012/144): negacyclic ring R_q, ternary secret, Δ=floor(q/t) scaling; encrypt/decrypt/homomorphic add/mul (no relinearisation, ciphertext grows to 3 components). Every step prints noise \|\|e\|\|∞ against the budget Δ/2=q/(2t); overflow fails explicitly instead of returning garbage. Teaching demo, not production: n≤16, q≤2^32, t≤2^16, no NTT/relin/mod-switch, directly breakable at this size. Parameters: op + n + q + t + m + ctA + ctB + seed |
 
 ### Modern Crypto · Stream (21 ops)
 
@@ -614,7 +660,7 @@ public/
 | rc4Drop | RC4-drop / CipherSaber-2 | RC4-drop[n] (drops the first n keystream bytes, RFC 6229 offset modes, default 768 = SANS recommendation) and CipherSaber-2 (10-byte IV prefix + KSA repeated r rounds, default r=20) |
 | xsalsa20 | XSalsa20 | XSalsa20 stream cipher (Bernstein, 'Extending the Salsa20 nonce'): HSalsa20 derives a 32-byte subkey + Salsa20/20, 32-byte key, 24-byte nonce, 64-bit block counter (self-reciprocal) |
 
-### Modern Crypto · Asymmetric (126 ops)
+### Modern Crypto · Asymmetric (128 ops)
 
 | opId | Name | Notes |
 |---|---|---|
@@ -650,11 +696,11 @@ public/
 | sm2Sign | SM2 Sign | SM2 digital signature (GB/T 32918.2-2016): ZA=SM3(ENTL\|\|ID_A\|\|a\|\|b\|\|x_G\|\|y_G\|\|x_P\|\|y_P) (G and P concatenated by coordinates, private key d not included), e=SM3(ZA\|\|M), outputs r\|\|s (each 32-byte hex, concatenated). Entering the public key (x,y) derives Za per the standard; leaving it empty signs M directly per the legacy convention |
 | sm2Verify | SM2 Verify | SM2 signature verification (GB/T 32918.2-2016): input message + signature r/s (32-byte hex each) + public key (x,y) + ID_A, recomputes SM3(ZA\|\|M) and checks the validity of (r,s) |
 | sm2KeyExchange | SM2 Key Exchange | SM2 key exchange protocol (GB/T 32918.3-2016): both sides' private keys + IDs derive the session key K (1..65536 bits selectable), outputs ephemeral points R_A/R_B and S1/S2 confirmation values (demo convention: ephemeral randomness generated internally) |
-| sm9KeyGen | SM9 Key Generation | SM9 identity-based cryptographic key system generation (GB/T 38665.2-2020): signing ks / encryption ke dual master key pairs (random, fixed values injectable to reproduce vectors) + user signing private key (G1) / encryption private key (G2) and user public key derived per uid. KGC model: the user's public key is the identity, no certificates needed |
-| sm9Sign | SM9 Sign | SM9 identity-based digital signature (GB/T 38665.2-2020): signing master public key (G2) + user signing private key (G1) + message → signature (h, S). h is 32-byte hex, S is a G1 point of 65 bytes (04‖x‖y). Supports a fixed r to reproduce official vectors |
-| sm9Verify | SM9 Verify | SM9 identity-based verification (GB/T 38665.2-2020): signing master public key (G2) + signer uid + hid + message + signature (h, S) → valid/invalid. Recomputes the bilinear pairing e(S,PA)·g^h and compares against H2 |
-| sm9Encrypt | SM9 Encrypt | SM9 identity-based encryption (GB/T 38665.4-2020): encryption master public key (G1) + recipient uid → ciphertext C1‖C3‖C2 (C1 is 64-byte x‖y). Only the peer's identity is needed to encrypt, no certificate; supports a fixed r to reproduce official vectors |
-| sm9Decrypt | SM9 Decrypt | SM9 identity-based decryption (GB/T 38665.4-2020): user encryption private key (G2) + recipient uid + ciphertext C1‖C3‖C2 → plaintext. A failed C3 check (tampering / wrong uid / wrong key) errors out |
+| sm9KeyGen | SM9 Key Generation | SM9 identity-based cryptographic key system generation (GB/T 38635.2-2020): signing ks / encryption ke dual master key pairs (random, fixed values injectable to reproduce vectors) + user signing private key (G1) / encryption private key (G2) and user public key derived per uid. KGC model: the user's public key is the identity, no certificates needed |
+| sm9Sign | SM9 Sign | SM9 identity-based digital signature (GB/T 38635.2-2020): signing master public key (G2) + user signing private key (G1) + message → signature (h, S). h is 32-byte hex, S is a G1 point of 65 bytes (04‖x‖y). Supports a fixed r to reproduce official vectors |
+| sm9Verify | SM9 Verify | SM9 identity-based verification (GB/T 38635.2-2020): signing master public key (G2) + signer uid + hid + message + signature (h, S) → valid/invalid. Recomputes the bilinear pairing e(S,PA)·g^h and compares against H2 |
+| sm9Encrypt | SM9 Encrypt | SM9 identity-based encryption (GB/T 38635.4-2020): encryption master public key (G1) + recipient uid → ciphertext C1‖C3‖C2 (C1 is 64-byte x‖y). Only the peer's identity is needed to encrypt, no certificate; supports a fixed r to reproduce official vectors |
+| sm9Decrypt | SM9 Decrypt | SM9 identity-based decryption (GB/T 38635.4-2020): user encryption private key (G2) + recipient uid + ciphertext C1‖C3‖C2 → plaintext. A failed C3 check (tampering / wrong uid / wrong key) errors out |
 | xwingKeyGen | X-Wing Key Generation | X-Wing hybrid KEM (X25519+ML-KEM-768, draft-connolly-cfrg-xwing-kem) key generation: a 32B seed SHAKE256-extended to 96B derives both components, pk = ML-KEM ek (1184B) ‖ X25519 public key (32B). Seed fixable for reproducibility |
 | xwingEncaps | X-Wing Encapsulate | X-Wing encapsulation: input public key pk (1216B), ct = ML-KEM ct (1088B) ‖ X25519 ephemeral public key (32B), ss = SHA3-256(ss_M‖ss_X‖ct_X‖pk_X‖"\./""/^\"). eseed fixable to reproduce official test vectors |
 | xwingDecaps | X-Wing Decapsulate | X-Wing decapsulation: input ciphertext ct (1120B) + private key sk (32B seed), re-extends both components from the seed and derives ss. A tampered ciphertext goes through the ML-KEM implicit-rejection path (unpredictable output) |
@@ -733,6 +779,8 @@ public/
 | schnorrReuseK | Schnorr Nonce Reuse Attack | Schnorr nonce reuse attack (sister puzzle of ECDSA k reuse): same private key, same k signing two different messages ⇒ d=(s1−s2)/(e1−e2) mod n, k=s1−e1·d mod n. Input the two signatures (e1,s1)(e2,s2) |
 | falconPkParse | Falcon public key parse | Falcon/FN-DSA public key parsing (spec §3.11.4): header byte 0000 nnnn (0x09=Falcon-512 / 0x0A=Falcon-1024) followed by a 14-bit big-endian bitstream per coefficient (897/1793 bytes), decoding the set/N/q=12289/polynomial-h coefficients and a SHA256 fingerprint; length/header/coefficient-range (≥12289) errors classified explicitly. The first step of verification; public keys are public material |
 | falconVerify | Falcon verify | Falcon/FN-DSA signature verification (spec v1.2 Algorithm 16, verify-only): c = SHAKE256(nonce‖message) hash-to-point (16-bit big-endian sampling with t<61445 rejection); s1 = c − s2·h mod (x^n+1, 12289) centered; valid iff ‖(s1,s2)‖² ≤ ⌊β²⌋ (34034726 / 70265242, equality allowed). Three encapsulations auto-detected (spec compressed 0x39/0x3A, CT fixed-length 0x59/0x5A, NIST API signed-message KAT style); format errors and signature errors reported separately; pure-JS O(n²) convolution (~2–4 ms at 1024), deterministic with zero randomness |
+| falconKeyGen | Falcon key generation | Falcon/FN-DSA key generation (spec v1.2): logn=9/10 gives n=512/1024; sample f,g, apply the Berd bound, solve f·G−g·F=q, and output the public key (0x09/0x0A + 14-bit stream) and the official three-part private key (0x59/0x5A + trim_i8(f,g,F)). Pure JS; an empty seed uses the unified random source, while a fixed 48-byte seed reproduces the run. |
+| falconSign | Falcon sign | Falcon/FN-DSA signing (spec v1.2 Algorithm 15): message plus an official three-part private key (0x59/0x5A) or this tool's four-part key; SHAKE256 hash-to-point, dynamic-LDL ffSampling, and output only when the norm is ≤⌊β²⌋. Signature = 0x39/0x3A ‖ nonce(40B) ‖ comp(s2), accepted directly by Falcon verify. Empty nonce/seed use the unified random source; explicit values reproduce KAT runs. |
 | kzgVerify | KZG proof verification | KZG polynomial commitment opening verification (EIP-4844): the pairing identity e(C − y·G1, [1]₂) == e(π, [s]₂ − z·[1]₂). The manual quadruple mode checks z/y/commitment/proof; blob mode derives z/y automatically from blob+commitment via Fiat-Shamir (FSBLOBVERIFY_V1_) and then verifies. Public constants of the BLS12-381 mainnet trusted setup; byte-for-byte matched against the c-kzg-4844 official vectors. A verification primitive of the commitment ecosystem, not encryption |
 | kzgCommit | KZG blob commitment | Computes the KZG commitment and versioned hash from an EIP-4844 blob (4096 32-byte field elements): commitment = linear combination of the evaluation vector against the mainnet trusted-setup G1 Lagrange points (bit-reversed domain order); versioned hash = 0x01 ‖ SHA-256(commitment)[1..31]. Can also generate the opening proof and self-verify. Trusted-setup generation is not implemented; this is a commitment, not encryption — the blob cannot be recovered from it |
 | ntruCca2Encrypt | NTRU CCA-2 encrypt | NTRU CCA-2 variant encryption (hash-based SVES: MGF1-SHA256 binding on top of EESS1 v3.1 + P1363.1 mapping): b and the blinding polynomial r are deterministically derived from the plaintext hash, making encryption fully deterministic and reproducible; the decryptor recomputes the MGF and verifies b — rejecting on mismatch (the re-encryption-check idea). Teaching demo scope, no official KAT; use standard KEMs such as ML-KEM in production |
@@ -780,9 +828,8 @@ public/
 | shamir | Shamir Secret Sharing | Shamir's Secret Sharing (GF(2^8)): encode splits the secret into n shares (threshold k), decode restores with any ≥k shares. Fewer than k shares reveal nothing about the secret (information-theoretically secure). Share format: x:hex per line |
 | jwtCrack | JWT Secret Crack | Weak-key small-dictionary demo for HS256/384/512-signed JWTs: built-in weak keys + custom + digits-only, recomputing HMAC signatures one by one. This tool does not do large-scale cracking — for big dictionaries use hashcat -m 16500 (https://hashcat.net) or John the Ripper's JWT format. Algorithm auto-detected from the header (force-selectable); RS/ES asymmetric signatures rejected |
 | xoodyakAead | Xoodyak-AEAD | Authenticated encryption of Xoodyak, a NIST Lightweight Cryptography finalist (two-color-domain Cyclist): 16-byte key / 16-byte nonce / optional associated data, fixed 16-byte tag. Encrypt: plaintext (UTF-8 or hex) → hex (ciphertext‖tag); decrypt: takes the same hex format, errors immediately on tag mismatch. The nonce is required and must be used once (no automatic random generation). Verified against the full official NIST KAT |
-
-| mpcToy | MPC Toy (teaching) | MPC teaching toy: beaver mode runs 3-party additive sharing plus a Beaver multiplication triple for a×b (prints shares, masks d/e and a reconstruction self-check); ot mode simulates 1-of-2 oblivious transfer (blind → mask → open one). Teaching demo, not production: no MAC/commitment/ZK, OT is a deterministic PRF simulation (a public seed opens both), so no real security |
-| quantumToy | Quantum Algorithm Toy (Grover / Shor) | Statevector teaching simulation: grover runs H → oracle phase flip → diffusion and prints the hit probability per round against the optimal count round(π/(4θ)−1/2) (the common ⌈π/4·√N⌉ overestimates by one for small N); shor only does the order-finding slice for N=15/21 (modular permutation + DFT + continued fractions) with a p×q=N self-check. Teaching demo, not production: n≤5, no noise/error correction, not gate-level; N≥35 rejected as exponential |
+| mpcToy | MPC Toy (teaching) | MPC teaching toy: beaver mode runs 3-party additive sharing plus a Beaver multiplication triple to compute a×b, printing each share, the masks d/e and a reconstruction self-check; ot mode simulates 1-of-2 oblivious transfer (blind → mask → open one). Teaching demo, not production: no MAC/commitment/ZK, OT is a deterministic PRF simulation (a public seed opens both), so there is no real security. Parameters: mode + a + b + seed |
+| quantumToy | Quantum Algorithm Toy (Grover / Shor) | Statevector teaching simulation: grover runs H → oracle phase flip → diffusion and prints the hit probability per round against the optimal count round(π/(4θ)-1/2) (the common ⌈π/4·√N⌉ overestimates by one for small N); shor only does the order-finding slice for N=15/21 (modular permutation + DFT + continued fractions), outputting the period and factors with a p×q=N self-check. Teaching demo, not production: n≤5, no noise/error correction, not gate-level; N≥35 is rejected as exponential. Parameters: algo + n + target + iters |
 
 ### Hash / Checksum (73 ops)
 
@@ -799,12 +846,12 @@ public/
 | crc16 | CRC16 | CRC16 checksum, CCITT-FALSE standard, polynomial 0x1021. |
 | ntlm | NTLM | NTLM hash, MD4 of UTF-16LE encoded password, Windows password storage format. |
 | sha3 | SHA-3 | SHA-3 hash (FIPS 202), selectable width 224/256/384/512, pure JS Keccak. |
-| keccak256 | Keccak-256 | Keccak-256 hash, used in Ethereum, padding 0x01 (differs from SHA3-256's 0x06). |
+| keccak256 | Keccak (multi-width) | Keccak sponge (original Keccak padding 0x01), widths 224/256/384/512, default 256; the 256-bit output matches Ethereum Keccak-256 (differs from SHA3-256's 0x06). |
 | shake128 | SHAKE128 | SHAKE128 extendable-output hash (FIPS 202), output length set by parameter. |
 | shake256 | SHAKE256 | SHAKE256 extendable-output hash (FIPS 202), output length set by parameter. |
 | ssdeep | SSDEEP Fuzzy Hash | CTPH context-triggered piecewise hashing (ssdeep-compatible): data → blocksize:hash1:hash2 signature, comparing two signatures yields a 0-100 similarity score; find same-origin/variant samples (score stays high after a few byte edits). Algorithm line-checked against ssdeep's official fuzzy.c, passes the C library's official vectors |
 | sm3 | SM3 | Chinese national-standard SM3 hash (GB/T 32905-2016, formerly GM/T 0004-2012, 256-bit, frequent in Chinese CTFs) |
-| ripemd160 | RIPEMD-160 | RIPEMD-160 message digest (160-bit, used in Bitcoin addresses) |
+| ripemd160 | RIPEMD (multi-width) | RIPEMD message digest (widths 128/160/256/320, default 160; 160-bit is used in Bitcoin addresses) |
 | blake2b | BLAKE2b | BLAKE2b hash (RFC 7693, up to 64-byte output, default 512-bit) |
 | blake2s | BLAKE2s | BLAKE2s hash (RFC 7693, up to 32-byte output, default 256-bit) |
 | adler32 | Adler-32 | Adler-32 checksum (RFC 1950, used by zlib, 32-bit) |
@@ -949,12 +996,10 @@ public/
 | progCalc | Programmer's Calculator | Bitwise expression evaluator (hand-written recursive-descent parser, no eval): & \| ^ ~ << >> >>> + - * / % **, parentheses, rotl/rotr circular shifts; 8/16/32/64-bit word masks with wrap-around (BigInt throughout), signed/unsigned toggle; one shot outputs decimal/hex/octal/binary (4-digit grouping)/two's complement/popcount/leading zeros/trailing zeros |
 | objectIdTime | ObjectID Timestamp Parse | BSON ObjectId (12 bytes: 4-byte big-endian Unix seconds + 5-byte random value + 3-byte big-endian counter) parsing: 24 hex digits → creation time (UTC) + random value + counter (run, one-way report) |
 
-### Analysis / Brute Force (48 ops)
+### Analysis / Brute Force (49 ops)
 
 | opId | Name | Notes |
 |---|---|---|
-| knnClassify | KNN Nearest-Neighbour Classification | Parse labelled training CSV (A/B) and unlabelled test CSV; Euclidean/Manhattan k-NN voting with tie handling, per-row predictions and A/B counts; local only |
-| plausibaer | Coordinate Formula Solver (Plausibär) | Enumerates unknown variables/intermediate formulas in a coordinate expression and outputs every valid latitude/longitude, decimal coordinate and map link (local reimplementation of guballa.de Plausibär) |
 | xorBrute | XOR Single-Byte Brute | XORs the input byte-by-byte with 0-255, outputs all results (printable filter available) |
 | freqDist | Char Frequency | Counts character occurrences and ratios (descending by count, optional case filter/merge + ascending) |
 | entropy | Shannon Entropy | Computes Shannon entropy (bits/char, gauges data randomness: random bytes ≈8.0, English ≈4.0-4.5) |
@@ -967,16 +1012,18 @@ public/
 | extractHashes | Hash Extractor | Regex-extracts hex hash strings from text (32-128 bits) |
 | getAllCasings | All Case Permutations | Generates all case combinations (letters ≤20, abuse-guarded) |
 | alternatingCaps | Alternating Caps | Alternating-case conversion (e.g. sPoNgEbOb text) |
+| knnClassify | KNN Classifier (EV A/B) | K-nearest-neighbour classification: put the training CSV (first column A/A车/B/B车 label + numeric features) in params and the test CSV (first column id + numeric features) in the input box to predict A/B row by row. Supports k, euclidean/manhattan and a tieBreak for ties; outputs every prediction, distance and statistics, then decodes the prediction bits as MSB-first ASCII (A=0/B=1). Dropped GBK CSV bytes are detected automatically. |
 | hashTypeIdentify | Hash Type Identify | Identifies hash algorithms by length + charset + prefix (MD5/SHA1/SHA256/NTLM/bcrypt/MySQL/crypt/Argon2/LDAP etc.) |
-| vigenereAuto | Vigenère Auto-Solver | IC key-length estimation + per-column chi-square key recovery + automatic decryption (English statistics) |
+| vigenereAuto | Vigenère Auto-Solver | guballa adjacent-bigram solver: 6 languages, classical/Beaufort/variant/Autokey, full key-length enumeration and crib hits |
 | hillKnownPlain | Hill Known-Plaintext Attack | Recovers the Hill key matrix from known plaintext + ciphertext (C·P⁻¹ mod 26, must be invertible) |
 | playfairCrack | Playfair Hill-Climb Crack | Simulated annealing + quadgram-fitness hill-climbing recovers the Playfair square and plaintext (more stable with longer ciphertexts) |
 | freqAnalysis | Frequency Analysis (n-gram) | Mono/bi/tri-gram frequency statistics + chart data (ASCII bar chart + JSON data) |
 | icAnalysis | Index of Coincidence (grouped) | Overall IC + grouped IC (distinguishes mono/polyalphabetic substitution + Vigenère key-length estimation, English ≈0.0667, random ≈0.0385) |
 | kasiskiTest | Kasiski Examination | Repeated n-gram interval GCD → Vigenère key-length candidates |
 | chiSquareAnalysis | Chi-square Test (detailed) | Chi-square test of ciphertext vs English letter frequencies (per-letter observed/expected table) |
-| subCipherSolver | Monoalphabetic Auto-solver | N-gram fitness hill-climbing (iterated local search) auto-cracks monoalphabetic substitution; known mappings can be locked in to speed up |
+| subCipherSolver | Monoalphabetic Auto-solver | N-gram/multilingual bigram hill-climbing auto-cracks monoalphabetic substitution; known mappings can be locked in; 6 languages |
 | caesarBrute | Caesar/ROT Shift Finder | Scores all 0-25 shifts (chi-square + quadgrams), auto-finds the best shift and outputs rankings + ROT47 |
+| plausibaer | Coordinate Formula Solver (Plausibär) | Enumerate unknown variables/formulas in coordinates; outputs every valid lat/lon, decimal coordinate and map link (local reimplementation of guballa.de Plausibär) |
 | ecCurveIdent | Elliptic Curve Parameter Identify | Identifies curves such as secp256k1/P-256/Curve25519 (input curve name / dotted OID / DER OID, outputs domain parameters p,a,b,G,n,h) |
 | sstiKeyword | SSTI Keyword Scan | Server-Side Template Injection (SSTI) static signature scan: recognizes template delimiters of Jinja2/Twig/FreeMarker/Velocity/Smarty and other engines, classic RCE chain keywords and 7*7 probe payloads, gives an engine guess. Identify only, no execution |
 | xorCribDrag | XOR Crib Drag | Known-plaintext crib dragging: C XOR crib at every position outputs candidate key/plaintext + printable ratio |
@@ -1001,8 +1048,9 @@ public/
 | lfsrRecover | LFSR Sequence Recovery | Berlekamp-Massey finds the shortest LFSR for a binary sequence: linear complexity L + feedback polynomial + taps + initial state, extrapolating future bits. Input a 0/1 string (spaces/newlines/commas tolerated) |
 | xorshiftRecover | xorshift State Recovery | Marsaglia xorshift32/64/128 PRNG: feed consecutive outputs to recover the internal state (single-register versions back-derive the initial seed) and predict future outputs. 32/64 need 1 output, 128 needs 4 consecutive outputs. CTF frequent |
 | rc4Visualize | RC4 KSA/PRGA Visualizer | Step-by-step RC4 internals: KSA's i/j/swap details scrambling the S table + the final S table + the PRGA keystream generation process; for teaching and recognizing KSA/PRGA signatures in reverse engineering |
+| extractAll | Dedicated Text Extractor | Batch-extract email/url/domain/ipv4/ipv6/mac/date/filepath/hash/flag/keyValue from text; dedupe keeping first occurrence, newline-separated by default; strict false-positive boundaries for 999.1.1.1, 1.2.3.4.5, aa:bb:cc and monkey = banana; budget overruns are rejected readably. |
 
-### 密码攻击 (22 ops)
+### Password Attacks (24 ops)
 
 | opId | Name | Notes |
 |---|---|---|
@@ -1023,13 +1071,15 @@ public/
 | rsaCoppersmith | RSA Coppersmith Hint | stereotyped-message small-root recovery (real implementation: Howgrave-Graham lattice + BigInt LLL): given a known plaintext prefix or suffix + number of unknown bytes, builds f(x)=(known±x)^e−c mod n and finds the small root to recover the full plaintext; beta<1 supports roots over a factor of n (a hit yields the factor) |
 | rsaBonehDurfee | RSA Boneh-Durfee Hint | d < N^0.292 condition check + lattice-attack methodology notes (enter n/e in the param boxes, decimal; the main input box is no longer used) |
 | pbeAesBrute | PBE-AES Password Brute-force | PBKDF2+AES weak-password small-dictionary demo: input = ciphertext (hex/base64), derives a key per password via PBKDF2 to decrypt AES, reports on a crib hit or a high printable ratio, covers openssl enc -pbkdf2 ciphertexts. This tool does not do large-scale cracking — for serious cracking feed the ciphertext to John the Ripper / hashcat PBKDF2 formats (https://www.openwall.com/john, https://hashcat.net) |
+| bombe | Bombe Machine | Enigma known-plaintext crib attack (3/4 rotors); outputs rotor stops, partial plugboard and decryption preview |
+| multipleBombe | Multiple Bombe | Batch Bombe over a rotor/reflector pool, ranked by preview matches and recovered plugboard pairs |
 | rsaBatchGcd | RSA Batch GCD Common Factor | Pairwise GCD over multiple RSA moduli N to find common prime factors |
 | rsaHastad | RSA Håstad Broadcast Attack | The same plaintext encrypted under the same e with multiple coprime n; CRT merges then the e-th root recovers the plaintext |
 | rsaPollardPm1 | RSA Pollard p-1 Factorization | Pollard p-1 factorization of the RSA modulus N (for B-smooth p-1; enter N in the input box, one per line or comma-separated) |
 | prngAttack | PRNG Cracker (LCG / MT19937) | LCG parameter recovery (differencing derives a/c/m, known moduli fillable) + MT19937 state recovery (624 outputs untempered + next-value prediction, Python random standard) |
 | hashLengthExtension | Hash Length Extension (MD5) | Merkle-Damgård weakness: builds H(secret\|\|padding\|\|append) from H(secret) and len(secret) without knowing secret. MD5/SHA-1/SHA-256 all implemented in pure JS (internal state back-derivation + continued compression), no hashpump needed. Input is parsed as explicit hex; any non-hex characters are ignored |
 
-### Compression / Archives (18 ops)
+### Compression / Archives (19 ops)
 
 | opId | Name | Notes |
 |---|---|---|
@@ -1051,6 +1101,7 @@ public/
 | zipEntries | ZIP Entry List | Read-only ZIP central directory: list name, method, compressed/original size, CRC32, encryption flag, DOS time, local-header offset and path-traversal risk. No extraction. Parameter: input encoding. |
 | zipExtract | ZIP Entry Extract / Decrypt | Extract Stored/Deflate entries by name (empty=all), verify size and CRC32 per entry, return a text preview and in-memory download products. ZipCrypto accepts a password, pseudo-encryption is detected, WinZip AES is reported unsupported. Parameters: input encoding + entry name + password. |
 | zipCreate | ZIP Create | Packs a piece of data (text/any bytes) into a single-file ZIP, with optional internal filename and compression method (Deflated/Stored); misc authoring often chains this with ZIP fake encryption (bit-set) for pseudo-encryption challenges |
+| bzip2Enc | bzip2 Compress | bzip2 (libbzip2 1.0.8 WASM) compression: block size 1..9, output base64/hex; input ≤4 MiB, full output without truncation, round-trips with bzip2Dec. |
 
 ### Password / Archive Cracking (12 ops)
 
@@ -1113,7 +1164,7 @@ public/
 | kzgBlobParse | EIP-4844 blob parsing | Parses and displays EIP-4844-related fields: the blob (131072 bytes = 4096 32-byte BLS12-381 scalar field elements, per-chunk canonicality check), the transaction-side blob versioned hash list (32 bytes = version byte 0x01 + 31-byte SHA-256(commitment) truncation), and a single 48-byte KZG commitment. Parse-and-display only: no network, and commitment computation belongs to the KZG blob commitment op |
 | pkcs12Parse | PKCS#12/PFX parse | PKCS#12/PFX container parsing (RFC 7292): version/structure tree, macData integrity check, passphrase decryption of encryptedData and pkcs8ShroudedKeyBag (legacy pbeWithSHAAnd3-Key/2-KeyTripleDES, SHA/RC2-128/40 implemented per RFC 2268 official vectors, plus PBES2+PBKDF2+AES/3DES), certificate serial/subject/validity with PEM export, keys as PKCS#8 PEM (byte-exact against openssl -nodes); no certificate chain validation, passphrase stays local with zero exfiltration |
 
-### Data Structures / Serialisation (21 ops)
+### Data Structures / Serialisation (22 ops)
 
 | opId | Name | Notes |
 |---|---|---|
@@ -1138,6 +1189,7 @@ public/
 | cryptoAddrUnified | Crypto Address Parser | Auto-identifies BTC (P2PKH/P2SH/P2WPKH/P2WSH/P2TR) / ETH address types + checksum validation + network + encoding scheme (unified entry, parse only, no private-key generation) |
 | huffmanCodec | Huffman Encode / Decode (generic) | Frequency mode (input statistics/weight table → deterministic canonical code) and user-table mode, bidirectional codec; MSB-first bitstream (hex+bitLen); rejects non-prefix codes/truncation/unknown symbols; defines no private file format |
 | unitConv | Unit Converter | Data sizes B/KB/MB/GB/TB/PB alongside KiB/MiB/GiB/TiB/PiB (SI 1000 vs IEC 60027-2 1024, all factors traceable); rates bps/Kbps/Mbps/Gbps ↔ B/s/KB/s/MB/s (bit×8); time ns~d; a pure number triggers timestamp-epoch cross-reference (Unix s/ms, FILETIME, Cocoa, Chrome μs, DOS packed, magnitude auto-sniffed); frequency Hz~GHz; angle deg/rad/gon. Data sizes use BigInt rationals throughout — zero precision loss at PB scale, exact decimals and truncation clearly marked |
+| dataConvert | JSON / CSV / XML / YAML Conversion | Beautify/minify JSON, convert JSON↔CSV and re-indent XML. CSV follows RFC 4180 (quotes, doubled quotes, line breaks inside fields). JSON→CSV supports object arrays, a single object, primitive arrays and 2D arrays; nested objects/arrays stay as JSON text in the cell. XML only re-indents and checks tag balance without changing attributes/CDATA/DOCTYPE semantics; YAML beautify/minify and JSON↔YAML are supported via js-yaml 4.1.0 with JSON_SCHEMA |
 
 ### Image / QR (37 ops)
 
@@ -1193,7 +1245,7 @@ public/
 | morseWav | Morse Audio Encode / Decode | Morse code audio (WAV), bidirectional (ITU-R M.1677-1). encode: plaintext or dot-dash string → synthesizes a 16-bit mono WAV per the 1/3/7 unit-time grid (base64 + downloadable morse.wav), tone/sample rate/amplitude/fade adjustable; decode: WAV audio → envelope detection → Otsu adaptive threshold → adaptive dot/dash classification → plaintext. Decoding supports integer PCM 8/16/24/32-bit, IEEE float 32/64-bit, µ-law, mono/multi-channel, any sample rate; unit duration auto-estimated, overridable by unit(ms) or wpm(PARIS); output includes dot/dash counts, SNR criteria and confidence, plus a 'decode the plaintext one layer further' reference (runs one layer through the auto-decode engine, original result unchanged) |
 | spectrogram | Audio Spectrogram (STFT) | WAV → short-time Fourier transform spectrogram PNG: Hann window + radix-2 FFT, magma colormap rendering, read frequency-domain hidden text by eye (CTF audio steganography paints flags into the spectrum). Pure front-end, no Audacity needed |
 
-### 文本隐写 (13 ops)
+### Text Steganography (13 ops)
 
 | opId | Name | Notes |
 |---|---|---|
@@ -1215,7 +1267,6 @@ public/
 
 | opId | Name | Notes |
 |---|---|---|
-| stegSolve | StegSolve Image Analysis | Standalone StegSolve 1.4 page: 42 channel/bit-plane/colour transforms, Data Extract for any channel/bit-plane, Stereogram Solver, Frame Browser, Image Combiner with 13 modes, and a file-format report. Supports PNG/APNG/GIF/JPEG/BMP/WebP; all computation is local. |
 | lsbImage | LSB Image Steganography | LSB pixel steganography: writes data into image pixel least significant bits, first 32 bits store length, supports R/G/B/A channel selection. |
 | pixelJihad | PixelJihad | PixelJihad steganography (SHA-256 seed + pseudo-random LSB + optional AES-CCM encryption) |
 | arnoldCat | Arnold Cat Map | Arnold cat-map scrambling (squares and arbitrary M×N rectangles supported, parameterized matrix [[1,a],[b,ab+1]], a=b=1 is the standard version; rectangles invertible via per-row-mod/per-column-mod placement). Row-major convention: matches reference implementations indexing the first coordinate as row (Python img[row][col] style); when checked, a/b are filled as-is, no swap needed. Per-channel scrambling: matches the semantics of popular scripts running the cat map independently per R/G/B plane, alpha channel untouched |
@@ -1227,6 +1278,11 @@ public/
 | openpuffLaunch | OpenPuff · Multi-carrier | OpenPuff multi-carrier steganography (image/audio/video/PDF/flash etc.), multi-layer passwords supported. This tool is a pure GUI program (proprietary format / no unattended command line); this feature only 'launches the local exe' — after clicking, operate manually in the popped-up window; the toolbox never feeds input or fetches results for you. Windows only, start python bridge.py first |
 | oursecretLaunch | OurSecret · Steg | OurSecret GUI steganography tool; the proprietary format cannot be replicated purely in the front end. This tool is a pure GUI program (proprietary format / no unattended command line); this feature only 'launches the local exe' — after clicking, operate manually in the popped-up window; the toolbox never feeds input or fetches results for you. Windows only, start python bridge.py first |
 | jsteg | jsteg JPEG Stego Encode/Decode | Bidirectional jsteg steganography: encode writes the message sequentially into DCT-coefficient LSBs (skipping 0 and ±1, sign flips keep the magnitude, avoiding new zeros), re-Huffman-codes and rewrites the JPEG (marker segments preserved as-is); decode reads the LSBs sequentially to restore the message. Framing = the 'jsteg' magic + LE32 length, compatible with the original jsteg CLI's hide/reveal. Baseline single-scan JPEG only, progressive errors out. Pure front-end, zero outbound |
+| lsbDeep | LSB Deep Scan | Brute-forces LSB extraction over channel combinations, bit planes 0-7, row/column order, MSB/LSB bit order and offsets 0-7 on PNG/BMP, ranked by flag, Base64, URL and readability; decode only, with automatic limits for large images. |
+| rasterStego | Raster Stego Phase Split | Enumerates divisors 2..maxDivisor of the PNG/BMP width/height, splits by x/y axis and phase, and outputs phase PNGs (e.g. x-5-1.png, y-5-1.png); fills with mid-gray #808080 by default so both black and white strokes stay visible, with dark-gray/black/transparent options; files are downloadable with image-count/per-image/total-pixel limits. |
+| mp3stego | MP3Stego Decode | MP3Stego 1.1.19-compatible -X -P decode: selects bits by password-driven SHA-1 from MPEG-1 Layer III part2_3_length parity, decrypts 3DES-CBC and gunzips the payload; wrong password, LSF frames or no payload fail explicitly. |
+| imageThumb | EXIF Thumbnail Extract | Extracts embedded thumbnails from JPEG APP0 (JFIF) / APP1 (EXIF IFD1) and PNG eXIf, returning downloadable files in their original encoding (JFIF raw RGB converted to PNG); no thumbnail is reported explicitly, with no arbitrary trailer carving. |
+| stegSolve | StegSolve Image Analysis | Standalone StegSolve 1.4 page: 42 channel/bit-plane/colour transforms, Data Extract for any channel/bit-plane, Stereogram Solver, Frame Browser, Image Combiner with 13 modes, and a file-format report. Supports PNG/APNG/GIF/JPEG/BMP/WebP; all computation is local. |
 | dctWatermark | DCT Blind Watermark | Text watermark embedding/extraction (8×8 DCT mid-frequency QIM quantization). The embed direction outputs a watermarked PNG, the extract direction outputs text; same strength/channel required |
 | dualFftWatermark | Dual-image Blind Watermark (frequency-domain) | Dual-image blind watermark (semi-blind): cover image + watermark image → composite image; 'original + composite' restores the watermark image. 2D-FFT-domain additive spread spectrum + row/column random shuffling (the seed is the tool's key) + 180° mirroring to fill. One base64 slot cannot hold two images, so paste the second image in the params (like 'Image Diff') |
 | outguess | OutGuess Stego Encode/Decode | OutGuess 0.4 steganography, bidirectional: encode embeds the message into the carrier, decode retrieves it with the same passphrase. JPEG goes through quantized DCT-coefficient LSBs (coefficient-domain editing, artifacts re-encoded at the quality setting, not a byte copy of the original), PPM/PGM (P2/P3/P5/P6) through pixel bits; statistical preservation on by default. Carriers dispatched by magic (jpg/ppm/pnm), P1/P4 unsupported. Payloads carry no authentication tag (no MAC): retrieved bytes do not certify the passphrase. Engine is a local WASM (single-threaded, no cross-origin isolation headers required), source and license in the engine directory NOTICE |
@@ -1243,12 +1299,10 @@ public/
 | stereogramSolver | Stereogram Solver | Autostereogram (magic eye) steganography solver: subtracts the image from a horizontally cyclic shift of itself (roll+diff); at the right offset the depth stripes emerge. Single-value exact offset, empty = auto-scan puzzle |
 | lsbEmbed | LSB Embed | Writes a payload text into the least significant bits of a chosen bit plane of a cover image (PNG/BMP), producing a stego PNG (channel order/bit plane/bit order map one-to-one onto zstegScan; for authoring misc challenges) |
 | deepsoundExtract | DeepSound Extract | Extracts DeepSound-hidden files (DSC2/DSCF · plaintext/AES-256) from the low sample bits of a PCM WAV carrier |
-| lsbDeep | LSB Deep Scan | Brute-forces LSB extraction over channel combinations, bit planes 0-7, row/column order, MSB/LSB bit order and offsets 0-7 on PNG/BMP, ranked by flag, Base64, URL and readability; decode only, with automatic limits for large images |
-| rasterStego | Raster Stego Phase Split | Enumerates divisors 2..maxDivisor of the PNG/BMP width/height and outputs phase PNGs (e.g. x-5-1.png); files are downloadable with image-count/per-image/total-pixel limits |
-| mp3stego | MP3Stego Decode | MP3Stego 1.1.19-compatible -X -P decode: selects bits by password-driven SHA-1 from MPEG-1 Layer III part2_3_length parity, decrypts 3DES-CBC and gunzips the payload; wrong password, LSF frames or no payload fail explicitly |
-| imageThumb | EXIF Thumbnail Extract | Extracts embedded thumbnails from JPEG APP0 (JFIF) / APP1 (EXIF IFD1) and PNG eXIf, returning downloadable files; no thumbnail is reported explicitly |
 
 ## Plugins & AI Access
+
+> The product UI calls this feature "extensions"; this section keeps "plugins" to match the code directory and SDK docs.
 
 The toolbox is driven by a declarative registry: every algorithm is a single `{id, cat, name, params, encode/decode/run, detect}` record, and the UI renders itself. The same contract is open to third parties.
 
@@ -1258,7 +1312,7 @@ Third parties can write plugins with zero main-project changes: a plugin is a st
 
 - Developer guide: [`src/plugin/README.md`](./src/plugin/README.md)
 - Reference plugin (a live template — copy, rename, start): [`src/plugin/examples/hello-cipher/index.js`](./src/plugin/examples/hello-cipher/index.js)
-- Official plugin package (shipped in releases, **disabled by default**): [`addons/dcode-extras-2026-10/`](./addons/dcode-extras-2026-10/). Enable it from the **Official plugins** section (official.json plus same-origin addons/ directory discovery); it adds no main op count, stays out of the precache, and becomes offline-available after the first online load. Current: Beta 408 ops; all 988 dCode tools are accounted for.
+- Official extension package (shipped in releases, **disabled by default**): [`addons/dcode-extras-2026-10/`](./addons/dcode-extras-2026-10/). Enable it from the **Official extensions** section (official.json plus same-origin addons/ directory discovery); it adds no main op count, stays out of the precache, and becomes offline-available after the first online load. Current: Beta 409 ops (2026-11 batch); all 988 dCode tools are accounted for.
 
 ### For External AI (MCP / Skills)
 
@@ -1271,7 +1325,7 @@ The AI's only network egress is the optional `aiClient`, which requires your own
 
 ## Contributors
 
-The list below matches the "Authors & Contributors" section of the in-app About page, in the same order.
+The list below follows the order of the "Authors & Contributors" section of the in-app About page.
 
 **Founder · Author**
 
@@ -1295,6 +1349,8 @@ The list below matches the "Authors & Contributors" section of the in-app About 
 - qinling072: proposed adding OutGuess and other image-steganography algorithms.
 - cnui6: proposed the Rabbit compatibility fix, enabling CryptoJS interop and passphrase support.
 - 二月犬 (Eryuequan): suggested the Ohou (Xianzi) codec, Hakimi ternary cipher and the Zako Whisper (official + Base8 variant).
+- 橙子 (Chengzi): proposed multiple Misc logic fixes.
+- Tokeii: contributed the redesigned icon and downstream optimizations.
 
 ## Community
 

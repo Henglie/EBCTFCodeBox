@@ -1,8 +1,8 @@
 /*
  * modernExt2.js — 现代分组密码补全组2。
  *
- * 覆盖：RC5（RFC 2040）/ IDEA（Lai 1991）—— modern.js / modernExt.js 未覆盖的分组密码。
- * 与 modern.js / modernExt.js 解耦（内嵌≠耦合红线），自写编码工具 + PKCS7 + 分组模式。
+ * 覆盖：RC5（RFC 2040）/ IDEA（Lai 1991）/ Blowfish / RC6（AES 候选；IETF draft-krovetz-rc6-rc5-vectors-00）/ CAST-128（RFC 2144）/ Twofish。
+ * 编码工具与分组模式自写；填充统一复用 modern.js 导出的 padBytes/unpadBytes。
  *
  * 红线：
  * - RC5 走 RFC 2040 标准（RC5-32/12/16：32 位字，12 轮，可变密钥），用 RFC 2040 附录 B 官方向量验证。
@@ -13,12 +13,13 @@
  * 分层：
  * [RC5 内核] rc5KeySchedule / rc5EncryptBlock / rc5DecryptBlock — 64 位块，12 轮
  * [IDEA 内核] ideaKeySchedule / ideaDecryptKeySchedule / ideaEncryptBlock — 64 位块，8.5 轮
- * [分组模式] ecb/cbc（自写，避免依赖 modern.js）
- * [填充] pkcs7 pad/unpad（自写）
- * [高层 API] rc5Encrypt/rc5Decrypt / ideaEncrypt/ideaDecrypt
+ * [分组模式] ecb/cbc/cfb/ofb/ctr（自写，避免依赖 modern.js）
+ * [填充] 复用 modern.js 的 padBytes/unpadBytes（pkcs7/none/zero/bit/iso10126/ansix923）
+ * [高层 API] rc5Encrypt/rc5Decrypt / ideaEncrypt/ideaDecrypt / blowfish / rc6 / cast5 / twofish
  * [register] 编码解析（key/iv/data 的 hex|base64|utf8|latin1）+ 双向注册
  */
 import { register } from "./registry.js";
+import { padBytes, unpadBytes, PADDING_OPTIONS } from "./modern.js";
 
 const te = (s) => new TextEncoder().encode(s);
 const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(b));
@@ -27,7 +28,8 @@ const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Arr
 // 字节 <-> 编码 工具（hex / base64 / utf8 / latin1）
 // ============================================================
 function hexToBytes(s) {
-  const clean = s.replace(/[^0-9a-fA-F]/g, "");
+  const clean = String(s == null ? "" : s).replace(/\s+/g, "");
+  if (!/^[0-9a-fA-F]*$/.test(clean)) throw new Error("非法 hex 字符（仅允许 0-9/A-F 与空白）");
   if (clean.length % 2) throw new Error("hex 长度必须为偶数");
   const out = new Uint8Array(clean.length / 2);
   for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);
@@ -92,36 +94,15 @@ function rotr32(x, s) {
 }
 
 // ============================================================
-// PKCS#7 填充
+// 分组模式（通用，块密码传入 encBlock/decBlock，块大小 bs；填充走统一实现）
 // ============================================================
-function pkcs7Pad(data, blockSize) {
-  const padLen = blockSize - (data.length % blockSize);
-  const out = new Uint8Array(data.length + padLen);
-  out.set(data);
-  out.fill(padLen, data.length);
-  return out;
-}
-function pkcs7Unpad(data, blockSize) {
-  if (data.length === 0 || data.length % blockSize !== 0) throw new Error("密文长度非块大小整数倍，无法去填充");
-  const padLen = data[data.length - 1];
-  if (padLen < 1 || padLen > blockSize) throw new Error("PKCS7 填充非法（可能密钥/模式错误）");
-  for (let i = data.length - padLen; i < data.length; i++) {
-    if (data[i] !== padLen) throw new Error("PKCS7 填充校验失败（可能密钥/模式错误）");
-  }
-  return data.subarray(0, data.length - padLen);
-}
 function xorBytes(a, b) {
   const o = new Uint8Array(a.length);
   for (let i = 0; i < a.length; i++) o[i] = a[i] ^ b[i];
   return o;
 }
-
-// ============================================================
-// 分组模式（通用，块密码传入 encBlock/decBlock，块大小 bs）
-// ============================================================
 function ecbEncrypt(data, encBlock, bs, pad = true) {
-  const d = pad ? pkcs7Pad(data, bs) : data;
-  if (d.length % bs) throw new Error(`明文需为 ${bs} 字节整数倍（或开启填充）`);
+  const d = padBytes(data, bs, pad);
   const out = new Uint8Array(d.length);
   for (let i = 0; i < d.length; i += bs) out.set(encBlock(d.subarray(i, i + bs)), i);
   return out;
@@ -130,11 +111,10 @@ function ecbDecrypt(data, decBlock, bs, pad = true) {
   if (data.length % bs) throw new Error(`密文需为 ${bs} 字节整数倍`);
   const out = new Uint8Array(data.length);
   for (let i = 0; i < data.length; i += bs) out.set(decBlock(data.subarray(i, i + bs)), i);
-  return pad ? pkcs7Unpad(out, bs) : out;
+  return unpadBytes(out, bs, pad);
 }
 function cbcEncrypt(data, encBlock, bs, iv, pad = true) {
-  const d = pad ? pkcs7Pad(data, bs) : data;
-  if (d.length % bs) throw new Error(`明文需为 ${bs} 字节整数倍（或开启填充）`);
+  const d = padBytes(data, bs, pad);
   const out = new Uint8Array(d.length);
   let prev = iv.subarray(0, bs);
   for (let i = 0; i < d.length; i += bs) {
@@ -153,7 +133,7 @@ function cbcDecrypt(data, decBlock, bs, iv, pad = true) {
     out.set(xorBytes(decBlock(cblk), prev), i);
     prev = cblk;
   }
-  return pad ? pkcs7Unpad(out, bs) : out;
+  return unpadBytes(out, bs, pad);
 }
 function cfbEncrypt(data, encBlock, bs, iv) {
   const out = new Uint8Array(data.length);
@@ -207,23 +187,28 @@ function ctrCrypt(data, encBlock, bs, iv) {
   }
   return out;
 }
-function blockModeEncrypt(data, encBlock, bs, mode, iv) {
-  if (mode === "ECB") return ecbEncrypt(data, encBlock, bs);
+function blockModeEncrypt(data, encBlock, bs, mode, iv, pad = true) {
+  if (mode === "ECB") return ecbEncrypt(data, encBlock, bs, pad);
   if (!iv || iv.length !== bs) throw new Error(`${mode} 模式 IV 需 ${bs} 字节`);
-  if (mode === "CBC") return cbcEncrypt(data, encBlock, bs, iv);
+  if (mode === "CBC") return cbcEncrypt(data, encBlock, bs, iv, pad);
   if (mode === "CFB") return cfbEncrypt(data, encBlock, bs, iv);
   if (mode === "OFB") return ofbCrypt(data, encBlock, bs, iv);
   if (mode === "CTR") return ctrCrypt(data, encBlock, bs, iv);
   throw new Error(`不支持模式: ${mode}`);
 }
-function blockModeDecrypt(data, encBlock, decBlock, bs, mode, iv) {
-  if (mode === "ECB") return ecbDecrypt(data, decBlock, bs);
+function blockModeDecrypt(data, encBlock, decBlock, bs, mode, iv, pad = true) {
+  if (mode === "ECB") return ecbDecrypt(data, decBlock, bs, pad);
   if (!iv || iv.length !== bs) throw new Error(`${mode} 模式 IV 需 ${bs} 字节`);
-  if (mode === "CBC") return cbcDecrypt(data, decBlock, bs, iv);
+  if (mode === "CBC") return cbcDecrypt(data, decBlock, bs, iv, pad);
   if (mode === "CFB") return cfbDecrypt(data, encBlock, bs, iv);
   if (mode === "OFB") return ofbCrypt(data, encBlock, bs, iv);
   if (mode === "CTR") return ctrCrypt(data, encBlock, bs, iv);
   throw new Error(`不支持模式: ${mode}`);
+}
+
+// opts.padding (字符串) 优先；opts.pad 保留旧布尔语义（false=NoPadding）
+function modePad(opts) {
+  return opts && opts.padding !== undefined ? opts.padding : (opts ? opts.pad : true);
 }
 
 // ============================================================
@@ -298,13 +283,13 @@ function rc5DecryptBlock(block, S) {
 export function rc5Encrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
   const ctx = rc5KeySchedule(key);
-  return blockModeEncrypt(data, (blk) => rc5EncryptBlock(blk, ctx), RC5_BLOCK_SIZE, mode, opts.iv);
+  return blockModeEncrypt(data, (blk) => rc5EncryptBlock(blk, ctx), RC5_BLOCK_SIZE, mode, opts.iv, modePad(opts));
 }
 
 export function rc5Decrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
   const ctx = rc5KeySchedule(key);
-  return blockModeDecrypt(data, (blk) => rc5EncryptBlock(blk, ctx), (blk) => rc5DecryptBlock(blk, ctx), RC5_BLOCK_SIZE, mode, opts.iv);
+  return blockModeDecrypt(data, (blk) => rc5EncryptBlock(blk, ctx), (blk) => rc5DecryptBlock(blk, ctx), RC5_BLOCK_SIZE, mode, opts.iv, modePad(opts));
 }
 
 // ============================================================
@@ -466,10 +451,10 @@ export function ideaEncrypt(data, key, opts = {}) {
   const iv = opts.iv;
   const sub = ideaKeySchedule(key);
   const enc = (blk) => ideaEncryptBlock(blk, sub);
-  if (mode === "ECB") return ecbEncrypt(data, enc, 8);
+  if (mode === "ECB") return ecbEncrypt(data, enc, 8, modePad(opts));
   if (mode === "CBC") {
     if (!iv) throw new Error("CBC 模式需提供 IV");
-    return cbcEncrypt(data, enc, 8, iv);
+    return cbcEncrypt(data, enc, 8, iv, modePad(opts));
   }
   throw new Error(`IDEA 不支持模式: ${mode}`);
 }
@@ -480,10 +465,10 @@ export function ideaDecrypt(data, key, opts = {}) {
   const encSub = ideaKeySchedule(key);
   const decSub = ideaDecryptKeySchedule(encSub);
   const dec = (blk) => ideaEncryptBlock(blk, decSub); // 解密用同一加密函数 + 解密子密钥
-  if (mode === "ECB") return ecbDecrypt(data, dec, 8);
+  if (mode === "ECB") return ecbDecrypt(data, dec, 8, modePad(opts));
   if (mode === "CBC") {
     if (!iv) throw new Error("CBC 模式需提供 IV");
-    return cbcDecrypt(data, dec, 8, iv);
+    return cbcDecrypt(data, dec, 8, iv, modePad(opts));
   }
   throw new Error(`IDEA 不支持模式: ${mode}`);
 }
@@ -731,27 +716,53 @@ export function blowfishEncrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
   if (key.length < 4 || key.length > 56) throw new Error("Blowfish 密钥长度需 4-56 字节");
   const ctx = blowfishKeySchedule(key);
-  return blockModeEncrypt(data, (blk) => blowfishEncryptBlock(blk, ctx), 8, mode, opts.iv);
+  return blockModeEncrypt(data, (blk) => blowfishEncryptBlock(blk, ctx), 8, mode, opts.iv, modePad(opts));
 }
 
 export function blowfishDecrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
   if (key.length < 4 || key.length > 56) throw new Error("Blowfish 密钥长度需 4-56 字节");
   const ctx = blowfishKeySchedule(key);
-  return blockModeDecrypt(data, (blk) => blowfishEncryptBlock(blk, ctx), (blk) => blowfishDecryptBlock(blk, ctx), 8, mode, opts.iv);
+  return blockModeDecrypt(data, (blk) => blowfishEncryptBlock(blk, ctx), (blk) => blowfishDecryptBlock(blk, ctx), 8, mode, opts.iv, modePad(opts));
 }
 
 // ============================================================
-// RC6-32/20/16（RFC 2276）
-// 128 位块，20 轮，可变密钥（1-255 字节，默认 16）
-// 常数同 RC5：P32=0xB7E15163, Q32=0x9E3779B9；子密钥数 2r+4=44
-// 关键运算：f(x)=x·(2x+1) mod 2^32（用 Math.imul 实现 32×32→32）
+// RC6-w/r/b（AES 候选算法；IETF draft-krovetz-rc6-rc5-vectors-00）
+// 默认 w=32（128 位块）、r=20、可变密钥。w=8..256（8 的倍数）。
+// 常数 P_w=Odd((e-2)·2^w), Q_w=Odd((φ-1)·2^w)，由 256 位主常数右移得到；
+// 关键运算：f(x)=x·(2x+1) mod 2^w，循环左移 lg(w) 位。
+// w=32 走原 32 位快路径（Math.imul，保持旧输出）；其它 w 走 BigInt 路径。
 // ============================================================
 const RC6_ROUNDS = 20;
 const RC6_BLOCK_SIZE = 16;
-const RC6_T = 2 * RC6_ROUNDS + 4; // 44 个子密钥
+const RC6_WORD_SIZE = 32;
 
-function rc6KeySchedule(key) {
+// Odd((e-2)·2^256) / Odd((φ-1)·2^256)，IETF RC6/RC5 向量草案
+const RC6_P256 = 0xb7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfefn;
+const RC6_Q256 = 0x9e3779b97f4a7c15f39cc0605cedc8341082276bf3a27251f86c6a11d0c18e95n;
+
+function rc6NormWordSize(wordSize) {
+  if (wordSize == null || wordSize === "") return RC6_WORD_SIZE;
+  const w = Number(wordSize);
+  if (!Number.isInteger(w) || w < 8 || w > 256 || w % 8 !== 0) {
+    throw new Error("RC6 wordSize 需为 8..256 且为 8 的倍数");
+  }
+  return w;
+}
+function rc6BlockBytes(w) {
+  return 4 * (w / 8);
+}
+
+function rc6NormRounds(rounds) {
+  if (rounds == null || rounds === "") return RC6_ROUNDS;
+  const n = Number(rounds);
+  if (!Number.isInteger(n) || n < 1 || n > 255) throw new Error("RC6 rounds 需为 1..255 的整数");
+  return n;
+}
+
+function rc6KeySchedule(key, rounds = RC6_ROUNDS) {
+  const R = rc6NormRounds(rounds);
+  const T = 2 * R + 4;
   const u = 4;
   const b = key.length;
   if (b < 1 || b > 255) throw new Error("RC6 密钥长度需 1-255 字节");
@@ -760,18 +771,18 @@ function rc6KeySchedule(key) {
   for (let i = b - 1; i >= 0; i--) {
     L[(i / u) | 0] = ((L[(i / u) | 0] << 8) + key[i]) >>> 0;
   }
-  const S = new Uint32Array(RC6_T);
+  const S = new Uint32Array(T);
   S[0] = RC5_P32;
-  for (let i = 1; i < RC6_T; i++) {
+  for (let i = 1; i < T; i++) {
     S[i] = (S[i - 1] + RC5_Q32) >>> 0;
   }
   let A = 0, B = 0;
   let i = 0, j = 0;
-  const n = 3 * Math.max(RC6_T, c);
+  const n = 3 * Math.max(T, c);
   for (let k = 0; k < n; k++) {
     A = S[i] = rotl32((S[i] + A + B) >>> 0, 3);
     B = L[j] = rotl32((L[j] + A + B) >>> 0, (A + B) & 31);
-    i = (i + 1) % RC6_T;
+    i = (i + 1) % T;
     j = (j + 1) % c;
   }
   return S;
@@ -784,7 +795,8 @@ function rc6F(x) {
   return rotl32(mul32(x, (((x << 1) | 1) >>> 0)), 5);
 }
 
-function rc6EncryptBlock(block, S) {
+function rc6EncryptBlock(block, S, rounds = RC6_ROUNDS) {
+  const R = rc6NormRounds(rounds);
  // block: Uint8Array(16)，4 个小端 32 位字 A,B,C,D
   let A = readU32LE(block, 0);
   let B = readU32LE(block, 4);
@@ -792,7 +804,7 @@ function rc6EncryptBlock(block, S) {
   let D = readU32LE(block, 12);
   B = (B + S[0]) >>> 0;
   D = (D + S[1]) >>> 0;
-  for (let r = 1; r <= RC6_ROUNDS; r++) {
+  for (let r = 1; r <= R; r++) {
     const t = rc6F(B);
     const u = rc6F(D);
     A = (rotl32((A ^ t) >>> 0, u) + S[2 * r]) >>> 0;
@@ -800,8 +812,8 @@ function rc6EncryptBlock(block, S) {
  // (A,B,C,D) = (B,C,D,A) 循环左移
     const tmp = A; A = B; B = C; C = D; D = tmp;
   }
-  A = (A + S[2 * RC6_ROUNDS + 2]) >>> 0;
-  C = (C + S[2 * RC6_ROUNDS + 3]) >>> 0;
+  A = (A + S[2 * R + 2]) >>> 0;
+  C = (C + S[2 * R + 3]) >>> 0;
   const out = new Uint8Array(16);
   writeU32LE(out, 0, A);
   writeU32LE(out, 4, B);
@@ -810,14 +822,15 @@ function rc6EncryptBlock(block, S) {
   return out;
 }
 
-function rc6DecryptBlock(block, S) {
+function rc6DecryptBlock(block, S, rounds = RC6_ROUNDS) {
+  const R = rc6NormRounds(rounds);
   let A = readU32LE(block, 0);
   let B = readU32LE(block, 4);
   let C = readU32LE(block, 8);
   let D = readU32LE(block, 12);
-  C = (C - S[2 * RC6_ROUNDS + 3]) >>> 0;
-  A = (A - S[2 * RC6_ROUNDS + 2]) >>> 0;
-  for (let r = RC6_ROUNDS; r >= 1; r--) {
+  C = (C - S[2 * R + 3]) >>> 0;
+  A = (A - S[2 * R + 2]) >>> 0;
+  for (let r = R; r >= 1; r--) {
  // (A,B,C,D) = (D,A,B,C) 循环右移（逆操作）
     const tmp = D; D = C; C = B; B = A; A = tmp;
     const u = rc6F(D);
@@ -835,16 +848,128 @@ function rc6DecryptBlock(block, S) {
   return out;
 }
 
+// ---- 可变字长 BigInt 路径（w ≠ 32） ----
+function rc6BigMask(w) { return (1n << BigInt(w)) - 1n; }
+function rc6BigLg(w) { return BigInt(Math.floor(Math.log2(w))); }
+function rc6BigRol(x, n, w, lgMask) {
+  const mask = rc6BigMask(w);
+  const sh = (n & lgMask) % BigInt(w);
+  return ((x << sh) | (x >> (BigInt(w) - sh))) & mask;
+}
+function rc6BigRor(x, n, w, lgMask) {
+  const mask = rc6BigMask(w);
+  const sh = (n & lgMask) % BigInt(w);
+  return ((x >> sh) | (x << (BigInt(w) - sh))) & mask;
+}
+function rc6BigReadWords(block, w) {
+  const bpw = w / 8;
+  const words = [];
+  for (let i = 0; i < block.length; i += bpw) {
+    let word = 0n;
+    for (let j = 0; j < bpw; j++) word |= BigInt(block[i + j] || 0) << BigInt(j * 8);
+    words.push(word);
+  }
+  return words;
+}
+function rc6BigWriteWords(words, w) {
+  const bpw = w / 8;
+  const out = new Uint8Array(words.length * bpw);
+  let off = 0;
+  for (const word of words) {
+    for (let j = 0; j < bpw; j++) out[off + j] = Number((word >> BigInt(j * 8)) & 0xffn);
+    off += bpw;
+  }
+  return out;
+}
+function rc6BigKeySchedule(key, rounds, w) {
+  const R = rc6NormRounds(rounds);
+  const bpw = w / 8;
+  const b = key.length;
+  if (b > 255) throw new Error("RC6 密钥长度需 ≤255 字节");
+  const c = Math.max(1, Math.ceil(b / bpw));
+  const padded = new Uint8Array(c * bpw);
+  padded.set(key);
+  const L = rc6BigReadWords(padded, w);
+  const t = 2 * R + 4;
+  const mask = rc6BigMask(w);
+  const lgMask = (1n << rc6BigLg(w)) - 1n;
+  const P = (RC6_P256 >> BigInt(256 - w)) | 1n;
+  const Q = (RC6_Q256 >> BigInt(256 - w)) | 1n;
+  const S = new Array(t);
+  S[0] = P;
+  for (let i = 1; i < t; i++) S[i] = (S[i - 1] + Q) & mask;
+  let A = 0n, B = 0n, i = 0, j = 0;
+  const v = 3 * Math.max(t, c);
+  for (let s = 0; s < v; s++) {
+    A = S[i] = rc6BigRol((S[i] + A + B) & mask, 3n, w, lgMask);
+    B = L[j] = rc6BigRol((L[j] + A + B) & mask, A + B, w, lgMask);
+    i = (i + 1) % t;
+    j = (j + 1) % c;
+  }
+  return S;
+}
+function rc6BigEncryptBlock(block, S, rounds, w) {
+  const R = rc6NormRounds(rounds);
+  const mask = rc6BigMask(w);
+  const lg = rc6BigLg(w);
+  const lgMask = (1n << lg) - 1n;
+  let [A, B, C, D] = rc6BigReadWords(block, w);
+  B = (B + S[0]) & mask;
+  D = (D + S[1]) & mask;
+  for (let r = 1; r <= R; r++) {
+    const t = rc6BigRol((B * ((2n * B + 1n) & mask)) & mask, lg, w, lgMask);
+    const u = rc6BigRol((D * ((2n * D + 1n) & mask)) & mask, lg, w, lgMask);
+    A = (rc6BigRol(A ^ t, u, w, lgMask) + S[2 * r]) & mask;
+    C = (rc6BigRol(C ^ u, t, w, lgMask) + S[2 * r + 1]) & mask;
+    const tmp = A; A = B; B = C; C = D; D = tmp;
+  }
+  A = (A + S[2 * R + 2]) & mask;
+  C = (C + S[2 * R + 3]) & mask;
+  return rc6BigWriteWords([A, B, C, D], w);
+}
+function rc6BigDecryptBlock(block, S, rounds, w) {
+  const R = rc6NormRounds(rounds);
+  const mask = rc6BigMask(w);
+  const lg = rc6BigLg(w);
+  const lgMask = (1n << lg) - 1n;
+  const addW = 1n << BigInt(w);
+  let [A, B, C, D] = rc6BigReadWords(block, w);
+  C = (C - S[2 * R + 3] + addW) & mask;
+  A = (A - S[2 * R + 2] + addW) & mask;
+  for (let r = R; r >= 1; r--) {
+    const tmp = D; D = C; C = B; B = A; A = tmp;
+    const u = rc6BigRol((D * ((2n * D + 1n) & mask)) & mask, lg, w, lgMask);
+    const t = rc6BigRol((B * ((2n * B + 1n) & mask)) & mask, lg, w, lgMask);
+    C = rc6BigRor((C - S[2 * r + 1] + addW) & mask, t, w, lgMask) ^ u;
+    A = rc6BigRor((A - S[2 * r] + addW) & mask, u, w, lgMask) ^ t;
+  }
+  D = (D - S[1] + addW) & mask;
+  B = (B - S[0] + addW) & mask;
+  return rc6BigWriteWords([A, B, C, D], w);
+}
+
 export function rc6Encrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
-  const ctx = rc6KeySchedule(key);
-  return blockModeEncrypt(data, (blk) => rc6EncryptBlock(blk, ctx), RC6_BLOCK_SIZE, mode, opts.iv);
+  const R = rc6NormRounds(opts.rounds);
+  const w = rc6NormWordSize(opts.wordSize);
+  if (w === RC6_WORD_SIZE) {
+    const ctx = rc6KeySchedule(key, R);
+    return blockModeEncrypt(data, (blk) => rc6EncryptBlock(blk, ctx, R), RC6_BLOCK_SIZE, mode, opts.iv, modePad(opts));
+  }
+  const ctx = rc6BigKeySchedule(key, R, w);
+  return blockModeEncrypt(data, (blk) => rc6BigEncryptBlock(blk, ctx, R, w), rc6BlockBytes(w), mode, opts.iv, modePad(opts));
 }
 
 export function rc6Decrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
-  const ctx = rc6KeySchedule(key);
-  return blockModeDecrypt(data, (blk) => rc6EncryptBlock(blk, ctx), (blk) => rc6DecryptBlock(blk, ctx), RC6_BLOCK_SIZE, mode, opts.iv);
+  const R = rc6NormRounds(opts.rounds);
+  const w = rc6NormWordSize(opts.wordSize);
+  if (w === RC6_WORD_SIZE) {
+    const ctx = rc6KeySchedule(key, R);
+    return blockModeDecrypt(data, (blk) => rc6EncryptBlock(blk, ctx, R), (blk) => rc6DecryptBlock(blk, ctx, R), RC6_BLOCK_SIZE, mode, opts.iv, modePad(opts));
+  }
+  const ctx = rc6BigKeySchedule(key, R, w);
+  return blockModeDecrypt(data, (blk) => rc6BigEncryptBlock(blk, ctx, R, w), (blk) => rc6BigDecryptBlock(blk, ctx, R, w), rc6BlockBytes(w), mode, opts.iv, modePad(opts));
 }
 
 
@@ -1275,13 +1400,13 @@ function cast5DecryptBlock(block, ctx) {
 export function cast5Encrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
   const ctx = cast5KeySchedule(key);
-  return blockModeEncrypt(data, (blk) => cast5EncryptBlock(blk, ctx), CAST5_BLOCK_SIZE, mode, opts.iv);
+  return blockModeEncrypt(data, (blk) => cast5EncryptBlock(blk, ctx), CAST5_BLOCK_SIZE, mode, opts.iv, modePad(opts));
 }
 
 export function cast5Decrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
   const ctx = cast5KeySchedule(key);
-  return blockModeDecrypt(data, (blk) => cast5EncryptBlock(blk, ctx), (blk) => cast5DecryptBlock(blk, ctx), CAST5_BLOCK_SIZE, mode, opts.iv);
+  return blockModeDecrypt(data, (blk) => cast5EncryptBlock(blk, ctx), (blk) => cast5DecryptBlock(blk, ctx), CAST5_BLOCK_SIZE, mode, opts.iv, modePad(opts));
 }
 
 
@@ -1584,13 +1709,13 @@ function twofishDecryptBlock(block, ctx) {
 export function twofishEncrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
   const ctx = twofishKeySchedule(key);
-  return blockModeEncrypt(data, (blk) => twofishEncryptBlock(blk, ctx), TWOFISH_BLOCK_SIZE, mode, opts.iv);
+  return blockModeEncrypt(data, (blk) => twofishEncryptBlock(blk, ctx), TWOFISH_BLOCK_SIZE, mode, opts.iv, modePad(opts));
 }
 
 export function twofishDecrypt(data, key, opts = {}) {
   const mode = (opts.mode || "ECB").toUpperCase();
   const ctx = twofishKeySchedule(key);
-  return blockModeDecrypt(data, (blk) => twofishEncryptBlock(blk, ctx), (blk) => twofishDecryptBlock(blk, ctx), TWOFISH_BLOCK_SIZE, mode, opts.iv);
+  return blockModeDecrypt(data, (blk) => twofishEncryptBlock(blk, ctx), (blk) => twofishDecryptBlock(blk, ctx), TWOFISH_BLOCK_SIZE, mode, opts.iv, modePad(opts));
 }
 
 // ============================================================
@@ -1614,6 +1739,7 @@ function blockParams(modes, keyPh, blockSize = 8) {
       options: modes.map((m) => ({ value: m, label: m })) },
     { key: "iv", label: "IV / Nonce", type: "text", default: "", placeholder: `hex（${blockSize} 字节 IV）` },
     { key: "ivEnc", label: "IV 编码", type: "select", default: "hex", options: ENC_OPTS },
+    { key: "padding", label: "填充（ECB/CBC 用；流模式忽略）", type: "select", default: "pkcs7", options: PADDING_OPTIONS },
     { key: "outEnc", label: "密文编码", type: "select", default: "base64", options: OUT_OPTS },
   ];
 }
@@ -1623,7 +1749,10 @@ function makeBlockEncode(encFn) {
     const mode = (p.mode || "CBC").toUpperCase();
     const data = te(text);
     const iv = p.iv ? decodeInput(p.iv, p.ivEnc || "hex") : undefined;
-    return encodeOutput(encFn(data, key, { mode, iv }), p.outEnc || "base64");
+    const padding = p.padding || "pkcs7";
+    const rounds = p.rounds != null && p.rounds !== "" ? Number(p.rounds) : undefined;
+    const wordSize = p.wordSize != null && p.wordSize !== "" ? Number(p.wordSize) : undefined;
+    return encodeOutput(encFn(data, key, { mode, iv, padding, rounds, wordSize }), p.outEnc || "base64");
   };
 }
 function makeBlockDecode(decFn) {
@@ -1632,45 +1761,55 @@ function makeBlockDecode(decFn) {
     const mode = (p.mode || "CBC").toUpperCase();
     const data = decodeInput(text.trim(), p.outEnc || "base64");
     const iv = p.iv ? decodeInput(p.iv, p.ivEnc || "hex") : undefined;
-    return encodeOutput(decFn(data, key, { mode, iv }), "utf8");
+    const padding = p.padding || "pkcs7";
+    const rounds = p.rounds != null && p.rounds !== "" ? Number(p.rounds) : undefined;
+    const wordSize = p.wordSize != null && p.wordSize !== "" ? Number(p.wordSize) : undefined;
+    return encodeOutput(decFn(data, key, { mode, iv, padding, rounds, wordSize }), "utf8");
   };
 }
 
 // export 底层函数供测试直接调用（官方向量需单块无填充）
-export { rc5KeySchedule, rc5EncryptBlock, rc5DecryptBlock, ideaKeySchedule, ideaEncryptBlock, ideaDecryptKeySchedule, blowfishKeySchedule, blowfishEncryptBlock, blowfishDecryptBlock, rc6KeySchedule, rc6EncryptBlock, rc6DecryptBlock, cast5KeySchedule, cast5EncryptBlock, cast5DecryptBlock, twofishKeySchedule, twofishEncryptBlock, twofishDecryptBlock };
+export { rc5KeySchedule, rc5EncryptBlock, rc5DecryptBlock, ideaKeySchedule, ideaEncryptBlock, ideaDecryptKeySchedule, blowfishKeySchedule, blowfishEncryptBlock, blowfishDecryptBlock, rc6KeySchedule, rc6EncryptBlock, rc6DecryptBlock, rc6NormWordSize, rc6BlockBytes, rc6BigKeySchedule, rc6BigEncryptBlock, rc6BigDecryptBlock, cast5KeySchedule, cast5EncryptBlock, cast5DecryptBlock, twofishKeySchedule, twofishEncryptBlock, twofishDecryptBlock };
 
 register({
-  id: "rc5", family: "rc", familyLabel: "rc5", cat: "block", name: "RC5", desc: "RC5-32/12/16 分组密码（RFC 2040，64位块，12轮，可变密钥；支持 ECB/CBC/CFB/OFB/CTR）",
+  id: "rc5", family: "rc", familyLabel: "rc5", cat: "block", name: "RC5", desc: "RC5-32/12/16 分组密码（RFC 2040，64位块，12轮，可变密钥；支持 ECB/CBC/CFB/OFB/CTR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "1-255 字节密钥（默认 16 字节）"),
   encode: makeBlockEncode(rc5Encrypt),
   decode: makeBlockDecode(rc5Decrypt),
 });
 register({
-  id: "idea", cat: "block", name: "IDEA", desc: "国际数据加密算法（Lai 1991，64位块，128位密钥，8.5轮，mod 2^16+1 乘法 + mod 2^16 加法 + XOR）",
+  id: "idea", cat: "block", name: "IDEA", desc: "国际数据加密算法（Lai 1991，64位块，128位密钥，8.5轮，mod 2^16+1 乘法 + mod 2^16 加法 + XOR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23",
   params: blockParams(["ECB", "CBC"], "16 字节密钥（128 位）"),
   encode: makeBlockEncode(ideaEncrypt),
   decode: makeBlockDecode(ideaDecrypt),
 });
 register({
-  id: "blowfish", cat: "block", name: "Blowfish", desc: "Blowfish 分组密码（Schneier 1993，64位块，可变密钥4-56字节，16轮Feistel；支持 ECB/CBC/CFB/OFB/CTR）",
+  id: "blowfish", cat: "block", name: "Blowfish", desc: "Blowfish 分组密码（Schneier 1993，64位块，可变密钥4-56字节，16轮Feistel；支持 ECB/CBC/CFB/OFB/CTR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "4-56 字节密钥"),
   encode: makeBlockEncode(blowfishEncrypt),
   decode: makeBlockDecode(blowfishDecrypt),
 });
 register({
-  id: "rc6", family: "rc", familyLabel: "rc6", cat: "block", name: "RC6", desc: "RC6 分组密码（RFC 2276，128位块，可变密钥1-255字节，20轮；支持 ECB/CBC/CFB/OFB/CTR）",
-  params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "1-255 字节密钥（默认 16）", 16),
+  id: "rc6", family: "rc", familyLabel: "rc6", cat: "block", name: "RC6", desc: "RC6 分组密码（AES 候选，IETF draft-krovetz-rc6-rc5-vectors-00）：block=4w 位，wordSize 8..256（8 的倍数，默认 32 → 128 位块），rounds 1-255 默认 20，可变密钥。w=32 走原快路径，其它字长 BigInt。支持 ECB/CBC/CFB/OFB/CTR；ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
+  params: [
+    ...blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "默认 16 字节；w=32 时 1-255 字节，w≠32 时 0-255 字节", 16)
+      .map((x) => x.key === "iv"
+        ? { ...x, placeholder: "hex（IV 长度 = 4×wordSize/8 字节；默认 w=32 → 16 字节）" }
+        : x),
+    { key: "rounds", label: "轮数（默认 20）", type: "number", default: 20, min: 1, max: 255, step: 1 },
+    { key: "wordSize", label: "字长 w（位，默认 32）", type: "number", default: 32, min: 8, max: 256, step: 8 },
+  ],
   encode: makeBlockEncode(rc6Encrypt),
   decode: makeBlockDecode(rc6Decrypt),
 });
 register({
-  id: "cast5", family: "cast", familyLabel: "cast128", cat: "block", name: "CAST-128", desc: "CAST-128/CAST5 分组密码（RFC 2144，64位块，可变密钥5-16字节，12/16轮；支持 ECB/CBC/CFB/OFB/CTR）",
+  id: "cast5", family: "cast", familyLabel: "cast128", cat: "block", name: "CAST-128", desc: "CAST-128/CAST5 分组密码（RFC 2144，64位块，可变密钥5-16字节，12/16轮；支持 ECB/CBC/CFB/OFB/CTR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "5-16 字节密钥"),
   encode: makeBlockEncode(cast5Encrypt),
   decode: makeBlockDecode(cast5Decrypt),
 });
 register({
-  id: "twofish", cat: "block", name: "Twofish", desc: "Twofish 分组密码（Schneier 1998 AES 提案，128位块，16轮，密钥128/192/256位；支持 ECB/CBC/CFB/OFB/CTR）",
+  id: "twofish", cat: "block", name: "Twofish", desc: "Twofish 分组密码（Schneier 1998 AES 提案，128位块，16轮，密钥128/192/256位；支持 ECB/CBC/CFB/OFB/CTR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "16/24/32 字节密钥", 16),
   encode: makeBlockEncode(twofishEncrypt),
   decode: makeBlockDecode(twofishDecrypt),

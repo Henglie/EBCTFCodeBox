@@ -391,7 +391,7 @@ register({
     { key: "p", label: "素数 p", type: "text", default: DEMO.p, placeholder: "L 位素数（demo:283）" },
     { key: "q", label: "素数 q（q|p-1）", type: "text", default: DEMO.q, placeholder: "N 位素数（demo:47）" },
     { key: "g", label: "生成元 g（阶 q）", type: "text", default: DEMO.g, placeholder: "g=h^((p-1)/q)（demo:60）" },
-    { key: "x", label: "私钥 x", type: "text", default: DEMO.x, placeholder: "x∈[1,q-1]（demo:24）" },
+    { sensitive: true, key: "x", label: "私钥 x", type: "text", default: DEMO.x, placeholder: "x∈[1,q-1]（demo:24）" },
     { key: "k", label: "指定 k（可选）", type: "text", default: "", placeholder: "留空随机；教学可填如 15" },
   ],
   run: (text, p) => {

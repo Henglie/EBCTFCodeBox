@@ -199,7 +199,7 @@ register({
   name: "NTRU CCA-2 解密",
   desc: "NTRU CCA-2 变体解密（与「NTRU CCA-2 加密」配对）：EESS1 解密数学还原 M 后，重算 MGF1-SHA256(明文) 与恢复的 b 比对——不一致即拒绝（密文被篡改）；另做 octL/零填充双重校验。教学演示口径（无官方 KAT），底层 PKE/SVES 与「NTRU 系列原语」同源",
   params: [
-    { key: "priv", label: "私钥（hex，NTRU 密钥生成的私钥）", type: "text", default: "", placeholder: "01 开头的私钥 hex" },
+    { sensitive: true, key: "priv", label: "私钥（hex，NTRU 密钥生成的私钥）", type: "text", default: "", placeholder: "01 开头的私钥 hex" },
     { key: "ct", label: "密文（hex，含参数集标签）", type: "text", default: "", placeholder: "加密产物 ntru_cca2_e.hex 的内容" },
   ],
   run: async (_text, p) => {

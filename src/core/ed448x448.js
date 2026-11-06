@@ -284,7 +284,7 @@ register({
       { value: "text", label: "文本" },
       { value: "hex", label: "Hex" },
     ] },
-    { key: "priv", label: "私钥 (57B hex)", type: "text", default: "", placeholder: "114 hex 字符，留空随机生成" },
+    { sensitive: true, key: "priv", label: "私钥 (57B hex)", type: "text", default: "", placeholder: "114 hex 字符，留空随机生成" },
     { key: "ctx", label: "Context (hex, 可选)", type: "text", default: "", placeholder: "RFC 8032 dom4 context，留空=无" },
   ],
   run: (text, p) => {
@@ -368,7 +368,7 @@ register({
   name: "X448 密钥生成",
   desc: "Curve448 密钥对生成（RFC 7748）：私钥 56 字节随机（或给定）→ 公钥 = X448(clamp(私钥), 基点 5)。配套「X448 共享密钥」op 做 ECDH",
   params: [
-    { key: "priv", label: "私钥 (56B hex)", type: "text", default: "", placeholder: "112 hex 字符，留空随机生成" },
+    { sensitive: true, key: "priv", label: "私钥 (56B hex)", type: "text", default: "", placeholder: "112 hex 字符，留空随机生成" },
   ],
   run: (_text, p) => {
     const privRaw = (p && p.priv && String(p.priv).trim()) || "";
@@ -403,10 +403,10 @@ register({
       { value: "shared_from_privs", label: "共享密钥（双方私钥）" },
       { value: "shared_priv_pub", label: "共享密钥（我私钥+对方公钥）" },
     ] },
-    { key: "priv", label: "我的私钥 (hex)", type: "text", default: "", placeholder: "56B hex" },
+    { sensitive: true, key: "priv", label: "我的私钥 (hex)", type: "text", default: "", placeholder: "56B hex" },
     { key: "pub", label: "对方公钥 (hex)", type: "text", default: "", placeholder: "56B hex" },
-    { key: "privA", label: "私钥 A (hex, 双方模式)", type: "text", default: "", placeholder: "56B hex" },
-    { key: "privB", label: "私钥 B (hex, 双方模式)", type: "text", default: "", placeholder: "56B hex" },
+    { sensitive: true, key: "privA", label: "私钥 A (hex, 双方模式)", type: "text", default: "", placeholder: "56B hex" },
+    { sensitive: true, key: "privB", label: "私钥 B (hex, 双方模式)", type: "text", default: "", placeholder: "56B hex" },
   ],
   run: (_text, p) => {
     const mode = (p && p.mode) || "shared_from_privs";

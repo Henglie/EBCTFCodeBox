@@ -178,7 +178,30 @@ function inflateZlibLocal(zb) {
   return inflateRaw(zb.subarray(2, zb.length - 4));
 }
 
-/** 返回 [{type, len, dataOff, totalOff}]，到 IEND 为止（含 IEND）。 */
+// 可打印 ASCII 串（≥min 个连续字符）：暴露伪造块 / 尾部附加数据里的明文片段。
+function pngAsciiRuns(bytes, min = 4) {
+  const out = [];
+  let cur = "";
+  for (let i = 0; i < bytes.length; i++) {
+    const c = bytes[i];
+    if (c >= 0x20 && c < 0x7F) cur += String.fromCharCode(c);
+    else { if (cur.length >= min) out.push(cur); cur = ""; }
+  }
+  if (cur.length >= min) out.push(cur);
+  return out;
+}
+function pngFindSeq(bytes, str) {
+  const m = Array.from(str, (c) => c.charCodeAt(0));
+  outer: for (let i = 0; i + m.length <= bytes.length; i++) {
+    for (let k = 0; k < m.length; k++) if (bytes[i + k] !== m[k]) continue outer;
+    return i;
+  }
+  return -1;
+}
+
+/** 返回 [{type, len, dataOff, totalOff, lenInvalid, avail}]，到 IEND 为止（含 IEND）。
+ *  len + 4 > 文件剩余字节时标记 lenInvalid 并停止遍历：这类块常见于伪造块头 /
+ *  尾部隐藏数据（真实 IEND 被吞进数据区），继续按声明长度跳会越过文件、丢失结束点。 */
 function pngParseChunks(bytes) {
   const chunks = [];
   let off = 8;
@@ -186,8 +209,11 @@ function pngParseChunks(bytes) {
     const len = readU32be(bytes, off);
     const type = String.fromCharCode(bytes[off + 4], bytes[off + 5], bytes[off + 6], bytes[off + 7]);
     const dataOff = off + 8;
-    chunks.push({ type, len, dataOff, totalOff: off });
+    const avail = bytes.length - dataOff;
+    const lenInvalid = len + 4 > avail;
+    chunks.push({ type, len, dataOff, totalOff: off, lenInvalid, avail });
     if (type === "IEND") break;
+    if (lenInvalid) break; // 越界块：停止遍历，交给调用方展示块内实际数据
     off = dataOff + len + 4; // data + crc
     if (off > bytes.length) break; // 防越界
   }
@@ -223,8 +249,14 @@ function pngChunkListRun(text, p) {
   }
 
   for (const c of chunks) {
-    lines.push(`[${c.type}] 偏移=${c.totalOff} 数据长度=${c.len}`);
-    const data = bytes.subarray(c.dataOff, c.dataOff + c.len);
+ // 越界块只取文件里真实存在的字节，不按声明长度越界读。
+    const realLen = Math.min(c.len, Math.max(0, bytes.length - c.dataOff));
+    if (c.lenInvalid) {
+      lines.push(`[${c.type}] 偏移=${c.totalOff} 声明长度=${c.len} ⚠ 越界（文件仅剩 ${realLen} 字节）`);
+    } else {
+      lines.push(`[${c.type}] 偏移=${c.totalOff} 数据长度=${c.len}`);
+    }
+    const data = bytes.subarray(c.dataOff, c.dataOff + realLen);
 
     if (c.type === "tEXt") {
       const nul = data.indexOf(0);
@@ -315,12 +347,23 @@ function pngChunkListRun(text, p) {
         lines.push(`  sRGB: 渲染意图 = ${intent}`);
       }
     } else if (c.type === "IDAT") {
-      lines.push(`  IDAT: 图像数据（${c.len} 字节，zlib 压缩）`);
+      lines.push(`  IDAT: 图像数据（${c.lenInvalid ? realLen : c.len} 字节，zlib 压缩${c.lenInvalid ? "；声明长度越界，已按文件实际字节截断" : ""}）`);
     } else if (c.type === "IEND") {
       lines.push(`  IEND: 文件结束标记`);
     } else {
  // 未知/辅助 chunk：hex 前 32 字节
       lines.push(`  hex 前32: ${hex(data, 32)}`);
+    }
+
+ // 长度越界块：声明长度把后续字节（含真实 IEND）都圈进了数据区。
+ // 这里按文件实际剩余字节展示，并单独暴露可打印串，避免「显示未知」把关键数据吞掉。
+    if (c.lenInvalid) {
+      lines.push("  ⚠ 长度字段越界：疑似伪造块 / 尾部隐藏数据；CRC 无法按声明长度校验");
+      lines.push(`  块内 hex 前64: ${hex(data, 64)}`);
+      const runs = pngAsciiRuns(data);
+      if (runs.length) lines.push(`  块内可打印: ${runs.join(" | ")}`);
+      const ie = pngFindSeq(data, "IEND");
+      if (ie >= 0) lines.push(`  块内发现 IEND（相对偏移 ${ie}）：真实结束标记被该块长度吞入`);
     }
   }
 

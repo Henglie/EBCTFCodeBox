@@ -102,6 +102,7 @@ function ensureStyles() {
 .ra-btn.ra-pending { background:var(--primary, #2b6cb0); border-color:transparent; color:#fff; }
 .ra-btn.ra-copied { border-color:var(--primary, #2b6cb0); color:var(--primary, #2b6cb0); }
 .ra-btn.ra-error { border-color:#c62828; color:#c62828; }
+.ra-btn.ra-sensitive { border-color:var(--warning, #b26a00); color:var(--warning, #b26a00); }
 .ra-btn .ra-label { overflow-wrap:anywhere; }
 @media (max-width:600px) { .ra-row { font-size:12.5px; } }
 `;

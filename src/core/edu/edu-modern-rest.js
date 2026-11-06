@@ -61,6 +61,7 @@ export default {
       "RC4 已被证明不安全（初始字节偏置、Fluhrer-Mantin-Shamir 攻击）——WEP 因此被淘汰。",
       "RC4 是流密码，加解密同一操作：encode(encode(m, k), k) = m。",
       "CTF 中 RC4 常见于旧系统——识别特征：密文长度 = 明文长度（无填充无块结构）。",
+      "`U2FsdGVkX1…` 开头的是 OpenSSL/CryptoJS 的 Salted__ 封装：要先按 EVP_BytesToKey 从口令派生 32 字节 key、跳过 8 字节头和 8 字节 salt，再走 RC4。本 op 只吃 raw key，这种封装请用「OpenSSL 口令加解密」并选 RC4。",
     ],
     aka: ["RC4", "ARC4", "ARCFOUR", "Rivest Cipher 4", "RC4流密码", "流密码", "rivest密码4", "WEP加密", "KSA PRGA", "RC4 stream cipher"],
   },

@@ -402,7 +402,7 @@ async function flaskSessionVerifyRun(text, p) {
 // ============ 注册 ============
 
 const CRYPTO_PARAMS = [
-  { key: "secret", label: "Secret Key", type: "text", default: "", placeholder: "Flask SECRET_KEY（UTF-8）" },
+  { sensitive: true, key: "secret", label: "Secret Key", type: "text", default: "", placeholder: "Flask SECRET_KEY（UTF-8）" },
   { key: "salt", label: "Salt", type: "text", default: "cookie-session", placeholder: "Flask 默认 cookie-session" },
   {
     key: "derivation", label: "key_derivation", type: "select", default: "hmac",

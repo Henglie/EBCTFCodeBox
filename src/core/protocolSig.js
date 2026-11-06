@@ -307,7 +307,7 @@ register({
   id: "feldmanVss", cat: "asym", name: "Feldman VSS",
   desc: "Feldman 可验证秘密分享（t-out-of-n，BLS12-381 G1，生产级校验）：多项式 f(x)=s+a₁x+…+a_{t−1}x^{t−1}，份额 (i, f(i))，承诺 A_j=[a_j]G。秘密按十进制字符串精确解析（无精度丢失）；t 须为 ≥1 整数、n≥t、不静默扩份额。勾选验证模式校验单份份额",
   params: [
-    { key: "secret", label: "秘密 s（十进制整数，< 群阶 r）", type: "number", default: 20260905 },
+    { sensitive: true, key: "secret", label: "秘密 s（十进制整数，< 群阶 r）", type: "number", default: 20260905 },
     { key: "t", label: "门限 t（≥1 整数）", type: "number", default: 3 },
     { key: "n", label: "份额数 n（≥t 整数）", type: "number", default: 5 },
     { key: "verifyMode", label: "验证模式（校验单份份额）", type: "bool", default: false },
@@ -364,8 +364,8 @@ register({
   id: "lsagSign", family: "lsag", familyLabel: "sign", cat: "asym", name: "LSAG 环签名",
   desc: "LSAG 环签名（Liu–Wei–Wong 2004，BLS12-381 G1）：n 选一匿名签名 + key image 可链接（同私钥在同环的两签可被关联）。Hp 由 RFC 9380 hash-to-curve 生成（离散对数不可知 → 不可由公开值定位签名者）。主输入填消息；参数填环公钥列表（每行 48B 压缩 hex）、签名者私钥与其在环中的 index",
   params: [
-    { key: "ring", label: "环公钥列表（每行 96 hex 压缩 G1）", type: "textarea", default: "", placeholder: "96 hex\n96 hex\n…" },
-    { key: "sk", label: "签名者私钥 (hex 32B)", type: "text", default: "" },
+    { acceptFile: "text", key: "ring", label: "环公钥列表（每行 96 hex 压缩 G1）", type: "textarea", default: "", placeholder: "96 hex\n96 hex\n…" },
+    { sensitive: true, key: "sk", label: "签名者私钥 (hex 32B)", type: "text", default: "" },
     { key: "index", label: "签名者在环中的 index（0 起）", type: "number", default: 0 },
   ],
   run(t, p = {}) {
@@ -390,7 +390,7 @@ register({
   id: "lsagVerify", family: "lsag", familyLabel: "verify", cat: "asym", name: "LSAG 环签名验证",
   desc: "LSAG 验签：主输入填原消息；参数填环公钥列表与签名 JSON（lsagSign 产物）。同 key image 的两签即同签者（可链接）",
   params: [
-    { key: "ring", label: "环公钥列表（每行 96 hex 压缩 G1）", type: "textarea", default: "", placeholder: "96 hex\n96 hex\n…" },
+    { acceptFile: "text", key: "ring", label: "环公钥列表（每行 96 hex 压缩 G1）", type: "textarea", default: "", placeholder: "96 hex\n96 hex\n…" },
     { key: "sigJson", label: "签名 JSON", type: "textarea", default: "", placeholder: "lsagSign 输出的 sig 文件内容" },
   ],
   run(t, p = {}) {

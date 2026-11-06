@@ -380,6 +380,68 @@ function expandReplacement(template, match) {
   return out;
 }
 
+// ============================================================
+// 常用提取预设：只提供 pattern/group，不改变 op id，也不改变自定义正则路径。
+// 预设均经过同一套结构白名单扫描；group 由预设给出（IPv4/IPv6/路径用捕获组
+// 去掉边界前缀），用户如需别的组请切回 custom。
+// ============================================================
+const PRESETS = {
+  emails: {
+    pattern: "[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,24}",
+    group: "0",
+  },
+  urls: {
+    pattern: "(?:https?|ftp)://[^\\s\"'<>()]*[A-Za-z0-9/#=_~%\\-]|www\\.[^\\s\"'<>()]*[A-Za-z0-9/#=_~%\\-]",
+    group: "0",
+  },
+  domains: {
+    pattern: "\\b[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]{1,63}){0,3}\\.[A-Za-z]{2,24}\\b",
+    group: "0",
+  },
+  ipv4: {
+    pattern: "(?:^|[^0-9.])((?:(?:25[0-5]|2[0-4]\\d|1\\d{2}|[1-9]?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1\\d{2}|[1-9]?\\d))(?!\\d|\\.)",
+    group: "1",
+  },
+  ipv6: {
+    pattern: "(?:^|[^0-9A-Fa-f:])(::(?:[Ff]{4}:)?(?:25[0-5]|2[0-4]\\d|1\\d{2}|[1-9]?\\d)(?:\\.(?:25[0-5]|2[0-4]\\d|1\\d{2}|[1-9]?\\d)){3}|(?=(?:[0-9A-Fa-f:]*::))(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}|(?=(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4})(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4})(?![0-9A-Fa-f:])",
+    group: "1",
+  },
+  mac: {
+    pattern: "\\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\\b",
+    group: "0",
+  },
+  dates: {
+    pattern: "\\b(?:19|20)\\d{2}[-/](?:0?[1-9]|1[0-2])[-/](?:0?[1-9]|[12]\\d|3[01])\\b|\\b(?:0?[1-9]|[12]\\d|3[01])[-/](?:0?[1-9]|1[0-2])[-/](?:19|20)\\d{2}\\b",
+    group: "0",
+  },
+  filepath: {
+    pattern: "(?:^|[^:A-Za-z0-9/])((?:[A-Za-z]:\\\\|/(?!/))[^\\r\\n\"'<>|*?\\s,;]+)",
+    group: "1",
+  },
+  hashes: {
+    pattern: "\\b(?:[0-9A-Fa-f]{128}|[0-9A-Fa-f]{64}|[0-9A-Fa-f]{40}|[0-9A-Fa-f]{32})\\b",
+    group: "0",
+  },
+  flag: {
+    pattern: "(?:[Ff][Ll][Aa][Gg]|[Cc][Tt][Ff]|[Kk][Ee][Yy])\\{[^}\\r\\n]{1,256}\\}",
+    group: "0",
+  },
+  keyValue: {
+    pattern: "\\b(?:key|pass|passwd|password|pwd|secret|token)\\s*[:=]\\s*([^\\s,;\"']+)",
+    group: "1",
+  },
+};
+
+/** 把 preset 名称解析成 { pattern, group }；custom/空 → null（走自定义正则）。 */
+function resolvePreset(name) {
+  if (name == null || name === "" || name === "custom") return null;
+  const p = PRESETS[name];
+  if (!p) {
+    throw new Error(`未知预设 ${JSON.stringify(name)}：支持 custom / ${Object.keys(PRESETS).join(" / ")}`);
+  }
+  return p;
+}
+
 /** 零宽结果的统一报错：全局 exec 遇到空匹配会原地打转，必须显式失败而不是跳过。 */
 function zeroWidthError(pattern, index) {
   return new Error(
@@ -393,8 +455,8 @@ register({
   cat: "text",
   name: "通用正则提取 / 替换",
   desc:
-    "按正则做提取或替换。extract：全局匹配后按 group 取整段(0)/第 n 组(1..n)/全部组(all，\\t 连接)，" +
-    "可选 dedupe 保首次顺序、firstOnly 只取首个，结果用 sep 连接（支持 \\n \\t 转义）；" +
+    "按正则做提取或替换。preset 提供常用提取预设（Email / URL / 域名 / IPv4 / IPv6 / MAC / 日期 / 文件路径 / 哈希 / flag / key=value），选中后自动填正则与捕获组，custom 使用自定义正则；" +
+    "extract：全局匹配后按 group 取整段(0)/第 n 组(1..n)/全部组(all，\\t 连接)，可选 dedupe 保首次顺序、firstOnly 只取首个，结果用 sep 连接（支持 \\n \\t 转义）；" +
     "replace：用 $1..$9、$&、$$ 展开替换全文，未知 $x 原样保留。空模式、非法正则、零匹配一律报错，" +
     "不静默返回原文；编译前结构白名单拒绝反向引用、嵌套量词、后行断言与非标准扩展",
   params: [
@@ -403,7 +465,22 @@ register({
         { value: "extract", label: "提取（extract）" },
         { value: "replace", label: "替换（replace）" },
       ] },
-    { key: "pattern", label: "正则表达式", type: "text", default: "", placeholder: "如 [0-9a-f]{32}（不可为空）" },
+    { key: "preset", label: "提取预设（extract）", type: "select", default: "custom",
+      options: [
+        { value: "custom", label: "自定义正则（custom）" },
+        { value: "emails", label: "Email 地址" },
+        { value: "urls", label: "URL" },
+        { value: "domains", label: "域名" },
+        { value: "ipv4", label: "IPv4" },
+        { value: "ipv6", label: "IPv6" },
+        { value: "mac", label: "MAC 地址" },
+        { value: "dates", label: "日期" },
+        { value: "filepath", label: "文件路径" },
+        { value: "hashes", label: "哈希（MD5/SHA1/SHA256/SHA512）" },
+        { value: "flag", label: "flag{...} / CTF{...} / key{...}" },
+        { value: "keyValue", label: "key=value / pass: value" },
+      ] },
+    { key: "pattern", label: "自定义正则（preset=custom 时生效）", type: "text", default: "", placeholder: "如 [0-9a-f]{32}（不可为空）" },
     { key: "flags", label: "标志位", type: "text", default: "g", placeholder: "g i m s u 的子集" },
     { key: "group", label: "捕获组（extract）", type: "text", default: "0", placeholder: "0 / 1..n / all" },
     { key: "dedupe", label: "去重（extract）", type: "bool", default: false },
@@ -418,11 +495,12 @@ register({
       throw new Error(`未知 mode ${JSON.stringify(mode)}：只支持 extract / replace`);
     }
 
-    const pattern = opts.pattern == null ? "" : String(opts.pattern);
+    const preset = resolvePreset(opts.preset);
+    const pattern = preset ? preset.pattern : (opts.pattern == null ? "" : String(opts.pattern));
     if (pattern === "") {
-      throw new Error("pattern 为空：空模式会在每个位置命中，已拒绝；请填写要提取或替换的正则");
+      throw new Error("pattern 为空：空模式会在每个位置命中，已拒绝；请填写要提取或替换的正则，或选择一个预设");
     }
-    if (pattern.length > MAX_PATTERN_LEN) {
+    if (!preset && pattern.length > MAX_PATTERN_LEN) {
       throw new Error(`pattern 长度 ${pattern.length} 超过上限 ${MAX_PATTERN_LEN} 字符`);
     }
 
@@ -447,7 +525,7 @@ register({
 
     if (mode === "extract") {
       const sep = unescapeSeparator(opts.sep);
-      const groupSpec = opts.group == null ? "0" : String(opts.group).trim();
+      const groupSpec = preset ? preset.group : (opts.group == null ? "0" : String(opts.group).trim());
       let groupIndex;
       if (groupSpec === "all") {
         if (groupCount === 0) {

@@ -115,7 +115,7 @@ register({
   id: "blsKeyGen", cat: "asym", family: "bls", familyLabel: "keygen",
   name: "BLS 密钥生成",
   desc: "BLS（Boneh–Lynn–Shacham）密钥生成，对齐 IETF draft-irtf-cfrg-bls-signature：BLS12-381 + RFC 9380，ciphersuite BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_。sk ∈ [1,r-1]（留空按 draft KeyGen 随机），pk=[sk]G1（48B 压缩，与 ETH2 互通）",
-  params: [{ key: "sk", label: "私钥 sk (hex，留空随机)", type: "text", default: "", placeholder: "复现用固定私钥" }],
+  params: [{ sensitive: true, key: "sk", label: "私钥 sk (hex，留空随机)", type: "text", default: "", placeholder: "复现用固定私钥" }],
   run(_t, p = {}) {
     const r = blsKeyGenBytes(p.sk);
     return { text: ["私钥 sk: " + r.sk, "公钥 pk ([sk]G1, 48B 压缩): " + r.pk].join("\n"), files: [] };
@@ -127,7 +127,7 @@ register({
   name: "BLS 签名",
   desc: "BLS 签名：σ = [sk]·H(m)，H 为 RFC 9380 hash_to_curve（恒定时间，官方 ciphersuite DST）。签名 σ 为 96B 压缩 G2 点；同域签名可聚合（见聚合验签）",
   params: [
-    { key: "sk", label: "私钥 sk (hex 32B)", type: "text", default: "", placeholder: "BLS 密钥生成输出的 sk" },
+    { sensitive: true, key: "sk", label: "私钥 sk (hex 32B)", type: "text", default: "", placeholder: "BLS 密钥生成输出的 sk" },
   ],
   run(t, p = {}) {
     if (!t || !String(t).trim()) throw new Error("请在主输入框填入待签消息");

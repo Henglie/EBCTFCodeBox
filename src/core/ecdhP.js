@@ -124,13 +124,13 @@ register({
   desc: "素数域 ECDH（SEC 1 v2.0 §3.3.1 / RFC 5903 口径）：我方私钥 d + 对方公钥点 Q → 共享点 d·Q 的 x 坐标即共享密钥。曲线 secp256k1/P-256/P-384/P-521。X25519/X448 见各自独立 op。RFC 5903 §8 P-256/384/521 官方向量逐字节验证",
   params: [
     { key: "curve", label: "曲线", type: "select", default: "secp256k1", options: CURVE_OPTIONS },
-    { key: "priv", label: "我方私钥 d", type: "text", default: "", placeholder: "十进制或 0x hex（可用 ECDSA 密钥生成档产出）" },
+    { sensitive: true, key: "priv", label: "我方私钥 d", type: "text", default: "", placeholder: "十进制或 0x hex（可用 ECDSA 密钥生成档产出）" },
     { key: "peerPub", label: "对方公钥点 Q", type: "text", default: "04…", placeholder: "04‖X‖Y / 02|03‖X / X‖Y（hex，与 eccCalc 同格式）" },
     { key: "mode", label: "验证模式", type: "select", default: "single", options: [
       { value: "single", label: "单侧（我方私钥 + 对方公钥）" },
       { value: "both", label: "双侧互验（另填对方私钥，验证 dA·QB == dB·QA）" },
     ] },
-    { key: "peerPriv", label: "对方私钥（both 模式用）", type: "text", default: "", placeholder: "十进制或 0x hex" },
+    { sensitive: true, key: "peerPriv", label: "对方私钥（both 模式用）", type: "text", default: "", placeholder: "十进制或 0x hex" },
   ],
   run: (_text, p) => {
     const c = CURVES[String((p && p.curve) || "secp256k1")];

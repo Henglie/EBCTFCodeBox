@@ -289,6 +289,14 @@ async function waitControl(control) {
 }
 
 /** decoded（decodePngPixels/decodeBmpPixels/canvas 帧契约）→ RGBA（读码器只吃 4 字节/像素）。 */
+/** 自包含 PNG/BMP 解码不支持时，给 canvas 兜底用的 MIME（只认签名，不猜扩展名）。 */
+function canvasMimeForImage(bytes) {
+  if (!bytes || bytes.length < 8) return "";
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "image/png";
+  if (bytes[0] === 0x42 && bytes[1] === 0x4d) return "image/bmp";
+  return "";
+}
+
 function decodedToRgba(decoded) {
   const { width: w, height: h, channels: ch, samples: s } = decoded;
   if (!w || !h || !s) return null;
@@ -405,7 +413,10 @@ async function unifiedQrSections(bytes, name, control = null) {
   if (png && !png.unsupported) frames = [{ decoded: png, info: null }];
   if (!frames) {
     let pack = null;
-    try { pack = await decodeToPixelFrames(bytes); } catch { pack = null; }
+    // 1/2/4/16-bit PNG、索引色、隔行等自包含解码不支持的图，仍可交给浏览器 canvas
+    // 解成 RGBA 再读码；不要因为 LSB 解码器不支持位深就直接判二维码失败。
+    const mime = canvasMimeForImage(bytes);
+    try { pack = await decodeToPixelFrames(bytes, mime ? { mime } : {}); } catch { pack = null; }
     if (pack && pack.frames && pack.frames.length) {
       const multi = pack.total > 1 || pack.frames.length > 1;
       frames = pack.frames.map((f, i) => ({ decoded: f, info: multi ? { index: i, total: pack.total } : null }));
@@ -771,20 +782,21 @@ export function analyzeImage(bytes, name = "", detected, opts) {
     ? { sections: finalizeSections(sizeSections, { source: "imageAnalysis" }) }
     : null; // 非 PNG/BMP → 交给其他分析
 
-  // 像素解码不支持（位深/隔行等）
+  // 自包含像素解码不支持（位深/隔行等）。若统一读码链已经命中，不要再加
+  // 一条「无法识别二维码」的自相矛盾提示。
   if (decoded.unsupported) {
-    return {
-      sections: finalizeSections([
-        ...sizeSections,
-        {
-          id: "img-qr",
-          title: "二维码识别",
-          level: "info",
-          icon: "qr_code",
-          body: "暂不支持该图片的像素解码，无法识别二维码: " + decoded.unsupported,
-        },
-      ], { source: "imageAnalysis" }),
-    };
+    const list = sizeSections.slice();
+    if (!skipQr) {
+      list.push({
+        id: "img-qr",
+        title: "二维码识别",
+        level: "info",
+        icon: "qr_code",
+        body: "自包含像素解码不支持该图片: " + decoded.unsupported +
+          "\n一键解码会再用浏览器 canvas 解像素读码；同步调用无 canvas 时会停在提示。",
+      });
+    }
+    return list.length ? { sections: finalizeSections(list, { source: "imageAnalysis" }) } : null;
   }
 
   // ---- 二维码识别（核心）----
@@ -831,31 +843,54 @@ export async function analyzeImageAsync(bytes, name = "", detected, opts = {}) {
   // PNG/BMP 走同步自包含解码（保持既有行为不变；ZXing 已命中则抑制其二维码段，避免自相矛盾）。
   if (!(await waitControl(control))) return null;
   const sync = analyzeImage(u8a, name, detected, { skipQr: zxHit });
+  const baseSections = [];
+  let syncUnsupported = false;
   if (sync) {
-    emit(sync.sections);
-    return { sections: finalizeSections([...zxSections, ...sync.sections], { source: "imageAnalysis" }) };
+    for (const s of sync.sections) {
+      // 自包含解码不支持位深时，若统一读码链已命中就不再保留错误段；
+      // 若未命中，也不直接早退，下一段用 canvas 解像素再试一次。
+      if (s && s.id === "img-qr" && /自包含像素解码不支持/.test(String(s.body || ""))) {
+        syncUnsupported = true;
+        continue;
+      }
+      baseSections.push(s);
+    }
+    emit(baseSections);
+    if (!syncUnsupported) {
+      return { sections: finalizeSections([...zxSections, ...baseSections], { source: "imageAnalysis" }) };
+    }
   }
 
- // 走到这里说明不是 PNG/BMP（或 PNG/BMP 像素解码不可用）：先给宽高修复留个机会。
+ // 走到这里说明同步链不可用：先给宽高修复留个机会。
  // jpgSizeRecover 是纯 JS，不依赖 canvas，Node 侧同样可用。
-  const sizeSections = buildSizeRecoverSections(u8a, name);
+  const sizeSections = baseSections.length ? [] : buildSizeRecoverSections(u8a, name);
   emit(sizeSections);
 
- // JPEG/GIF：canvas 解码到 RGBA 像素帧，逐帧跑 QR 识别。
+ // canvas 解码到 RGBA 像素帧（JPEG/GIF/1-bit PNG/索引色 PNG 都可走），逐帧跑 QR 识别。
   let framePack;
+  const canvasMime = canvasMimeForImage(u8a);
   try {
-    framePack = await decodeToPixelFrames(u8a);
+    framePack = await decodeToPixelFrames(u8a, canvasMime ? { mime: canvasMime } : {});
   } catch (_) {
     framePack = null;
   }
   if (!framePack || !framePack.frames || !framePack.frames.length) {
-    const out = [...zxSections, ...sizeSections];
+    const out = [...zxSections, ...baseSections, ...sizeSections];
+    if (syncUnsupported && !zxHit) {
+      out.push({
+        id: "img-qr",
+        title: "二维码识别",
+        level: "info",
+        icon: "qr_code",
+        body: "自包含与 canvas 两条像素解码链都未能解出该图片；如果是隔行/异常位深/非 PNG-BMP 容器，请先转成标准 8-bit PNG。",
+      });
+    }
     return out.length ? { sections: finalizeSections(out, { source: "imageAnalysis" }) } : null;
   }
 
   const { mime, frames, total } = framePack;
   const multi = total > 1 || frames.length > 1;
-  const sections = [...zxSections, ...sizeSections];
+  const sections = [...zxSections, ...baseSections, ...sizeSections];
   for (let i = 0; i < frames.length; i++) {
     if (!(await waitControl(control))) break;
     const frameInfo = multi ? { index: i, total } : null;
@@ -870,7 +905,7 @@ export async function analyzeImageAsync(bytes, name = "", detected, opts = {}) {
  // 有帧但一个 QR 都没识别到：给一条 info，说明已解到像素但未见 QR
  // （避免「明明支持却静默无输出」的困惑）。
   if (!sections.length) {
-    const fmt = mime === "image/gif" ? "GIF" : "JPEG";
+    const fmt = mime === "image/gif" ? "GIF" : mime === "image/jpeg" ? "JPEG" : mime === "image/png" ? "PNG" : mime === "image/bmp" ? "BMP" : "图片";
     const frameNote = multi ? "（共 " + total + " 帧" + (frames.length < total ? "，已分析前 " + frames.length + " 帧" : "") + "）" : "";
     sections.push({
       id: "img-qr",
@@ -879,7 +914,7 @@ export async function analyzeImageAsync(bytes, name = "", detected, opts = {}) {
       icon: "qr_code",
       body:
         "已将 " + fmt + " 解码到像素" + frameNote + "，但未识别到整图 QR 码。" +
-        "注：canvas 取到的是渲染后 RGB 像素，若隐写藏在 JPEG 原始 DCT 系数中此路无法触及（属进阶，待 WASM）。",
+        (mime === "image/jpeg" ? "注：canvas 取到的是渲染后 RGB 像素，若隐写藏在 JPEG 原始 DCT 系数中此路无法触及（属进阶，待 WASM）。" : ""),
     });
   }
 

@@ -145,7 +145,7 @@ register({
   params: [
     ...COMMON_PARAMS,
     { key: "pkR", label: "收方公钥 pkR（32B hex）", type: "text", default: "", placeholder: "64 hex 字符（X25519 密钥生成档产出）" },
-    { key: "skE", label: "临时私钥 skE（可选 32B hex）", type: "text", default: "", placeholder: "留空随机；给定则密文可复现（对拍向量用）" },
+    { sensitive: true, key: "skE", label: "临时私钥 skE（可选 32B hex）", type: "text", default: "", placeholder: "留空随机；给定则密文可复现（对拍向量用）" },
   ],
   run: async (text, p) => {
     const pt = typeof text === "string" ? new TextEncoder().encode(text) : new Uint8Array(text || []);
@@ -186,7 +186,7 @@ register({
     ...COMMON_PARAMS,
     { key: "enc", label: "enc（发送方临时公钥 32B hex）", type: "text", default: "", placeholder: "64 hex 字符" },
     { key: "ct", label: "密文 ct（hex，含尾 16 字节 tag）", type: "text", default: "", placeholder: "hex" },
-    { key: "skR", label: "收方私钥 skR（32B hex）", type: "text", default: "", placeholder: "64 hex 字符" },
+    { sensitive: true, key: "skR", label: "收方私钥 skR（32B hex）", type: "text", default: "", placeholder: "64 hex 字符" },
   ],
   run: async (_text, p) => {
     const enc = need32(hexToBytes((p && p.enc) || "", "enc"), "enc");

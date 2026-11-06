@@ -345,8 +345,8 @@ register({
   desc: "SM9 标识密码密钥体系生成（GB/T 38635.2-2020）：签名 ks/加密 ke 双主密钥对（随机，可注入固定值复现向量）+ 按指定 uid 派生用户签名私钥（G1）/加密私钥（G2）与用户公钥。KGC 模式：用户公钥=标识，无需证书",
   params: [
     { key: "uid", label: "用户标识 uid", type: "text", default: "Alice", placeholder: "如 Alice / 邮箱 / 手机号（即公钥）" },
-    { key: "ks", label: "签名主私钥 ks（hex，可选）", type: "text", default: "", placeholder: "留空随机；32 字节 hex（KAT 复现用）" },
-    { key: "ke", label: "加密主私钥 ke（hex，可选）", type: "text", default: "", placeholder: "留空随机；32 字节 hex（KAT 复现用）" },
+    { sensitive: true, key: "ks", label: "签名主私钥 ks（hex，可选）", type: "text", default: "", placeholder: "留空随机；32 字节 hex（KAT 复现用）" },
+    { sensitive: true, key: "ke", label: "加密主私钥 ke（hex，可选）", type: "text", default: "", placeholder: "留空随机；32 字节 hex（KAT 复现用）" },
   ],
   run: (text, p) => {
     const uid = new TextEncoder().encode(String(p.uid == null || p.uid === "" ? "Alice" : p.uid));
@@ -387,7 +387,7 @@ register({
   desc: "SM9 标识数字签名（GB/T 38635.2-2020）：签名主公钥（G2）+ 用户签名私钥（G1）+ 消息 → 签名 (h, S)。h 为 32 字节 hex，S 为 G1 点 65 字节（04‖x‖y）。支持固定 r 复现官方向量",
   params: [
     { key: "masterPub", label: "签名主公钥 Ppub_s（hex）", type: "text", default: "", placeholder: "G2 点 129 字节（04 前缀）或 128 字节" },
-    { key: "userPriv", label: "用户签名私钥 dA（hex）", type: "text", default: "", placeholder: "G1 点 65 字节（04 前缀）或 64 字节" },
+    { sensitive: true, key: "userPriv", label: "用户签名私钥 dA（hex）", type: "text", default: "", placeholder: "G1 点 65 字节（04 前缀）或 64 字节" },
     { key: "uid", label: "用户标识 uid", type: "text", default: "Alice", placeholder: "签名人标识（派生 dA 时所用）" },
     { key: "hid", label: "hid（hex）", type: "text", default: "01", placeholder: "签名函数标识，默认 01" },
     { key: "fixedR", label: "固定 r（hex，可选）", type: "text", default: "", placeholder: "留空随机；KAT 复现用" },
@@ -470,7 +470,7 @@ register({
   name: "SM9 解密",
   desc: "SM9 标识解密（GB/T 38635.4-2020）：用户加密私钥（G2）+ 收件人 uid + 密文 C1‖C3‖C2 → 明文。C3 校验失败（篡改/错 uid/错私钥）即报错",
   params: [
-    { key: "userPriv", label: "用户加密私钥 dB（hex）", type: "text", default: "", placeholder: "G2 点 129 字节（04 前缀）或 128 字节" },
+    { sensitive: true, key: "userPriv", label: "用户加密私钥 dB（hex）", type: "text", default: "", placeholder: "G2 点 129 字节（04 前缀）或 128 字节" },
     { key: "uid", label: "收件人标识 uid", type: "text", default: "Bob", placeholder: "加密时所用标识" },
     { key: "enc", label: "密文编码", type: "select", default: "hex", options: ENC_OPTS },
   ],

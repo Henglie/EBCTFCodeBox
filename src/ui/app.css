@@ -345,6 +345,48 @@ label.switch,
   line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .param-bigta:focus { outline: 2px solid var(--primary); border-color: transparent; }
+/* 敏感 textarea 遮罩：优先 -webkit-text-security 圆点（Chromium/WebKit/Edge）；
+   不支持时（@supports not 分支）以实心剪影遮蔽，绝不显示明文；不用 blur。 */
+.secret-field textarea.is-masked {
+  -webkit-text-security: disc;
+}
+@supports not (-webkit-text-security: disc) {
+  .secret-field textarea.is-masked {
+    color: transparent;
+    caret-color: var(--on-surface);
+    text-shadow: 0 0 0 var(--on-surface);
+  }
+}
+.secret-field textarea.is-masked::selection { background: transparent; }
+.param-bigta.dragover, .param input.dragover { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent); }
+/* M3 自实现密钥/口令字段：外框 + 自定义可见性按钮，压掉浏览器原生 reveal */
+.secret-field {
+  position: relative;
+  align-items: center; padding: 2px 4px 2px 10px;
+  border: 1px solid var(--outline); border-radius: var(--r-sm);
+  background: var(--field-bg); transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.secret-field:focus-within { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+.secret-field > input, .secret-field > textarea, .secret-field > .exp-wrap, .secret-field .exp-input {
+  border: 0 !important; background: transparent !important; box-shadow: none !important; outline: none !important;
+}
+.secret-field .stepper { border: 0; background: transparent; padding: 0; }
+/* 眼睛/上传/展开按钮：显式热区 + 置顶，避免被输入框覆盖或点错。eye 用独立类便于定位/测试。 */
+.secret-field .exp-btn,
+.secret-field .secret-eye-btn {
+  flex: none; position: relative; z-index: 1;
+  width: 34px; min-width: 34px; min-height: 34px;
+  align-self: center;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.secret-field .exp-btn .msym,
+.secret-field .secret-eye-btn .msym { font-size: 18px; }
+.secret-field .exp-btn.param-bigta-btn { border: 0; background: transparent; }
+.secret-field input[type="password"]::-ms-reveal,
+.secret-field input[type="password"]::-ms-clear { display: none; }
+.secret-field input[type="password"]::-webkit-credentials-auto-fill-button,
+.secret-field input[type="password"]::-webkit-strong-password-auto-fill-button { visibility: hidden; display: none !important; }
+.secret-field input.is-masked { -webkit-text-security: disc; }
 .act-btn.fav-btn { flex: 0 0 48px; width: 48px; height: 48px; min-width: 48px; min-height: 48px; max-width: 48px; max-height: 48px; padding: 0; border-radius: 50%; margin-inline-start: auto; justify-content: center; }
 .act-btn.fav-btn .msym { font-size: 28px; display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
 /* 星居中终修（恒烈 2026-09-13「还靠在左下，再往右上移动」）：Material Symbols star 字形
@@ -546,8 +588,16 @@ label.switch,
 /* ---- 首页一把梭 ---- */
 .home-hero { max-width: 760px; margin: 0 auto; }
 .home-hero .op-title { font-size: var(--fs-2xl); }
-.onekey-out { margin-top: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); }
+.onekey-out { margin-top: var(--sp-4); display: flex; flex-direction: column; gap: 0; }
+/* 卡片间距用 margin 兜底：部分浏览器/嵌套卡片对 flex gap 的渲染不一致，
+   曾出现带复制按钮的卡片贴在一起。统一由 direct child 的 margin-bottom 控制。 */
+.onekey-out > * { margin-bottom: var(--sp-3); }
+.onekey-out > *:last-child { margin-bottom: 0; }
+/* 特异性必须高于后面的 .onekey-card { margin:0 } */
+.onekey-out > .onekey-card { margin-bottom: var(--sp-3); }
+.onekey-out > .onekey-card:last-child { margin-bottom: 0; }
 .onekey-card {
+  margin: 0;
   padding: var(--sp-4);
   background: var(--surface-1);
   border: 1px solid var(--outline-var);
@@ -653,6 +703,16 @@ label.switch,
 .magic-crib:focus { outline: 2px solid var(--primary); border-color: transparent; }
 .magic-intensive-label { display: flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-base); color: var(--on-surface-var); cursor: pointer; user-select: none; }
 .onekey-card.crib-hit { border-inline-start-color: var(--success); background: var(--surface-hi); }
+
+/* 内嵌图/特殊形态卡：内部再挂文件报告时保持卡片间距，避免嵌套卡片贴边 */
+.onekey-special-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+  min-width: 0;
+}
+.onekey-special-body > .file-report:last-child { margin-bottom: 0; }
 
 /* 原始输入卡——中性描边，区别于解码结果卡（不做 crib 绿色高亮） */
 .onekey-card.onekey-raw { border-inline-start-color: var(--outline-var); background: var(--surface-2, var(--surface-1)); }
@@ -1667,6 +1727,30 @@ a.about-ref-name:hover { text-decoration: underline; }
 /* 徽章内小图标（可选，如 terminal/desktop_windows），跟随徽章文字色 */
 .exe-badge .msym { font-size: 12px; flex: none; }
 
+/* 新增/更新 op 徽标：插件版本时间戳可见，不抢标题 */
+.op-new-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-full);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: .3px;
+  line-height: 1;
+  color: var(--on-primary);
+  background: var(--primary);
+  cursor: help;
+  user-select: none;
+  align-self: center;
+  margin-inline-start: var(--sp-1);
+}
+.op-updated-badge {
+  color: var(--on-surface);
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
 /* ============ 前庭无障碍：减少动效开关（2026-09-09 恒烈指示改造） ============ */
 /* 原版挂在 OS 的 prefers-reduced-motion 上——部分 Windows 关闭「动画效果」后用户将永远
    看不到任何动画（实机确诊）。改为应用内开关：html.reduce-motion 类由 main.js 依
@@ -2181,7 +2265,7 @@ html.reduce-motion .act-btn.pending-run { animation: none; box-shadow: 0 0 0 3px
 
 /* ---- 2026-10-28 真题测试批：一键解码运行条 / 可编辑卡片 / 右侧缩略目录 / 文件报告折叠 ---- */
 .onekey-runbar {
-  position: sticky; top: 8px; z-index: 18;
+  position: static;
   display: flex; flex-direction: column; gap: var(--sp-2);
   padding: var(--sp-2) var(--sp-3);
   background: color-mix(in srgb, var(--surface-1) 92%, var(--primary) 8%);
