@@ -79,14 +79,31 @@ function hexEncode(text, p) {
   let s = out.join("");
   return p && p.space && s ? s.match(/.{1,2}/g).join(" ") : s;
 }
+const HEX_DELIMS = {
+  Space: " ", Percent: "%", Comma: ",", "Semi-colon": ";", Colon: ":",
+  LF: "\n", CRLF: "\r\n",
+};
+function hexCleanByDelimiter(text, p) {
+  const delim = (p && p.delimiter) || "Auto";
+  const raw = String(text);
+  if (delim === "Auto") return raw.replace(/0x/gi, "").replace(/[^0-9a-fA-F]/g, "");
+  if (delim === "None") return raw.trim();
+  if (delim === "0x") return raw.replace(/0x/gi, "").replace(/\s/g, "");
+  if (delim === "0x with comma") return raw.replace(/0x/gi, "").split(",").join("").replace(/\s/g, "");
+  if (delim === "\\x") return raw.replace(/\\x/gi, "").replace(/\s/g, "");
+  if (!Object.prototype.hasOwnProperty.call(HEX_DELIMS, delim)) {
+    throw new Error("base16 delimiter 须为 Auto/Space/Percent/Comma/Semi-colon/Colon/LF/CRLF/0x/0x with comma/\\x/None（实为 " + delim + "）");
+  }
+  return raw.split(HEX_DELIMS[delim]).join("").replace(/\s/g, "");
+}
 function hexDecode(text, p) {
   const D = (p && p.dict) || B16;
  // 自定义码表可能含非 hex 字符（G-Z/符号）——此时不能用固定 hex 正则清洗
  // 只去 0x 前缀与空白，按 dict 自身字符集查表。标准码表走原 hex 清洗（容忍夹杂噪声）。
   const isStdHex = D === B16 || /^[0-9a-fA-F]{16}$/.test(D);
   const s = isStdHex
-    ? text.replace(/0x/gi, "").replace(/[^0-9a-fA-F]/g, "")
-    : text.replace(/0x/gi, "").replace(/\s/g, "");
+    ? hexCleanByDelimiter(text, p)
+    : String(text).replace(/0x/gi, "").replace(/\s/g, "");
   if (s.length % 2) throw new Error("十六进制长度必须为偶数");
   const bytes = [];
   const lookup = isStdHex ? D.toLowerCase() : D;
@@ -137,7 +154,10 @@ function base32Decode(text, p) {
  // 大小写/容错归一随 variant 分支（不再无条件 toUpperCase）。
  // 自定义码表按原样查（不套变体 norm，否则大小写会被强改致查不到）。
   const stripped = text.replace(/=+$/, "").replace(/\s/g, "");
-  const clean = hasCustom ? stripped : v.norm(stripped);
+  const normalized = hasCustom ? stripped : v.norm(stripped);
+  const clean = (p && p.removeNonAlphabet)
+    ? [...normalized].filter((ch) => D.indexOf(ch) >= 0).join("")
+    : normalized;
   let bits = 0, value = 0;
   const out = [];
   for (const ch of clean) {
@@ -176,7 +196,10 @@ function base45Encode(text, p) {
 function base45Decode(text, p) {
   const D = (p && p.dict) || B45;
  // 空格在 Base45 码表中是合法符号（索引 36），不能 trim，仅去换行
-  const s = text.replace(/[\r\n]/g, "");
+  let s = text.replace(/[\r\n]/g, "");
+  if (p && p.removeNonAlphabet) {
+    s = [...s].filter((ch) => D.indexOf(ch) >= 0).join("");
+  }
   const out = [];
   for (let i = 0; i < s.length; i += 3) {
     const chunk = s.slice(i, i + 3);
@@ -215,7 +238,12 @@ function b58Dict(p) {
   return B58_ALPHABETS[a] || B58;
 }
 const base58Encode = (t, p) => radixNEncode(t, b58Dict(p));
-const base58Decode = (t, p) => radixNDecode(t, b58Dict(p));
+function base58Decode(text, p) {
+  const D = b58Dict(p);
+  let s = String(text);
+  if (p && p.removeNonAlphabet) s = [...s].filter((ch) => D.indexOf(ch) >= 0).join("");
+  return radixNDecode(s, D);
+}
 
 // ============ Base62 ============
 const B62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -256,6 +284,15 @@ function base64Decode(text, p) {
   const D = (p && p.dict) || B64_STD;
   let s = text.replace(/\s/g, "");
   if (p && p.urlsafe || /[-_]/.test(s)) s = s.replace(/-/g, "+").replace(/_/g, "/");
+  if (p && p.removeNonAlphabet) {
+    s = [...s].filter((ch) => ch === "=" || D.indexOf(ch) >= 0).join("");
+  }
+  if (p && p.strictMode) {
+    const body = s.replace(/=+$/, "");
+    for (const ch of body) {
+      if (D.indexOf(ch) < 0) throw new Error("Base64 strictMode 遇到非字母表字符: " + ch);
+    }
+  }
  // 标准码表用 atob 快路径
   if (D === B64_STD) {
     while (s.length % 4) s += "=";
@@ -277,30 +314,78 @@ function base64Decode(text, p) {
 }
 
 // ============ Base85 / Ascii85（Adobe <~ ~>，z 压缩零组） ============
-// compat=true 时省略 <~ ~> 包裹（Adobe 框记在 Ascii85 里本就可选，多数外部工具输出裸串）。
-// decode 侧一直容忍有无包裹，故仅 encode 需要该开关。
-function ascii85Encode(text, p) {
+// alphabet：Standard（Ascii85）/ Z85（ZeroMQ）/ IPv6（RFC 1924）。
+// compat=true 或 includeDelimiter=false 时省略 <~ ~> 包裹；decode 一直容忍有无包裹。
+const B85_Z85 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#";
+const B85_IPV6 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~";
+function b85Alphabet(p) {
+  const a = (p && p.alphabet) || "Standard";
+  if (a === "Standard") return null; // Ascii85 用字符码 33..117
+  if (a === "Z85") return B85_Z85;
+  if (a === "IPv6") return B85_IPV6;
+  throw new Error("base85 alphabet 须为 Standard/Z85/IPv6（实为 " + a + "）");
+}
+function base85GenericEncode(text, p, D) {
   const bytes = te(text);
+  if (bytes.length % 4 !== 0) throw new Error("Base85 " + ((p && p.alphabet) || "") + " 输入字节数须为 4 的倍数（实为 " + bytes.length + "）");
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 4) {
+    let num = ((bytes[i] << 24) | (bytes[i + 1] << 16) | (bytes[i + 2] << 8) | bytes[i + 3]) >>> 0;
+    const enc = [];
+    for (let k = 0; k < 5; k++) { enc.unshift(D[num % 85]); num = Math.floor(num / 85); }
+    out += enc.join("");
+  }
+  return out;
+}
+function base85GenericDecode(text, p, D) {
+  let s = String(text).replace(/^<~/, "").replace(/~>$/, "").replace(/\s/g, "");
+  if (p && p.removeNonAlphabet) s = [...s].filter((ch) => D.indexOf(ch) >= 0).join("");
+  if (s.length % 5 !== 0) throw new Error("Base85 " + ((p && p.alphabet) || "") + " 输入字符数须为 5 的倍数（实为 " + s.length + "）");
+  const bytes = [];
+  for (let i = 0; i < s.length; i += 5) {
+    let num = 0;
+    for (const ch of s.slice(i, i + 5)) {
+      const v = D.indexOf(ch);
+      if (v < 0) throw new Error("非法 Base85 字符: " + ch);
+      num = num * 85 + v;
+    }
+    if (num > 0xffffffff) throw new Error("Base85 组值超出 32 位");
+    bytes.push((num >>> 24) & 255, (num >>> 16) & 255, (num >>> 8) & 255, num & 255);
+  }
+  return finishBytesDecode(bytes, { name: "base85" });
+}
+function ascii85Encode(text, p) {
+  const D = b85Alphabet(p);
+  if (D) return base85GenericEncode(text, p, D);
+  const bytes = te(text);
+  const zero = (p && p.allZeroGroupChar) || "z";
   let out = "";
   for (let i = 0; i < bytes.length; i += 4) {
     const chunk = bytes.slice(i, i + 4);
     const size = chunk.length;
     let num = 0;
     for (let k = 0; k < 4; k++) num = (num * 256 + (k < size ? chunk[k] : 0)) >>> 0;
-    if (size === 4 && num === 0) { out += "z"; continue; }
+    if (size === 4 && num === 0) { out += zero; continue; }
     const enc = [];
     let n = num;
     for (let k = 0; k < 5; k++) { enc.unshift(String.fromCharCode((n % 85) + 33)); n = Math.floor(n / 85); }
     out += enc.slice(0, size + 1).join("");
   }
-  return (p && p.compat) ? out : "<~" + out + "~>";
+  const noWrap = (p && p.compat) || (p && p.includeDelimiter === false);
+  return noWrap ? out : "<~" + out + "~>";
 }
-function ascii85Decode(text) {
+function ascii85Decode(text, p) {
+  const D = b85Alphabet(p);
+  if (D) return base85GenericDecode(text, p, D);
+  const zero = (p && p.allZeroGroupChar) || "z";
   let s = text.replace(/^<~/, "").replace(/~>$/, "").replace(/\s/g, "");
+  if (p && p.removeNonAlphabet) {
+    s = [...s].filter((ch) => ch === zero || (ch.charCodeAt(0) >= 33 && ch.charCodeAt(0) <= 117)).join("");
+  }
   const bytes = [];
   let i = 0;
   while (i < s.length) {
-    if (s[i] === "z") { bytes.push(0, 0, 0, 0); i++; continue; }
+    if (s[i] === zero) { bytes.push(0, 0, 0, 0); i++; continue; }
     const chunk = s.slice(i, i + 5);
     const pad = 5 - chunk.length;
     const padded = chunk + "u".repeat(pad);
@@ -449,7 +534,22 @@ register({
   id: "base16", cat: "base", name: "Base16 / Hex", desc: "十六进制编码（支持自定义码表）",
   params: [
     { key: "upper", label: "大写", type: "bool", default: true },
-    { key: "space", label: "空格分隔", type: "bool", default: false },
+    { key: "space", label: "空格分隔（encode）", type: "bool", default: false },
+    { key: "delimiter", label: "输入分隔符（decode）", type: "select", default: "Auto",
+      options: [
+        { value: "Auto", label: "Auto（自动剥离非 hex 字符）" },
+        { value: "Space", label: "Space" },
+        { value: "Percent", label: "Percent（%）" },
+        { value: "Comma", label: "Comma" },
+        { value: "Semi-colon", label: "Semi-colon" },
+        { value: "Colon", label: "Colon" },
+        { value: "LF", label: "Line feed" },
+        { value: "CRLF", label: "CRLF" },
+        { value: "0x", label: "0x" },
+        { value: "0x with comma", label: "0x with comma" },
+        { value: "\\x", label: "\\x" },
+        { value: "None", label: "None（不剥离）" },
+      ] },
     { key: "dict", label: "自定义码表", type: "text", default: B16, placeholder: B16 },
   ],
   acceptsBytes: true, textTransit: true,
@@ -468,6 +568,7 @@ register({
       ],
     },
     { key: "padding", label: "补 =（仅 rfc4648/hex）", type: "bool", default: true },
+    { key: "removeNonAlphabet", label: "解码时移除非字母表字符", type: "bool", default: false },
     { key: "dict", label: "自定义码表（覆盖变体字母表）", type: "text", default: "", placeholder: B32 },
   ],
   acceptsBytes: true, textTransit: true,
@@ -491,7 +592,10 @@ register({
 });
 register({
   id: "base45", cat: "base", name: "Base45", desc: "RFC 9285（QR 码常用）",
-  params: DICT_PARAM(B45),
+  params: [
+    ...DICT_PARAM(B45),
+    { key: "removeNonAlphabet", label: "解码时移除非字母表字符", type: "bool", default: false },
+  ],
   acceptsBytes: true, textTransit: true,
   encode: (t, p) => base45Encode(p?.rawBytes ?? t, p), decode: base45Decode,
   // 空格是 Base45 合法数据字符（码表索引 36），非分隔符 → 长度校验只剥 \r\n（与 decode 一致），
@@ -510,6 +614,7 @@ register({
         { value: "custom", label: "自定义（用下方码表）" },
       ],
     },
+    { key: "removeNonAlphabet", label: "解码时移除非字母表字符", type: "bool", default: false },
     { key: "dict", label: "自定义码表（alphabet=custom 时生效）", type: "text", default: B58, placeholder: B58 },
   ],
   acceptsBytes: true, textTransit: true,
@@ -529,6 +634,8 @@ register({
   params: [
     { key: "urlsafe", label: "URL-safe（+/ → -_）", type: "bool", default: false },
     { key: "padding", label: "补齐 =（关闭即无 padding，如 JWT）", type: "bool", default: true },
+    { key: "removeNonAlphabet", label: "解码时移除非字母表字符", type: "bool", default: false },
+    { key: "strictMode", label: "严格模式（解码遇非字母表字符即报错）", type: "bool", default: false },
     { key: "dict", label: "自定义码表", type: "text", default: B64_STD, placeholder: B64_STD },
   ],
   acceptsBytes: true, textTransit: true,
@@ -541,9 +648,18 @@ register({
   },
 });
 register({
-  id: "base85", cat: "base", name: "Base85 / Ascii85", desc: "Adobe Ascii85（<~ ~> 包裹，z 压缩零组）",
+  id: "base85", cat: "base", name: "Base85 / Ascii85", desc: "Ascii85（<~ ~> 包裹，z 压缩零组）/ Z85 / IPv6 Base85",
   params: [
+    { key: "alphabet", label: "字母表", type: "select", default: "Standard",
+      options: [
+        { value: "Standard", label: "Standard（Adobe Ascii85）" },
+        { value: "Z85", label: "Z85（ZeroMQ）" },
+        { value: "IPv6", label: "IPv6（RFC 1924）" },
+      ] },
     { key: "compat", label: "兼容模式（输出不带 <~ ~> 包裹）", type: "bool", default: false },
+    { key: "includeDelimiter", label: "输出 <~ ~> 包裹（Standard 生效）", type: "bool", default: true },
+    { key: "allZeroGroupChar", label: "全零组字符（Standard）", type: "text", default: "z", placeholder: "z" },
+    { key: "removeNonAlphabet", label: "解码时移除非字母表字符", type: "bool", default: false },
   ],
   acceptsBytes: true, textTransit: true,
   encode: (t, p) => ascii85Encode(p?.rawBytes ?? t, p), decode: ascii85Decode,

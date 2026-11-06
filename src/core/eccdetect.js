@@ -257,7 +257,7 @@ function nodeTypeName(node) {
 }
 
 /** 递归格式化 ASN.1 树为文本（带缩进）。 */
-function formatAsn1Tree(node, indent = 0, maxDepth = 8) {
+function formatAsn1Tree(node, indent = 0, maxDepth = 8, truncateOctets = 32) {
   const pad = "  ".repeat(indent);
   const lines = [];
   const type = nodeTypeName(node);
@@ -272,11 +272,11 @@ function formatAsn1Tree(node, indent = 0, maxDepth = 8) {
         break;
       case 0x03: { // BIT STRING
         const bs = decodeBitString(node.value);
-        val = `unusedBits=${bs.unusedBits}, ${bs.bytes.length} 字节` + (bs.bytes.length <= 32 ? "  " + toHex(bs.bytes) : "");
+        val = `unusedBits=${bs.unusedBits}, ${bs.bytes.length} 字节` + (bs.bytes.length <= truncateOctets ? "  " + toHex(bs.bytes) : "");
         break;
       }
       case 0x04: // OCTET STRING
-        val = `${node.value.length} 字节  ${node.value.length <= 32 ? toHex(node.value) : ""}`.trimEnd();
+        val = `${node.value.length} 字节  ${node.value.length <= truncateOctets ? toHex(node.value) : ""}`.trimEnd();
         break;
       case 0x05: // NULL
         val = "";
@@ -301,13 +301,13 @@ function formatAsn1Tree(node, indent = 0, maxDepth = 8) {
         val = decodeInteger(node.value).toString();
         break;
       default:
-        val = node.value.length <= 32 ? toHex(node.value) : `(${node.value.length} 字节)`;
+        val = node.value.length <= truncateOctets ? toHex(node.value) : `(${node.value.length} 字节)`;
     }
   }
   const lenTag = node.indefinite ? "indef" : node.length;
   lines.push(`${pad}${type} (${lenTag} 字节)${val ? " : " + val : ""}`);
   if (node.children && indent < maxDepth) {
-    for (const c of node.children) lines.push(...formatAsn1Tree(c, indent + 1, maxDepth));
+    for (const c of node.children) lines.push(...formatAsn1Tree(c, indent + 1, maxDepth, truncateOctets));
   } else if (node.children && indent >= maxDepth) {
     lines.push(`${pad}  …(深度上限，省略子节点)`);
   }
@@ -1050,12 +1050,18 @@ function asn1ParseReport(text, p) {
       der = b64ToBytes(t);
     }
   }
+  const startIndex = Math.max(0, Number((p && p.startIndex) || 0));
+  const truncateOctets = Math.max(0, Number(p && p.truncateOctets != null ? p.truncateOctets : 32));
+  if (startIndex > 0) {
+    if (startIndex >= der.length) throw new Error("startIndex " + startIndex + " 超出输入长度 " + der.length);
+    der = der.slice(startIndex);
+  }
   const root = parseAsn1(der);
   const lines = [];
   lines.push("=== ASN.1 DER 解析（X.690 TLV 递归）===");
   lines.push(`输入: ${der.length} 字节`);
   lines.push("");
-  lines.push(...formatAsn1Tree(root, 0, 8));
+  lines.push(...formatAsn1Tree(root, 0, 8, truncateOctets));
   lines.push("");
   lines.push("=== 顶层节点统计 ===");
   function countNodes(n) {
@@ -1174,8 +1180,11 @@ register({
   id: "asn1Parse",
   cat: "data",
   name: "ASN.1 TLV 解析",
-  desc: "X.690 DER 递归解析（输入 DER hex 或 base64，输出标签/长度/值树 + OID 名称）",
-  params: [],
+  desc: "X.690 DER 递归解析（输入 DER hex 或 base64，输出标签/长度/值树 + OID 名称）；可指定起始字节与长值截断长度",
+  params: [
+    { key: "startIndex", label: "起始字节偏移", type: "number", default: 0 },
+    { key: "truncateOctets", label: "截断长值（字节，默认 32）", type: "number", default: 32 },
+  ],
   run: asn1ParseReport,
   acceptsBytes: true,
 });

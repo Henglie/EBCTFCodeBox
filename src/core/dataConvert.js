@@ -57,11 +57,22 @@ function normalizeIndent(raw, fallback = 2) {
   return " ".repeat(v);
 }
 
-/** JSON 美化：解析后按 indent 重新序列化。 */
+function sortJsonKeys(v) {
+  if (Array.isArray(v)) return v.map(sortJsonKeys);
+  if (v && typeof v === "object") {
+    const out = {};
+    for (const k of Object.keys(v).sort()) out[k] = sortJsonKeys(v[k]);
+    return out;
+  }
+  return v;
+}
+
+/** JSON 美化：解析后按 indent 重新序列化。sortKeys 递归键排序；formatted=false 输出单行。 */
 export function jsonBeautify(input, opts = {}) {
   const indent = normalizeIndent(opts.indent, 2);
-  const value = parseJsonInput(input);
-  return JSON.stringify(value, null, indent);
+  let value = parseJsonInput(input);
+  if (opts.sortKeys) value = sortJsonKeys(value);
+  return opts.formatted === false ? JSON.stringify(value) : JSON.stringify(value, null, indent);
 }
 
 /** JSON 压缩：解析后去掉所有非必要空白。 */

@@ -300,12 +300,35 @@ function atbash(text) {
 }
 
 // ============ A1Z26（数字 ↔ 字母） ============
-function a1z26Encode(text) {
-  return text.toLowerCase().split("").filter((c) => /[a-z]/.test(c))
-    .map((c) => c.charCodeAt(0) - 96).join(" ");
+// delimiter：CC A1Z26 的 Delimiter 参数（Space/Comma/Semi-colon/Colon/LF/CRLF）。
+// auto 为项目兼容档：encode 用空格、decode 沿用旧的宽分隔（空白/逗号/点/连字符），保证旧配方不回归。
+const A1Z26_DELIMS = {
+  Auto: null,
+  Space: " ",
+  Comma: ",",
+  "Semi-colon": ";",
+  Colon: ":",
+  "Line feed": "\n",
+  CRLF: "\r\n",
+};
+function a1z26Delimiter(p) {
+  const name = (p && p.delimiter) || "Auto";
+  if (!Object.prototype.hasOwnProperty.call(A1Z26_DELIMS, name)) {
+    throw new Error("a1z26 delimiter 须为 " + Object.keys(A1Z26_DELIMS).join("/") + "（实为 " + name + "）");
+  }
+  return A1Z26_DELIMS[name];
 }
-function a1z26Decode(text) {
-  return text.trim().split(/[\s,.\-]+/).filter(Boolean)
+function a1z26Encode(text, p) {
+  const d = a1z26Delimiter(p);
+  return text.toLowerCase().split("").filter((c) => /[a-z]/.test(c))
+    .map((c) => c.charCodeAt(0) - 96).join(d == null ? " " : d);
+}
+function a1z26Decode(text, p) {
+  const d = a1z26Delimiter(p);
+  const parts = d == null
+    ? text.trim().split(/[\s,.\-]+/)
+    : text.trim().split(d);
+  return parts.filter(Boolean)
     .map((n) => {
       const i = parseInt(n, 10);
       return i >= 1 && i <= 26 ? A[i - 1] : "?";
@@ -644,6 +667,18 @@ register({
 
 register({
   id: "a1z26", cat: "fancy", name: "A1Z26", desc: "字母 ↔ 数字（1-26）",
+  params: [
+    { key: "delimiter", label: "分隔符", type: "select", default: "Auto",
+      options: [
+        { value: "Auto", label: "自动（encode 空格；decode 兼容空白/逗号/点/连字符）" },
+        { value: "Space", label: "空格" },
+        { value: "Comma", label: "逗号" },
+        { value: "Semi-colon", label: "分号" },
+        { value: "Colon", label: "冒号" },
+        { value: "Line feed", label: "换行 LF" },
+        { value: "CRLF", label: "CRLF" },
+      ] },
+  ],
   encode: a1z26Encode, decode: a1z26Decode,
   detect: (t) => (/^[\d\s,.\-]+$/.test(t.trim()) && t.trim().split(/[\s,.\-]+/).every((n) => !n || (parseInt(n, 10) >= 1 && parseInt(n, 10) <= 26)) ? 0.3 : 0),
 });

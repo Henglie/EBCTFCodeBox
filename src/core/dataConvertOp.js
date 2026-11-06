@@ -49,6 +49,8 @@ register({
         { value: "jsonToYaml", label: "JSON → YAML" },
       ] },
     { key: "indent", label: "缩进（JSON/YAML 美化 / CSV→JSON / YAML→JSON / JSON→YAML / XML 美化）", type: "number", default: 2, placeholder: "JSON 0-10；YAML 1-10" },
+    { key: "sortKeys", label: "JSON Beautify：递归排序对象键", type: "bool", default: false },
+    { key: "formatted", label: "JSON Beautify：格式化（关闭则单行）", type: "bool", default: true },
     { key: "delimiter", label: "CSV 分隔符", type: "text", default: ",", placeholder: "单个字符，如 , 或 ;" },
     { key: "header", label: "CSV 首行作表头", type: "bool", default: true },
   ],
@@ -60,7 +62,7 @@ register({
     const header = o.header !== false;
     switch (mode) {
       case "jsonBeautify":
-        return jsonBeautify(text, { indent });
+        return jsonBeautify(text, { indent, sortKeys: !!o.sortKeys, formatted: o.formatted !== false });
       case "jsonMinify":
         return jsonMinify(text);
       case "jsonToCsv":

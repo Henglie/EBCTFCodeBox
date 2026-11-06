@@ -147,19 +147,85 @@ function modInverse256(a) {
   }
   return ((ox % 256) + 256) % 256;
 }
-function byteArithBytes(bytes, op, key) {
-  const k = ((key % 256) + 256) % 256;
-  const out = new Uint8Array(bytes.length);
-  if (op === "add") {
-    for (let i = 0; i < bytes.length; i++) out[i] = (bytes[i] + k) & 0xff;
-  } else if (op === "sub") {
-    for (let i = 0; i < bytes.length; i++) out[i] = (bytes[i] - k + 256) & 0xff;
-  } else if (op === "mul") {
-    for (let i = 0; i < bytes.length; i++) out[i] = (bytes[i] * k) & 0xff;
+// CC BitwiseOp 的 key 语义：key 是字节数组，不是单个数字。
+// keyEnc 决定 keyText 的读法；keyAlign=right 时左侧补 0 对齐，否则按周期重复。
+function parseByteArithKey(p) {
+  const enc = (p && p.keyEnc) || "Decimal";
+  const raw = (p && p.keyText != null && p.keyText !== "") ? String(p.keyText) : String((p && p.key != null) ? p.key : 1);
+  let bytes;
+  if (enc === "Decimal") {
+    bytes = raw.split(/[\s,]+/).filter(Boolean).map((s) => {
+      const n = Number(s);
+      if (!Number.isInteger(n) || n < -128 || n > 255) throw new Error("byteArith Decimal key 字节须为 -128..255（实为 " + s + "）");
+      return n < 0 ? n + 256 : n;
+    });
+  } else if (enc === "Hex") {
+    const s = raw.replace(/0x/gi, "").replace(/[\s,]/g, "");
+    if (s.length === 0) throw new Error("byteArith Hex key 为空");
+    if (s.length % 2) throw new Error("byteArith Hex key 长度须为偶数（实为 " + s.length + "）");
+    bytes = [];
+    for (let i = 0; i < s.length; i += 2) bytes.push(parseInt(s.slice(i, i + 2), 16));
+  } else if (enc === "Binary") {
+    const s = raw.replace(/0x/gi, "").replace(/[\s,]/g, "");
+    if (!/^[01]+$/.test(s)) throw new Error("byteArith Binary key 只能含 0/1");
+    const g = [];
+    for (let i = 0; i < s.length; i += 8) g.push(s.slice(i, i + 8));
+    bytes = g.map((b) => parseInt(b.padEnd(8, "0"), 2));
+  } else if (enc === "Base64") {
+    const bin = atob(raw.replace(/\s/g, ""));
+    bytes = [...bin].map((c) => c.charCodeAt(0));
+  } else if (enc === "Latin1") {
+    bytes = [...raw].map((c) => c.charCodeAt(0) & 0xff);
+  } else if (enc === "UTF8") {
+    bytes = [...new TextEncoder().encode(raw)];
   } else {
-    throw new Error("byteArith 未知操作: " + op + "（合法: add/sub/mul）");
+    throw new Error("byteArith keyEnc 须为 Hex/Decimal/Binary/Base64/UTF8/Latin1（实为 " + enc + "）");
+  }
+  if (!bytes.length) throw new Error("byteArith key 不能为空（not 模式除外）");
+  return bytes;
+}
+function alignByteKey(keyBytes, len, align) {
+  if (align === "right") {
+    if (keyBytes.length >= len) return keyBytes.slice(keyBytes.length - len);
+    const out = new Array(len - keyBytes.length).fill(0);
+    return out.concat(keyBytes);
+  }
+  return Array.from({ length: len }, (_, i) => keyBytes[i % keyBytes.length]);
+}
+function byteArithBytes(bytes, op, key, keyAlign) {
+  const keyBytes = Array.isArray(key) ? key : null;
+  const k = keyBytes ? 0 : ((Number(key) % 256) + 256) % 256;
+  const keys = keyBytes ? alignByteKey(keyBytes, bytes.length, keyAlign) : null;
+  const out = new Uint8Array(bytes.length);
+  const at = (i) => (keys ? keys[i] : k);
+  if (op === "add") {
+    for (let i = 0; i < bytes.length; i++) out[i] = (bytes[i] + at(i)) & 0xff;
+  } else if (op === "sub") {
+    for (let i = 0; i < bytes.length; i++) out[i] = (bytes[i] - at(i) + 256) & 0xff;
+  } else if (op === "mul") {
+    for (let i = 0; i < bytes.length; i++) out[i] = (bytes[i] * at(i)) & 0xff;
+  } else if (op === "and") {
+    for (let i = 0; i < bytes.length; i++) out[i] = bytes[i] & at(i);
+  } else if (op === "or") {
+    for (let i = 0; i < bytes.length; i++) out[i] = bytes[i] | at(i);
+  } else if (op === "not") {
+    for (let i = 0; i < bytes.length; i++) out[i] = ~bytes[i] & 0xff;
+  } else {
+    throw new Error("byteArith 未知操作: " + op + "（合法: add/sub/mul/and/or/not）");
   }
   return out;
+}
+// decode 侧：逆运算。and/or/not 不是一一映射，CC 同 op 只有单向 run；项目保持 encode/decode 双函数，
+// 对这三档 decode 与 encode 同语义（并在帮助文案中标注「逻辑档 decode 不还原」）。
+function byteArithDecodeOp(bytes, op, key, keyAlign) {
+  if (op === "and" || op === "or" || op === "not") return byteArithBytes(bytes, op, key, keyAlign);
+  const invOp = op === "add" ? "sub" : op === "sub" ? "add" : "mul";
+  if (Array.isArray(key)) {
+    const invKey = op === "mul" ? key.map((k) => modInverse256(k)) : key;
+    return byteArithBytes(bytes, invOp, invKey, keyAlign);
+  }
+  const invKey = op === "mul" ? modInverse256(Number(key)) : key;
+  return byteArithBytes(bytes, invOp, invKey, keyAlign);
 }
 
 // 1. bitReverse（自逆变换）
@@ -287,30 +353,48 @@ register({
 // 7. byteArith（字节算术模 256，双向）
 // encode：每字节按 op 运算（add/sub/mul）模 256；decode：逆运算还原。
 // add 的逆是 sub；sub 的逆是 add；mul 的逆是乘以模 256 逆元（仅奇数 key）。
+const BYTE_ARITH_KEYENC = [
+  { value: "Hex", label: "Hex" },
+  { value: "Decimal", label: "Decimal" },
+  { value: "Binary", label: "Binary" },
+  { value: "Base64", label: "Base64" },
+  { value: "UTF8", label: "UTF8" },
+  { value: "Latin1", label: "Latin1" },
+];
+function byteArithReadParams(p) {
+  const op = (p && p.op) || "add";
+  const key = op === "not" ? null : parseByteArithKey(p);
+  return { op, key, keyAlign: (p && p.keyAlign) || "left" };
+}
 register({
   id: "byteArith", cat: "modern", name: "字节算术 (mod 256)",
-  desc: "逐字节算术运算模 256。encode 按 op(add/sub/mul) + key 运算→Hex；decode 逆运算还原。mul 仅奇数 key 可逆（偶数无模 256 逆元）。",
+  desc: "逐字节算术/位运算。算术档 add/sub/mul 模 256 可逆（mul 仅奇数 key 有逆元）；位运算档 and/or/not 为 CC BitwiseOp 语义（decode 不还原）。key 支持 Hex/Decimal/Binary/Base64/UTF8/Latin1 字节数组，left=周期重复、right=左补 0 对齐。",
   params: [
     { key: "op", label: "运算", type: "select", default: "add",
       options: [
         { value: "add", label: "加 (x + key)" },
         { value: "sub", label: "减 (x - key)" },
         { value: "mul", label: "乘 (x * key)" },
+        { value: "and", label: "AND (x & key)" },
+        { value: "or", label: "OR (x | key)" },
+        { value: "not", label: "NOT (~x，忽略 key)" },
       ] },
-    { key: "key", label: "key (0-255)", type: "number", default: 1 },
+    { key: "key", label: "key 单字节（Decimal 且 keyText 留空时生效，0-255）", type: "number", default: 1 },
+    { key: "keyText", label: "key 字节数组（留空用 key；按 keyEnc 解析）", type: "text", default: "", placeholder: "如 Decimal: 1 2 3；Hex: 010203" },
+    { key: "keyEnc", label: "key 编码", type: "select", default: "Decimal", options: BYTE_ARITH_KEYENC },
+    { key: "keyAlign", label: "key 对齐", type: "select", default: "left",
+      options: [
+        { value: "left", label: "left（周期重复）" },
+        { value: "right", label: "right（左补 0 对齐）" },
+      ] },
   ],
   encode: (t, p) => {
-    const op = (p && p.op) || "add";
-    const key = Number((p && p.key) || 1);
-    return bytesToHex(byteArithBytes(strToBytes(t), op, key));
+    const r = byteArithReadParams(p);
+    return bytesToHex(byteArithBytes(strToBytes(t), r.op, r.key, r.keyAlign));
   },
   decode: (t, p) => {
-    const op = (p && p.op) || "add";
-    const key = Number((p && p.key) || 1);
- // 逆运算：add→sub, sub→add, mul→mul(逆元)
-    const invOp = op === "add" ? "sub" : op === "sub" ? "add" : "mul";
-    const invKey = op === "mul" ? modInverse256(key) : key;
-    return finishBytesDecode(byteArithBytes(hexToBytes(t), invOp, invKey), { textMode: "hex", name: "byteArith" });
+    const r = byteArithReadParams(p);
+    return finishBytesDecode(byteArithDecodeOp(hexToBytes(t), r.op, r.key, r.keyAlign), { textMode: "hex", name: "byteArith" });
   },
 });
 

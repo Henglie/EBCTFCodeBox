@@ -64,6 +64,18 @@ function asciiWidth(base) {
   if (base === 16) return 2;
   return 0; // 其他进制不定宽
 }
+const ASCII_DELIMS = {
+  Space: " ", Comma: ",", "Semi-colon": ";", Colon: ":", "Line feed": "\n", CRLF: "\r\n",
+};
+function asciiDelimiter(p) {
+  const name = (p && p.delimiter) || "Auto";
+  if (name === "Auto") return null;
+  if (name === "None") return "";
+  if (!Object.prototype.hasOwnProperty.call(ASCII_DELIMS, name)) {
+    throw new Error("delimiter 须为 Auto/Space/Comma/Semi-colon/Colon/Line feed/CRLF/None（实为 " + name + "）");
+  }
+  return ASCII_DELIMS[name];
+}
 
 // base=2 的二进制变体：bits=7|8 位宽、invert 0/1 取反、
 // bitReverse 逐字节位反转（LSB-first）。仅对二进制串有意义，其他 base 忽略这些 opts。
@@ -71,16 +83,22 @@ function asciiWidth(base) {
 //  - invert：整串 0↔1 取反。
 //  - bitReverse：每组比特首尾镜像（有些编码器按 LSB-first 输出）。
 function binWidth(base, opts) {
-  if (base === 2) return (opts && Number(opts.bits) === 7) ? 7 : 8;
+  if (base === 2) {
+    const bl = opts && Number(opts.byteLength);
+    if (bl >= 1 && bl <= 256) return bl;
+    return (opts && Number(opts.bits) === 7) ? 7 : 8;
+  }
   return asciiWidth(base);
 }
 
 function asciiEncode(text, base, opts) {
   if (base < 2 || base > 36) throw new Error("进制须在 2-36");
   const w = binWidth(base, opts);
+  const delim = asciiDelimiter(opts);
   const bytes = te(text);
   const inv = base === 2 && opts && opts.invert;
   const rev = base === 2 && opts && opts.bitReverse;
+  const signed = base === 10 && opts && opts.signed;
   return bytes.map((b) => {
     if (base === 2) {
       if (w === 7 && b > 127) throw new Error("7-bit 只能编码 ASCII（<128），遇到字节 " + b);
@@ -89,12 +107,13 @@ function asciiEncode(text, base, opts) {
       if (inv) s = s.replace(/[01]/g, (c) => (c === "0" ? "1" : "0"));
       return s;
     }
-    const s = bigIntToRadix(BigInt(b), base);
+    const v = signed && b > 127 ? b - 256 : b;
+    const s = bigIntToRadix(BigInt(v), base);
  // compat=true 时不补前导零（外部工具多输出 32 而非 032）；二进制仍定宽，
  // 因为二进制无空格串要靠定宽切分，去掉补零会让解码产生歧义
     if (opts && opts.compat) return s;
     return w ? s.padStart(w, "0") : s;
-  }).join(" ");
+  }).join(delim == null ? " " : delim);
 }
 
 function asciiDecode(text, base, opts) {
@@ -102,9 +121,20 @@ function asciiDecode(text, base, opts) {
   const w = binWidth(base, opts);
   const inv = base === 2 && opts && opts.invert;
   const rev = base === 2 && opts && opts.bitReverse;
+  const delim = asciiDelimiter(opts);
   let tokens;
   const trimmed = text.trim();
-  if (w > 0 && trimmed !== "" && !/\s/.test(trimmed)) {
+  if (delim === "") {
+    if (w > 0) {
+      if (trimmed.length % w !== 0) throw new Error("定宽输入长度不是 " + w + " 的倍数");
+      tokens = [];
+      for (let i = 0; i < trimmed.length; i += w) tokens.push(trimmed.slice(i, i + w));
+    } else {
+      tokens = trimmed.split(/\s+/).filter(Boolean);
+    }
+  } else if (delim != null) {
+    tokens = trimmed.split(delim).filter(Boolean);
+  } else if (w > 0 && trimmed !== "" && !/\s/.test(trimmed)) {
  // 定宽无空格（如 hex 串 E4B8AD / 二进制串 0110011001101100）：按 width 切分
     if (trimmed.length % w !== 0) throw new Error("定宽无空格输入长度不是 " + w + " 的倍数");
     tokens = [];
@@ -118,7 +148,11 @@ function asciiDecode(text, base, opts) {
       if (inv) tok = tok.replace(/[01]/g, (c) => (c === "0" ? "1" : "0"));
       if (rev) tok = [...tok].reverse().join("");
     }
-    const n = parseBigIntRadix(tok, base);
+    let n = parseBigIntRadix(tok, base);
+    if (opts && opts.signed && n < 0n) {
+      if (n < -128n) throw new Error("值 " + t + " 超出有符号字节范围 -128..127");
+      n += 256n;
+    }
     if (n < 0n || n > 255n) throw new Error("值 " + t + " 超出字节范围 0-255");
     return Number(n);
   });
@@ -181,43 +215,66 @@ function halfToFloat(h) {
   return new Float32Array(buf)[0];
 }
 
-function ieee754Encode(text, precision) {
-  const f = Number(text.trim());
-  if (Number.isNaN(f)) throw new Error("无效浮点数: " + text);
-  const buf = new ArrayBuffer(8);
-  if (precision === "half") {
-    const h = floatToHalf(f);
-    return h.toString(16).padStart(4, "0").toUpperCase();
-  } else if (precision === "single") {
-    new Float32Array(buf)[0] = f;
-    const u = new Uint32Array(buf)[0];
-    return u.toString(16).padStart(8, "0").toUpperCase();
-  } else if (precision === "double") {
-    new Float64Array(buf)[0] = f;
-    const u = new BigUint64Array(buf)[0];
-    return u.toString(16).padStart(16, "0").toUpperCase();
-  }
-  throw new Error("未知精度: " + precision);
+function ieeePrecision(p, fallback) {
+  const prec = (p && p.precision) || fallback || "single";
+  if (prec === "half" || prec === "double") return prec;
+  if (p && Number(p.size) === 8) return "double";
+  return "single";
+}
+function ieeeByteLen(precision) {
+  return precision === "half" ? 2 : precision === "double" ? 8 : 4;
+}
+function ieeeSwapEndian(hex) {
+  const parts = hex.match(/.{2}/g) || [];
+  return parts.reverse().join("");
+}
+function ieee754Encode(text, precision, opts) {
+  precision = ieeePrecision(opts, precision);
+  const delim = asciiDelimiter(opts);
+  const endian = (opts && opts.endianness) || "Big Endian";
+  const tokens = String(text).trim().split(delim == null ? /\s+/ : (delim === "" ? /\s+/ : delim)).filter(Boolean);
+  return tokens.map((tok) => {
+    const f = Number(tok);
+    if (Number.isNaN(f)) throw new Error("无效浮点数: " + tok);
+    const buf = new ArrayBuffer(8);
+    let hex;
+    if (precision === "half") {
+      hex = floatToHalf(f).toString(16).padStart(4, "0").toUpperCase();
+    } else if (precision === "single") {
+      new Float32Array(buf)[0] = f;
+      hex = new Uint32Array(buf)[0].toString(16).padStart(8, "0").toUpperCase();
+    } else {
+      new Float64Array(buf)[0] = f;
+      hex = new BigUint64Array(buf)[0].toString(16).padStart(16, "0").toUpperCase();
+    }
+    return endian === "Little Endian" ? ieeeSwapEndian(hex) : hex;
+  }).join(delim == null ? " " : delim);
 }
 
-function ieee754Decode(text, precision) {
-  const hex = text.trim().replace(/[^0-9a-fA-F]/g, "");
+function ieee754Decode(text, precision, opts) {
+  precision = ieeePrecision(opts, precision);
+  const delim = asciiDelimiter(opts);
+  const endian = (opts && opts.endianness) || "Big Endian";
+  const len = ieeeByteLen(precision) * 2;
+  const raw = String(text).trim();
+  const tokens = delim == "" ? (raw.match(new RegExp(".{1," + len + "}", "g")) || []) : raw.split(delim == null ? /\s+/ : delim).filter(Boolean);
   const buf = new ArrayBuffer(8);
-  if (precision === "half") {
-    const h = parseInt(hex.slice(0, 4), 16);
-    if (Number.isNaN(h)) throw new Error("无效十六进制: " + text);
-    return String(halfToFloat(h));
-  } else if (precision === "single") {
-    const u = parseInt(hex.slice(0, 8), 16);
-    if (Number.isNaN(u)) throw new Error("无效十六进制: " + text);
-    new Uint32Array(buf)[0] = u;
-    return String(new Float32Array(buf)[0]);
-  } else if (precision === "double") {
-    const u = BigInt("0x" + hex.slice(0, 16));
-    new BigUint64Array(buf)[0] = u;
-    return String(new Float64Array(buf)[0]);
-  }
-  throw new Error("未知精度: " + precision);
+  return tokens.map((tok) => {
+    let hex = tok.replace(/[^0-9a-fA-F]/g, "");
+    if (!hex) throw new Error("无效十六进制: " + tok);
+    if (hex.length < len) hex = hex.padEnd(len, "0");
+    if (hex.length > len) throw new Error("十六进制长度超出 " + precision + " 精度（" + hex.length + " > " + len + "）");
+    if (endian === "Little Endian") hex = ieeeSwapEndian(hex);
+    if (precision === "half") {
+      return String(halfToFloat(parseInt(hex, 16)));
+    } else if (precision === "single") {
+      new Uint32Array(buf)[0] = parseInt(hex, 16);
+      return String(new Float32Array(buf)[0]);
+    } else {
+      new BigUint64Array(buf)[0] = BigInt("0x" + hex);
+      return String(new Float64Array(buf)[0]);
+    }
+  }).join(" ");
 }
 
 // ============ 5. BCD 码（十进制 ↔ BCD 十六进制串） ============
@@ -304,6 +361,19 @@ register({
     ] },
     { key: "invert", label: "0-1 取反（二进制）", type: "bool", default: false },
     { key: "bitReverse", label: "逐字节位反转（二进制）", type: "bool", default: false },
+    { key: "delimiter", label: "分隔符", type: "select", default: "Auto",
+      options: [
+        { value: "Auto", label: "Auto（编码空格 / 解码按空白）" },
+        { value: "Space", label: "Space" },
+        { value: "Comma", label: "Comma" },
+        { value: "Semi-colon", label: "Semi-colon" },
+        { value: "Colon", label: "Colon" },
+        { value: "Line feed", label: "Line feed" },
+        { value: "CRLF", label: "CRLF" },
+        { value: "None", label: "None（无分隔）" },
+      ] },
+    { key: "signed", label: "十进制有符号（-128..127）", type: "bool", default: false },
+    { key: "byteLength", label: "二进制位宽（1-256，0=沿用 bits）", type: "number", default: 0 },
     { key: "compat", label: "兼容模式（十/八/十六进制不补前导零）", type: "bool", default: false },
   ],
   encode: (t, p) => asciiEncode(t, Number((p && p.base) || 16), p),
@@ -318,9 +388,27 @@ register({
       { value: "single", label: "单精度 (32 bit)" },
       { value: "double", label: "双精度 (64 bit)" },
     ] },
+    { key: "size", label: "Size（CC Float(4)/Double(8)）", type: "select", default: 4, options: [
+      { value: 4, label: "Float（4 字节）" },
+      { value: 8, label: "Double（8 字节）" },
+    ] },
+    { key: "endianness", label: "端序", type: "select", default: "Big Endian", options: [
+      { value: "Big Endian", label: "Big Endian" },
+      { value: "Little Endian", label: "Little Endian" },
+    ] },
+    { key: "delimiter", label: "分隔符", type: "select", default: "Auto", options: [
+      { value: "Auto", label: "Auto（空格）" },
+      { value: "Space", label: "Space" },
+      { value: "Comma", label: "Comma" },
+      { value: "Semi-colon", label: "Semi-colon" },
+      { value: "Colon", label: "Colon" },
+      { value: "Line feed", label: "Line feed" },
+      { value: "CRLF", label: "CRLF" },
+      { value: "None", label: "None（无分隔）" },
+    ] },
   ],
-  encode: (t, p) => ieee754Encode(t, (p && p.precision) || "single"),
-  decode: (t, p) => ieee754Decode(t, (p && p.precision) || "single"),
+  encode: (t, p) => ieee754Encode(t, (p && p.precision) || "single", p),
+  decode: (t, p) => ieee754Decode(t, (p && p.precision) || "single", p),
 });
 
 register({

@@ -371,14 +371,36 @@ function bech32DecodeOp(text, p) {
   const opts = p || {};
   const mode = normalizeBech32Mode(opts.mode);
   const encoding = opts.encoding || "auto";
+  const outFormat = String(opts.outFormat == null ? "Legacy" : opts.outFormat);
   const s = String(text).trim();
   if (mode === "segwit") {
     const r = bech32DecodeSegwit(s, opts.hrp || null, encoding);
-    return "hrp=" + r.hrp + "\nwitnessVersion=" + r.witnessVersion +
-      "\nprogram=" + bytesToHex(r.program) + "\nencoding=" + r.encoding;
+    if (outFormat === "Legacy") {
+      return "hrp=" + r.hrp + "\nwitnessVersion=" + r.witnessVersion +
+        "\nprogram=" + bytesToHex(r.program) + "\nencoding=" + r.encoding;
+    }
+    if (outFormat === "Bitcoin scriptPubKey") {
+      const opVer = r.witnessVersion === 0 ? "00" : (0x50 + r.witnessVersion).toString(16);
+      return opVer + r.program.length.toString(16).padStart(2, "0") + bytesToHex(r.program);
+    }
+    const hex = bytesToHex(r.program);
+    if (outFormat === "JSON") {
+      return JSON.stringify({ hrp: r.hrp, witnessVersion: r.witnessVersion, program: hex, encoding: r.encoding });
+    }
+    if (outFormat === "HRP: Hex") return r.hrp + ": " + hex;
+    if (outFormat === "Hex") return hex;
+    if (outFormat === "Raw") return new TextDecoder("utf-8", { fatal: false }).decode(r.program);
+    throw new Error("bech32 outFormat 须为 Raw/Hex/Bitcoin scriptPubKey/HRP: Hex/JSON（实为 " + outFormat + "）");
   }
   const { hrp, payload } = bech32Decode(s, encoding);
-  return "hrp=" + hrp + "\npayload=" + bytesToHex(payload);
+  if (outFormat === "Legacy") return "hrp=" + hrp + "\npayload=" + bytesToHex(payload);
+  if (outFormat === "Bitcoin scriptPubKey") throw new Error("Bitcoin scriptPubKey 输出仅适用于 mode=Bitcoin SegWit");
+  const hex = bytesToHex(payload);
+  if (outFormat === "JSON") return JSON.stringify({ hrp, payload: hex, encoding: "auto" });
+  if (outFormat === "HRP: Hex") return hrp + ": " + hex;
+  if (outFormat === "Hex") return hex;
+  if (outFormat === "Raw") return new TextDecoder("utf-8", { fatal: false }).decode(payload);
+  throw new Error("bech32 outFormat 须为 Raw/Hex/Bitcoin scriptPubKey/HRP: Hex/JSON（实为 " + outFormat + "）");
 }
 
 // ============================================================
@@ -496,6 +518,17 @@ register({
     {
       key: "witnessVersion", label: "见证版本（SegWit）", type: "number", default: 0,
       placeholder: "0-16；v0=Bech32，v1+=Bech32m",
+    },
+    {
+      key: "outFormat", label: "解码输出格式（From Bech32）", type: "select", default: "Legacy",
+      options: [
+        { value: "Legacy", label: "Legacy（hrp=/payload= 报告，保持旧行为）" },
+        { value: "Raw", label: "Raw（UTF-8）" },
+        { value: "Hex", label: "Hex" },
+        { value: "Bitcoin scriptPubKey", label: "Bitcoin scriptPubKey（SegWit）" },
+        { value: "HRP: Hex", label: "HRP: Hex" },
+        { value: "JSON", label: "JSON" },
+      ],
     },
   ],
   encode: bech32EncodeOp,

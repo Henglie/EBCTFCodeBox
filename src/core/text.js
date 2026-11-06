@@ -100,41 +100,53 @@ function htmlEntityDecode(text) {
 }
 
 // ============ Unicode 转义 ============
-// 三种格式：\uXXXX（含代理对）/ U+XXXX / &#xHH;（HTML 数字型）
+// 格式：\uXXXX（含代理对）/ %uXXXX / U+XXXX / &#xHH;（HTML 数字型）。
+// encodeAll=true 时逐字符转义；false 时仅转义非可打印 ASCII（CC 默认）。
+// padding 控制 hex 位数（CC 4..8），upperHex 控制大小写。
 function unicodeEscapeEncode(text, p) {
-  const fmt = (p && p.fmt) || "uXXXX"; // uXXXX | U+ | hex
+  const fmt = (p && p.fmt) || "uXXXX"; // uXXXX | %u | U+ | hex
+  const encodeAll = p && p.encodeAll !== undefined ? !!p.encodeAll : true;
+  const padding = Math.max(4, Math.min(8, Number((p && p.padding) || 4)));
+  const upper = p && p.upperHex !== undefined ? !!p.upperHex : true;
+  const hx = (n) => {
+    const s = n.toString(16).padStart(padding, "0");
+    return upper ? s.toUpperCase() : s.toLowerCase();
+  };
   let out = "";
   for (const ch of text) {
     const cp = ch.codePointAt(0);
-    if (fmt === "uXXXX") {
+    if (!encodeAll && cp >= 0x20 && cp <= 0x7e) { out += ch; continue; }
+    if (fmt === "uXXXX" || fmt === "%u") {
+      const prefix = fmt === "%u" ? "%u" : "\\u";
       if (cp > 0xFFFF) {
         const hi = 0xD800 + ((cp - 0x10000) >> 10);
         const lo = 0xDC00 + ((cp - 0x10000) & 0x3FF);
-        out += "\\u" + hi.toString(16).padStart(4, "0").toUpperCase();
-        out += "\\u" + lo.toString(16).padStart(4, "0").toUpperCase();
+        out += prefix + hx(hi) + prefix + hx(lo);
       } else {
-        out += "\\u" + cp.toString(16).padStart(4, "0").toUpperCase();
+        out += prefix + hx(cp);
       }
     } else if (fmt === "U+") {
-      out += "U+" + cp.toString(16).padStart(4, "0").toUpperCase();
+      out += "U+" + hx(cp);
     } else if (fmt === "hex") {
-      out += "&#x" + cp.toString(16).toUpperCase() + ";";
+      out += "&#x" + hx(cp) + ";";
+    } else {
+      throw new Error("unicodeEscape fmt 须为 uXXXX/%u/U+/hex（实为 " + fmt + "）");
     }
   }
   return out;
 }
 function unicodeEscapeDecode(text) {
   let out = text;
- // 先解代理对 \uXXXX\uXXXX（组合成星平面字符）
-  out = out.replace(/\\u([0-9a-fA-F]{4})\\u([0-9a-fA-F]{4})/g, (m, hi, lo) => {
+ // 先解代理对 \uXXXX\uXXXX / %uXXXX%uXXXX
+  out = out.replace(/(?:\\u|%u)([0-9a-fA-F]{4})(?:\\u|%u)([0-9a-fA-F]{4})/g, (m, hi, lo) => {
     const h = parseInt(hi, 16), l = parseInt(lo, 16);
     if (h >= 0xD800 && h <= 0xDBFF && l >= 0xDC00 && l <= 0xDFFF) {
       return String.fromCodePoint(0x10000 + ((h - 0xD800) << 10) + (l - 0xDC00));
     }
     return m;
   });
- // 单个 \uXXXX
-  out = out.replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+ // 单个 \uXXXX / %uXXXX
+  out = out.replace(/(?:\\u|%u)([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
  // U+XXXX（4-6 位十六进制）
   out = out.replace(/U\+([0-9a-fA-F]{4,6})/g, (_, h) => {
     const cp = parseInt(h, 16);
@@ -295,18 +307,22 @@ register({
 });
 
 register({
-  id: "unicodeEscape", cat: "text", name: "Unicode 转义", desc: "\\uXXXX / U+XXXX / &#xHH; 三种格式",
+  id: "unicodeEscape", cat: "text", name: "Unicode 转义", desc: "\\uXXXX / %uXXXX / U+XXXX / &#xHH;，可控制全量转义、位数与大小写",
   params: [
     { key: "fmt", label: "格式", type: "select", default: "uXXXX",
       options: [
         { value: "uXXXX", label: "\\uXXXX（含代理对）" },
+        { value: "%u", label: "%uXXXX（含代理对）" },
         { value: "U+", label: "U+XXXX" },
         { value: "hex", label: "&#xHH;（HTML 数字型）" },
       ],
     },
+    { key: "encodeAll", label: "转义所有字符（关闭时仅转义非可打印 ASCII）", type: "bool", default: true },
+    { key: "padding", label: "hex 位数（4-8）", type: "number", default: 4 },
+    { key: "upperHex", label: "大写 hex", type: "bool", default: true },
   ],
   encode: unicodeEscapeEncode, decode: unicodeEscapeDecode,
-  detect: (t) => (/\\u[0-9a-fA-F]{4}/.test(t) || /U\+[0-9a-fA-F]{4,6}/.test(t) ? 0.5 : 0),
+  detect: (t) => (/(?:\\u|%u)[0-9a-fA-F]{4}/.test(t) || /U\+[0-9a-fA-F]{4,6}/.test(t) ? 0.5 : 0),
 });
 
 register({
