@@ -1,5 +1,5 @@
 /*
- * edu-t760.js — bzip2Enc / extractAll 科普卡（T760）。
+ * edu-t760.js — bzip2Enc / extractAll 科普卡。
  * 纯数据，无 import、无副作用。
  */
 export default {

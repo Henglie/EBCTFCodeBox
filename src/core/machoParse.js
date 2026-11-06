@@ -15,6 +15,7 @@
  */
 
 import { register } from "./registry.js";
+import { hexToBytes } from "./bytesIo.js";
 
 const FAT_MAGIC = 0xcafebabe;
 const MH_MAGIC_64 = 0xfeedfacf, MH_CIGAM_64 = 0xcffaedfe;
@@ -41,6 +42,29 @@ const LC = {
   0x80000033: "LC_DYLD_EXPORTS_TRIE", 0x80000034: "LC_DYLD_CHAINED_FIXUPS",
   0x80000035: "LC_FILESET_ENTRY", 0x80000036: "LC_ATOM_INFO",
 };
+
+function byteView(u8) {
+  const b = u8 instanceof Uint8Array ? u8 : new Uint8Array(u8);
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  return {
+    length: b.length,
+    readUInt32LE: (o) => dv.getUint32(o, true),
+    readUInt32BE: (o) => dv.getUint32(o, false),
+    readBigUInt64LE: (o) => dv.getBigUint64(o, true),
+    toString(enc, start, end) {
+      const s = start == null ? 0 : start;
+      const e = end == null ? b.length : end;
+      if (enc === "hex") {
+        let h = "";
+        for (let i = s; i < e; i++) h += b[i].toString(16).padStart(2, "0");
+        return h;
+      }
+      let out = "";
+      for (let i = s; i < e; i++) out += String.fromCharCode(b[i]);
+      return out;
+    },
+  };
+}
 
 function fixedStr(b, off, len) {
   let s = b.toString("latin1", off, off + len).replace(/\0.*$/, "");
@@ -159,12 +183,13 @@ register({
   params: [],
   run: (t, p) => {
     const raw = p && p.rawBytes;
+    const s = String(t ?? "").trim().replace(/^0x/i, "").replace(/\s+/g, "");
+    const textHex = s.length > 0 && s.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(s);
     let b;
-    if (raw) b = Buffer.from(raw);
+    if (raw && !(textHex && !(p && p.rawFileName))) b = byteView(raw);
     else {
-      const s = String(t ?? "").trim().replace(/^0x/i, "").replace(/\s+/g, "");
       if (s.length % 2 || /[^0-9a-fA-F]/.test(s)) throw new Error("输入非法：须为 Mach-O 文件字节或偶数位 hex");
-      b = Buffer.from(s, "hex");
+      b = byteView(hexToBytes(s));
     }
     return parseMacho(b);
   },

@@ -13,6 +13,7 @@
  */
 
 import { register } from "./registry.js";
+import { hexToBytes } from "./bytesIo.js";
 
 // ---- uleb128（严格：截断/超 32 位/单节超 5 字节报错） ----
 function uleb(b, off, label) {
@@ -53,8 +54,8 @@ function valType(b, off, label) {
 function parseWasm(b) {
   if (b.length < 8) throw new Error(`WASM 解析失败：文件过短（${b.length} 字节，头部至少 8 字节）`);
   const magic = b[0] * 0x1000000 + b[1] * 0x10000 + b[2] * 0x100 + b[3];
-  if (magic !== 0x0061736d) throw new Error(`WASM 解析失败：magic 非法（${b.subarray(0, 4).toString("hex")}，应为 0061736d "\\0asm"）`);
-  const version = b.readUInt32LE(4);
+  if (magic !== 0x0061736d) { const h = Array.from(b.subarray(0, 4), (x) => x.toString(16).padStart(2, "0")).join(""); throw new Error(`WASM 解析失败：magic 非法（${h}，应为 0061736d "\\0asm"）`); }
+  const version = (b[4] | (b[5] << 8) | (b[6] << 16) | (b[7] << 24)) >>> 0;
   if (version !== 1) throw new Error(`WASM 解析失败：版本 ${version} 不支持（当前二进制规范版本 1）`);
 
   const lines = [
@@ -227,13 +228,14 @@ register({
   params: [],
   run: (t, p) => {
     const raw = p && p.rawBytes;
+    const s = String(t ?? "").trim().replace(/^0x/i, "").replace(/\s+/g, "");
+    const textHex = s.length > 0 && s.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(s);
     let b;
-    if (raw) b = raw;
+    if (raw && !(textHex && !(p && p.rawFileName))) b = raw;
     else {
-      const s = String(t ?? "").trim().replace(/^0x/i, "").replace(/\s+/g, "");
       if (s.length % 2 || /[^0-9a-fA-F]/.test(s)) throw new Error("输入非法：须为 wasm 文件字节或偶数位 hex");
-      b = Buffer.from(s, "hex");
+      b = hexToBytes(s);
     }
-    return parseWasm(b instanceof Uint8Array && !(b instanceof Buffer) ? Buffer.from(b) : b);
+    return parseWasm(b instanceof Uint8Array ? b : new Uint8Array(b));
   },
 });

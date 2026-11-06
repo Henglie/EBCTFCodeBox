@@ -7,7 +7,7 @@
  *
  * 红线（不变）：
  * - 不改 detectExt.js / detect.js / magic.js，不碰 main.js import 清单（机制四）。
- * - 件内自注册：import 时自动 patch OPS，入口 import 行写回执交 M 归并。
+ * - 件内自注册：import 时自动 patch OPS，入口 import 行写回执交汇总流程归并。
  * - detect 只读不写；置信度策略沿用 detectExt.js：固定变换/字符集明确 0.3-0.5
  * 需密钥/参数 0.1-0.2，自反变换 0.1，纯数字长度特征 0.2-0.4，二进制图像不适用 0。
  * - 编码特征基于公开格式常识与各 op desc，不编造编码表。
@@ -75,8 +75,15 @@ const DETECTORS2 = {
     return /^\d{9,10}$/.test(s) ? 0.12 : 0;
   },
   cocoaTime: (t) => {
-    const s = compact(trim(t));
-    return /^\d{9,10}$/.test(s) ? 0.12 : 0;
+    // Cocoa 纪元 2001，2001 前为负；不 compact（会吃掉负号）
+    const s = trim(t).replace(/\s/g, "");
+    if (/^\d{9,10}$/.test(s)) return 0.12;
+    // 负值下界取公元 1 年（约 -63072000000 秒）；至少 5 位避免小负数误报
+    if (/^-\d{5,11}$/.test(s)) {
+      const n = Number(s);
+      return n >= -63072000000 ? 0.12 : 0;
+    }
+    return 0;
   },
   dosDateTime: (t) => {
     const s = compact(trim(t));
@@ -94,9 +101,14 @@ const DETECTORS2 = {
     return /^\d{7}(\.\d+)?$/.test(s) ? 0.2 : 0;
   },
   excelDate: (t) => {
-    const s = compact(trim(t));
- // Excel 序列日期 ~5 位（44927），可带小数
-    return /^\d{4,5}(\.\d+)?$/.test(s) ? 0.15 : 0;
+    // 1900 系统 1900 前为负；不 compact（会吃掉负号）
+    const s = trim(t).replace(/\s/g, "");
+    const m = /^(-?)(\d{1,7})(\.\d+)?$/.exec(s);
+    if (!m) return 0;
+    const n = Number(m[2]);
+    if (m[1]) return n >= 1 && n <= 695055 ? 0.15 : 0; // 公元 1 年 ~ 1899-12-31（兼容 1904 系统下界）
+    // 正常序列号只认 4-5 位，避免与普通数字撞（1900-01-01=1，9999-12-31=2958465）
+    return n >= 1000 && n <= 99999 ? 0.15 : 0;
   },
   chromeTime: (t) => {
     const s = compact(trim(t));
@@ -192,8 +204,16 @@ const DETECTORS2 = {
   },
   stenoLetter: (t) => {
     const s = trim(t).toUpperCase();
- // 速记和弦：STKPWHR AO*EU FRPBLGTS DZ 等键，特征弱
-    return /^[STKPHRAOEUFRPBLGTSDZ#*]+(\s+[STKPHRAOEUFRPBLGTSDZ#*]+)*$/.test(s) && s.length >= 2 ? 0.15 : 0;
+    if (!s) return 0;
+    // 和弦均来自 STENO_LETTER 值：星号位置不固定（*E/*EU/TP*），但星号必在键序字母之间；
+    // "/" 是词间空格。无星号的普通大写词（HELLO）不命中。
+    let chords = 0;
+    for (const tok of s.split(/\s+/).filter(Boolean)) {
+      if (tok === "/") continue;
+      if (tok.length < 2 || !/^[STKPWHRAOEUFRPBLGTSDZ]*\*[STKPWHRAOEUFRPBLGTSDZ]*$/.test(tok)) return 0;
+      chords++;
+    }
+    return chords >= 1 ? 0.15 : 0;
   },
   arrowKey: (t) => {
     const s = trim(t);
@@ -210,8 +230,16 @@ const DETECTORS2 = {
   },
   cnTelegraphMorse: (t) => {
     const s = trim(t);
- // 中文电码摩斯：4 位数字 ↔ 摩斯，含 . - 和数字
-    return /[\.\-]/.test(s) && /\d{4}/.test(s) ? 0.3 : 0;
+    if (!s) return 0;
+    // encode 输出为数字摩斯（每位 5 个 .-/），组间可带 " / "；不再要求原数字
+    let count = 0;
+    for (const g of s.split(/\s*\/\s*/)) {
+      for (const tok of g.trim().split(/\s+/).filter(Boolean)) {
+        if (!/^[.-]{5}$/.test(tok)) return 0;
+        count++;
+      }
+    }
+    return count >= 2 ? 0.3 : 0;
   },
   tapCode: (t) => {
     const s = trim(t);
@@ -220,9 +248,10 @@ const DETECTORS2 = {
     return /^[1-5]{4,}$/.test(s) && s.length % 2 === 0 ? 0.3 : 0;
   },
   semaphore: (t) => {
-    const s = trim(t).toUpperCase();
- // 旗语：方向对标记，特征弱，仅兜底
-    return /^[NSEWUDLR]+(\s[NSEWUDLR]+)*$/.test(s) && s.length >= 2 ? 0.2 : 0;
+    // 方向词对（照 morseExt.js SEMAPHORE_TABLE 的 8 方向；与 detectSupplement 同判据）
+    const dir = "(?:up|down|left|right|upleft|upright|downleft|downright)";
+    const re = new RegExp("^" + dir + "\\+" + dir + "(?:\\s+" + dir + "\\+" + dir + ")+$", "i");
+    return re.test(trim(t)) ? 0.5 : 0;
   },
   morseRhythm: (t) => {
     const s = trim(t);

@@ -214,7 +214,7 @@ import "./bftoolsImg.js"; // Brainloller/Braincopter 图像变体（stego）
 import "./xwing.js"; // X-Wing 混合 KEM（asym，PQC 批A）
 import "./stegdetect.js"; // stegdetect JPEG 隐写检测（analysis）
 import "./jsteg.js";
-import "./stegoOpWrappers.js"; // R18：lsbDeep/rasterStego/mp3stego/imageThumb（stegoFile，acceptsBytes） // jsteg JPEG 系数隐写（stego）
+import "./stegoOpWrappers.js"; // lsbDeep/rasterStego/mp3stego/imageThumb（stegoFile，acceptsBytes） // jsteg JPEG 系数隐写（stego）
 import "./dtmfWav.js"; // DTMF 拨号音 WAV 编/解（stego；此前仅经 audioAnalysis 间接注册，Node/Worker 闭包缺项）
 import "./morseWav.js"; // 摩斯音频解码 morseWav（audio, decode, WAV→包络→Otsu 自适应阈值→点划分类→明文, 无 detect）
 import "./xmssLms.js"; // XMSS/LMS 哈希签名（asym，PQC 批A）
@@ -402,7 +402,7 @@ import "./objectIdTime.js"; // ObjectID 时间戳解析 objectIdTime（radix, ru
 import "./rc4Drop.js"; // RC4-drop / CipherSaber-2 rc4Drop（stream, 双向, RFC 6229 + cstest.cs2 向量, 无 detect）
 import "./xsalsa20.js"; // XSalsa20 xsalsa20（stream, 双向, libsodium stream3/core3/core4 向量, 无 detect）
 import "./imageToolbox.js"; // 图像处理工具组 imageCompress/imageGray/imagePixelate/imageFrosted/imageSketch/imageToText/gifCompose（image, run, 纯 JS, 无 detect）
-import "./falconOps.js"; // T711：Falcon 密钥生成 + 签名 falconKeyGen+falconSign（asym, run）
+import "./falconOps.js"; // Falcon 密钥生成 + 签名 falconKeyGen+falconSign（asym, run）
 import "./falconVerify.js"; // Falcon-512/1024 公钥解析 + 验签 falconPkParse+falconVerify（asym, run, spec 算法16, SHAKE256）
 import "./poseidon.js"; // Poseidon/Poseidon2 哈希 poseidon+poseidon2（hash, run, BN254/BLS12-381 官方实例）
 import "./kzg.js"; // KZG/EIP-4844 kzgVerify+kzgCommit+kzgBlobParse（asym/filefmt, 主网可信设置）
@@ -424,16 +424,37 @@ import "./gostKeyWrap.js"; // GOST 28147-89 Key Wrap gostKeyWrap（block, run, R
 import "./bfvToy.js"; // BFV 玩具同态加密 bfvToy（block, run, 教学：噪声账本/同态加乘）
 import "./mpcToy.js"; // 安全多方计算玩具 mpcToy（modern, run, 教学：Beaver 三元组/1-of-2 OT 模拟）
 import "./quantumToy.js"; // 量子算法玩具 quantumToy（modern, run, 教学：Grover/Shor statevector）
-import "./t813IpChecksum.js"; // T813：TCP/IP 校验和 ipChecksum（hash, run, RFC 1071）
-import "./t813XorChecksum.js"; // T813：XOR 分块校验和 xorChecksum（hash, run）
-import "./t813ParityBit.js"; // T813：奇偶校验位 parityBit（hash, run）
-import "./t813HexToOid.js"; // T813：十六进制→OID hexToOid（asym, run, X.690）
-import "./t813OidToHex.js"; // T813：OID→十六进制 oidToHex（asym, run, X.690）
-import "./t813FromHexContent.js"; // T813：SNORT Hex Content 解码 fromHexContent（data, run）
-import "./t813ToHexContent.js"; // T813：SNORT Hex Content 编码 toHexContent（data, run）
-import "./t813EscapeSmartCharacters.js"; // T813：转义智能字符 escapeSmartChars（text, run）
-import "./t813RemoveDiacritics.js"; // T813：去除变音符号 removeDiacritics（text, run）
-import "./t813StripHttpHeaders.js"; // T813：剥离 HTTP 头 stripHttpHeaders（forensic, run, RFC 7230）
+import "./t813IpChecksum.js"; // TCP/IP 校验和 ipChecksum（hash, run, RFC 1071）
+import "./t813XorChecksum.js"; // XOR 分块校验和 xorChecksum（hash, run）
+import "./t813ParityBit.js"; // 奇偶校验位 parityBit（hash, run）
+import "./t813HexToOid.js"; // 十六进制→OID hexToOid（asym, run, X.690）
+import "./t813OidToHex.js"; // OID→十六进制 oidToHex（asym, run, X.690）
+import "./t813FromHexContent.js"; // SNORT Hex Content 解码 fromHexContent（data, run）
+import "./t813ToHexContent.js"; // SNORT Hex Content 编码 toHexContent（data, run）
+import "./t813EscapeSmartCharacters.js"; // 转义智能字符 escapeSmartChars（text, run）
+import "./t813RemoveDiacritics.js"; // 去除变音符号 removeDiacritics（text, run）
+import "./t813StripHttpHeaders.js"; // 剥离 HTTP 头 stripHttpHeaders（forensic, run, RFC 7230）
+import "./t816CartesianProduct.js"; // 笛卡尔积 cartesianProduct（data, run）
+import "./t816DefangIp.js"; // Defang IP defangIp（forensic, run）
+import "./t816DefangUrl.js"; // Defang URL defangUrl（forensic, run）
+import "./t816FangUrl.js"; // Fang URL fangUrl（forensic, run）
+import "./t816FromCiRegex.js"; // 还原大小写不敏感正则 fromCiRegex（text, run）
+import "./t816Haversine.js"; // Haversine 球面距离 haversine（analysis, run）
+import "./t816PowerSet.js"; // 幂集 powerSet（data, run）
+import "./t816StripIpv4.js"; // 剥离 IPv4 头 stripIpv4（forensic, run）
+import "./t816StripTcp.js"; // 剥离 TCP 头 stripTcp（forensic, run）
+import "./t816StripUdp.js"; // 剥离 UDP 头 stripUdp（forensic, run）
+import "./t819CssSelector.js"; // CSS 选择器 cssSelector（text, run）
+import "./t819JsBeautify.js"; // JavaScript 美化 jsBeautify（text, run）
+import "./t819JsMinify.js"; // JavaScript 压缩 jsMinify（text, run）
+import "./t819JsParser.js"; // JavaScript 解析 jsParser（text, run）
+import "./t819Jsonata.js"; // Jsonata 查询 jsonataQuery（data, run）
+import "./t819SqlBeautify.js"; // SQL 美化 sqlBeautify（text, run）
+import "./t819XPath.js"; // XPath 表达式 xpathQuery（text, run）
+import "./t820Jq.js"; // jq JSON 查询 jqQuery（data, run, CyberChef #242）
+import "./t820Yara.js"; // YARA 规则扫描 yaraScan（forensic, run, CyberChef #503）
+import "./t820DisasmArm.js"; // 反汇编 ARM disasmArm（forensic, run, CyberChef #101）
+import "./t820DisasmX86.js"; // 反汇编 x86 disasmX86（forensic, run, CyberChef #102）
 import "./detectExt3.js"; // EASY 30 op detect 补齐（须在所有 op 注册后）
 import "./detectSupplement.js"; // 编码类 detect 覆盖补齐（须在所有 op 注册后）
 

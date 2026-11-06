@@ -7,7 +7,7 @@
  *   - Poseidon 家族运算在素域元素上（S-box x^5、线性层是域上矩阵乘法），输入输出是域元素；
  *   - 常量（轮常量/MDS 矩阵）由 Grain LFSR / 官方实例文件给出，与 Keccak 无任何关系。
  *
- * 实现口径与常量来源（全部机器提取自官方文件，证据见工程留存目录）：
+ * 实现口径与常量来源（全部机器提取自官方文件，证据见开发档案）：
  *   ① Poseidon2（t=3 BN254；t=2/3/4 BLS12-381）：HorizenLabs/poseidon2
  *      plain_implementations/src/poseidon2/ 官方实例 + 官方 KAT（论文作者团队维护的参考实现）。
  *      算法：先做一次外部矩阵 M_E；全轮 ARK(全宽)→SBOX→M_E；部分轮 state[0] ARK→SBOX→M_I；

@@ -23,7 +23,7 @@
  * - PHP：O/C/r/R（对象/自定义序列化/引用）不出站，仅 N/b/i/d/s/a
  *
  * 本模块只 import registry.js（register）与 bytesIo.js（hex/base64），纯 JS 零依赖。
- * 共享入口（registerAll.js）由 M 接线，本文件不自行改注册表。
+ * 共享入口（registerAll.js）接线，本文件不自行改注册表。
  */
 import { register } from "./registry.js";
 import { bytesToHex, bytesToB64, b64ToBytes } from "./bytesIo.js";

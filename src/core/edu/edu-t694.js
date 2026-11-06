@@ -1,5 +1,5 @@
 /*
- * edu_t694_zh.js — T694 两 op 科普卡候选（中文）。
+ * edu_t694_zh.js — 两 op 科普卡候选（中文）。
  * 候选文件，未接线；示例 out 值全部来自本项目实跑（verify_t694.mjs 40/0），未编造。
  */
 export default {

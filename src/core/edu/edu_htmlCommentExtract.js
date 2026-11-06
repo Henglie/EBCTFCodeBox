@@ -1,6 +1,6 @@
 /*
  * edu_htmlCommentExtract.js — 科普卡候选（HTML 注释提取）。纯数据，无 import 无副作用。
- * 供 M 归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
+ * 供归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
  * 来源：HTML Living Standard 13.2.4 Comments / 13.2.5 分词器注释状态（2026-09-22 访问）。
  */
 export default {

@@ -35,7 +35,7 @@
  * main.js（读 getMode()），复用 core/explicitRun.js 的显式触发机制。
  *
  * 零依赖：自带轻量 el/msym（与 envPanel.js 同形）；i18n 优先 window.__ebctfT，缺键回退本
- * 模块内置中文兜底（zh/en 建议键见交付报告，由 M 落 src/i18n/**）。
+ * 模块内置中文兜底（zh/en 建议键见交付报告，由 i18n 侧落 src/i18n/**）。
  */
 import { RAND_MODES, getRandConfig, setRandConfig, onRandConfigChange, isServerReady, isMouseReady, warmupServer, sha256HexOfUtf8 } from "../core/randSource.js";
 import { icon as iconSvg } from "./icons.js";

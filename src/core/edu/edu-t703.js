@@ -1,5 +1,5 @@
 /*
- * edu_t703_zh.js — T703 两 op 科普卡候选（中文）。
+ * edu_t703_zh.js — 两 op 科普卡候选（中文）。
  * 候选文件，未接线；示例 out 值全部来自本项目实跑（verify_t703.mjs 34/0），未编造。
  */
 export default {
@@ -26,7 +26,7 @@ export default {
     ],
     tips: [
       "认题：56 个 hex 字符（28 字节）的哈希 → SHA-224；配合 hashcat/john 的命名 hashcat -m 1300。",
-      "⚠ 本项目曾把 IV h7 误抄成 befafa53（来自 SHA-512/224 的 64 位 IV），空输入输出 8bd1cfa3… 全错——被 FIPS 向量当场抓出。教训：**IV/常量必须逐词对照标准原文**，自往返不能发现两处同错互逆（T629 门禁判例同款）。",
+      "⚠ 本项目曾把 IV h7 误抄成 befafa53（来自 SHA-512/224 的 64 位 IV），空输入输出 8bd1cfa3… 全错——被 FIPS 向量当场抓出。教训：**IV/常量必须逐词对照标准原文**，自往返不能发现两处同错互逆（同类门禁用例）。",
       "SHA-224 vs SHA3-224：名字像但完全不同算法（Merkle-Damgård vs Keccak 海绵）；拿到哈希先按长度二选一再按算法试。",
       "与其他工具互认：openssl dgst -sha224、hashlib.sha224（Python）、node:crypto sha224 输出与本 op 逐字节一致。",
       "WebCrypto 不支持 SHA-224 是 W3C 规范刻意取舍（非浏览器 bug）；本工具因此走纯 JS。",

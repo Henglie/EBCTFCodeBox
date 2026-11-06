@@ -64,6 +64,19 @@
 | Capstone（反汇编 WASM） | capstone-wasm@1.0.3 线 | BSD-3-Clause | `public/wasm/vendor/disasm/` | https://www.capstone-engine.org/ 、https://github.com/capstone-engine/capstone |
 | Material Symbols | svg-400 | Apache-2.0 | `src/ui/icons.js` 内联 | https://fonts.google.com/icons |
 | 天珩全字库 | V5.0.0（2025-09-25 编译） | 非商用（版权人沈天珩声明，详见 README 字体节） | `public/fonts/th/` | http://cheonhyeong.com/index.html |
+| @xmldom/xmldom | 0.8.13（wrapper 头注实测） | MIT © 2019-present Christopher J. Brody and contributors；© 2012-2017 @jindw | `src/vendor/t819/xmldom.mjs`（+ `src/vendor/t819/licenses/xmldom-LICENSE`） | https://github.com/xmldom/xmldom |
+| nwmatcher | 1.4.4（源内 Version 实测） | MIT © 2007-2018 Diego Perini | `src/vendor/t819/nwmatcher.mjs`（+ `src/vendor/t819/licenses/nwmatcher-LICENSE`） | https://github.com/dperini/nwmatcher |
+| esprima | 4.0.1（wrapper 头注实测） | BSD-2-Clause © JS Foundation and contributors | `src/vendor/t819/esprima.mjs`（+ `src/vendor/t819/licenses/esprima-LICENSE.BSD`） | https://github.com/jquery/esprima |
+| escodegen | 2.1.0（wrapper 头注实测） | BSD-2-Clause © 2012 Yusuke Suzuki and contributors | `src/vendor/t819/escodegen.mjs`（+ `src/vendor/t819/licenses/escodegen-LICENSE.BSD`） | https://github.com/estools/escodegen |
+| terser | 5.48.0（wrapper 头注实测） | BSD-2-Clause © 2012-2018 Mihai Bazon | `src/vendor/t819/terser.mjs`（+ `src/vendor/t819/licenses/terser-LICENSE`） | https://github.com/terser/terser |
+| jsonata | 2.2.1（wrapper 头注实测） | MIT © jsonata-js contributors | `src/vendor/t819/jsonata.mjs`（+ `src/vendor/t819/licenses/jsonata-LICENSE`） | https://github.com/jsonata-js/jsonata |
+| sql-formatter | 15.8.2（wrapper 头注实测） | MIT © 2016-2020 ZeroTurnaround LLC；© 2020-2021 George Leslie-Waksman；© 2021-present inferrinizzard | `src/vendor/t819/sql-formatter.mjs`（+ `src/vendor/t819/licenses/sql-formatter-LICENSE`） | https://github.com/sql-formatter-org/sql-formatter |
+| xpath | 0.0.34（wrapper 头注实测） | MIT © 2018 Cameron McCormack | `src/vendor/t819/xpath.mjs`（+ `src/vendor/t819/licenses/xpath-LICENSE`） | https://github.com/goto100/xpath |
+| jq-web（含 jq asm.js bundle） | 0.5.1（调用方头注实测） | ISC © 2019 fiatjaf；jq © 2012 Stephen Dolan（MIT） | `src/vendor/jq-web/jq.asm.bundle.min.mjs`（+ `src/vendor/jq-web/LICENSE`） | https://github.com/fiatjaf/jq-web 、https://github.com/jqlang/jq |
+| libyara-wasm | 1.2.1（调用方头注实测） | ISC © 2019 Matt Coomber | `src/vendor/libyara-wasm/libyara-wasm.mjs`（+ `src/vendor/libyara-wasm/LICENSE`） | https://www.npmjs.com/package/libyara-wasm |
+
+> `src/vendor/t819/licenses/` 另含上述打包内嵌依赖的许可证：estraverse、esutils（BSD-2-Clause）；@jridgewell/gen-mapping、resolve-uri、source-map、sourcemap-codec、trace-mapping（MIT）。
+> zxing-wasm 与 tesseract.js 的 vendor 默认 locateFile/workerPath 指向 jsdelivr，运行时由 `src/core/qrZxing.js`、`src/core/ocr.js` 显式覆盖到 `public/wasm/zxing/`、`public/vendor/ocr/`；默认 CDN 分支不触发。
 
 > **安全提示（2026-10）**：7-Zip 24.09 位于 CVE-2025-11001 / CVE-2025-11002（目录穿越 RCE，25.00 修复）影响范围。本项目仅在本地 Emscripten MEMFS 中解压用户主动选择的 CTF 文件，不暴露网络服务；升级到 7-Zip ≥25.00 已列入后续项。OpenPGP.js 已于 2026-10 升级至 5.11.3（CVE-2025-47934 修复），详见 A3。
 

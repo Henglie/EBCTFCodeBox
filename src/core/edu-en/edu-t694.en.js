@@ -1,5 +1,5 @@
 /*
- * edu_t694_en.js — English edu cards for the 2 T694 ops (candidates, not wired).
+ * edu_t694_en.js — English edu cards for the 2 ops (candidates, not wired).
  * Source: edu_t694_zh.js, translated 1:1. Example vectors (in/param/out) and TeX
  * formulas copied verbatim; only prose is translated. Aka lists keep every Chinese
  * alias and add English ones.

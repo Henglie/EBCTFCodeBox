@@ -1,6 +1,6 @@
 /*
  * outguess.worker.js - single-threaded Worker adapter for the OutGuess 0.4
- * WASM build (T610 candidate).
+ * WASM build.
  *
  * Design notes
  * ------------

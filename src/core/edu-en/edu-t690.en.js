@@ -1,5 +1,5 @@
 /*
- * edu_t690_en.js — English edu cards for the 5 T690 ops (candidates, not wired).
+ * edu_t690_en.js — English edu cards for the 5 ops (candidates, not wired).
  * Source: edu_t690_zh.js (Chinese), translated 1:1. Example vectors (in/param/out)
  * and TeX formulas are copied verbatim; only prose is translated. Aka lists keep
  * every Chinese alias and add English ones.

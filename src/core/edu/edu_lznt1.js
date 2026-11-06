@@ -1,6 +1,6 @@
 /*
  * edu_lznt1.js — 科普卡候选（LZNT1 解压）。纯数据，无 import 无副作用。
- * 供 M 归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
+ * 供归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
  * 来源：wine dlls/ntdll/rtl.c 与 ReactOS sdk/lib/rtl/compress.c（逐行一致），
  * 本机 Windows 10 26100 RtlCompressBuffer 真样本（均 2026-09-22，见 ref/SOURCES_A.md）。
  */

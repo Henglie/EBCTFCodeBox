@@ -567,6 +567,14 @@ function keyboardDecode(text, p) {
         return KBD_ROWS[r][c];
       }
     }
+    // 3 位 token：首 1 位行、后 2 位列，兼容 P=(1,10) → "110" 这类第 10 列键。
+    if (token.length === 3 && /^\d{3}$/.test(token)) {
+      const r = parseInt(token[0], 10) - 1;
+      const c = parseInt(token.slice(1), 10) - 1;
+      if (r >= 0 && r < KBD_ROWS.length && c >= 0 && c < KBD_ROWS[r].length) {
+        return KBD_ROWS[r][c];
+      }
+    }
     return token;
   }).join("");
 }

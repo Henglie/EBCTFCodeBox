@@ -1,5 +1,5 @@
 /*
- * edu-t760.en.js — English edu cards for bzip2Enc / extractAll (T760).
+ * edu-t760.en.js — English edu cards for bzip2Enc / extractAll.
  * Source: edu/edu-t760.js; examples are kept verbatim.
  */
 export default {

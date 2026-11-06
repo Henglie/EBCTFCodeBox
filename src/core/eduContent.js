@@ -190,14 +190,14 @@ import EDU_DATA_TO_IMAGE from "./edu/edu_dataToImage.js";
 import EDU_BATCH7_NEW from "./edu/edu-batch7-new.js"; // v0.1.11 迷因四件套 + 图片/进制反向 9 op
 import EDU_CN_LOOKUP from "./edu/edu-cn-lookup.js"; // v0.1.12 五种中文查字编码
 import EDU_P0_20261025 from "./edu/edu-p0-20261025.js"; // v0.1.12 P0：AEAD/PQC/ZIP + 进制小数
-import EDU_T690 from "./edu/edu-t690.js"; // v0.1.12 T690：ECDH/RSA-OAEP/HPKE
-import EDU_T693 from "./edu/edu-t693.js"; // T693：Mach-O/WASM
-import EDU_T694 from "./edu/edu-t694.js"; // T694：UTF-32/GB18030
-import EDU_T703 from "./edu/edu-t703.js"; // T703：SHA-224/cSHAKE
+import EDU_T690 from "./edu/edu-t690.js"; // v0.1.12：ECDH/RSA-OAEP/HPKE
+import EDU_T693 from "./edu/edu-t693.js"; // Mach-O/WASM
+import EDU_T694 from "./edu/edu-t694.js"; // UTF-32/GB18030
+import EDU_T703 from "./edu/edu-t703.js"; // SHA-224/cSHAKE
 import EDU_REGEX from "./edu/edu-regex.js"; // 通用正则提取/替换 regexTool
 import EDU_DATA_CONVERT from "./edu/edu-dataConvert.js"; // JSON / CSV / XML / YAML 转换 dataConvert
-import EDU_T760 from "./edu/edu-t760.js"; // T760：bzip2Enc / extractAll
-import EDU_T711 from "./edu/edu-t711.js"; // T711：Falcon keygen/sign
+import EDU_T760 from "./edu/edu-t760.js"; // bzip2Enc / extractAll
+import EDU_T711 from "./edu/edu-t711.js"; // Falcon keygen/sign
 import EDU_TEACH from "./edu/edu-teach.js"; // BFV/MPC/量子 教学三件
 import EDU_T706 from "./edu/edu-t706.js";
 import EDU_T689T710 from "./edu/edu-t689t710.js";
@@ -206,12 +206,13 @@ import EDU_T722 from "./edu/edu-t722.js";
 import EDU_T720 from "./edu/edu-t720.js";
 import EDU_T721 from "./edu/edu-t721.js"; // 2026-10-26：Falcon/Poseidon/KZG/SSH·PKCS12·JWK/GCM·NTRU/Xoodyak/ECC 共 17 op
 import EDU_PLAUSIBAER from "./edu/edu-plausibaer.js"; // guballa Plausibär 坐标公式求解
-import EDU_R18 from "./edu/edu-r18.js"; // R18：lsbDeep/rasterStego/mp3stego/imageThumb
+import EDU_R18 from "./edu/edu-r18.js"; // lsbDeep/rasterStego/mp3stego/imageThumb
 import EDU_CC_PARITY from "./edu/edu-cc-parity.js"; // CyberChef P0：cobs/lzma/tar
 import EDU_CC_P0B from "./edu/edu-cc-p0b.js"; // CyberChef P0-B：serialEnc 5 + textUtils 28 + ocr
 import EDU_OPENSSL from "./edu/edu-openssl.js"; // OpenSSL Salted__ 一步式口令加解密
-import EDU_T796 from "./edu/edu-t796.js"; // CyberChef M：HTTP Dechunk / 拆分颜色通道
-import EDU_T813 from "./edu/edu-t813.js"; // T814：T813 批 10 op 科普（ipChecksum/xorChecksum/parityBit/hexToOid/oidToHex/fromHexContent/toHexContent/escapeSmartChars/removeDiacritics/stripHttpHeaders）
+import EDU_T796 from "./edu/edu-t796.js"; // CyberChef：HTTP Dechunk / 拆分颜色通道
+import EDU_T813 from "./edu/edu-t813.js"; // 10 op 科普（ipChecksum/xorChecksum/parityBit/hexToOid/oidToHex/fromHexContent/toHexContent/escapeSmartChars/removeDiacritics/stripHttpHeaders）
+import EDU_T821 from "./edu/edu-t821.js"; // 共 21 个新 op 科普
 
 // 合并所有分片。后者不覆盖前者（分区不重叠）；重叠时以后者为准，构建期应避免。
 const EDU = Object.assign(
@@ -384,6 +385,7 @@ const EDU = Object.assign(
   EDU_OPENSSL,
   EDU_T796,
   EDU_T813,
+  EDU_T821,
 );
 
 import { ZH as INTEGRATED, HASH_VECTORS, BASE_NOTES, EXTRA_ALIASES, CRC_PARAMS } from "./edu/edu-integrated.js";

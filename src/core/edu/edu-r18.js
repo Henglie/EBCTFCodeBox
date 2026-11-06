@@ -1,8 +1,8 @@
 /*
- * edu-r18.js — R18 四个新 op 的中文科普卡候选（纯数据，无 import / 无副作用）。
- * 样例全部来自本项目实跑：R6 verify_lsbdeep.mjs、R10 verify_r10.mjs、R8 verify_thumb.mjs、
- * R18 verify_r18.mjs；未编造不存在的性质或输出。
- * M 归并建议：复制到 src/core/edu/edu-r18.js，在 eduContent.js 的 Object.assign 列表加 EDU_R18。
+ * edu-r18.js — 四个新 op 的中文科普卡候选（纯数据，无 import / 无副作用）。
+ * 样例全部来自本项目实跑与独立复核；
+ * 未编造不存在的性质或输出。
+ * 归并建议：复制到 src/core/edu/edu-r18.js，在 eduContent.js 的 Object.assign 列表加 EDU_R18。
  */
 export default {
   // ==================== LSB 深度扫描 ====================
@@ -30,10 +30,10 @@ export default {
       "要精确复现某个候选，把对应 channels/bits/orders/scans/offsets 填成单项再跑一次。",
     examples: [
       {
-        in: "资料/软件测试用文件/LSB-AsianCheetah.png（600×450 RGBA PNG）",
+        in: "LSB-AsianCheetah.png（600×450 RGBA PNG）",
         param: "默认 channels=all, bits=0-7, orders=msb,lsb, scans=row,col, offsets=0-7",
         out: "Top1 = B/bit0 MSB-first 行优先 off0，score=1225.6，命中 SharifCTF{e8e12db2fc654f3b50f3da4901ab986e}",
-        desc: "R6 verify_lsbdeep.mjs 实跑：2048 组合、1216 条候选，flag 排第 1；R18 verify 再次命中",
+        desc: "本项目实跑：2048 组合、1216 条候选，flag 排第 1；复测再次命中",
       },
       {
         in: "同一张 LSB-AsianCheetah.png",
@@ -65,7 +65,7 @@ export default {
       "列优先（col）在方形图上常与行优先结果不同；如果行优先全是噪声，把 scans 改成 col 再试。",
       "偏移 1..7 很便宜，默认全跑；如果已知从第 N 个 bit 开始，直接填 offsets=N 可以把扫描量降到 1/8。",
       "flag 候选排第一是评分设计，不代表其余候选都无意义；Base64/URL 形态的候选也值得点开看。",
-      "来源与限制：R6 `verify_lsbdeep.mjs` 45/0；默认 16MP 像素上限、单候选 4096 字符；与 zstegScan 的差异是支持列优先、MSB/LSB 位序和 0..7 偏移。",
+      "来源与限制：本项目对拍 45/0；默认 16MP 像素上限、单候选 4096 字符；与 zstegScan 的差异是支持列优先、MSB/LSB 位序和 0..7 偏移。",
     ],
     aka: [
       "LSB 深入分析", "LSB 深度扫描", "LSB 全通道扫描", "LSB 位平面分析", "LSB 多偏移扫描",
@@ -99,10 +99,10 @@ export default {
       "先看文件名里的 d 与 phase，再逐张预览找文字。",
     examples: [
       {
-        in: "资料/软件测试用文件/光栅图demo.png（600×300 RGBA PNG）",
+        in: "光栅图demo.png（600×300 RGBA PNG）",
         param: "默认 maxDivisor=10, both=true, fillMode=auto",
         out: "共 68 张：x 轴 38 张、y 轴 30 张；x-5-1.png 存在（axis=x, divisor=5, phase=0）",
-        desc: "R10 verify_r10.mjs 49/0 实跑；x-5-1 的 5×5 采样拼出 Password is here!",
+        desc: "本项目实跑 49/0；x-5-1 的 5×5 采样拼出 Password is here!",
       },
       {
         in: "同一张光栅图demo.png",
@@ -111,7 +111,7 @@ export default {
         desc: "资源上限的失败语义：超限报错并给出因数，绝不只返回前 10 张假装成功",
       },
       {
-        in: "2×2 24 位 BMP（R10 合成用例）",
+        in: "2×2 24 位 BMP（合成用例）",
         param: "默认参数",
         out: "x 轴 2 张 + y 轴 2 张 = 4 张，产物都是 PNG",
         desc: "BMP 输入也走同一套拆图与 PNG 编码，24 位 BGR 顺序已校正",
@@ -134,7 +134,7 @@ export default {
       "源图带 alpha 时默认透明填充；如果拆出来一片黑，试 fillMode=black 或 transparent 对比。",
       "产物多时先看 d 小的（2、3、5、10）；d 越大图越稀疏，文字可能只剩几列。",
       "资源上限是硬限制：`maxImages` 默认 128，`maxTotalPixels` 默认 64M；超限会报 RASTER_LIMIT_*，不会卡死浏览器。",
-      "来源与限制：R10 `verify_r10.mjs` 49/0；参考实现 `资料/参考/反编py/zbCrypto/zbCrypto.zbRasterTerminator.py`；本 op 纯 JS、零 DOM。",
+      "来源与限制：本项目对拍 49/0；参考实现 `zbCrypto.zbRasterTerminator.py`；本 op 纯 JS、零 DOM。",
     ],
     aka: [
       "光栅隐写", "光栅图拆图", "zbRasterTerminator", "光栅终止器", "相位拆图",
@@ -168,10 +168,10 @@ export default {
       "`extract=false` 时返回 `mp3stego-payload.bin` 供进一步分析。密码错误、空密码、非 MP3、LSF 帧都会给出明确错误码。",
     examples: [
       {
-        in: "资料/工程留存/R10/_assets/a.mp3",
+        in: "a.mp3",
         param: "password=ILOVEYOUYOULOVEME, extract=true",
         out: "flag{1251_521_m1xueb1n9chen9ti@nm1mi}（明文 37 字节；233 帧、931 个候选位、隐藏负载 64 字节）",
-        desc: "R10 verify_r10.mjs 与官方 mp3stego_Decode.exe oracle 逐字一致；R18 verify 再次命中",
+        desc: "与官方 mp3stego_Decode.exe oracle 逐字一致；复测再次命中",
       },
       {
         in: "同一 a.mp3",
@@ -209,7 +209,7 @@ export default {
       "`extract=false` 只取加密负载，适合先用它确认「到底有没有隐藏数据」，再换密码解 3DES。",
       "隐藏长度 lData 有 4 MiB 上限；超限会报 `MP3STEGO_PAYLOAD_LIMIT`，不会分配超大内存。",
       "实现依赖编码器的 32 位 size_t 和小端主机序；官方 32 位 Windows/Linux 构建满足，其他构建可能对不上。",
-      "来源与限制：R10 `verify_r10.mjs` 49/0 + exe oracle；算法按 MP3Stego 1.1.19 源码复刻，未调用外部 exe。",
+      "来源与限制：本项目对拍 49/0 + exe oracle；算法按 MP3Stego 1.1.19 源码复刻，未调用外部 exe。",
     ],
     aka: [
       "MP3Stego", "MP3 隐写", "MP3 隐写解码", "mp3stego -X -P", "MP3Stego 解码",
@@ -241,16 +241,16 @@ export default {
       "并把缩略图作为可下载文件返回；文件名默认 `image-thumb-1.jpg`，可用 rawFileName 改前缀。",
     examples: [
       {
-        in: "资料/软件测试用文件/misc22-缩略图.jpg",
+        in: "misc22-缩略图.jpg",
         param: "默认 maxCount=8, minBytes=0",
         out: "1 张：EXIF IFD1 | image/jpeg | 300×50 | 8201 B",
-        desc: "R8 verify_thumb.mjs 46/0 与 PIL 对拍一致；R18 verify 再次确认 8201 B",
+        desc: "本项目对拍 46/0 与 PIL 一致；复测再次确认 8201 B",
       },
       {
-        in: "资料/软件测试用文件/014.jpg",
+        in: "014.jpg",
         param: "默认参数",
         out: "未发现内嵌缩略图：未发现 EXIF/JFIF 内嵌缩略图",
-        desc: "没有缩略图时明确说明，不抛异常、不伪造文件（R2 回归要求 014 不崩）",
+        desc: "没有缩略图时明确说明，不抛异常、不伪造文件（回归要求 014 不崩）",
       },
     ],
     formulas: [
@@ -269,7 +269,7 @@ export default {
       "JFIF APP0 的缩略图是裸 RGB，不是 JPEG；本工具自动转 PNG，下载后可直接看。",
       "014.jpg 这类没有 IFD1 的文件会明确返回「未发现」，不是解码失败；换其他文件再试。",
       "只支持 JPEG/PNG 的标准缩略图位置；如果缩略图被塞在文件尾部或自定义 chunk，本 op 不负责 carving，请用 binwalk/foremost。",
-      "来源与限制：R8 `verify_thumb.mjs` 46/0；PIL 对拍 misc22 为 300×50 / 8201 B；`014.jpg` 无缩略图且不崩。",
+      "来源与限制：本项目对拍 46/0；PIL 对拍 misc22 为 300×50 / 8201 B；`014.jpg` 无缩略图且不崩。",
     ],
     aka: [
       "EXIF 缩略图", "EXIF 缩略图提取", "内嵌缩略图", "JPEG 缩略图", "IFD1 缩略图",
@@ -287,7 +287,7 @@ export default {
         "in": "LSB-AsianCheetah.png（600×450 RGBA PNG）",
         "param": "Data Extract：B 通道 / bit0 / MSB-first / row / offset=0",
         "out": "提取到 SharifCTF{e8e12db2fc654f3b50f3da4901ab986e}",
-        "desc": "R6 verify_lsbdeep.mjs 的同一实战样本；StegSolve 用于手工复核通道/位序/偏移。"
+        "desc": "与前述实跑相同的实战样本；StegSolve 用于手工复核通道/位序/偏移。"
       },
       {
         "in": "GIF 多帧图片",

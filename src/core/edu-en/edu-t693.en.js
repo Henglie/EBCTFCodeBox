@@ -1,5 +1,5 @@
 /*
- * edu_t693_en.js — English edu cards for the 2 T693 ops (candidates, not wired).
+ * edu_t693_en.js — English edu cards for the 2 ops (candidates, not wired).
  * Source: edu_t693_zh.js, translated 1:1. Example vectors and TeX formulas copied
  * verbatim; only prose is translated. Aka lists keep every Chinese alias and add
  * English ones.
@@ -69,7 +69,7 @@ export default {
       "__cstring/__objc_methname sections are string goldmines — strings-pass first; this tool gives each section's offset/size for precise extraction.",
       "arm64e (pointer authentication) shares cputype with arm64 but differs in subtype — the tool shows arm64e by cputype field.",
       "No decompiling here: function-body reversing belongs to Hopper/Ghidra/IDA; signature validation (LC_CODE_SIGNATURE) shows location only.",
-      "Standards: Apple's open-source mach-o/loader.h and fat.h (Darwin XNU/ctools); structure byte-exact against this project's own universal2 launcher (the MT646 artifact).",
+      "Standards: Apple's open-source mach-o/loader.h and fat.h (Darwin XNU/ctools); structure byte-exact against this project's own universal2 launcher.",
     ],
     aka: ["Mach-O 解析", "MachO", "mach-o 结构", "Mach-O 文件分析", "fat binary",
       "universal binary 解析", "machoParse", "Mach-O header", "mach-o load commands",

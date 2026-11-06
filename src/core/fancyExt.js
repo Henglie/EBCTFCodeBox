@@ -234,6 +234,15 @@ const TYPE7_MAGIC = [
 ];
 
 function type7Encrypt(text, salt) {
+  // Cisco Type7 原始域是 ASCII/字节；>0xFF 会写成 3-4 位 hex，decode 按 2 位读会静默错位。
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code > 0xff) {
+      const cp = text.codePointAt(i).toString(16).toUpperCase().padStart(4, "0");
+      const shown = String.fromCodePoint(text.codePointAt(i));
+      throw new Error("type7: 输入字符「" + shown + "」(U+" + cp + ") 超出单字节范围；Cisco Type7 仅支持单字节/ASCII 文本，请先转为 UTF-8 hex 或改用其他编码");
+    }
+  }
   const saltOffset = ((Math.floor(salt) % 53) + 53) % 53;
   const seed = String(saltOffset).padStart(2, "0");
   let enc = "";

@@ -10,7 +10,7 @@
 //   locales  src/i18n/locales/**（zh/en 在 src/i18n/*.js，属基线，不进包）
 //   edu-en   src/core/eduContent.en.js + src/core/edu-en/**
 //
-// bytes 与 entries 由工程留存目录下的 collect_packs.mjs 逐文件 statSync 统计；
+// bytes 与 entries 由开发档案中的 collect_packs.mjs 逐文件 statSync 统计；
 // 同目录 verify 脚本会重新扫盘断言逐字节一致（±0），防止手写数字漂移。
 //
 // 状态形状（上层持久化的就是它）：
@@ -23,7 +23,7 @@
 export const PACKS = [
   {
     id: "wasm",
-    bytes: 9490473,
+    bytes: 9490456,
     entries: [
       { name: "/public/wasm/7zz.js", bytes: 82904 },
       { name: "/public/wasm/7zz.wasm", bytes: 1651931 },
@@ -32,7 +32,7 @@ export const PACKS = [
       { name: "/public/wasm/outguess/outguess-client.js", bytes: 4805 },
       { name: "/public/wasm/outguess/outguess.js", bytes: 62458 },
       { name: "/public/wasm/outguess/outguess.wasm", bytes: 181940 },
-      { name: "/public/wasm/outguess/outguess.worker.js", bytes: 3641 },
+      { name: "/public/wasm/outguess/outguess.worker.js", bytes: 3624 },
       { name: "/public/wasm/steghide/steghide.js", bytes: 149186 },
       { name: "/public/wasm/steghide/steghide.wasm", bytes: 1017408 },
       { name: "/public/wasm/steghide/steghide.worker.js", bytes: 2450 },
@@ -57,22 +57,22 @@ export const PACKS = [
   },
   {
     id: "locales",
-    bytes: 3146394,
+    bytes: 3170298,
     entries: [
       { name: "/src/i18n/locales/ar.js", bytes: 102637 },
       { name: "/src/i18n/locales/bo.js", bytes: 121984 },
       { name: "/src/i18n/locales/de.js", bytes: 315598 },
       { name: "/src/i18n/locales/es.js", bytes: 92754 },
       { name: "/src/i18n/locales/fa.js", bytes: 107300 },
-      { name: "/src/i18n/locales/fr.js", bytes: 348183 },
+      { name: "/src/i18n/locales/fr.js", bytes: 353507 },
       { name: "/src/i18n/locales/he.js", bytes: 97778 },
       { name: "/src/i18n/locales/hi.js", bytes: 130827 },
       { name: "/src/i18n/locales/id.js", bytes: 85917 },
-      { name: "/src/i18n/locales/ja.js", bytes: 344362 },
-      { name: "/src/i18n/locales/ko.js", bytes: 334220 },
+      { name: "/src/i18n/locales/ja.js", bytes: 350058 },
+      { name: "/src/i18n/locales/ko.js", bytes: 339678 },
       { name: "/src/i18n/locales/mn-Mong.js", bytes: 126286 },
       { name: "/src/i18n/locales/pt.js", bytes: 92026 },
-      { name: "/src/i18n/locales/ru.js", bytes: 475584 },
+      { name: "/src/i18n/locales/ru.js", bytes: 483010 },
       { name: "/src/i18n/locales/tr.js", bytes: 89244 },
       { name: "/src/i18n/locales/ug.js", bytes: 102292 },
       { name: "/src/i18n/locales/ur.js", bytes: 106163 },
@@ -81,7 +81,7 @@ export const PACKS = [
   },
   {
     id: "edu-en",
-    bytes: 1369509,
+    bytes: 1415902,
     entries: [
       { name: "/src/core/edu-en/edu-ana-crypto-new.en.js", bytes: 34324 },
       { name: "/src/core/edu-en/edu-ana-freq.en.js", bytes: 16830 },
@@ -143,7 +143,7 @@ export const PACKS = [
       { name: "/src/core/edu-en/edu-pemkeys.en.js", bytes: 2887 },
       { name: "/src/core/edu-en/edu-pipAstro.en.js", bytes: 6915 },
       { name: "/src/core/edu-en/edu-qrscanimage.en.js", bytes: 9875 },
-      { name: "/src/core/edu-en/edu-r18.en.js", bytes: 28834 },
+      { name: "/src/core/edu-en/edu-r18.en.js", bytes: 28550 },
       { name: "/src/core/edu-en/edu-radix-bitops.en.js", bytes: 5450 },
       { name: "/src/core/edu-en/edu-radix-check.en.js", bytes: 8399 },
       { name: "/src/core/edu-en/edu-radix-color.en.js", bytes: 2823 },
@@ -169,19 +169,20 @@ export const PACKS = [
       { name: "/src/core/edu-en/edu-t508-b4.en.js", bytes: 15736 },
       { name: "/src/core/edu-en/edu-t508.en.js", bytes: 14180 },
       { name: "/src/core/edu-en/edu-t689t710.en.js", bytes: 100030 },
-      { name: "/src/core/edu-en/edu-t690.en.js", bytes: 21988 },
-      { name: "/src/core/edu-en/edu-t693.en.js", bytes: 10664 },
-      { name: "/src/core/edu-en/edu-t694.en.js", bytes: 11019 },
-      { name: "/src/core/edu-en/edu-t703.en.js", bytes: 10484 },
+      { name: "/src/core/edu-en/edu-t690.en.js", bytes: 21983 },
+      { name: "/src/core/edu-en/edu-t693.en.js", bytes: 10638 },
+      { name: "/src/core/edu-en/edu-t694.en.js", bytes: 11014 },
+      { name: "/src/core/edu-en/edu-t703.en.js", bytes: 10479 },
       { name: "/src/core/edu-en/edu-t706.en.js", bytes: 45 },
       { name: "/src/core/edu-en/edu-t711.en.js", bytes: 4144 },
       { name: "/src/core/edu-en/edu-t720.en.js", bytes: 11420 },
       { name: "/src/core/edu-en/edu-t721.en.js", bytes: 8757 },
       { name: "/src/core/edu-en/edu-t722.en.js", bytes: 3637 },
       { name: "/src/core/edu-en/edu-t723.en.js", bytes: 2936 },
-      { name: "/src/core/edu-en/edu-t760.en.js", bytes: 5890 },
+      { name: "/src/core/edu-en/edu-t760.en.js", bytes: 5883 },
       { name: "/src/core/edu-en/edu-t796.en.js", bytes: 3134 },
-      { name: "/src/core/edu-en/edu-t813.en.js", bytes: 19230 },
+      { name: "/src/core/edu-en/edu-t813.en.js", bytes: 19201 },
+      { name: "/src/core/edu-en/edu-t822.en.js", bytes: 46697 },
       { name: "/src/core/edu-en/edu-teach.en.js", bytes: 13523 },
       { name: "/src/core/edu-en/edu-text-bubblebabble.en.js", bytes: 3191 },
       { name: "/src/core/edu-en/edu-text-jsescape.en.js", bytes: 2555 },
@@ -189,7 +190,7 @@ export const PACKS = [
       { name: "/src/core/edu-en/edu-token-signing.en.js", bytes: 7907 },
       { name: "/src/core/edu-en/edu-unified-misc.en.js", bytes: 11852 },
       { name: "/src/core/edu-en/eduImages.en.js", bytes: 5584 },
-      { name: "/src/core/eduContent.en.js", bytes: 15193 },
+      { name: "/src/core/eduContent.en.js", bytes: 15250 },
       { name: "/src/core/edu-en/edu-openssl.en.js", bytes: 5036 },
     ],
   },

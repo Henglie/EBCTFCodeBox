@@ -1,5 +1,5 @@
 /*
- * Bombe candidate module (T762 C group).
+ * Bombe candidate module.
  * Algorithm derived from CyberChef lib/Bombe.mjs and lib/Enigma.mjs.
  * CyberChef: Crown Copyright 2019, Apache-2.0.
  */

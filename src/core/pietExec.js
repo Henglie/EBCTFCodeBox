@@ -28,7 +28,7 @@
  * 图像输入默认按 npiet 口径自动探测 codel 尺寸（0 = 自动，>=1 = 指定）。
  *
  * 算法来源：David Morgan-Mar Piet 规范（dangermouse.net/esoteric/piet.html），
- * 对拍基准 npiet v1.3（资料/参考/.../res/cmd/npiet/npiet.exe）。
+ * 对拍基准 npiet v1.3（参考实现 npiet.exe）。
  */
 import { register } from "./registry.js";
 import { inflateRaw } from "./pcapDeep.js";

@@ -1,7 +1,7 @@
 /*
  * textUtils.js — CyberChef 全量对齐第一波：文本 / 字节小工具（cat:'text' 为主）。
  *
- * 契约：本文件**不调用 register()**（注册表不动，由共享入口 M 接线）。只导出 handler
+ * 契约：本文件**不调用 register()**（注册表不动，由共享入口接线）。只导出 handler
  * 与现成的 op 元数据数组 TEXT_UTILS_OPS，M 直接 forEach(register) 即可。
  *
  * 逐项对照 CyberChef 同名 operation（Apache-2.0 / MIT，见各段来源标注）实现；差异见交付报告。
@@ -982,7 +982,7 @@ function fileTree(input, p) {
 }
 
 // ============================================================
-// op 元数据（供 M 接线；本文件自行 register 会与「注册表不动」冲突，故只导出）
+// op 元数据（供接线；本文件自行 register 会与「注册表不动」冲突，故只导出）
 // ============================================================
 const TEXT_UTILS_OPS = [
   {

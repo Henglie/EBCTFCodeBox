@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bridge.py — T18 外部 exe 本地桥（独立本地服务，仅 Windows，署名：外部4）。
+bridge.py — 外部 exe 本地桥（独立本地服务，仅 Windows，署名：外部4）。
 
 为什么独立服务而非改 start.py：
-  - 不碰主开发 M 的 start.py（机制四 + 用户要求「不影响主开发」）。
+  - 不碰主开发的 start.py（机制四 + 用户要求「不影响主开发」）。
   - 独立进程，可选启用；不起则前端 op 灰置提示，不影响纯前端功能。
 
-安全红线（见 T18 任务卡 + 库根安全约定）：
+安全红线（见库根安全约定）：
   - 白名单 exe（硬编码 tool→绝对路径，不接受任意命令）。
   - subprocess.run 参数数组，shell=False，绝不字符串拼接（防注入核心）。
   - 仅监听 127.0.0.1，CORS 只放行 localhost:8180（前端端口），不对外。
@@ -28,7 +28,7 @@ import shutil
 import platform
 import time
 try:
-    import winreg  # Windows 注册表（读系统强调色，MT42）
+    import winreg  # Windows 注册表（读系统强调色）
 except ImportError:
     winreg = None
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -66,14 +66,14 @@ EXE_BASE = os.path.join(ROOT, "tools", "exe")
 # 这里只放「有命令行、可无人值守跑（读 args/stdin，回 stdout）」的 CLI exe。
 # 纯 GUI 程序（OurSecret/OpenPuff/Jphswin 等）见下方 LAUNCH_WHITELIST，走 /api/launch。
 WHITELIST = {
-    # ---- 新增 CLI 工具（T18 补齐，署名：外部4）----
+    # ---- 新增 CLI 工具（署名：外部4）----
 }
 
 # ---- GUI 启动白名单（tool → 绝对路径）。仅「启动 exe 让用户手动操作」，不喂输入不取输出 ----
 # 这些是纯 GUI 隐写/工具程序，无无人值守 CLI（或私有格式无法脚本化）。/api/launch 仅
 # Popen 拉起进程即返回，用户在弹出窗口里自己操作。安全：仍走白名单，绝不启动名单外的东西。
 LAUNCH_WHITELIST = {
-    # watermarkH：已于 MT650 纯前端复刻为内置 op（watermarkhFft），exe 退场、条目移除。
+    # watermarkH：已纯前端复刻为内置 op（watermarkhFft），exe 退场、条目移除。
     # JPHS for Windows：JPEG 图像隐写 GUI（jphide/jpseek）
     "jphswin":      os.path.join(EXE_BASE, "gui", "Jphswin.exe"),
     # NTFS 数据流编辑器（ADS 交换数据流查看/编辑）
@@ -92,7 +92,7 @@ MAX_STDIN = 50 * 1024 * 1024  # 50MB
 # 故按请求 Origin 反射放行：只认本机来源（localhost/127.0.0.1/::1 任意端口），外部站点一律拒绝。
 ALLOWED_ORIGIN_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
-# ---- 环境探测（T159）：CTF 常用本机工具版本，供顶栏「环境管理」面板懒检测 ----
+# ---- 环境探测：CTF 常用本机工具版本，供顶栏「环境管理」面板懒检测 ----
 # (key, [候选命令名或绝对路径], [version 参数], 是否取 stderr)。
 # shutil.which 逐个找可执行；找到则跑 version 参数，5s 超时；stdout/stderr 解析版本串。
 ENV_PROBES = [
@@ -150,12 +150,12 @@ def probe_env():
             out[key] = {"ok": False, "error": "探测超时（%ds）" % ENV_TIMEOUT}
         except Exception as e:
             out[key] = {"ok": False, "error": "探测异常: %s" % e}
-    # MT42：本地桥是否支持读系统强调色（Windows 注册表 AccentColorMenu）
+    # 本地桥是否支持读系统强调色（Windows 注册表 AccentColorMenu）
     out["accent"] = read_accent_color() is not None
     return out
 
 # ============================================================
-# MT42：读 Windows 系统强调色（注册表 AccentColorMenu\AccentColor）
+# 读 Windows 系统强调色（注册表 AccentColorMenu\AccentColor）
 # ------------------------------------------------------------
 # 注册表 DWORD 是 ARGB（0xAARRGGBB），非 ABGR（见 PROGRESS.md 第八批修正）。
 # 红线：只读这一个键，不执行用户代码，不联网，仅 127.0.0.1；失败返回 None 降级。
@@ -192,7 +192,7 @@ def read_accent_color():
         return None
 
 # ============================================================
-# MT7：pyc/exe 自动反编译（新增端点，署名：MT7）
+# pyc/exe 自动反编译（新增端点）
 # ------------------------------------------------------------
 # 流程：前端拖入 .pyc/.exe → /api/decompile → 桥用 xdis 查 magic 定 Python 版本
 #   → 3.4-3.8 走 uncompyle6/decompyle3；3.9+ 走 pylingual（实验，需手动装 + HF 镜像）
@@ -209,14 +209,10 @@ import re
 DECOMPILE_TOOLS = {
     # uncompyle6：支持 Python 1.x-3.8（本机 3.9.3 版）
     "uncompyle6": [
-        r"C:\Users\Operater\AppData\Local\Programs\Python\Python311\Scripts\uncompyle6.exe",
-        r"C:\Users\Operater\AppData\Local\Programs\Python\Python313\Scripts\uncompyle6.exe",
         "uncompyle6",
     ],
     # decompyle3：支持 3.7-3.8（uncompyle6 的姊妹，部分样本更稳）
     "decompyle3": [
-        r"C:\Users\Operater\AppData\Local\Programs\Python\Python313\Scripts\decompyle3.exe",
-        r"C:\Users\Operater\AppData\Local\Programs\Python\Python311\Scripts\decompyle3.exe",
         "decompyle3",
     ],
     # pylingual：3.9+ 大模型反编（实验，需手动装 + HF_ENDPOINT 镜像）
@@ -226,7 +222,6 @@ DECOMPILE_TOOLS = {
     # 校验 `-h` 输出含 input.pyc；只靠「文件存在」会把假工具当成可用。
     "pycdc": [
         os.path.join(os.path.dirname(ROOT), "PyKC", "third_party", "bin", "pycdc.exe"),
-        r"C:\Users\Administrator\Documents\我的项目源码\PyKC\third_party\bin\pycdc.exe",
         os.path.join(ROOT, "tools", "exe", "cli", "pycdc.exe"),
         "pycdc",
     ],
@@ -684,7 +679,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 info[t] = {"exists": os.path.isfile(p), "path": p}
             self._send_json(200, {"tools": info, "win": IS_WIN})
         elif path == "/api/env":
-            # T159 环境探测：本机 CTF 常用工具版本（懒检测，仅 GET 触发）
+            # 环境探测：本机 CTF 常用工具版本（懒检测，仅 GET 触发）
             self._send_json(200, {
                 "ok": True,
                 "platform": platform.system(),
@@ -697,7 +692,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
             # MT7 反编工具链可用性探测（前端据此灰置/实验标记）
             self._send_json(200, decompile_env())
         elif path == "/api/accent":
-            # MT42：读 Windows 注册表系统强调色（ARGB），供前端 M3 动态取色
+            # 读 Windows 注册表系统强调色（ARGB），供前端 M3 动态取色
             info = read_accent_color()
             if info:
                 self._send_json(200, info)

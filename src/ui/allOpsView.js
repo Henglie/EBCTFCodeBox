@@ -388,11 +388,9 @@ export function renderAllOpsView(host, options = {}) {
 
   const refresh = () => {
     if (!host.isConnected) return;
-    const pending = typeof applyFilter._cancel === "function" ? applyFilter._cancel() : false;
     cachedGroups = null;
-    // 空搜索框不因科普数据到达而整页重建；但若上一轮分帧渲染尚未完成，
-    // 取消后必须重启，否则卡片会停在半截（计数与 DOM 不一致）。
-    if (input.value || pending) applyFilter(input.value);
+    // 空搜索框不重建当前 DOM（别名只影响后续搜索 hay）；非空时才取消并按新别名重过滤。
+    if (input.value) applyFilter(input.value);
   };
   _activeRefresh = refresh;
   eduContentReady().then(() => {

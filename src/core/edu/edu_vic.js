@@ -1,6 +1,6 @@
 /*
  * edu_vic.js — 科普卡候选（VIC 密码）。纯数据，无 import 无副作用。
- * 供 M 归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
+ * 供归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
  * 来源：Wikipedia「VIC cipher」+ J. Savard quadibloc 专文（均 2026-09-22 访问）。
  */
 export default {
@@ -38,7 +38,7 @@ export default {
       "传输层两约定（补 null 凑 5 的倍数、密钥组按日期第 6 位插入密文）不改变密码本体，本工具默认不纳入输出，" +
         "以保证编码/解码严格互逆；Savard 全例（含这些传输步骤）已在交付验证中逐层对拍。",
       "Wikipedia 例的全部派生线（A 到 S）、棋盘输出，以及 Savard 例的两次换位中间值与最终密文，均已逐字复现" +
-        "（见 verify_classic2_a.mjs 向量表）。",
+        "（见本项目向量表）。",
       "安全边界：密钥熵最终收敛到约 38 位（Line-H 约 34 位 + 密钥组位置），现代计算机一日内可暴力穷举——" +
         "仅作 CTF 与密码史教学，不可用于真实保密。",
       "来源：Wikipedia「VIC cipher」https://en.wikipedia.org/wiki/VIC_cipher ；" +

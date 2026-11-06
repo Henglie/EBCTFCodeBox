@@ -5,7 +5,7 @@
  * A5/1 and A5/2 "voice privacy" encryption algorithms》(1998) 参考实现
  * （osmocom airprobe a5-1-2.h 镜像，**norev 语义**——官方原版 keysetup 无字节
  * 反转，用户 key 输入按序装载；airprobe 镜像额外加的 `key_reversed` 反转是
- * 变异，M 已用官方向量实测排除：norev 版 A5/2 输出与官方向量逐字节一致）：
+ * 变异，已用官方向量实测排除：norev 版 A5/2 输出与官方向量逐字节一致）：
  *
  * 四个 LFSR（Galois 反向，Fibonacci 抽头）：
  *   R1：19 位，反馈抽头 bit 13/16/17/18，输出位 bit 18

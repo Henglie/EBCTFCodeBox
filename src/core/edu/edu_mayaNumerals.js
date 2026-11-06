@@ -1,6 +1,6 @@
 /*
  * edu_mayaNumerals.js — 科普卡候选（玛雅数字）。纯数据，无 import 无副作用。
- * 供 M 归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
+ * 供归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
  * EduEntry 契约见 src/core/eduContent.js 头注释。
  * 来源：dCode「Numération Maya」/ Wikipedia「Maya numerals」（均 2026-09-22 访问）。
  */

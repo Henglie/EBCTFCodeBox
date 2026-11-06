@@ -1,8 +1,8 @@
 /*
- * edu-r18.en.js — English edu cards for the 4 R18 ops (candidates, not wired).
+ * edu-r18.en.js — English edu cards for the 4 ops (candidates, not wired).
  * Source: edu-r18.js (Chinese), translated 1:1. Example vectors and formulas are
  * copied verbatim; only prose is translated. Aka lists keep every Chinese alias
- * and add English ones. All samples come from real runs (R6/R8/R10/R18 verify).
+ * and add English ones. All samples come from real runs and independent cross-checks.
  *
  * M merge: copy to src/core/edu-en/edu-r18.en.js, import it in eduContent.en.js,
  * and add it to the registerEduEn({...}) object.
@@ -39,10 +39,10 @@ export default {
       "that single combination and run again.",
     examples: [
       {
-        in: "资料/软件测试用文件/LSB-AsianCheetah.png (600×450 RGBA PNG)",
+        in: "LSB-AsianCheetah.png (600×450 RGBA PNG)",
         param: "default channels=all, bits=0-7, orders=msb,lsb, scans=row,col, offsets=0-7",
         out: "Top1 = B/bit0 MSB-first row-major off0, score=1225.6, hit SharifCTF{e8e12db2fc654f3b50f3da4901ab986e}",
-        desc: "R6 verify_lsbdeep.mjs real run: 2048 combinations, 1216 candidates, flag ranked #1; R18 verify hits it again",
+        desc: "Real run: 2048 combinations, 1216 candidates, flag ranked #1; re-test hits it again",
       },
       {
         in: "the same LSB-AsianCheetah.png",
@@ -74,7 +74,7 @@ export default {
       "Column-major (col) often differs from row-major on square images; if row-major is all noise, set scans=col and try again.",
       "Offsets 1..7 are cheap and run by default; if you know the payload starts at bit N, set offsets=N to cut the sweep to 1/8.",
       "A flag candidate ranking first is a scoring design, not proof that every other candidate is meaningless; Base64/URL-shaped candidates are worth opening too.",
-      "Sources and limits: R6 `verify_lsbdeep.mjs` 45/0; default 16MP pixel cap, 4096 characters per candidate; the difference from zstegScan is column-major, MSB/LSB bit order and 0..7 offsets.",
+      "Sources and limits: local cross-check 45/0; default 16MP pixel cap, 4096 characters per candidate; the difference from zstegScan is column-major, MSB/LSB bit order and 0..7 offsets.",
     ],
     aka: [
       "LSB 深入分析", "LSB 深度扫描", "LSB 全通道扫描", "LSB 位平面分析", "LSB 多偏移扫描",
@@ -111,10 +111,10 @@ export default {
       "Start from the files with small d and inspect the phase images for text.",
     examples: [
       {
-        in: "资料/软件测试用文件/光栅图demo.png (600×300 RGBA PNG)",
+        in: "光栅图demo.png (600×300 RGBA PNG)",
         param: "default maxDivisor=10, both=true, fillMode=auto",
         out: "68 images: x axis 38, y axis 30; x-5-1.png exists (axis=x, divisor=5, phase=0)",
-        desc: "R10 verify_r10.mjs 49/0 real run; a 5×5 sampling of x-5-1 spells Password is here!",
+        desc: "Real run 49/0; a 5×5 sampling of x-5-1 spells Password is here!",
       },
       {
         in: "the same 光栅图demo.png",
@@ -123,7 +123,7 @@ export default {
         desc: "limit semantics: over-limit raises an error with the divisor list instead of returning the first 10 and pretending success",
       },
       {
-        in: "2×2 24-bit BMP (R10 synthetic case)",
+        in: "2×2 24-bit BMP (synthetic case)",
         param: "default parameters",
         out: "2 x-axis images + 2 y-axis images = 4, all PNG",
         desc: "BMP input uses the same split and PNG encoder; 24-bit BGR order is corrected",
@@ -146,7 +146,7 @@ export default {
       "With alpha the default fill is transparent; if the output looks all black, compare fillMode=black and fillMode=transparent.",
       "When there are many products, start with small d (2, 3, 5, 10); large d makes the image sparse and text may be only a few columns wide.",
       "Limits are hard: `maxImages` defaults to 128 and `maxTotalPixels` to 64M; exceeding them raises RASTER_LIMIT_* instead of freezing the browser.",
-      "Sources and limits: R10 `verify_r10.mjs` 49/0; reference `资料/参考/反编py/zbCrypto/zbCrypto.zbRasterTerminator.py`; pure JS, zero DOM.",
+      "Sources and limits: local cross-check 49/0; reference `zbCrypto.zbRasterTerminator.py`; pure JS, zero DOM.",
     ],
     aka: [
       "光栅隐写", "光栅图拆图", "zbRasterTerminator", "光栅终止器", "相位拆图",
@@ -185,10 +185,10 @@ export default {
       "password, non-MP3 input and LSF frames all produce explicit error codes.",
     examples: [
       {
-        in: "资料/工程留存/R10/_assets/a.mp3",
+        in: "a.mp3",
         param: "password=ILOVEYOUYOULOVEME, extract=true",
         out: "flag{1251_521_m1xueb1n9chen9ti@nm1mi} (37-byte plaintext; 233 frames, 931 candidate bits, 64-byte hidden payload)",
-        desc: "R10 verify_r10.mjs matches the official mp3stego_Decode.exe oracle byte-for-byte; R18 verify hits it again",
+        desc: "Matches the official mp3stego_Decode.exe oracle byte-for-byte; re-test hits it again",
       },
       {
         in: "the same a.mp3",
@@ -226,7 +226,7 @@ export default {
       "`extract=false` only returns the encrypted payload; it is useful for confirming whether hidden data exists before trying passwords.",
       "The hidden length lData is capped at 4 MiB; exceeding it reports `MP3STEGO_PAYLOAD_LIMIT` without allocating huge memory.",
       "The layout depends on the encoder's 32-bit size_t and little-endian host order; official 32-bit Windows/Linux builds match, other builds may not.",
-      "Sources and limits: R10 `verify_r10.mjs` 49/0 plus the exe oracle; algorithm replicated from MP3Stego 1.1.19 source, no external exe involved.",
+      "Sources and limits: local cross-check 49/0 plus the exe oracle; algorithm replicated from MP3Stego 1.1.19 source, no external exe involved.",
     ],
     aka: [
       "MP3Stego", "MP3 隐写", "MP3 隐写解码", "mp3stego -X -P", "MP3Stego 解码",
@@ -262,16 +262,16 @@ export default {
       "`rawFileName` changes the prefix.",
     examples: [
       {
-        in: "资料/软件测试用文件/misc22-缩略图.jpg",
+        in: "misc22-缩略图.jpg",
         param: "default maxCount=8, minBytes=0",
         out: "1 image: EXIF IFD1 | image/jpeg | 300×50 | 8201 B",
-        desc: "R8 verify_thumb.mjs 46/0 and PIL cross-check agree; R18 verify confirms 8201 B again",
+        desc: "Local cross-check 46/0 and PIL agree; re-test confirms 8201 B again",
       },
       {
-        in: "资料/软件测试用文件/014.jpg",
+        in: "014.jpg",
         param: "default parameters",
         out: "no embedded thumbnail: no EXIF/JFIF embedded thumbnail found",
-        desc: "with no thumbnail the tool says so explicitly, does not throw and does not fabricate files (R2 regression requirement)",
+        desc: "with no thumbnail the tool says so explicitly, does not throw and does not fabricate files (regression requirement)",
       },
     ],
     formulas: [
@@ -290,7 +290,7 @@ export default {
       "The JFIF APP0 thumbnail is raw RGB, not JPEG; this tool converts it to PNG so the downloaded file opens directly.",
       "Files such as 014.jpg with no IFD1 return \"not found\" explicitly rather than a decode failure; try another file.",
       "Only standard JPEG/PNG thumbnail locations are supported; thumbnails hidden in the file trailer or custom chunks need binwalk/foremost, not this op.",
-      "Sources and limits: R8 `verify_thumb.mjs` 46/0; PIL cross-check reports 300×50 / 8201 B for misc22; `014.jpg` has no thumbnail and does not crash.",
+      "Sources and limits: local cross-check 46/0; PIL cross-check reports 300×50 / 8201 B for misc22; `014.jpg` has no thumbnail and does not crash.",
     ],
     aka: [
       "EXIF 缩略图", "EXIF 缩略图提取", "内嵌缩略图", "JPEG 缩略图", "IFD1 缩略图",
@@ -309,7 +309,7 @@ export default {
         "in": "LSB-AsianCheetah.png (600x450 RGBA PNG)",
         "param": "Data Extract: B channel / bit0 / MSB-first / row / offset=0",
         "out": "SharifCTF{e8e12db2fc654f3b50f3da4901ab986e}",
-        "desc": "Same real sample used by R6 verify_lsbdeep.mjs; StegSolve is the manual cross-check."
+        "desc": "Same real sample used by the earlier local run; StegSolve is the manual cross-check."
       },
       {
         "in": "Multi-frame GIF",

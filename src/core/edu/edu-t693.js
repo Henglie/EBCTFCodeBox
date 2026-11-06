@@ -1,5 +1,5 @@
 /*
- * edu_t693_zh.js — T693 两 op 科普卡候选（中文）。
+ * edu_t693_zh.js — 两 op 科普卡候选（中文）。
  * 候选文件，未接线；示例 out 值全部来自本项目实跑（verify_t693.mjs 43/0，真实样例为
  * public/wasm/7zz.wasm 等 + bin/macOS启动器 universal2 fat），未编造。
  */
@@ -68,7 +68,7 @@ export default {
       "__cstring/__objc_methname section 是字符串金矿，逆向第一步 strings 一遍；本工具给出每个 section 的 offset/size 便于精确提取。",
       "arm64e（0x0100000C+指针认证）与 arm64 的 cputype 相同位段不同 subtype——工具按 cputype 显示 arm64e。",
       "本工具不做反编译：函数体逆向用 Hopper/Ghidra/IDA；签名校验（LC_CODE_SIGNATURE）只展示位置不验证。",
-      "标准来源：Apple 开源 mach-o/loader.h 与 fat.h（Darwin XNU/ctools）；结构与本项目自带的 universal2 真实启动器（MT646 产物）逐字节对拍。",
+      "标准来源：Apple 开源 mach-o/loader.h 与 fat.h（Darwin XNU/ctools）；结构与本项目自带的 universal2 真实启动器逐字节对拍。",
     ],
     aka: ["Mach-O 解析", "MachO", "mach-o 结构", "Mach-O 文件分析", "fat binary",
       "universal binary 解析", "machoParse", "Mach-O header", "mach-o load commands",

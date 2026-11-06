@@ -1,5 +1,5 @@
 /*
- * ioCodingToolbar.js — T701 全局输入/输出编码工具栏（文本 / 字节双模）。
+ * ioCodingToolbar.js — 全局输入/输出编码工具栏（文本 / 字节双模）。
  *
  * 职责：
  *   1. 在输入框上方提供 charset（auto + CHARSETS）、视图（text/hex/base64/escaped）、
@@ -17,7 +17,7 @@
  *   · 不改 ioArea 的 .value 代理、撤销、粘贴、A-/A+；工具条只是插在输入框前的一行 DOM。
  *   · 不自动改写 outArea.value：main.js 需在输出落框前调用 controller.formatOutput()，
  *     否则无法区分「op 返回的文本」与「加载中占位 / 错误文案」。精确接线见
- *     资料/工程留存/T701/main-hook.md。
+ *     开发档案 main-hook.md。
  *   · 状态为会话态；模块级默认值在多次 renderOp 之间复用，切换 op 不丢选择。
  *     resetIoCodingDefaults() 仅供测试/重置。
  */
@@ -446,7 +446,7 @@ export function attachIoCodingToolbar(area, opts = {}) {
     // 算法自带输入编码参数（inputType/inputEncoding/…）时，工具栏视图会把同一段文本再解一次。
     // 此时让位给算法：视图强制文本，并在 prepareInput 里提示原因。
     const opParams = op && Array.isArray(op.params) ? op.params : [];
-    // A 类输入编码键（T771 盘点 169 条）：命中任一个就说明 op 自己解释输入，视图必须让位。
+    // A 类输入编码键（盘点 169 条）：命中任一个就说明 op 自己解释输入，视图必须让位。
     // outEnc 在 decode 方向才是主输入承载，按方向单独计入；encode 方向不算。
     const dir = String(params.mode || params.dir || params.direction || "").toLowerCase();
     const decodeDir = dir === "decode" || dir === "decrypt" || dir === "dec";

@@ -1,8 +1,8 @@
 /*
- * edu-t813.js — T813 批 10 个 CyberChef 对齐 op 的科普卡（T814 补齐）。
+ * edu-t813.js — 10 个 CyberChef 对齐 op 的科普卡。
  * 纯数据，无 import、无副作用。
  *
- * 权威来源（逐卡注明，未标注的一律取自项目内 T813 交付的 op 实现与 CyberChef 操作名）：
+ * 权威来源（逐卡注明，未标注的一律取自项目内 op 实现与 CyberChef 操作名）：
  *   ipChecksum        — RFC 1071《Computing the Internet Checksum》§1/§2；CyberChef「TCP/IP Checksum」
  *   xorChecksum       — CyberChef「XOR Checksum」；列/块异或校验的通用定义
  *   parityBit         — CyberChef「Parity Bit」；奇偶校验的通用定义（ISO/IEC 2382 术语）

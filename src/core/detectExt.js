@@ -20,7 +20,25 @@ const DETECTORS = {
   rot47: cs(/^[\x21-\x7e]+$/, 4, 0.1),
   atbash: cs(/^[A-Za-z\s]+$/, 4, 0.1),
   scytale: cs(/^[A-Za-z\s]+$/, 4, 0.1),
-  shiftKey: cs(/^[A-Za-z\s]+$/, 4, 0.1),
+  shiftKey: (t) => {
+    const s = (t || "").trim();
+    if (s.length < 4) return 0;
+    // keyboard.js SHIFT_KEY_MAP 的键/值（不 import 以保持注册时序）
+    const keysSet = ["^", "%", "&", "(", ")", "!", "@", "#", "$", "*", "`", "-", "=", "[", "]", "'", ";", "\\", "/"];
+    const valsSet = ["6", "5", "7", "9", "0", "1", "2", "3", "4", "8", "~", "_", "+", "{", "}", '"', ":", "|", "?"];
+    let keys = 0, symbols = 0, mapped = 0;
+    for (const ch of s) {
+      if (keysSet.includes(ch)) {
+        mapped++;
+        if (ch !== "'") { keys++; symbols++; }
+      } else if (valsSet.includes(ch)) {
+        mapped++;
+        if (!/[0-9A-Za-z]/.test(ch)) symbols++;
+      }
+    }
+    // 至少 2 个上档符号键，或 2 个符号 + 3 个映射字符；纯文本/纯数字不命中
+    return (keys >= 2 || (symbols >= 2 && mapped >= 3)) ? 0.1 : 0;
+  },
 
  // ---- fancy 参数化（默认参数可能解不出，低置信度兜底）----
   railFence: cs(/^[A-Za-z\s]+$/, 4, 0.1),
@@ -49,7 +67,18 @@ const DETECTORS = {
 
  // ---- radix（字符集探测）----
   radixConvert: cs(/^[0-9]+$/, 2, 0.15),
-  asciiRadix: cs(/^[0-9]+$/, 2, 0.15),
+  asciiRadix: (t) => {
+    const s = (t || "").trim();
+    if (!s) return 0;
+    const parts = s.split(/\s+/);
+    if (parts.length < 2) return 0;
+    // 按默认 encode 的定宽 token 识别：hex 2 位 / bin 7-8 位 / oct 3 位 / dec 3 位
+    if (parts.every((p) => /^[0-9a-fA-F]{2}$/.test(p))) return 0.2;
+    if (parts.every((p) => /^[01]{7,8}$/.test(p))) return 0.2;
+    if (parts.every((p) => /^[0-7]{3}$/.test(p))) return 0.15;
+    if (parts.every((p) => /^\d{3}$/.test(p) && Number(p) <= 255)) return 0.15;
+    return 0;
+  },
   ieee754: cs(/^[0-9a-fA-F\s]+$/, 8, 0.2),
   bcd: (t) => {
     const s = (t || "").trim().replace(/\s/g, "");
@@ -58,8 +87,8 @@ const DETECTORS = {
   binPad: cs(/^[01\s]+$/, 8, 0.4),
   hybridCode: (t) => {
     const s = (t || "").trim();
- // 混合进制：含 0/1 且有分隔
-    return /^[01\s]+$/.test(s) && s.length >= 4 ? 0.2 : 0;
+    // 混合进制：b/x/o/d 前缀 token，至少 3 个（默认 hex 输出为 xNN）
+    return /^(?:x[0-9a-fA-F]+|d\d+|o[0-7]+|b[01]+)(?:\s+(?:x[0-9a-fA-F]+|d\d+|o[0-7]+|b[01]+)){2,}$/.test(s) ? 0.2 : 0;
   },
   asciiOffset: cs(/^[0-9\s]+$/, 2, 0.2),
   completion: (t) => {

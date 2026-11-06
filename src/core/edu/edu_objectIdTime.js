@@ -1,6 +1,6 @@
 /*
  * edu_objectIdTime.js — 科普卡候选（ObjectID 时间戳解析）。纯数据，无 import 无副作用。
- * 供 M 归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
+ * 供归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
  * 来源：BSON Specification 1.1、MongoDB Database Manual「BSON Types → ObjectId」「ObjectId.getTimestamp()」
  * 官方算例（均 2026-09-23 访问，全文与出处见 权威来源.md）。
  */

@@ -4,7 +4,7 @@
 // 四大分区（一级标题 + 卡片）：
 // 1. 扩展：列已加载扩展（op/解码贡献/AI 提供方计数）+ 停用/卸载；从 URL 加载新扩展；
 //   内置参考扩展一键启用；配置导出 / 导入（已启用扩展源清单 JSON）。
-// 2. 离线增强包（T709）：同一视觉分组内——批量操作（一键缓存全部 / 一键移除全部 + 批量状态）
+// 2. 离线增强包：同一视觉分组内——批量操作（一键缓存全部 / 一键移除全部 + 批量状态）
 //   与逐包明细（大小、已缓存、未缓存、失败、单项安装/移除）。
 // 3. 天珩字库：首屏子集 + 全量四平面按需加载/状态。
 // 4. MCP：导出工具箱能力清单（tools/resources JSON），供外部 MCP 客户端 / AI 接入。
@@ -17,7 +17,7 @@ import {
   exportConfig, importConfig,
 } from "../plugin/pluginHost.js";
 import { exportManifest } from "../plugin/mcpBridge.js";
-// 离线增强包：数据/状态迁移在内核，本面板负责持久化与 SW 消息接线（T709 迁移入口）。
+// 离线增强包：数据/状态迁移在内核，本面板负责持久化与 SW 消息接线。
 import { PACKS, packPlan, markInstalled, markFailed } from "../core/offlinePacks.js";
 import { offlinePackPanel } from "./offlinePackPanel.js";
 // 天珩字库：复用 fontLoader.js 的平面加载/状态订阅，不复制逻辑。

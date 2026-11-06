@@ -1,6 +1,6 @@
 /*
  * edu_phillips.js — 科普卡候选（Phillips 密码）。纯数据，无 import 无副作用。
- * 供 M 归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
+ * 供归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
  * 来源：ACA「PHILLIPS」PDF（2026-09-22 访问）+ dCode「Phillips Cipher」。
  */
 export default {

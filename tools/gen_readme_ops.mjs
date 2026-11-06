@@ -42,6 +42,9 @@ while (stack.length) {
 }
 
 for (const file of closure.sort()) await import(pathToFileURL(file).href);
+// T622 后 main.js 不再静态 import 全部算法；registerAll 才是全量 barrel。
+// 必须再导入它，否则 README 清单会读到 lazyTables 的 stub（只有 id/cat/name，desc 为空）。
+await import(pathToFileURL(join(core, "registerAll.js")).href);
 
 const clean = (value) => String(value || "")
   .replaceAll("|", "\\|")

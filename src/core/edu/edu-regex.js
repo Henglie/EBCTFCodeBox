@@ -1,6 +1,6 @@
 /*
  * edu-regex.js — 通用正则提取/替换 regexTool 科普卡（中文）。
- * 示例 out 全部来自本项目实跑（见 资料/工程留存/_m_verify_20261026/gen_edu_examples.mjs），未编造。
+ * 示例 out 全部来自本项目实跑（由生成脚本 gen_edu_examples.mjs 产出），未编造。
  */
 export default {
   regexTool: {

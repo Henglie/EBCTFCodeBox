@@ -26,7 +26,7 @@
  *              dir=compress 复用 lz4CompressBlock（哈希链贪心 + MFLIMIT=12/LASTLITERALS=5），
  *              只输出裸 block，明确不伪造 frame。
  *   bzip2Dec — 压缩方向 BLOCKED：纯 JS 需 BWT+MTF+RLE1+Huffman 全链，且无内置压缩器可对拍，
- *              按「写不清宁缺」不提供假压缩；详见 资料/工程留存/T750/A3.md。
+ *              按「写不清宁缺」不提供假压缩；详见开发档案。
  *   bzip2Dec — bzip2 流格式（BZh+级别；块 magic 0x314159265359 / 尾 magic
  *              0x177245385090；CRC-32/BZIP2 poly 0x04C11DB7 MSB-first；24 位 origPtr；
  *              16×16 符号位图；2-6 棵 Huffman 树 + 50 符号换树选择子 MTF+一元码；

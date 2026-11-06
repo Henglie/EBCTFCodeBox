@@ -1,5 +1,5 @@
 /*
- * recipeStore.js — 配方命名保存 / 自动草稿 / 分享 URL（T698/T699）。
+ * recipeStore.js — 配方命名保存 / 自动草稿 / 分享 URL。
  *
  * 存储全部在本地 localStorage；分享链接只把配方+输入压进 hash，不发网络请求。
  * 压缩走 core/compress 的 deflate-raw（原生 Streams 不可用时自动退 stored deflate）。

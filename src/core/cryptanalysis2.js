@@ -207,7 +207,7 @@ function hillKnownPlain(text, p = {}) {
 // Playfair 爬山破解（模拟退火 + 四元组适应度）
 // ============================================================
 
-// 语料：Project Gutenberg 公有领域文本（T623 扩充，quad 覆盖 10.729%）。
+// 语料：Project Gutenberg 公有领域文本（quad 覆盖 10.729%）。
 // 大表已外置为 ./data/quadgramCorpus.js（约 348KB），本模块仍可整文件惰载；
 // n-gram 频率表改为首次使用时解码，避免 Worker 启动时为所有 analysis op 付建表成本。
 

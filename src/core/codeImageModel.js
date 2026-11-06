@@ -1,7 +1,7 @@
 /*
  * codeImageModel.js — 编码图字形的低算力离线 k-NN 原型模型。
  *
- * 设计目标（T760-A）：
+ * 设计目标：
  *   · 纯函数、零 UI 依赖：位图解码、建模型、分类、权重解析都不碰 DOM。
  *   · 原型向量直接取 codeImageFingerprints.json 的槽位（16×16 位图 + 宽高比）。
  *   · 默认零权重 = 未校准；可选 public/models/codeimage.meta.json + codeimage.dat

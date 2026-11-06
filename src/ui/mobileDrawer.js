@@ -3,8 +3,8 @@
  *
  * 设计：
  * 1. 桌面 >860px 完全不介入：汉堡/遮罩仅由 CSS 在窄屏显示，导航保持原 rail/折叠行为。
- * 2. 窄屏侧栏不再自动收成 60px rail。main.js 的 navRail() 需在窄屏返回 false（接线补丁见
- *    资料/工程留存/UI-移动抽屉/），由 renderNav 正常渲染分类名/计数/二级算法名。
+ * 2. 窄屏侧栏不再自动收成 60px rail。main.js 的 navRail() 需在窄屏返回 false，由
+ *    renderNav 正常渲染分类名/计数/二级算法名。
  * 3. 本模块自行注入汉堡按钮与遮罩，避免改 index.html；开合状态只加/删 class，不重建导航。
  * 4. 关闭时机：汉堡、遮罩、Esc、点击二级算法/置顶入口、hashchange、切回桌面宽度、main.js 调 close。
  * 5. 可访问性：role=dialog + aria-modal + aria-expanded + 焦点移入/循环/归还。

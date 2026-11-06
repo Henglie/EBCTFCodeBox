@@ -37,7 +37,7 @@ export function ensureExpStyles() {
 }
 
 // ---- 图标兜底：open_in_full 未必在 icons.js，缺则退回 font_download 之外的展开语义图标 ----
-// icons.js 缺图标返回占位方框（不抛错），此处直接用名字，交由 M 决定是否补 open_in_full。
+// icons.js 缺图标返回占位方框（不抛错），此处直接用名字，交由后续决定是否补 open_in_full。
 function expandIconName() {
   return "open_in_full";
 }

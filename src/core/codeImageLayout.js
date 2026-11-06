@@ -1,9 +1,9 @@
 /*
- * codeImageLayout.js — 编码图 A0 槽位布局 sidecar 的按需加载器（T774）。
+ * codeImageLayout.js — 编码图 A0 槽位布局 sidecar 的按需加载器。
  *
  * 资产：public/data/codeimage/codeImageLayout.bin（自定义二进制 CIL1）。
- *   来源研究件：资料/工程留存/v0.1.14-预研/codeimage_a0/codeImageLayout.json（1.58 MB）。
- *   生成器：资料/工程留存/T774/assets/build_layout_asset.mjs。
+ *   来源研究件：codeImageLayout.json（1.58 MB）。
+ *   生成器：build_layout_asset.mjs。
  *   布局只提供对照表槽位的稳定 bbox/行列/单元 id，不参与字形分类；
  *   打开编码图页时才动态加载，缺失/损坏时静默返回 null，不影响识图主流程。
  *

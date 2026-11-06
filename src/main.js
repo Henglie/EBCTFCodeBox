@@ -26,7 +26,7 @@ import { magicFilterReset, filterMagicCands, filterBruteCands, magicFilterBar } 
 import { magicDecode } from "./core/magic/magic.js";
 import { runMagic, cancelMagic, pauseMagic, resumeMagic } from "./core/magic/magicClient.js"; // 真多线程调度（Worker 优先，降级主线程）+ 中断/暂停接管
 import { createResultToc } from "./ui/resultToc.js"; // 一键解码结果右侧浮动缩略目录
-import { batchPanel } from "./ui/batchPanel.js"; // 批处理面板（多文件 / 目录 + ZIP，T696）
+import { batchPanel } from "./ui/batchPanel.js"; // 批处理面板（多文件 / 目录 + ZIP）
 import { planBatch as batchPlanBatch, runBatch as batchRunBatch, buildZip as batchBuildZip, makeCancelToken as batchMakeCancelToken } from "./core/batchRun.js"; // 批处理内核
 // fileAnalysis / imageAnalysis / audioAnalysis（智能分析三链，含 QR·pcap·inflate·音频子树）已改懒载，见 ensureAnalysisChains()
 import { loadLicense, OPENSOURCE_LICENSE } from "./core/license.js";
@@ -58,7 +58,7 @@ import { openDecodeStrength } from "./ui/decodeStrength.js"; // 「解码强度�
 import { applyAccent, enableHctEngine, DEFAULT_ACCENT, resetAccent } from "./ui/dynamicColor.js"; // M3 动态取色（HSL 近似 + HCT 精确引擎）
 import { themeVariant } from "./ui/themePicker.js";
 import { attachEditorToolbar } from "./ui/editorToolbar.js"; // 通用编辑框工具条（记事本化，全站复用）
-import { attachIoCodingToolbar } from "./ui/ioCodingToolbar.js"; // T701 全局 I/O 编码 + 文本/字节双模
+import { attachIoCodingToolbar } from "./ui/ioCodingToolbar.js"; // 全局 I/O 编码 + 文本/字节双模
 import { attachTextContextMenu } from "./ui/textContextMenu.js"; // 编辑框右键文本处理菜单
 import { attachEditHistory } from "./ui/editHistory.js"; // 通用编辑框撤销/重做（contenteditable/textarea）
 import { loadFavorites, isFavorite, toggleFavorite, openFavMenu } from "./ui/favorites.js";
@@ -1257,7 +1257,7 @@ function renderPluginsView(host) {
     });
 }
 
-// ---- 批处理入口（T696）----
+// ---- 批处理入口 ----
 // 多文件 / 目录拖入 → 批处理面板；单文件仍走原有 processFile / loadFileIntoArea，路径不变。
 // 面板用独立 modal 承载，不改工作区布局；op 页入口把当前 op + 参数快照传给面板。
 let _batchOverlay = null;
@@ -2009,7 +2009,7 @@ function renderOneKeySnapshot(outWrap) {
 // 分组保序：以每个 base 首次出现位置为组序，组内保 magic 综合分原顺序（最优在前）。
 function groupSweepCands(cands) { return groupSingleCandidates(cands); }
 
-// T700：证据等级 + 信号 chips。四态/信号键在 magic.finalizeResults 里生成，这里只做展示。
+// 证据等级 + 信号 chips。四态/信号键在 magic.finalizeResults 里生成，这里只做展示。
 function renderEvidenceChips(c) {
   const row = el("div", { class: "ok-evidence" });
   for (const k of c.chips || []) {
@@ -3678,7 +3678,7 @@ function renderOp() {
   );
   $ws.append(io);
 
-  // T701 全局 I/O 编码工具栏：只在主输入框存在时挂；输出框引用交给 controller 统一格式化。
+  // 全局 I/O 编码工具栏：只在主输入框存在时挂；输出框引用交给 controller 统一格式化。
   if (!hasFields && showInput) {
     attachIoCodingToolbar(inArea, {
       outArea,
@@ -4432,7 +4432,7 @@ async function convert(src) {
     text = vals.join(op.fieldsJoin ?? "\n");
   } else if (inArea) {
     text = inArea.value;
-    // T701：hex/base64/escaped 视图下空串是合法字节输入，不能按「空输入」早退。
+    // hex/base64/escaped 视图下空串是合法字节输入，不能按「空输入」早退。
     if (text === "" && ioViewIsText && (op.encode || op.decode)) { outArea.value = ""; renderOutMedia(document.getElementById("ioOutMedia"), ""); return; }
   } else {
  // ：主输入框隐藏（io=none 且未启用自定义实现）→ 空输入直跑 run-only（keygen 类合法调用）。
@@ -5801,7 +5801,7 @@ async function detectRuntimeAndPreload() {
   } catch { isLocal = false; }
   window.__ebctfRuntime = isLocal ? "local" : "server";
   if (isLocal) {
-    // 全量字体是 T709 的可选离线包，不能因本地桥在线就自动拉 31MB。
+    // 全量字体是可选离线包，不能因本地桥在线就自动拉 31MB。
     // 用户装过 fonts 包才后台补全量；未装时仍可用首屏子集与手动加载。
     if (offlinePackInstalled("fonts")) preloadAllPlanes();
     initSystemAccent();   // 仅本地版且用户未选色时，用系统强调色做默认动态取色（失败静默降级）

@@ -58,7 +58,7 @@ function normalizeOem(v) {
   throw new Error(`OCR：不支持的 Engine Mode "${name}"`);
 }
 
-// 缺包/加载失败的统一可读出口：保留底层原因与失败 URL，另附离线包安装入口（T812 §9-2）。
+// 缺包/加载失败的统一可读出口：保留底层原因与失败 URL，另附离线包安装入口。
 const INSTALL_HINT = "离线包未安装：请到 扩展面板 → 离线包 → OCR（eng+chi_sim）安装后重试。";
 function withInstallHint(msg) {
   const text = String(msg == null ? "" : msg);

@@ -1,5 +1,5 @@
 /*
- * numerals.js 自测：14 个记数 op 的已知向量/往返，以及 T757 的 F3/F8/F10 预算边界。
+ * numerals.js 自测：14 个记数 op 的已知向量/往返，以及 F3/F8/F10 预算边界。
  * 用法：node addons/dcode-extras-2026-10/tests/numerals.selftest.mjs
  */
 

@@ -10,7 +10,7 @@
  * - **默认零网络请求**：加载与验证全程不发起任何网络请求；只有用户显式选择"拉取"并勾选
  *   "允许联网"后，才会向官方 endpoint 发起请求。
  *
- * 规范依据（URL、访问日期与许可见工程留存内「公开随机信标」一卡的规范来源清单）：
+ * 规范依据（URL、访问日期与许可见开发档案内「公开随机信标」一卡的规范来源清单）：
  * - drand（league of entropy，schemeID=pedersen-bls-chained）：
  *     msg        = SHA-256(previous_signature ‖ round_be8)   （chained；unchained 时去掉 previous_signature）
  *     signature  = BLS12-381(σ∈G2 96B, pk∈G1 48B)，DST = BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_

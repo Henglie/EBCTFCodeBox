@@ -1,5 +1,5 @@
 /*
- * Multiple-Bombe candidate module (T762 C group).
+ * Multiple-Bombe candidate module.
  * Algorithm derived from CyberChef MultipleBombe.mjs.
  * CyberChef: Crown Copyright 2019, Apache-2.0.
  *

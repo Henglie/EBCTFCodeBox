@@ -70,6 +70,9 @@ const EXCLUDE_RULES = [
   // 首次在线使用后由 SW runtime cache 回填，此后离线可用——与 sw.js 的
   // RUNTIME_CACHE_FIRST "/src/vendor/" 两处保持同步。两份许可 .txt 仍留预缓存。
   [/^src\/vendor\/(codemirror\.bundle\.js|openpgp\.min\.js|bwip-js\.js|bwipp\.js)$/, "编辑器/PGP/条码内核（按功能懒加载）"],
+  // CyberChef vendor 引擎（T819/T820）：CSS/JS/SQL/XPath 解析与 jq/YARA 均为打开对应
+  // op 才 dynamic import；不进首屏预缓存，首次在线使用后由 SW runtime cache 回填。
+  [/^src\/vendor\/(t819\/|jq-web\/|libyara-wasm\/).*\.mjs$/, "CyberChef vendor 引擎（按功能懒加载）"],
   // 官方插件包（dCode 补全集等）：随发行包分发但默认不启用，用户在插件面板
   // 显式加载时才动态 import。首次在线加载后由 SW runtime cache 回填——
   // 与 sw.js 的 RUNTIME_CACHE_FIRST "/addons/" 两处保持同步。

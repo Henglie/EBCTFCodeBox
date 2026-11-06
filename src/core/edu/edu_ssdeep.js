@@ -1,6 +1,6 @@
 /*
  * edu_ssdeep.js — 科普卡候选（SSDEEP 模糊哈希）。纯数据，无 import 无副作用。
- * 供 M 归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
+ * 供归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
  * 来源：ssdeep 官方源码 fuzzy.c + Kornblum 2006 CACM 论文 + python-ssdeep 测试向量
  * + ppdeep README（均 2026-09-22 访问，全文见 ref/SOURCES_A.md）。
  */

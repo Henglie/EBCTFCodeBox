@@ -1,6 +1,6 @@
 /*
  * edu_iban.js — 科普卡候选（IBAN mod-97 校验）。纯数据，无 import 无副作用。
- * 供 M 归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
+ * 供归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
  * 来源：ISO 13616-1 算法（Wikipedia IBAN 条目镜像）+ iban.com 结构页（均 2026-09-22 访问）。
  */
 export default {

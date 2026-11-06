@@ -1,6 +1,6 @@
 /*
  * edu_rc4Drop.js — 科普卡候选（RC4-drop[n] / CipherSaber-2）。纯数据，无 import 无副作用。
- * 供 M 归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
+ * 供归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
  * 来源：RFC 6229 测试向量、CipherSaber 官方页（ciphersaber.gurus.org）、Bart Massey CipherSaber-2 实现
  * 与 cstest.cs2 向量、Adam Back「Ciphersaber Memorable Test Vectors」（均 2026-09-23 访问，见 权威来源.md）。
  */

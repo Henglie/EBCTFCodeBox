@@ -104,7 +104,7 @@ const RECIPE_FALLBACK = {
   "ui.op.fileLoaded": "📎 已载入 {0}（{1}）· 该操作读取原始文件字节，无需手动转码",
   "ui.op.droppedText": "已载入文本文件 {0}",
   "ui.op.droppedHex": "二进制文件 {0} 已转 hex 载入",
-  // T750：执行智能 / 节点控制 / 快捷键
+  // 执行智能 / 节点控制 / 快捷键
   "ui.recipe.autoRun": "自动执行",
   "ui.recipe.autoRunOff": "自动执行已关闭：改动后点 Bake 或 Ctrl+Enter 运行",
   "ui.recipe.staleLarge": "输入较大，已暂停自动执行。改完点「执行！（Bake！）」或 Ctrl+Enter。",
@@ -351,7 +351,7 @@ function scheduleDraft() {
   clearTimeout(_draftTimer);
   _draftTimer = setTimeout(() => saveDraft(serializeState()), 250);
 }
-// 自动重跑闸门（T750）：手动模式 / 重 op / 大输入 / 运行中一律只标 stale，等 Bake 或 Ctrl+Enter。
+// 自动重跑闸门：手动模式 / 重 op / 大输入 / 运行中一律只标 stale，等 Bake 或 Ctrl+Enter。
 function maybeRunChain() {
   scheduleDraft();
   resetStepSession();
@@ -984,7 +984,7 @@ function importRecipeFromText(text) {
   return applyRecipeData(data);
 }
 
-// T698/T699：一次启动恢复（分享链接优先于自动草稿）。异步解码后重绘一次。
+// 一次启动恢复（分享链接优先于自动草稿）。异步解码后重绘一次。
 let _bootRestored = false;
 let _lastShare = "";
 function restoreOnce() {
@@ -1738,7 +1738,7 @@ function applyMagicCandidate(nodes, ctx) {
 async function runRecipeMagic(anchor) {
   const api = window.__ebctfRecipeMagic;
   if (typeof api !== "function") {
-    setRunStatus("Magic 需要主入口钩子（见 T750/A2.md）", "warn");
+    setRunStatus("Magic 需要主入口钩子", "warn");
     return;
   }
   const src = magicInputText();
@@ -2320,7 +2320,7 @@ export function renderRecipe(container) {
     el("label", { class: "switch", for: "recipeStepToggle" }, stepChk, el("span", { class: "track" }), el("span", { class: "knob" })),
     el("span", {}, tt("ui.recipe.showSteps")),
   ));
-  // T750：Auto Bake 开关。关闭 = 只标 stale，点 Bake / Ctrl+Enter 才跑。
+  // Auto Bake 开关。关闭 = 只标 stale，点 Bake / Ctrl+Enter 才跑。
   const autoChk = el("input", { type: "checkbox", id: "recipeAutoToggle" });
   autoChk.checked = rState.autoRunMode !== "manual";
   autoChk.addEventListener("change", () => {
@@ -2350,7 +2350,7 @@ export function renderRecipe(container) {
     el("span", {}, tt("ui.recipe.includeInput")),
   ));
 
- // T698：命名存档 + 自动草稿；T699：分享链接（只进 hash，不发网络）。
+ // 命名存档 + 自动草稿；分享链接（只进 hash，不发网络）。
   const savedSel = el("select", { class: "recipe-preset-picker recipe-saved-picker", title: tt("ui.recipe.loadSaved") });
   const refreshSaved = () => {
     savedSel.innerHTML = "";

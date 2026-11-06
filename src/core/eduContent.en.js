@@ -105,10 +105,10 @@ import E_EN_EDU_IMAGE_TOOLBOX from "./edu-en/edu-imageToolbox.en.js"; // image t
 import EDU_EN_BATCH7_NEW from "./edu-en/edu-batch7-new.en.js"; // v0.1.11 迷因四件套 + 图片/进制反向 9 op（xianzi/hajimi/zako×2/dataURIToImage/img2bits/imageToData/floatToDecimal/complementToDec）
 import EDU_EN_CN_LOOKUP from "./edu-en/edu-cn-lookup.en.js"; // v0.1.12 五种中文查字编码
 import EDU_EN_P0_20261025 from "./edu-en/edu-p0-20261025.en.js"; // v0.1.12 P0：AEAD/PQC/ZIP + 进制小数
-import EDU_EN_T690 from "./edu-en/edu-t690.en.js"; // v0.1.12 T690：ECDH/RSA-OAEP/HPKE
-import EDU_EN_T693 from "./edu-en/edu-t693.en.js"; // T693：Mach-O/WASM
-import EDU_EN_T694 from "./edu-en/edu-t694.en.js"; // T694：UTF-32/GB18030
-import EDU_EN_T703 from "./edu-en/edu-t703.en.js"; // T703：SHA-224/cSHAKE
+import EDU_EN_T690 from "./edu-en/edu-t690.en.js"; // v0.1.12: ECDH/RSA-OAEP/HPKE
+import EDU_EN_T693 from "./edu-en/edu-t693.en.js"; // Mach-O/WASM
+import EDU_EN_T694 from "./edu-en/edu-t694.en.js"; // UTF-32/GB18030
+import EDU_EN_T703 from "./edu-en/edu-t703.en.js"; // SHA-224/cSHAKE
 import EDU_EN_REGEX from "./edu-en/edu-regex.en.js"; // regexTool: generic regex extract/replace
 import EDU_EN_DATA_CONVERT from "./edu-en/edu-dataConvert.en.js"; // dataConvert: JSON/CSV/XML/YAML
 import EDU_EN_T760 from "./edu-en/edu-t760.en.js"; // bzip2Enc / extractAll
@@ -118,11 +118,12 @@ import EDU_EN_T689T710 from "./edu-en/edu-t689t710.en.js";
 import EDU_EN_T723 from "./edu-en/edu-t723.en.js";
 import EDU_EN_T722 from "./edu-en/edu-t722.en.js";
 import EDU_EN_T720 from "./edu-en/edu-t720.en.js";
-import EDU_EN_R18 from "./edu-en/edu-r18.en.js"; // R18: lsbDeep/rasterStego/mp3stego/imageThumb
+import EDU_EN_R18 from "./edu-en/edu-r18.en.js"; // lsbDeep/rasterStego/mp3stego/imageThumb
 import EDU_EN_T721 from "./edu-en/edu-t721.en.js"; // 2026-10-26: Falcon/Poseidon/KZG/SSH·PKCS12·JWK/GCM·NTRU/Xoodyak/ECC (17 ops)
 import EDU_EN_HISTORICAL from "./edu-en/edu-historical-machines.en.js"; // typex/sigaba/lorenz 3
 import EDU_EN_HISTORICAL_ATTACKS from "./edu-en/edu-historical-attacks.en.js"; // bombe/multipleBombe/colossus 3
-import EDU_EN_T813 from "./edu-en/edu-t813.en.js"; // T814: English cards for the T813 batch (10 ops)
+import EDU_EN_T813 from "./edu-en/edu-t813.en.js"; // English cards for the 10-op batch
+import EDU_EN_T822 from "./edu-en/edu-t822.en.js"; // English cards for the 21-op batch
 
 const EDU_EN = Object.assign(
   {},
@@ -228,6 +229,7 @@ const EDU_EN = Object.assign(
   EDU_EN_HISTORICAL,
   EDU_EN_HISTORICAL_ATTACKS,
   EDU_EN_T813,
+  EDU_EN_T822,
 );
 
 import { EN as INTEGRATED, HASH_VECTORS, BASE_NOTES, EXTRA_ALIASES, CRC_PARAMS } from "./edu/edu-integrated.js";

@@ -1,7 +1,7 @@
 /*
  * falconSign.js — Falcon（FN-DSA）签名：ffSampling/LDL 树 + 高斯采样 + 压缩签名编码。
  *
- * 依据（来源 URL 与访问日期见 资料/工程留存/T711/SOURCES.md）：
+ * 依据（来源 URL 与访问日期见开发档案 SOURCES.md）：
  *   - 规范：Falcon Specification v1.2（2020-10-01）§3.6、§3.8、§3.9（算法 9–12）、
  *     §3.11.2/§3.11.3（压缩系数与签名编码）、表 3.3。
  *   - 参考实现：Falcon Round-3 Reference_Implementation/falcon512int 与 falcon1024int：

@@ -2,7 +2,7 @@
 
 > 本文档记录完整更新历史。README.md「更新日志」仅保留最新版本变更。
 
-## v0.1.14（开发中）
+## v0.1.14（2026-11-06）
 
 ### 新增功能
 
@@ -17,8 +17,9 @@
 - CyberChef 参数对齐：Argon2 PHC 编码输出、Ascon/CMAC 密钥编码、Base85 自定义码表、bzip2 work factor、多字节二进制解码
 - 关于页新增 README 与更新日志入口
 - 新增 10 个 CyberChef 对齐 op：TCP/IP 校验和、XOR 校验和、奇偶校验位、Hex↔OID、SNORT Hex Content 编解码、智能字符转义、去除变音符号、剥离 HTTP 头
-- 主 op 增至 940
-- 六门文案 2959 键
+- 新增 21 个 CyberChef 对齐 op：CSS/JavaScript/SQL/XPath/Jsonata 查询与美化、jq、YARA、ARM/x86 反汇编、IP/URL Defang/Fang、IPv4/TCP/UDP 头剥离、Haversine、幂集、笛卡尔积、大小写不敏感正则还原
+- 主 op 增至 961
+- 六门文案 3001 键
 
 ### 修复
 
@@ -31,6 +32,13 @@
 - PNG 畸形头分离修正
 - binwalk 模式直接雕复
 - 离线 OCR 缺包降级提示
+- 修复 Mach-O/WASM 结构解析在浏览器报 `Buffer is not defined`，并支持粘贴 hex 头部
+- 修复 9 个新 op 输入框被误判隐藏、反汇编粘贴 hex 被当文本
+- 修复 `keyboard` 的 P 键坐标、`t9Phone` 标点分组、`type7` 非单字节输入静默错位
+- 修复 9 个 op 的 detect 与自身编码输出不一致
+- 修复 `#/all` 在科普数据到达时二次重建
+- 清理用户可见工程痕迹并补全第三方许可清单
+- macOS 启动器重建，去除本机构建路径（0.1.14；未公证）
 
 ## v0.1.13-beta
 

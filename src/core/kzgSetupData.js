@@ -2,7 +2,7 @@
  * kzgSetupData.js — EIP-4844 KZG 主网可信设置公开常量（只读数据，不含任何私钥材料：
  * 可信设置只公开各点的群元，秘密 s 本身已被仪式销毁）。
  *
- * 来源（逐字机器提取，零手工转录；生成脚本见工程留存目录）：
+ * 来源（逐字机器提取，零手工转录；生成脚本见开发档案）：
  *   https://github.com/ethereum/c-kzg-4844/releases/tag/v2.1.8（2026-10-25 取）
  *   该 release tarball 内 src/trusted_setup.txt：
  *   SHA256 d39b9f2d047cc9dca2de58f264b6a09448ccd34db967881a6713eacacf0f26b7

@@ -1,6 +1,6 @@
 /*
  * edu_collon.js — 科普卡候选（Collon 密码）。纯数据，无 import 无副作用。
- * 供 M 归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
+ * 供归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
  * 来源：dCode「Chiffre de Collon」（2026-09-22 访问）。
  */
 export default {

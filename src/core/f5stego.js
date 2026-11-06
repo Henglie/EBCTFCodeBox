@@ -32,7 +32,7 @@
  * stegdetect 家族等）。本 op 专门匹配 f5stegojs 系嵌入；其他实现产出的样本不保证可解。
  *
  * 已知样本边界（2026-10-30 复测，勿删）：
- * `资料/测试题库/图片隐写/F5隐写口令f5alsogood/F5隐写口令f5alsogood.jpg`
+ * `F5隐写口令样本 f5alsogood.jpg`
  * 是 Andreas Westfeld 原始 Java F5（Extract.java）产物，**不是 f5stegojs 方言**：
  * · 原版 Extract（Java 8，`-p f5alsogood`）输出：`Length of embedded file: 32 bytes`
  *   `(1, 127, 7) code used`，明文 `zip-password-is-Every0neL0veBeF5`（R14 证据）；

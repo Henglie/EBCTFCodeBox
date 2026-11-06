@@ -322,7 +322,7 @@ function parseHex(s, name, expectLen, pad = true) {
   if (!/^[0-9a-fA-F]+$/.test(raw)) throw new Error(`${name}必须为十六进制：${raw}`);
   if (expectLen && raw.length > expectLen) throw new Error(`${name}最长 ${expectLen} 个十六进制字符`);
   // pad=false：key 按官方变长语义原样交给核心调度（1-32 字节，Serpent 规范 0x01 补位）。
-  // 入口再左填充会静默改变 key 实质内容——短 key 全部错位，见 MT701 报告。
+  // 入口再左填充会静默改变 key 实质内容——短 key 全部错位。
   const hex = pad && expectLen ? raw.padStart(expectLen, "0") : raw;
   if (hex.length % 2) throw new Error(`${name}十六进制长度必须为偶数`);
   const out = new Uint8Array(hex.length / 2);

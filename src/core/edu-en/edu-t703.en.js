@@ -1,5 +1,5 @@
 /*
- * edu_t703_en.js — English edu cards for the 2 T703 ops (candidates, not wired).
+ * edu_t703_en.js — English edu cards for the 2 ops (candidates, not wired).
  * Source: edu_t703_zh.js, translated 1:1. Example vectors (in/param/out) and TeX
  * formulas copied verbatim; only prose is translated. Aka lists keep every Chinese
  * alias and add English ones.
@@ -28,7 +28,7 @@ export default {
     ],
     tips: [
       "Recognition: a 56-hex-character (28-byte) hash → SHA-224; hashcat mode 1300.",
-      "⚠ This project once miscopied IV h7 as befafa53 (from SHA-512/224's 64-bit IV), making every digest wrong (empty input gave 8bd1cfa3…) — caught immediately by the FIPS vectors. Lesson: **IVs/constants must be checked word-by-word against the standard text**; self round-trips cannot detect two mirrored errors (same lesson as the T629 gate precedent).",
+      "⚠ This project once miscopied IV h7 as befafa53 (from SHA-512/224's 64-bit IV), making every digest wrong (empty input gave 8bd1cfa3…) — caught immediately by the FIPS vectors. Lesson: **IVs/constants must be checked word-by-word against the standard text**; self round-trips cannot detect two mirrored errors (same lesson as earlier gate precedents).",
       "SHA-224 vs SHA3-224: similar names, entirely different algorithms (Merkle-Damgård vs Keccak sponge); pick by length first, then try both.",
       "Interop: openssl dgst -sha224, Python hashlib.sha224 and node:crypto sha224 all match this op byte-exactly.",
       "WebCrypto omitting SHA-224 is a deliberate W3C spec choice (not a browser bug); hence pure JS here.",

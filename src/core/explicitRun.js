@@ -57,7 +57,7 @@ export const EXPLICIT_RUN_OPS = [
   "pgpEncryptAndSign", "pgpDecryptAndVerify", "pgpParseKey",
   // 作者已标注 noAuto 的重 op（工具页同样要显式触发）
   "qrFormatBrute", "xiangyue", "xiangyueEnc", "adsTool",
-  // ---- v0.1.14 全 op 审计补录（判定依据与实测见 资料/工程留存/v0.1.14-预研/sensitive_audit.md）----
+  // ---- v0.1.14 全 op 审计补录（判定依据与实测见开发档案 sensitive_audit.md）----
   // KDF（内存硬化，默认快、调参即重；与既有 pbkdf2 同口径）：argon2 默认档实测 2.7s，
   //   scrypt 0.49s / yescrypt 0.60s / balloon 0.16s / bcrypt 0.11s / lyra2 0.03s；
   //   N / 内存 / 轮数一调即秒级，禁止参数框逐键自动跑。
@@ -73,6 +73,8 @@ export const EXPLICIT_RUN_OPS = [
   "jwtCrack",
   // 重型 WASM / 文件隐写引擎（改口令/密钥即整档重算；steghide/outguess 为 WASM 引擎）
   "steghide", "outguess", "f5stego", "sevenZipExtract",
+  // CyberChef 引擎级：jq asm.js 1.75MB / YARA wasm 1.18MB / Capstone 1.78MB，首次加载与改参都重
+  "jqQuery", "yaraScan", "disasmArm", "disasmX86",
   // 长耗时分析：LSB 全组合扫描 / 图像 FFT / 立体图解（整图重算）
   "zstegScan", "stereogramSolver", "spectrogram", "imgFft",
 ];

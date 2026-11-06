@@ -1,6 +1,6 @@
 /*
  * edu_bellaso.js — 科普卡候选（Bellaso 密码）。纯数据，无 import 无副作用。
- * 供 M 归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
+ * 供归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
  * 来源：dCode「Bellaso Cipher」+ Wikipedia「Giovan Battista Bellaso」（均 2026-09-22 访问）。
  */
 export default {

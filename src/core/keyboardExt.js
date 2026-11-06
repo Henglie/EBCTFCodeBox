@@ -135,13 +135,22 @@ function t9Encode(text) {
   return out;
 }
 function t9Decode(text) {
-  const s = text.replace(/\s+/g, "");
   let out = "";
-  for (let i = 0; i < s.length; i += 2) {
-    const pair = s.slice(i, i + 2);
-    if (T9_DEC[pair]) out += T9_DEC[pair];
-    else out += pair; // 无法识别的二位段原样保留
+  let buf = "";
+  for (const ch of text) {
+    if (ch >= "0" && ch <= "9") {
+      buf += ch;
+      if (buf.length === 2) {
+        out += T9_DEC[buf] !== undefined ? T9_DEC[buf] : buf;
+        buf = "";
+      }
+    } else {
+      // 标点/空白先冲刷未成对数字，再原样输出，避免把标点吞进数字对。
+      if (buf) { out += buf; buf = ""; }
+      out += ch;
+    }
   }
+  if (buf) out += buf;
   return out;
 }
 

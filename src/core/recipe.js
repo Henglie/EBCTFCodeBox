@@ -168,7 +168,7 @@ export function mapMagicCandidateToRecipe(steps) {
 }
 
 // ---- 控制节点（kind:"control"）----
-// T750/CC-A5：不注册主 op、不进 878 计数。控制节点只存在于配方图里，由本模块解释执行。
+// CC-A5：不注册主 op、不进 878 计数。控制节点只存在于配方图里，由本模块解释执行。
 // 语义对照 CyberChef flowControl：
 //   register（正则捕获 $R0..$Rn）/ conditionalJump / label / jump / return
 //   / fork（按行/正则/字面拆分 → 分支各跑一遍 → merge 合并）/ merge / subsection（不改变执行序）
@@ -483,7 +483,7 @@ export function executeRecipe(graph, input) {
 
 // ---- 异步执行器（带步级钩子；断点 / 取消 / 预算 / 从某步）----
 //
-// T750：配方页需要「错误定位到步、保留已完成前缀、断点、单步、从某步、取消、超时」。
+// 配方页需要「错误定位到步、保留已完成前缀、断点、单步、从某步、取消、超时」。
 // 旧的 executeRecipeAsync 只返回终值，出错时中间结果全部丢弃；本函数把每一步的结果
 // 与耗时都交回调用方，并在出错/取消/超时/断点处停下而不清空已完成前缀。
 //

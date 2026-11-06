@@ -27,7 +27,7 @@ import { register } from "./registry.js";
 import { randomBytes, setRandConfig, getRandConfig, isServerReady, warmupServer } from "./randSource.js";
 import { RAND_SERVER_MAX_BYTES, RAND_SERVER_DEFAULT_BYTES } from "./randServer.js";
 
-/** 档位中文标签（op 输出报告用；op 名称/描述的 i18n 由 M 落 op.randomSecure.* 键）。 */
+/** 档位中文标签（op 输出报告用；op 名称/描述的 i18n 由 i18n 侧落 op.randomSecure.* 键）。 */
 const MODE_LABEL = {
   system: "系统（crypto.getRandomValues，默认）",
   mixed: "混合增强（用户输入 ‖ 系统熵 → HKDF-SHA-256）",

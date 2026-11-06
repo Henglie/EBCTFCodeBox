@@ -1,6 +1,6 @@
 /*
  * edu_kuznyechik.js — 科普卡候选（Kuznyechik / GOST R 34.12-2015）。纯数据，无 import 无副作用。
- * 供 M 归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
+ * 供归并进 src/core/eduContent.js（或 src/core/edu 下新分片）。
  * 来源：RFC 7801（GOST R 34.12-2015 正式英文镜像）+ Wikipedia「Kuznyechik」（均 2026-09-22 访问）。
  */
 export default {

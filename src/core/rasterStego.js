@@ -1,7 +1,7 @@
 /*
  * rasterStego.js — 光栅隐写（zbRasterTerminator 复刻，纯 JS / 零 DOM）。
  *
- * 参考实现：资料/参考/反编py/zbCrypto/zbCrypto.zbRasterTerminator.py
+ * 参考实现：zbCrypto.zbRasterTerminator.py
  *   - 对宽/高在 2..maxDivisor 内的每个因数 d，输出 d 张相位图；
  *   - x 轴：只保留列 x % d === phase（其余列清零），文件名 x-d-(phase+1).png；
  *   - y 轴：只保留行 y % d === phase（其余行清零），文件名 y-d-(phase+1).png；

@@ -19,9 +19,9 @@
  * polybius/tapcode/adfgx/adfgvx 四张 svg 为本箱自制（公共领域古典密码规则表）。
  * american-morse/morse-rhythm/wabun/futhark/counting-rods/alien-alphabet/chuck-unary/
  * cardan-grille/tadpole/wingdings-zapf 十张 svg 亦为本箱自制（公共领域码表/规则图，
- * 算筹棍形纯几何绘制不依赖字体；来源与许可逐图见 工程留存 sources 台账）。
+ * 算筹棍形纯几何绘制不依赖字体；来源与许可逐图见 sources 台账）。
  * baudot/decabit/pollux/morbit/straddle-checkerboard 五张 svg 同为自制（表值取自本工具
- * op 实跑，逐槽核对 363/0；来源与许可随图登记于工程留存归档 sources.md）。
+ * op 实跑，逐槽核对 363/0；来源与许可随图登记于 sources.md）。
  */
 export default {
   bacon: { src: "public/codeimages/bacon.png", cap: "培根密码 A/B 五位字母对照表" },

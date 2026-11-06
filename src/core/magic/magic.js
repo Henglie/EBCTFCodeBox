@@ -1199,7 +1199,7 @@ function finalizeResults(results, o) {
       && isPrintableRatio(c.result) >= 0.8
       && FLAG_STRONG_RE.test(c.result);
     const confidence = scoreToConfidence(score);
- // 四态裁决（T700）：把「分低」翻译成用户能判断的证据等级。
+ // 四态裁决：把「分低」翻译成用户能判断的证据等级。
  // confirmed=命中 flag/用户目标/crib（非回声）；likely=可打印且高置信或命中真实词表；
  // ambiguous=回声/近似回声或中等置信；normal=其余低置信候选。
     const hasStrongHit = !echoPenalized && signal.signals.some((s) => s.kind === "flagStrong" || s.kind === "target");

@@ -21,7 +21,7 @@
  * visualizeInvisiblesHTML(text, opts) → { html, count, byType } 显形 HTML + 计数
  * invisibleReport(text) → { count, byType, dangerous } 检测报告
  *
- * DOM 组件（供 M 挂到任意输出区/textarea 旁）：
+ * DOM 组件（供挂到任意输出区/textarea 旁）：
  * invisibleToggle(container, text, opts) → 切换按钮 + 显示区，返回 { setText, destroy }
  * renderEnhancedView(container, text, opts)→ flag 高亮只读视图 + 不可见字符切换（组合件）
  *
@@ -315,7 +315,7 @@ export function invisibleToggle(container, text = "", opts = {}) {
 
 // ============================================================
 // renderEnhancedView — 组合件：flag 高亮只读视图 + 不可见字符切换（DOM 组件）
-// 供 M 接首页 renderHome / op 输出区。opts.showSpace 透传给不可见切换。
+// 供接首页 renderHome / op 输出区。opts.showSpace 透传给不可见切换。
 // 返回 { setText(newText), destroy }。
 // ============================================================
 export function renderEnhancedView(container, text = "", opts = {}) {

@@ -1079,6 +1079,6 @@ export function checkPrivateKey(key) {
   return { ok: true, h };
 }
 
-// 说明：本文件按 T711 写锁约定不注册 op；keygen/sign 的共享入口与 i18n/edu 由 M 在收口时接线。
+// 说明：本文件不注册 op；keygen/sign 的共享入口与 i18n/edu 由收口流程接线。
 // Berd 判界、NTRU 求解与 falconSign.js 的 ffSampling 已通过 NIST KAT 签名逐字节对拍
-// （见 资料/工程留存/T711/kat_t711.mjs 与 收口报告.md）。
+// （见开发档案 kat_t711.mjs 与收口报告.md）。

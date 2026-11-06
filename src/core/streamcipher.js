@@ -691,7 +691,7 @@ function rabbitDecode(text, p) {
 // 注册 op
 // ============================================================
 // 注意：chacha20 op 不在此注册——modernExt.js 已有完整 chacha20 op（id:"chacha20"）
-// 重复注册会被 registry 拦截。本文件仅保留 ChaCha20 实现（供测试 + 未来 M 归并引用）
+// 重复注册会被 registry 拦截。本文件仅保留 ChaCha20 实现（供测试 + 未来归并引用）
 // 只注册 rabbit op（modernExt.js 无此 op）。
 register({
   id: "rabbit",
@@ -730,7 +730,7 @@ register({
 });
 
 // ============================================================
-// 导出（供测试 + M 归并引用）
+// 导出（供测试 + 归并引用）
 // ============================================================
 export {
   strToBytes, bytesToStr, bytesToHex, hexToBytes, rotl32, le32,
