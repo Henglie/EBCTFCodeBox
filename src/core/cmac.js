@@ -128,9 +128,11 @@ function cmacGeneric(encBlock, msg, rb) {
   return encBlock(xor16(X, M_last)); // T = CIPH_K(X_{n-1} ⊕ M_last)
 }
 
-/** AES-CMAC（RFC 4493）。key 16 字节。 */
+/** AES-CMAC（RFC 4493）。key 16/24/32 字节。 */
 export function aesCmacBytes(key, msg) {
-  if (key.length !== 16) throw new Error(`AES-CMAC 密钥须为 16 字节 hex（RFC 4493 限 AES-128），当前 ${key.length} 字节`);
+  if (key.length !== 16 && key.length !== 24 && key.length !== 32) {
+    throw new Error(`AES-CMAC 密钥须为 16/24/32 字节（AES-128/192/256，同 CyberChef CMAC AES），当前 ${key.length} 字节`);
+  }
   const { encBlock } = makeAes(key);
   return cmacGeneric(encBlock, msg, 0x87);
 }
@@ -330,9 +332,9 @@ register({
   acceptsBytes: true,
   cat: "block",
   name: "AES-CMAC",
-  desc: "AES-CMAC 消息认证码（RFC 4493，AES-128）",
+  desc: "AES-CMAC 消息认证码（RFC 4493；支持 AES-128/192/256）",
   params: [
-    { key: "key", label: "密钥 K (hex, 16B)", type: "text", default: "2b7e151628aed2a6abf7158809cf4f3c", placeholder: "RFC 4493 测试密钥" },
+    { key: "key", label: "密钥 K (hex, 16/24/32B)", type: "text", default: "2b7e151628aed2a6abf7158809cf4f3c", placeholder: "RFC 4493 测试密钥" },
   ],
   run: aesCmacRun,
 });

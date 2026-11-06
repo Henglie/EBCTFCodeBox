@@ -19,6 +19,7 @@
  */
 
 import { register } from "./registry.js";
+import { randomBytes } from "./randSource.js";
 
 const LETTERS = "_abcdefghijklmnopqrstuvwxyz.0123456789,-+*/:?!'()";
 const N = 7;
@@ -119,26 +120,39 @@ register({
   id: "ls47",
   cat: "classic",
   name: "LS47 字母牌密码",
-  desc: "ElsieFour/LC4 的 7×7 扩展（49 字符含小写字母/数字/常用符号）：牌面行列随每字符旋转 + marker 混合位，状态自同步。密钥支持 49 字符排列或口令派生。对照官方参考实现 ls47.py 逐字对拍",
+  desc: "ElsieFour/LC4 的 7×7 扩展（49 字符含小写字母/数字/常用符号）：牌面行列随每字符旋转 + marker 混合位，状态自同步。密钥支持 49 字符排列或口令派生；Padding/Signature 与 CyberChef LS47 Encrypt 对齐（默认 0/空保持旧输出）",
   params: [
     { key: "mode", label: "密钥方式", type: "select", default: "password", options: [
       { value: "password", label: "口令派生（derive_key）" },
       { value: "raw", label: "49 字符原始牌面" },
     ] },
     { sensitive: true, key: "key", label: "密钥 / 口令", type: "password", default: "s3cret_p4ssw0rd/31337", placeholder: "口令任意长；raw 模式须 49 字符排列" },
+    { key: "padding", label: "Padding（随机填充字符数，0=旧行为）", type: "number", default: 0 },
+    { key: "signature", label: "Signature（仅加密，追加 ---<签名>）", type: "text", default: "" },
   ],
   encode: (text, p) => {
     const key = (p && p.mode) === "raw"
       ? checkKey(String((p && p.key) || "").trim())
       : deriveKeyChecked(String((p && p.key) || ""));
     // 空格透明转 _（字母表空格位约定，官方算法本体不动）
-    return process(key, String(text).replace(/ /g, "_"), true);
+    let body = String(text).replace(/ /g, "_");
+    const pad = Math.max(0, Math.min(10000, Number((p && p.padding) || 0)));
+    const sig = String((p && p.signature) || "");
+    if (pad > 0 || sig !== "") {
+      const rb = randomBytes(pad);
+      let padding = "";
+      for (let i = 0; i < pad; i++) padding += LETTERS[rb[i] % LETTERS.length];
+      body = padding + body + "---" + sig;
+    }
+    return process(key, body, true);
   },
   decode: (text, p) => {
     const key = (p && p.mode) === "raw"
       ? checkKey(String((p && p.key) || "").trim())
       : deriveKeyChecked(String((p && p.key) || ""));
-    return process(key, String(text), false).replace(/_/g, " ");
+    const pad = Math.max(0, Math.min(10000, Number((p && p.padding) || 0)));
+    const out = process(key, String(text), false);
+    return out.slice(pad).replace(/_/g, " ");
   },
 });
 

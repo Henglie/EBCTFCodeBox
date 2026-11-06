@@ -871,6 +871,45 @@ const OUT_OPTS = [
   { value: "base64", label: "Base64" },
   { value: "hex", label: "Hex" },
 ];
+// RC4 专用 IO（对齐 CyberChef RC4 的 UTF16/UTF16LE/UTF16BE 档；不改其他 op 的 ENC_OPTS）
+const RC4_IO_OPTS = [
+  ...ENC_OPTS,
+  { value: "utf16", label: "UTF-16（BE）" },
+  { value: "utf16le", label: "UTF-16LE" },
+  { value: "utf16be", label: "UTF-16BE" },
+];
+function decodeInputIo(text, enc) {
+  if (enc === "utf16" || enc === "utf16be") {
+    const s = String(text == null ? "" : text);
+    const out = new Uint8Array(s.length * 2);
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      out[i * 2] = (c >> 8) & 0xff; out[i * 2 + 1] = c & 0xff;
+    }
+    return out;
+  }
+  if (enc === "utf16le") {
+    const s = String(text == null ? "" : text);
+    const out = new Uint8Array(s.length * 2);
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      out[i * 2] = c & 0xff; out[i * 2 + 1] = (c >> 8) & 0xff;
+    }
+    return out;
+  }
+  return decodeInput(text, enc || "utf8");
+}
+function encodeOutputIo(bytes, enc) {
+  if (enc === "utf16" || enc === "utf16be" || enc === "utf16le") {
+    const le = enc === "utf16le";
+    let s = "";
+    for (let i = 0; i + 1 < bytes.length; i += 2) {
+      s += String.fromCharCode(le ? (bytes[i] | (bytes[i + 1] << 8)) : ((bytes[i] << 8) | bytes[i + 1]));
+    }
+    return s;
+  }
+  return encodeOutput(bytes, enc);
+}
 
 // 分组密码参数（AES 含 GCM，DES/3DES 不含）。
 function blockParams(modes, keyPh, { gcm = false } = {}) {
@@ -1059,10 +1098,26 @@ const XOR_PARAMS = [
   { key: "outEnc", label: "密文编码", type: "select", default: "base64", options: OUT_OPTS },
 ];
 {
-  const { enc, dec } = makeStreamOp(rc4);
+  const RC4_PARAMS = [
+    { key: "key", label: "密钥 / Passphrase", type: "text", default: "", placeholder: "密钥" },
+    { key: "keyEnc", label: "密钥编码", type: "select", default: "utf8", options: RC4_IO_OPTS },
+    { key: "inEnc", label: "输入编码（空=编码方向 UTF-8 / 解码方向跟随密文编码）", type: "select", default: "",
+      options: [{ value: "", label: "跟随（旧行为）" }, ...RC4_IO_OPTS] },
+    { key: "outEnc", label: "输出编码", type: "select", default: "base64", options: RC4_IO_OPTS },
+  ];
+  const enc = (text, p) => {
+    const key = decodeInputIo(p.key || "", p.keyEnc || "utf8");
+    const data = decodeInputIo(text, (p && p.inEnc) || "utf8");
+    return encodeOutputIo(rc4(data, key), p.outEnc || "base64");
+  };
+  const dec = (text, p) => {
+    const key = decodeInputIo(p.key || "", p.keyEnc || "utf8");
+    const data = decodeInputIo(text.trim(), (p && p.inEnc) || p.outEnc || "base64");
+    return encodeOutputIo(rc4(data, key), "utf8");
+  };
   register({
-    id: "rc4", cat: "stream", name: "RC4", desc: "RC4 流密码（自反，key 任意长）。只接受 raw key；若密文以 U2FsdGVk 开头（OpenSSL/CryptoJS 的 Salted__ 封装），请改用「OpenSSL 口令加解密」并选 RC4",
-    params: STREAM_PARAMS, encode: enc, decode: dec,
+    id: "rc4", cat: "stream", name: "RC4", desc: "RC4 流密码（自反，key 任意长；密钥/输入/输出支持 UTF16/UTF16LE/UTF16BE/Latin1/Hex/Base64）。若密文以 U2FsdGVk 开头（OpenSSL/CryptoJS 的 Salted__ 封装），请改用「OpenSSL 口令加解密」并选 RC4",
+    params: RC4_PARAMS, encode: enc, decode: dec,
   });
 }
 {

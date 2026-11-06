@@ -49,7 +49,7 @@ function sm3GG(x, y, z, j) {
 function sm3P0(x) { return (x ^ rotl32(x, 9) ^ rotl32(x, 17)) >>> 0; }
 function sm3P1(x) { return (x ^ rotl32(x, 15) ^ rotl32(x, 23)) >>> 0; }
 
-function sm3Compress(V, W) {
+function sm3Compress(V, W, rounds = 64) {
  // V: 8×uint32 (状态), W: 68×uint32 (扩展消息)
   const W1 = new Array(64);
   for (let j = 0; j < 64; j++) {
@@ -59,7 +59,7 @@ function sm3Compress(V, W) {
   let A = V[0], B = V[1], C = V[2], D = V[3];
   let E = V[4], F = V[5], G = V[6], H = V[7];
 
-  for (let j = 0; j < 64; j++) {
+  for (let j = 0; j < rounds; j++) {
     const Tj = sm3Tj(j);
     const SS1 = rotl32((rotl32(A, 12) + E + rotl32(Tj, j % 32)) >>> 0, 7);
     const SS2 = (SS1 ^ rotl32(A, 12)) >>> 0;
@@ -81,7 +81,7 @@ function sm3Compress(V, W) {
   ];
 }
 
-function sm3Bytes(bytes) {
+function sm3Bytes(bytes, rounds = 64, length = 256) {
  // 消息填充：0x80 + 0x00... + 64 位大端长度（位）
   const origLen = bytes.length;
   const withOne = origLen + 1;
@@ -110,12 +110,13 @@ function sm3Bytes(bytes) {
       W[j] = sm3P1((W[j - 16] ^ W[j - 9] ^ rotl32(W[j - 3], 15)) >>> 0) ^ rotl32(W[j - 13], 7) ^ W[j - 6];
       W[j] = W[j] >>> 0;
     }
-    V = sm3Compress(V, W);
+    V = sm3Compress(V, W, rounds);
   }
 
- // 输出 8×uint32 → 32 字节（大端）
-  const out = new Uint8Array(32);
-  for (let i = 0; i < 8; i++) {
+ // 输出前 words 个 uint32 → 大端字节（CC Length 参数按 32 位字截断）
+  const words = Math.max(0, Math.min(8, Math.floor(Number(length) / 32 || 0)));
+  const out = new Uint8Array(words * 4);
+  for (let i = 0; i < words; i++) {
     out[i * 4] = (V[i] >>> 24) & 0xff;
     out[i * 4 + 1] = (V[i] >>> 16) & 0xff;
     out[i * 4 + 2] = (V[i] >>> 8) & 0xff;
@@ -125,7 +126,7 @@ function sm3Bytes(bytes) {
 }
 
 function sm3(text) {
-  return toHex(sm3Bytes(te(text)));
+  return toHex(sm3Bytes(te(text), 64, 256));
 }
 
 // ============================================================
@@ -523,8 +524,57 @@ function blake2bBytes(bytes, hashLen = 64, key = new Uint8Array(0)) {
   return out;
 }
 
-function blake2b(text, hashLen = 64) {
-  return toHex(blake2bBytes(te(text), hashLen));
+// 通用 key/输出编码解析（BLAKE2b/2s key toggleString 语义同 CyberChef）
+function keyTextToBytes(text, enc) {
+  const raw = String(text == null ? "" : text);
+  switch (String(enc || "UTF8").toLowerCase()) {
+    case "hex": {
+      const h = raw.replace(/0x/gi, "").replace(/[\s,]/g, "");
+      if (!h) return new Uint8Array(0);
+      if (h.length % 2 || !/^[0-9a-fA-F]+$/.test(h)) throw new Error("key Hex 需偶数长度十六进制");
+      const o = new Uint8Array(h.length / 2);
+      for (let i = 0; i < o.length; i++) o[i] = parseInt(h.substr(i * 2, 2), 16);
+      return o;
+    }
+    case "decimal": {
+      const parts = raw.split(/[\s,]+/).filter(Boolean);
+      return Uint8Array.from(parts.map((s) => {
+        const n = Number(s);
+        if (!Number.isInteger(n) || n < 0 || n > 255) throw new Error("key Decimal 字节须为 0-255");
+        return n;
+      }));
+    }
+    case "base64": {
+      const bin = atob(raw.replace(/\s/g, ""));
+      return Uint8Array.from([...bin].map((c) => c.charCodeAt(0)));
+    }
+    case "latin1":
+      return Uint8Array.from([...raw].map((c) => c.charCodeAt(0) & 0xff));
+    case "utf8":
+    default:
+      return te(raw);
+  }
+}
+function hashOut(bytes, fmt) {
+  switch (String(fmt || "Hex").toLowerCase()) {
+    case "base64": {
+      let bin = "";
+      for (const b of bytes) bin += String.fromCharCode(b);
+      return btoa(bin);
+    }
+    case "raw": {
+      let s = "";
+      for (const b of bytes) s += String.fromCharCode(b);
+      return s;
+    }
+    case "hex":
+    default:
+      return toHex(bytes);
+  }
+}
+
+function blake2b(text, hashLen = 64, key = new Uint8Array(0), outFmt = "Hex") {
+  return hashOut(blake2bBytes(text instanceof Uint8Array ? text : te(text), hashLen, key), outFmt);
 }
 
 // ============================================================
@@ -629,8 +679,8 @@ function blake2sBytes(bytes, hashLen = 32, key = new Uint8Array(0)) {
   return out;
 }
 
-function blake2s(text, hashLen = 32) {
-  return toHex(blake2sBytes(te(text), hashLen));
+function blake2s(text, hashLen = 32, key = new Uint8Array(0), outFmt = "Hex") {
+  return hashOut(blake2sBytes(text instanceof Uint8Array ? text : te(text), hashLen, key), outFmt);
 }
 
 // ============================================================
@@ -814,14 +864,22 @@ function crc64EcmaHex(text)  { return hexU64be(crc64Ecma(te(text))); }
 function crc32cHex(text)     { return hexU32be(crc32c(te(text))); }
 function fnv1a32Hex(text)    { return hexU32be(fnv1a32(te(text))); }
 function fnv1a64Hex(text)    { return hexU64be(fnv1a64(te(text))); }
-function murmur3_32Hex(text) { return hexU32be(murmur3_32(te(text))); }
+function murmur3_32Hex(text, seed = 0) { return hexU32be(murmur3_32(te(text), seed)); }
 
 // ============================================================
 // register 层
 // ============================================================
 register({
-  id: "sm3", cat: "hash", name: "SM3", desc: "国密哈希（GB/T 32905-2016，前身 GM/T 0004-2012，256 位，国内 CTF 高频）",
-  run: (t, p) => sm3(p?.rawBytes ?? t),
+  id: "sm3", cat: "hash", name: "SM3", desc: "国密哈希（GB/T 32905-2016，前身 GM/T 0004-2012，256 位，国内 CTF 高频）；Length/Rounds 与 CyberChef 同名参数对齐",
+  params: [
+    { key: "length", label: "输出长度（位，32 的倍数）", type: "number", default: 256, placeholder: "默认 256" },
+    { key: "rounds", label: "轮数（1-64）", type: "number", default: 64, placeholder: "默认 64" },
+  ],
+  run: (t, p) => {
+    const rounds = Math.max(1, Math.min(64, Number((p && p.rounds) || 64)));
+    const length = Math.max(0, Math.min(256, Number((p && p.length != null) ? p.length : 256)));
+    return toHex(sm3Bytes(p?.rawBytes ?? te(t), rounds, length));
+  },
 });
 
 register({
@@ -838,20 +896,44 @@ register({
   run: (t, p) => ripemdByBits(Number((p && p.size != null) ? p.size : 160), p?.rawBytes ?? t),
 });
 
+const HASH_KEY_PARAMS = [
+  { key: "keyText", label: "Key（可空）", type: "text", default: "", placeholder: "留空=无密钥；按下方编码解析" },
+  { key: "keyEnc", label: "Key 编码", type: "select", default: "UTF8",
+    options: [
+      { value: "UTF8", label: "UTF8" },
+      { value: "Decimal", label: "Decimal（逗号/空格分隔字节）" },
+      { value: "Base64", label: "Base64" },
+      { value: "Hex", label: "Hex" },
+      { value: "Latin1", label: "Latin1" },
+    ] },
+];
+const HASH_OUT_PARAMS = { key: "outFormat", label: "输出编码", type: "select", default: "Hex",
+  options: [
+    { value: "Hex", label: "Hex" },
+    { value: "Base64", label: "Base64" },
+    { value: "Raw", label: "Raw（Latin1 字节串）" },
+  ] };
+
 register({
-  id: "blake2b", family: "blake", familyLabel: "blake2b", cat: "hash", name: "BLAKE2b", desc: "BLAKE2b 哈希（RFC 7693，最多 64 字节输出，默认 512 位）",
+  id: "blake2b", family: "blake", familyLabel: "blake2b", cat: "hash", name: "BLAKE2b", desc: "BLAKE2b 哈希（RFC 7693，最多 64 字节输出，默认 512 位）；可选 keyed 与 Output Encoding（Hex/Base64/Raw）",
   params: [
-    { key: "hashLen", label: "输出字节数", type: "number", default: 64, placeholder: "1-64" },
+    { key: "hashLen", label: "输出字节数", type: "number", default: 64, placeholder: "1-64（512/384/256/160/128 位对应 64/48/32/20/16）" },
+    HASH_OUT_PARAMS,
+    ...HASH_KEY_PARAMS,
   ],
-  run: (t, p) => blake2b(p?.rawBytes ?? t, (p && p.hashLen) || 64),
+  run: (t, p) => blake2b(p?.rawBytes ?? t, (p && p.hashLen) || 64,
+    keyTextToBytes(p && p.keyText, p && p.keyEnc), (p && p.outFormat) || "Hex"),
 });
 
 register({
-  id: "blake2s", family: "blake", familyLabel: "blake2s", cat: "hash", name: "BLAKE2s", desc: "BLAKE2s 哈希（RFC 7693，最多 32 字节输出，默认 256 位）",
+  id: "blake2s", family: "blake", familyLabel: "blake2s", cat: "hash", name: "BLAKE2s", desc: "BLAKE2s 哈希（RFC 7693，最多 32 字节输出，默认 256 位）；可选 keyed 与 Output Encoding（Hex/Base64/Raw）",
   params: [
-    { key: "hashLen", label: "输出字节数", type: "number", default: 32, placeholder: "1-32" },
+    { key: "hashLen", label: "输出字节数", type: "number", default: 32, placeholder: "1-32（256/160/128 位对应 32/20/16）" },
+    HASH_OUT_PARAMS,
+    ...HASH_KEY_PARAMS,
   ],
-  run: (t, p) => blake2s(p?.rawBytes ?? t, (p && p.hashLen) || 32),
+  run: (t, p) => blake2s(p?.rawBytes ?? t, (p && p.hashLen) || 32,
+    keyTextToBytes(p && p.keyText, p && p.keyEnc), (p && p.outFormat) || "Hex"),
 });
 
 // ---- 哈希扩展补全组 register ----
@@ -902,8 +984,17 @@ register({
 
 register({
   id: "murmur3_32", cat: "hash", name: "MurmurHash3-32",
-  desc: "MurmurHash3 x86 32 位非加密哈希（seed=0，CTF/一致性哈希高频）",
-  run: (t) => murmur3_32Hex(t),
+  desc: "MurmurHash3 x86 32 位非加密哈希（可选 seed 与 Convert to Signed；默认 hex 保持项目旧输出）",
+  params: [
+    { key: "seed", label: "Seed", type: "number", default: 0 },
+    { key: "signed", label: "Convert to Signed", type: "bool", default: false },
+  ],
+  run: (t, p) => {
+    const seed = Number((p && p.seed) || 0);
+    const h = murmur3_32(te(String(t == null ? "" : t)), seed) >>> 0;
+    if (p && p.signed) return String(h & 0x80000000 ? h - 0x100000000 : h);
+    return hexU32be(h);
+  },
 });
 
 export {

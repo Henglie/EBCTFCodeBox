@@ -32,6 +32,7 @@
 import { register } from "./registry.js";
 import { camelliaEncode } from "./camellia.js";
 import { seedEncode } from "./seed.js";
+import { makeDes3 } from "./modern.js";
 import {
   ideaKeySchedule, ideaEncryptBlock,
   blowfishKeySchedule, blowfishEncryptBlock,
@@ -188,6 +189,13 @@ const ALGS = {
     enc: (key) => { const ctx = cast5KeySchedule(key); return (blk) => cast5EncryptBlock(blk, ctx); },
     note: "单块 KAT：RFC 2144 附录 A（64 位块 Rb=0x1B）；CMAC 结构 ISO/IEC 9797-1 等价。",
   },
+  des3: {
+    bs: 8, rb: 0x1b,
+    keyOk: (k) => k.length === 16 || k.length === 24,
+    keyMsg: "Triple DES 密钥须 16 或 24 字节",
+    enc: (key) => { const c = makeDes3(key); return (blk) => c.encBlock(blk); },
+    note: "单块 KAT：3DES EDE（FIPS 46-3）；CMAC 结构 ISO/IEC 9797-1 等价。",
+  },
 };
 
 // ============================================================
@@ -223,7 +231,7 @@ register({
   name: "CMAC 扩展",
   desc: "通用 CMAC 消息认证码（ISO/IEC 9797-1 / RFC 4493 结构），底层分组密码可选 Camellia/SEED/Twofish/RC6（128 位块 Rb=0x87）或 IDEA/Blowfish/CAST-128（64 位块 Rb=0x1B）。单块 KAT 逐字背书。",
   params: [
-    { key: "alg", label: "底层分组密码", type: "select", default: "camellia", options: ["camellia", "seed", "twofish", "rc6", "idea", "blowfish", "cast5"] },
+    { key: "alg", label: "底层分组密码", type: "select", default: "camellia", options: ["camellia", "seed", "twofish", "rc6", "idea", "blowfish", "cast5", "des3"] },
     { key: "key", label: "密钥 K (hex)", type: "text", default: "2b7e151628aed2a6abf7158809cf4f3c", placeholder: "各算法密钥长度不同" },
   ],
   run: cmacExtRun,

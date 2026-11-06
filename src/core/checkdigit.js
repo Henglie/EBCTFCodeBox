@@ -50,6 +50,29 @@ function luhnCheckDigit(body) {
 function luhnValid(full) {
   return luhnCheckDigit(full.slice(0, -1)) === Number(full.slice(-1));
 }
+// Luhn mod N（CyberChef LuhnChecksum 同构：parseInt(elem, radix)，偶数进制）
+function luhnModNChecksum(inputStr, radix) {
+  let even = false;
+  return [...String(inputStr)].reverse().reduce((acc, ch) => {
+    let temp = parseInt(ch, radix);
+    if (Number.isNaN(temp)) throw new Error(`字符 ${JSON.stringify(ch)} 不是 radix ${radix} 的合法数字`);
+    if (even) { temp = 2 * temp; temp = Math.floor(temp / radix) + (temp % radix); }
+    even = !even;
+    return acc + temp;
+  }, 0) % radix;
+}
+function luhnModNReport(inputStr, radix) {
+  const r = Number(radix);
+  if (!Number.isInteger(r) || r < 2 || r > 36) throw new Error("Luhn Radix 须为 2-36");
+  if (r % 2 !== 0) throw new Error("Luhn Radix 须为偶数（Luhn mod N）");
+  const s = String(inputStr);
+  if (!s) return "";
+  const checkSum = luhnModNChecksum(s, r).toString(r);
+  let checkDigit = luhnModNChecksum(s + "0", r);
+  checkDigit = checkDigit === 0 ? 0 : (r - checkDigit);
+  checkDigit = checkDigit.toString(r);
+  return `Checksum: ${checkSum}\nCheckdigit: ${checkDigit}\nLuhn Validated String: ${s}${checkDigit}`;
+}
 
 // ============ 2. ISBN-10（模 11） ============
 // d1×10 + d2×9 + ... + d10×1 ≡ 0 (mod 11)，d10 可能是 X(=10)
@@ -150,14 +173,20 @@ function binLookup(cardNum) {
 // 1. Luhn（信用卡/IMEI 通用）
 register({
   id: "luhn", cat: "radix", name: "Luhn 校验位",
-  desc: "Luhn 校验（信用卡/IMEI，ISO/IEC 7812）。encode=算校验位，decode=校验合法性",
-  params: [],
-  encode: (t) => {
+  desc: "Luhn 校验（信用卡/IMEI，ISO/IEC 7812）。encode=算校验位，decode=校验合法性；Radix≠10 时走 Luhn mod N（同 CyberChef Luhn Checksum 报告格式）",
+  params: [
+    { key: "radix", label: "Radix（默认 10；Luhn mod N 须偶数 2-36）", type: "number", default: 10 },
+  ],
+  encode: (t, p) => {
+    const radix = Number((p && p.radix) != null ? p.radix : 10);
+    if (radix !== 10) return luhnModNReport(t, radix);
     const s = cleanDigits(t);
     if (s.length < 1) throw new Error("Luhn: 输入过短");
     return String(luhnCheckDigit(s));
   },
-  decode: (t) => {
+  decode: (t, p) => {
+    const radix = Number((p && p.radix) != null ? p.radix : 10);
+    if (radix !== 10) return luhnModNReport(t, radix);
     const s = cleanDigits(t);
     if (s.length < 2) throw new Error("Luhn: 完整号至少 2 位");
     if (luhnValid(s)) return "合法（Luhn 校验通过）";

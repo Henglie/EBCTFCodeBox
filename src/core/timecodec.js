@@ -62,6 +62,7 @@ function unixToMs(ts, unit) {
   if (u === "sec") return n * 1000;
   if (u === "ms") return n;
   if (u === "us") return n / 1000;
+  if (u === "ns") return n / 1e6;
   throw new Error("未知单位: " + unit);
 }
 
@@ -70,6 +71,7 @@ function msToUnix(ms, unit) {
   if (u === "sec") return Math.floor(ms / 1000).toString();
   if (u === "ms") return Math.floor(ms).toString();
   if (u === "us") return Math.floor(ms * 1000).toString();
+  if (u === "ns") return Math.floor(ms * 1e6).toString();
   throw new Error("未知单位: " + unit);
 }
 
@@ -312,6 +314,7 @@ register({
       { value: "sec", label: "秒" },
       { value: "ms", label: "毫秒" },
       { value: "us", label: "微秒" },
+      { value: "ns", label: "纳秒（同 CyberChef Nanoseconds (ns)）" },
     ] },
   ],
   encode: (t, p) => msToUnix(parseIso(t), (p && p.unit) || "auto"),

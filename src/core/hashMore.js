@@ -214,7 +214,7 @@ function snefruCompress(input, rounds) {
 
 /** Snefru 哈希：outWords=4（128 位）/8（256 位），rounds 默认 8。 */
 function snefruHash(msg, outWords, rounds) {
-  if (rounds !== 4 && rounds !== 8) rounds = 8;
+  if (rounds !== 2 && rounds !== 4 && rounds !== 8) rounds = 8;
   if (rounds * 2 > SNEFRU_SBOXES.length) throw new Error("Snefru 轮数超限");
   const hash = new Array(16).fill(0);
   const chunkBytes = 4 * (16 - outWords); // 48 字节（128 位）/32 字节（256 位）
@@ -248,7 +248,8 @@ function snefruHash(msg, outWords, rounds) {
 // ============================================================
 const SHA0_IV = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0];
 
-function sha0(msg) {
+function sha0(msg, rounds = 80) {
+  const R = Math.max(1, Math.min(80, Number(rounds) || 80));
   const bitLen = msg.length * 8;
   const padded = new Uint8Array((((msg.length + 8) >> 6) + 1) << 6);
   padded.set(msg);
@@ -265,12 +266,12 @@ function sha0(msg) {
       W[t] = ((padded[blk + 4 * t] << 24) | (padded[blk + 4 * t + 1] << 16) |
         (padded[blk + 4 * t + 2] << 8) | padded[blk + 4 * t + 3]) >>> 0;
     }
-    for (let t = 16; t < 80; t++) {
+    for (let t = 16; t < R; t++) {
       // SHA-0 与 SHA-1 的唯一差异：这里不 rotl32
       W[t] = (W[t - 3] ^ W[t - 8] ^ W[t - 14] ^ W[t - 16]) >>> 0;
     }
     let [a, b, c, dd, e] = h;
-    for (let t = 0; t < 80; t++) {
+    for (let t = 0; t < R; t++) {
       let f, k;
       if (t < 20) { f = (b & c) | (~b & dd); k = 0x5a827999; }
       else if (t < 40) { f = b ^ c ^ dd; k = 0x6ed9eba1; }
@@ -504,19 +505,28 @@ register({
 
 register({
   id: "snefru", cat: "hash", name: "Snefru",
-  desc: "Snefru 哈希（Merkle 1990，Snefru 2.5a，8 轮，128/256 位；输出已被碰撞攻击削弱，仅 CTF 历史）",
+  desc: "Snefru 哈希（Merkle 1990，Snefru 2.5a；Size 32-480（step 32）与 Rounds 2/4/8 与 CyberChef 对齐；默认 256/8 保持项目旧输出）",
   params: [
-    { key: "bits", label: "摘要位数", type: "select", default: 256, options: [128, 256] },
+    { key: "size", label: "Size（位，32-480 step 32）", type: "number", default: 256, placeholder: "默认 256" },
+    { key: "rounds", label: "Rounds", type: "select", default: "8",
+      options: [{ value: "8", label: "8" }, { value: "4", label: "4" }, { value: "2", label: "2" }] },
     INPUT_PARAM,
   ],
-  run: (t, p) => snefruHash(inputBytes(t, p), Number((p && p.bits) || 256) === 128 ? 4 : 8, 8),
+  run: (t, p) => {
+    const size = Math.max(32, Math.min(480, Number((p && p.size) || 256)));
+    const outWords = Math.max(1, Math.min(15, Math.round(size / 32)));
+    return snefruHash(inputBytes(t, p), outWords, Number((p && p.rounds) || 8));
+  },
 });
 
 register({
   id: "sha0", cat: "hash", name: "SHA-0", family: "sha", familyLabel: "SHA-0",
-  desc: "SHA-0（FIPS 180 原版 1993，被 SHA-1/FIPS 180-1 替换，仅历史兼容；与 SHA-1 唯一差异是消息扩展不旋转）",
-  params: [INPUT_PARAM],
-  run: (t, p) => sha0(inputBytes(t, p)),
+  desc: "SHA-0（FIPS 180 原版 1993，被 SHA-1/FIPS 180-1 替换，仅历史兼容；与 SHA-1 唯一差异是消息扩展不旋转）；Rounds 默认 80",
+  params: [
+    { key: "rounds", label: "Rounds（1-80）", type: "number", default: 80 },
+    INPUT_PARAM,
+  ],
+  run: (t, p) => sha0(inputBytes(t, p), Number((p && p.rounds) || 80)),
 });
 
 register({

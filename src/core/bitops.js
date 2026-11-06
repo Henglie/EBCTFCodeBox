@@ -76,28 +76,86 @@ function bitRotateBytes(bytes, dir, n) {
 }
 
 // ============ 字节序反转（按组，自逆） ============
-function byteSwapBytes(bytes, group) {
+function byteSwapBytes(bytes, group, pad = false) {
   group = group | 0;
-  if (group < 2) group = 2;
-  const out = new Uint8Array(bytes.length);
+  if (group < 1) group = 1;
+  const out = new Uint8Array(pad ? Math.ceil(bytes.length / group) * group : bytes.length);
   for (let i = 0; i < bytes.length; i += group) {
     const end = Math.min(i + group, bytes.length);
     const len = end - i;
-    for (let j = 0; j < len; j++) out[i + j] = bytes[end - 1 - j];
+    if (pad && len < group) {
+      // CyberChef：末组先补 0 到 wordLength，再整组反转
+      const word = new Uint8Array(group);
+      word.set(bytes.subarray(i, end));
+      for (let j = 0; j < group; j++) out[i + j] = word[group - 1 - j];
+    } else {
+      for (let j = 0; j < len; j++) out[i + j] = bytes[end - 1 - j];
+    }
   }
   return out;
 }
 
-// hex↔hex 端序交换（复刻原 endianSwap，带整组长度校验，自逆）
-// group 2/4/8 对应 16/32/64 位。整组时反转逻辑与 byteSwapBytes 一致。
-function byteSwapHexIO(text, group) {
+// hex↔hex 端序交换（复刻原 endianSwap；group 任意 ≥1；pad=true 时末组补 0）
+function byteSwapHexIO(text, group, pad = false) {
   group = group | 0;
-  if (![2, 4, 8].includes(group)) throw new Error("分组字节数须为 2/4/8（实为 " + group + "）");
+  if (group < 1) throw new Error("Word length 须 ≥1（实为 " + group + "）");
   const bytes = hexToBytes(text);
-  if (bytes.length % group !== 0) {
-    throw new Error("字节长度 " + bytes.length + " 不是 " + group + " 的整数倍（" + (group * 8) + " 位组）");
+  return bytesToHex(byteSwapBytes(bytes, group, pad));
+}
+
+// 跨字节 carry 循环旋转（CyberChef Rotate.mjs 同构）
+function rotRightCarry(bytes, amount) {
+  amount = ((amount % 8) + 8) % 8;
+  const out = new Uint8Array(bytes.length);
+  let carry = 0;
+  for (let i = 0; i < bytes.length; i++) {
+    const old = bytes[i];
+    out[i] = ((old >> amount) | carry) & 0xff;
+    carry = (old & ((1 << amount) - 1)) << (8 - amount);
   }
-  return bytesToHex(byteSwapBytes(bytes, group));
+  if (out.length) out[0] |= carry;
+  return out;
+}
+function rotLeftCarry(bytes, amount) {
+  amount = ((amount % 8) + 8) % 8;
+  const out = new Uint8Array(bytes.length);
+  let carry = 0;
+  for (let i = bytes.length - 1; i >= 0; i--) {
+    const old = bytes[i];
+    out[i] = ((old << amount) | carry) & 0xff;
+    carry = (old >> (8 - amount)) & ((1 << amount) - 1);
+  }
+  if (out.length) out[out.length - 1] |= carry;
+  return out;
+}
+// 整串 Reverse by：byte / character（UTF-8 字符，含代理对）/ line（按 0x0a 分行）
+function byteReverseBy(bytes, by) {
+  if (by === "line") {
+    const lines = [];
+    let line = [];
+    for (const b of bytes) {
+      if (b === 0x0a) { lines.push(line); line = []; } else line.push(b);
+    }
+    lines.push(line);
+    lines.reverse();
+    const out = [];
+    for (const l of lines) { out.push(...l, 0x0a); }
+    return Uint8Array.from(out.slice(0, bytes.length));
+  }
+  if (by === "character") {
+    const s = bytesToStr(bytes);
+    let r = "";
+    for (let i = s.length - 1; i >= 0; i--) {
+      const c = s.charCodeAt(i);
+      if (i > 0 && 0xdc00 <= c && c <= 0xdfff) {
+        const c2 = s.charCodeAt(i - 1);
+        if (0xd800 <= c2 && c2 <= 0xdbff) { r += s.charAt(i - 1) + s.charAt(i); i--; continue; }
+      }
+      r += s.charAt(i);
+    }
+    return strToBytes(r);
+  }
+  return byteReverseBytes(bytes);
 }
 
 // ============ 位平面提取（单向，有损） ============
@@ -247,17 +305,24 @@ register({
       { value: "right", label: "循环右移" },
     ] },
     { key: "bits", label: "位数（1-7）", type: "number", default: 1 },
+    { key: "carryThrough", label: "Carry through（跨字节 carry）", type: "bool", default: false },
   ],
   encode: (t, p) => {
     const dir = (p && p.dir) || "left";
     const n = Number((p && p.bits) || 1);
-    return bytesToHex(bitRotateBytes(strToBytes(t), dir, n));
+    const bytes = strToBytes(t);
+    return bytesToHex((p && p.carryThrough)
+      ? (dir === "right" ? rotRightCarry(bytes, n) : rotLeftCarry(bytes, n))
+      : bitRotateBytes(bytes, dir, n));
   },
   decode: (t, p) => {
     const dir = (p && p.dir) || "left";
     const n = Number((p && p.bits) || 1);
     const inv = dir === "right" ? "left" : "right";
-    return finishBytesDecode(bitRotateBytes(hexToBytes(t), inv, n), { textMode: "hex", name: "bitRotate" });
+    const bytes = hexToBytes(t);
+    return finishBytesDecode((p && p.carryThrough)
+      ? (inv === "right" ? rotRightCarry(bytes, n) : rotLeftCarry(bytes, n))
+      : bitRotateBytes(bytes, inv, n), { textMode: "hex", name: "bitRotate" });
   },
 });
 
@@ -271,22 +336,35 @@ register({
     { key: "mode", label: "模式", type: "select", default: "text", options: [
       { value: "text", label: "文本 ↔ Hex" },
       { value: "hex", label: "Hex ↔ Hex（大小端）" },
+      { value: "raw", label: "Raw ↔ Raw（同 CyberChef Data format=Raw）" },
     ] },
     { key: "group", label: "分组字节数", type: "select", default: 2, options: [
       { value: 2, label: "2 字节（16 位）" },
       { value: 4, label: "4 字节（32 位）" },
       { value: 8, label: "8 字节（64 位）" },
     ] },
+    { key: "wordLength", label: "Word length（字节，0=用分组档）", type: "number", default: 0, placeholder: "0 = 按分组档" },
+    { key: "padIncomplete", label: "Pad incomplete words（末组补 0）", type: "bool", default: false },
   ],
   encode: (t, p) => {
-    const group = Number((p && p.group) || 2);
-    if (p && p.mode === "hex") return byteSwapHexIO(t, group);
-    return bytesToHex(byteSwapBytes(strToBytes(t), group));
+    const group = Number((p && p.wordLength) || (p && p.group) || 2);
+    if (p && p.mode === "hex") return byteSwapHexIO(t, group, !!(p && p.padIncomplete));
+    if (p && p.mode === "raw") {
+      const out = byteSwapBytes(strToBytes(t), group, !!(p && p.padIncomplete));
+      let s = ""; for (const b of out) s += String.fromCharCode(b);
+      return s;
+    }
+    return bytesToHex(byteSwapBytes(strToBytes(t), group, !!(p && p.padIncomplete)));
   },
   decode: (t, p) => {
-    const group = Number((p && p.group) || 2);
-    if (p && p.mode === "hex") return byteSwapHexIO(t, group);
-    return finishBytesDecode(byteSwapBytes(hexToBytes(t), group), { textMode: "hex", name: "byteSwap" });
+    const group = Number((p && p.wordLength) || (p && p.group) || 2);
+    if (p && p.mode === "hex") return byteSwapHexIO(t, group, !!(p && p.padIncomplete));
+    if (p && p.mode === "raw") {
+      const out = byteSwapBytes(strToBytes(t), group, !!(p && p.padIncomplete));
+      let s = ""; for (const b of out) s += String.fromCharCode(b);
+      return s;
+    }
+    return finishBytesDecode(byteSwapBytes(hexToBytes(t), group, !!(p && p.padIncomplete)), { textMode: "hex", name: "byteSwap" });
   },
 });
 
@@ -415,15 +493,23 @@ register({
       { value: "text", label: "文本 → 倒序 Hex" },
       { value: "hex", label: "Hex ↔ Hex（整串倒序，自逆）" },
     ] },
+    { key: "by", label: "By（Byte / Character / Line）", type: "select", default: "byte",
+      options: [
+        { value: "byte", label: "Byte" },
+        { value: "character", label: "Character" },
+        { value: "line", label: "Line" },
+      ] },
   ],
   encode: (t, p) => {
-    if (p && p.mode === "hex") return bytesToHex(byteReverseBytes(hexToBytes(t)));
-    return bytesToHex(byteReverseBytes(strToBytes(t)));
+    const by = (p && p.by) || "byte";
+    if (p && p.mode === "hex") return bytesToHex(byteReverseBy(hexToBytes(t), by));
+    return bytesToHex(byteReverseBy(strToBytes(t), by));
   },
   decode: (t, p) => {
-    if (p && p.mode === "hex") return bytesToHex(byteReverseBytes(hexToBytes(t)));
+    const by = (p && p.by) || "byte";
+    if (p && p.mode === "hex") return bytesToHex(byteReverseBy(hexToBytes(t), by));
     // 文本模式 decode：Hex → 倒序字节 → UTF-8 文本（还原原文）
-    return finishBytesDecode(byteReverseBytes(hexToBytes(t)), { textMode: "hex", name: "byteReverse" });
+    return finishBytesDecode(byteReverseBy(hexToBytes(t), by), { textMode: "hex", name: "byteReverse" });
   },
   detect: () => 0,
 });
@@ -432,7 +518,7 @@ export {
   strToBytes, bytesToStr, bytesToHex, hexToBytes,
   reverseByte, bitReverseBytes,
   rotLeftByte, rotRightByte, bitRotateBytes,
-  byteSwapBytes, byteSwapHexIO,
+  byteSwapBytes, byteSwapHexIO, rotLeftCarry, rotRightCarry, byteReverseBy,
   bitPlane,
   ror13Dword, ror13HashBytes, modInverse256, byteArithBytes,
   byteReverseBytes,

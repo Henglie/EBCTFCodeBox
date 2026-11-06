@@ -440,7 +440,7 @@ register({
   desc: "Bcrypt 口令哈希 / 校验（OpenBSD，$2a$/$2b$/$2y$，EksBlowfish，cost 4-31）",
   params: [
     { key: "mode", label: "模式", type: "select", default: "hash",
-      options: [{ value: "hash", label: "生成哈希" }, { value: "verify", label: "校验" }] },
+      options: [{ value: "hash", label: "生成哈希" }, { value: "verify", label: "校验" }, { value: "parse", label: "解析哈希（同 CyberChef Bcrypt parse）" }] },
     { key: "cost", label: "cost（对数轮数）", type: "number", default: 10, placeholder: "4..31，默认 10" },
     { key: "salt", label: "盐", type: "text", default: "", placeholder: "留空随机；或 22位bcrypt / 32位hex" },
     { key: "saltEnc", label: "盐编码", type: "select", default: "auto", options: SALT_ENC_OPTS },
@@ -450,6 +450,13 @@ register({
   ],
   run: (text, p) => {
     const mode = p.mode || "hash";
+    if (mode === "parse") {
+      const full = String(text == null ? "" : text).trim();
+      const m = HASH_RE.exec(full);
+      if (!m) throw new Error("非法 bcrypt 串（应形如 $2b$10$22位salt+31位hash）");
+      const cost = parseInt(m[2], 10);
+      return `Rounds: ${cost}\nSalt: $${m[1]}$${m[2]}$${m[3]}\nPassword hash: ${m[4]}\nFull hash: ${full}`;
+    }
     if (mode === "verify") {
       const target = (p.hashStr || "").trim();
       if (!target) throw new Error("校验模式需在「待校验哈希」填入 $2b$... 串");

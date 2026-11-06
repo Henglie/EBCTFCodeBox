@@ -378,7 +378,7 @@ function verifyPayload(payload, entry, opts = {}) {
 /**
  * 提取单条。返回 { bytes, pseudo, crypto } 或抛错（带人话原因）。
  */
-function extractOne(bytes, entry, password) {
+function extractOne(bytes, entry, password, verify = true) {
   if (entry.isDir) throw new Error("目录条目，无文件内容");
   const local = readLocalHeader(bytes, entry);
   const flags = joinFlags(entry.flags, local.flags);
@@ -404,7 +404,7 @@ function extractOne(bytes, entry, password) {
 
   if (!encrypted) {
     const payload = decompressPayload(comp, entry.method, entry.name);
-    verifyPayload(payload, entry);
+    verifyPayload(payload, entry, { skipCrc: !verify });
     return { bytes: payload, pseudo: false, crypto: "" };
   }
 
@@ -412,7 +412,7 @@ function extractOne(bytes, entry, password) {
   let plainError = null;
   try {
     const plain = decompressPayload(comp, entry.method, entry.name);
-    verifyPayload(plain, entry);
+    verifyPayload(plain, entry, { skipCrc: !verify });
     return { bytes: plain, pseudo: true, crypto: "" };
   } catch (e) {
     plainError = e;
@@ -428,7 +428,7 @@ function extractOne(bytes, entry, password) {
     throw new Error(`密码错误或加密数据损坏：${e && e.message ? e.message : String(e)}；明文试解也失败（${plainError && plainError.message ? plainError.message : "未知"}）。未输出任何伪造明文。`);
   }
   const payload = decompressPayload(decrypted, entry.method, entry.name);
-  verifyPayload(payload, entry);
+  verifyPayload(payload, entry, { skipCrc: !verify });
   return { bytes: payload, pseudo: false, crypto: "ZipCrypto" };
 }
 
@@ -638,7 +638,7 @@ function zipExtractRun(text, p) {
     }
     let r;
     try {
-      r = extractOne(data, e, pp.password);
+      r = extractOne(data, e, pp.password, pp.verify !== false);
     } catch (err) {
       failed++;
       lines.push(`${tag} — ✗ ${err && err.message ? err.message : String(err)}`);
@@ -724,6 +724,7 @@ register({
     INPUT_ENC_PARAM,
     { key: "entry", label: "条目名（留空=全部；多个用逗号/分号分隔；#N 按序号）", type: "text", default: "", placeholder: "flag.txt 或留空" },
     { sensitive: true, key: "password", label: "ZipCrypto 密码（可空；AES 条目暂不支持）", type: "password", default: "", placeholder: "先 zipBrute 取口令" },
+    { key: "verify", label: "Verify result（CRC32 校验；默认 true 保持旧行为）", type: "bool", default: true },
   ],
   run: zipExtractRun,
   acceptsBytes: true,

@@ -89,6 +89,19 @@ function decodeInput(text, enc) {
       for (let i = 0; i < s.length; i++) o[i] = s.charCodeAt(i) & 0xff;
       return o;
     }
+    case "utf16":
+    case "utf16be": {
+      const s = String(text == null ? "" : text);
+      const o = new Uint8Array(s.length * 2);
+      for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); o[i * 2] = (c >> 8) & 0xff; o[i * 2 + 1] = c & 0xff; }
+      return o;
+    }
+    case "utf16le": {
+      const s = String(text == null ? "" : text);
+      const o = new Uint8Array(s.length * 2);
+      for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); o[i * 2] = c & 0xff; o[i * 2 + 1] = (c >> 8) & 0xff; }
+      return o;
+    }
     case "utf8":
     default: return te(text);
   }
@@ -100,6 +113,14 @@ function encodeOutput(bytes, enc) {
     case "latin1": {
       let s = "";
       for (const x of bytes) s += String.fromCharCode(x);
+      return s;
+    }
+    case "utf16":
+    case "utf16be":
+    case "utf16le": {
+      const le = enc === "utf16le";
+      let s = "";
+      for (let i = 0; i + 1 < bytes.length; i += 2) s += String.fromCharCode(le ? (bytes[i] | (bytes[i + 1] << 8)) : ((bytes[i] << 8) | bytes[i + 1]));
       return s;
     }
     case "utf8":
@@ -172,10 +193,14 @@ const ENC_OPTS = [
   { value: "hex", label: "Hex" },
   { value: "base64", label: "Base64" },
   { value: "latin1", label: "Latin-1" },
+  { value: "utf16", label: "UTF-16（BE）" },
+  { value: "utf16le", label: "UTF-16LE" },
+  { value: "utf16be", label: "UTF-16BE" },
 ];
 const OUT_OPTS = [
   { value: "base64", label: "Base64" },
   { value: "hex", label: "Hex" },
+  ...ENC_OPTS.filter((o) => o.value !== "utf8"),
 ];
 
 register({
@@ -189,6 +214,8 @@ register({
       ] },
     { key: "key", label: "密钥", type: "text", default: "", placeholder: "密钥" },
     { key: "keyEnc", label: "密钥编码", type: "select", default: "utf8", options: ENC_OPTS },
+    { key: "inEnc", label: "输入编码（空=编码方向 UTF-8 / 解码方向跟随密文编码）", type: "select", default: "",
+      options: [{ value: "", label: "跟随（旧行为）" }, ...ENC_OPTS] },
     { key: "drop", label: "丢弃字节数 n（drop 模式）", type: "number", default: 768, placeholder: "0/256/768/1536/3072/4096" },
     { key: "ksaRounds", label: "KSA 轮数 r（CS2 模式）", type: "number", default: 20, placeholder: "≥1，1=CS1" },
     { key: "iv", label: "IV（CS2 加密方向，10 字节）", type: "text", default: "", placeholder: "10 字节；解密时从密文前 10 字节读取" },
@@ -206,12 +233,12 @@ register({
       blob.set(body, iv.length);
       return encodeOutput(blob, p.outEnc || "base64");
     }
-    return encodeOutput(rc4DropCrypt(te(text), key, Number((p && p.drop) || 0)), p.outEnc || "base64");
+    return encodeOutput(rc4DropCrypt(decodeInput(text, (p && p.inEnc) || "utf8"), key, Number((p && p.drop) || 0)), p.outEnc || "base64");
   },
   decode: (text, p) => {
     const mode = (p && p.mode) || "drop";
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
-    const blob = decodeInput(String(text).trim(), p.outEnc || "base64");
+    const blob = decodeInput(String(text).trim(), (p && p.inEnc) || p.outEnc || "base64");
     if (mode === "cipherSaber2") {
       if (blob.length < 10) throw new Error(`CipherSaber-2：密文不足 10 字节，读不到 IV（当前 ${blob.length}）。`);
       const iv = blob.subarray(0, 10);

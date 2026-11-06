@@ -93,6 +93,41 @@ function simpleSubDecode(text, key = "AJPCZWRLFBDKOTYUQGENHXMIVS") {
   return text.replace(/[a-z]/gi, (ch) => keepCase(AZ[k.indexOf(ch.toUpperCase())], ch));
 }
 
+// ---- CyberChef Substitute 兼容：任意字节映射（支持 \\n \\t \\xNN 与 A-Z 区间） ----
+function expandAlphaRange(s) {
+  const src = String(s == null ? "" : s).replace(/\\x([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/\\n/g, "\n").replace(/\\r/g, "\r").replace(/\\t/g, "\t").replace(/\\b/g, "\b").replace(/\\f/g, "\f");
+  const out = [];
+  for (let i = 0; i < src.length; i++) {
+    if (i + 2 < src.length && src[i + 1] === "-" && src[i] !== "-" && src[i + 2] !== "-") {
+      const a = src.charCodeAt(i), b = src.charCodeAt(i + 2);
+      if (a <= b) { for (let c = a; c <= b; c++) out.push(String.fromCharCode(c)); i += 2; continue; }
+    }
+    out.push(src[i]);
+  }
+  return out;
+}
+function substituteRun(text, p, reverse) {
+  const plain = expandAlphaRange(p.plaintext != null && p.plaintext !== "" ? p.plaintext : "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+  const cipher = expandAlphaRange(p.ciphertext != null && p.ciphertext !== "" ? p.ciphertext : "XYZABCDEFGHIJKLMNOPQRSTUVW");
+  const ignoreCase = !!p.ignoreCase;
+  let warn = "";
+  if (plain.length !== cipher.length) warn = "Warning: Plaintext and Ciphertext lengths differ\n\n";
+  const dict = new Map();
+  for (let i = 0; i < Math.min(plain.length, cipher.length); i++) {
+    dict.set(reverse ? cipher[i] : plain[i], reverse ? plain[i] : cipher[i]);
+  }
+  const mapChar = (ch) => {
+    if (!ignoreCase) return dict.has(ch) ? dict.get(ch) : ch;
+    const upper = ch === ch.toUpperCase();
+    if (dict.has(ch)) return upper ? dict.get(ch).toUpperCase() : dict.get(ch).toLowerCase();
+    const other = upper ? ch.toLowerCase() : ch.toUpperCase();
+    if (dict.has(other)) return upper ? dict.get(other).toUpperCase() : dict.get(other).toLowerCase();
+    return ch;
+  };
+  return warn + Array.from(String(text == null ? "" : text), mapChar).join("");
+}
+
 // ============ 滚动密钥 RunningKey（长文本作 key 的维吉尼亚） ============
 // 与 vigenere 语义等价，惯用长文本（书页）作密钥。密钥字母流按明文字母推进，不足则循环。
 function runningKeyEncode(text, key = "THEQUICKBROWNFOX", decrypt = false) {
@@ -132,10 +167,24 @@ register({
 });
 
 register({
-  id: "simplesub", cat: "classic", name: "简单替换", desc: "自定义 26 字母置换表单表替换（A-Z 依次映射到密钥表）",
-  params: [{ key: "key", label: "26 字母置换表", type: "text", default: "AJPCZWRLFBDKOTYUQGENHXMIVS" }],
-  encode: (t, p) => simpleSubEncode(t, (p && p.key) || "AJPCZWRLFBDKOTYUQGENHXMIVS"),
-  decode: (t, p) => simpleSubDecode(t, (p && p.key) || "AJPCZWRLFBDKOTYUQGENHXMIVS"),
+  id: "simplesub", cat: "classic", name: "简单替换", desc: "自定义 26 字母置换表单表替换（A-Z 依次映射到密钥表）；subMode=bytes 时提供 CyberChef Substitute 的 Plaintext/Ciphertext/Ignore case 任意字节映射",
+  params: [
+    { key: "subMode", label: "模式", type: "select", default: "table",
+      options: [
+        { value: "table", label: "26 字母置换表（旧行为）" },
+        { value: "bytes", label: "任意字节映射（CyberChef Substitute）" },
+      ] },
+    { key: "key", label: "26 字母置换表（table 模式）", type: "text", default: "AJPCZWRLFBDKOTYUQGENHXMIVS" },
+    { key: "plaintext", label: "Plaintext（bytes 模式）", type: "text", default: "ABCDEFGHIJKLMNOPQRSTUVWXYZ" },
+    { key: "ciphertext", label: "Ciphertext（bytes 模式）", type: "text", default: "XYZABCDEFGHIJKLMNOPQRSTUVW" },
+    { key: "ignoreCase", label: "Ignore case（bytes 模式）", type: "bool", default: false },
+  ],
+  encode: (t, p) => (p && p.subMode === "bytes")
+    ? substituteRun(t, p || {}, false)
+    : simpleSubEncode(t, (p && p.key) || "AJPCZWRLFBDKOTYUQGENHXMIVS"),
+  decode: (t, p) => (p && p.subMode === "bytes")
+    ? substituteRun(t, p || {}, true)
+    : simpleSubDecode(t, (p && p.key) || "AJPCZWRLFBDKOTYUQGENHXMIVS"),
 });
 
 register({

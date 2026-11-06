@@ -32,7 +32,9 @@ const MD2_S = [
   49, 68, 80, 180, 143, 237, 31, 26, 219, 153, 141, 51, 159, 17, 131, 20,
 ];
 
-function md2Bytes(bytes) {
+function md2Bytes(bytes, rounds = 18) {
+ // CC MD2 Rounds：0 → 18（crypto-api `rounds || 18`）
+  const R = Math.max(1, Math.min(64, Number(rounds) || 18));
  // 1. 填充到 16 字节整数倍：补 i 个值为 i 的字节（i = 16 - len%16，恒 1..16）
   const padLen = 16 - (bytes.length % 16);
   const msg = new Uint8Array(bytes.length + padLen);
@@ -62,7 +64,7 @@ function md2Bytes(bytes) {
       X[32 + j] = X[16 + j] ^ X[j];
     }
     let t = 0;
-    for (let round = 0; round < 18; round++) {
+    for (let round = 0; round < R; round++) {
       for (let j = 0; j < 48; j++) {
         t = X[j] ^= MD2_S[t];
       }
@@ -72,14 +74,17 @@ function md2Bytes(bytes) {
   return X.slice(0, 16);
 }
 
-function md2(text) {
-  return toHex(md2Bytes(te(text)));
+function md2(text, rounds = 18) {
+  return toHex(md2Bytes(te(text), rounds));
 }
 
 register({
   id: "md2", cat: "hash", name: "MD2", family: "md", familyLabel: "MD2",
-  desc: "MD2 消息摘要（128 位，RFC 1319，256 字节置换表 + 校验字节，纯 JS）",
-  run: (t, p) => md2(p?.rawBytes ?? t),
+  desc: "MD2 消息摘要（128 位，RFC 1319，256 字节置换表 + 校验字节，纯 JS）；Rounds 与 CyberChef 对齐（默认 18）",
+  params: [
+    { key: "rounds", label: "Rounds", type: "number", default: 18, placeholder: "默认 18" },
+  ],
+  run: (t, p) => md2(p?.rawBytes ?? t, Number((p && p.rounds) || 18)),
 });
 
 export { md2, md2Bytes };

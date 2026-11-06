@@ -111,18 +111,20 @@ function hammingDistance(a, b) {
 }
 
 // ============ levenshtein（编辑距离，DP）============
-function levenshtein(a, b) {
+function levenshtein(a, b, insCost = 1, delCost = 1, subCost = 1) {
+  const ins = Number(insCost), del = Number(delCost), sub = Number(subCost);
+  if (ins < 0 || del < 0 || sub < 0) throw new Error("Levenshtein 代价不能为负");
   const m = a.length, n = b.length;
-  if (m === 0) return `编辑距离: ${n}`;
-  if (n === 0) return `编辑距离: ${m}`;
+  if (m === 0) return `编辑距离: ${n}\n长度: 0 vs ${n}\n相似度: ${(1 - n / n).toFixed(4)}`;
+  if (n === 0) return `编辑距离: ${m}\n长度: ${m} vs 0\n相似度: ${(1 - m / m).toFixed(4)}`;
   const prev = new Array(n + 1);
   const curr = new Array(n + 1);
-  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let j = 0; j <= n; j++) prev[j] = j * ins;
   for (let i = 1; i <= m; i++) {
-    curr[0] = i;
+    curr[0] = i * del;
     for (let j = 1; j <= n; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+      const c = a[i - 1] === b[j - 1] ? 0 : sub;
+      curr[j] = Math.min(prev[j] + ins, curr[j - 1] + del, prev[j - 1] + c);
     }
     for (let j = 0; j <= n; j++) prev[j] = curr[j];
   }
@@ -342,12 +344,28 @@ register({
 });
 register({
   id: "levenshtein", cat: "analysis", name: "编辑距离",
-  desc: "Levenshtein 编辑距离（插入/删除/替换，DP）",
-  params: [],
-  run: (t) => {
-    const parts = t.split(/\r?\n/);
+  desc: "Levenshtein 编辑距离（插入/删除/替换，DP）；Sample delimiter 与三类代价与 CyberChef 对齐，默认输出保持旧格式",
+  params: [
+    { key: "sampleDelimiter", label: "Sample delimiter", type: "text", default: "\\n", placeholder: "默认 \\n" },
+    { key: "insCost", label: "Insertion cost", type: "number", default: 1 },
+    { key: "delCost", label: "Deletion cost", type: "number", default: 1 },
+    { key: "subCost", label: "Substitution cost", type: "number", default: 1 },
+  ],
+  run: (t, p) => {
+    const delim = String((p && p.sampleDelimiter) || "\\n");
+    let parts;
+    if (delim === "\\n") {
+      parts = String(t).split(/\r?\n/);
+    } else {
+      const sep = delim.replace(/\\x([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+        .replace(/\\n/g, "\n").replace(/\\r/g, "\r").replace(/\\t/g, "\t");
+      parts = String(t).split(sep);
+    }
     if (parts.length < 2) return "请输入两行文本（用换行分隔）";
-    return levenshtein(parts[0], parts.slice(1).join("\n"));
+    return levenshtein(parts[0], parts.slice(1).join("\n"),
+      Number((p && p.insCost) != null ? p.insCost : 1),
+      Number((p && p.delCost) != null ? p.delCost : 1),
+      Number((p && p.subCost) != null ? p.subCost : 1));
   },
 });
 register({

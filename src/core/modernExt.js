@@ -1074,43 +1074,65 @@ function makeBlockOp(encFn, decFn) {
 
 // Salsa20 / ChaCha20（流密码，自反：encode=decode）
 // nonce/counter 由 register 层解析；nonce 编码默认 hex（CTF 常见给 hex nonce）。rounds = 20/12/8。
-function makeStreamCipherOp(fn, keyHint, nonceHint) {
+function intToLeBytes(value, len) {
+  let n = BigInt(Math.trunc(Number(value)));
+  if (!Number.isFinite(Number(value)) || n < 0n) throw new Error("Integer nonce 须为 ≥0 整数");
+  const out = new Uint8Array(len);
+  for (let i = 0; i < len; i++) { out[i] = Number(n & 0xffn); n >>= 8n; }
+  if (n !== 0n) throw new Error("Integer nonce 超出 " + (len * 8) + " 位");
+  return out;
+}
+function makeStreamCipherOp(fn, keyHint, nonceHint, integerNonceLen = 8) {
   const params = [
     { key: "key", label: "密钥", type: "text", default: "", placeholder: keyHint },
     { key: "keyEnc", label: "密钥编码", type: "select", default: "hex", options: ENC_OPTS },
     { key: "nonce", label: "Nonce", type: "text", default: "", placeholder: nonceHint },
+    { key: "nonceType", label: "Nonce 类型", type: "select", default: "encoded",
+      options: [
+        { value: "encoded", label: "按编码解析" },
+        { value: "integer", label: "Integer（小端整数）" },
+      ] },
     { key: "nonceEnc", label: "Nonce 编码", type: "select", default: "hex", options: ENC_OPTS },
     { key: "counter", label: "初始计数器", type: "number", default: 0 },
     { key: "rounds", label: "轮数", type: "select", default: "20",
       options: [{ value: "20", label: "20" }, { value: "12", label: "12" }, { value: "8", label: "8" }] },
+    { key: "inEnc", label: "输入编码（空=编码方向 UTF-8 / 解码方向跟随密文编码）", type: "select", default: "",
+      options: [
+        { value: "", label: "跟随（旧行为）" },
+        ...ENC_OPTS,
+      ] },
     { key: "outEnc", label: "密文编码", type: "select", default: "base64", options: ENC_OPTS },
   ];
+  const readNonce = (p) => (p && p.nonceType === "integer")
+    ? intToLeBytes(parseInt(String(p.nonce || "0"), 10), integerNonceLen)
+    : decodeInput(p.nonce || "", p.nonceEnc || "hex");
   const encode = (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "hex");
-    const nonce = decodeInput(p.nonce || "", p.nonceEnc || "hex");
+    const nonce = readNonce(p);
     const counter = Number(p.counter) || 0;
     const rounds = p.rounds ? Number(p.rounds) : 20;
-    return encodeOutput(fn(te(text), key, nonce, counter, rounds), p.outEnc || "base64");
+    const data = decodeInput(text, (p && p.inEnc) || "utf8");
+    return encodeOutput(fn(data, key, nonce, counter, rounds), p.outEnc || "base64");
   };
   const decode = (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "hex");
-    const nonce = decodeInput(p.nonce || "", p.nonceEnc || "hex");
+    const nonce = readNonce(p);
     const counter = Number(p.counter) || 0;
     const rounds = p.rounds ? Number(p.rounds) : 20;
-    const data = decodeInput(text.trim(), p.outEnc || "base64");
+    const data = decodeInput(text.trim(), (p && p.inEnc) || p.outEnc || "base64");
     return td(fn(data, key, nonce, counter, rounds));
   };
   return { params, encode, decode };
 }
 {
-  const { params, encode, decode } = makeStreamCipherOp(salsa20, "16 或 32 字节密钥", "8 字节 nonce");
+  const { params, encode, decode } = makeStreamCipherOp(salsa20, "16 或 32 字节密钥", "8 字节 nonce", 8);
   register({
     id: "salsa20", cat: "stream", name: "Salsa20", desc: "Salsa20 流密码（Bernstein，key 16/32 字节，nonce 8 字节，64位块计数器；rounds 20/12/8）",
     params, encode, decode,
   });
 }
 {
-  const { params, encode, decode } = makeStreamCipherOp(chacha20, "32 字节密钥", "12 字节（RFC 8439）或 8 字节（原版）nonce");
+  const { params, encode, decode } = makeStreamCipherOp(chacha20, "32 字节密钥", "12 字节（RFC 8439）或 8 字节（原版）nonce", 12);
   register({
     id: "chacha20", cat: "stream", name: "ChaCha20", desc: "ChaCha20 流密码（key 32 字节；nonce 12 字节 RFC 8439 / 8 字节原版 64 位计数器；rounds 20/12/8）",
     params, encode, decode,

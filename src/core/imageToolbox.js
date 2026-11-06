@@ -193,8 +193,8 @@ async function imageCompressOp(text, p = {}) {
 // ============================================================
 async function imageGrayOp(text, p = {}) {
   const mode = String(p.mode || "gray");
-  if (!["gray", "binary"].includes(mode)) {
-    throw new Error("imageGray：模式需为 gray 或 binary，当前 " + mode);
+  if (!["gray", "binary", "sepia"].includes(mode)) {
+    throw new Error("imageGray：模式需为 gray / binary / sepia，当前 " + mode);
   }
   const threshold = mode === "binary"
     ? _intInRange("imageGray", p.threshold, 0, 255, "二值化阈值", 128)
@@ -202,11 +202,23 @@ async function imageGrayOp(text, p = {}) {
   const img = await _toolDecodeImage(text, p, "imageGray");
   const d = img.data;
   for (let i = 0; i < d.length; i += 4) {
+    if (mode === "sepia") {
+      // 逐字复刻 Jimp plugin-color sepia：green/blue 使用上一步刚算出的 red/green（float），
+      // 再交给 Uint8ClampedArray 的 ToUint8Clamp（0.5 取偶）截断。
+      const r0 = d[i], g0 = d[i + 1], b0 = d[i + 2];
+      const red = r0 * 0.393 + g0 * 0.769 + b0 * 0.189;
+      const green = red * 0.349 + g0 * 0.686 + b0 * 0.168;
+      const blue = red * 0.272 + green * 0.534 + b0 * 0.131;
+      d[i] = red < 255 ? red : 255;
+      d[i + 1] = green < 255 ? green : 255;
+      d[i + 2] = blue < 255 ? blue : 255;
+      continue;
+    }
     const g = _lum601(d[i], d[i + 1], d[i + 2]);
     const v = mode === "binary" ? (g >= threshold ? 255 : 0) : g;
     d[i] = v; d[i + 1] = v; d[i + 2] = v; // alpha 保持
   }
-  return _toolOutPng(img, mode === "binary" ? "gray_binary.png" : "gray.png");
+  return _toolOutPng(img, mode === "binary" ? "gray_binary.png" : (mode === "sepia" ? "sepia.png" : "gray.png"));
 }
 
 // ============================================================
@@ -760,6 +772,7 @@ register({
       options: [
         { value: "gray", label: "灰度（256 级）" },
         { value: "binary", label: "二值（黑白，配阈值）" },
+        { value: "sepia", label: "Sepia（棕褐色，同 CyberChef Image Filter）" },
       ],
     },
     { key: "threshold", label: "二值化阈值（0-255，仅 binary 生效）", type: "number", default: 128 },
