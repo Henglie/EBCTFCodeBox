@@ -254,6 +254,26 @@ function bytesToB64(b) {
 // register 注册
 // ============================================================
 
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 const ENC_OPTS = [
   { value: "utf8", label: "UTF-8" },
   { value: "hex", label: "Hex" },
@@ -288,6 +308,7 @@ function encodeOutput(bytes, enc) {
 // ZUC op（流密码，encode=decode 自反）
 register({
   id: "zuc",
+  acceptsBytes: true,
   cat: "stream",
   name: "ZUC 祖冲之",
   desc: "国密流密码（GB/T 33133.1-2016，前身 GM/T 0001-2012，128 位密钥+128 位 IV，3GPP LTE 加密标准）",
@@ -300,13 +321,13 @@ register({
   encode: (text, p) => {
     const key = hexToBytes(p.key || "00".repeat(16));
     const iv = hexToBytes(p.iv || "00".repeat(16));
-    const data = decodeInput(text, p.dataEnc || "utf8");
+    const data = rawBytesOrNull(p, text) || decodeInput(text, p.dataEnc || "utf8");
     return encodeOutput(zucCrypt(data, key, iv), p.outEnc || "hex");
   },
   decode: (text, p) => {
     const key = hexToBytes(p.key || "00".repeat(16));
     const iv = hexToBytes(p.iv || "00".repeat(16));
-    const data = decodeInput(text, p.dataEnc || "hex");
+    const data = rawBytesOrNull(p, text) || decodeInput(text, p.dataEnc || "hex");
     return encodeOutput(zucCrypt(data, key, iv), p.outEnc || "utf8");
   },
   detect: (text) => {

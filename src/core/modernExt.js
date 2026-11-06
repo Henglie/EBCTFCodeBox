@@ -897,6 +897,26 @@ export function sm4GcmDecrypt(data, key, iv, aad, tagLen = 16) {
 // ============================================================
 // register 层（编码解析 + 双向注册）
 // ============================================================
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 const ENC_OPTS = [
   { value: "utf8", label: "UTF-8" },
   { value: "hex", label: "Hex" },
@@ -962,7 +982,7 @@ function makeBlockOp(encFn, decFn) {
   const encode = (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
     const o = opts(p);
-    let out = encFn(te(text), key, o);
+    let out = encFn(rawBytesOrNull(p, text) || te(text), key, o);
     if (o.mode === "GCM" && o.includeIv !== "off") {
       if (!o.iv) throw new Error("GCM 需提供 nonce（IV）");
       out = o.includeIv === "prepend" ? concatBytes(o.iv, out) : concatBytes(out, o.iv);
@@ -971,7 +991,7 @@ function makeBlockOp(encFn, decFn) {
   };
   const decode = (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
-    let data = decodeInput(text.trim(), p.outEnc || "base64");
+    let data = rawBytesOrNull(p, text.trim()) || decodeInput(text.trim(), p.outEnc || "base64");
     const o = opts(p);
     const tagRaw = String(p.tag == null ? "" : p.tag);
     const tagEnc = p.tagEnc || "hex";
@@ -1022,7 +1042,8 @@ function makeBlockOp(encFn, decFn) {
 {
   const { encode, decode } = makeBlockOp(teaEncrypt, teaDecrypt);
   register({
-    id: "tea", family: "tea", familyLabel: "tea", cat: "block", name: "TEA", desc: "Tiny Encryption Algorithm（64位块，128位密钥，32轮 Feistel，Wheeler 1994；支持 ECB/CBC/CFB/OFB/CTR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
+    id: "tea",
+    acceptsBytes: true, family: "tea", familyLabel: "tea", cat: "block", name: "TEA", desc: "Tiny Encryption Algorithm（64位块，128位密钥，32轮 Feistel，Wheeler 1994；支持 ECB/CBC/CFB/OFB/CTR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
     params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "16 字节密钥"),
     encode, decode,
   });
@@ -1031,7 +1052,8 @@ function makeBlockOp(encFn, decFn) {
 {
   const { encode, decode } = makeBlockOp(xteaEncrypt, xteaDecrypt);
   register({
-    id: "xtea", family: "tea", familyLabel: "xtea", cat: "block", name: "XTEA", desc: "扩展 TEA（改进密钥调度，64位块，128位密钥，Needham 1997；支持 ECB/CBC/CFB/OFB/CTR 与 rounds 1-255）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
+    id: "xtea",
+    acceptsBytes: true, family: "tea", familyLabel: "xtea", cat: "block", name: "XTEA", desc: "扩展 TEA（改进密钥调度，64位块，128位密钥，Needham 1997；支持 ECB/CBC/CFB/OFB/CTR 与 rounds 1-255）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
     params: [
       ...blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "16 字节密钥"),
       { key: "rounds", label: "轮数（默认 32）", type: "number", default: 32, min: 1, max: 255, step: 1 },
@@ -1043,15 +1065,17 @@ function makeBlockOp(encFn, decFn) {
 {
   const encode = (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
-    return encodeOutput(xxteaEncrypt(te(text), key), p.outEnc || "base64");
+    const data = rawBytesOrNull(p, text) || te(text);
+    return encodeOutput(xxteaEncrypt(data, key), p.outEnc || "base64");
   };
   const decode = (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
-    const data = decodeInput(text.trim(), p.outEnc || "base64");
+    const data = rawBytesOrNull(p, text.trim()) || decodeInput(text.trim(), p.outEnc || "base64");
     return td(xxteaDecrypt(data, key));
   };
   register({
-    id: "xxtea", family: "tea", familyLabel: "xxtea", cat: "block", name: "XXTEA", desc: "可变长度块 TEA（整个数据一次性加密，≥8字节，128位密钥，Wheeler 1998）",
+    id: "xxtea",
+    acceptsBytes: true, family: "tea", familyLabel: "xxtea", cat: "block", name: "XXTEA", desc: "可变长度块 TEA（整个数据一次性加密，≥8字节，128位密钥，Wheeler 1998）",
     params: [
       { key: "key", label: "密钥", type: "text", default: "", placeholder: "16 字节密钥" },
       { key: "keyEnc", label: "密钥编码", type: "select", default: "utf8", options: ENC_OPTS },
@@ -1065,7 +1089,8 @@ function makeBlockOp(encFn, decFn) {
 {
   const { encode, decode } = makeBlockOp(sm4Encrypt, sm4Decrypt);
   register({
-    id: "sm4", family: "sm4", familyLabel: "encdec", cat: "block", name: "SM4",
+    id: "sm4",
+    acceptsBytes: true, family: "sm4", familyLabel: "encdec", cat: "block", name: "SM4",
     desc: "国密分组密码（GB/T 32907-2016，前身 GM/T 0002-2012；128位块，128位密钥，32轮非线性迭代。模式：ECB/CBC/CFB/OFB/CTR + GCM 认证加密）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；GCM 支持 AAD、tagLen(128…32 位)、Include IV(off/prepend/append) 与解密独立 tag；流模式忽略填充",
     params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR", "GCM"], "16 字节密钥（hex 32 字符）"),
     encode, decode,
@@ -1111,7 +1136,7 @@ function makeStreamCipherOp(fn, keyHint, nonceHint, integerNonceLen = 8) {
     const nonce = readNonce(p);
     const counter = Number(p.counter) || 0;
     const rounds = p.rounds ? Number(p.rounds) : 20;
-    const data = decodeInput(text, (p && p.inEnc) || "utf8");
+    const data = rawBytesOrNull(p, text) || decodeInput(text, (p && p.inEnc) || "utf8");
     return encodeOutput(fn(data, key, nonce, counter, rounds), p.outEnc || "base64");
   };
   const decode = (text, p) => {
@@ -1119,7 +1144,7 @@ function makeStreamCipherOp(fn, keyHint, nonceHint, integerNonceLen = 8) {
     const nonce = readNonce(p);
     const counter = Number(p.counter) || 0;
     const rounds = p.rounds ? Number(p.rounds) : 20;
-    const data = decodeInput(text.trim(), (p && p.inEnc) || p.outEnc || "base64");
+    const data = rawBytesOrNull(p, text.trim()) || decodeInput(text.trim(), (p && p.inEnc) || p.outEnc || "base64");
     return td(fn(data, key, nonce, counter, rounds));
   };
   return { params, encode, decode };
@@ -1127,14 +1152,16 @@ function makeStreamCipherOp(fn, keyHint, nonceHint, integerNonceLen = 8) {
 {
   const { params, encode, decode } = makeStreamCipherOp(salsa20, "16 或 32 字节密钥", "8 字节 nonce", 8);
   register({
-    id: "salsa20", cat: "stream", name: "Salsa20", desc: "Salsa20 流密码（Bernstein，key 16/32 字节，nonce 8 字节，64位块计数器；rounds 20/12/8）",
+    id: "salsa20",
+    acceptsBytes: true, cat: "stream", name: "Salsa20", desc: "Salsa20 流密码（Bernstein，key 16/32 字节，nonce 8 字节，64位块计数器；rounds 20/12/8）",
     params, encode, decode,
   });
 }
 {
   const { params, encode, decode } = makeStreamCipherOp(chacha20, "32 字节密钥", "12 字节（RFC 8439）或 8 字节（原版）nonce", 12);
   register({
-    id: "chacha20", cat: "stream", name: "ChaCha20", desc: "ChaCha20 流密码（key 32 字节；nonce 12 字节 RFC 8439 / 8 字节原版 64 位计数器；rounds 20/12/8）",
+    id: "chacha20",
+    acceptsBytes: true, cat: "stream", name: "ChaCha20", desc: "ChaCha20 流密码（key 32 字节；nonce 12 字节 RFC 8439 / 8 字节原版 64 位计数器；rounds 20/12/8）",
     params, encode, decode,
   });
 }
@@ -1142,17 +1169,18 @@ function makeStreamCipherOp(fn, keyHint, nonceHint, integerNonceLen = 8) {
 // xorStrings（多进制循环异或，明文/密钥短侧循环补齐，自反）
 {
   const encode = (text, p) => {
-    const data = decodeInput(text, p.inEnc || "utf8");
+    const data = rawBytesOrNull(p, text) || decodeInput(text, p.inEnc || "utf8");
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
     return encodeOutput(xorExtend(data, key), p.outEnc || "hex");
   };
   const decode = (text, p) => {
-    const data = decodeInput(text.trim(), p.outEnc || "hex");
+    const data = rawBytesOrNull(p, text.trim()) || decodeInput(text.trim(), p.outEnc || "hex");
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
     return encodeOutput(xorExtend(data, key), p.inEnc || "utf8");
   };
   register({
-    id: "xorStrings", cat: "modern", name: "XOR 循环补齐", desc: "循环异或：明文与密钥短侧各自循环补齐到较长一侧再异或（自反）",
+    id: "xorStrings",
+    acceptsBytes: true, cat: "modern", name: "XOR 循环补齐", desc: "循环异或：明文与密钥短侧各自循环补齐到较长一侧再异或（自反）",
     params: [
       { key: "key", label: "密钥", type: "text", default: "", placeholder: "密钥（可短于明文，循环补齐）" },
       { key: "keyEnc", label: "密钥编码", type: "select", default: "utf8", options: ENC_OPTS },

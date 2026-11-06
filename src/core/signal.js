@@ -56,6 +56,26 @@ function bitsToText(bits) {
   return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
 }
 
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 // ============================================================
 // 1. 曼彻斯特编码（Manchester Encoding）
 // ============================================================
@@ -497,17 +517,20 @@ function bitsToOutput(bits, p) {
 
 register({
   id: "manchester",
+  acceptsBytes: true,
   cat: "fancy",
   name: "曼彻斯特编码",
   desc: "Manchester Encoding：每比特中央跳变，0/01 ↔ 1/10（IEEE 802.3 / G.E. Thomas 双约定）。输入文本或比特流。",
   params: [inputFormatParam, convParam],
   encode(text, p) {
-    const bits = inputToBits(text, p);
+    const raw = rawBytesOrNull(p, text);
+    const bits = raw ? bytesToBits(raw) : inputToBits(text, p);
     const out = manchesterEncodeBits(bits, p.convention || "ieee");
     return out;
   },
   decode(text, p) {
-    const bits = toBitStream(text);
+    const raw = rawBytesOrNull(p, text);
+    const bits = raw ? bytesToBits(raw) : toBitStream(text);
     const out = manchesterDecodeBits(bits, p.convention || "ieee");
     return bitsToOutput(out, p);
   },
@@ -515,17 +538,20 @@ register({
 
 register({
   id: "diffManchester",
+  acceptsBytes: true,
   cat: "fancy",
   name: "差分曼彻斯特编码",
   desc: "Differential Manchester：中央必跳变（时钟），0=周期起始跳变，1=不跳变（IEEE 802.5 Token Ring 约定）。",
   params: [inputFormatParam, initLevelParam],
   encode(text, p) {
-    const bits = inputToBits(text, p);
+    const raw = rawBytesOrNull(p, text);
+    const bits = raw ? bytesToBits(raw) : inputToBits(text, p);
     const init = parseInt(p.initialLevel || "0", 10);
     return diffManchesterEncodeBits(bits, init);
   },
   decode(text, p) {
-    const bits = toBitStream(text);
+    const raw = rawBytesOrNull(p, text);
+    const bits = raw ? bytesToBits(raw) : toBitStream(text);
     const init = parseInt(p.initialLevel || "0", 10);
     const out = diffManchesterDecodeBits(bits, init);
     return bitsToOutput(out, p);
@@ -534,17 +560,20 @@ register({
 
 register({
   id: "nrzi",
+  acceptsBytes: true,
   cat: "fancy",
   name: "NRZI 编码",
   desc: "Non-Return-to-Zero Inverted：USB 约定 0=跳变/1=不跳变，经典约定 1=跳变/0=不跳变。USB 2.0 / Fast Ethernet 用。",
   params: [inputFormatParam, nrziConvParam, initLevelParam],
   encode(text, p) {
-    const bits = inputToBits(text, p);
+    const raw = rawBytesOrNull(p, text);
+    const bits = raw ? bytesToBits(raw) : inputToBits(text, p);
     const init = parseInt(p.initialLevel || "0", 10);
     return nrziEncodeBits(bits, p.convention || "usb", init);
   },
   decode(text, p) {
-    const bits = toBitStream(text);
+    const raw = rawBytesOrNull(p, text);
+    const bits = raw ? bytesToBits(raw) : toBitStream(text);
     const init = parseInt(p.initialLevel || "0", 10);
     const out = nrziDecodeBits(bits, p.convention || "usb", init);
     return bitsToOutput(out, p);
@@ -553,17 +582,20 @@ register({
 
 register({
   id: "miller",
+  acceptsBytes: true,
   cat: "fancy",
   name: "密勒码",
   desc: "Miller Code / Delay Modulation：1=中央跳变，0 跟 0 后=起始跳变，0 跟 1 后=不跳变。磁盘存储用。",
   params: [inputFormatParam, initLevelParam],
   encode(text, p) {
-    const bits = inputToBits(text, p);
+    const raw = rawBytesOrNull(p, text);
+    const bits = raw ? bytesToBits(raw) : inputToBits(text, p);
     const init = parseInt(p.initialLevel || "0", 10);
     return millerEncodeBits(bits, init);
   },
   decode(text, p) {
-    const bits = toBitStream(text);
+    const raw = rawBytesOrNull(p, text);
+    const bits = raw ? bytesToBits(raw) : toBitStream(text);
     const init = parseInt(p.initialLevel || "0", 10);
     const out = millerDecodeBits(bits, init);
     return bitsToOutput(out, p);
@@ -572,19 +604,22 @@ register({
 
 register({
   id: "fourB5B",
+  acceptsBytes: true,
   cat: "fancy",
   name: "4B5B 编码",
   desc: "4-bit → 5-bit code（FDDI/100BASE-TX）。表照 ANSI X3T9.5 规范，每 4 位映射为 5 位以保证足够跳变。",
   params: [inputFormatParam],
   encode(text, p) {
-    const bits = inputToBits(text, p);
+    const raw = rawBytesOrNull(p, text);
+    const bits = raw ? bytesToBits(raw) : inputToBits(text, p);
     if (bits.length % 4 !== 0) {
       throw new Error("4B5B 编码要求输入比特数为 4 的倍数（当前 " + bits.length + " 位，文本模式下需补齐字节边界）");
     }
     return fourB5BEncodeBits(bits);
   },
   decode(text, p) {
-    const bits = toBitStream(text);
+    const raw = rawBytesOrNull(p, text);
+    const bits = raw ? bytesToBits(raw) : toBitStream(text);
     const out = fourB5BDecodeBits(bits);
     return bitsToOutput(out, p);
   },
@@ -592,16 +627,19 @@ register({
 
 register({
   id: "pwmPpm",
+  acceptsBytes: true,
   cat: "fancy",
   name: "PWM/PPM 脉冲调制",
   desc: "PWM（脉宽）0=10, 1=110；PPM（脉位）0=100, 1=010。CTF 硬件流可视化常见。",
   params: [inputFormatParam, pwmPpmModeParam],
   encode(text, p) {
-    const bits = inputToBits(text, p);
+    const raw = rawBytesOrNull(p, text);
+    const bits = raw ? bytesToBits(raw) : inputToBits(text, p);
     return p.mode === "ppm" ? ppmEncodeBits(bits) : pwmEncodeBits(bits);
   },
   decode(text, p) {
-    const bits = toBitStream(text);
+    const raw = rawBytesOrNull(p, text);
+    const bits = raw ? bytesToBits(raw) : toBitStream(text);
     const out = p.mode === "ppm" ? ppmDecodeBits(bits) : pwmDecodeBits(bits);
     return bitsToOutput(out, p);
   },
