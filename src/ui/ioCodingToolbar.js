@@ -23,8 +23,8 @@
  */
 
 import {
-  CHARSETS, VIEWS, detectBom, sniffCharset, decodeText, encodeText,
-  bytesToView, viewToBytes, normalizeCharset,
+  CHARSETS, VIEWS, BIT_ORDERS, detectBom, sniffCharset, decodeText, encodeText,
+  bytesToView, viewToBytes, normalizeCharset, normalizeBitOrder,
 } from "../core/ioCoding.js";
 
 const BOM_LABELS = new Set(CHARSETS.filter((c) => c.bom).map((c) => c.label));
@@ -38,6 +38,12 @@ const FALLBACK = {
   "ui.io.view.hex": "十六进制",
   "ui.io.view.base64": "Base64",
   "ui.io.view.escaped": "转义字节",
+  "ui.io.view.bits": "位串",
+  "ui.io.view.base32": "Base32",
+  "ui.io.bitOrder": "位序",
+  "ui.io.bitOrder.msb": "MSB 优先",
+  "ui.io.bitOrder.lsb": "LSB 优先",
+  "ui.io.bitOrderHint": "仅位串视图生效：MSB 优先 = 每字节 bit7→bit0；LSB 优先 = bit0→bit7。两种位序与字节严格互逆。",
   "ui.io.keepBom": "保留 BOM",
   "ui.io.keepBomHint": "勾选后起始 U+FEFF 原样保留；不勾选则剥离并在结果里标注",
   "ui.io.noBom": "该字符集没有 BOM 定义",
@@ -71,6 +77,8 @@ const VIEW_LABEL_KEY = {
   hex: "ui.io.view.hex",
   base64: "ui.io.view.base64",
   escaped: "ui.io.view.escaped",
+  bits: "ui.io.view.bits",
+  base32: "ui.io.view.base32",
 };
 
 const VIEW_PLACEHOLDER = {
@@ -78,9 +86,11 @@ const VIEW_PLACEHOLDER = {
   hex: "",
   base64: "SGVsbG8=",
   escaped: "\\x48\\x65\\x6c\\x6c\\x6f",
+  bits: "01001000 01100101 01101100 01101100 01101111",
+  base32: "JBSWY3DP",
 };
 
-const DEFAULT_STATE = { charset: "auto", view: "text", keepBom: false };
+const DEFAULT_STATE = { charset: "auto", view: "text", keepBom: false, bitOrder: "msb" };
 let globalState = { ...DEFAULT_STATE };
 let globalOutputState = { ...DEFAULT_STATE };
 
@@ -93,6 +103,7 @@ export function setIoCodingDefaults(patch) {
   if (p.charset != null) globalState.charset = normalizeCharsetChoice(p.charset);
   if (p.view != null) globalState.view = normalizeViewChoice(p.view);
   if (p.keepBom != null) globalState.keepBom = !!p.keepBom;
+  if (p.bitOrder != null) globalState.bitOrder = normalizeBitOrder(p.bitOrder);
   return { ...globalState };
 }
 
@@ -187,10 +198,10 @@ function effectiveKeepBom(keepBom, charset) {
 }
 
 /** 用户层容错：hex 视图允许空白分隔（core 的 hexToBytes 只做 trim，不跳内部空白）。 */
-function parseViewBytes(raw, view) {
+function parseViewBytes(raw, view, bitOrder) {
   const s = raw == null ? "" : String(raw);
   if (view === "hex") return viewToBytes(s.replace(/\s+/g, ""), view);
-  return viewToBytes(s, view);
+  return viewToBytes(s, view, { bitOrder });
 }
 
 function validateBom(bytes, charset) {
@@ -220,6 +231,7 @@ function ensureStyles() {
   font-size: var(--fs-sm); color: var(--on-surface-var);
 }
 .io-coding-field { display: inline-flex; align-items: center; gap: var(--sp-1); min-width: 0; }
+.io-coding-field[hidden] { display: none; }
 .io-coding-label { white-space: nowrap; font-size: var(--fs-xs); color: var(--on-surface-var); }
 .io-coding-select {
   height: 30px; max-width: 190px; padding: 0 var(--sp-2);
@@ -306,6 +318,16 @@ export function attachIoCodingToolbar(area, opts = {}) {
     viewSeg.append(b);
   }
 
+  const bitOrderSel = el("select", { class: "io-coding-select", "aria-label": t("ui.io.bitOrder"), title: t("ui.io.bitOrderHint") });
+  for (const o of BIT_ORDERS) {
+    bitOrderSel.append(el("option", { value: o, title: t("ui.io.bitOrder." + o) }, t("ui.io.bitOrder." + o)));
+  }
+  const bitOrderField = el("span", { class: "io-coding-field io-coding-bitorder" },
+    el("span", { class: "io-coding-label" }, t("ui.io.bitOrder")),
+    bitOrderSel,
+  );
+  bitOrderSel.addEventListener("change", () => controller.setBitOrder(bitOrderSel.value));
+
   const bomInput = el("input", { type: "checkbox", "aria-label": t("ui.io.keepBom") });
   const bomLabel = el("label", { class: "io-coding-bom", title: t("ui.io.keepBomHint") },
     bomInput, el("span", {}, t("ui.io.keepBom")));
@@ -322,6 +344,7 @@ export function attachIoCodingToolbar(area, opts = {}) {
       el("span", { class: "io-coding-label" }, t("ui.io.view")),
       viewSeg,
     ),
+    bitOrderField,
     bomLabel,
     status,
   );
@@ -377,6 +400,8 @@ export function attachIoCodingToolbar(area, opts = {}) {
       b.classList.toggle("on", on);
       b.setAttribute("aria-pressed", String(on));
     }
+    bitOrderSel.value = state.bitOrder;
+    bitOrderField.hidden = state.view !== "bits";
     const supports = bomSupported(state.charset);
     bomInput.checked = state.keepBom && supports;
     bomInput.disabled = !supports;
@@ -435,13 +460,23 @@ export function attachIoCodingToolbar(area, opts = {}) {
       viewRaw = "text";
       viewSource = "op-selfenc";
     }
+    // 位序只作为 bits 视图的子选项：只认 ioBitOrder，不认通用 bitOrder
+    // （stegosaurus / zstegScan 等 op 的 bitOrder 是算法内部参数，不能挪作视图解释）。
+    let bitOrder = state.bitOrder;
+    let bitOrderSource = "toolbar";
+    if (hasValue(params.ioBitOrder)) {
+      bitOrder = normalizeBitOrder(params.ioBitOrder);
+      bitOrderSource = "op";
+    }
     return {
       charset: normalizeCharsetChoice(charsetRaw),
       view: normalizeViewChoice(viewRaw),
       keepBom: !!keepBom,
+      bitOrder,
       charsetSource,
       viewSource,
       keepBomSource,
+      bitOrderSource,
       selfEncodedKey: selfEncoded ? String(selfEncoded.key) : "",
       params,
       op,
@@ -502,7 +537,7 @@ export function attachIoCodingToolbar(area, opts = {}) {
       const raw = area.value;
       if (!raw) { setStatus("", "info"); return; }
       try {
-        bytes = parseViewBytes(raw, eff.view);
+        bytes = parseViewBytes(raw, eff.view, eff.bitOrder);
       } catch (e) {
         showError(e);
         return;
@@ -547,7 +582,8 @@ export function attachIoCodingToolbar(area, opts = {}) {
     }
     if (patch.view != null) state.view = normalizeViewChoice(patch.view);
     if (patch.keepBom != null) state.keepBom = !!patch.keepBom;
-    const nextDefaults = { charset: state.charset, view: state.view, keepBom: state.keepBom };
+    if (patch.bitOrder != null) state.bitOrder = normalizeBitOrder(patch.bitOrder);
+    const nextDefaults = { charset: state.charset, view: state.view, keepBom: state.keepBom, bitOrder: state.bitOrder };
     if (stateScope === "output") globalOutputState = nextDefaults;
     else globalState = nextDefaults;
     syncControls();
@@ -606,7 +642,7 @@ export function attachIoCodingToolbar(area, opts = {}) {
       };
     }
 
-    const bytes = parseViewBytes(source, view);
+    const bytes = parseViewBytes(source, view, eff.bitOrder);
     if (!bytes.length) {
       return {
         text: "",
@@ -696,7 +732,7 @@ export function attachIoCodingToolbar(area, opts = {}) {
       };
     } else {
       result = {
-        text: bytesToView(outBytes, view),
+        text: bytesToView(outBytes, view, { bitOrder: eff.bitOrder }),
         bytes: outBytes,
         charset: charset === "auto" ? "utf-8" : charset,
         view,
@@ -722,6 +758,7 @@ export function attachIoCodingToolbar(area, opts = {}) {
     setCharset(label, o) { commit({ charset: label }, !(o && o.emit === false)); },
     setView(view, o) { commit({ view }, !(o && o.emit === false)); },
     setKeepBom(v, o) { commit({ keepBom: !!v }, !(o && o.emit === false)); },
+    setBitOrder(v, o) { commit({ bitOrder: v }, !(o && o.emit === false)); },
     getState() { return { ...state }; },
     resolveOptions,
     prepareInput,

@@ -56,7 +56,10 @@ export const LIMITS = {
   sniffSample: 1024 * 1024,
 };
 
-export const VIEWS = ["text", "hex", "base64", "escaped"];
+export const VIEWS = ["text", "hex", "base64", "escaped", "bits", "base32"];
+
+/** bits 视图的位序：msb = 首比特落字节最高位；lsb = 首比特落最低位。 */
+export const BIT_ORDERS = ["msb", "lsb"];
 
 /**
  * 编码表。kind 决定编码路径：
@@ -969,15 +972,155 @@ export function encodeText(text, opts) {
   return out;
 }
 
+/* ============================== bits / base32 ============================== */
+
+/** 位序规范化；未知值显式抛错，不静默回落 msb。 */
+export function normalizeBitOrder(bitOrder) {
+  const s = String(bitOrder == null ? "msb" : bitOrder).trim().toLowerCase();
+  if (BIT_ORDERS.includes(s)) return s;
+  throw new Error(
+    "未知位序 " + JSON.stringify(String(bitOrder)) + "：可选 " + BIT_ORDERS.join(" / ")
+    + "（msb = 首比特落字节最高位，lsb = 首比特落最低位）。",
+  );
+}
+
+const B32_ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+/** 字节 → RFC 4648 base32：大写字母表、5 位分组、尾部补 '=' 到 8 的倍数。 */
+function bytesToB32(bytes) {
+  const b = toBytes(bytes);
+  let out = "";
+  let value = 0;
+  let bits = 0;
+  for (let i = 0; i < b.length; i++) {
+    value = (value << 8) | b[i];
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      out += B32_ALPHA[(value >>> bits) & 0x1f];
+    }
+    value &= (1 << bits) - 1;
+  }
+  if (bits > 0) out += B32_ALPHA[(value << (5 - bits)) & 0x1f];
+  while (out.length % 8 !== 0) out += "=";
+  return out;
+}
+
+/** base32 → 字节。大小写不敏感；容忍缺省尾部填充；长度/填充/字符非法均显式抛错。 */
+function b32ToBytes(str) {
+  const raw = String(str == null ? "" : str);
+  let t = "";
+  for (let i = 0; i < raw.length; i++) {
+    if (!/\s/.test(raw[i])) t += raw[i];
+  }
+  const padAt = t.indexOf("=");
+  if (padAt >= 0) {
+    for (let i = padAt; i < t.length; i++) {
+      if (t[i] !== "=") {
+        throw new Error(
+          "base32 填充非法：'=' 只能连续出现在末尾，偏移 " + i + " 处出现 "
+          + JSON.stringify(t[i]) + "，原文 " + JSON.stringify(t.slice(0, 48)) + "。",
+        );
+      }
+    }
+  }
+  const body = t.replace(/=+$/, "");
+  const padCount = t.length - body.length;
+  const upper = body.toUpperCase();
+  for (let i = 0; i < upper.length; i++) {
+    if (B32_ALPHA.indexOf(upper[i]) < 0) {
+      throw new Error(
+        "base32 含非法字符 " + JSON.stringify(body[i]) + "（第 " + (i + 1)
+        + " 个有效字符）：RFC 4648 标准字母表为 A–Z 与 2–7，不含 0/1/8/9。",
+      );
+    }
+  }
+  const rem = upper.length % 8;
+  if (![0, 2, 4, 5, 7].includes(rem)) {
+    throw new Error(
+      "base32 长度非法：有效字符 " + upper.length + " 个（长度 mod 8 = " + rem
+      + "）；整字节输入只可能产生 0/2/4/5/7 的余数，请检查是否缺字符或混入非字母表字符。",
+    );
+  }
+  const expectedPad = rem === 0 ? 0 : 8 - rem;
+  if (padCount > 0 && padCount !== expectedPad) {
+    throw new Error(
+      "base32 填充数量非法：有效字符 " + upper.length + " 个应对应 " + expectedPad
+      + " 个 '='，实际 " + padCount + " 个。",
+    );
+  }
+  const out = [];
+  let value = 0;
+  let bits = 0;
+  for (let i = 0; i < upper.length; i++) {
+    value = (value << 5) | B32_ALPHA.indexOf(upper[i]);
+    bits += 5;
+    if (bits >= 8) {
+      bits -= 8;
+      out.push((value >>> bits) & 0xff);
+      value &= (1 << bits) - 1;
+    }
+  }
+  return new Uint8Array(out);
+}
+
+/** 字节 → 0/1 位串（无分隔）。msb = 每字节 bit7→bit0；lsb = bit0→bit7。 */
+function bytesToBits(bytes, opts) {
+  const b = toBytes(bytes);
+  const order = normalizeBitOrder(opts && opts.bitOrder);
+  const parts = [];
+  for (let i = 0; i < b.length; i++) {
+    for (let k = 0; k < 8; k++) {
+      parts.push(order === "msb" ? (b[i] >> (7 - k)) & 1 : (b[i] >> k) & 1);
+    }
+  }
+  return parts.join("");
+}
+
+/** 0/1 位串 → 字节。允许空白分隔；长度必须为 8 的倍数；非法字符显式报错。 */
+function bitsToBytes(str, opts) {
+  const order = normalizeBitOrder(opts && opts.bitOrder);
+  const s = String(str == null ? "" : str);
+  const chars = [];
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === "0" || c === "1") { chars.push(c); continue; }
+    if (/\s/.test(c)) continue;
+    throw new Error(
+      "bits 视图含非法字符 " + JSON.stringify(c) + "（原文偏移 " + i + "，第 " + (chars.length + 1)
+      + " 个有效位）：只接受 0 / 1，空白（空格、制表、换行）只作分隔。",
+    );
+  }
+  if (chars.length % 8 !== 0) {
+    throw new Error(
+      "bits 长度必须为 8 的倍数（按字节对齐）：当前 " + chars.length + " 位，余 "
+      + (chars.length % 8) + " 位不足一个字节。",
+    );
+  }
+  const out = new Uint8Array(chars.length / 8);
+  for (let i = 0; i < out.length; i++) {
+    let v = 0;
+    for (let k = 0; k < 8; k++) {
+      const bit = chars[i * 8 + k] === "1" ? 1 : 0;
+      v |= order === "msb" ? bit << (7 - k) : bit << k;
+    }
+    out[i] = v;
+  }
+  return out;
+}
+
 /* ============================== 视图（字节的文本表示） ============================== */
 
 /**
- * 字节 → 文本表示。四个视图都与 viewToBytes 精确互逆。
- * @param {string} view 'text' | 'hex' | 'base64' | 'escaped'
+ * 字节 → 文本表示。六个视图都与 viewToBytes 精确互逆。
+ * @param {string} view 'text' | 'hex' | 'base64' | 'escaped' | 'bits' | 'base32'
  *   text    —— 必须是合法 UTF-8，否则抛错并提示改用 hex
  *   hex     —— 小写、无分隔
  *   base64  —— 标准表、带 padding
  *   escaped —— 与 bytesIo.bytesToEscapedText 同口径（可打印 ASCII 原样，其余 \xNN，反斜杠转义为 \x5c）
+ *   bits    —— 0/1 位串，无分隔；opts.bitOrder 选 'msb'（默认）/ 'lsb'
+ *   base32  —— RFC 4648 大写标准表，5 位分组，尾部 '=' 补到 8 的倍数
+ * @param {{bitOrder?:'msb'|'lsb'}} [opts] 仅 bits 视图使用
  */
 export function bytesToView(bytes, view, opts) {
   const b = toBytes(bytes);
@@ -989,6 +1132,8 @@ export function bytesToView(bytes, view, opts) {
   if (v === "hex") return bytesToHex(b);
   if (v === "base64") return bytesToB64(b);
   if (v === "escaped") return bytesToEscapedText(b);
+  if (v === "bits") return bytesToBits(b, opts);
+  if (v === "base32") return bytesToB32(b);
   try {
     return utf8DecodeStrict(b, 0);
   } catch (e) {
@@ -1034,8 +1179,9 @@ function escapedToBytes(str) {
 /**
  * 文本表示 → 字节。与 bytesToView 精确互逆。
  * 空串 → 空数组（不是错误）。
+ * @param {{bitOrder?:'msb'|'lsb'}} [opts] 仅 bits 视图使用
  */
-export function viewToBytes(str, view) {
+export function viewToBytes(str, view, opts) {
   const s = str == null ? "" : String(str);
   const v = String(view == null ? "text" : view);
   if (!VIEWS.includes(v)) {
@@ -1055,13 +1201,15 @@ export function viewToBytes(str, view) {
     }
     return b64ToBytes(t);
   }
+  if (v === "bits") return bitsToBytes(s, opts);
+  if (v === "base32") return b32ToBytes(s);
   const lone = findLoneSurrogate(s);
   if (lone) throw loneSurrogateError(lone, "utf-8");
   return utf8Encode(s);
 }
 
 export default {
-  CHARSETS, VIEWS, LIMITS,
+  CHARSETS, VIEWS, LIMITS, BIT_ORDERS,
   detectBom, sniffCharset, decodeText, encodeText, bytesToView, viewToBytes,
-  normalizeCharset,
+  normalizeCharset, normalizeBitOrder,
 };
