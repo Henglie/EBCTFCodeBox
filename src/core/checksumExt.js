@@ -80,6 +80,25 @@ function strToBytes(s, inputMode) {
   return new TextEncoder().encode(s);
 }
 
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+/** 视图 text 模式字节与文本同构时让位给文本层；真字节原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 function parseHexOrDec(s) {
  // 解析数字（支持 0x 前缀十六进制 / 十进制）
   const t = String(s).trim();
@@ -328,18 +347,9 @@ register({
   },
 });
 
-// 输入模式参数（fletcher/bsdSum/sysvSum 共用；默认 auto 保持历史行为）
-const INPUT_MODE_PARAM = {
-  key: "inputMode", label: "输入模式", type: "select", default: "auto", options: [
-    { value: "auto", label: "自动（纯 hex 偶数长度按字节解，否则 UTF-8）" },
-    { value: "text", label: "文本（强制 UTF-8）" },
-    { value: "hex", label: "十六进制（非法则报错）" },
-  ],
-};
-
 // 6. fletcher（16/32 合并）
 register({
-  id: "fletcher", cat: "hash", name: "Fletcher",
+  id: "fletcher", cat: "hash", name: "Fletcher", acceptsBytes: true,
   desc: "Fletcher 校验和（位宽可选 8/16/32/64；8 位模 15，16 位按字节流模 255，32 位按 16 位字小端模 65535，64 位按 32 位字小端模 2^32-1）。输入模式 inputMode：auto（默认，纯 hex 偶数长度按字节解，否则 UTF-8）/ text（强制 UTF-8）/ hex（强制十六进制，非法输入报错）",
   params: [
     { key: "bits", label: "输出位数", type: "select", default: 16, options: [
@@ -348,15 +358,18 @@ register({
       { value: 32, label: "32" },
       { value: 64, label: "64" },
     ] },
-    INPUT_MODE_PARAM,
   ],
   run: function (t, p) {
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "auto") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
     const bits = Number((p && p.bits != null) ? p.bits : 16);
  // 位宽仅 8/16/32/64 合法（与下拉枚举一致）；其余显式报错，不静默回落 16 位
     if (bits !== 8 && bits !== 16 && bits !== 32 && bits !== 64) {
       throw new Error("Fletcher 位宽须为 8/16/32/64，得到 " + String(p && p.bits));
     }
-    const bytes = strToBytes(t, p && p.inputMode);
+    const raw = rawBytesOrNull(p, t);
+    const bytes = raw != null ? raw : strToBytes(t, "auto");
     if (bits === 8) {
       const v = fletcher8(bytes);
       return toHex(v, 8) + "  // " + v;
@@ -376,22 +389,30 @@ register({
 
 // 8. bsdSum
 register({
-  id: "bsdSum", cat: "hash", name: "BSD checksum",
+  id: "bsdSum", cat: "hash", name: "BSD checksum", acceptsBytes: true,
   desc: "BSD checksum（16 位寄存器逐字节右旋 1 位后累加，BSD `sum` 命令，输出 16 位）。输入模式 inputMode：auto（默认）/ text（强制 UTF-8）/ hex（强制十六进制，非法输入报错）",
-  params: [INPUT_MODE_PARAM],
+  params: [],
   run: function (t, p) {
-    const v = bsdSum(strToBytes(t, p && p.inputMode));
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "auto") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
+    const raw = rawBytesOrNull(p, t);
+    const v = bsdSum(raw != null ? raw : strToBytes(t, "auto"));
     return toHex(v, 16) + "  // " + v;
   },
 });
 
 // 9. sysvSum
 register({
-  id: "sysvSum", cat: "hash", name: "SysV checksum",
+  id: "sysvSum", cat: "hash", name: "SysV checksum", acceptsBytes: true,
   desc: "SysV checksum（按字节求和后折叠至 16 位，SysV `sum` 命令，输出 16 位）。输入模式 inputMode：auto（默认）/ text（强制 UTF-8）/ hex（强制十六进制，非法输入报错）",
-  params: [INPUT_MODE_PARAM],
+  params: [],
   run: function (t, p) {
-    const v = sysvSum(strToBytes(t, p && p.inputMode));
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "auto") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
+    const raw = rawBytesOrNull(p, t);
+    const v = sysvSum(raw != null ? raw : strToBytes(t, "auto"));
     return toHex(v, 16) + "  // " + v;
   },
 });

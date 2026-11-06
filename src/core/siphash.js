@@ -133,12 +133,18 @@ function le64Hex(v) {
 }
 
 function siphashRun(text, p = {}) {
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "text") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
   const variant = (p && p.variant) || "2-4";
   const [c, d] = variant === "1-3" ? [1, 3] : [2, 4];
   const keyRaw = String((p && p.key) || "").trim();
   if (!keyRaw) throw new Error("请填写 16 字节密钥（32 hex）");
   const key = hexToBytes(keyRaw);
-  const data = decodeInput(text, (p && p.inputMode) || "text");
+  const raw = p && p.rawBytes;
+  const data = raw != null
+    ? (raw instanceof Uint8Array ? raw : new Uint8Array(raw))
+    : decodeInput(text, "text");
 
   const out = siphash(key, data, c, d);
   const lines = [];
@@ -166,15 +172,8 @@ register({
       ],
     },
     { key: "key", label: "密钥 (hex, 16 字节)", type: "text", default: "000102030405060708090a0b0c0d0e0f", placeholder: "32 hex 字符" },
-    {
-      key: "inputMode", label: "消息形式", type: "select", default: "text",
-      options: [
-        { value: "text", label: "UTF-8 文本" },
-        { value: "hex", label: "Hex" },
-        { value: "base64", label: "Base64" },
-      ],
-    },
   ],
+  acceptsBytes: true,
   run: siphashRun,
 });
 

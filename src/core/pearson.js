@@ -81,10 +81,14 @@ function pearson(data, n = 1) {
 }
 
 function pearsonRun(text, p = {}) {
-  const inputMode = (p && p.inputMode) || "text";
-  let input;
-  if (inputMode === "hex") input = hexToBytes(String(text || ""));
-  else input = new TextEncoder().encode(String(text || ""));
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "text") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
+  const inputMode = "text";
+  const raw = p && p.rawBytes;
+  const input = raw != null
+    ? (raw instanceof Uint8Array ? raw : new Uint8Array(raw))
+    : new TextEncoder().encode(String(text || ""));
 
   const bytesRaw = p && p.bytes != null && String(p.bytes).trim() !== "" ? String(p.bytes).trim() : null;
   let n = bytesRaw !== null ? parseInt(bytesRaw, 10) : 8;
@@ -108,15 +112,9 @@ register({
   name: "Pearson 哈希",
   desc: "Pearson 快速哈希（CACM 1990）：h:=T[h^c] 逐字节迭代，T 为 0..255 置换表（Wikipedia 参考表）。极简非加密哈希，多字节输出用首字节替身扩展。可选输出 1..32 字节。",
   params: [
-    {
-      key: "inputMode", label: "输入形式", type: "select", default: "text",
-      options: [
-        { value: "text", label: "文本 (UTF-8)" },
-        { value: "hex", label: "Hex" },
-      ],
-    },
     { key: "bytes", label: "输出字节数 (1..32)", type: "number", default: 8, placeholder: "默认 8" },
   ],
+  acceptsBytes: true,
   run: pearsonRun,
 });
 

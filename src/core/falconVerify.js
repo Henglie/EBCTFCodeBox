@@ -443,6 +443,7 @@ register({
 
 register({
   id: "falconVerify", family: "falcon", familyLabel: "verify",
+  acceptsBytes: true,
   cat: "asym",
   name: "Falcon 验签",
   desc: "Falcon/FN-DSA 格签名验证（规范 v1.2 算法 16）：c = SHAKE256(nonce‖消息) 哈希到点（16bit 大端采样、t<61445 接受）；s1 = c − s2·h mod (x^n+1, 12289) 居中；‖(s1,s2)‖² ≤ ⌊β²⌋（512 档 34034726 / 1024 档 70265242）则有效。自动识别规范格式（0x39/0x3A 压缩、0x59/0x5A CT）与 NIST API signed-message（KAT/PQClean 风格）；格式错与签名错分列报出",
@@ -453,25 +454,18 @@ register({
       { value: "hex", label: "hex" },
       { value: "base64", label: "base64" },
     ] },
-    { key: "msgEnc", label: "消息编码", type: "select", default: "text", options: [
-      { value: "text", label: "text（UTF-8）" },
-      { value: "hex", label: "hex（原始字节）" },
-    ] },
   ],
   run: (t, p) => {
+  if (p && p.msgEnc != null && String(p.msgEnc).toLowerCase() !== "text") {
+    throw new Error("msgEnc 该参数已废弃，请改用输入视图");
+  }
     const enc = (p && p.inputEnc) === "base64" ? "base64" : "hex";
     const rawBytes = p && p.rawBytes;
     const pkBytes = bytesFromInput(p && p.publicKey, enc, "公钥");
     const sigBytes = bytesFromInput(p && p.signature, enc, "签名");
-    const msgEnc = (p && p.msgEnc) === "hex" ? "hex" : "text";
-    let msgBytes;
-    if (msgEnc === "hex") {
-      msgBytes = bytesFromInput(t, "hex", "消息");
-    } else if (rawBytes) {
-      msgBytes = rawBytes;
-    } else {
-      msgBytes = new TextEncoder().encode(String(t ?? ""));
-    }
+    const msgBytes = rawBytes != null
+      ? (rawBytes instanceof Uint8Array ? rawBytes : new Uint8Array(rawBytes))
+      : new TextEncoder().encode(String(t ?? ""));
     // 空消息视为「未提供」（NIST 格式下消息取自 blob；提供了非空消息且不一致才报错）
     const r = falconVerifyCore(pkBytes, sigBytes, msgBytes, msgBytes.length ? msgBytes : null);
     const P = PARAMS[r.logn];

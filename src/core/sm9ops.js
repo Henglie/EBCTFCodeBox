@@ -296,6 +296,25 @@ function encEncode(b, enc) {
   }
   return new TextDecoder("utf-8", { ignoreBOM: true }).decode(b);
 }
+
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+/** 视图 text 模式字节与文本同构时让位给 hex 文本层；真字节原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
 function parseScalarHex(s, label) {
   const t = String(s == null ? "" : s).trim();
   if (!t) throw new Error(`缺少参数 ${label}（hex）`);
@@ -464,6 +483,7 @@ register({
 // ---- 档⑤ 解密 ----
 register({
   id: "sm9Decrypt",
+  acceptsBytes: true,
   cat: "asym",
   family: "sm9",
   familyLabel: "decrypt",
@@ -472,10 +492,13 @@ register({
   params: [
     { sensitive: true, key: "userPriv", label: "用户加密私钥 dB（hex）", type: "text", default: "", placeholder: "G2 点 129 字节（04 前缀）或 128 字节" },
     { key: "uid", label: "收件人标识 uid", type: "text", default: "Bob", placeholder: "加密时所用标识" },
-    { key: "enc", label: "密文编码", type: "select", default: "hex", options: ENC_OPTS },
   ],
   run: (text, p) => {
-    const cipher = encDecode(text, p.enc || "hex");
+  if (p && p.enc != null && String(p.enc).toLowerCase() !== "hex") {
+    throw new Error("enc 该参数已废弃，请改用输入视图");
+  }
+    const view = rawBytesOrNull(p, text);
+    const cipher = view || encDecode(text, "hex");
     const userPriv = parseG2Hex(p.userPriv, "用户加密私钥 dB");
     const uid = new TextEncoder().encode(String(p.uid == null || p.uid === "" ? "Bob" : p.uid));
     return encEncode(sm9Decrypt(cipher, uid, userPriv), "utf8");

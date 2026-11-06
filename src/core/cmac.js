@@ -51,6 +51,25 @@ function msgToBytes(text, enc) {
   return te(String(text == null ? "" : text));
 }
 
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+/** 视图 text 模式字节与文本同构时让位给 hex 文本层；真字节原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = te(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 /**
  * GF(2^128) 乘 x（RFC 4493 §2.3 doubling）：大端 128 位整体左移 1 位。
  * 高位字节在低地址：out[i] 低 LSB ← b[i+1] 的 MSB（进位从低地址字节流向高地址字节）；
@@ -245,13 +264,16 @@ export function kmacBytes(bits, key, msg, L, customization) {
 // op 1 · aesCmac（RFC 4493）
 // ============================================================
 function aesCmacRun(text, p = {}) {
+  if (p && p.msgEnc != null && String(p.msgEnc).toLowerCase() !== "hex") {
+    throw new Error("msgEnc 该参数已废弃，请改用输入视图");
+  }
   const key = hexToBytes(p.key);
-  const msg = msgToBytes(text, p.msgEnc || "hex");
+  const msg = rawBytesOrNull(p, text) || msgToBytes(text, "hex");
   const mac = aesCmacBytes(key, msg);
   const L = [];
   L.push("=== AES-CMAC（RFC 4493） ===");
   L.push(`密钥 (hex, ${key.length} B) = ${bytesToHex(key)}`);
-  L.push(`消息 (${p.msgEnc || "hex"}, ${msg.length} B) = ${p.msgEnc === "hex" ? bytesToHex(msg) : JSON.stringify(String(text))}`);
+  L.push(`消息 (hex, ${msg.length} B) = ${bytesToHex(msg)}`);
   L.push("");
   L.push(`T = AES-CMAC(K, M) = ${bytesToHex(mac)}`);
   return L.join("\n");
@@ -261,13 +283,16 @@ function aesCmacRun(text, p = {}) {
 // op 2 · sm4Cmac（GB/T 32907-2016 SM4 块 + ISO/IEC 9797-1）
 // ============================================================
 function sm4CmacRun(text, p = {}) {
+  if (p && p.msgEnc != null && String(p.msgEnc).toLowerCase() !== "hex") {
+    throw new Error("msgEnc 该参数已废弃，请改用输入视图");
+  }
   const key = hexToBytes(p.key);
-  const msg = msgToBytes(text, p.msgEnc || "hex");
+  const msg = rawBytesOrNull(p, text) || msgToBytes(text, "hex");
   const mac = sm4CmacBytes(key, msg);
   const L = [];
   L.push("=== SM4-CMAC（SM4 块 + ISO/IEC 9797-1 结构） ===");
   L.push(`密钥 (hex, ${key.length} B) = ${bytesToHex(key)}`);
-  L.push(`消息 (${p.msgEnc || "hex"}, ${msg.length} B) = ${p.msgEnc === "hex" ? bytesToHex(msg) : JSON.stringify(String(text))}`);
+  L.push(`消息 (hex, ${msg.length} B) = ${bytesToHex(msg)}`);
   L.push("");
   L.push(`T = SM4-CMAC(K, M) = ${bytesToHex(mac)}`);
   return L.join("\n");
@@ -277,17 +302,20 @@ function sm4CmacRun(text, p = {}) {
 // op 3 · kmac（NIST SP 800-185 §4.3）
 // ============================================================
 function kmacRun(text, p = {}) {
+  if (p && p.msgEnc != null && String(p.msgEnc).toLowerCase() !== "hex") {
+    throw new Error("msgEnc 该参数已废弃，请改用输入视图");
+  }
   const bits = Number(p.bits || 128);
   const key = hexToBytes(p.key);
   if (!key.length) throw new Error("缺少参数 key（hex）");
   const L = Math.max(1, Number(p.outLen || 32));
-  const msg = msgToBytes(text, p.msgEnc || "hex");
+  const msg = rawBytesOrNull(p, text) || msgToBytes(text, "hex");
   const mac = kmacBytes(bits, key, msg, L, p.customization || "");
   const out = [];
   out.push(`=== KMAC${bits}（NIST SP 800-185 §4.3，cSHAKE${bits}） ===`);
   out.push(`密钥 (hex, ${key.length} B) = ${bytesToHex(key)}`);
   out.push(`定制串 S = ${JSON.stringify(String(p.customization || ""))}`);
-  out.push(`消息 (${p.msgEnc || "hex"}, ${msg.length} B) = ${p.msgEnc === "hex" ? bytesToHex(msg) : JSON.stringify(String(text))}`);
+  out.push(`消息 (hex, ${msg.length} B) = ${bytesToHex(msg)}`);
   out.push(`输出长度 L = ${L} 字节`);
   out.push("");
   out.push(`KMAC${bits}(K, X, L, S) = ${bytesToHex(mac)}`);
@@ -299,30 +327,31 @@ function kmacRun(text, p = {}) {
 // ============================================================
 register({
   id: "aesCmac", family: "aes", familyLabel: "cmac",
+  acceptsBytes: true,
   cat: "block",
   name: "AES-CMAC",
   desc: "AES-CMAC 消息认证码（RFC 4493，AES-128）",
   params: [
     { key: "key", label: "密钥 K (hex, 16B)", type: "text", default: "2b7e151628aed2a6abf7158809cf4f3c", placeholder: "RFC 4493 测试密钥" },
-    { key: "msgEnc", label: "消息编码", type: "select", default: "hex", options: ["hex", "text"] },
   ],
   run: aesCmacRun,
 });
 
 register({
   id: "sm4Cmac", family: "sm4", familyLabel: "cmac",
+  acceptsBytes: true,
   cat: "block",
   name: "SM4-CMAC",
   desc: "SM4-CMAC 消息认证码（SM4 块 + ISO/IEC 9797-1 结构）",
   params: [
     { key: "key", label: "密钥 K (hex, 16B)", type: "text", default: "0123456789abcdeffedcba9876543210", placeholder: "GB/T 32907-2016 附录 A 测试密钥" },
-    { key: "msgEnc", label: "消息编码", type: "select", default: "hex", options: ["hex", "text"] },
   ],
   run: sm4CmacRun,
 });
 
 register({
   id: "kmac",
+  acceptsBytes: true,
   cat: "hash",
   name: "KMAC",
   desc: "KMAC128/KMAC256 消息认证码（NIST SP 800-185，cSHAKE）",
@@ -330,7 +359,6 @@ register({
     { key: "bits", label: "位数", type: "select", default: "128", options: ["128", "256"] },
     { key: "key", label: "密钥 K (hex)", type: "text", default: "404142434445464748494a4b4c4d4e4f", placeholder: "NIST 样例密钥 40..4F (16B)" },
     { key: "customization", label: "定制串 S (text)", type: "text", default: "" },
-    { key: "msgEnc", label: "消息编码", type: "select", default: "hex", options: ["hex", "text"] },
     { key: "outLen", label: "输出长度 L (字节)", type: "number", default: 32 },
   ],
   run: kmacRun,

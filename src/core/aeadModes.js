@@ -61,6 +61,25 @@ function textToBytes(text) {
   return new TextEncoder().encode(String(text == null ? "" : text));
 }
 
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+/** 视图 text 模式字节与文本同构时让位给文本层；真字节原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 function xorPrefix(a, b, n) {
   const len = Math.min(n, a.length, b.length);
   const out = new Uint8Array(len);
@@ -249,17 +268,23 @@ const RFC8439_AEAD_VECTOR =
   "1ae10b594f09e26a7e902ecbd0600691";
 
 function aeadEncode(text, p = {}) {
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "text") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
   const { key, nonce, aad } = keyNonceAad(p);
-  const plaintext = p.inputMode === "hex"
-    ? hexToBytesStrict(text, "明文 hex", null, true)
-    : textToBytes(text);
+  const raw = rawBytesOf(p);
+  const plaintext = raw != null ? raw : textToBytes(text);
   const { ciphertext, tag } = chacha20Poly1305Encrypt(key, nonce, plaintext, aad);
   return bytesToHex(concatBytes(ciphertext, tag));
 }
 
 function aeadDecode(text, p = {}) {
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "text") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
   const { key, nonce, aad } = keyNonceAad(p);
-  const raw = hexToBytesStrict(text, "密文 hex", null, false);
+  const viewBytes = rawBytesOrNull(p, text);
+  const raw = viewBytes || hexToBytesStrict(text, "密文 hex", null, false);
   let ciphertext;
   let tag;
   if (String(p.tag == null ? "" : p.tag).trim() !== "") {
@@ -288,15 +313,9 @@ register({
     { key: "key", label: "key（32B hex）", type: "text", default: "", placeholder: "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f" },
     { key: "nonce", label: "nonce（12B hex）", type: "text", default: "", placeholder: "070000004041424344454647" },
     { key: "aad", label: "aad（hex，可空）", type: "text", default: "", placeholder: "50515253c0c1c2c3c4c5c6c7" },
-    {
-      key: "inputMode", label: "明文形式（仅加密方向）", type: "select", default: "text",
-      options: [
-        { value: "text", label: "UTF-8 文本" },
-        { value: "hex", label: "Hex 字节" },
-      ],
-    },
     { key: "tag", label: "tag（16B hex，仅解密可选）", type: "text", default: "", placeholder: "留空则取密文末 16B" },
   ],
+  acceptsBytes: true,
   encode: aeadEncode,
   decode: aeadDecode,
   detect: (t) => (String(t == null ? "" : t).replace(/\s+/g, "").toLowerCase() === RFC8439_AEAD_VECTOR ? 0.99 : 0),
@@ -307,10 +326,12 @@ register({
 // ============================================================
 
 function poly1305Run(text, p = {}) {
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "text") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
   const key = hexToBytesStrict(p.key, "key", 32, false);
-  const msg = p.inputMode === "hex"
-    ? hexToBytesStrict(text, "消息 hex", null, true)
-    : textToBytes(text);
+  const raw = rawBytesOf(p);
+  const msg = raw != null ? raw : textToBytes(text);
   return bytesToHex(poly1305Mac(msg, key));
 }
 
@@ -321,14 +342,8 @@ register({
   desc: "RFC 8439 §2.5 Poly1305 一次性认证码：key 为 32B hex（前 16B 是 r，后 16B 是 s），消息可选 UTF-8 文本或 hex，输出 16B tag 的 hex。key 与 nonce/消息必须一次性使用；RFC 8439 §2.5.2 官方向量校验通过。",
   params: [
     { key: "key", label: "key（32B hex）", type: "text", default: "", placeholder: "85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b" },
-    {
-      key: "inputMode", label: "消息形式", type: "select", default: "text",
-      options: [
-        { value: "text", label: "UTF-8 文本" },
-        { value: "hex", label: "Hex 字节" },
-      ],
-    },
   ],
+  acceptsBytes: true,
   run: poly1305Run,
   detect: (t) => (String(t == null ? "" : t) === "Cryptographic Forum Research Group" ? 0.9 : 0),
 });
