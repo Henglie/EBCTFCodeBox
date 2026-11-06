@@ -72,6 +72,29 @@ function decodeContentBytes(text, enc) {
   return te.encode(raw);
 }
 
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+function bytesToHexLocal(b) {
+  let s = "";
+  for (const x of b) s += x.toString(16).padStart(2, "0");
+  return s;
+}
+
+/** rawBytes 优先：armor/JWT 仍是文本；二进制签名转 hex 交给既有格式识别。 */
+function viewTextOf(p) {
+  const b = rawBytesOf(p);
+  if (b == null) return null;
+  const s = td.decode(b);
+  const t = s.trim();
+  if (/-----BEGIN /.test(t) || t.startsWith("SSHSIG") || JWT_RE.test(t) || JWE_RE.test(t)) return s;
+  return bytesToHexLocal(b);
+}
+
 function getOp(id) {
   const op = OPS.find((o) => o.id === id && !o.__stub);
   return op && typeof op.run === "function" ? op : null;
@@ -365,7 +388,7 @@ async function verifyPgp(text, p) {
       out.reason = "detached PGP 签名需要原文（content 参数）";
       return out;
     }
-    contentText = decodeContentText(p.content, p.contentEnc || "text");
+    contentText = decodeContentText(p.content, "text");
   }
   const info = await pgpKeyInfo(pub);
   out.algorithm = info.algorithm || "OpenPGP";
@@ -487,7 +510,7 @@ async function verifyCmsText(text, p) {
       out.reason = "detached CMS 需要原文（content 参数）";
       return out;
     }
-    opts.detachedContent = decodeContentBytes(p.content, p.contentEnc || "text");
+    opts.detachedContent = decodeContentBytes(p.content, "text");
   }
   try {
     opts.extraCerts = parseCertificateBundle(p.certs);
@@ -561,7 +584,7 @@ async function verifySshSig(text, p) {
   }
   let sub;
   try {
-    sub = await runOp(op, text, { key: p.key, pubKey: p.key, namespace: p.namespace || "file", message: p.content, msgEnc: p.contentEnc || "text" });
+    sub = await runOp(op, text, { key: p.key, pubKey: p.key, namespace: p.namespace || "file", message: p.content, msgEnc: "text" });
   } catch (e) {
     out.verdict = "FAIL";
     out.reason = `SSHSIG 验签执行失败：${e.message}`;
@@ -610,12 +633,17 @@ export function formatUnifiedResult(r) {
 }
 
 export async function sigVerifyRun(text, p = {}) {
-  const r = await sigVerify(text, p);
+    if (p && p.contentEnc != null && String(p.contentEnc).toLowerCase() !== "text") {
+      throw new Error("contentEnc 该参数已废弃，请改用输入视图");
+    }
+  const viewText = viewTextOf(p);
+  const r = await sigVerify(viewText != null ? viewText : text, p);
   return formatUnifiedResult(r);
 }
 
 register({
   id: "sigVerify",
+  acceptsBytes: true,
   family: "sig",
   familyLabel: "verify",
   cat: "asym",
@@ -625,11 +653,6 @@ register({
     { acceptFile: "text", key: "key", label: "公钥 / 密钥材料", type: "textarea", default: "", placeholder: "JWT：RSA/EC PEM 或 JWK；PGP：公钥块；SSHSIG：authorized_keys 公钥行" },
     { sensitive: true, key: "secret", label: "JWT HMAC 密钥 secret", type: "text", default: "", placeholder: "HS256/384/512 用" },
     { key: "content", label: "detached 原文（PGP/CMS 用）", type: "textarea", default: "", placeholder: "PGP 分离签名或 detached CMS 时提供" },
-    { key: "contentEnc", label: "原文编码", type: "select", default: "text", options: [
-      { value: "text", label: "文本（UTF-8）" },
-      { value: "hex", label: "hex 字节" },
-      { value: "base64", label: "base64" },
-    ] },
     { acceptFile: "text", key: "certs", label: "CMS 补充证书（PEM，可多张）", type: "textarea", default: "" },
     { acceptFile: "text", key: "anchor", label: "X.509 信任锚（PEM 或 SHA-256 指纹）", type: "text", default: "" },
     { key: "at", label: "X.509 验证时刻（ISO 8601 / epoch 秒）", type: "text", default: "" },

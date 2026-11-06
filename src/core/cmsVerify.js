@@ -1007,6 +1007,21 @@ function decodeContentParam(text, enc) {
   return te.encode(raw);
 }
 
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** CMS 主输入：rawBytes 优先（0x30 起始按 DER 直用；否则按 UTF-8 文本走 PEM/hex/base64）。 */
+function loadCmsBytesOrText(text, p) {
+  const raw = rawBytesOf(p);
+  if (raw == null) return loadCmsInput(text);
+  if (raw.length && raw[0] === 0x30) return { der: raw, srcKind: "视图真字节（DER）" };
+  return loadCmsInput(new TextDecoder("utf-8", { fatal: false }).decode(raw));
+}
+
 /** 解析外部补充证书 PEM 包（可多张）。 */
 export function parseCertificateBundle(pemText) {
   const src = String(pemText == null ? "" : pemText).trim();
@@ -1097,7 +1112,10 @@ export function formatCmsReport(result, srcKind) {
 
 /** op 入口：CMS 文本 + 参数 → 报告。 */
 export async function cmsVerifyRun(text, p = {}) {
-  const { der, srcKind } = loadCmsInput(text);
+    if (p && p.contentEnc != null && String(p.contentEnc).toLowerCase() !== "text") {
+      throw new Error("contentEnc 该参数已废弃，请改用输入视图");
+    }
+  const { der, srcKind } = loadCmsBytesOrText(text, p);
   let cms;
   try {
     cms = parseCmsDer(der);
@@ -1109,7 +1127,7 @@ export async function cmsVerifyRun(text, p = {}) {
     if (p.content == null || String(p.content) === "") {
       throw new Error("detached CMS：缺少外部签名原文。请在参数「外部原文」中提供，或改用 attached（-nodetach）样本");
     }
-    opts.detachedContent = decodeContentParam(p.content, p.contentEnc || "text");
+    opts.detachedContent = decodeContentParam(p.content, "text");
   }
   opts.extraCerts = parseCertificateBundle(p.certs);
   const result = await verifyParsedCms(cms, opts);
@@ -1122,6 +1140,7 @@ export async function cmsVerifyRun(text, p = {}) {
 
 register({
   id: "cmsVerify",
+  acceptsBytes: true,
   family: "cms",
   familyLabel: "verify",
   cat: "asym",
@@ -1129,11 +1148,6 @@ register({
   desc: "CMS/PKCS#7 SignedData 签名验证（RFC 5652）：DER/BER 解析，attached 内嵌内容与 detached 外部原文；多 SignerInfo 逐个验证，支持 issuerAndSerialNumber 与 subjectKeyIdentifier；校验 signedAttrs 的 contentType/messageDigest 并按 DER SET OF 重算签名；摘要 SHA-256/384/512，签名 RSA PKCS#1 v1.5 与 ECDSA P-256/384/521；解析签名者证书 SPKI/SKID/KeyUsage。仅本地验签，不做证书链/CRL/OCSP/时间戳",
   params: [
     { key: "content", label: "外部原文（detached CMS 必填）", type: "textarea", default: "", placeholder: "detached 时提供被签名原文；attached 时忽略" },
-    { key: "contentEnc", label: "外部原文编码", type: "select", default: "text", options: [
-      { value: "text", label: "文本（UTF-8）" },
-      { value: "hex", label: "hex 字节" },
-      { value: "base64", label: "base64" },
-    ] },
     { acceptFile: "text", key: "certs", label: "补充证书（PEM，可多张）", type: "textarea", default: "", placeholder: "CMS 未内嵌证书（-nocerts）时使用" },
     { key: "requireSignedAttrs", label: "要求 signedAttrs", type: "bool", default: true },
   ],

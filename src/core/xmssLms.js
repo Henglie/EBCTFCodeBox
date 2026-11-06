@@ -899,15 +899,18 @@ register({
     { key: "pubSeed", label: "PUB_SEED (hex 32B)", type: "text", default: "", placeholder: XMSS_KAT.pubSeed },
     { key: "root", label: "root (hex 32B，密钥生成输出)", type: "text", default: "", placeholder: XMSS_KAT.root },
     { key: "idx", label: "签名 index (0..1023，不可重用)", type: "number", default: 0 },
-    { key: "msgMode", label: "消息形式", type: "select", default: "text", options: MSG_MODE_OPTIONS },
   ],
   run: (t, p = {}) => {
-    const msg = rawBytesOrNull(p, t) || msgBytes(t, p.msgMode);
+    if (p && p.msgMode != null && String(p.msgMode).toLowerCase() !== "text") {
+      throw new Error("msgMode 该参数已废弃，请改用输入视图");
+    }
+    const raw = rawBytesOf(p);
+    const msg = raw != null ? raw : msgBytes(t, "text");
     const r = xmssSignFull(msg, p.skSeed, p.skPrf, p.pubSeed, p.root, Number(p.idx));
     return {
       text: [
         "参数集: XMSS-SHA2_10_256 (n=32, w=16, len=67, h=10)",
-        `消息 M: ${msg.length} B（${p.msgMode === "hex" ? "hex" : "UTF-8"}）`,
+        `消息 M: ${msg.length} B（UTF-8）`,
         `index idx_sig: ${Number(p.idx)}（已消耗，不可再用）`,
         `签名 Sig (${r.sig.length} B = idx4 ‖ R32 ‖ WOTS+2144 ‖ auth320):`,
         bytesToHex(r.sig),
@@ -930,14 +933,17 @@ register({
   params: [
     { key: "pk", label: "公钥 pk (hex 64B 或 68B 带 OID)", type: "text", default: "", placeholder: "root‖PUB_SEED 或 OID‖root‖PUB_SEED" },
     { key: "sig", label: "签名 Sig (hex 2500B)", type: "text", default: "", placeholder: "签名输出的 Sig hex" },
-    { key: "msgMode", label: "消息形式", type: "select", default: "text", options: MSG_MODE_OPTIONS },
   ],
   run: (t, p = {}) => {
-    const msg = rawBytesOrNull(p, t) || msgBytes(t, p.msgMode);
+    if (p && p.msgMode != null && String(p.msgMode).toLowerCase() !== "text") {
+      throw new Error("msgMode 该参数已废弃，请改用输入视图");
+    }
+    const raw = rawBytesOf(p);
+    const msg = raw != null ? raw : msgBytes(t, "text");
     const r = xmssVerifyFull(msg, p.pk, p.sig);
     const lines = [
       "参数集: XMSS-SHA2_10_256 (n=32, w=16, len=67, h=10)",
-      `消息 M: ${msg.length} B（${p.msgMode === "hex" ? "hex" : "UTF-8"}）`,
+      `消息 M: ${msg.length} B（UTF-8）`,
     ];
     if (r.idx != null) lines.push(`签名 index: ${r.idx}`);
     lines.push(`结论: ${r.valid ? "✓ 合法（验证通过）" : "✗ 不合法"} — ${r.reason}`);
@@ -987,10 +993,13 @@ register({
     { key: "i2", label: "底层 I (hex 16B，仅 HSS)", type: "text", default: "", placeholder: LMS_KAT2.iBot },
     { key: "q", label: "底层/单级 index q（签消息用，不可重用）", type: "number", default: 0 },
     { sensitive: true, key: "c", label: "底层/单级随机数 C (hex 32B)", type: "text", default: "", placeholder: "官方 TC2 底层 C 可留空随机" },
-    { key: "msgMode", label: "消息形式", type: "select", default: "text", options: MSG_MODE_OPTIONS },
   ],
   run: (t, p = {}) => {
-    const msg = rawBytesOrNull(p, t) || msgBytes(t, p.msgMode);
+    if (p && p.msgMode != null && String(p.msgMode).toLowerCase() !== "text") {
+      throw new Error("msgMode 该参数已废弃，请改用输入视图");
+    }
+    const raw = rawBytesOf(p);
+    const msg = raw != null ? raw : msgBytes(t, "text");
     const r = lmsSignFull(msg, p);
     const nm = (s) => (s === "h10" ? "H10" : "H5");
     const nw = (s) => (s === "w8" ? "W8" : "W4");
@@ -998,7 +1007,7 @@ register({
       return {
         text: [
           `参数集: HSS L=2, 顶层 LMS_SHA256_M32_${nm(p.h)}/${nw(p.w)} + 底层 LMS_SHA256_M32_${nm(p.h2)}/${nw(p.w2)}`,
-          `消息 M: ${msg.length} B（${p.msgMode === "hex" ? "hex" : "UTF-8"}）`,
+          `消息 M: ${msg.length} B（UTF-8）`,
           `顶层 q=${Number(p.qTop)}（签底层公钥），底层 q=${Number(p.q)}（签消息，已消耗）`,
           `HSS 公钥 (${r.hssPub.length}B = levels‖LMS type‖LMOTS type‖I‖K):`,
           bytesToHex(r.hssPub),
@@ -1016,7 +1025,7 @@ register({
     return {
       text: [
         `参数集: LMS_SHA256_M32_${nm(p.h)} + LMOTS_SHA256_N32_${nw(p.w)}（单级 LMS）`,
-        `消息 M: ${msg.length} B（${p.msgMode === "hex" ? "hex" : "UTF-8"}）`,
+        `消息 M: ${msg.length} B（UTF-8）`,
         `index q=${Number(p.q)}（已消耗，不可再用）`,
         `LMS 公钥 (${r.pk.length}B):`,
         bytesToHex(r.pk),
@@ -1046,15 +1055,18 @@ register({
     ] },
     { key: "pk", label: "公钥 (hex：HSS 60B / LMS 56B)", type: "text", default: "", placeholder: "levels‖LMS type‖LMOTS type‖I‖K" },
     { key: "sig", label: "签名 (hex)", type: "text", default: "", placeholder: "HSS/LMS 签名 hex" },
-    { key: "msgMode", label: "消息形式", type: "select", default: "text", options: MSG_MODE_OPTIONS },
   ],
   run: (t, p = {}) => {
-    const msg = rawBytesOrNull(p, t) || msgBytes(t, p.msgMode);
+    if (p && p.msgMode != null && String(p.msgMode).toLowerCase() !== "text") {
+      throw new Error("msgMode 该参数已废弃，请改用输入视图");
+    }
+    const raw = rawBytesOf(p);
+    const msg = raw != null ? raw : msgBytes(t, "text");
     const r = lmsVerifyFull(msg, p.pk, p.sig, p.format);
     return {
       text: [
         "参数集: RFC 8554（SHA-256 系，签名自描述解析 typecode）",
-        `消息 M: ${msg.length} B（${p.msgMode === "hex" ? "hex" : "UTF-8"}）`,
+        `消息 M: ${msg.length} B（UTF-8）`,
         `结论: ${r.valid ? "✓ 合法（验证通过）" : "✗ 不合法"} — ${r.reason}`,
       ].join("\n"),
     };

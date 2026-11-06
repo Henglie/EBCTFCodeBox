@@ -35,6 +35,13 @@ function bytesFrom(text, enc, name) {
 function messageBytes(text, mode) {
   return mode === "hex" ? hexToBytes(text, "消息") : new TextEncoder().encode(String(text ?? ""));
 }
+
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
 function normLogn(v) {
   const n = Number(v);
   if (n !== 9 && n !== 10) throw new Error("Falcon 档位仅支持 512（logn=9）或 1024（logn=10）");
@@ -88,14 +95,11 @@ register({
 
 register({
   id: "falconSign", family: "falcon", familyLabel: "sign",
+  acceptsBytes: true,
   cat: "asym",
   name: "Falcon 签名",
   desc: "Falcon/FN-DSA 签名（规范 v1.2 算法 15）：输入消息与官方三段私钥（0x59/0x5A）或本工具四段私钥；SHAKE256 哈希到点，ffSampling 动态 LDL 取样，范数 ≤⌊β²⌋ 才输出。签名 = 0x39/0x3A ‖ nonce(40B) ‖ comp(s2)，直接交给「Falcon 验签」。nonce/种子留空走统一随机源；显式给出可复现 KAT。",
   params: [
-    { key: "msgMode", label: "消息形式", type: "select", default: "text", options: [
-      { value: "text", label: "文本（UTF-8）" },
-      { value: "hex", label: "Hex 原始字节" },
-    ] },
     { sensitive: true, key: "privKey", label: "私钥（hex）", type: "textarea", default: "", placeholder: "0x59/0x5A 官方格式或本工具四段格式" },
     { key: "privEnc", label: "私钥编码", type: "select", default: "hex", options: [
       { value: "hex", label: "hex" },
@@ -105,6 +109,9 @@ register({
     { key: "seed", label: "签名种子（48B hex，可选）", type: "text", default: "", placeholder: "留空随机；固定用于 KAT" },
   ],
   run: (text, p) => {
+    if (p && p.msgMode != null && String(p.msgMode).toLowerCase() !== "text") {
+      throw new Error("msgMode 该参数已废弃，请改用输入视图");
+    }
     const privBytes = bytesFrom(p && p.privKey, (p && p.privEnc) === "base64" ? "base64" : "hex", "私钥");
     if (!privBytes.length) throw new Error("请填写 Falcon 私钥");
     const nonceText = String((p && p.nonce) || "").replace(/\s+/g, "");
@@ -113,7 +120,8 @@ register({
     const seed = seedText ? hexToBytes(seedText, "种子") : undefined;
     if (nonce && nonce.length !== 40) throw new Error(`nonce 需恰好 40 字节（当前 ${nonce.length}）`);
     if (seed && seed.length !== 48) throw new Error(`种子需恰好 48 字节（当前 ${seed.length}）`);
-    const msg = messageBytes(text, (p && p.msgMode) === "hex" ? "hex" : "text");
+    const raw = rawBytesOf(p);
+    const msg = raw != null ? raw : messageBytes(text, "text");
     const t0 = Date.now();
     const r = falconSignCore(privBytes, msg, { nonce, seed });
     const ms = Date.now() - t0;

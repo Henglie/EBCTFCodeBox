@@ -790,6 +790,9 @@ export function formatSshsigResult(result) {
 
 export async function sshsigVerifyRun(text, p = {}) {
   const params = p || {};
+  if (params.msgEnc != null && String(params.msgEnc).toLowerCase() !== "text") {
+    throw new Error("msgEnc 该参数已废弃，请改用输入视图");
+  }
   let input = text;
   if (params.rawBytes && params.rawBytes.length) {
     input = Uint8Array.from(params.rawBytes);
@@ -797,7 +800,7 @@ export async function sshsigVerifyRun(text, p = {}) {
   try {
     const result = await verifySshsig(input, {
       message: params.message,
-      msgEnc: params.msgEnc,
+      msgEnc: "text",
       key: params.key,
       namespace: params.namespace,
     });
@@ -832,17 +835,6 @@ register({
       rows: 6,
       default: "",
       placeholder: "粘贴被签名的消息；二进制消息改用 msgEnc=hex/base64",
-    },
-    {
-      key: "msgEnc",
-      label: "消息编码",
-      type: "select",
-      default: "text",
-      options: [
-        { value: "text", label: "文本（UTF-8）" },
-        { value: "hex", label: "Hex" },
-        { value: "base64", label: "Base64" },
-      ],
     },
     { acceptFile: "text",
       key: "key",

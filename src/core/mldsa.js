@@ -871,7 +871,6 @@ register({
   params: [
     { key: "set", label: "参数集", type: "select", default: "65", options: SET_OPTIONS },
     { sensitive: true, key: "sk", label: "私钥 sk (hex)", type: "textarea", default: "", placeholder: "密钥生成输出的 sk hex" },
-    { key: "msgMode", label: "消息形式", type: "select", default: "text", options: MSG_MODE_OPTIONS },
     { key: "ctx", label: "上下文 ctx (≤255B，默认空)", type: "text", default: "", placeholder: "FIPS 204 §5.4 域分隔上下文" },
     { key: "rndMode", label: "随机性模式", type: "select", default: "hedged", options: [
       { value: "hedged", label: "随机 rnd（hedged，推荐）" },
@@ -880,14 +879,18 @@ register({
     { key: "rnd", label: "rand (hex 32B，留空随机；rnd=0 模式忽略)", type: "text", default: "", placeholder: "教学复现可固定" },
   ],
   run: (t, p = {}) => {
-    const msg = rawBytesOrNull(p, t) || messageBytes(t, p.msgMode);
+    if (p && p.msgMode != null && String(p.msgMode).toLowerCase() !== "text") {
+      throw new Error("msgMode 该参数已废弃，请改用输入视图");
+    }
+    const raw = rawBytesOf(p);
+    const msg = raw != null ? raw : messageBytes(t, "text");
     const ctx = ctxBytes(p.ctx);
     const rnd = p.rndMode === "det" ? new Uint8Array(32) : (String(p.rnd == null ? "" : p.rnd).trim() === "" ? null : p.rnd);
     const r = mldsaSignBytes(p.set, p.sk, msg, ctx, rnd);
     return {
       text: [
         setSummary(r.s),
-        `消息 M: ${msg.length} B（${p.msgMode === "hex" ? "hex" : "UTF-8"}）`,
+        `消息 M: ${msg.length} B（UTF-8）`,
         `上下文 ctx: ${ctx.length} B`,
         `随机性 rnd: ${bytesToHex(r.rnd)}${p.rndMode === "det" ? "（确定性 rnd=0）" : ""}`,
         `拒绝采样轮数: ${r.rounds}（Fiat–Shamir with aborts）`,
@@ -914,16 +917,19 @@ register({
     { key: "set", label: "参数集", type: "select", default: "65", options: SET_OPTIONS },
     { key: "pk", label: "公钥 pk (hex)", type: "text", default: "", placeholder: "密钥生成输出的 pk hex" },
     { key: "sig", label: "签名 σ (hex)", type: "text", default: "", placeholder: "签名输出的 σ hex" },
-    { key: "msgMode", label: "消息形式", type: "select", default: "text", options: MSG_MODE_OPTIONS },
     { key: "ctx", label: "上下文 ctx (≤255B，须与签名一致)", type: "text", default: "", placeholder: "FIPS 204 §5.4 域分隔上下文" },
   ],
   run: (t, p = {}) => {
-    const msg = rawBytesOrNull(p, t) || messageBytes(t, p.msgMode);
+    if (p && p.msgMode != null && String(p.msgMode).toLowerCase() !== "text") {
+      throw new Error("msgMode 该参数已废弃，请改用输入视图");
+    }
+    const raw = rawBytesOf(p);
+    const msg = raw != null ? raw : messageBytes(t, "text");
     const ctx = ctxBytes(p.ctx);
     const r = mldsaVerifyBytes(p.set, p.pk, msg, ctx, p.sig);
     const lines = [
       setSummary(getSet(p.set)),
-      `消息 M: ${msg.length} B（${p.msgMode === "hex" ? "hex" : "UTF-8"}），ctx: ${ctx.length} B`,
+      `消息 M: ${msg.length} B（UTF-8），ctx: ${ctx.length} B`,
       `签名长度: ${r.sigLen}/${r.expectedSigLen} B ${r.sigLen === r.expectedSigLen ? "✓" : "✗"}`,
     ];
     if (r.hintCount != null) lines.push(`hint 数: ${r.hintCount}`);
