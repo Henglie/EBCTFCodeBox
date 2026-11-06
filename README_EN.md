@@ -9,7 +9,7 @@
   <span>EternalBlaze CTF Codebox · EBCTFCodeBox</span>
 </h1>
 <p align="center">
-  <span align="center">A local-first, zero-upload codec / cryptography / steganalysis toolbox: 930 registered operations across 23 categories, most running entirely in your browser; Windows can additionally enable local-bridge capabilities, while macOS / Linux ship with double-click launchers.</span>
+  <span align="center">A local-first, zero-upload codec / cryptography / steganalysis toolbox: 940 registered operations across 23 categories, most running entirely in your browser; Windows can additionally enable local-bridge capabilities, while macOS / Linux ship with double-click launchers.</span>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 - [Introduction](#introduction)　　　　[Features](#features)
 - [Screenshots](#screenshots)　　　　[Running](#running)
 - [Platform Compatibility](#platform-compatibility)　　[Performance Requirements](#performance-requirements)
-- [Directory Structure](#directory-structure)　　　　[Full Codec List](#full-codec-list-928-ops--23-categories)
+- [Directory Structure](#directory-structure)　　　　[Full Codec List](#full-codec-list-940-ops--23-categories)
 - [Plugins & AI Access](#plugins--ai-access)　　[License](#license)
 - [Third-party Resources & Licenses](#third-party-resources--licenses)　　[Privacy](#privacy)
 - [Keywords](#keywords)
@@ -132,7 +132,7 @@ Core design:
 
 - **Local-first · zero upload**: Native ES modules, no framework, no build step. Core codecs run in-browser and never upload your input; "external link" ops only generate URLs. PWA updates fetch site assets only, the local bridge only talks to `127.0.0.1`, and external AI is only used after you configure an endpoint yourself.
 - **One-shot smart decoding**: Paste or drop content; it detects possible encoding chains and returns ranked decode candidates, with crib-based filtering and deep brute force.
-- **930 registered operations · 23 categories**: covering Base, text / transfer encodings, fancy CTF encodings, esoteric programming languages, Chinese / domestic encodings, classical ciphers, modern crypto (block / stream / asymmetric / other), hashes & checksums, radix & charsets (incl. primality testing and sieving), analysis / brute force, password attacks, compression & archives, password / archive cracking, forensics & traffic, file-format structures, data structures, images & QR codes, audio & video, steganography, plus 4 optional Windows GUI bridge entries. The complete list is generated automatically from the registry.
+- **940 registered operations · 23 categories**: covering Base, text / transfer encodings, fancy CTF encodings, esoteric programming languages, Chinese / domestic encodings, classical ciphers, modern crypto (block / stream / asymmetric / other), hashes & checksums, radix & charsets (incl. primality testing and sieving), analysis / brute force, password attacks, compression & archives, password / archive cracking, forensics & traffic, file-format structures, data structures, images & QR codes, audio & video, steganography, plus 4 optional Windows GUI bridge entries. The complete list is generated automatically from the registry.
 - **Decoding-strength quartet** (v0.1.2): strength levels + custom algorithm pool + a **separate brute-force channel** (XOR / Caesar / dictionary / rainbow-table / HMAC / PBE / Playfair / ZIP / CRC32 / bkcrack — results are grouped separately so they don't pollute the main ranking) + **decode depth 1–3**.
 - **Lenient matching mode** (v0.1.2): at the Enhanced / Very Strong / Maximum / Custom levels, algorithms are admitted by character-class count alone, so variant-encoding challenges (a "meow" table for 0/1, emoji-as-binary) also participate; Default / Fast keep strict domain detection.
 - **Key + ciphertext one-shot attack**: given ciphertext and a key, automatically enumerates AES / DES / 3DES / RC4 / XOR / Fernet × cipher modes × encoding combinations.
@@ -289,11 +289,11 @@ public/
 资料/               algorithm cross-check tables + research artifacts (dev-only; not shipped in release packages)
 ```
 
-## Full Codec List (930 ops · 23 categories)
+## Full Codec List (940 ops · 23 categories)
 
 > This section is generated from the real import closure; opId is the unique registry identifier.
 
-> The table below keeps the v0.1.13 baseline entries (890 ops); the 40 ops added in v0.1.14 are listed in the changelog.
+> The table below keeps the v0.1.13 baseline entries (890 ops); the 50 ops added in v0.1.14 are listed in the changelog.
 
 ### Base (30 ops)
 
