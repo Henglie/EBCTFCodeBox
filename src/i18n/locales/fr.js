@@ -203,7 +203,7 @@ export default {
   "op.trithemius.name": "Décalage Progressif de Trithème",
   "op.trithemius.desc": "Décale le i-ième lettre de (start+i) mod 26 (forme polyalphabétique ancienne, progression de la Tabula Recta)",
   "op.goldbug.name": "Chiffre du Scarabée d'Or",
-  "op.goldbug.desc": "Substitution symbolique du chiffre Kidd de « The Gold-Bug » de Poe (un symbole unique pour chacune des 26 lettres, édition pédagogique réversible)",
+  "op.goldbug.desc": "Substitution symbolique du chiffre Kidd de « The Gold-Bug » de Poe (un symbole unique pour chacune des 26 lettres ; le décodage normalise en majuscules, les minuscules ne sont pas conservées)",
 
  // ---- op names (hash) ----
   "op.md5.name": "MD5",
@@ -2621,7 +2621,7 @@ export default {
   "op.schnorrVerify.name": "Vérification Schnorr",
   "op.schnorrVerify.desc": "Vérification Schnorr : R' = s·G − e·P, e' = H(R'.x ‖ P.x ‖ m) mod n, valide ⟺ e' == e. Entrée : clé publique (Px,Py), signature (e,s) et message",
   "op.sga.name": "Alphabet galactique standard (SGA)",
-  "op.sga.desc": "26 lettres latines ↔ Standard Galactic Alphabet (script Commander Keen/Minecraft de la table d'enchantement) ; le domaine texte utilise la chaîne d'adaptation Unicode folklorique collectée par dCode (ᔑʖᓵ↸ᒷ⎓⊣⍑╎⋮ꖌꖎᒲリ𝙹!¡ᑑ∷ᓭℸ̣⚍⍊∴̇/||, auto-évaluée par dCode « mauvaise mais répandue ») ; les chiffres passent non traduits, u/x portent des points combinants (ℸ/∴ nus tolérés)",
+  "op.sga.desc": "26 lettres latines ↔ Standard Galactic Alphabet (script Commander Keen/Minecraft de la table d'enchantement) ; le domaine texte utilise la chaîne d'adaptation Unicode folklorique collectée par dCode (ᔑʖᓵ↸ᒷ⎓⊣⍑╎⋮ꖌꖎᒲリ𝙹!¡ᑑ∷ᓭℸ̣⚍⍊∴̇/||, auto-évaluée par dCode « mauvaise mais répandue ») ; les chiffres passent non traduits, u/x portent des points combinants (ℸ/∴ nus tolérés) ; le décodage normalise en majuscules et échappe un ! littéral en \\!",
   "op.skipCipher.name": "Chiffre par sauts Skip",
   "op.skipCipher.desc": "Transposition par lecture à pas fixe : à partir de start, prendre un caractère tous les s en bouclant au bout ; exige gcd(s, longueur)=1 ; exemple par défaut DCODE+3 → DDCEO",
   "op.slhdsaKeyGen.name": "Génération de clés SLH-DSA",

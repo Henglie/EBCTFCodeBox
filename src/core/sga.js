@@ -102,7 +102,7 @@ function sgaDecode(text) {
 
 register({
   id: "sga", cat: "fancy", name: "银河标准字母 SGA",
-  desc: "26 拉丁字母 ↔ Standard Galactic Alphabet（Commander Keen/Minecraft 附魔台文字）文本域用 dCode 收录的民间 Unicode 适配串（ᔑʖᓵ↸ᒷ⎓⊣⍑╎⋮ꖌꖎᒲリ𝙹!¡ᑑ∷ᓭℸ̣⚍⍊∴̇/||，dCode 自评「糟糕但流传广」）；数字不译原样保留，u/x 含组合点（裸 ℸ/∴ 容忍）",
+  desc: "26 拉丁字母 ↔ Standard Galactic Alphabet（Commander Keen/Minecraft 附魔台文字）文本域用 dCode 收录的民间 Unicode 适配串；数字不译原样保留；解码统一大写，字面 ! 用 \\! 转义，u/x 含组合点（裸 ℸ/∴ 容忍）",
   params: [],
   encode: sgaEncode,
   decode: sgaDecode,

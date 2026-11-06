@@ -92,7 +92,7 @@ register({
   id: "goldbug",
   cat: "classic",
   name: "GoldBug 金甲虫密码",
-  desc: "爱伦坡《金甲虫》Kidd 密码符号替换（26 字母各一唯一符号，可逆教学版）",
+  desc: "爱伦坡《金甲虫》Kidd 密码符号替换（26 字母各一唯一符号；解码统一大写，小写不保留）",
   encode: goldbugEncode,
   decode: goldbugDecode,
   detect: goldbugDetect,
