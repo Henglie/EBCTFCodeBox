@@ -14,8 +14,10 @@
 - 扩展面板重构
 - 离线包批量管理
 - Minecraft 文本情报提取支持拖入存档 ZIP 整包，深度扫描全部 NBT 字符串找 flag
+- CyberChef 参数对齐：Argon2 PHC 编码输出、Ascon/CMAC 密钥编码、Base85 自定义码表、bzip2 work factor、多字节二进制解码
+- 关于页新增 README 与更新日志入口
 - 主 op 增至 930
-- 六门文案 2937 键
+- 六门文案 2939 键
 
 ### 修复
 

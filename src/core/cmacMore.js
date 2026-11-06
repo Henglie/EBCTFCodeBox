@@ -201,6 +201,14 @@ const ALGS = {
 // ============================================================
 // op · cmacExt
 // ============================================================
+function cmacKeyBytes(raw, enc) {
+  const s = String(raw == null ? "" : raw);
+  if (enc === "UTF8") return new TextEncoder().encode(s);
+  if (enc === "Latin1") { const o = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) o[i] = s.charCodeAt(i) & 0xff; return o; }
+  if (enc === "Base64") { let b = s.replace(/\s+/g, ""); while (b.length % 4) b += "="; const bin = atob(b); const o = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) o[i] = bin.charCodeAt(i); return o; }
+  return hexToBytes(s);
+}
+
 function cmacExtRun(text, p = {}) {
   if (p && p.msgEnc != null && String(p.msgEnc).toLowerCase() !== "hex") {
     throw new Error("msgEnc 该参数已废弃，请改用输入视图");
@@ -209,7 +217,7 @@ function cmacExtRun(text, p = {}) {
   const spec = ALGS[alg];
   if (!spec) throw new Error(`cmacExt 不支持的算法: ${alg}（可选：${Object.keys(ALGS).join("/")}）`);
 
-  const key = hexToBytes(p && p.key);
+  const key = cmacKeyBytes(p && p.key, (p && p.keyEnc) || "hex");
   if (!spec.keyOk(key)) throw new Error(spec.keyMsg + `，当前 ${key.length} 字节`);
 
   const rawMsg = rawBytesOrNull(p, text);
@@ -232,7 +240,8 @@ register({
   desc: "通用 CMAC 消息认证码（ISO/IEC 9797-1 / RFC 4493 结构），底层分组密码可选 Camellia/SEED/Twofish/RC6（128 位块 Rb=0x87）或 IDEA/Blowfish/CAST-128（64 位块 Rb=0x1B）。单块 KAT 逐字背书。",
   params: [
     { key: "alg", label: "底层分组密码", type: "select", default: "camellia", options: ["camellia", "seed", "twofish", "rc6", "idea", "blowfish", "cast5", "des3"] },
-    { key: "key", label: "密钥 K (hex)", type: "text", default: "2b7e151628aed2a6abf7158809cf4f3c", placeholder: "各算法密钥长度不同" },
+    { key: "keyEnc", label: "Key encoding（同 CC）", type: "select", default: "hex", options: ["hex", "UTF8", "Latin1", "Base64"] },
+    { key: "key", label: "密钥 K", type: "text", default: "2b7e151628aed2a6abf7158809cf4f3c", placeholder: "各算法密钥长度不同" },
   ],
   run: cmacExtRun,
   acceptsBytes: true,

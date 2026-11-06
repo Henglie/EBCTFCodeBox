@@ -5303,12 +5303,20 @@ function renderAbout(host) {
  // ③ 简介
   const intro = el("p", { class: "about-intro" }, t("ui.about.intro"));
 
- // ④ GitHub 入口（零外发：仅外跳链接，不嵌徽章图、不拉 star 数）
+ // ④ GitHub / 文档入口（零外发：仅外跳链接，不嵌徽章图、不拉 star 数）
   const repoBtn = el("a", {
     class: "about-repo-btn", href: REPO_URL, target: "_blank", rel: "noopener noreferrer",
   }, msym("code"), el("span", null, t("ui.about.repoBtn")));
+  const docBtns = el("div", { class: "about-doc-btns" },
+    el("a", {
+      class: "about-repo-btn", href: REPO_URL + "/blob/main/README.md", target: "_blank", rel: "noopener noreferrer",
+    }, msym("description"), el("span", null, t("ui.about.readmeBtn"))),
+    el("a", {
+      class: "about-repo-btn", href: REPO_URL + "/blob/main/CHANGELOG.md", target: "_blank", rel: "noopener noreferrer",
+    }, msym("history"), el("span", null, t("ui.about.changelogBtn"))),
+  );
 
-  page.append(el("div", { class: "about-hero" }, logo, title, ver, intro, repoBtn));
+  page.append(el("div", { class: "about-hero" }, logo, title, ver, intro, repoBtn, docBtns));
 
  // 通用小节工厂
   const section = (labelKey, ...nodes) => {

@@ -355,12 +355,20 @@ function randomBytes16() {
   return randBytes(16);
 }
 
+function asconDecodeEnc(raw, enc) {
+  const s = String(raw == null ? "" : raw);
+  if (enc === "UTF8") return new TextEncoder().encode(s);
+  if (enc === "Latin1") { const o = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) o[i] = s.charCodeAt(i) & 0xff; return o; }
+  if (enc === "Base64") { let b = s.replace(/\s+/g, ""); while (b.length % 4) b += "="; const bin = atob(b); const o = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) o[i] = bin.charCodeAt(i); return o; }
+  return hexToBytes(s);
+}
+
 function asconRun(text, p) {
   if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "text") {
     throw new Error("inputMode 该参数已废弃，请改用输入视图");
   }
   const mode = (p && p.mode) || "encrypt";
-  const key = hexToBytes((p && p.key) || "");
+  const key = asconDecodeEnc((p && p.key) || "", (p && p.keyEnc) || "Hex");
   const aadMode = (p && p.aadMode) || "text";
   const aad = p && p.aad ? (aadMode === "hex" ? hexToBytes(p.aad) : new TextEncoder().encode(p.aad)) : new Uint8Array(0);
   let tagLen = parseInt((p && p.tagLen) || "16", 10);
@@ -369,7 +377,7 @@ function asconRun(text, p) {
 
   if (mode === "encrypt") {
     // nonce：留空随机生成（16 字节）；填了则必须恰为 16 字节（非法长度明示报错）
-    let nonce = p && p.nonce ? hexToBytes(p.nonce) : new Uint8Array(0);
+    let nonce = p && p.nonce ? asconDecodeEnc(p.nonce, (p && p.nonceEnc) || "Hex") : new Uint8Array(0);
     let nonceRand = false;
     if (nonce.length === 0) {
       nonce = randomBytes16();
@@ -378,8 +386,9 @@ function asconRun(text, p) {
       throw new Error(`Ascon-AEAD128 nonce 必须为 16 字节（128 位），当前 ${nonce.length} 字节`);
     }
     // 明文：优先真字节通道（acceptsBytes），否则按输入视图语义用 UTF-8 编码文本
+    const inEnc = (p && p.inEnc) || "auto";
     const rawPt = rawBytesOf(p);
-    const pt = rawPt || new TextEncoder().encode(text);
+    const pt = rawPt || (inEnc === "hex" ? hexToBytes(text) : inEnc === "raw" ? (() => { const o = new Uint8Array(String(text).length); for (let i = 0; i < o.length; i++) o[i] = String(text).charCodeAt(i) & 0xff; return o; })() : new TextEncoder().encode(text));
     const { ciphertext, tag } = asconAead128Encrypt(key, nonce, aad, pt);
     const tagCut = tag.slice(0, tagLen);
     // 密文字节产物 = 密文 ‖ tag（真字节；tag 按 §4.2.1 截断到 tagLen）
@@ -388,7 +397,7 @@ function asconRun(text, p) {
     artifact.set(tagCut, ciphertext.length);
     return {
       // 层①：text 是该字节的无损 hex 表示，可原样进配方链；真字节在 files
-      text: bytesToHex(artifact),
+      text: (p && p.outEnc) === "raw" ? (() => { let s = ""; for (const b of artifact) s += String.fromCharCode(b); return s; })() : bytesToHex(artifact),
       files: [{
         // 随机生成的 nonce 无法从密文反推，故写入文件名避免丢失；显式 nonce 用固定名
         name: nonceRand ? `ascon-ciphertext.nonce-${bytesToHex(nonce)}.bin` : "ascon-ciphertext.bin",
@@ -399,15 +408,18 @@ function asconRun(text, p) {
   }
 
   // 解密：输入可为真字节（rawBytes，原样喂入）或密文+tag 的 hex 文本；tag 取末 tagLen 字节
-  const all = rawBytesOf(p) || hexToBytes(text);
+  const inEnc = (p && p.inEnc) || "auto";
+  const all = rawBytesOf(p) || (inEnc === "raw" ? (() => { const o = new Uint8Array(String(text).length); for (let i = 0; i < o.length; i++) o[i] = String(text).charCodeAt(i) & 0xff; return o; })() : hexToBytes(text));
   if (all.length < tagLen) throw new Error(`输入至少应含密文+${tagLen} 字节 tag，当前仅 ${all.length} 字节`);
-  const nonce = p && p.nonce ? hexToBytes(p.nonce) : new Uint8Array(0);
-  if (nonce.length === 0) throw new Error("解密必须提供 nonce（16 字节 hex）");
+  const nonce = p && p.nonce ? asconDecodeEnc(p.nonce, (p && p.nonceEnc) || "Hex") : new Uint8Array(0);
+  if (nonce.length === 0) throw new Error("解密必须提供 nonce（16 字节）");
   if (nonce.length !== 16) throw new Error(`Ascon-AEAD128 nonce 必须为 16 字节（128 位），当前 ${nonce.length} 字节`);
   const ct = all.subarray(0, all.length - tagLen);
   const tag = all.subarray(all.length - tagLen);
   const pt = asconAead128Decrypt(key, nonce, aad, ct, tag);
   // 明文字节出口：合法 UTF-8 出文本；否则出 { text: hex, files }（绝不静默 U+FFFD 替换）
+  if ((p && p.outEnc) === "hex") return bytesToHex(pt);
+  if ((p && p.outEnc) === "raw") { let s = ""; for (const b of pt) s += String.fromCharCode(b); return s; }
   return finishBytesDecode(pt, { textMode: "hex", name: "ascon-plaintext" });
 }
 
@@ -448,8 +460,16 @@ register({
         { value: "decrypt", label: "解密" },
       ],
     },
-    { key: "key", label: "key（16B hex）", type: "text", default: "", placeholder: "000102030405060708090a0b0c0d0e0f" },
-    { key: "nonce", label: "nonce（16B hex）", type: "text", default: "", placeholder: "留空则加密时随机生成；解密必填" },
+    { key: "keyEnc", label: "Key encoding（同 CC）", type: "select", default: "Hex", options: ["Hex", "UTF8", "Latin1", "Base64"] },
+    { key: "key", label: "key（16B）", type: "text", default: "", placeholder: "000102030405060708090a0b0c0d0e0f" },
+    { key: "nonceEnc", label: "Nonce encoding", type: "select", default: "Hex", options: ["Hex", "UTF8", "Latin1", "Base64"] },
+    { key: "nonce", label: "nonce（16B）", type: "text", default: "", placeholder: "留空则加密时随机生成；解密必填" },
+    { key: "inEnc", label: "Input（同 CC）", type: "select", default: "auto", options: [
+      { value: "auto", label: "Auto（项目旧行为）" }, { value: "hex", label: "Hex" }, { value: "raw", label: "Raw" },
+    ] },
+    { key: "outEnc", label: "Output（同 CC）", type: "select", default: "auto", options: [
+      { value: "auto", label: "Auto（项目旧行为）" }, { value: "hex", label: "Hex" }, { value: "raw", label: "Raw" },
+    ] },
     {
       key: "aadMode", label: "aad 形式", type: "select", default: "text",
       options: [

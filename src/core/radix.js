@@ -142,20 +142,26 @@ function asciiDecode(text, base, opts) {
   } else {
     tokens = trimmed.split(/\s+/).filter(Boolean);
   }
-  const bytes = tokens.map((t) => {
+  const bytes = [];
+  for (const t of tokens) {
     let tok = t;
     if (base === 2 && (inv || rev)) {
       if (inv) tok = tok.replace(/[01]/g, (c) => (c === "0" ? "1" : "0"));
       if (rev) tok = [...tok].reverse().join("");
     }
     let n = parseBigIntRadix(tok, base);
+    const tokenBytes = w > 8 ? Math.ceil(w / 8) : 1;
+    if (tokenBytes > 1) {
+      for (let k = tokenBytes - 1; k >= 0; k--) bytes.push(Number((n >> BigInt(8 * k)) & 0xffn));
+      continue;
+    }
     if (opts && opts.signed && n < 0n) {
       if (n < -128n) throw new Error("值 " + t + " 超出有符号字节范围 -128..127");
       n += 256n;
     }
     if (n < 0n || n > 255n) throw new Error("值 " + t + " 超出字节范围 0-255");
-    return Number(n);
-  });
+    bytes.push(Number(n));
+  }
   return td(bytes);
 }
 

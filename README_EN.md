@@ -53,7 +53,7 @@ Current version **v0.1.14**. The source of truth is always the GitHub repository
 
 ## v0.1.14 (in development)
 
-> This release: new structured outbound encoders, text utilities, EN/ZH OCR and code-image recognition upgrades; the extension panel is rebuilt with batch offline-pack management; sensitive params are masked by default, heavy ops run explicitly, passphrases and private keys can be hidden; BOM toolbar state and modal route cleanup are fixed; main ops reach 930 and six core locales align at 2937 keys.
+> This release: new structured outbound encoders, text utilities, EN/ZH OCR and code-image recognition upgrades; the extension panel is rebuilt with batch offline-pack management; sensitive params are masked by default, heavy ops run explicitly, passphrases and private keys can be hidden; BOM toolbar state and modal route cleanup are fixed; main ops reach 930 and six core locales align at 2939 keys.
 
 ## v0.1.13-beta
 

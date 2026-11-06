@@ -1440,6 +1440,7 @@ label.switch,
 .about-repo-btn:hover { filter: brightness(1.08); }
 .about-repo-btn:active { transform: scale(.97); }
 .about-repo-btn .msym { font-size: 18px; }
+.about-doc-btns { display: flex; flex-wrap: wrap; gap: var(--sp-2); justify-content: center; margin-top: var(--sp-2); }
 
 /* 通用小节 */
 .about-section { margin-bottom: var(--sp-5); }

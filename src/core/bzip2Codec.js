@@ -160,14 +160,14 @@ function parseOutEnc(v) {
   return enc;
 }
 
-async function compressBytes(bytes, blockSize) {
+async function compressBytes(bytes, blockSize, workFactor = 30) {
   const bz = await getBz2();
   // bzip2 最坏膨胀远小于 1%，但短输入有固定头尾开销；预留 1% + 1KB。
   let destLen = Math.max(1024, bytes.length + Math.ceil(bytes.length / 100) + 1024);
   let lastErr = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      return bz.compress(bytes, blockSize, destLen);
+      return bz.compress(bytes, blockSize, destLen, workFactor);
     } catch (e) {
       lastErr = e;
       const msg = e && e.message ? e.message : String(e);
@@ -204,8 +204,10 @@ export async function bzip2EncRun(text, p) {
 
   const blockSize = parseBlockSize(p && p.blockSize);
   const outEnc = parseOutEnc(p && p.outEnc);
+  let workFactor = parseInt((p && p.workFactor != null ? p.workFactor : 30), 10);
+  if (!Number.isFinite(workFactor) || workFactor < 0 || workFactor > 250) workFactor = 30;
 
-  const compressed = await compressBytes(bytes, blockSize);
+  const compressed = await compressBytes(bytes, blockSize, workFactor);
   const encoded = outEnc === "hex" ? bytesToHex(compressed) : bytesToBase64(compressed);
 
   if (encoded.length > MAX_OUTPUT_CHARS) {
@@ -234,6 +236,12 @@ register({
         { value: "base64", label: "Base64" },
         { value: "hex", label: "Hex" },
       ],
+    },
+    {
+      key: "workFactor",
+      label: "Work factor（0-250，CC 默认 30）",
+      type: "number",
+      default: 30,
     },
     {
       key: "blockSize",

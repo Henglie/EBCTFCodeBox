@@ -976,6 +976,8 @@ export default {
   "ui.about.regOpensource": "开源自编译版本",
   "ui.about.copyright": "© 2026–{0} 恒烈 · EternalBlaze，基于 Apache 2.0 许可发布。",
   "ui.about.repoBtn": "在 GitHub 打开",
+  "ui.about.readmeBtn": "README 说明",
+  "ui.about.changelogBtn": "更新日志",
   "ui.about.contributors": "作者与贡献者",
   "ui.about.founderBadge": "创始人 · 作者",
   "ui.about.tierAuthor": "作者",

@@ -127,7 +127,7 @@ class BZip2 {
         return this.createBuffer(decompressedPtr, decompressedLengthPtr);
     }
 
-    compress(decompressed, blockSize = 5, compressedLength) {
+    compress(decompressed, blockSize = 5, compressedLength, workFactor = 30) {
         this.ensureInitialized();
 
         if (!compressedLength) {
@@ -155,7 +155,7 @@ class BZip2 {
             decompressed.length,
             blockSize,
             0,
-            30
+            workFactor
         );
 
         this.wasmModule._free(decompressedPtr);

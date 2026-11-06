@@ -1200,6 +1200,8 @@ export default {
   "ui.about.regOpensource": "オープンソース自前ビルド版",
   "ui.about.copyright": "© 2026–{0} Henglie · EternalBlaze. Apache 2.0 ライセンスの下で公開。",
   "ui.about.repoBtn": "GitHub で開く",
+  "ui.about.readmeBtn": "README 説明",
+  "ui.about.changelogBtn": "更新履歴",
   "ui.about.contributors": "作者と貢献者",
   "ui.about.founderBadge": "創設者 · 作者",
   "ui.about.tierAuthor": "作者",

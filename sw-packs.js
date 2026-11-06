@@ -1,4 +1,4 @@
-self.__EBCTF_PACK_REV = "wasm:c37709b7,fonts:e9658b79,locales:90a21c59,edu-en:3a5e6787,ocr:303d1515";
+self.__EBCTF_PACK_REV = "wasm:c37709b7,fonts:e9658b79,locales:163b54f8,edu-en:3a5e6787,ocr:303d1515";
 self.__EBCTF_PACKS = [
   {
     "id": "wasm",
@@ -38,8 +38,8 @@ self.__EBCTF_PACKS = [
   },
   {
     "id": "locales",
-    "rev": "90a21c59",
-    "bytes": 3134117,
+    "rev": "163b54f8",
+    "bytes": 3134486,
     "entries": [
       "/src/i18n/locales/ar.js",
       "/src/i18n/locales/bo.js",

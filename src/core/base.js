@@ -402,6 +402,11 @@ function base64Decode(text, p) {
 const B85_Z85 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#";
 const B85_IPV6 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~";
 function b85Alphabet(p) {
+  const custom = String((p && p.customAlphabet) || "");
+  if (custom !== "") {
+    if (custom.length !== 85 || new Set(custom).size !== 85) throw new Error("Base85 自定义 Alphabet 须为 85 个互不相同的字符");
+    return custom;
+  }
   const a = (p && p.alphabet) || "Standard";
   if (a === "Standard") return null; // Ascii85 用字符码 33..117
   if (a === "Z85") return B85_Z85;
@@ -762,6 +767,7 @@ register({
         { value: "Z85", label: "Z85（ZeroMQ）" },
         { value: "IPv6", label: "IPv6（RFC 1924）" },
       ] },
+    { key: "customAlphabet", label: "Custom Alphabet（85 字符，留空=用上方 preset）", type: "text", default: "", placeholder: "85 个互不相同字符" },
     { key: "compat", label: "兼容模式（输出不带 <~ ~> 包裹）", type: "bool", default: false },
     { key: "includeDelimiter", label: "输出 <~ ~> 包裹（Standard 生效）", type: "bool", default: true },
     { key: "allZeroGroupChar", label: "全零组字符（Standard）", type: "text", default: "z", placeholder: "z" },

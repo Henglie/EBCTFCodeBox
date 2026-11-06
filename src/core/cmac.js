@@ -265,11 +265,19 @@ export function kmacBytes(bits, key, msg, L, customization) {
 // ============================================================
 // op 1 · aesCmac（RFC 4493）
 // ============================================================
+function cmacKeyBytes(raw, enc) {
+  const s = String(raw == null ? "" : raw);
+  if (enc === "UTF8") return new TextEncoder().encode(s);
+  if (enc === "Latin1") { const o = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) o[i] = s.charCodeAt(i) & 0xff; return o; }
+  if (enc === "Base64") { let b = s.replace(/\s+/g, ""); while (b.length % 4) b += "="; const bin = atob(b); const o = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) o[i] = bin.charCodeAt(i); return o; }
+  return hexToBytes(s);
+}
+
 function aesCmacRun(text, p = {}) {
   if (p && p.msgEnc != null && String(p.msgEnc).toLowerCase() !== "hex") {
     throw new Error("msgEnc 该参数已废弃，请改用输入视图");
   }
-  const key = hexToBytes(p.key);
+  const key = cmacKeyBytes(p.key, (p && p.keyEnc) || "hex");
   const msg = rawBytesOrNull(p, text) || msgToBytes(text, "hex");
   const mac = aesCmacBytes(key, msg);
   const L = [];
@@ -334,7 +342,8 @@ register({
   name: "AES-CMAC",
   desc: "AES-CMAC 消息认证码（RFC 4493；支持 AES-128/192/256）",
   params: [
-    { key: "key", label: "密钥 K (hex, 16/24/32B)", type: "text", default: "2b7e151628aed2a6abf7158809cf4f3c", placeholder: "RFC 4493 测试密钥" },
+    { key: "keyEnc", label: "Key encoding（同 CC）", type: "select", default: "hex", options: ["hex", "UTF8", "Latin1", "Base64"] },
+    { key: "key", label: "密钥 K (16/24/32B)", type: "text", default: "2b7e151628aed2a6abf7158809cf4f3c", placeholder: "RFC 4493 测试密钥" },
   ],
   run: aesCmacRun,
 });

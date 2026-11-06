@@ -954,6 +954,8 @@ export default {
   "ui.about.regOpensource": "Open-source self-build",
   "ui.about.copyright": "© 2026–{0} Henglie · EternalBlaze. Released under the Apache License 2.0.",
   "ui.about.repoBtn": "Open on GitHub",
+  "ui.about.readmeBtn": "README",
+  "ui.about.changelogBtn": "Changelog",
   "ui.about.contributors": "Author & Contributors",
   "ui.about.founderBadge": "Founder · Author",
   "ui.about.tierAuthor": "Author",

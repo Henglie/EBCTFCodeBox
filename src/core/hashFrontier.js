@@ -1466,6 +1466,11 @@ register({
     { key: "m", label: "内存 m（KiB，≤65536）", type: "number", default: 16384 },
     { key: "p", label: "并行度 p", type: "number", default: 1 },
     { key: "tagLen", label: "输出字节数", type: "number", default: 32 },
+    { key: "outputFormat", label: "Output format（同 CC）", type: "select", default: "hex", options: [
+      { value: "hex", label: "Hex hash（项目旧默认）" },
+      { value: "encoded", label: "Encoded hash（PHC 串）" },
+      { value: "raw", label: "Raw hash（Latin-1 字节）" },
+    ] },
     { sensitive: true, key: "secret", label: "secret（hex，可空）", type: "text", default: "" },
     { key: "ad", label: "associated data（hex，可空）", type: "text", default: "" },
   ],
@@ -1483,7 +1488,25 @@ register({
     if (tagLen < 4 || tagLen > 1024) throw new Error("tagLen 需在 4..1024");
     const pwd = inputBytes(text, p);
     const salt = p.saltType === "hex" ? hexBytes(p.salt) : te.encode(p.salt || "");
-    return toHex(argon2Hash(pwd, salt, hexBytes(p.secret), hexBytes(p.ad), { type, t, m, p: pp, tagLen }));
+    const digest = argon2Hash(pwd, salt, hexBytes(p.secret), hexBytes(p.ad), { type, t, m, p: pp, tagLen });
+    if ((p.outputFormat || "hex") === "raw") {
+      let s = "";
+      for (const b of digest) s += String.fromCharCode(b);
+      return s;
+    }
+    if ((p.outputFormat || "hex") === "encoded") {
+      const b64 = (bytes) => {
+        let bin = "";
+        for (const b of bytes) bin += String.fromCharCode(b);
+        return btoa(bin).replace(/=+$/, "");
+      };
+      const typeName = Object.keys(A2_TYPES).find((k) => A2_TYPES[k] === type) || "argon2id";
+      if (!salt.length) throw new Error("Encoded hash 需要非空 salt");
+      let phc = `$${typeName}$v=19$m=${m},t=${t},p=${pp}$${b64(salt)}$${b64(digest)}`;
+      if (p.secret || p.ad) phc += `$data=${b64(hexBytes(p.ad))}`;
+      return phc;
+    }
+    return toHex(digest);
   },
 });
 
