@@ -1066,23 +1066,25 @@ register({
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "8 字节密钥"),
   encode: makeBlockEncode(desEncrypt, false),
   decode: makeBlockDecode(desDecrypt, false),
+  acceptsBytes: true,
 });
 register({
   id: "des3", family: "des", familyLabel: "3des", cat: "block", name: "3DES / TripleDES", desc: "三重 DES（EDE，key 16 或 24 字节，块 8 字节）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "16/24 字节密钥"),
   encode: makeBlockEncode(des3Encrypt, false),
   decode: makeBlockDecode(des3Decrypt, false),
+  acceptsBytes: true,
 });
 
 // RC4 / XOR：流密码，自反。encode=decode（明文↔密文同一变换）。
 function makeStreamOp(fn) {
   const enc = (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
-    return encodeOutput(fn(te(text), key), p.outEnc || "base64");
+    return encodeOutput(fn(rawBytesOrNull(p, text) || te(text), key), p.outEnc || "base64");
   };
   const dec = (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
-    return encodeOutput(fn(decodeInput(text.trim(), p.outEnc || "base64"), key), "utf8");
+    return encodeOutput(fn(rawBytesOrNull(p, text.trim()) || decodeInput(text.trim(), p.outEnc || "base64"), key), "utf8");
   };
   return { enc, dec };
 }
@@ -1107,17 +1109,18 @@ const XOR_PARAMS = [
   ];
   const enc = (text, p) => {
     const key = decodeInputIo(p.key || "", p.keyEnc || "utf8");
-    const data = decodeInputIo(text, (p && p.inEnc) || "utf8");
+    const data = rawBytesOrNull(p, text) || decodeInputIo(text, (p && p.inEnc) || "utf8");
     return encodeOutputIo(rc4(data, key), p.outEnc || "base64");
   };
   const dec = (text, p) => {
     const key = decodeInputIo(p.key || "", p.keyEnc || "utf8");
-    const data = decodeInputIo(text.trim(), (p && p.inEnc) || p.outEnc || "base64");
+    const data = rawBytesOrNull(p, text.trim()) || decodeInputIo(text.trim(), (p && p.inEnc) || p.outEnc || "base64");
     return encodeOutputIo(rc4(data, key), "utf8");
   };
   register({
     id: "rc4", cat: "stream", name: "RC4", desc: "RC4 流密码（自反，key 任意长；密钥/输入/输出支持 UTF16/UTF16LE/UTF16BE/Latin1/Hex/Base64）。若密文以 U2FsdGVk 开头（OpenSSL/CryptoJS 的 Salted__ 封装），请改用「OpenSSL 口令加解密」并选 RC4",
     params: RC4_PARAMS, encode: enc, decode: dec,
+    acceptsBytes: true,
   });
 }
 {
@@ -1125,6 +1128,7 @@ const XOR_PARAMS = [
   register({
     id: "xor", cat: "stream", name: "XOR", desc: "重复密钥异或（自反，CTF 最常用；单字节爆破见分析类 xorBrute）",
     params: XOR_PARAMS, encode: enc, decode: dec,
+    acceptsBytes: true,
   });
 }
 

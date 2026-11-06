@@ -29,6 +29,33 @@ import { register } from "./registry.js";
 import { bytesToHex, bytesToB64, b64ToBytes } from "./bytesIo.js";
 
 const TE = new TextEncoder();
+const TD = new TextDecoder("utf-8");
+
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
+/** 主输入：视图真字节优先（按 UTF-8 还原 JSON 文本），否则原文本路径。 */
+function inputText(p, text) {
+  const b = rawBytesOrNull(p, text);
+  return b ? TD.decode(b) : String(text == null ? "" : text);
+}
 
 // ============ 通用字节工具 ============
 class Buf {
@@ -118,7 +145,7 @@ function cborEncode(value, depth = 0) {
   throw new Error("CBOR 不支持的类型: " + typeof value);
 }
 
-function cborEncodeRun(text, p = {}) { return outBytes(cborEncode(parseJsonInput(text)), p); }
+function cborEncodeRun(text, p = {}) { return outBytes(cborEncode(parseJsonInput(inputText(p, text))), p); }
 
 // ============ MessagePack 编码 ============
 function mpInt(value) {
@@ -187,7 +214,7 @@ function msgpackEncode(value, depth = 0) {
   throw new Error("MessagePack 不支持的类型: " + typeof value);
 }
 
-function msgpackEncodeRun(text, p = {}) { return outBytes(msgpackEncode(parseJsonInput(text)), p); }
+function msgpackEncodeRun(text, p = {}) { return outBytes(msgpackEncode(parseJsonInput(inputText(p, text))), p); }
 
 // ============ BSON 序列化（bsonspec.org） ============
 function i32le(v) { const t = new Uint8Array(4); new DataView(t.buffer).setInt32(0, v, true); return t; }
@@ -237,7 +264,7 @@ function bsonSerialize(value, depth = 0) {
   return bsonSerializeDocument(value, depth);
 }
 
-function bsonSerializeRun(text, p = {}) { return outBytes(bsonSerialize(parseJsonInput(text)), p); }
+function bsonSerializeRun(text, p = {}) { return outBytes(bsonSerialize(parseJsonInput(inputText(p, text))), p); }
 
 // ============ PHP serialize 生成 ============
 function phpFloat(v) {
@@ -383,25 +410,28 @@ function protobufEncode(obj, schemaText) {
 }
 
 function protobufEncodeRun(text, p = {}) {
-  const bytes = protobufEncode(parseJsonInput(text), p.schema || "");
+  const bytes = protobufEncode(parseJsonInput(inputText(p, text)), p.schema || "");
   return outBytes(bytes, p);
 }
 
 // ============ 注册 ============
 register({
   id: "cborEncode", cat: "data", name: "CBOR 编码",
+  acceptsBytes: true,
   desc: "JSON → CBOR 二进制（RFC 8949：null/bool/uint/negint/float/string/array/map；浮点一律 float64；不做 indefinite/tag）",
   params: [OUT_ENC_PARAM],
   run: cborEncodeRun,
 });
 register({
   id: "msgpackEncode", cat: "data", name: "MessagePack 编码",
+  acceptsBytes: true,
   desc: "JSON → MessagePack 二进制（nil/bool/int/float/str/bin/array/map，整数按最小宽度）",
   params: [OUT_ENC_PARAM],
   run: msgpackEncodeRun,
 });
 register({
   id: "bsonSerialize", cat: "data", name: "BSON 序列化",
+  acceptsBytes: true,
   desc: "JSON → BSON 文档（document/array/string/int32/int64/double/bool/null；ObjectId 等未实现）",
   params: [OUT_ENC_PARAM],
   run: bsonSerializeRun,
@@ -414,6 +444,7 @@ register({
 });
 register({
   id: "protobufEncode", cat: "data", name: "Protobuf 编码",
+  acceptsBytes: true,
   desc: "JSON + 简化 .proto schema → Protobuf wire（标量字段 + repeated；wire 0/1/2/5；不做 map/oneof/嵌套）",
   params: [
     { key: "schema", label: "schema（.proto 文本）", type: "textarea", rows: 6, default: "", placeholder: "message Foo {\\n  int32 a = 1;\\n  string b = 2;\\n}" },

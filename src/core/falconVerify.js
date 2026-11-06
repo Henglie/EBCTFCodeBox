@@ -403,6 +403,7 @@ export function falconVerifyCore(pkBytes, sigBytes, msgBytes, explicitMsgBytes) 
 
 register({
   id: "falconPkParse", family: "falcon", familyLabel: "parse",
+  acceptsBytes: true,
   cat: "asym",
   name: "Falcon 公钥解析",
   desc: "解析 Falcon/FN-DSA 公钥（规范 v1.2 §3.11.4：头字节 0000nnnn + n×14bit 大端系数流，q=12289）：档位、长度、系数统计与合法性逐项报告。支持 Falcon-512（897 字节）与 Falcon-1024（1793 字节），hex 或 base64 输入",

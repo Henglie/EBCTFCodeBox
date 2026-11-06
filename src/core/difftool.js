@@ -26,6 +26,28 @@ import { register } from "./registry.js";
 
 // ---------------- 常量 ----------------
 const MAX_INPUT = 256 * 1024; // 每段输入上限 256KB
+
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
+const TD = new TextDecoder("utf-8");
 const LCS_CELL_CAP = 2_000_000; // LCS DP 格子数上限，超出回退朴素 diff
 
 const INPUT_ENC_PARAM = {
@@ -373,16 +395,18 @@ function renderLine(aLines, bLines, ops, context, kind) {
 
 // ---------------- run ----------------
 function diffRun(textA, p) {
+  const raw = rawBytesOrNull(p, textA);
+  const aText = raw ? TD.decode(raw) : textA;
   const textB = p.textB ?? "";
   const mode = p.mode || "byte";
   const context = Math.max(0, Math.floor(Number(p.context) || 0));
 
-  if (textA.length > MAX_INPUT || textB.length > MAX_INPUT) {
+  if (aText.length > MAX_INPUT || textB.length > MAX_INPUT) {
     throw new Error(`单段输入超过 ${MAX_INPUT} 字节上限，请裁剪后重试`);
   }
 
   if (mode === "line") {
-    const aLines = textA.length === 0 ? [] : textA.split(/\r?\n/);
+    const aLines = aText.length === 0 ? [] : aText.split(/\r?\n/);
     const bLines = textB.length === 0 ? [] : textB.split(/\r?\n/);
     const { ops, kind } = diffSeq(aLines, bLines);
     return renderLine(aLines, bLines, ops, context, kind);
@@ -390,11 +414,11 @@ function diffRun(textA, p) {
 
  // byte 模式
   let enc = p.inputEnc || "auto";
-  if (enc === "auto") enc = detectEnc(textA);
+  if (enc === "auto") enc = detectEnc(aText);
   let aBytes;
   let bBytes;
   try {
-    aBytes = toBytes(textA, enc);
+    aBytes = raw || toBytes(aText, enc);
   } catch (e) {
     throw new Error(`A 解码失败（${enc}）: ${e.message}`);
   }
@@ -410,6 +434,7 @@ function diffRun(textA, p) {
 // ---------------- 注册 ----------------
 register({
   id: "diffTool",
+  acceptsBytes: true,
   cat: "data",
   name: "差异对比",
   desc: "两段输入逐字节 / 逐行 diff，定位差异区间（等长快速路径 + 不等长 LCS 对齐，CTF 找隐藏差异）",

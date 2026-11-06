@@ -268,6 +268,26 @@ const OUT_OPTS = [
   { value: "latin1", label: "Raw（Latin-1）" },
 ];
 
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 /** CyberChef 口径：Integer nonce = 8 字节小端（其余字节缺失时按 CC 短 nonce 行为补 0）。 */
 function buildNonce(p) {
   if ((p && p.nonceType) === "integer") {
@@ -291,6 +311,7 @@ function encodeInputCc(text, p) {
 
 register({
   id: "xsalsa20", cat: "stream", name: "XSalsa20",
+  acceptsBytes: true,
   desc: "XSalsa20 流密码（Bernstein「Extending the Salsa20 nonce」）：HSalsa20 派生 32 字节子密钥 + Salsa20，密钥 32 字节、nonce 24 字节、64 位块计数器（自反）。rounds 支持 20/12/8（默认 20；HSalsa20 与 Salsa20 同步降轮）",
   params: [
     { key: "key", label: "密钥", type: "text", default: "", placeholder: "32 字节" },
@@ -311,12 +332,13 @@ register({
   encode: (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "hex");
     const nonce = buildNonce(p);
-    return encodeOutput(xsalsa20(encodeInputCc(text, p), key, nonce, Number((p && p.counter) || 0), Number((p && p.rounds) || 20)), p.outEnc || "base64");
+    const data = rawBytesOrNull(p, text) || encodeInputCc(text, p);
+    return encodeOutput(xsalsa20(data, key, nonce, Number((p && p.counter) || 0), Number((p && p.rounds) || 20)), p.outEnc || "base64");
   },
   decode: (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "hex");
     const nonce = buildNonce(p);
-    const data = decodeInput(String(text).trim(), p.outEnc || "base64");
+    const data = rawBytesOrNull(p, String(text).trim()) || decodeInput(String(text).trim(), p.outEnc || "base64");
     return td(xsalsa20(data, key, nonce, Number((p && p.counter) || 0), Number((p && p.rounds) || 20)));
   },
 });

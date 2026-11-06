@@ -399,6 +399,7 @@ register({
 // ---- 档② 签名 ----
 register({
   id: "sm9Sign",
+  acceptsBytes: true,
   cat: "asym",
   family: "sm9",
   familyLabel: "sign",
@@ -413,7 +414,7 @@ register({
     { key: "dataEnc", label: "消息编码", type: "select", default: "utf8", options: ENC_OPTS },
   ],
   run: (text, p) => {
-    const msg = encDecode(text, p.dataEnc || "utf8");
+    const msg = rawBytesOrNull(p, text) || encDecode(text, p.dataEnc || "utf8");
     const masterPub = parseG2Hex(p.masterPub, "签名主公钥 Ppub_s");
     const userPriv = parseG1Hex(p.userPriv, "用户签名私钥 dA");
     const fixedR = parseOptionalScalarHex(p.fixedR, "固定 r");
@@ -429,6 +430,7 @@ register({
 // ---- 档③ 验签 ----
 register({
   id: "sm9Verify",
+  acceptsBytes: true,
   cat: "asym",
   family: "sm9",
   familyLabel: "verify",
@@ -443,7 +445,7 @@ register({
     { key: "dataEnc", label: "消息编码", type: "select", default: "utf8", options: ENC_OPTS },
   ],
   run: (text, p) => {
-    const msg = encDecode(text, p.dataEnc || "utf8");
+    const msg = rawBytesOrNull(p, text) || encDecode(text, p.dataEnc || "utf8");
     const masterPub = parseG2Hex(p.masterPub, "签名主公钥 Ppub_s");
     const uid = new TextEncoder().encode(String(p.uid == null || p.uid === "" ? "Alice" : p.uid));
     const hid = parseHid(p.hid, 0x01);
@@ -457,6 +459,7 @@ register({
 // ---- 档④ 加密 ----
 register({
   id: "sm9Encrypt",
+  acceptsBytes: true,
   cat: "asym",
   family: "sm9",
   familyLabel: "encrypt",
@@ -471,7 +474,7 @@ register({
     { key: "outEnc", label: "密文输出", type: "select", default: "hex", options: ENC_OPTS },
   ],
   run: (text, p) => {
-    const msg = encDecode(text, p.dataEnc || "utf8");
+    const msg = rawBytesOrNull(p, text) || encDecode(text, p.dataEnc || "utf8");
     const masterPub = parseG1Hex(p.masterPub, "加密主公钥 Ppub_e");
     const uid = new TextEncoder().encode(String(p.uid == null || p.uid === "" ? "Bob" : p.uid));
     const hid = parseHid(p.hid, 0x03);

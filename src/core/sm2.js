@@ -642,6 +642,7 @@ register({
 // ---- 档⑤ 验签 ----
 register({
   id: "sm2Verify",
+  acceptsBytes: true,
   cat: "asym",
   family: "sm2",
   familyLabel: "verify",
@@ -656,7 +657,7 @@ register({
     { key: "dataEnc", label: "输入编码", type: "select", default: "utf8", options: ENC_OPTS },
   ],
   run: (text, p) => {
-    const data = encDecode(text, p.dataEnc || "utf8");
+    const data = rawBytesOrNull(p, text) || encDecode(text, p.dataEnc || "utf8");
     const px = parseBigHex(p.pubX, "公钥 X"), py = parseBigHex(p.pubY, "公钥 Y");
     const ida = encDecode(p.ida || "1234567812345678", "utf8");
     const r = parseBigHex(p.r, "r"), s = parseBigHex(p.s, "s");
