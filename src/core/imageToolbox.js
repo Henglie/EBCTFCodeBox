@@ -154,6 +154,31 @@ function _boxBlurGray(src, w, h, radius) {
   return out;
 }
 
+// 分离式高斯核（半径 r，sigma=r/2）；边缘 clamp。
+function _gaussBlurGray(src, w, h, radius) {
+  const r = Math.max(1, Math.min(20, radius));
+  const sigma = r / 2;
+  const k = [];
+  let ksum = 0;
+  for (let i = -r; i <= r; i++) { const v = Math.exp(-(i * i) / (2 * sigma * sigma)); k.push(v); ksum += v; }
+  for (let i = 0; i < k.length; i++) k[i] /= ksum;
+  const clampX = (x) => (x < 0 ? 0 : x >= w ? w - 1 : x);
+  const clampY = (y) => (y < 0 ? 0 : y >= h ? h - 1 : y);
+  const tmp = new Float64Array(w * h);
+  const out = new Float64Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let s = 0;
+    for (let i = -r; i <= r; i++) s += src[y * w + clampX(x + i)] * k[i + r];
+    tmp[y * w + x] = s;
+  }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let s = 0;
+    for (let i = -r; i <= r; i++) s += tmp[clampY(y + i) * w + x] * k[i + r];
+    out[y * w + x] = s;
+  }
+  return out;
+}
+
 // ============================================================
 // op 1: imageCompress 图片压缩
 // ============================================================
@@ -256,7 +281,9 @@ async function imagePixelateOp(text, p = {}) {
 // op 4: imageFrosted 毛玻璃
 // ============================================================
 async function imageFrostedOp(text, p = {}) {
-  const radius = _intInRange("imageFrosted", p.radius, 1, 20, "模糊半径", 4);
+  const type = String(p.type || "Fast");
+  if (!["Fast", "Gaussian"].includes(type)) throw new Error("imageFrosted：type 需为 Fast 或 Gaussian");
+  const radius = _intInRange("imageFrosted", p.amount != null && p.amount !== "" ? p.amount : p.radius, 1, 20, "模糊量", 4);
   const img = await _toolDecodeImage(text, p, "imageFrosted");
   const w = img.width, h = img.height, d = img.data;
   const n = w * h;
@@ -265,7 +292,7 @@ async function imageFrostedOp(text, p = {}) {
     ch[0][j] = d[i]; ch[1][j] = d[i + 1]; ch[2][j] = d[i + 2];
   }
   for (let c = 0; c < 3; c++) {
-    const blurred = _boxBlurGray(ch[c], w, h, radius);
+    const blurred = type === "Gaussian" ? _gaussBlurGray(ch[c], w, h, radius) : _boxBlurGray(ch[c], w, h, radius);
     const src = ch[c];
     for (let i = 0; i < n; i++) src[i] = Math.round(blurred[i]);
   }
@@ -795,7 +822,12 @@ register({
   id: "imageFrosted", cat: "image", name: "图片毛玻璃",
   desc: "盒模糊（box blur）：水平+垂直两遍分离卷积近似高斯，边缘窗口按实际像素收缩平均，半径 1-20。观察低频结构/压掉高频隐写痕迹时用",
   params: [
-    { key: "radius", label: "模糊半径（1-20）", type: "number", default: 4 },
+    { key: "type", label: "Type（同 CyberChef）", type: "select", default: "Fast", options: [
+      { value: "Fast", label: "Fast（盒模糊，项目旧行为）" },
+      { value: "Gaussian", label: "Gaussian（真高斯核）" },
+    ] },
+    { key: "amount", label: "Amount（模糊量 1-20，留空=用 radius）", type: "number", default: "" },
+    { key: "radius", label: "模糊半径（1-20，兼容旧参数）", type: "number", default: 4 },
   ],
   acceptsBytes: true,
   run: (t, p) => imageFrostedOp(t, p),
