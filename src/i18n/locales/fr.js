@@ -3056,6 +3056,10 @@ export default {
   "op.fileTree.desc": "Afficher une liste de chemins sous forme d'arborescence",
   "op.ocr.name": "OCR (anglais / chinois simplifié)",
   "op.opensslDec.name": "Chiffrement/déchiffrement OpenSSL (RC4 inclus)",
+  "op.httpDechunk.name": "HTTP Dechunk",
+  "op.httpDechunk.desc": "Comme le Dechunk HTTP response de CyberChef : retire les lignes de taille de chunk et les CRLF pour restituer le corps brut ; couche transport uniquement, pas de décompression",
+  "op.splitChannels.name": "Split Colour Channels (R/G/B/A)",
+  "op.splitChannels.desc": "Comme Split Colour Channels de CyberChef : sépare l'image en quatre PNG en niveaux de gris (R/G/B/A) pour analyser les LSB/plans de bits par canal",
   "op.opensslDec.desc": "Déchiffrement/chiffrement en une étape du format Salted__ d'OpenSSL enc : entrée base64/hex/octets, EVP_BytesToKey (md5/sha256) + AES-128/192/256-CBC + PKCS#7, plus RC4 (flux courant de CryptoJS, sans padding). auto essaie les 8 combinaisons et détaille chaque tentative. Longueur non alignée sur 16 octets, padding invalide, en-tête Salted__ absent et mauvaise phrase secrète lèvent une erreur explicite, sans sortie illisible.",
   "op.ocr.desc": "Image vers texte, compatible png/jpg/bmp/pbm. Langue : anglais (eng) / chinois simplifié (chi_sim) / mixte (eng+chi_sim). Moteur tesseract.js ; worker/cœur/modèles dans public/vendor/ocr/, exécutés localement dans le navigateur, aucune image envoyée. Premier usage : ~7,9 Mo de moteur + modèle de langue (eng≈2,95 Mo / chi_sim≈1,72 Mo), puis cache IndexedDB. Ressources manquantes : erreur explicite. Première ligne par défaut « Confidence: N% ».",
 };

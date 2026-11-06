@@ -111,6 +111,24 @@ export function inputToBytes(text, p) {
 
 // ============ run ============
 
+export function scanUtf16be(data, min) {
+  const out = [];
+  let start = 0, cur = "", i = 0;
+  while (i + 1 < data.length) {
+    if (data[i] === 0 && printable(data[i + 1])) {
+      if (cur === "") start = i;
+      cur += String.fromCharCode(data[i + 1]);
+      i += 2;
+    } else {
+      if (cur.length >= min) out.push({ offset: start, s: cur });
+      cur = "";
+      i += 1;
+    }
+  }
+  if (cur.length >= min) out.push({ offset: start, s: cur });
+  return out;
+}
+
 function stringsExtractRun(text, p) {
   const pp = p || {};
   if ((!text || !String(text).trim()) && !(pp.rawBytes && pp.rawBytes.length)) {
@@ -124,9 +142,20 @@ function stringsExtractRun(text, p) {
   const data = inputToBytes(text, pp);
 
   let hits = [];
-  if (enc === "ascii" || enc === "both") hits = hits.concat(scanAscii(data, minLen));
-  if (enc === "utf16le" || enc === "both") hits = hits.concat(scanUtf16le(data, minLen));
-  if (enc === "both") hits.sort((a, b) => a.offset - b.offset);
+  if (enc === "ascii" || enc === "both" || enc === "all") hits = hits.concat(scanAscii(data, minLen));
+  if (enc === "utf16le" || enc === "both" || enc === "all") hits = hits.concat(scanUtf16le(data, minLen));
+  if (enc === "utf16be" || enc === "all") hits = hits.concat(scanUtf16be(data, minLen));
+  if (enc === "both" || enc === "all") hits.sort((a, b) => a.offset - b.offset);
+  if (pp.ccMode === true) {
+    if (pp.unique === true) {
+      const seen = new Set();
+      hits = hits.filter((h) => (seen.has(h.s) ? false : (seen.add(h.s), true)));
+    }
+    if (pp.sort === true) hits.sort((a, b) => a.s.localeCompare(b.s));
+    const lines = hits.map((h) => h.s);
+    if (pp.showTotal === true) lines.push(`Total matches: ${hits.length}`);
+    return lines.join("\n");
+  }
 
   const encName = enc === "utf16le" ? "UTF-16LE" : enc === "both" ? "ASCII + UTF-16LE" : "ASCII";
   const lines = [];
@@ -203,12 +232,18 @@ register({
     {
       key: "encoding", label: "编码", type: "select", default: "ascii",
       options: [
-        { value: "ascii", label: "ASCII" },
-        { value: "utf16le", label: "UTF-16LE" },
+        { value: "ascii", label: "Single byte / ASCII" },
+        { value: "utf16le", label: "16-bit little-endian" },
+        { value: "utf16be", label: "16-bit big-endian" },
         { value: "both", label: "两者（按偏移合并）" },
+        { value: "all", label: "All（ASCII + LE + BE）" },
       ],
     },
     { key: "showOffset", label: "显示偏移", type: "bool", default: false },
+    { key: "ccMode", label: "CyberChef Strings 输出（纯字符串，不含报告头）", type: "bool", default: false },
+    { key: "showTotal", label: "cc：末行输出 Total matches", type: "bool", default: false },
+    { key: "sort", label: "cc：按字符串排序", type: "bool", default: false },
+    { key: "unique", label: "cc：去重", type: "bool", default: false },
   ],
   run: stringsExtractRun,
   acceptsBytes: true,

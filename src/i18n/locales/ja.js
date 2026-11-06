@@ -3051,6 +3051,10 @@ export default {
   "op.fileTree.desc": "ファイルパス一覧をツリー表示",
   "op.ocr.name": "OCR 文字認識（英語 / 簡体字中国語）",
   "op.opensslDec.name": "OpenSSL パスフレーズ暗号化/復号（RC4 対応）",
+  "op.httpDechunk.name": "HTTP デチャンク（Dechunk）",
+  "op.httpDechunk.desc": "CyberChef の Dechunk HTTP response と同様：chunk 長行と CRLF を除去して生のボディを復元。トランスポート層のみで解凍は行わない",
+  "op.splitChannels.name": "カラーチャンネル分割（R/G/B/A）",
+  "op.splitChannels.desc": "CyberChef の Split Colour Channels と同様：画像を R/G/B/A の 4 枚のグレースケール PNG に分割し、チャンネルごとの LSB/ビットプレーン解析を容易にする",
   "op.opensslDec.desc": "OpenSSL enc の Salted__ 形式を 1 ステップで復号/暗号化：base64/hex/生バイト入力、EVP_BytesToKey（md5/sha256）＋ AES-128/192/256-CBC ＋ PKCS#7、RC4（CryptoJS で一般的なストリーム暗号、パディングなし）にも対応。auto は 8 通りを試して全結果を表示。16 の倍数でない長さ、不正なパディング、Salted__ ヘッダ欠落、誤ったパスフレーズはすべて明示的にエラー。",
   "op.ocr.desc": "画像→テキスト。png/jpg/bmp/pbm 対応。言語は英語(eng) / 簡体字中国語(chi_sim) / 混在(eng+chi_sim)。エンジンは tesseract.js で worker/core/言語モデルは public/vendor/ocr/ に同梱しブラウザ内でローカル実行、画像は送出しません。初回は約 7.9MB のエンジン + 言語モデル（eng≈2.95MB / chi_sim≈1.72MB）を読み込み、以降は IndexedDB キャッシュ。資産欠如時は明示エラー。既定の先頭行は「Confidence: N%」。",
 };

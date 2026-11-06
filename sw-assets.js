@@ -1,4 +1,4 @@
-self.__EBCTF_ASSET_REV = "991a602534b03123";
+self.__EBCTF_ASSET_REV = "0919ed4244aa9319";
 self.__EBCTF_ASSETS = [
   "./",
   "./index.html",
@@ -351,6 +351,7 @@ self.__EBCTF_ASSETS = [
   "./src/core/edu/edu-t722.js",
   "./src/core/edu/edu-t723.js",
   "./src/core/edu/edu-t760.js",
+  "./src/core/edu/edu-t796.js",
   "./src/core/edu/edu-teach.js",
   "./src/core/edu/edu-text-bubblebabble.js",
   "./src/core/edu/edu-text-jsescape.js",

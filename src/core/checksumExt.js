@@ -274,6 +274,11 @@ register({
   id: "crcGeneric", cat: "hash", name: "通用 CRC（参数化）",
   desc: "CRC 通用计算（width/poly/init/refIn/refOut/xorOut 可配置，含 CRC-16/CRC-32 常用预设）。run 单向，输出十六进制",
   params: [
+    { key: "mode", label: "模式", type: "select", default: "single", options: [
+      { value: "single", label: "单预设（原有模式）" },
+      { value: "all", label: "Generate all checksums（全部预设）" },
+    ] },
+    { key: "includeNames", label: "全预设：包含名称", type: "bool", default: true },
     { key: "preset", label: "预设", type: "select", default: "crc16Modbus", options: CRC_PRESETS },
     { key: "width", label: "位宽（8/16/32，自定义时生效）", type: "number", default: 16, placeholder: "8/16/32" },
     { key: "poly", label: "多项式（0x 十六进制）", type: "text", default: "0x8005", placeholder: "如 0x1021" },
@@ -284,6 +289,14 @@ register({
   ],
   run: function (t, p) {
     const bytes = strToBytes(t);
+    if (p && p.mode === "all") {
+      const names = Object.keys(CRC_PRESET_MAP);
+      return names.map((name) => {
+        const o = CRC_PRESET_MAP[name];
+        const v = crcCompute(bytes, o);
+        return (p.includeNames === false ? "" : name + ": ") + toHex(v, o.width);
+      }).join("\n");
+    }
     let opts;
     if (p.preset && p.preset !== "custom" && CRC_PRESET_MAP[p.preset]) {
       opts = CRC_PRESET_MAP[p.preset];

@@ -210,6 +210,7 @@ import EDU_R18 from "./edu/edu-r18.js"; // R18：lsbDeep/rasterStego/mp3stego/im
 import EDU_CC_PARITY from "./edu/edu-cc-parity.js"; // CyberChef P0：cobs/lzma/tar
 import EDU_CC_P0B from "./edu/edu-cc-p0b.js"; // CyberChef P0-B：serialEnc 5 + textUtils 28 + ocr
 import EDU_OPENSSL from "./edu/edu-openssl.js"; // OpenSSL Salted__ 一步式口令加解密
+import EDU_T796 from "./edu/edu-t796.js"; // CyberChef M：HTTP Dechunk / 拆分颜色通道
 
 // 合并所有分片。后者不覆盖前者（分区不重叠）；重叠时以后者为准，构建期应避免。
 const EDU = Object.assign(
@@ -380,6 +381,7 @@ const EDU = Object.assign(
   EDU_CC_PARITY,
   EDU_CC_P0B,
   EDU_OPENSSL,
+  EDU_T796,
 );
 
 import { ZH as INTEGRATED, HASH_VECTORS, BASE_NOTES, EXTRA_ALIASES, CRC_PARAMS } from "./edu/edu-integrated.js";

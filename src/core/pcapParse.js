@@ -1040,6 +1040,17 @@ function formatReport(container, dissected, opts) {
 // ============================================================
 // op run 函数
 // ============================================================
+function singleHeaderReport(bytes, mode) {
+  let r;
+  if (mode === "ethernet") r = dissectEthernet(bytes);
+  else if (mode === "ipv4Header") r = dissectIPv4(bytes);
+  else if (mode === "tcpHeader") r = dissectTCP(bytes);
+  else if (mode === "udpHeader") r = dissectUDP(bytes);
+  else throw new Error("未知 header mode: " + mode);
+  const js = JSON.stringify(r, (k, v) => v instanceof Uint8Array ? Array.from(v, (b) => b.toString(16).padStart(2, "0")).join("") : v, 2);
+  return js;
+}
+
 export function pcapParseRun(text, p = {}) {
   const enc = p.inputEnc || "auto";
   const maxPackets = parseInt(p.maxPackets, 10) || 50;
@@ -1057,6 +1068,7 @@ export function pcapParseRun(text, p = {}) {
     return "输入解析失败：" + (e && e.message ? e.message : String(e));
   }
 
+  if (p.mode && p.mode !== "auto" && p.mode !== "pcap") return singleHeaderReport(bytes, p.mode);
   if (bytes.length < 24) return "（输入过短）不足一个 pcap 全局头（24 字节）。";
 
   let container;
@@ -1094,6 +1106,16 @@ register({
   name: "pcap/pcapng 结构解析",
   desc: "解析 pcap/pcapng 流量文件：全局头+包记录+Ethernet/IPv4/IPv6/TCP/UDP/ICMP/HTTP/DNS 分帧，输出包摘要表+协议详情+载荷提取。纯前端零依赖",
   params: [
+    {
+      key: "mode", label: "解析模式", type: "select", default: "auto",
+      options: [
+        { value: "auto", label: "pcap/pcapng（原有模式）" },
+        { value: "ethernet", label: "Parse Ethernet frame（独立帧）" },
+        { value: "ipv4Header", label: "Parse IPv4 header" },
+        { value: "tcpHeader", label: "Parse TCP header" },
+        { value: "udpHeader", label: "Parse UDP header" },
+      ],
+    },
     {
       key: "inputEnc", label: "输入编码", type: "select", default: "hex",
       options: [

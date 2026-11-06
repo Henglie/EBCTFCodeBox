@@ -233,9 +233,28 @@ register({
 });
 
 register({
-  id: "sha256", cat: "hash", name: "SHA-256", family: "sha", familyLabel: "SHA-256", desc: "SHA-256 消息摘要（256 位，WebCrypto）",
+  id: "sha256", cat: "hash", name: "SHA-256", family: "sha", familyLabel: "SHA-256", desc: "SHA-256 消息摘要（256 位，WebCrypto）；mode=all 时输出全部可用摘要（同 CyberChef Generate all hashes）",
+  params: [
+    { key: "mode", label: "模式", type: "select", default: "single", options: [
+      { value: "single", label: "仅 SHA-256（原有模式）" },
+      { value: "all", label: "Generate all hashes（全部摘要）" },
+    ] },
+    { key: "includeNames", label: "包含名称", type: "bool", default: true },
+  ],
   acceptsBytes: true, textTransit: true,
-  run: async (t, p) => sha("SHA-256", p?.rawBytes ?? t),
+  run: async (t, p) => {
+    if (!(p && p.mode === "all")) return sha("SHA-256", p?.rawBytes ?? t);
+    const data = p?.rawBytes ?? t;
+    const text = typeof data === "string" ? data : new TextDecoder().decode(data);
+    const rows = [
+      ["MD5", md5(text)],
+      ["SHA-1", await sha("SHA-1", data)],
+      ["SHA-256", await sha("SHA-256", data)],
+      ["SHA-384", await sha("SHA-384", data)],
+      ["SHA-512", await sha("SHA-512", data)],
+    ];
+    return rows.map(([n, v]) => (p.includeNames === false ? v : n + ": " + v)).join("\n");
+  },
 });
 
 register({

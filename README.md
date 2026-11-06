@@ -9,7 +9,7 @@
   <span>恒烈 CTF 编码工具箱 · EBCTFCodeBox</span>
 </h1>
 <p align="center">
-  <span align="center">本地优先、零外发的编解码 / 加解密 / 隐写分析工具箱：928 个注册操作覆盖 23 类能力，绝大多数在浏览器本地运行，Windows 另可启用本地桥能力，macOS / Linux 提供双击启动器。</span>
+  <span align="center">本地优先、零外发的编解码 / 加解密 / 隐写分析工具箱：930 个注册操作覆盖 23 类能力，绝大多数在浏览器本地运行，Windows 另可启用本地桥能力，macOS / Linux 提供双击启动器。</span>
 </p>
 
 <p align="center">
@@ -53,7 +53,7 @@
 
 ## v0.1.14（开发中）
 
-> 本版主要变化：新增结构化出站编码、文本处理工具组、中英文 OCR 与编码图识图升级；扩展面板重构并支持离线包批量管理；敏感参数默认遮罩、重运算显式运行、口令与私钥可隐藏；BOM 工具条状态与弹窗切路由修复；主 op 增至 928，六门文案 2927 键。
+> 本版主要变化：新增结构化出站编码、文本处理工具组、中英文 OCR 与编码图识图升级；扩展面板重构并支持离线包批量管理；敏感参数默认遮罩、重运算显式运行、口令与私钥可隐藏；BOM 工具条状态与弹窗切路由修复；主 op 增至 930，六门文案 2937 键。
 
 ## v0.1.13-beta
 
@@ -132,7 +132,7 @@
 
 - **本地优先 · 零外发**：原生 ES module，无框架、无构建步骤。核心编解码在浏览器本地执行，不上传用户输入；「外链」只生成 URL。PWA 更新仅下载本站资源，本地桥只访问 `127.0.0.1`，外部 AI 仅在用户主动配置 endpoint 后启用。
 - **一把梭智能解码**：粘贴或拖入内容，自动识别可能的编码链并给出候选解码结果，支持 crib 目标特征过滤与深度爆破。
-- **928 个注册操作 · 23 分类**：覆盖 Base、文本传输、花式 CTF、深奥编程语言、中文本土、古典密码、现代加密（分组 / 流 / 非对称 / 其他）、哈希校验、进制字符集（含素数判定与筛选）、分析爆破、密码攻击、压缩归档、口令与归档破解、取证流量、文件格式结构、数据结构、图像与二维码、音频音视频、隐写及 4 个可选 Windows GUI 桥入口。完整清单由 registry 自动生成。
+- **930 个注册操作 · 23 分类**：覆盖 Base、文本传输、花式 CTF、深奥编程语言、中文本土、古典密码、现代加密（分组 / 流 / 非对称 / 其他）、哈希校验、进制字符集（含素数判定与筛选）、分析爆破、密码攻击、压缩归档、口令与归档破解、取证流量、文件格式结构、数据结构、图像与二维码、音频音视频、隐写及 4 个可选 Windows GUI 桥入口。完整清单由 registry 自动生成。
 - **解码强度四件套**（v0.1.2）：强度档位 + 自定义算法池 + **暴力爆破独立通道**（XOR/凯撒/字典/彩虹表/HMAC/PBE/Playfair/ZIP/CRC32/bkcrack，结果单独归组展示不污染主排序）+ **解析层数 1~3 选择**。
 - **宽松判定模式**（v0.1.2）：增强/极强/最强/自定义档只按字符种类数放行算法，变体编码题（「喵呜」表 0/1、emoji 表二进制）也能参与解码；默认/快速档保持严格定义域识别。
 - **密钥+密文一键尝试**：给定密文与密钥，自动枚举 AES/DES/3DES/RC4/XOR/Fernet × 多种模式 × 多种编码组合。
@@ -289,7 +289,7 @@ public/
 资料/              算法码表核对资料 + 研究成果（开发资料，不随发行包分发）
 ```
 
-## 编解码全清单（928 ops · 23 分类）
+## 编解码全清单（930 ops · 23 分类）
 
 > 本节由 `node tools/gen_readme_ops.mjs` 从主入口真实 import 闭包生成；opId 即注册表唯一标识。
 
@@ -665,7 +665,7 @@ public/
 
 | opId | 名称 | 说明 |
 |---|---|---|
-| rc4 | RC4 | RC4 流密码（自反，key 任意长）。只接受 raw key；若密文以 U2FsdGVk 开头（OpenSSL/CryptoJS 的 Salted__ 封装），请改用「OpenSSL 口令加解密」并选 RC4 |
+| rc4 | RC4 | RC4 流密码（自反，key 任意长；密钥/输入/输出支持 UTF16/UTF16LE/UTF16BE/Latin1/Hex/Base64）。若密文以 U2FsdGVk 开头（OpenSSL/CryptoJS 的 Salted__ 封装），请改用「OpenSSL 口令加解密」并选 RC4 |
 | xor | XOR | 重复密钥异或（自反，CTF 最常用；单字节爆破见分析类 xorBrute） |
 | rabbit | Rabbit 流密码 | RFC 4503 Rabbit 流密码。变体三档：CryptoJS Legacy（旧版在线工具默认，推荐）/ CryptoJS 标准 / RFC 4503 文档方向（0.1.9 及更早行为）。密钥填 32 位 hex 直用（IV 可选）；填口令或留空则按 CryptoJS OpenSSL 封装（Salted base64）加解密。decode 对 CryptoJS 密文（U2FsdGVkX1 开头）自动带空口令与常见口令尝试。 |
 | salsa20 | Salsa20 |  |
@@ -865,7 +865,7 @@ public/
 | md5 | MD5 | MD5 消息摘要（128 位，RFC 1321，纯 JS） |
 | md4 | MD4 | MD4 消息摘要（128 位，RFC 1320，纯 JS，NTLM 基础） |
 | sha1 | SHA-1 | SHA-1 消息摘要（160 位，WebCrypto） |
-| sha256 | SHA-256 | SHA-256 消息摘要（256 位，WebCrypto） |
+| sha256 | SHA-256 | SHA-256 消息摘要（256 位，WebCrypto）；mode=all 时输出全部可用摘要（同 CyberChef Generate all hashes） |
 | sha384 | SHA-384 | SHA-384 消息摘要（384 位，WebCrypto） |
 | sha512 | SHA-512 | SHA-512 消息摘要（512 位，WebCrypto） |
 | hmac | HMAC | HMAC 消息认证码（参数：密钥 + 哈希算法，WebCrypto） |
@@ -1150,7 +1150,7 @@ public/
 | gcmForbidden | GCM nonce 重用攻击 |  |
 | eccSubgroupAttack | ECDH 小子群/无效曲线攻击 |  |
 
-### 取证 / 流量（19 ops）
+### 取证 / 流量（20 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1160,6 +1160,7 @@ public/
 | pcapDnsTunnel | DNS 隧道检测 | 提取 DNS query 子域名数据标签，拼接后尝试 base32/base64/hex 解码，检出 DNS 隧道外泄的隐藏数据。复用 pcapParse DNS 分帧 |
 | pcapIcmpPayload | ICMP 载荷提取 | 提取 ICMP echo 载荷，按 id/seq 排序拼接，还原 ICMP 隐写/隧道外泄的数据。复用 pcapParse ICMP 分帧 |
 | pcapFieldExtract | pcap 字段提取/过滤 | 逐包提取 ip.id / TTL / TCP urgent pointer / DNS qry-answer 等字段，支持协议与方向过滤（src:/dst:/port=），输出表格/TSV/纯值三档（纯值 TTL 列可直接接 TTL 隐写解码） |
+| httpDechunk | HTTP 分块解码（Dechunk） | 同 CyberChef Dechunk HTTP response：输入 chunked 编码的 HTTP body（或整段 response），去掉 chunk 长度行与 CRLF，拼出原始响应体 |
 | oleExtract | OLE/CFB 容器静态提取 |  |
 | mcLevelDat | Minecraft level.dat 解析 |  |
 | mcMapRender | Minecraft 地图渲染 |  |
@@ -1226,7 +1227,7 @@ public/
 | unitConv | 单位换算 |  |
 | dataConvert | JSON / CSV / XML / YAML 转换 |  |
 
-### 图像 / 二维码（38 ops）
+### 图像 / 二维码（39 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1236,6 +1237,7 @@ public/
 | gifFrames | GIF 多帧提取 |  |
 | iccStrip | ICC 剥离 |  |
 | imageBasic | 图像基础操作 |  |
+| splitChannels | 拆分颜色通道（R/G/B/A） |  |
 | pngText | PNG 文本块读写 |  |
 | pngHeight | PNG 高度修改 |  |
 | exifExtract | EXIF 提取 |  |

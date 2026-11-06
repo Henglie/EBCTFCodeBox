@@ -3049,6 +3049,10 @@ export default {
   "op.fileTree.desc": "파일 경로 목록을 트리로 표시",
   "op.ocr.name": "OCR 문자 인식(영어 / 중국어 간체)",
   "op.opensslDec.name": "OpenSSL 암호문구 암호화/복호화(RC4 포함)",
+  "op.httpDechunk.name": "HTTP 청크 해제(Dechunk)",
+  "op.httpDechunk.desc": "CyberChef Dechunk HTTP response와 동일: chunk 길이 줄과 CRLF를 제거해 원본 본문을 복원합니다. 전송 계층만 처리하며 압축 해제는 하지 않습니다",
+  "op.splitChannels.name": "색상 채널 분할(R/G/B/A)",
+  "op.splitChannels.desc": "CyberChef Split Colour Channels와 동일: 이미지를 R/G/B/A 4장의 그레이스케일 PNG로 분할해 채널별 LSB/비트 플레인 분석을 쉽게 합니다",
   "op.opensslDec.desc": "OpenSSL enc의 Salted__ 형식을 한 단계로 복호화/암호화: base64/hex/원시 바이트 입력, EVP_BytesToKey(md5/sha256) + AES-128/192/256-CBC + PKCS#7, RC4(CryptoJS에서 흔한 스트림 암호, 패딩 없음) 지원. auto는 8가지를 모두 시도해 전부 보고합니다. 16의 배수가 아닌 길이, 잘못된 패딩, Salted__ 헤더 없음, 틀린 암호문구는 모두 명시적으로 오류를 냅니다.",
   "op.ocr.desc": "이미지→텍스트, png/jpg/bmp/pbm 지원. 언어: 영어(eng) / 중국어 간체(chi_sim) / 혼합(eng+chi_sim). 엔진은 tesseract.js이며 worker/core/언어 모델을 public/vendor/ocr/에 포함해 브라우저에서 로컬 실행, 이미지 전송 없음. 최초 사용 시 약 7.9MB 엔진 + 언어 모델(eng≈2.95MB / chi_sim≈1.72MB) 로드 후 IndexedDB 캐시. 자산 누락 시 명확한 오류. 기본 첫 줄은 \"Confidence: N%\".",
 };

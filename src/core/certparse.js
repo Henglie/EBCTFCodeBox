@@ -538,6 +538,17 @@ function pssParamLines(paramsNode) {
 }
 
 function x509ParseRun(text, p = {}) {
+  if (p && p.bundleMode === true) {
+    const blocks = String(text || "").match(/-----BEGIN CERTIFICATE-----[A-Za-z0-9+/=\r\n]+-----END CERTIFICATE-----/g) || [];
+    if (!blocks.length) throw new Error("未识别到 PEM 证书块");
+    const texts = [], files = [];
+    for (let i = 0; i < blocks.length; i++) {
+      const r = x509ParseRun(blocks[i], { ...p, bundleMode: false });
+      texts.push(`=== Certificate ${i + 1}/${blocks.length} ===\n` + (r && r.text ? r.text : String(r)));
+      if (r && r.files) files.push(...r.files.map((f) => ({ ...f, name: `${i + 1}_${f.name}` })));
+    }
+    return { text: texts.join("\n\n"), files };
+  }
   const { der, srcKind } = loadCertDer(text);
   let root;
   try {
@@ -942,6 +953,7 @@ register({
       { value: "publicKeyPem", label: "Public Key from Certificate（PEM）" },
       { value: "publicKeyDerHex", label: "Public Key from Certificate（DER hex）" },
     ] },
+    { key: "bundleMode", label: "Parse X.509 certificate bundles（多证书汇总）", type: "bool", default: false },
     { key: "at", label: "过期判定基准时间", type: "text", default: "", placeholder: "留空=当前时间；或 ISO 时间如 2026-01-01T00:00:00Z" },
   ],
   run: x509ParseRun,

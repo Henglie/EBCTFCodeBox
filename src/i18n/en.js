@@ -2935,6 +2935,10 @@ export default {
   "op.fileTree.desc": "Render a list of file paths as a tree",
   "op.ocr.name": "OCR (English / Simplified Chinese)",
   "op.opensslDec.name": "OpenSSL Passphrase Encrypt/Decrypt (incl. RC4)",
+  "op.httpDechunk.name": "HTTP Dechunk",
+  "op.httpDechunk.desc": "Same as CyberChef Dechunk HTTP response: strips chunk size lines and CRLFs to recover the raw body; transport layer only, not decompression",
+  "op.splitChannels.name": "Split Colour Channels (R/G/B/A)",
+  "op.splitChannels.desc": "Same as CyberChef Split Colour Channels: splits an image into four grayscale PNGs (R/G/B/A) for per-channel LSB/bit-plane analysis",
   "op.opensslDec.desc": "One-step decrypt/encrypt for OpenSSL enc's Salted__ format: base64/hex/raw-byte input, EVP_BytesToKey (md5/sha256) + AES-128/192/256-CBC + PKCS#7, plus RC4 (the common CryptoJS stream cipher, no padding). auto tries all 8 combinations and reports every attempt. For non-block-aligned ciphertext AES raises the missing byte count and auto switches to stream ciphers; bad padding, a missing Salted__ header and a wrong passphrase all raise explicit errors instead of emitting garbage.",
   "op.ocr.desc": "Image to text, supporting png/jpg/bmp/pbm. Language: English (eng) / Simplified Chinese (chi_sim) / mixed (eng+chi_sim). Engine is tesseract.js; worker/core/language data ship in public/vendor/ocr/ and run locally in the browser with no uploads. First use loads ~7.9MB engine + language model (eng≈2.95MB / chi_sim≈1.72MB), then IndexedDB cache. Missing assets raise a clear error. Default first line is \"Confidence: N%\".",
 };

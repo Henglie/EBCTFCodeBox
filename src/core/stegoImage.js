@@ -879,6 +879,39 @@ register({
   run: imageBasicOp,
   acceptsBytes: true,
 });
+// CyberChef Split Colour Channels：R/G/B/A 各出一张 PNG（其余通道置 0，A 保留原 alpha）。
+export function splitChannelsTransform(imageData) {
+  return ["R", "G", "B", "A"].map((ch) => {
+    const data = new Uint8ClampedArray(imageData.data);
+    for (let i = 0; i < data.length; i += 4) {
+      if (ch === "R") { data[i + 1] = 0; data[i + 2] = 0; data[i + 3] = 255; }
+      else if (ch === "G") { data[i] = 0; data[i + 2] = 0; data[i + 3] = 255; }
+      else if (ch === "B") { data[i] = 0; data[i + 1] = 0; data[i + 3] = 255; }
+      else { const a = data[i + 3]; data[i] = a; data[i + 1] = a; data[i + 2] = a; data[i + 3] = 255; }
+    }
+    return { ch, width: imageData.width, height: imageData.height, data };
+  });
+}
+
+async function splitChannelsOp(text, p = {}) {
+  const src = await _inputImageData(text, p);
+  const files = [];
+  for (const out of splitChannelsTransform(src)) {
+    const url = imageDataToDataURL({ width: out.width, height: out.height, data: out.data });
+    const b64 = url.slice(url.indexOf(",") + 1);
+    files.push({ name: `channel_${out.ch}.png`, mime: "image/png", bytes: _b64ToBytes(b64) });
+  }
+  return { text: `已拆分 R/G/B/A 四个通道（${src.width}×${src.height}）`, files };
+}
+
+register({
+  id: "splitChannels", cat: "image", name: "拆分颜色通道（R/G/B/A）",
+  desc: "同 CyberChef Split Colour Channels：输入图片 → 输出 4 张 PNG（R/G/B/A 各一张，其余通道置 0）",
+  params: [],
+  run: splitChannelsOp,
+  acceptsBytes: true,
+});
+
 // ============ 图像隐写扩展组 ============
 // 算法来源（参考常见图像隐写工具菜单）：
 // lsbMulti —— LSB 多通道多位深（扩 lsbImage，1-3 位/通道）

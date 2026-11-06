@@ -1192,3 +1192,25 @@ register({
   run: pcapFieldExtractRun,
   acceptsBytes: true,
 });
+
+register({
+  id: "httpDechunk", family: "pcap", familyLabel: "dechunk",
+  cat: "forensic", name: "HTTP 分块解码（Dechunk）",
+  desc: "同 CyberChef Dechunk HTTP response：输入 chunked 编码的 HTTP body（或整段 response），去掉 chunk 长度行与 CRLF，拼出原始响应体",
+  params: [
+    { key: "inputEnc", label: "输入编码", type: "select", default: "auto", options: [
+      { value: "hex", label: "Hex 十六进制" }, { value: "base64", label: "Base64" }, { value: "auto", label: "自动识别" }, { value: "raw", label: "Raw 文本" },
+    ] },
+  ],
+  run: (text, p = {}) => {
+    let bytes;
+    if (p && p.rawBytes && p.rawBytes.length) bytes = p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes);
+    else if ((p && p.inputEnc) === "raw") {
+      bytes = new Uint8Array(String(text).length);
+      for (let i = 0; i < bytes.length; i++) bytes[i] = String(text).charCodeAt(i) & 0xff;
+    } else bytes = inputToBytes(text, (p && p.inputEnc) || "auto");
+    const r = readChunked(bytes, 0);
+    return latin1(r.data, 0, r.data.length);
+  },
+  acceptsBytes: true,
+});

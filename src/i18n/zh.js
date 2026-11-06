@@ -2942,6 +2942,10 @@ export default {
   "op.fileTree.desc": "把文件路径列表渲染为树形结构",
   "op.ocr.name": "OCR 文字识别（英文 / 简体中文）",
   "op.opensslDec.name": "OpenSSL 口令加解密（含 RC4）",
+  "op.httpDechunk.name": "HTTP 分块解码（Dechunk）",
+  "op.httpDechunk.desc": "同 CyberChef Dechunk HTTP response：去掉 chunk 长度行与 CRLF，拼出原始响应体；只拆传输层，不代替解压",
+  "op.splitChannels.name": "拆分颜色通道（R/G/B/A）",
+  "op.splitChannels.desc": "同 CyberChef Split Colour Channels：把图片拆成 R/G/B/A 四张灰度 PNG，便于逐通道看 LSB/位平面",
   "op.opensslDec.desc": "OpenSSL enc 的 Salted__ 一步式口令加解密：base64/hex/真字节输入，EVP_BytesToKey（md5/sha256）+ AES-128/192/256-CBC + PKCS#7，并支持 RC4（CryptoJS 常见流密码，无填充）。auto 遍历 8 组并给出全部尝试结果；密文非 16 倍数时分组密码显式报缺字节、自动改试流密码，坏填充/无 Salted__ 头/口令错误均显式报错，不输出乱码。",
   "op.ocr.desc": "图片转文字，支持 png/jpg/bmp/pbm。识别语言可选 英文(eng) / 简体中文(chi_sim) / 中英混合(eng+chi_sim)。引擎为 tesseract.js，worker/core/语言模型全部随包于 public/vendor/ocr/，浏览器本地运行，零外发、不上传图片；首次使用需加载约 7.9MB 引擎 + 对应语言模型（eng≈2.95MB / chi_sim≈1.72MB），之后走 IndexedDB 缓存。资源缺失时明确报错。默认输出首行为「Confidence: N%」。",
 };

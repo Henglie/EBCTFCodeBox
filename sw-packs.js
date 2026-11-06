@@ -1,4 +1,4 @@
-self.__EBCTF_PACK_REV = "wasm:c37709b7,fonts:e9658b79,locales:e806afaf,edu-en:34f757f6,ocr:303d1515";
+self.__EBCTF_PACK_REV = "wasm:c37709b7,fonts:e9658b79,locales:39bd6d5f,edu-en:3a5e6787,ocr:303d1515";
 self.__EBCTF_PACKS = [
   {
     "id": "wasm",
@@ -38,8 +38,8 @@ self.__EBCTF_PACKS = [
   },
   {
     "id": "locales",
-    "rev": "e806afaf",
-    "bytes": 3131164,
+    "rev": "39bd6d5f",
+    "bytes": 3133424,
     "entries": [
       "/src/i18n/locales/ar.js",
       "/src/i18n/locales/bo.js",
@@ -63,8 +63,8 @@ self.__EBCTF_PACKS = [
   },
   {
     "id": "edu-en",
-    "rev": "34f757f6",
-    "bytes": 1346941,
+    "rev": "3a5e6787",
+    "bytes": 1350162,
     "entries": [
       "/src/core/edu-en/edu-ana-crypto-new.en.js",
       "/src/core/edu-en/edu-ana-freq.en.js",
@@ -163,6 +163,7 @@ self.__EBCTF_PACKS = [
       "/src/core/edu-en/edu-t722.en.js",
       "/src/core/edu-en/edu-t723.en.js",
       "/src/core/edu-en/edu-t760.en.js",
+      "/src/core/edu-en/edu-t796.en.js",
       "/src/core/edu-en/edu-teach.en.js",
       "/src/core/edu-en/edu-text-bubblebabble.en.js",
       "/src/core/edu-en/edu-text-jsescape.en.js",
