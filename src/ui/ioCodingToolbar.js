@@ -657,7 +657,10 @@ export function attachIoCodingToolbar(area, opts = {}) {
       };
     }
     const bomHit = validateBom(bytes, charset);
-    const decoded = decodeText(bytes, { charset, keepBom });
+    // 字节视图（hex / base64 / escaped / bits / base32）明确表达「这是字节」：
+    // auto 严格解码失败时由 core 显式回退 ISO-8859-1 承载原始字节，并写入 warning；
+    // 显式 charset 与 BOM 命中路径不受影响（core 只在 auto 猜测路径回退）。
+    const decoded = decodeText(bytes, { charset, keepBom, latin1Fallback: true });
     if (decoded.warnings && decoded.warnings.length) warnings.push(...decoded.warnings);
     if (bomHit && !keepBom) warnings.push(t("ui.io.bomStripped", bomHit.charset, bomHit.bomLen));
     return {

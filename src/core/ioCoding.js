@@ -812,6 +812,9 @@ function mbcsDecodeLossy(bytes, label) {
  *   charset：'auto'（默认）或任意 CHARSETS 标签 / 别名
  *   strict ：默认 true；false 时按 U+FFFD 有损解码，并在 warnings 里声明
  *   keepBom：默认 false；true 时保留起始 U+FEFF（与 bytesIo 的 ignoreBOM:true 同语义）
+ *   latin1Fallback：默认 false；仅在 charset:'auto' 且字符集来自字节结构猜测时生效。
+ *     严格解码失败后显式回退 ISO-8859-1 逐字节映射（每字节对应同码点，不产生 U+FFFD），
+ *     并在 warnings 里记录原判字符集与失败原因；BOM 命中与显式 charset 一律不回退。
  * @returns {{text:string, charset:string, bom:{present:boolean,len:number}, warnings:string[]}}
  */
 export function decodeText(bytes, opts) {
@@ -823,6 +826,9 @@ export function decodeText(bytes, opts) {
   const warnings = [];
 
   let charset;
+  // 是否来自 auto 的字节结构猜测：BOM 命中与显式 charset 都不算，
+  // 只有「没有 BOM、靠 sniffCharset 排序」这一条路径才允许 latin1Fallback。
+  let sniffed = false;
   const asked = o.charset == null ? "auto" : String(o.charset);
   if (asked.trim().toLowerCase() === "auto") {
     const hit = detectBom(b);
@@ -837,6 +843,7 @@ export function decodeText(bytes, opts) {
     } else {
       const sn = sniffCharset(b, { sample: o.sample });
       charset = sn.best;
+      sniffed = true;
       const top = sn.candidates.find((c) => c.charset === charset) || sn.candidates[0];
       // 纯 ASCII 段：各字符集解码逐字节相同，0.500 只是「无判别信息」的中性值。
       // 这条对用户没有决策价值，不再刷到 BOM 旁的状态栏（判据仍在 core 候选里可查）。
@@ -866,30 +873,47 @@ export function decodeText(bytes, opts) {
     if (!keepBom) start = bomBytes.length;
   }
 
-  let text;
-  if (info.kind === "utf8") {
-    if (strict) text = utf8DecodeStrict(b, start);
-    else {
-      text = decodeUtf8Lossy(start === 0 ? b : b.subarray(start));
+  const decodeBody = (cs, csInfo, from, isStrict) => {
+    if (csInfo.kind === "utf8") {
+      if (isStrict) return utf8DecodeStrict(b, from);
+      const lossy = decodeUtf8Lossy(from === 0 ? b : b.subarray(from));
       warnings.push("strict:false：非法 UTF-8 序列已按 U+FFFD 替换（调用方显式要求，默认不会这样做）。");
+      return lossy;
     }
-  } else if (info.kind === "utf16") {
-    if (strict) text = utf16Decode(b, charset === "utf-16le", start);
-    else {
-      const td = new TextDecoder(charset, { fatal: false, ignoreBOM: true });
-      text = td.decode(start === 0 ? b : b.subarray(start));
+    if (csInfo.kind === "utf16") {
+      if (isStrict) return utf16Decode(b, cs === "utf-16le", from);
+      const td = new TextDecoder(cs, { fatal: false, ignoreBOM: true });
+      const lossy = td.decode(from === 0 ? b : b.subarray(from));
       warnings.push("strict:false：非法 UTF-16 序列已按 U+FFFD 替换（调用方显式要求，默认不会这样做）。");
+      return lossy;
     }
-  } else if (info.kind === "sbcs") {
-    let out = "";
-    for (let i = start; i < b.length; i++) out += String.fromCodePoint(sbcsCodePoint(charset, b[i]));
-    text = out;
-  } else {
-    if (strict) text = mbcsDecodeStrict(start === 0 ? b : b.subarray(start), charset);
-    else {
-      text = mbcsDecodeLossy(start === 0 ? b : b.subarray(start), charset);
-      warnings.push("strict:false：" + charset + " 的非法序列已按 U+FFFD 替换（调用方显式要求，默认不会这样做）。");
+    if (csInfo.kind === "sbcs") {
+      let out = "";
+      for (let i = from; i < b.length; i++) out += String.fromCodePoint(sbcsCodePoint(cs, b[i]));
+      return out;
     }
+    if (isStrict) return mbcsDecodeStrict(from === 0 ? b : b.subarray(from), cs);
+    const lossy = mbcsDecodeLossy(from === 0 ? b : b.subarray(from), cs);
+    warnings.push("strict:false：" + cs + " 的非法序列已按 U+FFFD 替换（调用方显式要求，默认不会这样做）。");
+    return lossy;
+  };
+
+  let text;
+  try {
+    text = decodeBody(charset, info, start, strict);
+  } catch (e) {
+    if (!(o.latin1Fallback === true && strict && sniffed)) throw e;
+    // 显式回退：只对「auto 猜测」路径生效，且必须留下 warning。
+    // 用 ISO-8859-1 恒等表逐字节映射，不产生 U+FFFD、不丢弃字节、不静默二次编码。
+    const reason = String(e && e.message ? e.message : e).split("；")[0];
+    warnings.push(
+      "字符集自动识别为 " + charset + "，但严格解码失败（" + reason + "）："
+      + "已显式回退 ISO-8859-1（0x00–0xFF 与 U+0000–U+00FF 恒等，逐字节映射，字节未改动、未替换）；"
+      + "这是显式回退，不是静默二次编码。若输入其实是文本，请手动指定其字符集。"
+    );
+    charset = "iso-8859-1";
+    bom = { present: false, len: 0 };
+    text = decodeBody(charset, charsetInfo(charset), 0, true);
   }
 
   return { text, charset, bom, warnings };
