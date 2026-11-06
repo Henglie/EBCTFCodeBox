@@ -829,6 +829,26 @@ function msgBytes(t, mode) {
   return new TextEncoder().encode(s0);
 }
 
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 const XMSS_KAT = {
   skSeed: "061550234D158C5EC95595FE04EF7A25767F2E24CC2BC479D09D86DC9ABCFDE7",
   skPrf: "056A8C266F9EF97ED08541DBD2E1FFA19810F5392D076276EF41277C3AB6E94A",
@@ -869,6 +889,7 @@ register({
 
 register({
   id: "xmssSign", family: "xmss", familyLabel: "sign",
+  acceptsBytes: true,
   cat: "asym",
   name: "XMSS 签名",
   desc: "RFC 8391 XMSS-SHA2_10_256 签名：R=PRF(SK_PRF,idx)，M'=H_msg(R‖root‖idx‖M)，WOTS+ 签 M' + 认证路径。签名 2500B=idx(4)‖R‖WOTS(2144)‖auth(320)。⚠ 真实使用必须维护 state，index 重用=私钥泄露",
@@ -881,7 +902,7 @@ register({
     { key: "msgMode", label: "消息形式", type: "select", default: "text", options: MSG_MODE_OPTIONS },
   ],
   run: (t, p = {}) => {
-    const msg = msgBytes(t, p.msgMode);
+    const msg = rawBytesOrNull(p, t) || msgBytes(t, p.msgMode);
     const r = xmssSignFull(msg, p.skSeed, p.skPrf, p.pubSeed, p.root, Number(p.idx));
     return {
       text: [
@@ -902,6 +923,7 @@ register({
 
 register({
   id: "xmssVerify", family: "xmss", familyLabel: "verify",
+  acceptsBytes: true,
   cat: "asym",
   name: "XMSS 验签",
   desc: "RFC 8391 XMSS-SHA2_10_256 验签：WOTS_pkFromSig → L-tree → 认证路径重算根节点，比对公钥 root。pk 64B（root‖PUB_SEED）或 68B（含 OID）。签名长度不符/index 超界直接判非法",
@@ -911,7 +933,7 @@ register({
     { key: "msgMode", label: "消息形式", type: "select", default: "text", options: MSG_MODE_OPTIONS },
   ],
   run: (t, p = {}) => {
-    const msg = msgBytes(t, p.msgMode);
+    const msg = rawBytesOrNull(p, t) || msgBytes(t, p.msgMode);
     const r = xmssVerifyFull(msg, p.pk, p.sig);
     const lines = [
       "参数集: XMSS-SHA2_10_256 (n=32, w=16, len=67, h=10)",
@@ -932,6 +954,7 @@ const LMS_KAT2 = {
 
 register({
   id: "lmsSign", family: "lms", familyLabel: "sign",
+  acceptsBytes: true,
   cat: "asym",
   name: "LMS/HSS 签名",
   desc: "RFC 8554 LMS 单级或 HSS 两级签名（SHA-256，h=5/10，w=4/8），私钥按 Appendix A 从 SEED 伪随机派生（x=H(I‖q‖i‖0xff‖SEED)）。SEED/I/C 固定即可复现官方向量（TC2 口径）。⚠ 状态签名：q 不可重用",
@@ -967,7 +990,7 @@ register({
     { key: "msgMode", label: "消息形式", type: "select", default: "text", options: MSG_MODE_OPTIONS },
   ],
   run: (t, p = {}) => {
-    const msg = msgBytes(t, p.msgMode);
+    const msg = rawBytesOrNull(p, t) || msgBytes(t, p.msgMode);
     const r = lmsSignFull(msg, p);
     const nm = (s) => (s === "h10" ? "H10" : "H5");
     const nw = (s) => (s === "w8" ? "W8" : "W4");
@@ -1012,6 +1035,7 @@ register({
 
 register({
   id: "lmsVerify", family: "lms", familyLabel: "verify",
+  acceptsBytes: true,
   cat: "asym",
   name: "LMS/HSS 验签",
   desc: "RFC 8554 验签：HSS 多级（逐层 LMS 验签，签名自描述解析）或 LMS 单级。LM-OTS 公钥候选 Kc → D_LEAF/D_INTR 逐层重算根 → 比对 K。支持官方向量 TC1/TC2 的公钥+签名直接粘贴",
@@ -1025,7 +1049,7 @@ register({
     { key: "msgMode", label: "消息形式", type: "select", default: "text", options: MSG_MODE_OPTIONS },
   ],
   run: (t, p = {}) => {
-    const msg = msgBytes(t, p.msgMode);
+    const msg = rawBytesOrNull(p, t) || msgBytes(t, p.msgMode);
     const r = lmsVerifyFull(msg, p.pk, p.sig, p.format);
     return {
       text: [

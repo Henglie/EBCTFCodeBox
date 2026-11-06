@@ -230,6 +230,26 @@ function rc2ModeDecrypt(data, K, mode, iv, pad = "pkcs7") {
   return unpadBytes(out, 8, pad);
 }
 
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 const RC2_ENC_OPTS = [
   { value: "utf8", label: "UTF-8" },
   { value: "hex", label: "Hex" },
@@ -243,6 +263,7 @@ const RC2_OUT_OPTS = [
 
 register({
   id: "rc2", family: "rc", familyLabel: "rc2", cat: "block", name: "RC2",
+  acceptsBytes: true,
   desc: "RC2 对称加解密（RFC 2268，ECB/CBC，纯 JS，key 1..128 字节）。支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；CBC 未填 IV 时沿用全零 IV",
   params: [
     { key: "key", label: "密钥", type: "text", default: "", placeholder: "1..128 字节密钥" },
@@ -264,7 +285,8 @@ register({
     const mode = (p.mode || "CBC").toUpperCase();
     const iv = mode === "CBC" ? (p.iv ? decodeInput(p.iv, p.ivEnc || "hex") : new Uint8Array(8)) : new Uint8Array(8);
     if (mode === "CBC" && iv.length !== 8) throw new Error("RC2-CBC 的 IV 需 8 字节");
-    return encodeOutput(rc2ModeEncrypt(te(text), K, mode, iv, p.padding || "pkcs7"), p.outEnc || "base64");
+    const data = rawBytesOrNull(p, text) || te(text);
+    return encodeOutput(rc2ModeEncrypt(data, K, mode, iv, p.padding || "pkcs7"), p.outEnc || "base64");
   },
   decode: (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
@@ -275,7 +297,8 @@ register({
     const mode = (p.mode || "CBC").toUpperCase();
     const iv = mode === "CBC" ? (p.iv ? decodeInput(p.iv, p.ivEnc || "hex") : new Uint8Array(8)) : new Uint8Array(8);
     if (mode === "CBC" && iv.length !== 8) throw new Error("RC2-CBC 的 IV 需 8 字节");
-    return encodeOutput(rc2ModeDecrypt(decodeInput(text.trim(), p.outEnc || "base64"), K, mode, iv, p.padding || "pkcs7"), "utf8");
+    const data = rawBytesOrNull(p, text.trim()) || decodeInput(text.trim(), p.outEnc || "base64");
+    return encodeOutput(rc2ModeDecrypt(data, K, mode, iv, p.padding || "pkcs7"), "utf8");
   },
 });
 

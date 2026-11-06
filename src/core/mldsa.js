@@ -88,6 +88,26 @@ function messageBytes(t, mode) {
   return new TextEncoder().encode(s);
 }
 
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 /** 上下文 ctx → 字节（UTF-8，≤255B，FIPS 204 §5.4）。 */
 function ctxBytes(v) {
   const b = new TextEncoder().encode(String(v == null ? "" : v));
@@ -843,6 +863,7 @@ register({
 
 register({
   id: "mldsaSign",
+  acceptsBytes: true,
   family: "mldsa", familyLabel: "sign",
   cat: "asym",
   name: "ML-DSA 签名",
@@ -859,7 +880,7 @@ register({
     { key: "rnd", label: "rand (hex 32B，留空随机；rnd=0 模式忽略)", type: "text", default: "", placeholder: "教学复现可固定" },
   ],
   run: (t, p = {}) => {
-    const msg = messageBytes(t, p.msgMode);
+    const msg = rawBytesOrNull(p, t) || messageBytes(t, p.msgMode);
     const ctx = ctxBytes(p.ctx);
     const rnd = p.rndMode === "det" ? new Uint8Array(32) : (String(p.rnd == null ? "" : p.rnd).trim() === "" ? null : p.rnd);
     const r = mldsaSignBytes(p.set, p.sk, msg, ctx, rnd);
@@ -884,6 +905,7 @@ register({
 
 register({
   id: "mldsaVerify",
+  acceptsBytes: true,
   family: "mldsa", familyLabel: "verify",
   cat: "asym",
   name: "ML-DSA 验签",
@@ -896,7 +918,7 @@ register({
     { key: "ctx", label: "上下文 ctx (≤255B，须与签名一致)", type: "text", default: "", placeholder: "FIPS 204 §5.4 域分隔上下文" },
   ],
   run: (t, p = {}) => {
-    const msg = messageBytes(t, p.msgMode);
+    const msg = rawBytesOrNull(p, t) || messageBytes(t, p.msgMode);
     const ctx = ctxBytes(p.ctx);
     const r = mldsaVerifyBytes(p.set, p.pk, msg, ctx, p.sig);
     const lines = [

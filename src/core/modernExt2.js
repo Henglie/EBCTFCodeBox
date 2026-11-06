@@ -1721,6 +1721,26 @@ export function twofishDecrypt(data, key, opts = {}) {
 // ============================================================
 // register 层
 // ============================================================
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 const ENC_OPTS = [
   { value: "utf8", label: "UTF-8" },
   { value: "hex", label: "Hex" },
@@ -1747,7 +1767,7 @@ function makeBlockEncode(encFn) {
   return (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
     const mode = (p.mode || "CBC").toUpperCase();
-    const data = te(text);
+    const data = rawBytesOrNull(p, text) || te(text);
     const iv = p.iv ? decodeInput(p.iv, p.ivEnc || "hex") : undefined;
     const padding = p.padding || "pkcs7";
     const rounds = p.rounds != null && p.rounds !== "" ? Number(p.rounds) : undefined;
@@ -1759,7 +1779,7 @@ function makeBlockDecode(decFn) {
   return (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
     const mode = (p.mode || "CBC").toUpperCase();
-    const data = decodeInput(text.trim(), p.outEnc || "base64");
+    const data = rawBytesOrNull(p, text.trim()) || decodeInput(text.trim(), p.outEnc || "base64");
     const iv = p.iv ? decodeInput(p.iv, p.ivEnc || "hex") : undefined;
     const padding = p.padding || "pkcs7";
     const rounds = p.rounds != null && p.rounds !== "" ? Number(p.rounds) : undefined;
@@ -1772,25 +1792,29 @@ function makeBlockDecode(decFn) {
 export { rc5KeySchedule, rc5EncryptBlock, rc5DecryptBlock, ideaKeySchedule, ideaEncryptBlock, ideaDecryptKeySchedule, blowfishKeySchedule, blowfishEncryptBlock, blowfishDecryptBlock, rc6KeySchedule, rc6EncryptBlock, rc6DecryptBlock, rc6NormWordSize, rc6BlockBytes, rc6BigKeySchedule, rc6BigEncryptBlock, rc6BigDecryptBlock, cast5KeySchedule, cast5EncryptBlock, cast5DecryptBlock, twofishKeySchedule, twofishEncryptBlock, twofishDecryptBlock };
 
 register({
-  id: "rc5", family: "rc", familyLabel: "rc5", cat: "block", name: "RC5", desc: "RC5-32/12/16 分组密码（RFC 2040，64位块，12轮，可变密钥；支持 ECB/CBC/CFB/OFB/CTR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
+  id: "rc5", family: "rc", familyLabel: "rc5", cat: "block", name: "RC5",
+  acceptsBytes: true, desc: "RC5-32/12/16 分组密码（RFC 2040，64位块，12轮，可变密钥；支持 ECB/CBC/CFB/OFB/CTR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "1-255 字节密钥（默认 16 字节）"),
   encode: makeBlockEncode(rc5Encrypt),
   decode: makeBlockDecode(rc5Decrypt),
 });
 register({
-  id: "idea", cat: "block", name: "IDEA", desc: "国际数据加密算法（Lai 1991，64位块，128位密钥，8.5轮，mod 2^16+1 乘法 + mod 2^16 加法 + XOR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23",
+  id: "idea", cat: "block", name: "IDEA",
+  acceptsBytes: true, desc: "国际数据加密算法（Lai 1991，64位块，128位密钥，8.5轮，mod 2^16+1 乘法 + mod 2^16 加法 + XOR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23",
   params: blockParams(["ECB", "CBC"], "16 字节密钥（128 位）"),
   encode: makeBlockEncode(ideaEncrypt),
   decode: makeBlockDecode(ideaDecrypt),
 });
 register({
-  id: "blowfish", cat: "block", name: "Blowfish", desc: "Blowfish 分组密码（Schneier 1993，64位块，可变密钥4-56字节，16轮Feistel；支持 ECB/CBC/CFB/OFB/CTR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
+  id: "blowfish", cat: "block", name: "Blowfish",
+  acceptsBytes: true, desc: "Blowfish 分组密码（Schneier 1993，64位块，可变密钥4-56字节，16轮Feistel；支持 ECB/CBC/CFB/OFB/CTR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "4-56 字节密钥"),
   encode: makeBlockEncode(blowfishEncrypt),
   decode: makeBlockDecode(blowfishDecrypt),
 });
 register({
-  id: "rc6", family: "rc", familyLabel: "rc6", cat: "block", name: "RC6", desc: "RC6 分组密码（AES 候选，IETF draft-krovetz-rc6-rc5-vectors-00）：block=4w 位，wordSize 8..256（8 的倍数，默认 32 → 128 位块），rounds 1-255 默认 20，可变密钥。w=32 走原快路径，其它字长 BigInt。支持 ECB/CBC/CFB/OFB/CTR；ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
+  id: "rc6", family: "rc", familyLabel: "rc6", cat: "block", name: "RC6",
+  acceptsBytes: true, desc: "RC6 分组密码（AES 候选，IETF draft-krovetz-rc6-rc5-vectors-00）：block=4w 位，wordSize 8..256（8 的倍数，默认 32 → 128 位块），rounds 1-255 默认 20，可变密钥。w=32 走原快路径，其它字长 BigInt。支持 ECB/CBC/CFB/OFB/CTR；ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
   params: [
     ...blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "默认 16 字节；w=32 时 1-255 字节，w≠32 时 0-255 字节", 16)
       .map((x) => x.key === "iv"
@@ -1803,13 +1827,15 @@ register({
   decode: makeBlockDecode(rc6Decrypt),
 });
 register({
-  id: "cast5", family: "cast", familyLabel: "cast128", cat: "block", name: "CAST-128", desc: "CAST-128/CAST5 分组密码（RFC 2144，64位块，可变密钥5-16字节，12/16轮；支持 ECB/CBC/CFB/OFB/CTR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
+  id: "cast5", family: "cast", familyLabel: "cast128", cat: "block", name: "CAST-128",
+  acceptsBytes: true, desc: "CAST-128/CAST5 分组密码（RFC 2144，64位块，可变密钥5-16字节，12/16轮；支持 ECB/CBC/CFB/OFB/CTR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "5-16 字节密钥"),
   encode: makeBlockEncode(cast5Encrypt),
   decode: makeBlockDecode(cast5Decrypt),
 });
 register({
-  id: "twofish", cat: "block", name: "Twofish", desc: "Twofish 分组密码（Schneier 1998 AES 提案，128位块，16轮，密钥128/192/256位；支持 ECB/CBC/CFB/OFB/CTR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
+  id: "twofish", cat: "block", name: "Twofish",
+  acceptsBytes: true, desc: "Twofish 分组密码（Schneier 1998 AES 提案，128位块，16轮，密钥128/192/256位；支持 ECB/CBC/CFB/OFB/CTR）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR"], "16/24/32 字节密钥", 16),
   encode: makeBlockEncode(twofishEncrypt),
   decode: makeBlockDecode(twofishDecrypt),

@@ -830,6 +830,26 @@ function msgBytes(t, mode) {
   return new TextEncoder().encode(s0);
 }
 
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 register({
   id: "slhdsaKeyGen",
   family: "slhdsa", familyLabel: "keygen",
@@ -862,6 +882,7 @@ register({
 
 register({
   id: "slhdsaSign",
+  acceptsBytes: true,
   family: "slhdsa", familyLabel: "sign",
   cat: "asym",
   name: "SLH-DSA 签名",
@@ -879,7 +900,7 @@ register({
   ],
   run: (t, p = {}) => {
     const s = getSet(p.set);
-    const msg = msgBytes(t, p.msgMode);
+    const msg = rawBytesOrNull(p, t) || msgBytes(t, p.msgMode);
     // det uses PK.seed; hedged draws n random bytes unless rnd is explicitly supplied.
     let rnd;
     if (p.rndMode === "det") rnd = null;
@@ -902,6 +923,7 @@ register({
 
 register({
   id: "slhdsaVerify",
+  acceptsBytes: true,
   family: "slhdsa", familyLabel: "verify",
   cat: "asym",
   name: "SLH-DSA 验签",
@@ -915,7 +937,7 @@ register({
   ],
   run: (t, p = {}) => {
     const s = getSet(p.set);
-    const msg = msgBytes(t, p.msgMode);
+    const msg = rawBytesOrNull(p, t) || msgBytes(t, p.msgMode);
     const r = slhdsaVerifyBytes(p.set, p.pk, msg, p.ctx, p.sig);
     const lines = [
       setSummary(s),

@@ -188,6 +188,26 @@ function cipherSaber2Crypt(data, key, iv, rounds, decrypt) {
   return out;
 }
 
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 const ENC_OPTS = [
   { value: "utf8", label: "UTF-8" },
   { value: "hex", label: "Hex" },
@@ -205,6 +225,7 @@ const OUT_OPTS = [
 
 register({
   id: "rc4Drop", cat: "stream", name: "RC4-drop / CipherSaber-2",
+  acceptsBytes: true,
   desc: "RC4-drop[n]（丢弃前 n 字节密钥流，RFC 6229 偏移档，默认 768=SANS 建议）与 CipherSaber-2（10 字节 IV 前置 + KSA 重复 r 轮，默认 r=20）",
   params: [
     { key: "mode", label: "模式", type: "select", default: "drop",
@@ -227,18 +248,18 @@ register({
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
     if (mode === "cipherSaber2") {
       const iv = decodeInput(p.iv || "", p.ivEnc || "utf8");
-      const body = cipherSaber2Crypt(te(text), key, iv, Number((p && p.ksaRounds) || 20), false);
+      const body = cipherSaber2Crypt(rawBytesOrNull(p, text) || te(text), key, iv, Number((p && p.ksaRounds) || 20), false);
       const blob = new Uint8Array(iv.length + body.length);
       blob.set(iv, 0);
       blob.set(body, iv.length);
       return encodeOutput(blob, p.outEnc || "base64");
     }
-    return encodeOutput(rc4DropCrypt(decodeInput(text, (p && p.inEnc) || "utf8"), key, Number((p && p.drop) || 0)), p.outEnc || "base64");
+    return encodeOutput(rc4DropCrypt(rawBytesOrNull(p, text) || decodeInput(text, (p && p.inEnc) || "utf8"), key, Number((p && p.drop) || 0)), p.outEnc || "base64");
   },
   decode: (text, p) => {
     const mode = (p && p.mode) || "drop";
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
-    const blob = decodeInput(String(text).trim(), (p && p.inEnc) || p.outEnc || "base64");
+    const blob = rawBytesOrNull(p, String(text).trim()) || decodeInput(String(text).trim(), (p && p.inEnc) || p.outEnc || "base64");
     if (mode === "cipherSaber2") {
       if (blob.length < 10) throw new Error(`CipherSaber-2：密文不足 10 字节，读不到 IV（当前 ${blob.length}）。`);
       const iv = blob.subarray(0, 10);
