@@ -66,6 +66,25 @@ function msgToBytes(text, enc) {
   return te(String(text == null ? "" : text));
 }
 
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+/** 视图 text 模式字节与文本同构时让位给 hex 文本层；真字节原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = te(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 // ============================================================
 // GF(2^bs) 乘 x（RFC 4493 §2.3 doubling 的通用版）：整块左移 1 位，溢出异或 Rb。
 // ============================================================
@@ -175,6 +194,9 @@ const ALGS = {
 // op · cmacExt
 // ============================================================
 function cmacExtRun(text, p = {}) {
+  if (p && p.msgEnc != null && String(p.msgEnc).toLowerCase() !== "hex") {
+    throw new Error("msgEnc 该参数已废弃，请改用输入视图");
+  }
   const alg = String((p && p.alg) || "camellia");
   const spec = ALGS[alg];
   if (!spec) throw new Error(`cmacExt 不支持的算法: ${alg}（可选：${Object.keys(ALGS).join("/")}）`);
@@ -182,13 +204,14 @@ function cmacExtRun(text, p = {}) {
   const key = hexToBytes(p && p.key);
   if (!spec.keyOk(key)) throw new Error(spec.keyMsg + `，当前 ${key.length} 字节`);
 
-  const msg = msgToBytes(text, (p && p.msgEnc) || "hex");
+  const rawMsg = rawBytesOrNull(p, text);
+  const msg = rawMsg || msgToBytes(text, "hex");
   const mac = cmacGeneric(spec.enc(key), msg, spec.bs, spec.rb);
 
   const L = [];
   L.push(`=== CMAC-${alg}（${spec.bs * 8} 位块${spec.bs === 8 ? "，Rb=0x1B" : "，Rb=0x87"}，ISO/IEC 9797-1 / RFC 4493 结构） ===`);
   L.push(`密钥 (hex, ${key.length} B) = ${bytesToHex(key)}`);
-  L.push(`消息 (${(p && p.msgEnc) || "hex"}, ${msg.length} B) = ${(p && p.msgEnc) === "hex" ? bytesToHex(msg) : JSON.stringify(String(text))}`);
+  L.push(`消息 (hex, ${msg.length} B) = ${bytesToHex(msg)}`);
   L.push("");
   L.push(`T = CMAC(${alg}, K, M) = ${bytesToHex(mac)}`);
   return L.join("\n");
@@ -202,7 +225,7 @@ register({
   params: [
     { key: "alg", label: "底层分组密码", type: "select", default: "camellia", options: ["camellia", "seed", "twofish", "rc6", "idea", "blowfish", "cast5"] },
     { key: "key", label: "密钥 K (hex)", type: "text", default: "2b7e151628aed2a6abf7158809cf4f3c", placeholder: "各算法密钥长度不同" },
-    { key: "msgEnc", label: "消息编码", type: "select", default: "hex", options: ["hex", "text"] },
   ],
   run: cmacExtRun,
+  acceptsBytes: true,
 });

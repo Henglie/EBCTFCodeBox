@@ -201,9 +201,13 @@ function jhHex(bytes, hashbitlen) {
 function jhRun(text, p = {}) {
   const variant = (p && p.variant) || "512";
   const hbl = parseInt(variant, 10);
-  const inputMode = (p && p.inputMode) || "text";
-  const input = inputMode === "hex"
-    ? (() => { const h = String(text || "").replace(/[^0-9a-fA-F]/g, ""); if (h.length % 2) throw new Error("hex 串长度须为偶数"); const o = new Uint8Array(h.length / 2); for (let i = 0; i < o.length; i++) o[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16); return o; })()
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "text") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
+  const inputMode = "text";
+  const raw = p && p.rawBytes;
+  const input = raw != null
+    ? (raw instanceof Uint8Array ? raw : new Uint8Array(raw))
     : new TextEncoder().encode(String(text || ""));
 
   const digest = jhHex(input, hbl);
@@ -233,13 +237,7 @@ register({
         { value: "512", label: "JH-512" },
       ],
     },
-    {
-      key: "inputMode", label: "输入形式", type: "select", default: "text",
-      options: [
-        { value: "text", label: "文本 (UTF-8)" },
-        { value: "hex", label: "Hex" },
-      ],
-    },
   ],
   run: jhRun,
+  acceptsBytes: true,
 });

@@ -251,8 +251,14 @@ function xxhashRun(text, p = {}) {
   const variant = (p && p.variant) || "xxh64";
   if (variant !== "xxh32" && variant !== "xxh64")
     throw new Error(`xxHash：未知变体 "${variant}"（仅支持 xxh32 / xxh64）`);
-  const inputMode = (p && p.inputMode) || "text";
-  const data = inputMode === "hex" ? hexToBytes(text) : _enc.encode(String(text || ""));
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "text") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
+  const inputMode = "text";
+  const raw = p && p.rawBytes;
+  const data = raw != null
+    ? (raw instanceof Uint8Array ? raw : new Uint8Array(raw))
+    : _enc.encode(String(text || ""));
   const seed = parseSeed(p && p.seed);
 
   const lines = [];
@@ -290,16 +296,10 @@ register({
         { value: "xxh32", label: "xxHash32（32 位）" },
       ],
     },
-    {
-      key: "inputMode", label: "输入形式", type: "select", default: "text",
-      options: [
-        { value: "text", label: "文本 (UTF-8)" },
-        { value: "hex", label: "Hex" },
-      ],
-    },
     { key: "seed", label: "种子 seed（可选，支持 0x）", type: "text", default: "", placeholder: "默认 0" },
   ],
   run: xxhashRun,
+  acceptsBytes: true,
 });
 
 export { xxh32, xxh64 };

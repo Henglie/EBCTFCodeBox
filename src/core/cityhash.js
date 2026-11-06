@@ -269,9 +269,14 @@ function bigToHex(x) { return x.toString(16).padStart(16, "0"); }
 function numToHex(x) { return (x >>> 0).toString(16).padStart(8, "0"); }
 
 function cityhashRun(text, p) {
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "text") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
   const bits = (p && p.bits === "32") ? 32 : 64;
-  const inputMode = (p && p.inputMode) || "text";
-  const b = toBytes(text, inputMode);
+  const raw = p && p.rawBytes;
+  const b = raw != null
+    ? (raw instanceof Uint8Array ? raw : new Uint8Array(raw))
+    : toBytes(text, "text");
   return bits === 32 ? numToHex(cityHash32(b, b.length)) : bigToHex(cityHash64(b, b.length));
 }
 
@@ -315,8 +320,8 @@ register({
       key: "bits", label: "位宽", type: "select", default: "64",
       options: [{ value: "64", label: "CityHash64（16 hex）" }, { value: "32", label: "CityHash32（8 hex）" }],
     },
-    { key: "inputMode", label: "输入格式", type: "select", default: "text", options: [{ value: "text", label: "文本" }, { value: "hex", label: "Hex" }] },
   ],
+  acceptsBytes: true,
   encode: (text, p) => cityhashRun(text, p),
   decode: (text, p) => cityhashRun(text, p),
 });

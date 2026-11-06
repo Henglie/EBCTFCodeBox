@@ -178,10 +178,12 @@ function bytesToB64(bytes) {
 }
 
 function blake3Run(text, p = {}) {
-  const inputMode = (p && p.inputMode) || "text";
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "text") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
+  const inputMode = "text";
   let input;
-  if (p && p.rawBytes && p.rawBytes.length) input = (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes)); // rawBytes 契约（字节直通）
-  else if (inputMode === "hex") input = hexToBytes(String(text || ""));
+  if (p && p.rawBytes != null) input = (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes)); // rawBytes 契约（字节直通）
   else input = new TextEncoder().encode(String(text || ""));
 
   let outLen = parseInt((p && p.outLen) || "32", 10);
@@ -205,16 +207,10 @@ register({
   name: "BLAKE3",
   desc: "BLAKE3 加密哈希（O'Connor/Aumasson/Neves/Wilcox-O'Hearn 2020）：BLAKE2 G 函数 + Merkle 树 + 无限输出（XOF）。7 轮压缩，chunk=1024 字节。默认 32 字节输出，可扩展。官方 test_vectors 验证。",
   params: [
-    {
-      key: "inputMode", label: "输入形式", type: "select", default: "text",
-      options: [
-        { value: "text", label: "UTF-8 文本" },
-        { value: "hex", label: "Hex 字节" },
-      ],
-    },
     { key: "outLen", label: "输出字节数", type: "number", default: 32, placeholder: "默认 32（XOF 可扩展，最大 4096）" },
   ],
   run: blake3Run,
+  acceptsBytes: true,
 });
 
 export { blake3, compress, bytesToHex, hexToBytes };

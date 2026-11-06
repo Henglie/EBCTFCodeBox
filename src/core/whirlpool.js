@@ -201,12 +201,14 @@ export function whirlpoolHex(data) {
 /* ---------- 注册 ---------- */
 
 function whirlpoolRun(text, p = {}) {
-  const inputMode = (p && p.inputMode) || "text";
-  const input = p && p.rawBytes && p.rawBytes.length
-    ? (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes))
-    : inputMode === "hex"
-      ? hexToBytes(text)
-      : new TextEncoder().encode(String(text || ""));
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "text") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
+  const inputMode = "text";
+  const raw = p && p.rawBytes;
+  const input = raw != null
+    ? (raw instanceof Uint8Array ? raw : new Uint8Array(raw))
+    : new TextEncoder().encode(String(text || ""));
 
   const digest = whirlpoolHex(input);
   const lines = [];
@@ -226,13 +228,7 @@ register({
   name: "Whirlpool",
   desc: "Whirlpool 哈希（Barreto & Rijmen，ISO/IEC 10118-3:2004）：512 位输出，Miyaguchi-Preneel 模式套 AES 风格 512 位分组密码，8x8 字节状态 10 轮。S 盒按规范用 4 位 mini-box 生成，载入时跑官方向量自检。",
   params: [
-    {
-      key: "inputMode", label: "输入形式", type: "select", default: "text",
-      options: [
-        { value: "text", label: "文本 (UTF-8)" },
-        { value: "hex", label: "Hex" },
-      ],
-    },
   ],
   run: whirlpoolRun,
+  acceptsBytes: true,
 });

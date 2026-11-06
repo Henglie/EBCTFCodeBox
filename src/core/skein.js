@@ -165,9 +165,13 @@ function skeinRun(text, p = {}) {
   if (!Object.prototype.hasOwnProperty.call(VARIANTS, variant))
     throw new Error(`Skein：未知变体 "${variant}"（可选：${Object.keys(VARIANTS).join(" / ")}）`);
   const [nw, hbl] = VARIANTS[variant];
-  const inputMode = (p && p.inputMode) || "text";
-  const input = inputMode === "hex"
-    ? hexToBytes(text)
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "text") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
+  const inputMode = "text";
+  const raw = p && p.rawBytes;
+  const input = raw != null
+    ? (raw instanceof Uint8Array ? raw : new Uint8Array(raw))
     : new TextEncoder().encode(String(text || ""));
 
   const digest = skeinHex(input, nw, hbl);
@@ -200,13 +204,7 @@ register({
         { value: "1024-1024", label: "Skein-1024-1024" },
       ],
     },
-    {
-      key: "inputMode", label: "输入形式", type: "select", default: "text",
-      options: [
-        { value: "text", label: "文本 (UTF-8)" },
-        { value: "hex", label: "Hex" },
-      ],
-    },
   ],
   run: skeinRun,
+  acceptsBytes: true,
 });

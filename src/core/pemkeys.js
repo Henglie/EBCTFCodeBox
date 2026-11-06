@@ -678,11 +678,6 @@ register({
   acceptsBytes: true,
   desc: "DER（hex 或 base64）封装为 PEM：RFC 7468 §5.2 格式，64 字符折行。标签可选 RSA PRIVATE KEY / PRIVATE KEY / PUBLIC KEY / EC PRIVATE KEY / CERTIFICATE 或自定义。hex/base64 自动判别（auto 下全 hex 字符按 hex 处理）。附带尝试 DER 顶层解析提示（不强制合法 DER）",
   params: [
-    { key: "input", label: "输入编码", type: "select", default: "auto", options: [
-      { value: "auto", label: "自动判别（hex 优先）" },
-      { value: "hex", label: "hex" },
-      { value: "base64", label: "base64" },
-    ] },
     { key: "label", label: "PEM 标签", type: "select", default: "PUBLIC KEY", options: [
       { value: "RSA PRIVATE KEY", label: "RSA PRIVATE KEY（PKCS#1 私钥）" },
       { value: "PRIVATE KEY", label: "PRIVATE KEY（PKCS#8 私钥）" },
@@ -694,11 +689,14 @@ register({
     { key: "customLabel", label: "自定义标签", type: "text", default: "", placeholder: "仅 label 选自定义时生效，如 CERTIFICATE REQUEST" },
   ],
   run: (text, p = {}) => {
+  if (p && p.input != null && String(p.input).toLowerCase() !== "auto") {
+    throw new Error("input 该参数已废弃，请改用输入视图");
+  }
     const rawBytes = p?.rawBytes ?? (text instanceof Uint8Array ? text : null);
     const raw = String(text).replace(/\s+/g, "");
     if (rawBytes == null && !raw) throw new Error("输入为空");
     let der;
-    const mode = String(p?.input ?? "auto");
+    const mode = "auto";
     if (rawBytes != null) {
       der = rawBytes instanceof Uint8Array ? rawBytes : new Uint8Array(rawBytes);
       if (!der.length) throw new Error("输入为空");

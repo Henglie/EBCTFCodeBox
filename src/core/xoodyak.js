@@ -300,14 +300,35 @@ function textToBytes(text) {
   return new TextEncoder().encode(String(text == null ? "" : text));
 }
 
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+/** 视图 text 模式字节与文本同构时让位给文本层；hex 视图/文件真字节原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = textToBytes(text);
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 // ============================================================
 // op：Xoodyak-Hash
 // ============================================================
 
 function xoodyakHashRun(text, p = {}) {
-  const msg = p.inputMode === "hex"
-    ? hexToBytesStrict(text, "消息 hex", null, true)
-    : textToBytes(text);
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "text") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
+  const raw = rawBytesOf(p);
+  const msg = raw != null ? raw : textToBytes(text);
   return bytesToHex(xoodyakHashBytes(msg));
 }
 
@@ -318,13 +339,6 @@ register({
   desc: "NIST 轻量级密码竞赛决赛方案 Xoodyak 的哈希模式：Xoodoo[12] 置换（384 位状态，θ/ρwest/ι/χ/ρeast 五步）+ Cyclist 单色域海绵，吸收块 16 字节，输出 32 字节摘要。输入任意文本或 hex 字节。NIST 官方 KAT 全量对拍通过",
   acceptsBytes: true, textTransit: true,
   params: [
-    {
-      key: "inputMode", label: "输入形式", type: "select", default: "text",
-      options: [
-        { value: "text", label: "UTF-8 文本" },
-        { value: "hex", label: "Hex 字节" },
-      ],
-    },
   ],
   run: xoodyakHashRun,
 });
@@ -343,17 +357,20 @@ function aeadParams(p = {}) {
 }
 
 function aeadEncode(text, p = {}) {
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "text") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
   const { key, nonce, aad } = aeadParams(p);
-  const plaintext = p.inputMode === "hex"
-    ? hexToBytesStrict(text, "明文 hex", null, true)
-    : textToBytes(text);
+  const raw = rawBytesOf(p);
+  const plaintext = raw != null ? raw : textToBytes(text);
   const { ciphertext, tag } = xoodyakAeadEncrypt(key, nonce, plaintext, aad);
   return bytesToHex(new Uint8Array([...ciphertext, ...tag]));
 }
 
 function aeadDecode(text, p = {}) {
   const { key, nonce, aad } = aeadParams(p);
-  const raw = hexToBytesStrict(text, "密文 hex", null, false);
+  const viewBytes = rawBytesOrNull(p, text);
+  const raw = viewBytes || hexToBytesStrict(text, "密文 hex", null, false);
   if (raw.length < 16) {
     throw new Error(`密文只有 ${raw.length} 字节，至少需要 16 字节 tag`);
   }
@@ -383,13 +400,6 @@ register({
       ],
     },
     { key: "aad", label: "关联数据 aad（可空）", type: "text", default: "", placeholder: "可空" },
-    {
-      key: "inputMode", label: "明文形式（仅加密方向）", type: "select", default: "text",
-      options: [
-        { value: "text", label: "UTF-8 文本" },
-        { value: "hex", label: "Hex 字节" },
-      ],
-    },
   ],
   encode: aeadEncode,
   decode: aeadDecode,

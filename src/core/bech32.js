@@ -355,12 +355,34 @@ function inputTextToBytes(text, inputFormat) {
   throw new Error("inputFormat 须为 hex / raw（实为 " + inputFormat + "）");
 }
 
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+/** 视图 text 模式字节与文本同构时让位给默认 hex 文本层；真字节原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 function bech32EncodeOp(text, p) {
+  if (p && p.inputFormat != null && String(p.inputFormat).toLowerCase() !== "hex") {
+    throw new Error("inputFormat 该参数已废弃，请改用输入视图");
+  }
   const opts = p || {};
   const hrp = opts.hrp || "bc";
   const mode = normalizeBech32Mode(opts.mode);
   const encoding = opts.encoding || "auto";
-  const bytes = inputTextToBytes(text, opts.inputFormat);
+  const bytes = rawBytesOrNull(p, text) || inputTextToBytes(text, "hex");
   if (mode === "segwit") {
     return bech32EncodeSegwit(hrp, opts.witnessVersion == null ? 0 : opts.witnessVersion, bytes, encoding);
   }
@@ -368,6 +390,9 @@ function bech32EncodeOp(text, p) {
 }
 
 function bech32DecodeOp(text, p) {
+  if (p && p.inputFormat != null && String(p.inputFormat).toLowerCase() !== "hex") {
+    throw new Error("inputFormat 该参数已废弃，请改用输入视图");
+  }
   const opts = p || {};
   const mode = normalizeBech32Mode(opts.mode);
   const encoding = opts.encoding || "auto";
@@ -502,13 +527,6 @@ register({
       ],
     },
     {
-      key: "inputFormat", label: "输入格式（编码）", type: "select", default: "hex",
-      options: [
-        { value: "hex", label: "Hex" },
-        { value: "raw", label: "原始文本（UTF-8）" },
-      ],
-    },
-    {
       key: "mode", label: "模式", type: "select", default: "Generic",
       options: [
         { value: "Generic", label: "Generic" },
@@ -531,6 +549,7 @@ register({
       ],
     },
   ],
+  acceptsBytes: true,
   encode: bech32EncodeOp,
   decode: bech32DecodeOp,
 });
