@@ -242,6 +242,13 @@ function msgBytes(text, msgMode) {
   return new TextEncoder().encode(String(text == null ? "" : text));
 }
 
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
 // ============================================================
 // Ed25519 三档算法族（-A，2026-09-04：同族多操作必须族滑块，废除下拉切模式）
 // family:"ed25519"（与已有 ed448 族命名区分）+ familyLabel → fam.lbl.*
@@ -284,25 +291,23 @@ register({
 // ---- 档② 签名 ----
 register({
   id: "ed25519Sign",
+  acceptsBytes: true,
   cat: "asym",
   family: "ed25519",
   familyLabel: "sign",
   name: "Ed25519 签名",
   desc: "Ed25519 签名（RFC 8032 §5.1.6）：r=H(prefix‖M) mod L，R=r·B，k=H(R‖A‖M) mod L，S=(r+k·a) mod L，签名=R(32B)‖S(32B)。确定性签名（无随机 nonce）。输出含自检验签",
   params: [
-    {
-      key: "msgMode", label: "消息形式", type: "select", default: "text",
-      options: [
-        { value: "text", label: "UTF-8 文本" },
-        { value: "hex", label: "Hex 字节" },
-      ],
-    },
     { sensitive: true, key: "priv", label: "私钥 (32B hex)", type: "text", default: "", placeholder: "64 hex 字符" },
   ],
   run: (text, p) => {
-    const msgMode = (p && p.msgMode) || "text";
+  if (p && p.msgMode != null && String(p.msgMode).toLowerCase() !== "text") {
+    throw new Error("msgMode 该参数已废弃，请改用输入视图");
+  }
+    const msgMode = "text";
     const sk = need32(hexToBytes((p && p.priv) || ""), "私钥");
-    const msg = msgBytes(text, msgMode);
+    const raw = rawBytesOf(p);
+    const msg = raw != null ? raw : msgBytes(text, "text");
     const pk = publicKey(sk);
     const sig = sign(sk, msg);
     return [
@@ -321,28 +326,26 @@ register({
 // ---- 档③ 验签 ----
 register({
   id: "ed25519Verify",
+  acceptsBytes: true,
   cat: "asym",
   family: "ed25519",
   familyLabel: "verify",
   name: "Ed25519 验签",
   desc: "Ed25519 验签（RFC 8032 §5.1.7）：检查 8·S·B == 8·R + 8·k·A（实现用非批量 S·B == R + k·A）。输入公钥 (32B)、签名 (64B) 与消息",
   params: [
-    {
-      key: "msgMode", label: "消息形式", type: "select", default: "text",
-      options: [
-        { value: "text", label: "UTF-8 文本" },
-        { value: "hex", label: "Hex 字节" },
-      ],
-    },
     { key: "pub", label: "公钥 (32B hex)", type: "text", default: "", placeholder: "64 hex 字符" },
     { key: "sig", label: "签名 (64B hex)", type: "text", default: "", placeholder: "128 hex 字符" },
   ],
   run: (text, p) => {
-    const msgMode = (p && p.msgMode) || "text";
+  if (p && p.msgMode != null && String(p.msgMode).toLowerCase() !== "text") {
+    throw new Error("msgMode 该参数已废弃，请改用输入视图");
+  }
+    const msgMode = "text";
     const pk = need32(hexToBytes((p && p.pub) || ""), "公钥");
     const sig = hexToBytes((p && p.sig) || "");
     if (sig.length !== 64) throw new Error(`签名必须 64 字节，当前 ${sig.length}`);
-    const msg = msgBytes(text, msgMode);
+    const raw = rawBytesOf(p);
+    const msg = raw != null ? raw : msgBytes(text, "text");
     const ok = verify(pk, msg, sig);
     return [
       "=== Ed25519 验签 ===",

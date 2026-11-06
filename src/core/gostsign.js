@@ -171,10 +171,18 @@ function msgToBytes(text, fmt) {
   return new TextEncoder().encode(String(text));
 }
 
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
 // ==================== op 注册 ====================
 
 register({
   id: "gostSign",
+  acceptsBytes: true,
   family: "gost", familyLabel: "sign",
   cat: "asym",
   name: "GOST R 34.10-2012 签名",
@@ -184,16 +192,16 @@ register({
       { value: "256", label: "256 位（TestParamSet = RFC 7091 官方示例集）" },
       { value: "512", label: "512 位（id-tc26-gost-3410-12-512-paramSetA）" },
     ] },
-    { key: "inputFormat", label: "消息格式", type: "select", default: "text", options: [
-      { value: "text", label: "文本" },
-      { value: "hex", label: "Hex" },
-    ] },
     { sensitive: true, key: "priv", label: "私钥 d (hex, 可选)", type: "text", default: "", placeholder: "32/64B hex，留空随机生成" },
     { key: "k", label: "随机数 k (hex, 教学)", type: "text", default: "", placeholder: "32/64B hex，留空随机（固定 k 仅供对拍教学）" },
   ],
   run: (text, p) => {
+  if (p && p.inputFormat != null && String(p.inputFormat).toLowerCase() !== "text") {
+    throw new Error("inputFormat 该参数已废弃，请改用输入视图");
+  }
     const cv = getSet(p && p.set);
-    const msg = msgToBytes(text, (p && p.inputFormat) || "text");
+    const raw = rawBytesOf(p);
+    const msg = raw != null ? raw : msgToBytes(text, "text");
     const digestHex = streebog(msg, cv.hashBits);
     const e = digestToE(cv, digestHex);
 
@@ -256,6 +264,7 @@ register({
 
 register({
   id: "gostVerify",
+  acceptsBytes: true,
   family: "gost", familyLabel: "verify",
   cat: "asym",
   name: "GOST R 34.10-2012 验签",
@@ -265,17 +274,17 @@ register({
       { value: "256", label: "256 位（TestParamSet = RFC 7091 官方示例集）" },
       { value: "512", label: "512 位（id-tc26-gost-3410-12-512-paramSetA）" },
     ] },
-    { key: "inputFormat", label: "消息格式", type: "select", default: "text", options: [
-      { value: "text", label: "文本" },
-      { value: "hex", label: "Hex" },
-    ] },
     { key: "pubx", label: "公钥 Q.x (hex)", type: "text", default: "", placeholder: "32/64B hex" },
     { key: "puby", label: "公钥 Q.y (hex)", type: "text", default: "", placeholder: "32/64B hex" },
     { key: "sig", label: "签名 ζ = R||S (hex)", type: "text", default: "", placeholder: "64/128B hex（R 在前 S 在后）" },
   ],
   run: (text, p) => {
+  if (p && p.inputFormat != null && String(p.inputFormat).toLowerCase() !== "text") {
+    throw new Error("inputFormat 该参数已废弃，请改用输入视图");
+  }
     const cv = getSet(p && p.set);
-    const msg = msgToBytes(text, (p && p.inputFormat) || "text");
+    const raw = rawBytesOf(p);
+    const msg = raw != null ? raw : msgToBytes(text, "text");
     const qx = BigInt("0x" + (String(p && p.pubx || "").replace(/^0x/i, "") || "0"));
     const qy = BigInt("0x" + (String(p && p.puby || "").replace(/^0x/i, "") || "0"));
     const Q = [qx, qy];

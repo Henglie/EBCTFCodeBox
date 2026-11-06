@@ -463,6 +463,13 @@ function msgToBytes(text, enc) {
   return new TextEncoder().encode(String(text == null ? "" : text));
 }
 
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
 // ============================================================
 // op 1 · ecdsaKeyGen
 // ============================================================
@@ -507,13 +514,17 @@ function ecdsaKeyGenRun(_text, p = {}) {
 // op 2 · ecdsaSign
 // ============================================================
 async function ecdsaSignRun(text, p = {}) {
+  if (p && p.msgEnc != null && String(p.msgEnc).toLowerCase() !== "text") {
+    throw new Error("msgEnc 该参数已废弃，请改用输入视图");
+  }
   const c = getCurve(p.curve || "secp256k1");
   const hashKey = p.hash || "sha256";
   const H = HASHES[hashKey];
   if (!H) throw new Error(`未知哈希：${hashKey}`);
   const kMode = p.kMode || "rfc6979";
   const d = parseBigAuto(p.d, "私钥 d（十进制或 0x hex）");
-  const msg = msgToBytes(text, p.msgEnc || "text");
+  const raw = rawBytesOf(p);
+  const msg = raw != null ? raw : msgToBytes(text, "text");
   const { r, s, k, e, h1 } = await ecdsaSignRaw(c, d, msg, hashKey, kMode);
   const Q = ecToAffine(ecMul(d, c.Gx, c.Gy, c.a, c.p), c.p);
   const bl = byteLen(c.n);
@@ -522,10 +533,10 @@ async function ecdsaSignRun(text, p = {}) {
   const der = sigToDer(r, s);
   const L = [];
   L.push("=== ECDSA 签名 ===");
-  L.push(`曲线: ${c.name}（${c.std}）  哈希: ${H.label}  消息编码: ${p.msgEnc || "text"}`);
+  L.push(`曲线: ${c.name}（${c.std}）  哈希: ${H.label}  消息编码: text`);
   L.push(`k 模式: ${kMode === "rfc6979" ? "RFC 6979 确定 k（同输入同签名，可复现）" : "随机 k（crypto.getRandomValues）"}`);
   L.push("");
-  L.push(`消息 (${p.msgEnc || "text"}) = ${p.msgEnc === "hex" ? bytesToHex(msg) : JSON.stringify(String(text))}`);
+  L.push(`消息 (text) = ${JSON.stringify(String(text))}`);
   L.push(`h1 = ${H.label}(msg) = ${bytesToHex(h1)}`);
   L.push(`e  = 左取 ${bitLen(c.n)} 位 = ${e}`);
   L.push("");
@@ -555,11 +566,15 @@ async function ecdsaSignRun(text, p = {}) {
 // op 3 · ecdsaVerify
 // ============================================================
 async function ecdsaVerifyRun(text, p = {}) {
+  if (p && p.msgEnc != null && String(p.msgEnc).toLowerCase() !== "text") {
+    throw new Error("msgEnc 该参数已废弃，请改用输入视图");
+  }
   const c = getCurve(p.curve || "secp256k1");
   const hashKey = p.hash || "sha256";
   const H = HASHES[hashKey];
   if (!H) throw new Error(`未知哈希：${hashKey}`);
-  const msg = msgToBytes(text, p.msgEnc || "text");
+  const raw = rawBytesOf(p);
+  const msg = raw != null ? raw : msgToBytes(text, "text");
   const h1 = await shaBytes(H.norm, msg);
   const e = hashToE(h1, c);
   const Q = parsePoint(p.pub, c, "公钥");
@@ -568,9 +583,9 @@ async function ecdsaVerifyRun(text, p = {}) {
   const v = ecdsaVerifyRaw(c, Q, sig.r, sig.s, e);
   const L = [];
   L.push("=== ECDSA 验签 ===");
-  L.push(`曲线: ${c.name}（${c.std}）  哈希: ${H.label}  消息编码: ${p.msgEnc || "text"}`);
+  L.push(`曲线: ${c.name}（${c.std}）  哈希: ${H.label}  消息编码: text`);
   L.push("");
-  L.push(`消息 (${p.msgEnc || "text"}) = ${p.msgEnc === "hex" ? bytesToHex(msg) : JSON.stringify(String(text))}`);
+  L.push(`消息 (text) = ${JSON.stringify(String(text))}`);
   L.push(`h1 = ${bytesToHex(h1)}`);
   L.push(`e  = ${e}`);
   L.push("");
@@ -772,6 +787,7 @@ register({
 
 register({
   id: "ecdsaSign",
+  acceptsBytes: true,
   family: "ecdsa", familyLabel: "sign",
   cat: "asym",
   name: "ECDSA 签名",
@@ -787,10 +803,6 @@ register({
       { value: "rfc6979", label: "RFC 6979 确定 k（推荐，可复现）" },
       { value: "random", label: "随机 k" },
     ] },
-    { key: "msgEnc", label: "消息编码", type: "select", default: "text", options: [
-      { value: "text", label: "文本" },
-      { value: "hex", label: "hex 字节" },
-    ] },
     { sensitive: true, key: "d", label: "私钥 d", type: "text", default: "", placeholder: "十进制或 0x hex（1 ≤ d < n）" },
   ],
   run: ecdsaSignRun,
@@ -798,6 +810,7 @@ register({
 
 register({
   id: "ecdsaVerify",
+  acceptsBytes: true,
   family: "ecdsa", familyLabel: "verify",
   cat: "asym",
   name: "ECDSA 验签",
@@ -808,10 +821,6 @@ register({
       { value: "sha256", label: "SHA-256" },
       { value: "sha384", label: "SHA-384" },
       { value: "sha512", label: "SHA-512" },
-    ] },
-    { key: "msgEnc", label: "消息编码", type: "select", default: "text", options: [
-      { value: "text", label: "文本" },
-      { value: "hex", label: "hex 字节" },
     ] },
     { key: "pub", label: "公钥 Q", type: "text", default: "", placeholder: "04‖X‖Y / 02|03‖X / X‖Y / G" },
     { key: "sig", label: "签名", type: "text", default: "", placeholder: "DER hex（30 开头）或 r;s 十进制/0x hex" },

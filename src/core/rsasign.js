@@ -338,6 +338,13 @@ function messageBytes(text, msgEnc) {
   return new TextEncoder().encode(String(text ?? ""));
 }
 
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
 /** 解析 saltLen 参数 → 实际值（hLen / emLen-hLen-2 上限 / 数字）；null = 自动（仅验签） */
 function resolveSaltLen(raw, hashKey, emLen, what) {
   const hLen = HASHES[hashKey].hLen;
@@ -463,13 +470,13 @@ const SALT_OPTIONS_VERIFY = [
 
 register({
   id: "rsaSign", family: "rsa", familyLabel: "sign",
+  acceptsBytes: true,
   cat: "asym",
   name: "RSA 签名",
   desc: "RSASSA PKCS#1 v1.5 与 PSS 签名（RFC 8017）：EM 按 §9.2/§9.1 构造后 s = EM^d mod n（modPow 复用 primeGen）。私钥支持十进制 n,d 或 PEM（PKCS#1 RSA PRIVATE KEY / PKCS#8 PRIVATE KEY）。PSS 盐长默认 hLen；同钥同文两次签名不同是 PSS 随机盐的预期行为。512 位模数跑不了 SHA-256 以上的 PSS（emLen < hLen+sLen+2），换大钥或减盐长",
   params: [
     { key: "mode", label: "签名模式", type: "select", default: "pkcs1v15", options: MODE_OPTIONS },
     { key: "hash", label: "哈希", type: "select", default: "sha256", options: HASH_OPTIONS },
-    { key: "msgEnc", label: "消息输入", type: "select", default: "text", options: MSG_ENC_OPTIONS },
     { key: "keyEnc", label: "私钥形式", type: "select", default: "dec", options: KEY_ENC_OPTIONS },
     { key: "n", label: "模数 n（十进制）", type: "text", default: "", placeholder: "keyEnc=十进制参数时必填" },
     { sensitive: true, key: "d", label: "私钥指数 d（十进制）", type: "text", default: "", placeholder: "keyEnc=十进制参数时必填" },
@@ -477,6 +484,9 @@ register({
     { key: "saltLen", label: "盐长 sLen（仅 PSS）", type: "select", default: "hlen", options: SALT_OPTIONS_SIGN },
   ],
   run: async (text, p = {}) => {
+  if (p && p.msgEnc != null && String(p.msgEnc).toLowerCase() !== "text") {
+    throw new Error("msgEnc 该参数已废弃，请改用输入视图");
+  }
     const mode = p.mode || "pkcs1v15";
     const hashKey = p.hash || "sha256";
     if (!HASHES[hashKey]) throw new Error(`不支持的哈希 ${hashKey}`);
@@ -488,7 +498,8 @@ register({
       d = decToBigint(p.d, "私钥指数 d");
     }
     if (n < 3n || d <= 0n || d >= n) throw new Error("n/d 参数不合法（需 n ≥ 3 且 0 < d < n）");
-    const msg = messageBytes(text, p.msgEnc || "text");
+    const raw = rawBytesOf(p);
+    const msg = raw != null ? raw : messageBytes(text, "text");
 
     const r = await rsaSignRaw(msg, hashKey, mode, d, n, p.saltLen);
     const k = Math.ceil(bigintBitLen(n) / 8);
@@ -530,13 +541,13 @@ register({
 
 register({
   id: "rsaVerify", family: "rsa", familyLabel: "verify",
+  acceptsBytes: true,
   cat: "asym",
   name: "RSA 验签",
   desc: "RSASSA PKCS#1 v1.5 与 PSS 验签（RFC 8017 §8.2.2/§8.1.2）：s^e mod n 恢复 EM 后逐项校验（v1.5 重算 EM 逐字节比较；PSS 查 0xbc 哨兵/左位零/DB 结构/H 重算），输出合法/不合法与失败位置。公钥支持十进制 n,e 或 PEM（PUBLIC KEY SPKI / RSA PUBLIC KEY）。签名 hex 或十进制。PSS 盐长可选自动反推",
   params: [
     { key: "mode", label: "签名模式", type: "select", default: "pkcs1v15", options: MODE_OPTIONS },
     { key: "hash", label: "哈希", type: "select", default: "sha256", options: HASH_OPTIONS },
-    { key: "msgEnc", label: "消息输入", type: "select", default: "text", options: MSG_ENC_OPTIONS },
     { key: "sigEnc", label: "签名输入", type: "select", default: "hex", options: SIG_ENC_OPTIONS },
     { key: "sig", label: "签名 s", type: "text", default: "", placeholder: "按「签名输入」格式填 hex 或十进制" },
     { key: "keyEnc", label: "公钥形式", type: "select", default: "dec", options: KEY_ENC_OPTIONS },
@@ -546,6 +557,9 @@ register({
     { key: "saltLen", label: "盐长 sLen（仅 PSS）", type: "select", default: "hlen", options: SALT_OPTIONS_VERIFY },
   ],
   run: async (text, p = {}) => {
+  if (p && p.msgEnc != null && String(p.msgEnc).toLowerCase() !== "text") {
+    throw new Error("msgEnc 该参数已废弃，请改用输入视图");
+  }
     const mode = p.mode || "pkcs1v15";
     const hashKey = p.hash || "sha256";
     if (!HASHES[hashKey]) throw new Error(`不支持的哈希 ${hashKey}`);
@@ -559,7 +573,8 @@ register({
     if (n < 3n || e <= 0n || e >= n) throw new Error("n/e 参数不合法（需 n ≥ 3 且 0 < e < n）");
     e = assertUsableRsaExponent(e);
     const keyWarnings = rsaKeyWarnings(n, e);
-    const msg = messageBytes(text, p.msgEnc || "text");
+    const raw = rawBytesOf(p);
+    const msg = raw != null ? raw : messageBytes(text, "text");
 
     const sigBytes = (p.sigEnc || "hex") === "dec"
       ? bigintToBytes(decToBigint(p.sig, "签名 s"), Math.ceil(bigintBitLen(n) / 8), "签名 s")

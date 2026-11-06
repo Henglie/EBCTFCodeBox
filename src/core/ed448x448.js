@@ -273,22 +273,30 @@ function msgToBytes(text, fmt) {
   return new TextEncoder().encode(String(text));
 }
 
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
 register({
   id: "ed448Sign",
+  acceptsBytes: true,
   family: "ed448", familyLabel: "sign",
   cat: "asym",
   name: "Ed448 签名",
   desc: "Ed448 纯 EdDSA 签名（RFC 8032，SHAKE-256，57 字节密钥/114 字节签名，~224 位安全级）：私钥留空随机生成，输出公钥与签名。支持 context（可选）。过 RFC 8032 §7.4 九组官方向量",
   params: [
-    { key: "inputFormat", label: "消息格式", type: "select", default: "text", options: [
-      { value: "text", label: "文本" },
-      { value: "hex", label: "Hex" },
-    ] },
     { sensitive: true, key: "priv", label: "私钥 (57B hex)", type: "text", default: "", placeholder: "114 hex 字符，留空随机生成" },
     { key: "ctx", label: "Context (hex, 可选)", type: "text", default: "", placeholder: "RFC 8032 dom4 context，留空=无" },
   ],
   run: (text, p) => {
-    const msg = msgToBytes(text, (p && p.inputFormat) || "text");
+  if (p && p.inputFormat != null && String(p.inputFormat).toLowerCase() !== "text") {
+    throw new Error("inputFormat 该参数已废弃，请改用输入视图");
+  }
+    const raw = rawBytesOf(p);
+    const msg = raw != null ? raw : msgToBytes(text, "text");
     const privRaw = (p && p.priv && String(p.priv).trim()) || "";
     const sk = privRaw ? hexToBytes(privRaw) : randomBytes(57);
     if (sk.length !== 57) throw new Error(`Ed448 私钥必须为 57 字节，当前 ${sk.length} 字节`);
@@ -323,21 +331,22 @@ register({
 
 register({
   id: "ed448Verify",
+  acceptsBytes: true,
   family: "ed448", familyLabel: "verify",
   cat: "asym",
   name: "Ed448 验签",
   desc: "Ed448 纯 EdDSA 验签（RFC 8032 §5.2.7）：公钥 + 114 字节签名 + 原消息，校验 [4][S]B = [4]R + [4][k]A。篡改消息/签名任一字节即失败",
   params: [
-    { key: "inputFormat", label: "消息格式", type: "select", default: "text", options: [
-      { value: "text", label: "文本" },
-      { value: "hex", label: "Hex" },
-    ] },
     { key: "pub", label: "公钥 (57B hex)", type: "text", default: "", placeholder: "114 hex 字符" },
     { key: "sig", label: "签名 (114B hex)", type: "text", default: "", placeholder: "228 hex 字符" },
     { key: "ctx", label: "Context (hex, 可选)", type: "text", default: "", placeholder: "须与签名时一致" },
   ],
   run: (text, p) => {
-    const msg = msgToBytes(text, (p && p.inputFormat) || "text");
+  if (p && p.inputFormat != null && String(p.inputFormat).toLowerCase() !== "text") {
+    throw new Error("inputFormat 该参数已废弃，请改用输入视图");
+  }
+    const raw = rawBytesOf(p);
+    const msg = raw != null ? raw : msgToBytes(text, "text");
     const pk = hexToBytes((p && p.pub) || "");
     if (pk.length !== 57) throw new Error(`公钥必须为 57 字节（114 hex 字符），当前 ${pk.length} 字节`);
     const sig = hexToBytes((p && p.sig) || "");

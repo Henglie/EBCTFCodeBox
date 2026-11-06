@@ -38,6 +38,13 @@ import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源�
 // ============================================================
 // 自带 SHA-256（同步，纯 JS，FIPS 180-4）
 // ============================================================
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
 const K256 = [
   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
   0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
@@ -256,22 +263,26 @@ register({
 // ---- 档② 签名 ----
 register({
   id: "schnorrSign",
+  acceptsBytes: true,
   cat: "asym",
   family: "schnorr",
   familyLabel: "sign",
   name: "Schnorr 签名",
   desc: "经典 Schnorr 签名（secp256k1，挑战 e=H(R.x‖P.x‖m) mod n）：R=k·G，s=(k+e·d) mod n，签名=(e,s)。私钥留空随机。⚠ 两条消息复用同一 nonce k 会泄露私钥（教学可用）",
   params: [
-    { key: "msgMode", label: "消息形式", type: "select", default: "text", options: [{ value: "text", label: "文本" }, { value: "hex", label: "Hex" }] },
     { sensitive: true, key: "priv", label: "私钥 d (hex)", type: "text", default: "", placeholder: "留空随机" },
     { key: "nonce", label: "nonce k (hex, 可选)", type: "text", default: "", placeholder: "留空随机；固定值用于演示重用攻击" },
   ],
   run: (text, p) => {
-    const msgMode = (p && p.msgMode) || "text";
+  if (p && p.msgMode != null && String(p.msgMode).toLowerCase() !== "text") {
+    throw new Error("msgMode 该参数已废弃，请改用输入视图");
+  }
+    const msgMode = "text";
+    const raw = rawBytesOf(p);
     const toMsgBytes = (s) => msgMode === "hex" ? hexToBytes(s) : new TextEncoder().encode(String(s || ""));
     const dRaw = (p && p.priv && String(p.priv).trim());
     const d = dRaw ? parseScalarHex(dRaw, "私钥 d", N) : randScalar();
-    const msg = toMsgBytes(text);
+    const msg = raw != null ? raw : toMsgBytes(text);
     const kRaw = (p && p.nonce && String(p.nonce).trim());
     const sig = schnorrSign(d, msg, kRaw ? parseScalarHex(kRaw, "nonce k", N) : null);
     const lines = [];
@@ -293,26 +304,30 @@ register({
 // ---- 档③ 验签 ----
 register({
   id: "schnorrVerify",
+  acceptsBytes: true,
   cat: "asym",
   family: "schnorr",
   familyLabel: "verify",
   name: "Schnorr 验签",
   desc: "Schnorr 验签：R' = s·G − e·P，e' = H(R'.x ‖ P.x ‖ m) mod n，e' == e 即有效。输入公钥 (Px,Py)、签名 (e,s) 与消息",
   params: [
-    { key: "msgMode", label: "消息形式", type: "select", default: "text", options: [{ value: "text", label: "文本" }, { value: "hex", label: "Hex" }] },
     { key: "pubX", label: "公钥 Px (hex)", type: "text", default: "", placeholder: "verify 用" },
     { key: "pubY", label: "公钥 Py (hex)", type: "text", default: "", placeholder: "verify 用" },
     { key: "e", label: "e (hex)", type: "text", default: "", placeholder: "verify 用" },
     { key: "s", label: "s (hex)", type: "text", default: "", placeholder: "verify 用" },
   ],
   run: (text, p) => {
-    const msgMode = (p && p.msgMode) || "text";
+  if (p && p.msgMode != null && String(p.msgMode).toLowerCase() !== "text") {
+    throw new Error("msgMode 该参数已废弃，请改用输入视图");
+  }
+    const msgMode = "text";
+    const raw = rawBytesOf(p);
     const toMsgBytes = (s) => msgMode === "hex" ? hexToBytes(s) : new TextEncoder().encode(String(s || ""));
     const Px = parseHexBig(p && p.pubX, "公钥 Px");
     const Py = parseHexBig(p && p.pubY, "公钥 Py");
     const e = parseHexBig(p && p.e, "e");
     const s = parseHexBig(p && p.s, "s");
-    const msg = toMsgBytes(text);
+    const msg = raw != null ? raw : toMsgBytes(text);
     const ok = schnorrVerify(Px, Py, e, s, msg);
     return [
       "=== Schnorr 验签（经典版，secp256k1） ===",
