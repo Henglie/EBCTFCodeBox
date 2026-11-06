@@ -407,8 +407,51 @@ function takeBytes(text, p) {
   return inputToBytes(text, p);
 }
 
+// CyberChef Take bytes 同口径：负 start 从尾部取；负 length 翻转起点；可选逐行应用。
+function takeBytesCC(bytes, start, length) {
+  let s = start, l = length;
+  if (s < 0) s = bytes.length + s;
+  if (l < 0) {
+    s = s + l;
+    if (s < 0) { s = bytes.length + s; l = s - l; }
+    else l = -l;
+  }
+  return bytes.slice(s, s + l);
+}
+
+function takeBytesOutput(bytes, p) {
+  const start = parseNum((p && p.start) ?? 0);
+  const length = Number(p && p.length != null ? p.length : 5);
+  if (!Number.isFinite(start) || !Number.isFinite(length)) throw new Error("Start/Length 须为数字");
+  let out;
+  if (p && p.applyToEachLine === true) {
+    const lines = [];
+    let line = [];
+    for (const b of bytes) {
+      if (b === 0x0a) { lines.push(line); line = []; }
+      else line.push(b);
+    }
+    lines.push(line);
+    out = [];
+    for (const ln of lines) {
+      out.push(...takeBytesCC(Uint8Array.from(ln), start, length));
+      out.push(0x0a);
+    }
+    out = Uint8Array.from(out.slice(0, out.length - 1));
+  } else {
+    out = takeBytesCC(bytes, start, length);
+  }
+  if ((p && p.takeFormat) === "raw") {
+    let s = "";
+    for (const b of out) s += String.fromCharCode(b);
+    return s;
+  }
+  return Array.from(out, (b) => padHex(b, 2)).join(" ");
+}
+
 function runHexRange(text, p) {
   const bytes = takeBytes(text, p);
+  if (p && p.mode === "take") return takeBytesOutput(bytes, p);
   const start = parseNum((p && p.start) ?? 0);
   const endInput = (p && p.end);
   const end = (endInput == null || endInput === "") ? Math.max(0, bytes.length - 1) : parseNum(endInput);
@@ -435,8 +478,18 @@ register({
   desc: "提取指定偏移区间的字节，多格式展示（hex/dec/oct/bin/ASCII/UTF-8）",
   params: [
     INPUT_ENC_PARAM,
-    { key: "start", label: "起始偏移（支持 0x 前缀）", type: "text", default: "0", placeholder: "0 或 0x10" },
+    { key: "mode", label: "模式", type: "select", default: "range", options: [
+      { value: "range", label: "区间多格式展示（原有模式）" },
+      { value: "take", label: "Take bytes（按 Start/Length 切片）" },
+    ] },
+    { key: "start", label: "起始偏移（支持 0x 前缀；take 模式可负）", type: "text", default: "0", placeholder: "0 或 0x10；-3=从尾部" },
     { key: "end", label: "结束偏移（含，支持 0x 前缀）", type: "text", default: "", placeholder: "留空=到末尾" },
+    { key: "length", label: "Take bytes：长度（可负）", type: "number", default: 5 },
+    { key: "applyToEachLine", label: "Take bytes：逐行应用", type: "bool", default: false },
+    { key: "takeFormat", label: "Take bytes：输出格式", type: "select", default: "hex", options: [
+      { value: "hex", label: "Hex（空格分隔）" },
+      { value: "raw", label: "Raw（逐字节 Latin-1）" },
+    ] },
   ],
   run: runHexRange,
   acceptsBytes: true,

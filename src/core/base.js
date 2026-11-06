@@ -63,6 +63,10 @@ function radixNDecode(text, dict) {
 
 // ============ Base16 / Hex ============
 const B16 = "0123456789ABCDEF";
+const TO_HEX_DELIMS = {
+  Space: " ", Percent: "%", Comma: ",", "Semi-colon": ";", Colon: ":",
+  LF: "\n", CRLF: "\r\n",
+};
 function hexEncode(text, p) {
   const D = (p && p.dict) || B16;
   const bytes = te(text);
@@ -77,6 +81,30 @@ function hexEncode(text, p) {
     out[i * 2 + 1] = L[b & 0xf];
   }
   let s = out.join("");
+  // CyberChef To Hex 同口径：分隔符/每行字节数（默认不启用，保持旧输出）
+  const toHexDelim = p && p.encodeDelimiter;
+  if (toHexDelim) {
+    const lineSize = Math.max(0, Math.floor(Number(p.bytesPerLine) || 0));
+    let delim;
+    let comma = "";
+    if (toHexDelim === "0x with comma") { delim = "0x"; comma = ","; }
+    else if (toHexDelim === "None") delim = "";
+    else if (toHexDelim === "Line feed") delim = "\n";
+    else if (toHexDelim === "CRLF") delim = "\r\n";
+    else delim = TO_HEX_DELIMS[toHexDelim];
+    if (delim === undefined) throw new Error("未知 To Hex 分隔符: " + toHexDelim);
+    const prepend = delim === "0x" || delim === "\\x" || delim === "%";
+    const parts = [];
+    for (let i = 0; i < bytes.length; i++) {
+      const h = (lower ? s.slice(i * 2, i * 2 + 2).toLowerCase() : s.slice(i * 2, i * 2 + 2));
+      parts.push((prepend ? delim : "") + h + (prepend ? "" : delim) + comma);
+      if (lineSize > 0 && i !== bytes.length - 1 && (i + 1) % lineSize === 0) parts.push("\n");
+    }
+    let joined = parts.join("");
+    if (!prepend && delim.length > 0) joined = joined.slice(0, -delim.length);
+    if (comma) joined = joined.slice(0, -comma.length);
+    return joined;
+  }
   return p && p.space && s ? s.match(/.{1,2}/g).join(" ") : s;
 }
 const HEX_DELIMS = {
@@ -252,7 +280,62 @@ const base62Decode = (t, p) => radixNDecode(t, (p && p.dict) || B62);
 
 // ============ Base64（标准 + URL-safe + 自定义码表） ============
 const B64_STD = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+/** 用指定 64 字符串（可含第 65 个 padding 字符）编码字节。用于 Show Base64 offsets。 */
+function base64WithAlphabet(bytes, alphabet) {
+  const D = String(alphabet || B64_STD);
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i], b1 = bytes[i + 1], b2 = bytes[i + 2];
+    const n = (b0 << 16) | ((b1 || 0) << 8) | (b2 || 0);
+    out += D[(n >> 18) & 63] + D[(n >> 12) & 63];
+    out += b1 !== undefined ? D[(n >> 6) & 63] : "=";
+    out += b2 !== undefined ? D[n & 63] : "=";
+  }
+  return out;
+}
+
+function bytesFromBase64Text(raw) {
+  let s = String(raw || "").replace(/\s/g, "").replace(/-/g, "+").replace(/_/g, "/");
+  while (s.length % 4) s += "=";
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/** CyberChef Show Base64 offsets：返回三个偏移的静态段（或带可变段标注）。 */
+function showBase64Offsets(text, p) {
+  const alphabet = String((p && p.offsetAlphabet) || "A-Za-z0-9+/=");
+  const expanded = alphabet === "A-Za-z0-9+/=" ? B64_STD : alphabet;
+  const showVariable = p && p.offsetShowVariable === true;
+  let input = (p && p.offsetInputFormat) === "Base64" ? bytesFromBase64Text(text) : te(String(text || ""));
+  if (input.length < 1) throw new Error("Please enter a string.");
+  const enc = (bytes) => base64WithAlphabet(bytes, expanded);
+  const full = [
+    enc(input),
+    enc(Uint8Array.from([0].concat(Array.from(input)))).slice(2),
+    enc(Uint8Array.from([0, 0].concat(Array.from(input)))).slice(3),
+  ];
+  const pads = [
+    enc(input).indexOf("="),
+    enc(Uint8Array.from([0].concat(Array.from(input)))).indexOf("="),
+    enc(Uint8Array.from([0, 0].concat(Array.from(input)))).indexOf("="),
+  ];
+  const cut = (s, len) => (len === -1 ? s : len % 4 === 2 ? s.slice(0, -3) : len % 4 === 3 ? s.slice(0, -2) : s);
+  if (!showVariable) return full.map((s, i) => cut(s, pads[i])).join("\n");
+  // 可变/填充段用 [] 标注（纯文本等价展示，CC 用 HTML span 高亮）
+  return full.map((s, i) => {
+    const len = pads[i];
+    if (len === -1) return s;
+    if (len % 4 === 2) return s.slice(0, -3) + "[" + s.slice(-3) + "]";
+    if (len % 4 === 3) return s.slice(0, -2) + "[" + s.slice(-2) + "]";
+    return s;
+  }).join("\n");
+}
+
 function base64Encode(text, p) {
+  if (p && p.showOffsets === true) return showBase64Offsets(text, p);
   const D = (p && p.dict) || B64_STD;
   const bytes = te(text);
   const wantPad = (p && p.padding !== undefined) ? p.padding : true;
@@ -551,6 +634,22 @@ register({
         { value: "None", label: "None（不剥离）" },
       ] },
     { key: "dict", label: "自定义码表", type: "text", default: B16, placeholder: B16 },
+    { key: "encodeDelimiter", label: "To Hex 分隔符（留空=旧行为）", type: "select", default: "",
+      options: [
+        { value: "", label: "不启用（沿用上方大写/空格参数）" },
+        { value: "Space", label: "Space" },
+        { value: "Percent", label: "Percent（%）" },
+        { value: "Comma", label: "Comma" },
+        { value: "Semi-colon", label: "Semi-colon" },
+        { value: "Colon", label: "Colon" },
+        { value: "Line feed", label: "Line feed" },
+        { value: "CRLF", label: "CRLF" },
+        { value: "0x", label: "0x" },
+        { value: "0x with comma", label: "0x with comma" },
+        { value: "\\x", label: "\\x" },
+        { value: "None", label: "None" },
+      ] },
+    { key: "bytesPerLine", label: "To Hex：每行字节数（0=不换行）", type: "number", default: 0 },
   ],
   acceptsBytes: true, textTransit: true,
   encode: (t, p) => hexEncode(p?.rawBytes ?? t, p), decode: hexDecode,
@@ -637,6 +736,13 @@ register({
     { key: "removeNonAlphabet", label: "解码时移除非字母表字符", type: "bool", default: false },
     { key: "strictMode", label: "严格模式（解码遇非字母表字符即报错）", type: "bool", default: false },
     { key: "dict", label: "自定义码表", type: "text", default: B64_STD, placeholder: B64_STD },
+    { key: "showOffsets", label: "显示所有 Base64 偏移（同 CyberChef Show Base64 offsets）", type: "bool", default: false },
+    { key: "offsetAlphabet", label: "偏移展示：字母表", type: "text", default: "A-Za-z0-9+/=" },
+    { key: "offsetShowVariable", label: "偏移展示：标注可变/填充字符", type: "bool", default: false },
+    { key: "offsetInputFormat", label: "偏移展示：输入格式", type: "select", default: "Raw", options: [
+      { value: "Raw", label: "Raw" },
+      { value: "Base64", label: "Base64" },
+    ] },
   ],
   acceptsBytes: true, textTransit: true,
   encode: (t, p) => base64Encode(p?.rawBytes ?? t, p), decode: base64Decode,

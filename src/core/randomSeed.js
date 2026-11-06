@@ -36,12 +36,33 @@ register({
         { value: "hex", label: "Hex" },
         { value: "base64", label: "Base64" },
       ] },
+    { key: "outputAs", label: "Output as（同 CyberChef Pseudo-Random Number Generator）", type: "select", default: "default",
+      options: [
+        { value: "default", label: "沿用 format（Hex/Base64）" },
+        { value: "Hex", label: "Hex" },
+        { value: "Integer", label: "Integer（大端无符号十进制）" },
+        { value: "Byte array", label: "Byte array（JSON 数组）" },
+        { value: "Raw", label: "Raw（逐字节 Latin-1）" },
+      ] },
   ],
   run: (_text, p) => {
     const len = Math.max(1, Math.min(4096, Number(p?.length) || 16));
     const fmt = p?.format || "hex";
     const buf = new Uint8Array(len);
     buf.set(randBytes(buf.length));
+    const outputAs = (p && p.outputAs) || "default";
+    if (outputAs === "Integer") {
+      let n = 0n;
+      for (const b of buf) n = (n << 8n) | BigInt(b);
+      return n.toString(10);
+    }
+    if (outputAs === "Byte array") return JSON.stringify([...buf]);
+    if (outputAs === "Raw") {
+      let s = "";
+      for (const b of buf) s += String.fromCharCode(b);
+      return s;
+    }
+    if (outputAs === "Hex") return bytesToHex(buf);
     return fmt === "base64" ? bytesToB64(buf) : bytesToHex(buf);
   },
 });

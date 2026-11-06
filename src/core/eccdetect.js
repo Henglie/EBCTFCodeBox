@@ -1036,7 +1036,64 @@ function pemParseReport(text, p) {
 }
 
 // ---- asn1Parse ----
+function parseBinaryInput(text, p) {
+  if (p && p.rawBytes && p.rawBytes.length) {
+    return p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes);
+  }
+  const t = String(text).trim();
+  if (/^[0-9a-fA-F\s]+$/.test(t) && t.replace(/\s/g, "").length % 2 === 0) return fromHex(t);
+  return b64ToBytes(t);
+}
+
+// CyberChef Parse TLV 同口径：Key(可选) / Length（默认小端，多字节按 256^i 累加）/ Value 字节数组。
+function parseTlvReport(text, p) {
+  const der = parseBinaryInput(text, p);
+  const keySize = Math.max(0, Number(p && p.keySize != null ? p.keySize : 1));
+  const lengthSize = Math.max(0, Number(p && p.lengthSize != null ? p.lengthSize : 1));
+  const useBER = p && p.useBER === true;
+  if (keySize <= 0 && lengthSize <= 0) throw new Error("Type or Length size must be greater than 0");
+
+  let pos = 0;
+  const data = [];
+  while (pos < der.length) {
+    let key;
+    if (keySize > 0) {
+      key = [];
+      for (let i = 0; i < keySize && pos < der.length; i++) key.push(der[pos++]);
+    }
+    let length;
+    if (useBER) {
+      const first = der[pos++];
+      if (first === undefined) break;
+      if (first & 0x80) {
+        const bytesInLength = first & ~0x80;
+        length = 0;
+        for (let i = 0; i < bytesInLength; i++) {
+          length = (length << 8) + der[pos];
+          pos++;
+        }
+      } else {
+        length = first & ~0x80;
+      }
+    } else {
+      length = 0;
+      for (let i = 0; i < lengthSize; i++) {
+        length += der[pos] * Math.pow(256, i);
+        pos++;
+      }
+    }
+    const value = [];
+    for (let i = 0; i < length; i++) {
+      if (pos >= der.length) break;
+      value.push(der[pos++]);
+    }
+    data.push({ key, length, value });
+  }
+  return JSON.stringify(data, null, 2);
+}
+
 function asn1ParseReport(text, p) {
+  if (p && p.tlvMode === "tlv") return parseTlvReport(text, p);
   let der;
  // 拖入文件走 rawBytes 通道（acceptsBytes 约定）：DER 是二进制，直接用真字节，跳过 hex/base64 文本解析。
   if (p && p.rawBytes && p.rawBytes.length) {
@@ -1180,10 +1237,17 @@ register({
   id: "asn1Parse",
   cat: "data",
   name: "ASN.1 TLV 解析",
-  desc: "X.690 DER 递归解析（输入 DER hex 或 base64，输出标签/长度/值树 + OID 名称）；可指定起始字节与长值截断长度",
+  desc: "X.690 DER 递归解析（输入 DER hex 或 base64，输出标签/长度/值树 + OID 名称）；可指定起始字节与长值截断长度；tlvMode=tlv 时按 CyberChef Parse TLV 解析通用 Key-Length-Value（可带 BER 长长度）",
   params: [
-    { key: "startIndex", label: "起始字节偏移", type: "number", default: 0 },
-    { key: "truncateOctets", label: "截断长值（字节，默认 32）", type: "number", default: 32 },
+    { key: "tlvMode", label: "解析模式", type: "select", default: "der", options: [
+      { value: "der", label: "ASN.1 DER 递归树" },
+      { value: "tlv", label: "通用 TLV（Key-Length-Value）" },
+    ] },
+    { key: "keySize", label: "TLV：Type/Key size（字节，0=无 key）", type: "number", default: 1 },
+    { key: "lengthSize", label: "TLV：Length size（字节）", type: "number", default: 1 },
+    { key: "useBER", label: "TLV：使用 BER 长长度", type: "bool", default: false },
+    { key: "startIndex", label: "起始字节偏移（DER）", type: "number", default: 0 },
+    { key: "truncateOctets", label: "截断长值（字节，默认 32，DER）", type: "number", default: 32 },
   ],
   run: asn1ParseReport,
   acceptsBytes: true,

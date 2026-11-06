@@ -369,6 +369,114 @@ function factorReport(n) {
 const BINARY_OPS = ["add", "sub", "mul", "pow", "div", "mod", "modpow", "gcd", "extgcd", "lcm"];
 const POW_BIT_LIMIT = 1000000; // 整数幂结果位长上限（100 万位二进制，防浏览器卡死）
 
+// ============ CyberChef Sum/Subtract/Multiply/Divide/Mean/Median 列表模式 ============
+const ARITH_DELIMS = {
+  "Space": " ", "Comma": ",", "Semi-colon": ";", "Colon": ":", "Line feed": "\n", "CRLF": "\r\n", "Tab": "\t",
+};
+
+// 列表数用 {v, s} 表示：v / 10^s。支持十进制小数与 0x 整数（同 BigNumber 输入口径）。
+function parseListNumber(raw) {
+  const t = String(raw == null ? "" : raw).trim();
+  if (!t) return null;
+  if (/^[+-]?0x[0-9a-fA-F]+$/.test(t)) {
+    const sign = t[0] === "-" ? -1n : 1n;
+    const body = t.replace(/^[+-]?0x/, "");
+    return { v: sign * BigInt("0x" + body), s: 0 };
+  }
+  const m = t.match(/^([+-]?)(?:(\d+)(?:\.(\d*))?|\.(\d+))$/);
+  if (!m) return null;
+  const sign = m[1] === "-" ? -1n : 1n;
+  const intPart = m[2] || "0";
+  const frac = m[3] !== undefined ? m[3] : (m[4] || "");
+  return { v: sign * BigInt(intPart + frac), s: frac.length };
+}
+
+function createListNumbers(text, p) {
+  const delim = ARITH_DELIMS[(p && p.delimiter) || "Space"];
+  if (delim === undefined) throw new Error("未知列表分隔符: " + (p && p.delimiter));
+  return String(text == null ? "" : text).split(delim).map(parseListNumber).filter((x) => x !== null);
+}
+
+function pow10(n) { return 10n ** BigInt(n); }
+
+function toCommonScale(nums) {
+  const maxS = Math.max(...nums.map((x) => x.s));
+  return { maxS, vals: nums.map((x) => x.v * pow10(maxS - x.s)) };
+}
+
+function fmtDec(v, s) {
+  const neg = v < 0n;
+  let abs = neg ? -v : v;
+  let out;
+  if (s === 0) out = abs.toString();
+  else {
+    const body = abs.toString().padStart(s + 1, "0");
+    const intPart = body.slice(0, -s);
+    const frac = body.slice(-s).replace(/0+$/, "");
+    out = frac ? intPart + "." + frac : intPart;
+  }
+  return (neg && out !== "0" ? "-" : "") + out;
+}
+
+// BigNumber 默认 20 位小数，四舍五入（half-up）。
+function divDec(a, b, places = 20) {
+  if (b.v === 0n) throw new Error("列表除法除数不能为 0");
+  const sign = (a.v < 0n) !== (b.v < 0n) ? -1n : 1n;
+  const av = a.v < 0n ? -a.v : a.v;
+  const bv = b.v < 0n ? -b.v : b.v;
+  const num = av * pow10(b.s + places);
+  const den = bv * pow10(a.s);
+  let q = num / den;
+  const r = num % den;
+  if (r !== 0n && 2n * r >= den) q += 1n;
+  return { v: sign * q, s: places };
+}
+
+function listCalc(text, p) {
+  const mode = p && p.listMode;
+  const nums = createListNumbers(text, p);
+  if (!nums.length) return "NaN";
+  switch (mode) {
+    case "sum": {
+      const { maxS, vals } = toCommonScale(nums);
+      return fmtDec(vals.reduce((a, b) => a + b, 0n), maxS);
+    }
+    case "sub": {
+      const { maxS, vals } = toCommonScale(nums);
+      return fmtDec(vals.slice(1).reduce((a, b) => a - b, vals[0]), maxS);
+    }
+    case "mul": {
+      const totalS = nums.reduce((a, x) => a + x.s, 0);
+      const prod = nums.reduce((a, x) => a * x.v, 1n);
+      return fmtDec(prod, totalS);
+    }
+    case "div": {
+      let cur = nums[0];
+      for (const n of nums.slice(1)) cur = divDec(cur, n);
+      return fmtDec(cur.v, cur.s);
+    }
+    case "mean": {
+      const { maxS, vals } = toCommonScale(nums);
+      const sum = vals.reduce((a, b) => a + b, 0n);
+      const avg = divDec({ v: sum, s: maxS }, { v: BigInt(nums.length), s: 0 });
+      return fmtDec(avg.v, avg.s);
+    }
+    case "median": {
+      const sorted = nums.slice().sort((a, b) => {
+        const av = a.v * pow10(Math.max(a.s, b.s) - a.s);
+        const bv = b.v * pow10(Math.max(a.s, b.s) - b.s);
+        return av < bv ? -1 : av > bv ? 1 : 0;
+      });
+      const mid = Math.floor(sorted.length / 2);
+      if (sorted.length % 2) return fmtDec(sorted[mid].v, sorted[mid].s);
+      const { maxS, vals } = toCommonScale([sorted[mid - 1], sorted[mid]]);
+      const avg = divDec({ v: vals[0] + vals[1], s: maxS }, { v: 2n, s: 0 });
+      return fmtDec(avg.v, avg.s);
+    }
+    default: throw new Error("未知列表运算: " + mode);
+  }
+}
+
 register({
   id: "bigCalc", cat: "radix", name: "大数计算器（BigInt）",
   desc: "BigInt 大整数运算：四则/截断余/整数幂/模幂/模逆/gcd·extgcd·lcm/素性检验/邻素数/素因子分解（试除+Pollard rho Brent）/整数开方/位长。div 为截断除、mod 符号随被除数（同 BigInt 语义）",
@@ -399,8 +507,29 @@ register({
       placeholder: "二元运算第二操作数；modpow 的指数" },
     { key: "m", label: "m 模数（modpow/modinv 必填）", type: "text", default: "",
       placeholder: "十进制，>= 1" },
+    { key: "listMode", label: "列表运算（十进制小数/0x 整数，同 CyberChef Sum/Subtract/Multiply/Divide/Mean/Median）", type: "select", default: "",
+      options: [
+        { value: "", label: "不启用（走上方 a/b 参数）" },
+        { value: "sum", label: "Sum（求和）" },
+        { value: "sub", label: "Subtract（首项减其余）" },
+        { value: "mul", label: "Multiply（连乘）" },
+        { value: "div", label: "Divide（首项除其余）" },
+        { value: "mean", label: "Mean（算术平均，整数截断）" },
+        { value: "median", label: "Median（中位数，整数截断）" },
+      ] },
+    { key: "delimiter", label: "列表分隔符", type: "select", default: "Space",
+      options: [
+        { value: "Space", label: "Space" },
+        { value: "Comma", label: "Comma" },
+        { value: "Semi-colon", label: "Semi-colon" },
+        { value: "Colon", label: "Colon" },
+        { value: "Line feed", label: "Line feed" },
+        { value: "CRLF", label: "CRLF" },
+        { value: "Tab", label: "Tab" },
+      ] },
   ],
-  run: (_text, p) => {
+  run: (text, p) => {
+    if (p && p.listMode) return listCalc(text, p);
     const op = String(p?.op || "add");
     const a = parseBigDec(p?.a, "a");
     const b = BINARY_OPS.includes(op) ? parseBigDec(p?.b, "b") : null;

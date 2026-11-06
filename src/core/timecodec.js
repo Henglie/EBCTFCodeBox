@@ -304,6 +304,26 @@ function tzConvert(iso, fromTz, toTz) {
   return formatIsoWithTz(utcMs, toOffset);
 }
 
+const CC_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const CC_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+function formatCcUtc(ms) {
+  const d = new Date(ms);
+  const p2 = (n) => String(n).padStart(2, "0");
+  return CC_WEEKDAYS[d.getUTCDay()] + " " + d.getUTCDate() + " " + CC_MONTHS[d.getUTCMonth()] + " " +
+    d.getUTCFullYear() + " " + p2(d.getUTCHours()) + ":" + p2(d.getUTCMinutes()) + ":" + p2(d.getUTCSeconds());
+}
+
+function parseIsoCc(s, treatAsUTC) {
+  const t = String(s).trim();
+  if (!t) throw new Error("时间: 空输入");
+  if (!treatAsUTC) {
+    const ms = Date.parse(t);
+    if (Number.isNaN(ms)) throw new Error("无效日期时间: " + s);
+    return ms;
+  }
+  return parseIso(t);
+}
+
 // ============ 注册 ============
 register({
   id: "unixTime", cat: "radix", name: "Unix 时间戳 ↔ ISO8601",
@@ -316,8 +336,14 @@ register({
       { value: "us", label: "微秒" },
       { value: "ns", label: "纳秒（同 CyberChef Nanoseconds (ns)）" },
     ] },
+    { key: "treatAsUTC", label: "按 UTC 解析（关闭=本地时区）", type: "bool", default: true },
+    { key: "showParsed", label: "附带解析出的 UTC 日期时间", type: "bool", default: false },
   ],
-  encode: (t, p) => msToUnix(parseIso(t), (p && p.unit) || "auto"),
+  encode: (t, p) => {
+    const ms = parseIsoCc(t, p && p.treatAsUTC !== false);
+    const base = msToUnix(ms, (p && p.unit) || "auto");
+    return p && p.showParsed === true ? `${base} (${formatCcUtc(ms)} UTC)` : base;
+  },
   decode: (t, p) => formatIso(unixToMs(t, (p && p.unit) || "auto")),
 });
 

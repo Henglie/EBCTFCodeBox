@@ -65,6 +65,52 @@ function sourceStatus(cfg) {
   return "system 档；crypto.getRandomValues 直通（与默认行为逐字节等价）";
 }
 
+const MAX53 = (1n << 53n) - 1n;
+function delimChar(name) {
+  switch (name) {
+    case "Comma": return ",";
+    case "Semi-colon": return ";";
+    case "Colon": return ":";
+    case "Line feed": return "\n";
+    case "CRLF": return "\r\n";
+    case "Nothing": return "";
+    case "Space": return " ";
+    default: return " ";
+  }
+}
+
+function randomIntegers(p) {
+  const count = Math.max(1, Math.min(10000, Math.floor(Number(p && p.count) || 1)));
+  const min = Math.ceil(Number(p && p.min != null ? p.min : 0));
+  const max = Math.floor(Number(p && p.max != null ? p.max : 99));
+  if (!Number.isSafeInteger(min) || !Number.isSafeInteger(max)) {
+    throw new Error("Min and Max must be between `-(2^53 - 1)` and `2^53 - 1`.");
+  }
+  if (min > max) throw new Error("Min cannot be larger than Max.");
+  const minBig = BigInt(min);
+  const range = BigInt(max) - minBig + 1n;
+  if (range > MAX53) throw new Error("Range between Min and Max cannot be larger than `2^53`");
+
+  const threshold = MAX53 - (MAX53 % range);
+  const output = [];
+  for (let i = 0; i < count; i++) {
+    let v;
+    do {
+      const buf = randomBytes(7);
+      v = 0n;
+      for (const b of buf) v = (v << 8n) | BigInt(b);
+      v &= MAX53;
+    } while (v >= threshold);
+    output.push(minBig + (v % range));
+  }
+
+  const outputType = (p && p.output) || "Raw";
+  if (outputType === "Raw") return output.map((v) => String.fromCharCode(Number(v))).join("");
+  const delim = delimChar(p && p.delimiter);
+  const vals = output.map((v) => (outputType === "Hex" ? v.toString(16) : v.toString(10)));
+  return vals.join(delim);
+}
+
 register({
   id: "randomSecure", cat: "radix", name: "增强随机安全",
   desc: "查看 / 切换随机源档位、查看随机源状态、按指定长度取随机数（hex/base64）",
@@ -80,6 +126,27 @@ register({
     { key: "seed", label: "用户随机输入", type: "text", default: "", placeholder: "mixed/custom 档的加料/种子" },
     { key: "endpoint", label: "服务器地址", type: "text", default: "", placeholder: "server 档 endpoint（如 http://…）" },
     { key: "auth", label: "鉴权头", type: "text", default: "", placeholder: "server 档可选鉴权（如 Bearer …）" },
+    { key: "genMode", label: "生成模式", type: "select", default: "bytes", options: [
+      { value: "bytes", label: "随机字节（原有模式）" },
+      { value: "integers", label: "随机整数（同 CyberChef Pseudo-Random Integer Generator）" },
+    ] },
+    { key: "count", label: "整数个数", type: "number", default: 1 },
+    { key: "min", label: "整数最小值", type: "number", default: 0 },
+    { key: "max", label: "整数最大值", type: "number", default: 99 },
+    { key: "delimiter", label: "整数分隔符", type: "select", default: "Space", options: [
+      { value: "Space", label: "Space" },
+      { value: "Comma", label: "Comma" },
+      { value: "Semi-colon", label: "Semi-colon" },
+      { value: "Colon", label: "Colon" },
+      { value: "Line feed", label: "Line feed" },
+      { value: "CRLF", label: "CRLF" },
+      { value: "Nothing", label: "Nothing" },
+    ] },
+    { key: "output", label: "整数输出格式", type: "select", default: "Raw", options: [
+      { value: "Raw", label: "Raw" },
+      { value: "Hex", label: "Hex" },
+      { value: "Decimal", label: "Decimal" },
+    ] },
     { key: "length", label: "字节数", type: "number", default: 16, placeholder: "0..4096 字节" },
     { key: "format", label: "输出格式", type: "select", default: "hex",
       options: [
@@ -93,6 +160,7 @@ register({
     if (req !== "inherit") {
       setRandConfig({ mode: req, seed: p && p.seed, endpoint: p && p.endpoint, auth: p && p.auth });
     }
+    if (p && p.genMode === "integers") return randomIntegers(p);
     const cfg = getRandConfig();
     const len = clampLen(p && p.length);
     const fmt = (p && p.format) === "base64" ? "base64" : "hex";

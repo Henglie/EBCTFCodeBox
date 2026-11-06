@@ -450,6 +450,35 @@ function zeroWidthError(pattern, index) {
   );
 }
 
+/** CyberChef Utils.parseEscapedChars 同口径：\n \r \t \b \f \v \a \xNN \uNNNN \u{...} 八进制与 \\。 */
+function parseEscapedChars(str) {
+  return str.replace(/\\([abfnrtv'"]|[0-3][0-7]{2}|[0-7]{1,2}|x[\da-fA-F]{2}|u[\da-fA-F]{4}|u\{[\da-fA-F]{1,6}\}|\\)/g, (m, a) => {
+    switch (a[0]) {
+      case "\\": return "\\";
+      case "0": case "1": case "2": case "3":
+      case "4": case "5": case "6": case "7":
+        return String.fromCharCode(parseInt(a, 8));
+      case "a": return String.fromCharCode(7);
+      case "b": return "\b";
+      case "t": return "\t";
+      case "n": return "\n";
+      case "v": return "\v";
+      case "f": return "\f";
+      case "r": return "\r";
+      case '"': return '"';
+      case "'": return "'";
+      case "x": return String.fromCharCode(parseInt(a.substr(1), 16));
+      case "u":
+        return a[1] === "{" ? String.fromCodePoint(parseInt(a.slice(2, -1), 16)) : String.fromCharCode(parseInt(a.substr(1), 16));
+      default: return m;
+    }
+  });
+}
+
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 register({
   id: "regexTool",
   cat: "text",
@@ -486,6 +515,15 @@ register({
     { key: "dedupe", label: "去重（extract）", type: "bool", default: false },
     { key: "firstOnly", label: "仅首个", type: "bool", default: false },
     { key: "sep", label: "结果分隔符（extract）", type: "text", default: "\\n", placeholder: "支持 \\n \\t 转义" },
+    { key: "findMode", label: "查找串类型", type: "select", default: "regex", options: [
+      { value: "regex", label: "Regex（正则）" },
+      { value: "extended", label: "Extended（\\n, \\t, \\x...）" },
+      { value: "simple", label: "Simple string（纯字面量）" },
+    ] },
+    { key: "replaceMode", label: "替换串转义", type: "select", default: "literal", options: [
+      { value: "literal", label: "Literal（保留 $1..$9 与反斜杠原样）" },
+      { value: "extended", label: "Extended（先解析 \\n, \\t, \\x...）" },
+    ] },
     { key: "replacement", label: "替换串（replace）", type: "text", default: "", placeholder: "支持 $1..$9、$&、$$" },
   ],
   run(text, p) {
@@ -496,7 +534,13 @@ register({
     }
 
     const preset = resolvePreset(opts.preset);
-    const pattern = preset ? preset.pattern : (opts.pattern == null ? "" : String(opts.pattern));
+    let pattern = preset ? preset.pattern : (opts.pattern == null ? "" : String(opts.pattern));
+    const findMode = opts.findMode == null ? "regex" : String(opts.findMode);
+    if (!preset && findMode !== "regex") {
+      if (findMode === "simple") pattern = escapeRegex(pattern);
+      else if (findMode === "extended") pattern = escapeRegex(parseEscapedChars(pattern));
+      else throw new Error(`未知 findMode ${JSON.stringify(findMode)}：只支持 regex / extended / simple`);
+    }
     if (pattern === "") {
       throw new Error("pattern 为空：空模式会在每个位置命中，已拒绝；请填写要提取或替换的正则，或选择一个预设");
     }
@@ -580,7 +624,8 @@ register({
     }
 
     // replace：默认全局替换；firstOnly 时去掉 g，只替换第一处。
-    const replacement = opts.replacement == null ? "" : String(opts.replacement);
+    let replacement = opts.replacement == null ? "" : String(opts.replacement);
+    if (opts.replaceMode === "extended") replacement = parseEscapedChars(replacement);
     const replaceFlags = firstOnly ? flags.replace(/g/g, "") : (flags.includes("g") ? flags : flags + "g");
     const re = compile(pattern, replaceFlags);
     let out = "";

@@ -92,8 +92,8 @@ function wordsFromBytes(bytes, start, len) {
 }
 
 // chunk → output 对象（最后一块作为可 root 化的输出，前面的块压进 cv）
-function chunkOutput(input, start, len, chunkIndex, flags) {
-  let cv = IV.slice();
+function chunkOutput(input, start, len, chunkIndex, flags, initCV = IV) {
+  let cv = initCV.slice();
   const nBlocks = Math.max(1, Math.ceil(len / 64));
   for (let i = 0; i < nBlocks; i++) {
     const blockStart = i * 64;
@@ -125,15 +125,15 @@ function largestPow2Below(n) {
 }
 
 // 递归树：返回根 output 对象
-function hashTree(input, start, len, chunkIndexStart, flags) {
+function hashTree(input, start, len, chunkIndexStart, flags, initCV = IV) {
   if (len <= 1024) {
-    return chunkOutput(input, start, len, chunkIndexStart, flags);
+    return chunkOutput(input, start, len, chunkIndexStart, flags, initCV);
   }
   const nChunks = Math.ceil(len / 1024);
   const leftChunks = largestPow2Below(nChunks);
   const leftLen = leftChunks * 1024;
-  const leftCV = outputCV(hashTree(input, start, leftLen, chunkIndexStart, flags));
-  const rightCV = outputCV(hashTree(input, start + leftLen, len - leftLen, chunkIndexStart + leftChunks, flags));
+  const leftCV = outputCV(hashTree(input, start, leftLen, chunkIndexStart, flags, initCV));
+  const rightCV = outputCV(hashTree(input, start + leftLen, len - leftLen, chunkIndexStart + leftChunks, flags, initCV));
   return parentOutput(leftCV, rightCV, flags);
 }
 
@@ -153,8 +153,22 @@ function rootBytes(o, outLen) {
   return out;
 }
 
-function blake3(inputBytes, outLen = 32) {
-  const o = hashTree(inputBytes, 0, inputBytes.length, 0, 0);
+const KEYED_HASH = 16;
+
+/** 32 字节密钥 → 8 个 32 位初始链接值（BLAKE3 keyed 模式以密钥字替代 IV）。 */
+function keyWords(keyBytes) {
+  const w = new Array(8);
+  for (let i = 0; i < 8; i++) {
+    w[i] = (keyBytes[i * 4] | (keyBytes[i * 4 + 1] << 8) | (keyBytes[i * 4 + 2] << 16) | (keyBytes[i * 4 + 3] << 24)) >>> 0;
+  }
+  return w;
+}
+
+function blake3(inputBytes, outLen = 32, keyBytes = null) {
+  if (keyBytes != null && keyBytes.length !== 32) throw new Error("BLAKE3 keyed 模式密钥须为 32 字节");
+  const flags = keyBytes ? KEYED_HASH : 0;
+  const initCV = keyBytes ? keyWords(keyBytes) : IV;
+  const o = hashTree(inputBytes, 0, inputBytes.length, 0, flags, initCV);
   return rootBytes(o, outLen);
 }
 
@@ -190,11 +204,19 @@ function blake3Run(text, p = {}) {
   if (!Number.isFinite(outLen) || outLen < 1) outLen = 32;
   if (outLen > 4096) outLen = 4096; // 防滥用
 
-  const digest = blake3(input, outLen);
+  const keyText = String((p && p.keyText) || "");
+  let keyBytes = null;
+  if (keyText !== "") {
+    keyBytes = new TextEncoder().encode(keyText);
+    if (keyBytes.length !== 32) throw new Error(`BLAKE3 keyed 密钥须恰为 32 字节（UTF-8），当前 ${keyBytes.length} 字节`);
+  }
+
+  const digest = blake3(input, outLen, keyBytes);
   const lines = [];
   lines.push("=== BLAKE3 加密哈希 ===");
   lines.push(`输入: ${input.length} 字节（${inputMode}）`);
   lines.push(`输出长度: ${outLen} 字节（XOF 可扩展）`);
+  if (keyBytes) lines.push("模式: keyed（KEYED_HASH，32 字节密钥）");
   lines.push("");
   lines.push(`hex:    ${bytesToHex(digest)}`);
   lines.push(`base64: ${bytesToB64(digest)}`);
@@ -208,6 +230,7 @@ register({
   desc: "BLAKE3 加密哈希（O'Connor/Aumasson/Neves/Wilcox-O'Hearn 2020）：BLAKE2 G 函数 + Merkle 树 + 无限输出（XOF）。7 轮压缩，chunk=1024 字节。默认 32 字节输出，可扩展。官方 test_vectors 验证。",
   params: [
     { key: "outLen", label: "输出字节数", type: "number", default: 32, placeholder: "默认 32（XOF 可扩展，最大 4096）" },
+    { key: "keyText", label: "密钥（UTF-8，恰 32 字节；留空=普通哈希）", type: "text", default: "", placeholder: "CyberChef Key；非空时启用 keyed 模式" },
   ],
   run: blake3Run,
   acceptsBytes: true,

@@ -14,14 +14,18 @@
  */
 import { register } from "./registry.js";
 
-function b64DecodeToText(b64) {
+function b64DecodeBytes(b64) {
   const s = String(b64 || "").replace(/\s+/g, "");
   let bin;
   if (typeof Buffer !== "undefined") bin = Buffer.from(s, "base64").toString("binary");
   else bin = globalThis.atob(s);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return new TextDecoder("utf-8", { fatal: false }).decode(out);
+  return out;
+}
+
+function b64DecodeToText(b64) {
+  return new TextDecoder("utf-8", { fatal: false }).decode(b64DecodeBytes(b64));
 }
 
 // quoted-printable 解码（RFC 2045）：=XX 转字节，软换行 = 去掉
@@ -118,7 +122,97 @@ export function mimeMultipartParse(src) {
   };
 }
 
+// RFC 2047 encoded-word 解码（CyberChef MIME Decoding 同口径：B 为 base64、Q 为 =XX/_，charset 支持 UTF-8/US-ASCII/ISO-8859-1..16）。
+function decodeMimeCharset(charset, bytes) {
+  const cs = String(charset || "").toLowerCase();
+  if (cs === "utf-8") return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  if (cs === "us-ascii") {
+    let s = "";
+    for (const b of bytes) s += String.fromCharCode(b);
+    return s;
+  }
+  const iso = cs.match(/^iso-8859-(\d+)$/);
+  if (iso) {
+    const n = Number(iso[1]);
+    if (n === 1) {
+      let s = "";
+      for (const b of bytes) s += String.fromCharCode(b);
+      return s;
+    }
+    if (n >= 2 && n <= 16) {
+      try { return new TextDecoder("iso-8859-" + n, { fatal: false }).decode(bytes); }
+      catch { /* fall through */ }
+    }
+  }
+  throw new Error("Unhandled Charset");
+}
+
+function parseQEncodedBytes(word) {
+  const out = [];
+  for (let i = 0; i < word.length; i++) {
+    if (word[i] === "_") {
+      out.push(0x20);
+    } else if (word[i] === "=") {
+      if (i + 2 >= word.length) throw new Error("Incorrectly Encoded Word");
+      const hex = word.slice(i + 1, i + 3);
+      if (!/^[0-9a-fA-F]{2}$/.test(hex)) throw new Error("Incorrectly Encoded Word");
+      out.push(parseInt(hex, 16));
+      i += 2;
+    } else {
+      const c = word.charCodeAt(i);
+      if ((c >= 0x20 && c <= 0x7e) || c === 0x0a || c === 0x0d || c === 0x09) out.push(c);
+      else throw new Error("Incorrectly Encoded Word");
+    }
+  }
+  return new Uint8Array(out);
+}
+
+function mimeDecodeHeaders(text) {
+  const headerString = String(text || "").replace(/\r\n/g, "\n");
+  let i = headerString.indexOf("=?");
+  if (i === -1) return headerString;
+  let decoded = headerString.slice(0, i);
+  let header = headerString.slice(i);
+  let isBetweenWords = false;
+  while (true) {
+    const start = header.indexOf("=?");
+    if (start === -1) break;
+    let cur = start + 2;
+    const q = header.slice(cur).indexOf("?");
+    if (q === -1) break;
+    const charset = header.slice(cur, cur + q);
+    cur += q + 1;
+    if (header.length < cur + 3) break;
+    const encoding = header[cur];
+    cur += 1;
+    if (header[cur] !== "?") break;
+    cur += 1;
+    const endIdx = header.slice(cur).indexOf("?=");
+    if (endIdx === -1) break;
+    const text = header.slice(cur, cur + endIdx);
+    const end = cur + endIdx + 2;
+    let bytes;
+    if (encoding.toLowerCase() === "b") bytes = b64DecodeBytes(text);
+    else if (encoding.toLowerCase() === "q") bytes = parseQEncodedBytes(text);
+    else {
+      isBetweenWords = false;
+      decoded += header.slice(0, start + 2);
+      header = header.slice(start + 2);
+      continue;
+    }
+    if (start > 0 && (!isBetweenWords || header.slice(0, start).search(/\S/g) > -1)) {
+      decoded += header.slice(0, start);
+    }
+    decoded += decodeMimeCharset(charset, bytes);
+    header = header.slice(end);
+    isBetweenWords = true;
+  }
+  if (header.length > 0) decoded += header;
+  return decoded;
+}
+
 function mimeMultipartOp(text, p = {}) {
+  if ((p && p.mode) === "encodedWords") return mimeDecodeHeaders(text);
   const parsed = mimeMultipartParse(text);
   if (!parsed.parts.length) return "解析完成：boundary=" + parsed.boundary + "，无 part";
   const out = parsed.parts.map((part, i) => {
@@ -152,12 +246,16 @@ function mimeMultipartEncode(text, p = {}) {
 
 register({
   id: "mimeMultipart", cat: "text", name: "MIME multipart 解析",
-  desc: "解析 multipart/mixed 邮件/HTTP 体：boundary 分 part，识别 Content-Type/Transfer-Encoding（base64/QP/7bit）并解码正文；encode 方向按 | 分隔组合",
+  desc: "解析 multipart/mixed 邮件/HTTP 体：boundary 分 part，识别 Content-Type/Transfer-Encoding（base64/QP/7bit）并解码正文；encode 方向按 | 分隔组合；mode=encodedWords 时按 RFC 2047 解码邮件头 encoded-word",
   params: [
+    { key: "mode", label: "模式", type: "select", default: "multipart", options: [
+      { value: "multipart", label: "multipart 解析" },
+      { value: "encodedWords", label: "MIME Decoding（RFC 2047 头解码）" },
+    ] },
     { key: "boundary", label: "boundary（encode 用）", type: "text", default: "", placeholder: "encode 方向自定义分隔串" },
   ],
   decode: mimeMultipartOp,
   encode: mimeMultipartEncode,
 });
 
-export { mimeMultipartOp, mimeMultipartEncode, qpDecode };
+export { mimeMultipartOp, mimeMultipartEncode, qpDecode, mimeDecodeHeaders };

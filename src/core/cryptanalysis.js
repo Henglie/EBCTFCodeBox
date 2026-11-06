@@ -319,7 +319,21 @@ function kasiskiTest(text, p) {
 // ============================================================
 // op 4: chiSquareAnalysis — 卡方检验（字母级详细对比）
 // ============================================================
+function chiSquareBytes(text) {
+  const data = new TextEncoder().encode(String(text == null ? "" : text));
+  if (data.length === 0) return "0";
+  const dist = new Array(256).fill(0);
+  for (const b of data) dist[b]++;
+  const expected = data.length / 256;
+  let total = 0;
+  for (const c of dist) {
+    if (c > 0) total += Math.pow(c - expected, 2) / expected;
+  }
+  return String(total);
+}
+
 function chiSquareAnalysis(text, p) {
+  if ((p && p.mode) === "bytes") return chiSquareBytes(text);
   const s = cleanAlpha(text);
   const n = s.length;
   if (n === 0) return "卡方检验: 输入无字母";
@@ -501,7 +515,55 @@ function rot47(text) {
   });
 }
 
+function escapeCcWhitespace(s) {
+  return s.replace(/[\x09-\x10]/g, (c) => String.fromCharCode(0xE000 + c.charCodeAt(0)));
+}
+
+function rotBruteReport(text, p, kind) {
+  const is13 = kind === "rot13";
+  const rotateLower = p && p.rotateLower !== undefined ? p.rotateLower !== false : true;
+  const rotateUpper = p && p.rotateUpper !== undefined ? p.rotateUpper !== false : true;
+  const rotateNum = p && p.rotateNumbers === true;
+  const sampleLength = p && p.sampleLength != null && p.sampleLength !== "" ? Number(p.sampleLength) : 100;
+  const sampleOffset = p && p.sampleOffset != null && p.sampleOffset !== "" ? Number(p.sampleOffset) : 0;
+  if (!Number.isFinite(sampleLength) || sampleLength < 0) throw new Error("Sample length must be a non-negative number");
+  if (!Number.isInteger(sampleOffset) || sampleOffset < 0) throw new Error("Sample offset must be a non-negative integer");
+  const printAmount = p && p.printAmount !== undefined ? p.printAmount !== false : true;
+  const crib = String((p && p.crib) || "");
+  const cribLower = crib.toLowerCase();
+
+  const input = new TextEncoder().encode(String(text == null ? "" : text));
+  const sample = input.slice(sampleOffset, sampleOffset + sampleLength);
+  const lowerStart = 97, upperStart = 65, numStart = 48;
+  const result = [];
+  const maxAmount = is13 ? 25 : 93;
+  for (let amount = 1; amount <= maxAmount; amount++) {
+    const rotated = sample.slice();
+    for (let i = 0; i < rotated.length; i++) {
+      if (is13) {
+        if (rotateLower && lowerStart <= rotated[i] && rotated[i] < lowerStart + 26) {
+          rotated[i] = (rotated[i] - lowerStart + amount) % 26 + lowerStart;
+        } else if (rotateUpper && upperStart <= rotated[i] && rotated[i] < upperStart + 26) {
+          rotated[i] = (rotated[i] - upperStart + amount) % 26 + upperStart;
+        } else if (rotateNum && numStart <= rotated[i] && rotated[i] < numStart + 10) {
+          rotated[i] = (rotated[i] - numStart + amount) % 10 + numStart;
+        }
+      } else if (rotated[i] >= 33 && rotated[i] <= 126) {
+        rotated[i] = (rotated[i] - 33 + amount) % 94 + 33;
+      }
+    }
+    const rotatedString = new TextDecoder("utf-8", { fatal: false }).decode(rotated);
+    if (rotatedString.toLowerCase().indexOf(cribLower) >= 0) {
+      const escaped = escapeCcWhitespace(rotatedString);
+      result.push(printAmount ? "Amount = " + (" " + amount).slice(-2) + ": " + escaped : escaped);
+    }
+  }
+  return result.join("\n");
+}
+
 function caesarBrute(text, p) {
+  if (p && p.bruteMode === "rot13") return rotBruteReport(text, p, "rot13");
+  if (p && p.bruteMode === "rot47") return rotBruteReport(text, p, "rot47");
   const s = text;
   const cleanS = cleanAlpha(text);
   if (cleanS.length === 0) return "凯撒求位移: 输入无字母";
@@ -604,8 +666,13 @@ register({
   id: "chiSquareAnalysis",
   cat: "analysis",
   name: "卡方检验（详细）",
-  desc: "密文 vs 英语字母频率的卡方检验（字母级观测/期望对比表）",
-  params: [],
+  desc: "密文 vs 英语字母频率的卡方检验（字母级观测/期望对比表）；mode=bytes 时为 CyberChef 同口径的 256 桶字节分布卡方值",
+  params: [
+    { key: "mode", label: "模式", type: "select", default: "letters", options: [
+      { value: "letters", label: "字母级（vs 英语频率，详细报告）" },
+      { value: "bytes", label: "字节分布（256 桶卡方值，同 CyberChef）" },
+    ] },
+  ],
   run: chiSquareAnalysis,
 });
 register({
@@ -635,8 +702,21 @@ register({
   id: "caesarBrute",
   cat: "analysis",
   name: "凯撒/ROT 自动求位移",
-  desc: "对 0-25 位移逐一打分（卡方 + 四元组），自动找最佳位移并输出排名 + ROT47",
-  params: [],
+  desc: "对 0-25 位移逐一打分（卡方 + 四元组），自动找最佳位移并输出排名 + ROT47；bruteMode=rot13/rot47 时按 CyberChef 同口径枚举可能位移（可过滤 crib）",
+  params: [
+    { key: "bruteMode", label: "模式", type: "select", default: "auto", options: [
+      { value: "auto", label: "自动求位移（打分排名）" },
+      { value: "rot13", label: "ROT13 Brute Force（1..25）" },
+      { value: "rot47", label: "ROT47 Brute Force（1..93）" },
+    ] },
+    { key: "rotateLower", label: "ROT13：旋转小写字母", type: "bool", default: true },
+    { key: "rotateUpper", label: "ROT13：旋转大写字母", type: "bool", default: true },
+    { key: "rotateNumbers", label: "ROT13：旋转数字", type: "bool", default: false },
+    { key: "sampleLength", label: "Sample length（0=全部）", type: "number", default: 100 },
+    { key: "sampleOffset", label: "Sample offset", type: "number", default: 0 },
+    { key: "printAmount", label: "输出位移量", type: "bool", default: true },
+    { key: "crib", label: "Crib（已知明文，过滤结果）", type: "text", default: "" },
+  ],
   run: caesarBrute,
 });
 

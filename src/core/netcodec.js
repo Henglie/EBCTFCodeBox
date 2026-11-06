@@ -374,11 +374,314 @@ register({
   decode: (t, p) => intToIpv4(ipv4ToIntWithFormat(t, (p && p.format) || "dec")),
 });
 
+// ============ IPv6 详细报告（CyberChef Parse IPv6 address 口径） ============
+function ipv4Pair(hi, lo) {
+  return intToIpv4((BigInt(hi) << 16n) | BigInt(lo));
+}
+
+function ipv6DetailedReport(text) {
+  const g = parseIpv6(text);
+  const longhand = ipv6Expand(g);
+  const shorthand = ipv6Compress(g);
+  let out = "Longhand:  " + longhand + "\nShorthand: " + shorthand + "\n";
+
+  if (shorthand === "::") {
+    out += "\nUnspecified address corresponding to 0.0.0.0/32 in IPv4.";
+    out += "\nUnspecified address range: ::/128";
+  } else if (shorthand === "::1") {
+    out += "\nLoopback address to the local host corresponding to 127.0.0.1/8 in IPv4.";
+    out += "\nLoopback addresses range: ::1/128";
+  } else if (g[0] === 0 && g[1] === 0 && g[2] === 0 && g[3] === 0 && g[4] === 0 && g[5] === 0xffff) {
+    out += "\nIPv4-mapped IPv6 address detected. IPv6 clients will be handled natively by default, and IPv4 clients appear as IPv6 clients at their IPv4-mapped IPv6 address.";
+    out += "\nMapped IPv4 address: " + ipv4Pair(g[6], g[7]);
+    out += "\nIPv4-mapped IPv6 addresses range: ::ffff:0:0/96";
+  } else if (g[0] === 0 && g[1] === 0 && g[2] === 0 && g[3] === 0 && g[4] === 0xffff && g[5] === 0) {
+    out += "\nIPv4-translated address detected. Used by Stateless IP/ICMP Translation (SIIT). See RFCs 6145 and 6052 for more details.";
+    out += "\nTranslated IPv4 address: " + ipv4Pair(g[6], g[7]);
+    out += "\nIPv4-translated addresses range: ::ffff:0:0:0/96";
+  } else if (g[0] === 0x100) {
+    out += "\nDiscard prefix detected. This is used when forwarding traffic to a sinkhole router to mitigate the effects of a denial-of-service attack. See RFC 6666 for more details.";
+    out += "\nDiscard range: 100::/64";
+  } else if (g[0] === 0x64 && g[1] === 0xff9b && g[2] === 0 && g[3] === 0 && g[4] === 0 && g[5] === 0) {
+    out += "\n'Well-Known' prefix for IPv4/IPv6 translation detected. See RFC 6052 for more details.";
+    out += "\nTranslated IPv4 address: " + ipv4Pair(g[6], g[7]);
+    out += "\n'Well-Known' prefix range: 64:ff9b::/96";
+  } else if (g[0] === 0x2001 && g[1] === 0) {
+    out += "\nTeredo tunneling IPv6 address detected\n";
+    const serverIpv4 = (g[2] << 16) + g[3];
+    const udpPort = (~g[5]) & 0xffff;
+    const clientIpv4 = ~((g[6] << 16) + g[7]);
+    const flagCone = (g[4] >>> 15) & 1;
+    const flagR = (g[4] >>> 14) & 1;
+    const flagRandom1 = (g[4] >>> 10) & 15;
+    const flagUg = (g[4] >>> 8) & 3;
+    const flagRandom2 = g[4] & 255;
+    out += "\nServer IPv4 address: " + intToIpv4(BigInt(serverIpv4 >>> 0)) +
+      "\nClient IPv4 address: " + intToIpv4(BigInt(clientIpv4 >>> 0)) +
+      "\nClient UDP port:     " + udpPort +
+      "\nFlags:" +
+      "\n\tCone:    " + flagCone + (flagCone ? " (Client is behind a cone NAT)" : " (Client is not behind a cone NAT)");
+    out += "\n\tR:       " + flagR + (flagR ? " Error: This flag should be set to 0. See RFC 5991 and RFC 4380." : "");
+    out += "\n\tRandom1: " + flagRandom1.toString(2).padStart(4, "0") +
+      "\n\tUG:      " + flagUg.toString(2).padStart(2, "0") + (flagUg ? " Error: This flag should be set to 00. See RFC 4380." : "");
+    out += "\n\tRandom2: " + flagRandom2.toString(2).padStart(8, "0");
+    if (!flagR && !flagUg && flagRandom1 && flagRandom2) {
+      out += "\n\nThis is a valid Teredo address which complies with RFC 4380 and RFC 5991.";
+    } else if (!flagR && !flagUg) {
+      out += "\n\nThis is a valid Teredo address which complies with RFC 4380, however it does not comply with RFC 5991 (Teredo Security Updates) as there are no randomised bits in the flag field.";
+    } else {
+      out += "\n\nThis is an invalid Teredo address.";
+    }
+    out += "\n\nTeredo prefix range: 2001::/32";
+  } else if (g[0] === 0x2001 && g[1] === 0x2 && g[2] === 0) {
+    out += "\nAssigned to the Benchmarking Methodology Working Group (BMWG) for benchmarking IPv6. Corresponds to 198.18.0.0/15 for benchmarking IPv4. See RFC 5180 for more details.";
+    out += "\nBMWG range: 2001:2::/48";
+  } else if (g[0] === 0x2001 && g[1] >= 0x10 && g[1] <= 0x1f) {
+    out += "\nDeprecated, previously ORCHIDv1 (Overlay Routable Cryptographic Hash Identifiers).\nORCHIDv1 range: 2001:10::/28\nORCHIDv2 now uses 2001:20::/28.";
+  } else if (g[0] === 0x2001 && g[1] >= 0x20 && g[1] <= 0x2f) {
+    out += "\nORCHIDv2 (Overlay Routable Cryptographic Hash Identifiers).\nThese are non-routed IPv6 addresses used for Cryptographic Hash Identifiers.";
+    out += "\nORCHIDv2 range: 2001:20::/28";
+  } else if (g[0] === 0x2001 && g[1] === 0xdb8) {
+    out += "\nThis is a documentation IPv6 address. This range should be used whenever an example IPv6 address is given or to model networking scenarios. Corresponds to 192.0.2.0/24, 198.51.100.0/24, and 203.0.113.0/24 in IPv4.";
+    out += "\nDocumentation range: 2001:db8::/32";
+  } else if (g[0] === 0x2002) {
+    out += "\n6to4 transition IPv6 address detected. See RFC 3056 for more details.\n6to4 prefix range: 2002::/16";
+    const v4Addr = ipv4Pair(g[1], g[2]);
+    const slaId = g[3];
+    const interfaceIdStr = g[4].toString(16) + g[5].toString(16) + g[6].toString(16) + g[7].toString(16);
+    const interfaceId = BigInt("0x" + interfaceIdStr).toString(10);
+    out += "\n\nEncapsulated IPv4 address: " + v4Addr +
+      "\nSLA ID: " + slaId +
+      "\nInterface ID (base 16): " + interfaceIdStr +
+      "\nInterface ID (base 10): " + interfaceId;
+  } else if (g[0] >= 0xfc00 && g[0] <= 0xfdff) {
+    out += "\nThis is a unique local address comparable to the IPv4 private addresses 10.0.0.0/8, 172.16.0.0/12 and 192.168.0.0/16. See RFC 4193 for more details.\nUnique local addresses range: fc00::/7";
+  } else if (g[0] >= 0xfe80 && g[0] <= 0xfebf) {
+    out += "\nThis is a link-local address comparable to the auto-configuration addresses 169.254.0.0/16 in IPv4.\nLink-local addresses range: fe80::/10";
+  } else if (g[0] >= 0xff00) {
+    out += "\nThis is a reserved multicast address.\nMulticast addresses range: ff00::/8";
+    const scope = {
+      0xff01: "Reserved Multicast Block for Interface Local Scope",
+      0xff02: "Reserved Multicast Block for Link Local Scope",
+      0xff03: "Reserved Multicast Block for Realm Local Scope",
+      0xff04: "Reserved Multicast Block for Admin Local Scope",
+      0xff05: "Reserved Multicast Block for Site Local Scope",
+      0xff08: "Reserved Multicast Block for Organisation Local Scope",
+      0xff0e: "Reserved Multicast Block for Global Scope",
+    }[g[0]];
+    if (scope) out += "\n\n" + scope;
+    if (g[6] === 1) {
+      if (g[7] === 2) out += "\nReserved Multicast Address for 'All DHCP Servers and Relay Agents (defined in RFC3315)'";
+      else if (g[7] === 3) out += "\nReserved Multicast Address for 'All LLMNR Hosts (defined in RFC4795)'";
+    } else {
+      const names = {
+        1: "All nodes", 2: "All routers", 5: "OSPFv3 - All OSPF routers", 6: "OSPFv3 - All Designated Routers",
+        8: "IS-IS for IPv6 Routers", 9: "RIP Routers", 0xa: "EIGRP Routers", 0xc: "Simple Service Discovery Protocol",
+        0xd: "PIM Routers", 0x16: "MLDv2 Reports (defined in RFC3810)",
+        0x6b: "Precision Time Protocol v2 Peer Delay Measurement Messages", 0xfb: "Multicast DNS",
+        0x101: "Network Time Protocol", 0x108: "Network Information Service", 0x114: "Experiments",
+        0x181: "Precision Time Protocol v2 Messages (exc. Peer Delay)",
+      }[g[7]];
+      if (names) out += "\nReserved Multicast Address for '" + names + "'";
+    }
+  }
+
+  if ((g[5] & 0xff) === 0xff && (g[6] >>> 8) === 0xfe) {
+    out += "\n\nThis IPv6 address contains a modified EUI-64 address, identified by the presence of FF:FE in the 12th and 13th octets.";
+    const hx = (n) => n.toString(16).padStart(2, "0");
+    const intIdent = [g[4] >>> 8, g[4] & 0xff, g[5] >>> 8, g[5] & 0xff, g[6] >>> 8, g[6] & 0xff, g[7] >>> 8, g[7] & 0xff].map(hx).join(":");
+    const mac = [(g[4] >>> 8) ^ 2, g[4] & 0xff, g[5] >>> 8, g[6] & 0xff, g[7] >>> 8, g[7] & 0xff].map(hx).join(":");
+    out += "\nInterface identifier: " + intIdent + "\nMAC address:          " + mac;
+  }
+  return out;
+}
+
+// ============ IPv4/IPv6 区间解析（CyberChef Parse IP range 口径） ============
+function v4Mask(prefix) {
+  if (prefix <= 0) return 0n;
+  return (0xFFFFFFFFn << BigInt(32 - prefix)) & 0xFFFFFFFFn;
+}
+
+function v4CidrReport(ipInt, prefix, inc, enumerate, allowLarge) {
+  if (prefix < 0 || prefix > 31) throw new Error("IPv4 CIDR must be less than 32");
+  const mask = v4Mask(prefix);
+  const ip1 = ipInt & mask;
+  const ip2 = ip1 | ((~mask) & 0xFFFFFFFFn);
+  const total = (ip2 - ip1 + 1n).toString();
+  let out = "";
+  if (inc) {
+    out += "Network: " + intToIpv4(ipInt) + "\n";
+    out += "CIDR: " + prefix + "\n";
+    out += "Mask: " + intToIpv4(mask) + "\n";
+    out += "Range: " + intToIpv4(ip1) + " - " + intToIpv4(ip2) + "\n";
+    out += "Total addresses in range: " + total + "\n\n";
+  }
+  if (enumerate) {
+    if (prefix >= 16 || allowLarge) {
+      const arr = [];
+      for (let n = ip1; n <= ip2; n++) arr.push(intToIpv4(n));
+      out += arr.join("\n");
+    } else {
+      out += LARGE_RANGE_ERROR;
+    }
+  }
+  return out;
+}
+
+function v4HyphenReport(ip1, ip2, inc, enumerate, allowLarge) {
+  let diff = ip1 ^ ip2;
+  let cidr = 32;
+  let mask = 0n;
+  while (diff !== 0n) {
+    diff >>= 1n;
+    cidr--;
+    mask = (mask << 1n) | 1n;
+  }
+  mask = (~mask) & 0xFFFFFFFFn;
+  const network = ip1 & mask;
+  const subIp1 = network & mask;
+  const subIp2 = subIp1 | ((~mask) & 0xFFFFFFFFn);
+  let out = "";
+  if (inc) {
+    out += "Minimum subnet required to hold this range:\n";
+    out += "\tNetwork: " + intToIpv4(network) + "\n";
+    out += "\tCIDR: " + cidr + "\n";
+    out += "\tMask: " + intToIpv4(mask) + "\n";
+    out += "\tSubnet range: " + intToIpv4(subIp1) + " - " + intToIpv4(subIp2) + "\n";
+    out += "\tTotal addresses in subnet: " + (subIp2 - subIp1 + 1n).toString() + "\n\n";
+    out += "Range: " + intToIpv4(ip1) + " - " + intToIpv4(ip2) + "\n";
+    out += "Total addresses in range: " + (ip2 - ip1 + 1n).toString() + "\n\n";
+  }
+  if (enumerate) {
+    if ((ip2 - ip1) <= 65536n || allowLarge) {
+      const arr = [];
+      for (let n = ip1; n <= ip2; n++) arr.push(intToIpv4(n));
+      out += arr.join("\n");
+    } else {
+      out += LARGE_RANGE_ERROR;
+    }
+  }
+  return out;
+}
+
+function ipv6MaskGroups(prefix) {
+  const mask = new Array(8);
+  for (let i = 0; i < 8; i++) {
+    if (prefix >= (i + 1) * 16) mask[i] = 0xffff;
+    else if (prefix <= i * 16) mask[i] = 0;
+    else mask[i] = (0xffff << (16 - (prefix - i * 16))) & 0xffff;
+  }
+  return mask;
+}
+
+function ipv6ToBig(groups) {
+  let n = 0n;
+  for (const g of groups) n = (n << 16n) | BigInt(g);
+  return n;
+}
+
+function v6CidrReport(groups, prefix, inc) {
+  if (prefix < 0 || prefix > 127) throw new Error("IPv6 CIDR must be less than 128");
+  const mask = ipv6MaskGroups(prefix);
+  const ip1 = groups.map((g, i) => g & mask[i]);
+  const ip2 = ip1.map((g, i) => g | ((~mask[i]) & 0xffff));
+  let out = "";
+  if (inc) {
+    out += "Network: " + ipv6Expand(groups) + "\n";
+    out += "Shorthand: " + ipv6Compress(groups) + "\n";
+    out += "CIDR: " + prefix + "\n";
+    out += "Mask: " + ipv6Expand(mask) + "\n";
+    out += "Range: " + ipv6Expand(ip1) + " - " + ipv6Expand(ip2) + "\n";
+    out += "Total addresses in range: " + (1n << BigInt(128 - prefix)).toString() + "\n\n";
+  }
+  return out;
+}
+
+function v6HyphenReport(g1, g2, inc) {
+  let out = "";
+  if (inc) {
+    out += "Range: " + ipv6Expand(g1) + " - " + ipv6Expand(g2) + "\n";
+    out += "Shorthand range: " + ipv6Compress(g1) + " - " + ipv6Compress(g2) + "\n";
+    const total = ipv6ToBig(g2) - ipv6ToBig(g1) + 1n;
+    out += "Total addresses in range: " + total.toString() + "\n\n";
+  }
+  return out;
+}
+
+const LARGE_RANGE_ERROR = 'The specified range contains more than 65,536 addresses. Running this query could crash your browser. If you want to run it, select the "Allow large queries" option. You are advised to turn off "Auto Bake" whilst editing large ranges.';
+
+function ipRangeReport(text, p) {
+  const inc = p && p.includeNetworkInfo !== false;
+  const enumerate = p && p.enumerate !== false;
+  const allowLarge = p && p.allowLarge === true;
+  const s = String(text == null ? "" : text).trim();
+  let m;
+  if ((m = s.match(/^\s*((?:\d{1,3}\.){3}\d{1,3})\/(\d\d?)\s*$/))) {
+    return v4CidrReport(ipv4ToInt(m[1]), Number(m[2]), inc, enumerate, allowLarge);
+  }
+  if ((m = s.match(/^\s*((?:\d{1,3}\.){3}\d{1,3})\s*-\s*((?:\d{1,3}\.){3}\d{1,3})\s*$/))) {
+    return v4HyphenReport(ipv4ToInt(m[1]), ipv4ToInt(m[2]), inc, enumerate, allowLarge);
+  }
+  const v4Lines = s.split(/\n/).map((x) => x.trim()).filter(Boolean);
+  if (v4Lines.length && v4Lines.every((x) => /^(\d{1,3}\.){3}\d{1,3}(\/\d\d?)?$/.test(x))) {
+    const list = [];
+    for (const line of v4Lines) {
+      if (line.includes("/")) {
+        const [ip, pre] = line.split("/");
+        const prefix = Number(pre);
+        if (prefix < 0 || prefix > 31) throw new Error("IPv4 CIDR must be less than 32");
+        const mask = v4Mask(prefix);
+        const net = ipv4ToInt(ip) & mask;
+        list.push(net, net | ((~mask) & 0xFFFFFFFFn));
+      } else {
+        const n = ipv4ToInt(line);
+        list.push(n, n);
+      }
+    }
+    list.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    return v4HyphenReport(list[0], list[list.length - 1], inc, enumerate, allowLarge);
+  }
+  if ((m = s.match(/^\s*([0-9A-Fa-f:]+)\/(\d\d?\d?)\s*$/))) {
+    return v6CidrReport(parseIpv6(m[1]), Number(m[2]), inc);
+  }
+  if ((m = s.match(/^\s*([0-9A-Fa-f:]+)\s*-\s*([0-9A-Fa-f:]+)\s*$/))) {
+    return v6HyphenReport(parseIpv6(m[1]), parseIpv6(m[2]), inc);
+  }
+  const v6Lines = s.split(/\n/).map((x) => x.trim()).filter(Boolean);
+  if (v6Lines.length && v6Lines.every((x) => /^[0-9A-Fa-f:]+(\/\d\d?\d?)?$/.test(x))) {
+    const list = [];
+    for (const line of v6Lines) {
+      if (line.includes("/")) {
+        const [ip, pre] = line.split("/");
+        const prefix = Number(pre);
+        if (prefix < 0 || prefix > 127) throw new Error("IPv6 CIDR must be less than 128");
+        const mask = ipv6MaskGroups(prefix);
+        const groups = parseIpv6(ip);
+        const ip1 = groups.map((g, i) => g & mask[i]);
+        const ip2 = ip1.map((g, i) => g | ((~mask[i]) & 0xffff));
+        list.push(ip1, ip2);
+      } else {
+        const groups = parseIpv6(line);
+        list.push(groups, groups);
+      }
+    }
+    list.sort((a, b) => {
+      const av = ipv6ToBig(a), bv = ipv6ToBig(b);
+      return av < bv ? -1 : av > bv ? 1 : 0;
+    });
+    return v6HyphenReport(list[0], list[list.length - 1], inc);
+  }
+  throw new Error("Invalid input.\n\nEnter either a CIDR range (e.g. 10.0.0.0/24) or a hyphenated range (e.g. 10.0.0.0 - 10.0.1.0). IPv6 also supported.");
+}
+
 register({
   id: "ipv6Format", cat: "radix", name: "IPv6 压缩/展开",
-  desc: "IPv6 规范压缩（RFC 5952）↔ 全展开 8 组 4 位十六进制",
-  encode: (t) => ipv6Compress(parseIpv6(t)),
-  decode: (t) => ipv6Expand(parseIpv6(t)),
+  desc: "IPv6 规范压缩（RFC 5952）↔ 全展开 8 组 4 位十六进制；report=true 时输出 CyberChef Parse IPv6 address 同口径的 longhand/shorthand 与保留段报告",
+  params: [
+    { key: "report", label: "详细报告（原样输出，不压缩/展开）", type: "bool", default: false },
+  ],
+  encode: (t, p) => (p && p.report ? ipv6DetailedReport(t) : ipv6Compress(parseIpv6(t))),
+  decode: (t, p) => (p && p.report ? ipv6DetailedReport(t) : ipv6Expand(parseIpv6(t))),
 });
 
 register({
@@ -399,9 +702,17 @@ register({
 
 register({
   id: "cidrCalc", cat: "radix", name: "CIDR 子网计算",
-  desc: "网络/广播地址、掩码、反掩码、主机范围、IP 类与私有段判定（单向）",
-  params: [],
-  run: (t) => cidrCalc(t),
+  desc: "网络/广播地址、掩码、反掩码、主机范围、IP 类与私有段判定（单向）；mode=auto 时同 CyberChef Parse IP range，支持 CIDR/连字符/列表与 IPv6",
+  params: [
+    { key: "mode", label: "模式", type: "select", default: "single", options: [
+      { value: "single", label: "单条 CIDR 详细计算" },
+      { value: "auto", label: "自动识别（CIDR/连字符/列表，IPv4/IPv6）" },
+    ] },
+    { key: "includeNetworkInfo", label: "输出网络信息", type: "bool", default: true },
+    { key: "enumerate", label: "枚举 IPv4 地址", type: "bool", default: true },
+    { key: "allowLarge", label: "允许大范围查询（>65536）", type: "bool", default: false },
+  ],
+  run: (t, p) => ((p && p.mode) === "auto" ? ipRangeReport(t, p) : cidrCalc(t)),
   detect: (t) => (/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(String(t).trim()) ? 0.5 : 0),
 });
 

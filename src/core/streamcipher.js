@@ -507,7 +507,131 @@ function rabbitDecryptSalted(salted, keyRaw, crackListText) {
   return `未命中：已尝试 ${candidates.length} 个口令 × 2 种变体，均未得到可读文本；可补充爆破候选口令，或检查密文完整性。`;
 }
 
+// CyberChef Rabbit 同口径：16 字节 key（Hex/UTF8/Latin1/Base64）、可选 8 字节 IV、
+// Big=RFC 4503 方向（rfc 变体）/ Little=Crypto++ 兼容（standard 变体）、Input Raw/Hex、Output Raw/Hex。
+function rabbitCcDecodeBytes(raw, enc) {
+  const s = String(raw == null ? "" : raw);
+  if (enc === "Hex") {
+    const h = s.replace(/\s+/g, "");
+    if (h.length % 2 || !/^[0-9a-fA-F]*$/.test(h)) throw new Error("Rabbit：Hex 输入长度须为偶数且仅含 0-9a-f");
+    return hexToBytes(h);
+  }
+  if (enc === "Base64") {
+    const b = rabbitB64Dec(s);
+    return b;
+  }
+  if (enc === "Latin1") {
+    const out = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i) & 0xff;
+    return out;
+  }
+  return strToBytes(s);
+}
+
+/** CyberChef Rabbit Big（RFC 4503 字节序）逐行移植（仅 cc 模式使用）。 */
+function rabbitCcBigCrypt(data, key, iv) {
+  const X = new Uint32Array(8), C = new Uint32Array(8);
+  let b = 0;
+  const A = [0x4d34d34d, 0xd34d34d3, 0x34d34d34, 0x4d34d34d, 0xd34d34d3, 0x34d34d34, 0x4d34d34d, 0xd34d34d3];
+  const counterUpdate = () => {
+    for (let j = 0; j < 8; j++) {
+      const temp = C[j] + A[j] + b;
+      b = (temp / ((1 << 30) * 4)) >>> 0;
+      C[j] = temp;
+    }
+  };
+  const g = (u, v) => {
+    const uv = (u + v) >>> 0;
+    const upper = uv >>> 16, lower = uv & 0xffff;
+    const upperUpper = upper * upper;
+    const upperLower2 = 2 * upper * lower;
+    const lowerLower = lower * lower;
+    const mswTemp = upperUpper + ((upperLower2 / (1 << 16)) >>> 0);
+    const lswTemp = lowerLower + (upperLower2 & 0xffff) * (1 << 16);
+    const msw = mswTemp + ((lswTemp / ((1 << 30) * 4)) >>> 0);
+    const lsw = lswTemp >>> 0;
+    return lsw ^ msw;
+  };
+  const leftRotate = (value, width) => (value << width) | (value >>> (32 - width));
+  const G = new Uint32Array(8);
+  const nextState = () => {
+    for (let j = 0; j < 8; j++) G[j] = g(X[j], C[j]);
+    X[0] = G[0] + leftRotate(G[7], 16) + leftRotate(G[6], 16);
+    X[1] = G[1] + leftRotate(G[0], 8) + G[7];
+    X[2] = G[2] + leftRotate(G[1], 16) + leftRotate(G[0], 16);
+    X[3] = G[3] + leftRotate(G[2], 8) + G[1];
+    X[4] = G[4] + leftRotate(G[3], 16) + leftRotate(G[2], 16);
+    X[5] = G[5] + leftRotate(G[4], 8) + G[3];
+    X[6] = G[6] + leftRotate(G[5], 16) + leftRotate(G[4], 16);
+    X[7] = G[7] + leftRotate(G[6], 8) + G[5];
+  };
+  const K = new Uint16Array(8);
+  for (let i = 0; i < 8; i++) K[i] = (key[14 - 2 * i] << 8) | key[15 - 2 * i];
+  for (let j = 0; j < 8; j++) {
+    if (j % 2 === 0) {
+      X[j] = (K[(j + 1) % 8] << 16) | K[j];
+      C[j] = (K[(j + 4) % 8] << 16) | K[(j + 5) % 8];
+    } else {
+      X[j] = (K[(j + 5) % 8] << 16) | K[(j + 4) % 8];
+      C[j] = (K[j] << 16) | K[(j + 1) % 8];
+    }
+  }
+  for (let i = 0; i < 4; i++) { counterUpdate(); nextState(); }
+  for (let j = 0; j < 8; j++) C[j] ^= X[(j + 4) % 8];
+  if (iv.length === 8) {
+    const getIVValue = (a, bb, c, d) => (iv[7 - a] << 24) | (iv[7 - bb] << 16) | (iv[7 - c] << 8) | iv[7 - d];
+    C[0] ^= getIVValue(3, 2, 1, 0); C[1] ^= getIVValue(7, 6, 3, 2);
+    C[2] ^= getIVValue(7, 6, 5, 4); C[3] ^= getIVValue(5, 4, 1, 0);
+    C[4] ^= getIVValue(3, 2, 1, 0); C[5] ^= getIVValue(7, 6, 3, 2);
+    C[6] ^= getIVValue(7, 6, 5, 4); C[7] ^= getIVValue(5, 4, 1, 0);
+    for (let i = 0; i < 4; i++) { counterUpdate(); nextState(); }
+  }
+  const S = new Uint8Array(16);
+  const extract = () => {
+    let pos = 0;
+    const addPart = (value) => { S[pos++] = value >>> 8; S[pos++] = value & 0xff; };
+    counterUpdate();
+    nextState();
+    addPart((X[6] >>> 16) ^ (X[1] & 0xffff));
+    addPart((X[6] & 0xffff) ^ (X[3] >>> 16));
+    addPart((X[4] >>> 16) ^ (X[7] & 0xffff));
+    addPart((X[4] & 0xffff) ^ (X[1] >>> 16));
+    addPart((X[2] >>> 16) ^ (X[5] & 0xffff));
+    addPart((X[2] & 0xffff) ^ (X[7] >>> 16));
+    addPart((X[0] >>> 16) ^ (X[3] & 0xffff));
+    addPart((X[0] & 0xffff) ^ (X[5] >>> 16));
+  };
+  const result = new Uint8Array(data.length);
+  let i = 0;
+  for (; i <= data.length - 16; i += 16) {
+    extract();
+    for (let j = 0; j < 16; j++) result[i + j] = data[i + j] ^ S[j];
+  }
+  if (data.length % 16 !== 0) {
+    const offset = data.length - data.length % 16;
+    extract();
+    for (let j = 0; offset + j < data.length; j++) result[offset + j] = data[offset + j] ^ S[16 - (data.length - offset) + j];
+  }
+  return result;
+}
+
+function rabbitCcCrypt(text, p) {
+  const key = rabbitCcDecodeBytes(p.key || "", p.keyEnc || "Hex");
+  if (key.length !== 16) throw new Error(`Invalid key length: ${key.length} bytes (expected: 16)`);
+  const iv = rabbitCcDecodeBytes(p.iv || "", p.ivEnc || "Hex");
+  if (iv.length !== 0 && iv.length !== 8) throw new Error(`Invalid IV length: ${iv.length} bytes (expected: 0 or 8)`);
+  const data = rabbitCcDecodeBytes(text, p.inEnc || "Raw");
+  const ct = (p.endianness || "Big") === "Little"
+    ? rabbitCryptVariant(data, key, iv, "standard")
+    : rabbitCcBigCrypt(data, key, iv);
+  if ((p.outEnc || "Raw") === "Hex") return bytesToHex(ct).toLowerCase();
+  let out = "";
+  for (const b of ct) out += String.fromCharCode(b);
+  return out;
+}
+
 function rabbitEncode(text, p) {
+  if (p && p.rabbitMode === "cc") return rabbitCcCrypt(text, p);
   const variant = RABBIT_VARIANTS.includes(p && p.variant) ? p.variant : "legacy";
   const keyRaw = String((p && p.key) || "").trim();
   const ivRaw = String((p && p.iv) || "").trim();
@@ -531,6 +655,7 @@ function rabbitEncode(text, p) {
 }
 
 function rabbitDecode(text, p) {
+  if (p && p.rabbitMode === "cc") return rabbitCcCrypt(text, p);
   const variant = RABBIT_VARIANTS.includes(p && p.variant) ? p.variant : "legacy";
   const keyRaw = String((p && p.key) || "").trim();
   const ivRaw = String((p && p.iv) || "").trim();
@@ -574,14 +699,29 @@ register({
   name: "Rabbit 流密码",
   desc: "RFC 4503 Rabbit 流密码。变体三档：CryptoJS Legacy（旧版在线工具默认，推荐）/ CryptoJS 标准 / RFC 4503 文档方向（0.1.9 及更早行为）。密钥填 32 位 hex 直用（IV 可选）；填口令或留空则按 CryptoJS OpenSSL 封装（Salted base64）加解密。decode 对 CryptoJS 密文（U2FsdGVkX1 开头）自动带空口令与常见口令尝试。",
   params: [
-    { key: "variant", label: "算法变体", type: "select", default: "legacy",
+    { key: "rabbitMode", label: "参数口径", type: "select", default: "classic",
+      options: [
+        { value: "classic", label: "项目既有（CryptoJS 封装 / 32 位 hex / 口令）" },
+        { value: "cc", label: "CyberChef Rabbit（16 字节 key + 可选 8 字节 IV）" },
+      ] },
+    { key: "variant", label: "算法变体（classic）", type: "select", default: "legacy",
       options: [
         { value: "legacy", label: "CryptoJS Legacy（旧版在线工具，推荐）" },
         { value: "standard", label: "CryptoJS 标准" },
         { value: "rfc", label: "RFC 4503 文档方向（0.1.9 及更早）" },
       ] },
     { sensitive: true, key: "key", label: "密钥 / 口令", type: "password", default: "", placeholder: "32 位 hex 密钥；其他内容按口令（CryptoJS 封装）处理" },
+    { key: "keyEnc", label: "cc 模式：Key 编码", type: "select", default: "Hex",
+      options: [{ value: "Hex", label: "Hex" }, { value: "UTF8", label: "UTF8" }, { value: "Latin1", label: "Latin1" }, { value: "Base64", label: "Base64" }] },
     { key: "iv", label: "IV（hex，8 字节，可留空）", type: "text", default: "", placeholder: "仅密钥模式使用；留空 = 无 IV" },
+    { key: "ivEnc", label: "cc 模式：IV 编码", type: "select", default: "Hex",
+      options: [{ value: "Hex", label: "Hex" }, { value: "UTF8", label: "UTF8" }, { value: "Latin1", label: "Latin1" }, { value: "Base64", label: "Base64" }] },
+    { key: "endianness", label: "cc 模式：字节序", type: "select", default: "Big",
+      options: [{ value: "Big", label: "Big（RFC 4503）" }, { value: "Little", label: "Little（Crypto++ 兼容）" }] },
+    { key: "inEnc", label: "cc 模式：输入格式", type: "select", default: "Raw",
+      options: [{ value: "Raw", label: "Raw" }, { value: "Hex", label: "Hex" }] },
+    { key: "outEnc", label: "cc 模式：输出格式", type: "select", default: "Raw",
+      options: [{ value: "Raw", label: "Raw" }, { value: "Hex", label: "Hex" }] },
     { key: "crackList", label: "口令爆破候选（可选）", type: "textarea", default: "", rows: 3,
       placeholder: "每行一条（或逗号分隔）。输入为 CryptoJS 密文且未直接命中时，连同内置常见口令逐条尝试，只列出可读结果" },
   ],

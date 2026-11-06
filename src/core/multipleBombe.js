@@ -43,7 +43,19 @@ function scoreStop(crib, stop) {
   return { matches, pairs, score: matches * 100 + pairs * 5 };
 }
 
+// CyberChef「Standard Enigmas」预设（第一/第二/第三/第四），custom 时沿用用户填写值。
+const BOMBE_PRESETS = {
+  german1: { rotors: "I\nII\nIII\nIV\nV", fourth: "", reflectors: "B" },
+  german2: { rotors: "I\nII\nIII\nIV\nV\nVI\nVII\nVIII", fourth: "", reflectors: "B\nC" },
+  german3: { rotors: "I\nII\nIII\nIV\nV\nVI\nVII\nVIII", fourth: "Gamma", reflectors: "B Thin" },
+  german4: { rotors: "I\nII\nIII\nIV\nV\nVI\nVII\nVIII", fourth: "Gamma", reflectors: "B Thin\nC Thin" },
+};
+
 function multipleBombeAttack(text, params = {}) {
+  const preset = BOMBE_PRESETS[params.preset];
+  if (preset) {
+    params = { ...params, rotors: preset.rotors, fourthRotors: preset.fourth, reflectors: preset.reflectors };
+  }
   const crib = sanitizeLetters(params.crib);
   const offset = Number(params.offset == null ? 0 : params.offset);
   if (!Number.isInteger(offset) || offset < 0) throw new Error("Offset must be a non-negative integer");
@@ -191,6 +203,19 @@ register({
   name: "Multiple Bombe 批量炸弹机",
   desc: "未知转子组合时批量运行 Bombe，按预览/crib 匹配与接线板完整度评分排序输出候选",
   params: [
+    {
+      key: "preset",
+      label: "Standard Enigmas",
+      type: "select",
+      default: "custom",
+      options: [
+        { value: "custom", label: "User defined（使用下方三组值）" },
+        { value: "german1", label: "German Service Enigma (First - 3 rotor)" },
+        { value: "german2", label: "German Service Enigma (Second - 3 rotor)" },
+        { value: "german3", label: "German Service Enigma (Third - 4 rotor)" },
+        { value: "german4", label: "German Service Enigma (Fourth - 4 rotor)" },
+      ],
+    },
     {
       key: "rotors",
       label: "主转子池（每行一个，左→右，至少 3 个，<步进会忽略）",

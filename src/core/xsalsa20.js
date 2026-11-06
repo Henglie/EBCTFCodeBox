@@ -44,6 +44,7 @@
 import { register } from "./registry.js";
 
 const SIGMA = [0x61707865, 0x3320646e, 0x79622d32, 0x6b206574]; // "expand 32-byte k"
+const TAU = [0x61707865, 0x3120646e, 0x79622d36, 0x6b206574];   // "expand 16-byte k"
 
 const rotl = (x, n) => (((x << n) | (x >>> (32 - n))) >>> 0);
 const rdU32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
@@ -122,16 +123,41 @@ function salsa20Core(inBytes, keyBytes, constBytes, rounds = 20) {
   return salsa20Block(s, rounds);
 }
 
-/** HSalsa20：key(32) + in(16) → 32 字节子密钥（输出 8 个字，不加回初始状态）。 */
+/** 从字节拼接（可能不足 64 字节）按小端读 16 字；缺失字节按 0（同 CyberChef 短 nonce 行为）。 */
+function wordsFromStateBytes(bytes) {
+  const w = new Array(16);
+  for (let i = 0; i < 16; i++) {
+    const o = i * 4;
+    w[i] = ((bytes[o] || 0) | ((bytes[o + 1] || 0) << 8) | ((bytes[o + 2] || 0) << 16) | ((bytes[o + 3] || 0) << 24)) >>> 0;
+  }
+  return w;
+}
+
+function wordBytes(w) {
+  return [w & 0xff, (w >>> 8) & 0xff, (w >>> 16) & 0xff, (w >>> 24) & 0xff];
+}
+
+function ccStateBytes(keyBytes, nonceBytes, counterBytes) {
+  const C = keyBytes.length === 16 ? TAU : SIGMA;
+  const K = keyBytes.length === 16 ? new Uint8Array([...keyBytes, ...keyBytes]) : keyBytes;
+  return [
+    ...wordBytes(C[0]), ...K.slice(0, 16), ...wordBytes(C[1]), ...nonceBytes,
+    ...(counterBytes || []), ...wordBytes(C[2]), ...K.slice(16, 32), ...wordBytes(C[3]),
+  ];
+}
+
+/** CyberChef salsa20Block 同口径（key 16/32、nonce/counter 可为任意长度，缺失按 0 补齐）。 */
+function salsa20BlockCc(keyBytes, nonceBytes, counterBytes, rounds = 20) {
+  const s = wordsFromStateBytes(ccStateBytes(keyBytes, nonceBytes, counterBytes));
+  const x = salsaRounds(s, rounds);
+  const out = new Uint8Array(64);
+  for (let i = 0; i < 16; i++) wrU32(out, i * 4, (x[i] + s[i]) >>> 0);
+  return out;
+}
+
+/** HSalsa20：key(16/32) + inBytes → 32 字节子密钥（输出 8 个字，不加回初始状态）。 */
 function hsalsa20(keyBytes, inBytes, rounds = 20) {
-  const s = new Array(16);
-  s[0] = SIGMA[0];
-  s[1] = rdU32(keyBytes, 0); s[2] = rdU32(keyBytes, 4); s[3] = rdU32(keyBytes, 8); s[4] = rdU32(keyBytes, 12);
-  s[5] = SIGMA[1];
-  s[6] = rdU32(inBytes, 0); s[7] = rdU32(inBytes, 4); s[8] = rdU32(inBytes, 8); s[9] = rdU32(inBytes, 12);
-  s[10] = SIGMA[2];
-  s[11] = rdU32(keyBytes, 16); s[12] = rdU32(keyBytes, 20); s[13] = rdU32(keyBytes, 24); s[14] = rdU32(keyBytes, 28);
-  s[15] = SIGMA[3];
+  const s = wordsFromStateBytes(ccStateBytes(keyBytes, inBytes, null));
   const x = salsaRounds(s, rounds);
   const words = [0, 5, 10, 15, 6, 7, 8, 9].map((i) => x[i]);
   const out = new Uint8Array(32);
@@ -141,25 +167,23 @@ function hsalsa20(keyBytes, inBytes, rounds = 20) {
 
 /** XSalsa20 密钥流（length 字节）。 */
 function xsalsa20Keystream(length, key, nonce, counter, rounds = 20) {
-  if (key.length !== 32) throw new Error(`XSalsa20：密钥须为 32 字节（当前 ${key.length}）。`);
-  if (nonce.length !== 24) throw new Error(`XSalsa20：nonce 须为 24 字节（当前 ${nonce.length}）。`);
+  if (key.length !== 16 && key.length !== 32) throw new Error(`XSalsa20：密钥须为 16 或 32 字节（当前 ${key.length}）。`);
+  if (nonce.length !== 24 && nonce.length !== 8) throw new Error(`XSalsa20：nonce 须为 24 字节（或 Integer 模式下 8 字节），当前 ${nonce.length}。`);
   const c = Number(counter);
   if (!Number.isInteger(c) || c < 0) throw new Error(`XSalsa20：计数器须为 ≥0 的整数（当前 ${counter}）。`);
   const R = normRounds(rounds);
   const subkey = hsalsa20(key, nonce.subarray(0, 16), R);
-  const s = new Array(16);
-  s[0] = SIGMA[0]; s[5] = SIGMA[1]; s[10] = SIGMA[2]; s[15] = SIGMA[3];
-  s[1] = rdU32(subkey, 0); s[2] = rdU32(subkey, 4); s[3] = rdU32(subkey, 8); s[4] = rdU32(subkey, 12);
-  s[11] = rdU32(subkey, 16); s[12] = rdU32(subkey, 20); s[13] = rdU32(subkey, 24); s[14] = rdU32(subkey, 28);
-  s[6] = rdU32(nonce, 16); s[7] = rdU32(nonce, 20);
-  s[8] = c >>> 0; s[9] = Math.floor(c / 0x100000000) >>> 0;
+  const tailNonce = nonce.subarray(16, 24);
+  let counterValue = c;
   const out = new Uint8Array(length);
   for (let off = 0; off < length; off += 64) {
-    const ks = salsa20Block(s, R);
+    const ctr = new Uint8Array(8);
+    let v = BigInt(counterValue);
+    for (let i = 0; i < 8; i++) { ctr[i] = Number(v & 0xffn); v >>= 8n; }
+    const ks = salsa20BlockCc(subkey, tailNonce, ctr, R);
     const n = Math.min(64, length - off);
     for (let j = 0; j < n; j++) out[off + j] = ks[j];
-    s[8] = (s[8] + 1) >>> 0;
-    if (s[8] === 0) s[9] = (s[9] + 1) >>> 0;
+    counterValue++;
   }
   return out;
 }
@@ -241,7 +265,29 @@ const ENC_OPTS = [
 const OUT_OPTS = [
   { value: "base64", label: "Base64" },
   { value: "hex", label: "Hex" },
+  { value: "latin1", label: "Raw（Latin-1）" },
 ];
+
+/** CyberChef 口径：Integer nonce = 8 字节小端（其余字节缺失时按 CC 短 nonce 行为补 0）。 */
+function buildNonce(p) {
+  if ((p && p.nonceType) === "integer") {
+    const n = BigInt(String((p && p.nonce) || "0").trim() || "0");
+    if (n < 0n) throw new Error("nonce 整数须为非负");
+    const out = new Uint8Array(8);
+    let v = n;
+    for (let i = 0; i < 8; i++) { out[i] = Number(v & 0xffn); v >>= 8n; }
+    return out;
+  }
+  const nonce = decodeInput(p.nonce || "", p.nonceEnc || "hex");
+  if (nonce.length !== 24) throw new Error(`XSalsa20：nonce 须为 24 字节（当前 ${nonce.length}）。`);
+  return nonce;
+}
+
+function encodeInputCc(text, p) {
+  const enc = p && p.inEnc;
+  if (enc && enc !== "utf8") return decodeInput(text, enc);
+  return te(text);
+}
 
 register({
   id: "xsalsa20", cat: "stream", name: "XSalsa20",
@@ -251,6 +297,12 @@ register({
     { key: "keyEnc", label: "密钥编码", type: "select", default: "hex", options: ENC_OPTS },
     { key: "nonce", label: "Nonce", type: "text", default: "", placeholder: "24 字节" },
     { key: "nonceEnc", label: "Nonce 编码", type: "select", default: "hex", options: ENC_OPTS },
+    { key: "nonceType", label: "Nonce 类型", type: "select", default: "encoded", options: [
+      { value: "encoded", label: "编码串（Hex/UTF-8/Base64/Latin-1）" },
+      { value: "integer", label: "Integer（8 字节小端，其余补 0）" },
+    ] },
+    { key: "inEnc", label: "输入格式（encode 方向）", type: "select", default: "utf8",
+      options: [{ value: "utf8", label: "Raw / UTF-8" }, { value: "hex", label: "Hex" }, { value: "base64", label: "Base64" }, { value: "latin1", label: "Latin-1" }] },
     { key: "counter", label: "初始计数器", type: "number", default: 0 },
     { key: "rounds", label: "轮数", type: "select", default: "20",
       options: [{ value: "20", label: "20" }, { value: "12", label: "12" }, { value: "8", label: "8" }] },
@@ -258,15 +310,15 @@ register({
   ],
   encode: (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "hex");
-    const nonce = decodeInput(p.nonce || "", p.nonceEnc || "hex");
-    return encodeOutput(xsalsa20(te(text), key, nonce, Number((p && p.counter) || 0), Number((p && p.rounds) || 20)), p.outEnc || "base64");
+    const nonce = buildNonce(p);
+    return encodeOutput(xsalsa20(encodeInputCc(text, p), key, nonce, Number((p && p.counter) || 0), Number((p && p.rounds) || 20)), p.outEnc || "base64");
   },
   decode: (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "hex");
-    const nonce = decodeInput(p.nonce || "", p.nonceEnc || "hex");
+    const nonce = buildNonce(p);
     const data = decodeInput(String(text).trim(), p.outEnc || "base64");
     return td(xsalsa20(data, key, nonce, Number((p && p.counter) || 0), Number((p && p.rounds) || 20)));
   },
 });
 
-export { xsalsa20, xsalsa20Keystream, hsalsa20, salsa20Block, salsaRounds, salsa20Core, SIGMA, hexToBytes, bytesToHex };
+export { xsalsa20, xsalsa20Keystream, hsalsa20, salsa20Block, salsa20BlockCc, salsaRounds, salsa20Core, SIGMA, TAU, hexToBytes, bytesToHex };
