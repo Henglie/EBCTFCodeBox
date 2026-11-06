@@ -1,4 +1,4 @@
-self.__EBCTF_ASSET_REV = "263163e90de701a1";
+self.__EBCTF_ASSET_REV = "54b089f82d542add";
 self.__EBCTF_ASSETS = [
   "./",
   "./index.html",
@@ -178,6 +178,7 @@ self.__EBCTF_ASSETS = [
   "./src/core/cnLookupWubi.js",
   "./src/core/cnLookupZhengma.js",
   "./src/core/cobs.js",
+  "./src/core/codeImageLayout.js",
   "./src/core/codeImageModel.js",
   "./src/core/codeImageRecognize.js",
   "./src/core/collisionShow.js",

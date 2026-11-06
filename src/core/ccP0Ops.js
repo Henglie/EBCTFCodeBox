@@ -76,10 +76,18 @@ function fromBytes(bytes, enc = "auto", binary = false) {
 }
 
 function cobsRun(text, p = {}) {
+  if (p.inputEnc != null && String(p.inputEnc).toLowerCase() !== "auto") {
+    throw new Error("inputEnc 该参数已废弃，请改用输入视图");
+  }
+  if (p.outEnc != null && String(p.outEnc).toLowerCase() !== "auto") {
+    throw new Error("outEnc 该参数已废弃，请改用输入视图");
+  }
   const dir = String(p.dir || "encode").toLowerCase();
-  const input = toBytes(text, p.inputEnc || "auto");
-  if (dir === "encode") return fromBytes(cobsEncode(input), p.outEnc || "auto", true);
-  if (dir === "decode") return fromBytes(cobsDecode(input), p.outEnc || "auto", false);
+  const input = p.rawBytes != null
+    ? (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes))
+    : toBytes(text, "auto");
+  if (dir === "encode") return fromBytes(cobsEncode(input), "auto", true);
+  if (dir === "decode") return fromBytes(cobsDecode(input), "auto", false);
   throw new Error("COBS：dir 只能是 encode / decode");
 }
 
@@ -163,8 +171,6 @@ register({
   desc: "Consistent Overhead Byte Stuffing：用非零字节替换 0x00，适合串口/协议/嵌入式帧定界；支持 hex/base64/UTF-8 输入输出。",
   params: [
     { key: "dir", label: "方向", type: "select", default: "encode", options: [{ value: "encode", label: "编码" }, { value: "decode", label: "解码" }] },
-    { key: "inputEnc", label: "输入编码", type: "select", default: "auto", options: [{ value: "auto", label: "自动（hex/base64/UTF-8）" }, { value: "utf8", label: "UTF-8" }, { value: "hex", label: "Hex" }, { value: "base64", label: "Base64" }] },
-    { key: "outEnc", label: "输出编码", type: "select", default: "auto", options: [{ value: "auto", label: "自动" }, { value: "utf8", label: "UTF-8" }, { value: "hex", label: "Hex" }, { value: "base64", label: "Base64" }] },
   ],
   run: cobsRun,
   acceptsBytes: true,

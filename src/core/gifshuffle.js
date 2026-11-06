@@ -817,14 +817,24 @@ function gifshuffleExtract(bytes, opts) {
 
 /* ================= op 适配 ================= */
 
+const LEGACY_ENC_DEFAULTS = { inputEnc: "auto", msgEnc: "text", outEnc: "auto" };
+
+/** 旧参数兼容：这些 A 类参数已由输入/输出视图接管；显式非默认值拒绝，默认值静默忽略。 */
+function assertNoLegacyEnc(p) {
+  for (const [key, def] of Object.entries(LEGACY_ENC_DEFAULTS)) {
+    const v = p && p[key];
+    if (v != null && String(v).toLowerCase() !== def) {
+      throw new Error(`${key} 该参数已废弃，请改用输入视图`);
+    }
+  }
+}
+
 function pickInputBytes(text, p) {
+  assertNoLegacyEnc(p);
   if (p && p.rawBytes && p.rawBytes.length) {
     return p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes);
   }
-  const enc = (p && p.inputEnc) || "auto";
   const s = String(text || "");
-  if (enc === "hex") return hexToBytes(s);
-  if (enc === "base64") return b64ToBytes(s);
   // auto：dataURL / base64 优先，失败再试 hex
   try { return b64ToBytes(s); } catch (e) {
     try { return hexToBytes(s); } catch (e2) { throw new Error("无法解析封面 GIF 输入（需要拖入文件或 base64/hex）"); }
@@ -832,9 +842,7 @@ function pickInputBytes(text, p) {
 }
 
 function messageBytesFromParam(p) {
-  const enc = (p && p.msgEnc) || "text";
   const s = (p && p.message) != null ? String(p.message) : "";
-  if (enc === "hex") return hexToBytes(s);
   return utf8ToBytes(s);
 }
 
@@ -867,11 +875,7 @@ function gifshuffleDecodeOp(text, p) {
     compress: !!p.compress,
     v1: !!p.v1,
   });
-  const outEnc = (p && p.outEnc) || "auto";
-  let shown;
-  if (outEnc === "hex") shown = bytesToHex(msg);
-  else if (outEnc === "text") shown = bytesToUtf8(msg);
-  else shown = isMostlyPrintable(msg) ? bytesToUtf8(msg) : bytesToHex(msg);
+  const shown = isMostlyPrintable(msg) ? bytesToUtf8(msg) : bytesToHex(msg);
   const report =
     `GifShuffle 提取：${msg.length} 字节${p.compress ? "（Huffman 解压）" : ""}${p.password ? "（ICE 解密）" : ""}\n` +
     `（口令错误不会报错，只会得到乱码；长度/内容异常时请核对口令与压缩开关）\n\n`;
@@ -937,15 +941,9 @@ register({
   desc: "通过重排 GIF 全局调色板条目顺序藏比特（外观逐像素不变）；兼容 gifshuffle 2.0 的 ICE 加密与内置 Huffman 压缩，支持透明色/动画/局部色表",
   params: [
     { key: "message", label: "待嵌入文本（编码时用）", type: "text", default: "" },
-    { key: "msgEnc", label: "消息编码", type: "select", default: "text",
-      options: [{ value: "text", label: "UTF-8 文本" }, { value: "hex", label: "Hex 字节" }] },
     { sensitive: true, key: "password", label: "口令（可选，ICE 加密）", type: "password", default: "" },
     { key: "compress", label: "使用内置 Huffman 压缩", type: "bool", default: false },
     { key: "v1", label: "兼容 1.0 排序（口令下仍用自然序排色表）", type: "bool", default: false },
-    { key: "inputEnc", label: "封面输入编码（文本输入时）", type: "select", default: "auto",
-      options: [{ value: "auto", label: "自动（base64/hex）" }, { value: "base64", label: "Base64" }, { value: "hex", label: "Hex" }] },
-    { key: "outEnc", label: "解码结果输出（解码时用）", type: "select", default: "auto",
-      options: [{ value: "auto", label: "自动（可打印→文本，否则 hex）" }, { value: "text", label: "UTF-8 文本" }, { value: "hex", label: "Hex" }] },
   ],
   aka: [
     "gifshuffle", "GifShuffle", "gif shuffle", "调色板隐写", "GIF调色板隐写",

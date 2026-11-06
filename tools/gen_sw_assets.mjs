@@ -58,6 +58,9 @@ const EXCLUDE_RULES = [
   [/^public\/data\/ids\.dat$/, "ids.dat（拼字 tab 才 fetch）"],
   // 编码对照图：点击查看才加载；codeImageManifest.json 很小且进 tab 就要，保留
   [/^public\/codeimages\/.*\.(png|webp|jpe?g|svg|gif|avif)$/, "codeimages 对照图（点击才加载）"],
+  // 编码图 A0 槽位布局 sidecar（T774）：打开编码图页才 fetch；
+  // 不进首屏预缓存。运行时由 sw.js 的 "/public/data/" 前缀回填（在线用过一次即离线可用）。
+  [/^public\/data\/codeimage\/codeImageLayout\.bin$/, "codeImageLayout.bin（编码图页才加载）"],
   // KaTeX：真·懒加载（katexLoader.js 单例 Promise，首次公式渲染才插 script/link；缺失降级为
   // 原始 TeX 文本 <code class="katex-fallback">，不白屏）
   [/^public\/vendor\/katex\//, "KaTeX dist（首次公式渲染才加载）"],

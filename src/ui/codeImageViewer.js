@@ -4,6 +4,9 @@
 // 自持 el/msym（icon 注水），tt/window.__ebctfT 兜底 i18n（不进主表）。零外发。
 import { icon as iconSvg } from "./icons.js";
 import { attachModalLifecycle } from "./modalLifecycle.js";
+// A0 槽位布局 sidecar：仅在打开本页时按需 fetch（public/data/codeimage/codeImageLayout.bin），
+// 不参与分类；加载失败静默回退，不影响识图。
+import { layoutSlotFor, loadCodeImageLayout } from "../core/codeImageLayout.js";
 
 function el(tag, attrs = {}, ...children) {
   const n = document.createElement(tag);
@@ -126,6 +129,8 @@ const ciState = {
   manifest: null,
   fpManifest: null,
   fpPromise: null,
+  layout: null,
+  layoutPromise: null,
   activeCat: "all",
   query: "",
   selected: null,
@@ -166,6 +171,21 @@ function loadFingerprints() {
   return ciState.fpPromise;
 }
 
+// 布局 sidecar 懒加载（单例）；失败返回 null。
+function ensureLayout() {
+  if (ciState.layout) return Promise.resolve(ciState.layout);
+  if (ciState.layoutPromise) return ciState.layoutPromise;
+  ciState.layoutPromise = loadCodeImageLayout()
+    .then((doc) => { ciState.layout = doc; return doc; })
+    .catch(() => null);
+  return ciState.layoutPromise;
+}
+
+function layoutCellId(chartId, slot) {
+  const s = layoutSlotFor(ciState.layout, chartId, slot);
+  return s && s.cellId ? s.cellId : "";
+}
+
 // ---- 渲染主入口 ----
 export async function renderCodeImageViewer(container) {
   container.innerHTML = "";
@@ -182,6 +202,9 @@ export async function renderCodeImageViewer(container) {
   const body = el("div", { class: "ci-body" });
   wrap.append(body);
   container.append(wrap);
+
+  // 打开编码图页才开始加载布局（不等它，页面先渲染）。
+  ensureLayout();
 
   if (!ciState.manifest) {
     try {
@@ -480,10 +503,12 @@ function buildRecognizePanel() {
         cands.forEach((c, i) => {
           if (i) kids.push(el("span", { class: "ci-rec-muted" }, "/"));
           const targetSlot = g.slot >= 0 ? g.slot : c.slot;
+          const refCell = layoutCellId(seq.chartId, targetSlot);
           kids.push(el("button", {
             class: "ci-rec-map-btn", type: "button",
             style: "height:22px;padding:0 7px;font-size:var(--fs-xs);line-height:1;",
-            title: tt("ui.ci.rec.slot", targetSlot) + " · " + Math.round((Number(c.score) || 0) * 100) + "%",
+            title: tt("ui.ci.rec.slot", targetSlot) + " · " + Math.round((Number(c.score) || 0) * 100) + "%"
+              + (refCell ? " · " + refCell : ""),
             onclick: () => applyCandidate(targetSlot, c.char),
           }, c.char));
         });
@@ -526,14 +551,16 @@ function buildRecognizePanel() {
       const rows = el("div", { class: "ci-rec-map-rows" });
       const inputs = [];
       for (const slot of used) {
+        const refCell = layoutCellId(seq.chartId, slot);
         const inp = el("input", {
           class: "ci-rec-map-inp", type: "text", maxlength: "8",
           placeholder: "?", value: old[slot] || "", "aria-label": tt("ui.ci.rec.slot", slot),
         });
         inp.dataset.slot = String(slot);
+        if (refCell) inp.dataset.cell = refCell;
         inputs.push(inp);
         rows.append(el("label", { class: "ci-rec-map-row" },
-          el("span", { class: "ci-rec-map-slot" }, tt("ui.ci.rec.slot", slot)), inp));
+          el("span", { class: "ci-rec-map-slot", title: refCell || null }, tt("ui.ci.rec.slot", slot)), inp));
       }
       const save = el("button", { class: "ci-rec-map-save", type: "button" }, tt("ui.ci.rec.saveMap"));
       save.addEventListener("click", async () => {

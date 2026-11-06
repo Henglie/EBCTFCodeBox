@@ -293,8 +293,6 @@ public/
 
 > 本节由 `node tools/gen_readme_ops.mjs` 从主入口真实 import 闭包生成；opId 即注册表唯一标识。
 
-> 下表为 v0.1.13 基线（890 项），v0.1.14 新增 37 op 见更新日志。
-
 ### Base 系列（30 ops）
 
 | opId | 名称 | 说明 |
@@ -330,7 +328,7 @@ public/
 | crockford32 | Crockford Base32 |  |
 | dxBase64 | DXBase64 |  |
 
-### 文本 / 传输编码（42 ops）
+### 文本 / 传输编码（70 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -368,6 +366,34 @@ public/
 | dataUriParse | Data URI 解析 |  |
 | magnetParse | Magnet 链接解析 |  |
 | hexdump | Hexdump 互转（xxd） |  |
+| cobs | COBS 编码 / 解码 |  |
+| textSort | 排序 (Sort) |  |
+| textUnique | 去重 (Unique) |  |
+| textSplit | 拆分/重组 (Split) |  |
+| textHead | 取前 N 项 (Head) |  |
+| textTail | 取后 N 项 (Tail) |  |
+| takeNthBytes | 每隔 N 字节取样 (Take nth bytes) |  |
+| dropBytes | 删除字节 (Drop bytes) |  |
+| dropNthBytes | 每隔 N 字节删除 (Drop nth bytes) |  |
+| removeWhitespace | 删除空白 (Remove whitespace) |  |
+| removeNullBytes | 删除 NUL 字节 (Remove null bytes) |  |
+| removeAnsiEscapeCodes | 删除 ANSI 转义 (Remove ANSI Escape Codes) |  |
+| addLineNumbers | 添加行号 (Add line numbers) |  |
+| removeLineNumbers | 删除行号 (Remove line numbers) |  |
+| padLines | 行补齐 (Pad lines) |  |
+| toUpperCase | 转大写 (To Upper case) |  |
+| toLowerCase | 转小写 (To Lower case) |  |
+| swapCase | 大小写互换 (Swap case) |  |
+| toCamelCase | 转驼峰 (To Camel case) |  |
+| toSnakeCase | 转下划线 (To Snake case) |  |
+| toKebabCase | 转短横线 (To Kebab case) |  |
+| countOccurrences | 出现次数 (Count occurrences) |  |
+| expandAlphabetRange | 展开字母表范围 (Expand alphabet range) |  |
+| textWrap | 折行 (Wrap) |  |
+| xmlMinify | XML 压缩 (XML Minify) |  |
+| htmlToText | HTML 转文本 (HTML To Text) |  |
+| stripHtmlTags | 剥离 HTML 标签 (Strip HTML tags) |  |
+| fileTree | 文件树 (File Tree) |  |
 | fullwidth | 全角密码 |  |
 | bubblebabble | BubbleBabble 编码 |  |
 | jsEscape | JS escape 编码 |  |
@@ -595,11 +621,11 @@ public/
 | beaufortVariant | 变体 Beaufort |  |
 | redefence | Redefence 栅栏 |  |
 
-### 现代密码·分组（34 ops）
+### 现代密码·分组（35 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
-| aes | AES | 高级加密标准（ECB/CBC/CFB/OFB/CTR 纯 JS + GCM WebCrypto，key 16/24/32 字节）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；GCM 支持 AAD、tagLen(128…32 位)、Include IV；流模式忽略填充 |
+| aes | AES | 高级加密标准（ECB/CBC/CFB/OFB/CTR 纯 JS + GCM WebCrypto，key 16/24/32 字节）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；GCM 支持 AAD（utf8/hex/base64/latin1）、tagLen(128…32 位)、Include IV、解密独立 tag 与 ivFromInput；流模式忽略填充 |
 | des | DES | 数据加密标准（FIPS-46-3，key 8 字节，块 8 字节）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充 |
 | des3 | 3DES / TripleDES | 三重 DES（EDE，key 16 或 24 字节，块 8 字节）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充 |
 | kuznyechik | Kuznyechik（GOST R 34.12-2015） |  |
@@ -616,6 +642,7 @@ public/
 | rc6 | RC6 |  |
 | cast5 | CAST-128 |  |
 | twofish | Twofish |  |
+| opensslDec | OpenSSL 口令加解密 | OpenSSL enc 的 Salted__ 一步式口令加解密：base64/hex/真字节输入，EVP_BytesToKey（md5/sha256）+ AES-128/192/256-CBC + PKCS#7，并支持 CryptoJS 常见的 RC4（流密码，无填充）。auto 遍历 8 组并给出全部尝试结果；密文非 16 倍数时分组密码显式报缺字节、自动改试流密码，坏填充/无 Salted__ 头/口令错误均显式报错，不输出乱码。 |
 | aesCmac | AES-CMAC |  |
 | sm4Cmac | SM4-CMAC |  |
 | camellia | Camellia（RFC 3713） |  |
@@ -638,7 +665,7 @@ public/
 
 | opId | 名称 | 说明 |
 |---|---|---|
-| rc4 | RC4 | RC4 流密码（自反，key 任意长） |
+| rc4 | RC4 | RC4 流密码（自反，key 任意长）。只接受 raw key；若密文以 U2FsdGVk 开头（OpenSSL/CryptoJS 的 Salted__ 封装），请改用「OpenSSL 口令加解密」并选 RC4 |
 | xor | XOR | 重复密钥异或（自反，CTF 最常用；单字节爆破见分析类 xorBrute） |
 | rabbit | Rabbit 流密码 | RFC 4503 Rabbit 流密码。变体三档：CryptoJS Legacy（旧版在线工具默认，推荐）/ CryptoJS 标准 / RFC 4503 文档方向（0.1.9 及更早行为）。密钥填 32 位 hex 直用（IV 可选）；填口令或留空则按 CryptoJS OpenSSL 封装（Salted base64）加解密。decode 对 CryptoJS 密文（U2FsdGVkX1 开头）自动带空口令与常见口令尝试。 |
 | salsa20 | Salsa20 |  |
@@ -909,7 +936,7 @@ public/
 | poseidon2 | Poseidon2 |  |
 | xoodyakHash | Xoodyak-Hash |  |
 
-### 进制 / 字符集（82 ops）
+### 进制 / 字符集（83 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -986,6 +1013,7 @@ public/
 | bech32 | Bech32 编码 |  |
 | uuidParse | UUID 解析 |  |
 | varint | VarInt (LEB128) |  |
+| generateUuid | 生成 UUID (Generate UUID) |  |
 | pipNumerals | 点数记数（骰面 / 骨牌） |  |
 | bigCalc | 大数计算器（BigInt） |  |
 | primeInspector | 素数判定与筛选 |  |
@@ -1079,7 +1107,7 @@ public/
 | prngAttack | PRNG 破解（LCG / MT19937） |  |
 | hashLengthExtension | 哈希长度扩展攻击（MD5/SHA1/SHA256） |  |
 
-### 压缩 / 归档（19 ops）
+### 压缩 / 归档（21 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1097,6 +1125,8 @@ public/
 | lzstring | LZString 压缩 / 解压 |  |
 | sevenZipExtract | 7z 归档解析 / 解压 | 识别 7z 签名 + 解析 SignatureHeader/StartHeader（CRC 校验）；放置 public/wasm/7zz.js 后可真列表/解压（LZMA 等，wasm 缺失自动降级） |
 | archiveUnified | 压缩 / 归档归一分析 |  |
+| lzma | LZMA 压缩 / 解压 |  |
+| tar | Tar 创建 / 列表 / 提取 |  |
 | zipRepair | ZIP 伪加密修复 |  |
 | zipPseudoEncrypt | ZIP 伪加密（置位） |  |
 | zipEntries | ZIP 条目列表 |  |
@@ -1133,8 +1163,8 @@ public/
 | oleExtract | OLE/CFB 容器静态提取 |  |
 | mcLevelDat | Minecraft level.dat 解析 |  |
 | mcMapRender | Minecraft 地图渲染 |  |
-| trailerCarve | 文件附加数据剥离 |  |
 | foremostCarve | 文件雕刻（Foremost JS） |  |
+| trailerCarve | 文件附加数据剥离 |  |
 | trafficReadable | 流量可读结论 |  |
 | usbKeyboard | USB 键盘流量解析 |  |
 | usbMouse | USB 鼠标流量解析 |  |
@@ -1164,7 +1194,7 @@ public/
 | kzgBlobParse | EIP-4844 blob 解析 |  |
 | pkcs12Parse | PKCS#12/PFX 解析 |  |
 
-### 数据结构 / 序列化（22 ops）
+### 数据结构 / 序列化（27 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1186,12 +1216,17 @@ public/
 | diffTool | 差异对比 |  |
 | rison | Rison |  |
 | pickleDisasm | Pickle 反汇编 |  |
+| cborEncode | CBOR 编码 |  |
+| msgpackEncode | MessagePack 编码 |  |
+| bsonSerialize | BSON 序列化 |  |
+| phpSerializeGenerate | PHP serialize 生成 |  |
+| protobufEncode | Protobuf 编码 |  |
 | cryptoAddrUnified | 加密货币地址解析 |  |
 | huffmanCodec | 哈夫曼编解码（通用） |  |
 | unitConv | 单位换算 |  |
 | dataConvert | JSON / CSV / XML / YAML 转换 |  |
 
-### 图像 / 二维码（37 ops）
+### 图像 / 二维码（38 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1214,6 +1249,7 @@ public/
 | qrFormatBrute | QR 格式信息爆破 |  |
 | qrScanImage | 二维码 / 条形码扫描解析 |  |
 | barcodeGen | 条码生成（1D/2D 八符号） |  |
+| ocr | OCR 文字识别（英文 / 简体中文） |  |
 | imageStructUnified | 图像结构分析（归一） |  |
 | bin2img | 二进制转图片 |  |
 | img2dataURI | 图片转 Base64/dataURI |  |

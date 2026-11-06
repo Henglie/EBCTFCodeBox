@@ -356,6 +356,9 @@ function randomBytes16() {
 }
 
 function asconRun(text, p) {
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "text") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
   const mode = (p && p.mode) || "encrypt";
   const key = hexToBytes((p && p.key) || "");
   const aadMode = (p && p.aadMode) || "text";
@@ -374,10 +377,9 @@ function asconRun(text, p) {
     } else if (nonce.length !== 16) {
       throw new Error(`Ascon-AEAD128 nonce 必须为 16 字节（128 位），当前 ${nonce.length} 字节`);
     }
-    // 明文：优先真字节通道（acceptsBytes），否则按 inputMode 解析主输入
-    const inputMode = (p && p.inputMode) || "text";
+    // 明文：优先真字节通道（acceptsBytes），否则按输入视图语义用 UTF-8 编码文本
     const rawPt = rawBytesOf(p);
-    const pt = rawPt || (inputMode === "hex" ? hexToBytes(text) : new TextEncoder().encode(text));
+    const pt = rawPt || new TextEncoder().encode(text);
     const { ciphertext, tag } = asconAead128Encrypt(key, nonce, aad, pt);
     const tagCut = tag.slice(0, tagLen);
     // 密文字节产物 = 密文 ‖ tag（真字节；tag 按 §4.2.1 截断到 tagLen）
@@ -453,13 +455,6 @@ register({
       ],
     },
     { key: "aad", label: "关联数据 aad（可空）", type: "text", default: "", placeholder: "可空" },
-    {
-      key: "inputMode", label: "加密输入形式", type: "select", default: "text",
-      options: [
-        { value: "text", label: "UTF-8 文本" },
-        { value: "hex", label: "Hex 字节" },
-      ],
-    },
     { key: "tagLen", label: "tag 字节数", type: "number", default: 16, placeholder: "4..16，默认 16（§4.2.1 截断）" },
   ],
   run: asconRun,

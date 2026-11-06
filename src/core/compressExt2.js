@@ -1049,7 +1049,7 @@ function lz4CompressRun(text, p) {
   try {
     bytes = inputToBytes(text, p);
   } catch {
-    throw new Error("LZ4 压缩：输入不是合法 hex/base64（文本请把「输入编码」设为 UTF-8）");
+    throw new Error("LZ4 压缩：输入不是合法 hex/base64（文本请使用输入视图的文本模式）");
   }
   if (bytes.length === 0) throw new Error("LZ4 压缩：输入为空。");
   if (bytes.length > LZ4_MAX_COMPRESS_BYTES) {
@@ -1064,9 +1064,13 @@ function lz4CompressRun(text, p) {
 
 /** 方向分流：dir=decompress（默认，旧行为）/ compress。 */
 function lz4Run(text, p) {
-  const dir = (p && p.dir) || "decompress";
-  if (dir === "compress") return lz4CompressRun(text, p);
-  if (dir === "decompress") return lz4DecRun(text, p);
+  if (p && p.inputEnc != null && String(p.inputEnc).toLowerCase() !== "auto") {
+    throw new Error("inputEnc 该参数已废弃，请改用输入视图");
+  }
+  const safe = p ? { ...p, inputEnc: undefined } : p;
+  const dir = (safe && safe.dir) || "decompress";
+  if (dir === "compress") return lz4CompressRun(text, safe);
+  if (dir === "decompress") return lz4DecRun(text, safe);
   throw new Error(`LZ4：未知方向 ${JSON.stringify(dir)}，仅支持 compress / decompress`);
 }
 
@@ -1086,13 +1090,6 @@ register({
         { value: "block", label: "块格式（裸 block）" },
         { value: "frame", label: "帧格式（LZ4 Frame）" },
       ] },
-    { key: "inputEnc", label: "输入编码（dir=compress 时文本请选 UTF-8）", type: "select", default: "auto",
-      options: [
-        { value: "auto", label: "自动（hex/base64/UTF-8）" },
-        { value: "hex", label: "Hex" },
-        { value: "base64", label: "Base64" },
-        { value: "utf8", label: "UTF-8 文本" },
-      ] },
     { key: "outEnc", label: "压缩输出编码（dir=compress）", type: "select", default: "hex",
       options: [
         { value: "hex", label: "Hex" },
@@ -1108,6 +1105,7 @@ register({
     { key: "toFile", label: "二进制结果输出为文件（dir=decompress）", type: "bool", default: false },
   ],
   run: lz4Run,
+  acceptsBytes: true,
 });
 
 /* ================================================================

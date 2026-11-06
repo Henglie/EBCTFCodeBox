@@ -191,7 +191,10 @@ async function compressBytes(bytes, blockSize) {
  * @returns {Promise<string>} base64 / hex
  */
 export async function bzip2EncRun(text, p) {
-  const bytes = toBytes(text, p);
+  if (p && p.inputEnc != null && String(p.inputEnc).toLowerCase() !== "utf8") {
+    throw new Error("inputEnc 该参数已废弃，请改用输入视图");
+  }
+  const bytes = toBytes(text, p ? { ...p, inputEnc: undefined } : p);
   if (bytes.length > MAX_INPUT_BYTES) {
     throw new Error(
       "bzip2 压缩：输入 " + bytes.length + " 字节超过上限 " + MAX_INPUT_BYTES +
@@ -223,18 +226,6 @@ register({
     "完整输出不截断，输入上限 4 MiB、输出预算 12 MiB；与现有 bzip2Dec 可直接往返。",
   params: [
     {
-      key: "inputEnc",
-      label: "输入编码",
-      type: "select",
-      default: "utf8",
-      options: [
-        { value: "utf8", label: "UTF-8 文本（默认）" },
-        { value: "hex", label: "Hex" },
-        { value: "base64", label: "Base64" },
-        { value: "auto", label: "自动（hex/base64/UTF-8）" },
-      ],
-    },
-    {
       key: "outEnc",
       label: "输出编码",
       type: "select",
@@ -253,6 +244,7 @@ register({
     },
   ],
   run: bzip2EncRun,
+  acceptsBytes: true,
 });
 
 export { MAX_INPUT_BYTES, MAX_OUTPUT_CHARS, parseBlockSize, bytesToBase64, bytesToHex };

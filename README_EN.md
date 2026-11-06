@@ -293,7 +293,7 @@ public/
 
 > This section is generated from the real import closure; opId is the unique registry identifier.
 
-> The table below is the v0.1.13 baseline (890 ops); 37 ops added in v0.1.14 are listed in the changelog.
+> The table below keeps the v0.1.13 baseline entries (890 ops); the 38 ops added in v0.1.14 are listed in the changelog.
 
 ### Base (30 ops)
 
