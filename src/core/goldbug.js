@@ -37,6 +37,8 @@ for (const [letter, sym] of Object.entries(ORIGINAL_MAP)) {
 
 // 符号集合（用于 decode 时判断是否为 GoldBug 符号）
 const SYMBOL_SET = new Set(Object.values(ORIGINAL_MAP));
+// 转义符：用于区分「字面数字/标点」与「同形符号」。\ 不在符号表内。
+const ESC = "\\";
 
 // ============ encode: 字母 → 符号 ============
 function goldbugEncode(text) {
@@ -47,7 +49,8 @@ function goldbugEncode(text) {
     if (upper in ORIGINAL_MAP) {
       out += ORIGINAL_MAP[upper];
     } else {
-      out += ch;  // 非字母原样透传
+      // 非字母若恰好是 GoldBug 符号（数字/标点）或转义符本身，则加 \ 转义，避免 decode 误当符号。
+      out += (SYMBOL_SET.has(ch) || ch === ESC) ? ESC + ch : ch;
     }
   }
   return out;
@@ -55,10 +58,15 @@ function goldbugEncode(text) {
 
 // ============ decode: 符号 → 字母 ============
 function goldbugDecode(text) {
-  const s = String(text);
+  const chars = [...String(text)];
   let out = "";
-  for (const ch of s) {
-    if (SYMBOL_SET.has(ch)) {
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    if (ch === ESC) {
+      if (i + 1 >= chars.length)
+        throw new Error("GoldBug：末尾有悬空转义符（字面反斜杠请写成双反斜杠）。");
+      out += chars[++i];  // 被转义的字面字符，原样输出
+    } else if (SYMBOL_SET.has(ch)) {
       out += REVERSE_MAP[ch];
     } else {
       out += ch;  // 非符号原样透传

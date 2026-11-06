@@ -50,12 +50,20 @@ const SGA_LONG = ["U", "X", "Z"].map((l) => SGA_MAP[l]).sort((a, b) => b.length 
 SGA_REV.set("ℸ", "U"); // 裸形容忍（组合点丢失常见）
 SGA_REV.set("∴", "X");
 
+// 转义：字面字符若恰好与 SGA 符号同形（如 !、数字、|、ℸ、组合点），必须用 \ 前缀，
+// 否则 decode 会把它当成字母符号。\ 本身也转义。
+const SGA_ESC = "\\";
+const SGA_LITERAL_SYMBOL_CHARS = new Set();
+for (const tok of Object.values(SGA_MAP)) for (const ch of [...tok]) SGA_LITERAL_SYMBOL_CHARS.add(ch);
+
 function sgaEncode(text) {
   const src = String(text == null ? "" : text);
   let out = "";
   for (const ch of src) {
     const up = ch.toUpperCase();
-    out += SGA_MAP[up] != null ? SGA_MAP[up] : ch;
+    if (SGA_MAP[up] != null) out += SGA_MAP[up];
+    else if (SGA_LITERAL_SYMBOL_CHARS.has(ch) || ch === SGA_ESC) out += SGA_ESC + ch;
+    else out += ch;
   }
   if (!out.trim()) throw new Error("SGA：输入为空。");
   return out;
@@ -67,6 +75,13 @@ function sgaDecode(text) {
   const cps = [...src];
   let out = "", i = 0;
   while (i < cps.length) {
+    if (cps[i] === SGA_ESC) {
+      if (i + 1 >= cps.length)
+        throw new Error("SGA：末尾有悬空转义符（字面反斜杠请写成双反斜杠）。");
+      out += cps[i + 1]; // 被转义的字面符号
+      i += 2;
+      continue;
+    }
     let matched = false;
     for (const tok of SGA_LONG) { // 先试多码点 token：u(ℸ+下加点) x(∴+上加点) z(||)
       const t = [...tok];

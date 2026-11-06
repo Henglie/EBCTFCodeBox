@@ -589,10 +589,12 @@ function grilleRun(text, n, holesParam, dir, padChar, decodeMode) {
       for (const [r, c] of open) grid[r][c] = chars[idx++];
     return grid.map((row) => row.join("")).join("");
   } else {
-    const t = String(text ?? "").replace(/\s+/g, "");
+    const t = String(text ?? "");
     const want = n * n - (n % 2); // 奇数 N 中心格禁用，密文比满格少 1
-    if (t.length !== want)
-      throw new Error(`转动格栅：密文须恰 ${want} 字符（${n}×${n}${n % 2 ? " 去中心格" : " 满格"}），当前 ${t.length} 个。`);
+    if (t.length !== want) {
+      const ws = [...t].filter((ch) => /\s/.test(ch)).length;
+      throw new Error(`转动格栅：密文须恰 ${want} 字符（${n}×${n}${n % 2 ? " 去中心格" : " 满格"}），当前 ${t.length} 个${ws ? `（含 ${ws} 个空白；空格也可能是合法格内容，人工分组空白请先删除）` : ""}。`);
+    }
     let k = 0;
     for (let i = 0; i < n * n; i++) {
       if (n % 2 === 1 && i === (n >> 1) * n + (n >> 1)) continue; // 跳过中心

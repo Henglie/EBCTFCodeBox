@@ -130,6 +130,8 @@ function rleEncode(text, p) {
         rest -= c;
       }
     } else {
+      if (ch >= "0" && ch <= "9")
+        throw new Error(`RLE：变长计数模式无法编码数字字符「${ch}」——数字行程与计数值在解码时二义，请改用定长计数或打包式。`);
       parts.push(fmt === "charFirst" ? [ch, String(n)] : [String(n), ch]);
     }
   }

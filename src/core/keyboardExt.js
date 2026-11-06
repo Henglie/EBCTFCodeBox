@@ -50,14 +50,40 @@ const C2Q = buildLayoutMap(LAY_COLEMAK, LAY_QWERTY);
 const D2C = buildLayoutMap(LAY_DVORAK, LAY_COLEMAK);
 const C2D = buildLayoutMap(LAY_COLEMAK, LAY_DVORAK);
 
-function layoutConvert(text, map) {
+// 大小写转义：47 键只建模 unshifted 主键，目标键是标点时无法靠 toUpperCase 保留大写。
+// 用 ~（不在 47 键集合）作为标记：~x = 源字符为大写、目标键为无大小写的 x；字面 ~ 写作 ~~。
+const LAY_ESC = "~";
+const isAsciiLetter = (ch) => (ch >= "A" && ch <= "Z") || (ch >= "a" && ch <= "z");
+
+function layoutConvert(text, map, decode = false) {
+  const chars = [...text];
   let out = "";
-  for (const ch of text) {
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    if (ch === LAY_ESC) {
+      if (!decode) {
+        out += LAY_ESC + LAY_ESC; // 字面 ~ 转义
+        continue;
+      }
+      const next = chars[++i];
+      if (next === undefined) throw new Error("键盘布局映射：末尾有悬空 ~ 转义。");
+      if (next === LAY_ESC) { out += LAY_ESC; continue; }
+      const src = map[next];
+      if (src === undefined) throw new Error("键盘布局映射：~ 后的字符不在目标布局内。");
+      out += src.toUpperCase(); // 标记表示源字符为大写
+      continue;
+    }
     const up = ch >= "A" && ch <= "Z";
     const low = up ? ch.toLowerCase() : ch;
     const dst = map[low];
-    if (dst !== undefined) out += up ? dst.toUpperCase() : dst;
-    else out += ch; // 不在 47 键集合内（如空格、换行、中文）原样保留
+    if (dst === undefined) { out += ch; continue; } // 不在 47 键集合内（如空格、换行、中文）原样保留
+    if (decode) {
+      out += up ? dst.toUpperCase() : dst;
+    } else if (up && !isAsciiLetter(dst)) {
+      out += LAY_ESC + dst; // 目标键无大小写，标记源字符的大写
+    } else {
+      out += up ? dst.toUpperCase() : dst;
+    }
   }
   return out;
 }
@@ -67,13 +93,13 @@ function layoutEncode(text, p) {
   const t = (p && p.layout) || "dvorak";
   const map = t === "colemak" ? Q2C : t === "dvorak" ? Q2D : null;
   if (!map) throw new Error("未知布局: " + t);
-  return layoutConvert(text, map);
+  return layoutConvert(text, map, false);
 }
 function layoutDecode(text, p) {
   const t = (p && p.layout) || "dvorak";
   const map = t === "colemak" ? C2Q : t === "dvorak" ? D2Q : null;
   if (!map) throw new Error("未知布局: " + t);
-  return layoutConvert(text, map);
+  return layoutConvert(text, map, true);
 }
 // 额外导出 Dvorak↔Colemak 直转（供测试与未来扩展，不单独注册 op）。
 function dvorakToColemak(text) { return layoutConvert(text, D2C); }
@@ -246,6 +272,9 @@ const ARROW_SCHEMES = {
 };
 // 箭头 → 方向键名；方向键名 → 箭头（与方案无关）
 const DIR_TO_ARROW = { up: ARROW_UP, down: ARROW_DOWN, left: ARROW_LEFT, right: ARROW_RIGHT };
+// 大小写标记：箭头本身无大小写，用小写源字母时在箭头后追加 ~；字面 ~ 用 \ 转义，字面 \ 写 \\。
+const ARROW_ESC = "\\";
+const ARROW_LOWER = "~";
 
 function arrowEncode(text, p) {
   const scheme = (p && p.scheme) || "wasd";
@@ -257,9 +286,17 @@ function arrowEncode(text, p) {
   let out = "";
   for (const ch of text) {
     const up = ch.toUpperCase();
-    if (letterToDir[up]) out += DIR_TO_ARROW[letterToDir[up]];
-    else if (ch === ARROW_UP || ch === ARROW_DOWN || ch === ARROW_LEFT || ch === ARROW_RIGHT) out += ch;
-    else out += ch; // 非方向字符原样保留
+    const dir = letterToDir[up];
+    if (dir) {
+      out += DIR_TO_ARROW[dir];
+      if (ch !== up) out += ARROW_LOWER; // 记录源字母是小写
+    } else if (ch === ARROW_UP || ch === ARROW_DOWN || ch === ARROW_LEFT || ch === ARROW_RIGHT) {
+      out += ch;
+    } else if (ch === ARROW_ESC || ch === ARROW_LOWER) {
+      out += ARROW_ESC + ch; // 字面转义符/标记符
+    } else {
+      out += ch; // 非方向字符原样保留
+    }
   }
   return out;
 }
@@ -272,10 +309,29 @@ function arrowDecode(text, p) {
   arrowToLetter[ARROW_DOWN] = sc.down;
   arrowToLetter[ARROW_LEFT] = sc.left;
   arrowToLetter[ARROW_RIGHT] = sc.right;
+  const chars = [...text];
   let out = "";
-  for (const ch of text) {
-    if (arrowToLetter[ch]) out += arrowToLetter[ch];
-    else out += ch;
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    if (ch === ARROW_ESC) {
+      if (i + 1 >= chars.length)
+        throw new Error("方向键编码：末尾有悬空转义符（字面反斜杠请写成双反斜杠）。");
+      out += chars[++i];
+      continue;
+    }
+    const letter = arrowToLetter[ch];
+    if (letter) {
+      if (chars[i + 1] === ARROW_LOWER) {
+        out += letter.toLowerCase();
+        i++;
+      } else {
+        out += letter;
+      }
+      continue;
+    }
+    if (ch === ARROW_LOWER)
+      throw new Error("方向键编码：孤立的 ~ 大小写标记（缺少前置箭头）。");
+    out += ch;
   }
   return out;
 }
