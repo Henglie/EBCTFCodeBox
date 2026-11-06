@@ -45,12 +45,24 @@ export const OCR_LANG_LABELS = [
 ];
 
 const OEM_LSTM_ONLY = 1;
-const OEM_MODES = { "Tesseract only": 0, "LSTM only": 1, "Tesseract/LSTM Combined": 2 };
+// tesseract.js 7 的浏览器分发只带 LSTM core + LSTM 模型，legacy OEM（0/2）没有实际能力。
+// 对外只暴露 LSTM；旧存档里的 0/2 与 legacy 名称在读取时归一到 1（不报错、不改默认输出）。
+const OEM_LEGACY_NAMES = new Set(["Tesseract only", "Tesseract/LSTM Combined"]);
 function normalizeOem(v) {
   if (v == null || v === "") return OEM_LSTM_ONLY;
+  if (v === OEM_LSTM_ONLY || v === "1") return OEM_LSTM_ONLY;
+  if (v === 0 || v === "0" || v === 2 || v === "2") return OEM_LSTM_ONLY;
   const name = String(v);
-  if (!(name in OEM_MODES)) throw new Error(`OCR：不支持的 Engine Mode "${name}"`);
-  return OEM_MODES[name];
+  if (name === "LSTM only" || name === "DEFAULT") return OEM_LSTM_ONLY;
+  if (OEM_LEGACY_NAMES.has(name)) return OEM_LSTM_ONLY;
+  throw new Error(`OCR：不支持的 Engine Mode "${name}"`);
+}
+
+// 缺包/加载失败的统一可读出口：保留底层原因与失败 URL，另附离线包安装入口（T812 §9-2）。
+const INSTALL_HINT = "离线包未安装：请到 扩展面板 → 离线包 → OCR（eng+chi_sim）安装后重试。";
+function withInstallHint(msg) {
+  const text = String(msg == null ? "" : msg);
+  return text.includes("离线包未安装") ? text : `${text} ${INSTALL_HINT}`;
 }
 
 /* -------------------------------------------------------------- 工具函数 */
@@ -129,7 +141,7 @@ async function loadTesseractApi() {
     return T;
   }).catch((e) => {
     _apiPromise = null;
-    throw new Error(`OCR 引擎加载失败（${url}）：${e && e.message ? e.message : e}`);
+    throw new Error(withInstallHint(`OCR 引擎加载失败（${url}）：${e && e.message ? e.message : e}`));
   });
   return _apiPromise;
 }
@@ -138,21 +150,35 @@ const _workers = new Map(); // lang -> { worker, logger }
 const _preflighted = new Set(); // 已成功预检的资源 URL
 
 /**
- * 资源预检：HEAD 探测本地资产是否到位。缺失（HTTP 4xx/5xx）→ 明确报错。
+ * 资源预检：先查 Cache API——已安装离线包 / 已回填的运行时缓存命中即视为到位，不发任何请求；
+ * 未命中且断网时不再 HEAD（否则每次新建 worker 都会产生 4 条 ERR_INTERNET_DISCONNECTED 噪声），
+ * 交给引擎加载失败路径报错；只有在线且未缓存时才 HEAD 探测 4xx/5xx，不额外下载大文件。
  * 环境不支持 HEAD（如 file://）时跳过，交由引擎自身报错，不误伤。
  */
 async function assertAsset(url, label) {
   if (_preflighted.has(url)) return;
+  if (typeof caches !== "undefined" && typeof caches.match === "function") {
+    try {
+      const hit = await caches.match(url);
+      if (hit) {
+        _preflighted.add(url);
+        return;
+      }
+    } catch {
+      // Cache API 不可用时按「未缓存」继续，不影响后续引擎加载。
+    }
+  }
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
   if (typeof fetch !== "function") return;
   let res;
   try {
     res = await fetch(url, { method: "HEAD", cache: "no-store" });
   } catch { return; }
   if (res && res.ok === false) {
-    throw new Error(
+    throw new Error(withInstallHint(
       `OCR 资源缺失：${label} 返回 HTTP ${res.status}（${url}）。`
       + "请确认随包/离线包已包含 public/vendor/ocr/。",
-    );
+    ));
   }
   _preflighted.add(url);
 }
@@ -188,7 +214,7 @@ async function createWorkerFor(lang, onProgress, oem = OEM_LSTM_ONLY) {
       errorHandler: (e) => { rec.lastError = e; },
     });
   } catch (e) {
-    throw new Error(`OCR 引擎初始化失败（lang=${lang}, core=${coreFile}）：${e && e.message ? e.message : e}`);
+    throw new Error(withInstallHint(`OCR 引擎初始化失败（lang=${lang}, core=${coreFile}）：${e && e.message ? e.message : e}`));
   }
   rec.worker = worker;
   return rec;
@@ -287,9 +313,7 @@ export const OCR_OP = {
     { key: "lang", label: "识别语言", type: "select", default: "eng", options: OCR_LANG_LABELS },
     { key: "showConfidence", label: "显示置信度", type: "bool", default: true },
     { key: "oem", label: "OCR Engine Mode", type: "select", default: "LSTM only", options: [
-      { value: "Tesseract only", label: "Tesseract only" },
-      { value: "LSTM only", label: "LSTM only（项目旧默认）" },
-      { value: "Tesseract/LSTM Combined", label: "Tesseract/LSTM Combined" },
+      { value: "LSTM only", label: "LSTM only" },
     ] },
   ],
   run,
