@@ -23,6 +23,26 @@ import { finishBytesDecode, decodeUtf8Lossy } from "./bytesIo.js";
 function strToBytes(s) {
   return new TextEncoder().encode(String(s));
 }
+
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
 // 保留导出面：有损解码实现已收敛到 bytesIo（全仓唯一一处 fatal:false）。
 // 注意：decode 出口**不再**用它 —— 那里用 finishBytesDecode，否则会静默产出 U+FFFD。
 function bytesToStr(b) {
@@ -331,6 +351,7 @@ register({
 // mode=hex：Hex↔Hex 端序交换（复刻旧 endianSwap），encode/decode 均自逆，带整组长度校验。
 register({
   id: "byteSwap", cat: "radix", name: "字节序反转",
+  acceptsBytes: true,
   desc: "按 2/4/8 字节分组反转字节顺序（大小端转换，自逆）。文本模式: 文本↔Hex；Hex 模式: Hex↔Hex（大小端互转，长度须为组的整数倍）。",
   params: [
     { key: "mode", label: "模式", type: "select", default: "text", options: [
@@ -348,6 +369,14 @@ register({
   ],
   encode: (t, p) => {
     const group = Number((p && p.wordLength) || (p && p.group) || 2);
+    const raw = rawBytesOrNull(p, t);
+    if (raw) {
+      if (p && p.mode === "raw") {
+        let s = ""; for (const b of byteSwapBytes(raw, group, !!(p && p.padIncomplete))) s += String.fromCharCode(b);
+        return s;
+      }
+      return bytesToHex(byteSwapBytes(raw, group, !!(p && p.padIncomplete)));
+    }
     if (p && p.mode === "hex") return byteSwapHexIO(t, group, !!(p && p.padIncomplete));
     if (p && p.mode === "raw") {
       const out = byteSwapBytes(strToBytes(t), group, !!(p && p.padIncomplete));
@@ -358,6 +387,15 @@ register({
   },
   decode: (t, p) => {
     const group = Number((p && p.wordLength) || (p && p.group) || 2);
+    const raw = rawBytesOrNull(p, t);
+    if (raw) {
+      if (p && p.mode === "hex") return bytesToHex(byteSwapBytes(raw, group, !!(p && p.padIncomplete)));
+      if (p && p.mode === "raw") {
+        let s = ""; for (const b of byteSwapBytes(raw, group, !!(p && p.padIncomplete))) s += String.fromCharCode(b);
+        return s;
+      }
+      return finishBytesDecode(byteSwapBytes(raw, group, !!(p && p.padIncomplete)), { textMode: "hex", name: "byteSwap" });
+    }
     if (p && p.mode === "hex") return byteSwapHexIO(t, group, !!(p && p.padIncomplete));
     if (p && p.mode === "raw") {
       const out = byteSwapBytes(strToBytes(t), group, !!(p && p.padIncomplete));
@@ -487,6 +525,7 @@ function byteReverseBytes(bytes) {
 }
 register({
   id: "byteReverse", cat: "radix", name: "整串字节倒序",
+  acceptsBytes: true,
   desc: "整个字节流首尾倒序（File-Reverse，区别于 byteSwap 定长分组端序反转）。文本模式: 文本→倒序字节 Hex；Hex 模式: Hex↔Hex 整串倒序（自逆）。",
   params: [
     { key: "mode", label: "模式", type: "select", default: "text", options: [
@@ -502,11 +541,17 @@ register({
   ],
   encode: (t, p) => {
     const by = (p && p.by) || "byte";
+    const raw = rawBytesOrNull(p, t);
+    if (raw) return bytesToHex(byteReverseBy(raw, by));
     if (p && p.mode === "hex") return bytesToHex(byteReverseBy(hexToBytes(t), by));
     return bytesToHex(byteReverseBy(strToBytes(t), by));
   },
   decode: (t, p) => {
     const by = (p && p.by) || "byte";
+    const raw = rawBytesOrNull(p, t);
+    if (raw) return p && p.mode === "hex"
+      ? bytesToHex(byteReverseBy(raw, by))
+      : finishBytesDecode(byteReverseBy(raw, by), { textMode: "hex", name: "byteReverse" });
     if (p && p.mode === "hex") return bytesToHex(byteReverseBy(hexToBytes(t), by));
     // 文本模式 decode：Hex → 倒序字节 → UTF-8 文本（还原原文）
     return finishBytesDecode(byteReverseBy(hexToBytes(t), by), { textMode: "hex", name: "byteReverse" });

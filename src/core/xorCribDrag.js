@@ -67,6 +67,26 @@ export function parseInput(text, inputEnc = "auto") {
   return base64ToBytes(s);
 }
 
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 // ============================================================
 // cribDrag：核心算法
 // ============================================================
@@ -118,7 +138,7 @@ function xorCribDragRun(text, p) {
 
   let cipherBytes;
   try {
-    cipherBytes = parseInput(text, inputEnc);
+    cipherBytes = rawBytesOrNull(p, text) || parseInput(text, inputEnc);
   } catch (err) {
     lines.push("✗ 密文解析失败：" + err.message);
     return lines.join("\n");
@@ -171,6 +191,7 @@ function xorCribDragRun(text, p) {
 // ============================================================
 register({
   id: "xorCribDrag",
+  acceptsBytes: true,
   cat: "analysis",
   name: "XOR crib-drag 已知明文拖动",
   desc: "已知明文片段拖动异或：逐位置 C XOR crib 输出候选密钥/明文 + 可打印率",

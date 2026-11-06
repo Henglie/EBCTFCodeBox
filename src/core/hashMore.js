@@ -64,11 +64,30 @@ const te = new TextEncoder();
 const toHex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 const rotl32 = (x, n) => ((x << n) | (x >>> (32 - n))) >>> 0;
 
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 /** text/hex 双编码输入。hex 非法直接抛错（项目惯例）。 */
 function inputBytes(text, p) {
-  if (p && p.rawBytes && p.rawBytes.length) {
-    return p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes); // rawBytes 契约（与 hash.js 世代一致）
-  }
+  const raw = rawBytesOrNull(p, text);
+  if (raw) return raw;
   const mode = (p && p.inputType) || "text";
   if (mode === "hex") {
     const s = (text || "").replace(/\s+/g, "");
@@ -495,6 +514,7 @@ const INPUT_PARAM = { key: "inputType", label: "输入编码", type: "select", d
 
 register({
   id: "md6", cat: "hash", name: "MD6", family: "md", familyLabel: "MD6",
+  acceptsBytes: true,
   desc: "MD6 哈希（Rivest 2008 NIST SHA-3 提案，未终选无 RFC 终稿；Merkle 树结构，默认 256 位）",
   params: [
     { key: "bits", label: "摘要位数", type: "select", default: 256, options: [128, 160, 192, 224, 256, 320, 384, 448, 512] },
@@ -505,6 +525,7 @@ register({
 
 register({
   id: "snefru", cat: "hash", name: "Snefru",
+  acceptsBytes: true,
   desc: "Snefru 哈希（Merkle 1990，Snefru 2.5a；Size 32-480（step 32）与 Rounds 2/4/8 与 CyberChef 对齐；默认 256/8 保持项目旧输出）",
   params: [
     { key: "size", label: "Size（位，32-480 step 32）", type: "number", default: 256, placeholder: "默认 256" },
@@ -521,6 +542,7 @@ register({
 
 register({
   id: "sha0", cat: "hash", name: "SHA-0", family: "sha", familyLabel: "SHA-0",
+  acceptsBytes: true,
   desc: "SHA-0（FIPS 180 原版 1993，被 SHA-1/FIPS 180-1 替换，仅历史兼容；与 SHA-1 唯一差异是消息扩展不旋转）；Rounds 默认 80",
   params: [
     { key: "rounds", label: "Rounds（1-80）", type: "number", default: 80 },
@@ -531,6 +553,7 @@ register({
 
 register({
   id: "has160", cat: "hash", name: "HAS-160",
+  acceptsBytes: true,
   desc: "HAS-160（韩国 KISA TTAS.KO-12.0011/R2，KCDSA 配套摘要，160 位）",
   params: [INPUT_PARAM],
   run: (t, p) => has160(inputBytes(t, p)),
@@ -538,6 +561,7 @@ register({
 
 register({
   id: "gostHash", family: "gostdigest", familyLabel: "gost94", cat: "hash", name: "GOST R 34.11-94",
+  acceptsBytes: true,
   desc: "老 GOST 哈希（RFC 5831，基于 GOST 28147-89；注意与本箱 Streebog 的 GOST R 34.11-2012 是两个不同算法）",
   params: [
     { key: "sbox", label: "S 盒参数集", type: "select", default: "test",

@@ -37,8 +37,30 @@ import { blake2b } from "./argon2id.js";
 const te = new TextEncoder();
 const toHex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 /** text/hex 双编码输入。hex 非法直接抛错（项目惯例）。 */
 function inputBytes(text, p) {
+  const raw = rawBytesOrNull(p, text);
+  if (raw) return raw;
   const mode = (p && p.inputType) || "text";
   if (mode === "hex") {
     const s = (text || "").replace(/\s+/g, "");
@@ -1379,6 +1401,7 @@ const OPT_TEXT_HEX = [
 
 register({
   id: "argon2",
+  acceptsBytes: true,
   cat: "hash",
   name: "Argon2 KDF（Argon2d/i/id）",
   desc: "RFC 9106 口令密钥派生（PHC 冠军），内存困难型，Argon2d/i/id 三型可选",
@@ -1417,6 +1440,7 @@ register({
 
 register({
   id: "tiger",
+  acceptsBytes: true,
   cat: "hash",
   name: "Tiger / Tiger2 哈希（192-bit）",
   desc: "Anderson-Biham Tiger/192（ED2K/TTH 等 P2P 场景常见）；Tiger2 为 0x80 填充变体",
@@ -1434,6 +1458,7 @@ register({
 
 register({
   id: "kupyna",
+  acceptsBytes: true,
   cat: "hash",
   name: "Kupyna 哈希（DSTU 7564:2014）",
   desc: "乌克兰国家标准哈希（Grøstl 近亲），256/384/512 位输出可选",
