@@ -1098,7 +1098,32 @@ const XOR_PARAMS = [
   { key: "key", label: "密钥", type: "text", default: "ctf", placeholder: "密钥" },
   { key: "keyEnc", label: "密钥编码", type: "select", default: "utf8", options: ENC_OPTS },
   { key: "outEnc", label: "密文编码", type: "select", default: "base64", options: OUT_OPTS },
+  { key: "scheme", label: "Scheme（同 CyberChef）", type: "select", default: "Standard", options: [
+    { value: "Standard", label: "Standard" },
+    { value: "Input differential", label: "Input differential" },
+    { value: "Output differential", label: "Output differential" },
+    { value: "Cascade", label: "Cascade" },
+  ] },
+  { key: "nullPreserving", label: "Null preserving", type: "bool", default: false },
 ];
+
+function xorApply(data, key, scheme = "Standard", nullPreserving = false) {
+  if (!key.length) throw new Error("XOR：密钥不能为空");
+  const out = new Uint8Array(data.length);
+  let prevIn = 0, prevOut = 0;
+  for (let i = 0; i < data.length; i++) {
+    let kb;
+    if (scheme === "Input differential") kb = i === 0 ? key[0] : prevIn;
+    else if (scheme === "Output differential") kb = i === 0 ? key[0] : prevOut;
+    else if (scheme === "Cascade") kb = i === 0 ? key[0] : ((prevIn << 1) & 0xff);
+    else kb = key[i % key.length];
+    const b = data[i];
+    out[i] = (nullPreserving && (b === 0 || b === kb)) ? b : (b ^ kb);
+    prevIn = b;
+    prevOut = out[i];
+  }
+  return out;
+}
 {
   const RC4_PARAMS = [
     { key: "key", label: "密钥 / Passphrase", type: "text", default: "", placeholder: "密钥" },
@@ -1124,9 +1149,18 @@ const XOR_PARAMS = [
   });
 }
 {
-  const { enc, dec } = makeStreamOp(xorCrypt);
+  const enc = (text, p) => {
+    const key = decodeInputIo(p.key || "", p.keyEnc || "utf8");
+    const data = rawBytesOrNull(p, text) || decodeInputIo(text, "utf8");
+    return encodeOutputIo(xorApply(data, key, p.scheme || "Standard", !!p.nullPreserving), p.outEnc || "base64");
+  };
+  const dec = (text, p) => {
+    const key = decodeInputIo(p.key || "", p.keyEnc || "utf8");
+    const data = rawBytesOrNull(p, text.trim()) || decodeInputIo(text.trim(), p.outEnc || "base64");
+    return encodeOutputIo(xorApply(data, key, p.scheme || "Standard", !!p.nullPreserving), "utf8");
+  };
   register({
-    id: "xor", cat: "stream", name: "XOR", desc: "重复密钥异或（自反，CTF 最常用；单字节爆破见分析类 xorBrute）",
+    id: "xor", cat: "stream", name: "XOR", desc: "重复密钥异或（自反，CTF 最常用；单字节爆破见分析类 xorBrute；支持 Standard/Input differential/Output differential/Cascade + Null preserving）",
     params: XOR_PARAMS, encode: enc, decode: dec,
     acceptsBytes: true,
   });

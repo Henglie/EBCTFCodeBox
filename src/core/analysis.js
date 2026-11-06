@@ -16,17 +16,41 @@ const te = (s) => new TextEncoder().encode(s);
 
 // ============ xorBrute（单字节异或爆破，输出全部 256 个结果，可过滤可打印）============
 function xorBrute(text, p) {
-  const bytes = te(text);
+  const bytes = (p && p.rawBytes && p.rawBytes.length) ? (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes)) : te(text);
   const printableOnly = p && p.printableOnly;
+  const keyLength = Math.max(1, Math.min(2, Number((p && p.keyLength) || 1)));
+  const sampleLength = Number((p && p.sampleLength != null) ? p.sampleLength : 100);
+  const sampleOffset = Number((p && p.sampleOffset != null) ? p.sampleOffset : 0);
+  const scheme = (p && p.scheme) || "Standard";
+  const nullPreserving = !!(p && p.nullPreserving);
+  const printKey = p && p.printKey !== false;
+  const outputHex = !!(p && p.outputHex);
+  const crib = String((p && p.crib) || "");
+  const sample = bytes.slice(sampleOffset, sampleOffset + sampleLength);
   const lines = [];
-  for (let k = 0; k < 256; k++) {
+  const maxKey = keyLength === 2 ? 65536 : 256;
+  for (let k = 0; k < maxKey; k++) {
+    const key = keyLength === 2 ? new Uint8Array([k >> 8, k & 0xff]) : new Uint8Array([k]);
     const out = new Uint8Array(bytes.length);
-    for (let i = 0; i < bytes.length; i++) out[i] = bytes[i] ^ k;
+    let prevIn = 0, prevOut = 0;
+    for (let i = 0; i < bytes.length; i++) {
+      let kb;
+      if (scheme === "Input differential") kb = i === 0 ? key[0] : prevIn;
+      else if (scheme === "Output differential") kb = i === 0 ? key[0] : prevOut;
+      else kb = key[i % key.length];
+      const b = bytes[i];
+      out[i] = (nullPreserving && (b === 0 || b === kb)) ? b : (b ^ kb);
+      prevIn = b; prevOut = out[i];
+    }
     let s;
     try { s = new TextDecoder("utf-8", { fatal: false }).decode(out); } catch { s = ""; }
-    const printable = s.replace(/[^\x20-\x7e]/g, "");
-    if (printableOnly && printable.length < s.length * 0.8) continue;
-    lines.push(`0x${k.toString(16).padStart(2, "0")} (${k}): ${s}`);
+    const sampleText = new TextDecoder("utf-8", { fatal: false }).decode(out.slice(sampleOffset, sampleOffset + sampleLength));
+    const printable = sampleText.replace(/[^\x20-\x7e]/g, "");
+    if (printableOnly && printable.length < sampleText.length * 0.8) continue;
+    if (crib && !s.includes(crib)) continue;
+    const keyStr = keyLength === 2 ? k.toString(16).padStart(4, "0") : k.toString(16).padStart(2, "0");
+    const body = outputHex ? Array.from(out, (b) => b.toString(16).padStart(2, "0")).join(" ") : s;
+    lines.push((printKey ? `0x${keyStr} (${k}): ` : "") + body);
   }
   return lines.join("\n");
 }
@@ -300,6 +324,18 @@ register({
   desc: "对输入逐字节异或 0-255，输出全部结果（可过滤可打印）",
   params: [
     { key: "printableOnly", label: "仅显示可打印结果", type: "bool", default: false },
+    { key: "keyLength", label: "Key length（1-2）", type: "number", default: 1 },
+    { key: "sampleLength", label: "Sample length", type: "number", default: 100 },
+    { key: "sampleOffset", label: "Sample offset", type: "number", default: 0 },
+    { key: "scheme", label: "Scheme", type: "select", default: "Standard", options: [
+      { value: "Standard", label: "Standard" },
+      { value: "Input differential", label: "Input differential" },
+      { value: "Output differential", label: "Output differential" },
+    ] },
+    { key: "nullPreserving", label: "Null preserving", type: "bool", default: false },
+    { key: "printKey", label: "Print key", type: "bool", default: true },
+    { key: "outputHex", label: "Output as hex", type: "bool", default: false },
+    { key: "crib", label: "Crib（已知明文）", type: "text", default: "" },
   ],
   run: xorBrute,
 });

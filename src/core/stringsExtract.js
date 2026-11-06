@@ -147,6 +147,15 @@ function stringsExtractRun(text, p) {
   if (enc === "utf16be" || enc === "all") hits = hits.concat(scanUtf16be(data, minLen));
   if (enc === "both" || enc === "all") hits.sort((a, b) => a.offset - b.offset);
   if (pp.ccMode === true) {
+    const mt = pp.matchType || "All printable chars (A)";
+    const rx = {
+      "All printable chars (A)": null,
+      "Alphanumeric + punctuation (A)": /^[A-Za-z0-9 .,;:!?@#$%^&*()_+\-=\[\]{};:'"\\|<>\/?~`]+$/,
+      "Alphanumeric (A)": /^[A-Za-z0-9]+$/,
+      "Printable chars + punctuation (A)": /^[ -~]+$/,
+      "Printable chars (A)": /^[A-Za-z0-9 ]+$/,
+    }[mt];
+    if (rx) hits = hits.filter((h) => rx.test(h.s));
     if (pp.unique === true) {
       const seen = new Set();
       hits = hits.filter((h) => (seen.has(h.s) ? false : (seen.add(h.s), true)));
@@ -241,6 +250,14 @@ register({
     },
     { key: "showOffset", label: "显示偏移", type: "bool", default: false },
     { key: "ccMode", label: "CyberChef Strings 输出（纯字符串，不含报告头）", type: "bool", default: false },
+    { key: "matchType", label: "cc：Match type", type: "select", default: "All printable chars (A)",
+      options: [
+        { value: "All printable chars (A)", label: "All printable chars (A)" },
+        { value: "Alphanumeric + punctuation (A)", label: "Alphanumeric + punctuation (A)" },
+        { value: "Alphanumeric (A)", label: "Alphanumeric (A)" },
+        { value: "Printable chars + punctuation (A)", label: "Printable chars + punctuation (A)" },
+        { value: "Printable chars (A)", label: "Printable chars (A)" },
+      ] },
     { key: "showTotal", label: "cc：末行输出 Total matches", type: "bool", default: false },
     { key: "sort", label: "cc：按字符串排序", type: "bool", default: false },
     { key: "unique", label: "cc：去重", type: "bool", default: false },
