@@ -85,6 +85,24 @@ function encodeOutput(bytes, enc) {
     default: return td(bytes);
   }
 }
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+/** 旧载体（dataEnc）未删前的兼容桥：text 视图同构字节让位给旧载体；其余 rawBytes 优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = te(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
 
 // ============================================================
 // 数论工具（BigInt）
@@ -388,13 +406,14 @@ register({
     { key: "dataEnc", label: "明文编码", type: "select", default: "utf8", options: DATA_ENC },
     { key: "outEnc", label: "解密输出", type: "select", default: "utf8", options: DATA_ENC },
   ],
+  acceptsBytes: true,
 
  // ---- 加密 ----
   encode: (text, p) => {
     const key = resolveKeyForEncode(p);
     const beta = key.beta;
     const n = beta.length;
-    const bytes = decodeInput(text, p.dataEnc || "utf8");
+    const bytes = rawBytesOrNull(p, text) || decodeInput(text, p.dataEnc || "utf8");
     if (bytes.length === 0) throw new Error("明文为空");
     const cipher = encryptBytes(new Uint8Array(bytes), beta);
 
@@ -452,7 +471,7 @@ register({
  // ---- 解密 ----
   decode: (text, p) => {
  // 从输入里提取密文块（容忍用户直接粘报告，抓最后一段逗号分隔数字串）
-    const cipher = parseCipherFromInput(text);
+    const cipher = parseCipherFromInput(p && p.rawBytes != null ? td(rawBytesOf(p)) : text);
     if (cipher.length === 0) throw new Error("未解析到密文块（应为逗号分隔的十进制大整数）");
     const key = resolveKeyForDecode(p);
     const { w, q, r } = key;

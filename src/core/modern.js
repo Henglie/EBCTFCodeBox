@@ -24,6 +24,28 @@ import { bytesToBits as _bytesToBitsStd, bitsToBytes as _bitsToBytesStd } from "
 import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 const te = (s) => new TextEncoder().encode(s);
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+/**
+ * 旧载体（outEnc/dataEnc）未删前的兼容桥：视图 text 模式交给 op 的字节
+ * 恰是输入的 UTF-8 编码时，让位给旧载体（同一文本层，只解一次）；
+ * hex/base64 视图或文件拖入的真字节与文本不同构 → 原样返回，rawBytes 优先。
+ */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = te(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
 // 本文件的 decode 出口已改为 finishBytesDecode（见 ./bytesIo.js）——不再有本地有损解码。
 
 // ============================================================
@@ -929,7 +951,7 @@ function makeBlockEncode(encFn, isAes) {
   return async (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
     const mode = (p.mode || "CBC").toUpperCase();
-    const data = te(text);
+    const data = rawBytesOrNull(p, text) || te(text);
     const padding = p.padding || "pkcs7";
     if (isAes && mode === "GCM") {
       if (!p.iv) throw new Error("GCM 需提供 nonce（IV）");
@@ -950,7 +972,7 @@ function makeBlockDecode(decFn, isAes) {
   return async (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
     const mode = (p.mode || "CBC").toUpperCase();
-    let data = decodeInput(text.trim(), p.outEnc || "base64");
+    let data = rawBytesOrNull(p, text) || decodeInput(text.trim(), p.outEnc || "base64");
     const padding = p.padding || "pkcs7";
     if (isAes && mode === "GCM") {
       const aad = parseGcmAad(p);
@@ -998,6 +1020,7 @@ register({
   params: blockParams(["ECB", "CBC", "CFB", "OFB", "CTR", "GCM"], "16/24/32 字节密钥", { gcm: true }),
   encode: makeBlockEncode(aesEncrypt, true),
   decode: makeBlockDecode(aesDecrypt, true),
+  acceptsBytes: true,
 });
 register({
   id: "des", family: "des", familyLabel: "des", cat: "block", name: "DES", desc: "数据加密标准（FIPS-46-3，key 8 字节，块 8 字节）。ECB/CBC 支持 PKCS#7/NoPadding/Zero/Bit/ISO10126/ANSI X9.23；流模式忽略填充",
@@ -1115,14 +1138,17 @@ register({
     { key: "dataEnc", label: "输入编码", type: "select", default: "dec", options: RSA_DATA_ENC },
     { key: "outEnc", label: "输出编码", type: "select", default: "dec", options: RSA_DATA_ENC },
   ],
+  acceptsBytes: true,
   encode: (text, p) => {
-    const m = rsaTextToInt(text, p.dataEnc || "dec");
+    const raw = rawBytesOrNull(p, text);
+    const m = raw ? bytesToBigInt(raw) : rsaTextToInt(text, p.dataEnc || "dec");
     const e = BigInt((p.e || "65537").trim());
     const n = rsaResolveN(p);
     return rsaIntToText(rsaPow(m, e, n), p.outEnc || "dec");
   },
   decode: (text, p) => {
-    const c = rsaTextToInt(text, p.dataEnc || "dec");
+    const raw = rawBytesOrNull(p, text);
+    const c = raw ? bytesToBigInt(raw) : rsaTextToInt(text, p.dataEnc || "dec");
     const d = rsaResolveD(p);
     const n = rsaResolveN(p);
     return rsaIntToText(rsaPow(c, d, n), p.outEnc || "dec");

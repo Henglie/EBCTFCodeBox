@@ -472,6 +472,34 @@ function encEncode(b, enc) {
   if (enc === "base64") { let bin = ""; for (const x of b) bin += String.fromCharCode(x); return btoa(bin); }
   return new TextDecoder("utf-8").decode(b);
 }
+/** 输入视图 auto 兜底：hex → base64 → UTF-8（原 enc 默认 hex，保持 hex 优先）。 */
+function encAutoDecode(s) {
+  const raw = String(s == null ? "" : s);
+  const compact = raw.trim().replace(/\s+/g, "");
+  if (compact.length >= 2 && compact.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(compact)) return hexToBytes(compact);
+  if (compact.length >= 4 && /^[A-Za-z0-9+/=_-]+$/.test(compact)) {
+    try { return encDecode(compact, "base64"); } catch { /* fall through */ }
+  }
+  return new TextEncoder().encode(raw);
+}
+/** 取 acceptsBytes 真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+/** 旧载体（dataEnc）未删前的兼容桥：text 视图同构字节让位给旧载体；其余 rawBytes 优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
 function parseBigHex(s, label) {
   const t = String(s == null ? "" : s).trim();
   if (!t) throw new Error(`缺少参数 ${label}（hex）`);
@@ -550,10 +578,11 @@ register({
     { key: "outEnc", label: "输出编码", type: "select", default: "hex", options: ENC_OPTS },
   ],
   run: (text, p) => {
-    const data = encDecode(text, p.dataEnc || "utf8");
+    const data = rawBytesOrNull(p, text) || encDecode(text, p.dataEnc || "utf8");
     const px = parseBigHex(p.pubX, "公钥 X"), py = parseBigHex(p.pubY, "公钥 Y");
     return encEncode(sm2Encrypt(data, px, py, null, p.format || "c1c3c2").cipher, p.outEnc || "hex");
   },
+  acceptsBytes: true,
 });
 
 // ---- 档③ 解密 ----
@@ -570,14 +599,17 @@ register({
       { value: "c1c3c2", label: "C1||C3||C2（GB/T 32918.4 序）" },
       { value: "c1c2c3", label: "C1||C2||C3（GM/T 0009-2023 序）" },
     ] },
-    { key: "enc", label: "密文编码", type: "select", default: "hex", options: ENC_OPTS },
   ],
   detect: SM2_DETECT,
   run: (text, p) => {
-    const data = encDecode(text, p.enc || "hex");
+    if (p && p.enc != null && String(p.enc).toLowerCase() !== "hex") {
+      throw new Error("enc 该参数已废弃，请改用输入视图");
+    }
+    const data = rawBytesOf(p) || encAutoDecode(text);
     const d = parseBigHex(p.privKey, "私钥");
     return encEncode(sm2Decrypt(data, d, p.format || "c1c3c2"), "utf8");
   },
+  acceptsBytes: true,
 });
 
 // ---- 档④ 签名 ----
