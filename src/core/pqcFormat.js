@@ -29,6 +29,26 @@ import { register } from "./registry.js";
 // 基础工具
 // ============================================================
 
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 function bytesToHex(bytes) {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -291,11 +311,9 @@ const SCHEME_OPTIONS = [
   { value: "SLH-DSA", label: "SLH-DSA" },
 ];
 const FORMAT_OPTIONS = [
-  { value: "auto", label: "自动（PEM / DER / raw hex）" },
+  { value: "auto", label: "自动（PEM / DER / 视图字节）" },
   { value: "pem", label: "PEM" },
-  { value: "der", label: "DER（hex 或 base64）" },
-  { value: "hex", label: "强制 raw hex（不做 OID 解析）" },
-  { value: "base64", label: "base64（先试 DER，再退回 raw）" },
+  { value: "der", label: "DER（hex 或 base64 视图）" },
 ];
 
 function classifyByLength(len, kindFilter = "auto", schemeFilter = "auto") {
@@ -310,9 +328,43 @@ function classifyByLength(len, kindFilter = "auto", schemeFilter = "auto") {
 // blob 解析
 // ============================================================
 
-function readInput(text, format) {
+function readInput(text, format, raw) {
   const s = String(text == null ? "" : text).trim();
-  if (!s) throw new Error("请输入 PQC blob（PEM / DER hex / base64 / raw hex）");
+  if (!s && !raw) throw new Error("请输入 PQC blob（PEM / DER hex / base64 / raw hex）");
+
+  // 视图/文件真字节：PEM 仍是文本形态，其余只做 DER 封装嗅探；绝不回文本层再解一次。
+  if (raw) {
+    const asText = new TextDecoder().decode(raw).trim();
+    if (format === "pem" || (format !== "der" && /-----BEGIN/.test(asText))) {
+      const env = parsePem(asText);
+      return {
+        mode: "envelope",
+        envelope: env,
+        bytes: env.payload,
+        source: `PEM「${env.pemLabel}」→ ${env.type === "spki" ? "SPKI DER" : "PKCS#8 DER"}`,
+      };
+    }
+    let derErr = null;
+    try {
+      const env = parseDerEnvelope(raw);
+      if (env) {
+        return {
+          mode: "envelope",
+          envelope: env,
+          bytes: env.payload,
+          source: env.type === "spki" ? "SPKI DER（视图字节）" : "PKCS#8 DER（视图字节）",
+        };
+      }
+    } catch (e) {
+      if (e.code === "CERT") throw e;
+      derErr = e;
+    }
+    if (format === "der") {
+      if (derErr) throw new Error(`DER 解析失败：${derErr.message}`);
+      throw new Error("DER 结构不是 SPKI/PKCS#8（顶层 SEQUENCE 的字段模式不匹配）");
+    }
+    return { mode: "raw", bytes: raw, source: "视图字节（未解析到 SPKI/PKCS#8 封装）" };
+  }
 
   if (format === "pem" || (format === "auto" && /-----BEGIN/.test(s))) {
     const env = parsePem(s);
@@ -407,10 +459,13 @@ function readInput(text, format) {
  */
 export function parsePqcBlob(text, params = {}) {
   const format = params.format || "auto";
+  if (format === "hex" || format === "base64") {
+    throw new Error(`format=${format} 该取值已废弃，请改用输入视图（hex/base64）`);
+  }
   const kindFilter = params.kind || "auto";
   const schemeFilter = params.scheme || "auto";
-  if (!["auto", "pem", "der", "hex", "base64"].includes(format)) {
-    throw new Error(`未知输入格式「${format}」；可选 auto/pem/der/hex/base64`);
+  if (!["auto", "pem", "der"].includes(format)) {
+    throw new Error(`未知输入格式「${format}」；可选 auto/pem/der`);
   }
   if (!["auto", "pk", "sk", "ct", "sig"].includes(kindFilter)) {
     throw new Error(`未知类型筛选「${kindFilter}」；可选 auto/pk/sk/ct/sig`);
@@ -418,7 +473,7 @@ export function parsePqcBlob(text, params = {}) {
   if (!["auto", "ML-KEM", "ML-DSA", "SLH-DSA"].includes(schemeFilter)) {
     throw new Error(`未知方案筛选「${schemeFilter}」；可选 auto/ML-KEM/ML-DSA/SLH-DSA`);
   }
-  const input = readInput(text, format);
+  const input = readInput(text, format, rawBytesOrNull(params, text));
 
   const r = {
     source: input.source,
@@ -518,6 +573,7 @@ function formatPqcReport(r) {
 
 register({
   id: "pqcBlobParse",
+  acceptsBytes: true,
   cat: "asym",
   name: "PQC blob 解析（ML-KEM/ML-DSA/SLH-DSA）",
   desc: "识别 ML-KEM-512/768/1024、ML-DSA-44/65/87、SLH-DSA（FIPS 205 六档 × SHA2/SHAKE）的公钥/私钥/KEM 密文/签名长度。优先解析 PEM 的 SPKI/PKCS#8 DER 并核对 NIST 算法 OID；没有 OID 的裸字节只报「raw 长度匹配」并列出歧义，不冒充标准格式。支持自动/强制 raw hex/强制 DER 等模式；X.509 证书与加密 PKCS#8 明确拒绝。",

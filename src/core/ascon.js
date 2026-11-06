@@ -412,8 +412,11 @@ function asconRun(text, p) {
 }
 
 function asconHashRun(text, p) {
-  const inputMode = (p && p.inputMode) || "text";
-  const msg = rawBytesOf(p) || (inputMode === "hex" ? hexToBytes(text) : new TextEncoder().encode(text));
+  if (p && p.inputMode != null && String(p.inputMode).toLowerCase() !== "text") {
+    throw new Error("inputMode 该参数已废弃，请改用输入视图");
+  }
+  const inputMode = "text"; // 视图接管后不再有 hex 分支；默认文本口径与迁移前逐字节一致
+  const msg = rawBytesOf(p) || new TextEncoder().encode(text);
   const digest = asconHash256(msg);
   let b64 = "";
   try {
@@ -466,15 +469,8 @@ register({
   cat: "hash",
   name: "Ascon-Hash256",
   desc: "NIST SP 800-232 轻量级哈希：sponge 结构、rate 64bit、全程 p[12] 轮置换、IV 0x0000080100cc0002、小端字节序，输出 32 字节摘要。注意与老 Ascon-Hash(v1.2) 的 IV/字节序/填充均不同，结果不通用。NIST LWC KAT + ACVP 官方向量验证。",
-  params: [
-    {
-      key: "inputMode", label: "输入形式", type: "select", default: "text",
-      options: [
-        { value: "text", label: "UTF-8 文本" },
-        { value: "hex", label: "Hex 字节" },
-      ],
-    },
-  ],
+  params: [],
+  acceptsBytes: true,
   run: asconHashRun,
 });
 

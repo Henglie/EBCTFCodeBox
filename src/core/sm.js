@@ -315,19 +315,20 @@ register({
   params: [
     { key: "key", label: "密钥（hex）", type: "text", default: "00000000000000000000000000000000", placeholder: "16 字节 hex（32 字符）" },
     { key: "iv", label: "IV（hex）", type: "text", default: "00000000000000000000000000000000", placeholder: "16 字节 hex（32 字符）" },
-    { key: "dataEnc", label: "数据编码", type: "select", default: "utf8", options: ENC_OPTS },
     { key: "outEnc", label: "输出编码", type: "select", default: "hex", options: ENC_OPTS },
   ],
   encode: (text, p) => {
+    if (p && p.dataEnc != null && p.dataEnc !== "utf8") throw new Error("dataEnc 该参数已废弃，请改用输入视图");
     const key = hexToBytes(p.key || "00".repeat(16));
     const iv = hexToBytes(p.iv || "00".repeat(16));
-    const data = rawBytesOrNull(p, text) || decodeInput(text, p.dataEnc || "utf8");
+    const data = rawBytesOrNull(p, text) || decodeInput(text, "utf8");
     return encodeOutput(zucCrypt(data, key, iv), p.outEnc || "hex");
   },
   decode: (text, p) => {
+    if (p && p.dataEnc != null && p.dataEnc !== "hex") throw new Error("dataEnc 该参数已废弃，请改用输入视图");
     const key = hexToBytes(p.key || "00".repeat(16));
     const iv = hexToBytes(p.iv || "00".repeat(16));
-    const data = rawBytesOrNull(p, text) || decodeInput(text, p.dataEnc || "hex");
+    const data = rawBytesOrNull(p, text) || decodeInput(text, "hex");
     return encodeOutput(zucCrypt(data, key, iv), p.outEnc || "utf8");
   },
   detect: (text) => {
