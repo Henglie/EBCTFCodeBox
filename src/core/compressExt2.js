@@ -44,6 +44,26 @@ import { inputToBytes, bytesToOutput } from "./compress.js";
 const te = (s) => new TextEncoder().encode(s);
 const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(b));
 
+/** 取视图真字节通道（params.rawBytes）；无则 null。 */
+function rawBytesOf(p) {
+  const b = p && p.rawBytes;
+  if (b == null) return null;
+  return b instanceof Uint8Array ? b : new Uint8Array(b);
+}
+
+/** 视图 text 模式字节与文本同构时让位给原文本层；真字节（hex/base64 视图、文件）原样优先。 */
+function rawBytesOrNull(p, text) {
+  const b = rawBytesOf(p);
+  if (!b) return null;
+  const t = new TextEncoder().encode(String(text == null ? "" : text));
+  if (b.length === t.length) {
+    let same = true;
+    for (let i = 0; i < b.length; i++) if (b[i] !== t[i]) { same = false; break; }
+    if (same) return null;
+  }
+  return b;
+}
+
 /** 字节 → 连续 hex（LZ4 压缩输出用，不截断）。 */
 function bytesToHexStr(bytes) {
   let s = "";
@@ -82,8 +102,9 @@ function rleRuns(chars) {
 function rleEncode(text, p) {
   const fmt = (p && p.fmt) || "countFirst";
   const t = String(text ?? "");
+  const raw = rawBytesOrNull(p, t);
   if (fmt === "packed") {
-    const bytes = te(t);
+    const bytes = raw || te(t);
     const out = [];
     let i = 0;
     while (i < bytes.length) {
@@ -97,7 +118,7 @@ function rleEncode(text, p) {
   }
   const countMode = (p && p.countMode) || "var";
   const digits = Math.max(1, Math.min(4, Number((p && p.fixedDigits) || 2) | 0));
-  const runs = rleRuns([...t]);
+  const runs = rleRuns([...(raw ? td(raw) : t)]);
   const parts = [];
   for (const { ch, n } of runs) {
     if (countMode === "fixed") {
@@ -119,23 +140,28 @@ function rleDecode(text, p) {
   const fmt = (p && p.fmt) || "countFirst";
   const countMode = (p && p.countMode) || "var";
   const digits = Math.max(1, Math.min(4, Number((p && p.fixedDigits) || 2) | 0));
+  const raw = rawBytesOrNull(p, text);
   if (fmt === "packed") {
-    // 打包式只认 hex/base64（不给 UTF-8 兜底：二进制格式喂文本只会产出静默垃圾）
+    // 打包式只认 hex/base64（不给 UTF-8 兜底：二进制格式喂文本只会产出静默垃圾）；视图真字节优先
     const enc = (p && p.inputEnc) || "auto";
     const s = String(text ?? "").trim().replace(/\s+/g, "");
     let bytes;
-    if (!s) return "";
-    if (enc === "hex" || (enc === "auto" && /^[0-9a-fA-F]+$/.test(s))) {
-      if (s.length % 2 !== 0)
-        throw new Error("RLE（打包式）：hex 长度为奇数（应为「计数,值」成对字节）。");
-      bytes = inputToBytes(s, { inputEnc: "hex" });
-    } else if (enc === "utf8") {
-      throw new Error("RLE（打包式）：不支持 UTF-8 输入（应为 hex/base64）。");
+    if (raw) {
+      bytes = raw;
     } else {
-      try {
-        bytes = inputToBytes(s, { inputEnc: "base64" });
-      } catch {
-        throw new Error("RLE（打包式）：输入不是合法 hex（偶数长度 0-9a-f）或 base64。");
+      if (!s) return "";
+      if (enc === "hex" || (enc === "auto" && /^[0-9a-fA-F]+$/.test(s))) {
+        if (s.length % 2 !== 0)
+          throw new Error("RLE（打包式）：hex 长度为奇数（应为「计数,值」成对字节）。");
+        bytes = inputToBytes(s, { inputEnc: "hex" });
+      } else if (enc === "utf8") {
+        throw new Error("RLE（打包式）：不支持 UTF-8 输入（应为 hex/base64）。");
+      } else {
+        try {
+          bytes = inputToBytes(s, { inputEnc: "base64" });
+        } catch {
+          throw new Error("RLE（打包式）：输入不是合法 hex（偶数长度 0-9a-f）或 base64。");
+        }
       }
     }
     if (bytes.length === 0) return "";
@@ -149,7 +175,7 @@ function rleDecode(text, p) {
     return out;
   }
   // 按码点切（emoji 等多字节字符不撕裂）；只剔换行（粘贴残留），空格/制表符是合法行程内容
-  const t = [...String(text ?? "").replace(/[\r\n]+/g, "")];
+  const t = [...(raw ? td(raw) : String(text ?? "")).replace(/[\r\n]+/g, "")];
   const isDigit = (ch) => ch >= "0" && ch <= "9";
   const out = [];
   const pushRun = (n, ch, where) => {
@@ -208,6 +234,7 @@ function rleDecode(text, p) {
 
 register({
   id: "rle", cat: "archive", name: "RLE 行程编码",
+  acceptsBytes: true,
   desc: "游程编码：计前式 4A3B=AAAABB / 计后式 A4B3 / 打包式 count+value 字节对(hex)；变长或定长计数，双向",
   params: [
     { key: "fmt", label: "格式", type: "select", default: "countFirst",
@@ -471,7 +498,7 @@ const bytesToHexLower = (arr) => Array.from(arr, (x) => x.toString(16).padStart(
 
 function lzwEncode(text, p) {
   const mode = (p && p.mode) || "gif";
-  const bytes = te(String(text ?? ""));
+  const bytes = rawBytesOrNull(p, String(text ?? "")) || te(String(text ?? ""));
   if (mode === "tiff") return bytesToHexLower(lzwEncodeTiffCore(bytes));
   if (mode === "fixed") {
     const width = Math.max(9, Math.min(16, Number((p && p.fixedBits) || 12) | 0));
@@ -489,7 +516,7 @@ function lzwDecode(text, p) {
   const mode = (p && p.mode) || "gif";
   let bytes;
   try {
-    bytes = inputToBytes(text, p);
+    bytes = rawBytesOrNull(p, text) || inputToBytes(text, p && p.rawBytes != null ? { ...p, rawBytes: null } : p);
   } catch {
     throw new Error("LZW：输入不是合法 hex/base64（应为编码输出的 hex 位流）。");
   }
@@ -515,6 +542,7 @@ function lzwDecode(text, p) {
 
 register({
   id: "lzw", cat: "archive", name: "标准 LZW（GIF/TIFF）",
+  acceptsBytes: true,
   desc: "经典变长码本 LZW 三档——GIF 档：LSB-first 位流、初始 256 项字节字典、clear 256 / EOD 257、9→12 位变宽；TIFF 档：MSB-first 位流 + early change（码长在码本 511/1023/2047 项时切换）、clear 256 / EOI 257、首新码 258、码本满先发 clear，条带末尾无 EOI 也容忍，输出为字节流（合法 UTF-8 给文本，否则给完整 hex）；定长档：MSB-first 定长 N 位，hex 呈现。≠ 既有 LZString op（JS 库变体，不等价）",
   params: [
     { key: "mode", label: "模式", type: "select", default: "gif",
@@ -1429,7 +1457,7 @@ function bz2Decompress(bytes) {
 function bzip2DecRun(text, p) {
   let bytes;
   try {
-    bytes = inputToBytes(text, p);
+    bytes = rawBytesOrNull(p, text) || inputToBytes(text, p && p.rawBytes != null ? { ...p, rawBytes: null } : p);
   } catch {
     throw new Error("bzip2：输入不是合法 hex/base64（应以 425a68… 即 BZh 开头）。");
   }
@@ -1447,6 +1475,7 @@ function bzip2DecRun(text, p) {
 
 register({
   id: "bzip2Dec", family: "bzip2", familyLabel: "decompress", cat: "archive", name: "bzip2 解压",
+  acceptsBytes: true,
   desc: "完整解压链：BZh 头 + π/√2 magic + Huffman(MTF+RUNA/RUNB) + BWT 逆变换 + RLE1 尾游程 + 块/文件 CRC 校验；含 0.9.0 时代已废弃的 randomized 档（按参考实现 BZ2_rNums 表逐字节反随机化）；纯 JS 自研，hex/base64 输入自动识别",
   params: [
     { key: "inputEnc", label: "输入编码", type: "select", default: "auto",

@@ -615,6 +615,7 @@ register({
 // ---- 档④ 签名 ----
 register({
   id: "sm2Sign",
+  acceptsBytes: true,
   cat: "asym",
   family: "sm2",
   familyLabel: "sign",
@@ -629,7 +630,7 @@ register({
     { key: "outEnc", label: "输出编码", type: "select", default: "hex", options: ENC_OPTS },
   ],
   run: (text, p) => {
-    const data = encDecode(text, p.dataEnc || "utf8");
+    const data = rawBytesOrNull(p, text) || encDecode(text, p.dataEnc || "utf8");
     const d = parseBigHex(p.privKey, "私钥");
     const ida = encDecode(p.ida || "1234567812345678", "utf8");
     const px = p.pubX ? parseBigHex(p.pubX, "公钥 X") : null;
