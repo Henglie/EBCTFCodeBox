@@ -456,13 +456,16 @@ function listCalc(text, p) {
       return fmtDec(cur.v, cur.s);
     }
     case "mod": {
-      const { maxS, vals } = toCommonScale(nums);
-      let cur = vals[0];
-      for (const n of vals.slice(1)) {
-        if (n === 0n) throw new Error("列表取模除数不能为 0");
-        cur %= n;
-      }
-      return fmtDec(cur, maxS);
+      const modRaw = String((p && p.modulus != null && p.modulus !== "") ? p.modulus : "2");
+      const mod = parseListNumber(modRaw);
+      if (!mod) throw new Error("Modulus 不是合法数字：" + modRaw);
+      if (mod.v === 0n) throw new Error("Modulus cannot be zero");
+      const maxS = Math.max(mod.s, ...nums.map((x) => x.s));
+      const mScaled = mod.v * pow10(maxS - mod.s);
+      return nums.map((x) => {
+        const v = x.v * pow10(maxS - x.s);
+        return fmtDec(v % mScaled, maxS);
+      }).join(" ");
     }
     case "mean": {
       const { maxS, vals } = toCommonScale(nums);
@@ -523,10 +526,11 @@ register({
         { value: "sub", label: "Subtract（首项减其余）" },
         { value: "mul", label: "Multiply（连乘）" },
         { value: "div", label: "Divide（首项除其余）" },
-        { value: "mod", label: "MOD（首项对后续逐项取模）" },
+        { value: "mod", label: "MOD（每个数对 Modulus 取模，空格输出）" },
         { value: "mean", label: "Mean（算术平均，整数截断）" },
         { value: "median", label: "Median（中位数，整数截断）" },
       ] },
+    { key: "modulus", label: "MOD：Modulus（同 CyberChef，默认 2）", type: "number", default: 2 },
     { key: "delimiter", label: "列表分隔符", type: "select", default: "Space",
       options: [
         { value: "Space", label: "Space" },

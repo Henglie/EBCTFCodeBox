@@ -28,6 +28,27 @@ import { register } from "./registry.js";
 import { inputToBytes } from "./compress.js";
 import { crc32Bytes } from "./zipRepair.js";
 import { zipEntries, zipReadEntry } from "./ooxmlMeta.js";
+import { keysFromPassword, updateKeys, decryptByte } from "./zipCrack.js";
+import { randomBytes as randBytes } from "./randSource.js";
+
+/** ZipCrypto（传统 PKWARE）加密：12 字节加密头 + 数据流，校验字节 = CRC32 高字节。 */
+function zipCryptoEncrypt(data, password) {
+  const keys = keysFromPassword(new TextEncoder().encode(String(password)));
+  const header = new Uint8Array(randBytes(12));
+  header[11] = (crc32Bytes(data) >>> 24) & 0xff;
+  const out = new Uint8Array(12 + data.length);
+  for (let i = 0; i < 12; i++) {
+    const ks = decryptByte(keys);
+    out[i] = (header[i] ^ ks) & 0xff;
+    updateKeys(keys, header[i]);
+  }
+  for (let i = 0; i < data.length; i++) {
+    const ks = decryptByte(keys);
+    out[12 + i] = (data[i] ^ ks) & 0xff;
+    updateKeys(keys, data[i]);
+  }
+  return out;
+}
 
 // ============ raw deflate：fixed Huffman、全字面量（RFC1951 BTYPE=01） ============
 // 逐字节查固定表发码（0-143:8 位 0x30+b；144-255:9 位 0x190+(b-144)），单块，块尾 EOB=256(7 位 0)。
@@ -69,15 +90,19 @@ function pushU32(parts, v) { pushInto(parts, v & 0xFF, (v >>> 8) & 0xFF, (v >>> 
  * @param {"Deflated"|"Stored"} methodName 压缩方式
  * @returns {{bytes:Uint8Array, method:number, name:string, size:number, compSize:number}}
  */
-export function makeZip(data, filename, methodName, comment = "", os = "Unix") {
+export function makeZip(data, filename, methodName, comment = "", os = "Unix", password = "") {
   const name = (filename && String(filename).trim()) ? String(filename) : "flag.txt";
   const commentB = Array.from(String(comment || ""), (c) => c.charCodeAt(0) & 0xff);
   const versionMade = os === "MSDOS" ? 0x0014 : os === "Macintosh" ? 0x0714 : 0x031E;
   const method = methodName === "Stored" ? 0 : 8;
   const nameB = Array.from(name, (c) => c.charCodeAt(0) & 0xff);
   const crc = crc32Bytes(data);
-  const comp = (typeof methodName === "string" && methodName === "Stored") ? data : deflateFixedRaw(data);
-  const flag = nameB.some((b) => b > 127) ? 0x0800 : 0; // 非 ASCII 文件名 → UTF-8 标志
+  let comp = (typeof methodName === "string" && methodName === "Stored") ? data : deflateFixedRaw(data);
+  let flag = nameB.some((b) => b > 127) ? 0x0800 : 0; // 非 ASCII 文件名 → UTF-8 标志
+  if (password) {
+    comp = zipCryptoEncrypt(comp, password);
+    flag |= 0x0001; // APPNOTE §4.4.4：bit0=加密
+  }
 
   const parts = [];
   // LFH
@@ -138,7 +163,7 @@ function zipCreateRun(text, p) {
 
   const comment = String(pp.comment || "");
   if (new TextEncoder().encode(comment).length > 65535) throw new Error("ZIP 注释最长 65535 字节");
-  const z = makeZip(data, pp.filename, pp.method, comment, pp.os || "Unix");
+  const z = makeZip(data, pp.filename, pp.method, comment, pp.os || "Unix", pp.password || "");
   const methodName = z.method === 0 ? "Stored" : "Deflated";
   // 产物协议：ZIP 字节走 files 下载按钮（真文件交付），不再倾倒 base64 文本。
   // 需要文本形态时可用 Base 系列对下载文件再编码；zipRepair/zipPseudoEncrypt 等链式 op 走文件导入。
@@ -237,6 +262,7 @@ register({
       ],
     },
     { key: "comment", label: "ZIP 注释（同 CC Comment）", type: "text", default: "" },
+    { sensitive: true, key: "password", label: "Password（ZipCrypto，留空=不加密）", type: "password", default: "" },
     { key: "os", label: "Operating system（同 CC）", type: "select", default: "Unix",
       options: [
         { value: "MSDOS", label: "MSDOS" },

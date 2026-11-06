@@ -1,4 +1,4 @@
-// BUILD-STAMP: d897cf807b087c3f
+// BUILD-STAMP: b6f3126e8545300b
 importScripts("./sw-assets.js", "./sw-packs.js");
 
 // The asset generator synchronizes BUILD-STAMP with the resource revision.
