@@ -151,8 +151,16 @@ const MAGMA_SBOX_MAP = {
   paramZ: null,
   test1989: "test",
   cryptoPro1989: "cryptopro",
+  "E-TEST": "E-TEST",
   "E-A": "E-A",
+  "E-B": "E-B",
+  "E-C": "E-C",
+  "E-D": "E-D",
   "E-SC": "E-SC",
+  "E-Z": "E-Z",
+  "D-TEST": "D-TEST",
+  "D-A": "D-A",
+  "D-SC": "D-SC",
 };
 
 const MAGMA_MODES = new Set(["ECB", "CBC", "CFB", "OFB", "CTR"]);
@@ -211,8 +219,16 @@ register({
         { value: "paramZ", label: "param-Z（2015 Magma，默认）" },
         { value: "test1989", label: "1989 TestParamSet（切换小端字序）" },
         { value: "cryptoPro1989", label: "1989 CryptoProParamSet（切换小端字序）" },
+        { value: "E-TEST", label: "1989 E-TEST（切换小端字序）" },
         { value: "E-A", label: "1989 CryptoPro-A（E-A，切换小端字序）" },
+        { value: "E-B", label: "1989 E-B（切换小端字序）" },
+        { value: "E-C", label: "1989 E-C（切换小端字序）" },
+        { value: "E-D", label: "1989 E-D（切换小端字序）" },
         { value: "E-SC", label: "1989 SignalCom（E-SC，切换小端字序）" },
+        { value: "E-Z", label: "1989 E-Z（切换小端字序）" },
+        { value: "D-TEST", label: "1989 D-TEST（切换小端字序）" },
+        { value: "D-A", label: "1989 D-A（切换小端字序）" },
+        { value: "D-SC", label: "1989 D-SC（切换小端字序）" },
       ] },
     { key: "keyMeshing", label: "密钥更新（key meshing）", type: "select", default: "NO",
       options: [

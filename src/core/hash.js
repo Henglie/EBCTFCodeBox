@@ -173,6 +173,43 @@ function ntlm(text) {
   return toHexUpper(md4Bytes(new Uint8Array(u16.buffer)));
 }
 
+// SHA-1 压缩（FIPS 180-4 §6.1.2），rounds 可调；默认 80 与 WebCrypto/CC 一致。
+function sha1Bytes(bytes, rounds = 80) {
+  const r = Math.max(1, Math.min(80, Math.floor(Number(rounds) || 80)));
+  const bitLenHi = Math.floor(bytes.length / 0x20000000);
+  const bitLenLo = (bytes.length << 3) >>> 0;
+  const paddedLen = (((bytes.length + 8) >> 6) + 1) << 6;
+  const padded = new Uint8Array(paddedLen);
+  padded.set(bytes);
+  padded[bytes.length] = 0x80;
+  const dv = new DataView(padded.buffer);
+  dv.setUint32(paddedLen - 8, bitLenHi, false);
+  dv.setUint32(paddedLen - 4, bitLenLo, false);
+  let h0 = 0x67452301, h1 = 0xefcdab89, h2 = 0x98badcfe, h3 = 0x10325476, h4 = 0xc3d2e1f0;
+  const w = new Uint32Array(80);
+  for (let off = 0; off < paddedLen; off += 64) {
+    for (let i = 0; i < 16; i++) w[i] = dv.getUint32(off + i * 4, false);
+    for (let i = 16; i < 80; i++) w[i] = rotl(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
+    let a = h0, b = h1, c = h2, d = h3, e = h4;
+    for (let i = 0; i < r; i++) {
+      let f, k;
+      if (i < 20) { f = (b & c) | (~b & d); k = 0x5a827999; }
+      else if (i < 40) { f = b ^ c ^ d; k = 0x6ed9eba1; }
+      else if (i < 60) { f = (b & c) | (b & d) | (c & d); k = 0x8f1bbcdc; }
+      else { f = b ^ c ^ d; k = 0xca62c1d6; }
+      const t = (rotl(a, 5) + f + e + k + w[i]) >>> 0;
+      e = d; d = c; c = rotl(b, 30); b = a; a = t;
+    }
+    h0 = (h0 + a) >>> 0; h1 = (h1 + b) >>> 0; h2 = (h2 + c) >>> 0;
+    h3 = (h3 + d) >>> 0; h4 = (h4 + e) >>> 0;
+  }
+  const out = new Uint8Array(20);
+  const odv = new DataView(out.buffer);
+  odv.setUint32(0, h0, false); odv.setUint32(4, h1, false); odv.setUint32(8, h2, false);
+  odv.setUint32(12, h3, false); odv.setUint32(16, h4, false);
+  return out;
+}
+
 // ============ SHA 系（WebCrypto，异步） ============
 async function sha(algo, text) {
   if (!globalThis.crypto?.subtle) throw new Error("当前环境不支持 WebCrypto");
@@ -227,9 +264,17 @@ register({
 });
 
 register({
-  id: "sha1", cat: "hash", name: "SHA-1", family: "sha", familyLabel: "SHA-1", desc: "SHA-1 消息摘要（160 位，WebCrypto）",
+  id: "sha1", cat: "hash", name: "SHA-1", family: "sha", familyLabel: "SHA-1",
+  desc: "SHA-1 消息摘要（160 位，FIPS 180-4 纯 JS）；Rounds 可调（默认 80，与 CyberChef SHA1 对齐）",
   acceptsBytes: true, textTransit: true,
-  run: async (t, p) => sha("SHA-1", p?.rawBytes ?? t),
+  params: [
+    { key: "rounds", label: "Rounds", type: "number", default: 80, placeholder: "默认 80（最小 16）" },
+  ],
+  run: (t, p) => {
+    const raw = p?.rawBytes;
+    const bytes = raw != null ? (raw instanceof Uint8Array ? raw : new Uint8Array(raw)) : te(t);
+    return toHex(sha1Bytes(bytes, Number((p && p.rounds != null) ? p.rounds : 80)));
+  },
 });
 
 register({
@@ -508,7 +553,7 @@ register({
   run: (t, p) => shake(256, p?.rawBytes ?? t, (p && p.outLen != null) ? p.outLen : 32),
 });
 
-export {
+export { sha1Bytes,
   md5, md5Bytes, md4, md4Bytes,
   crc32, crc16, ntlm,
   sha, hmac,

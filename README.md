@@ -9,7 +9,7 @@
   <span>恒烈 CTF 编码工具箱 · EBCTFCodeBox</span>
 </h1>
 <p align="center">
-  <span align="center">本地优先、零外发的编解码 / 加解密 / 隐写分析工具箱：961 个注册操作覆盖 23 类能力，绝大多数在浏览器本地运行，Windows 另可启用本地桥能力，macOS / Linux 提供双击启动器。</span>
+  <span align="center">本地优先、零外发的编解码 / 加解密 / 隐写分析工具箱：969 个注册操作覆盖 23 类能力，绝大多数在浏览器本地运行，Windows 另可启用本地桥能力，macOS / Linux 提供双击启动器。</span>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 - [项目简介](#项目简介)　　　　[特点](#特点)
 - [界面预览](#界面预览)　　　　[运行](#运行)
 - [平台兼容性](#平台兼容性)　　[性能要求](#性能要求)
-- [目录结构](#目录结构)　　　　[编解码全清单](#编解码全清单961-ops--23-分类)
+- [目录结构](#目录结构)　　　　[编解码全清单](#编解码全清单969-ops--23-分类)
 - [插件与 AI 接入](#插件与-ai-接入)　[开源协议](#开源协议)
 - [第三方资源与许可](#第三方资源与许可)　[隐私](#隐私)
 - [关键词 / Keywords](#关键词--keywords)
@@ -53,7 +53,7 @@
 
 ## v0.1.15（开发中）
 
-> 开发中：源码注释清理与下一版缺口推进。0.1.14 更新已结束、未发布，完整变更见 [CHANGELOG.md](./CHANGELOG.md)。
+> 开发中：新增 8 个 CyberChef 对齐 op（CRC 全预设、全部校验和、SHA-2 六档、CTPH、全部哈希、Whirlpool 变体、LZ4 Frame、Enigma），CyberChef 矩阵 partial 清零，`moyue` 非默认密钥识别闭环，源码注释工程痕迹清理。0.1.14 更新已结束、未发布，完整变更见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## v0.1.13-beta
 
@@ -132,7 +132,7 @@
 
 - **本地优先 · 零外发**：原生 ES module，无框架、无构建步骤。核心编解码在浏览器本地执行，不上传用户输入；「外链」只生成 URL。PWA 更新仅下载本站资源，本地桥只访问 `127.0.0.1`，外部 AI 仅在用户主动配置 endpoint 后启用。
 - **一把梭智能解码**：粘贴或拖入内容，自动识别可能的编码链并给出候选解码结果，支持 crib 目标特征过滤与深度爆破。
-- **961 个注册操作 · 23 分类**：覆盖 Base、文本传输、花式 CTF、深奥编程语言、中文本土、古典密码、现代加密（分组 / 流 / 非对称 / 其他）、哈希校验、进制字符集（含素数判定与筛选）、分析爆破、密码攻击、压缩归档、口令与归档破解、取证流量、文件格式结构、数据结构、图像与二维码、音频音视频、隐写及 4 个可选 Windows GUI 桥入口。完整清单由 registry 自动生成。
+- **969 个注册操作 · 23 分类**：覆盖 Base、文本传输、花式 CTF、深奥编程语言、中文本土、古典密码、现代加密（分组 / 流 / 非对称 / 其他）、哈希校验、进制字符集（含素数判定与筛选）、分析爆破、密码攻击、压缩归档、口令与归档破解、取证流量、文件格式结构、数据结构、图像与二维码、音频音视频、隐写及 4 个可选 Windows GUI 桥入口。完整清单由 registry 自动生成。
 - **解码强度四件套**（v0.1.2）：强度档位 + 自定义算法池 + **暴力爆破独立通道**（XOR/凯撒/字典/彩虹表/HMAC/PBE/Playfair/ZIP/CRC32/bkcrack，结果单独归组展示不污染主排序）+ **解析层数 1~3 选择**。
 - **宽松判定模式**（v0.1.2）：增强/极强/最强/自定义档只按字符种类数放行算法，变体编码题（「喵呜」表 0/1、emoji 表二进制）也能参与解码；默认/快速档保持严格定义域识别。
 - **密钥+密文一键尝试**：给定密文与密钥，自动枚举 AES/DES/3DES/RC4/XOR/Fernet × 多种模式 × 多种编码组合。
@@ -289,7 +289,7 @@ public/
 资料/              算法码表核对资料 + 研究成果（开发资料，不随发行包分发）
 ```
 
-## 编解码全清单（961 ops · 23 分类）
+## 编解码全清单（969 ops · 23 分类）
 
 > 本节由 `node tools/gen_readme_ops.mjs` 从主入口真实 import 闭包生成；opId 即注册表唯一标识。
 
@@ -550,7 +550,7 @@ public/
 | xiangyueEnc | 想曰 XiangYue 加密 | 想曰加密方向：明文 → zlib + AES-CTR + ChaCha20-Poly1305 → 中文/日文/韩文/象形/Emoji/零宽/Base64 密文，可被本工具箱「想曰」解密自动识别还原（format2 快；format1 Argon2id 64MiB 单次数秒） |
 | yueChang | 曰唱 | 风之暇想 曰唱：deflate + PBKDF2-SHA256(10万次) + AES-GCM-256，Base64 逐字符映射为中文拟声字（前缀「唱：」，口令可空则用默认 YueChang） |
 
-### 古典密码（75 ops）
+### 古典密码（76 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -629,6 +629,7 @@ public/
 | twosquare | Two-square 双方 | 双方密码（double Playfair）：两个 keyword 方阵，横排或纵排双字母替换。自反密码（编=解）。5×5，奇数补 X；纵排同列 / 横排同行时该组原样输出。字母表可选 I/J 合并或省略 Q。 |
 | beaufortVariant | 变体 Beaufort | 变体 Beaufort（Beaufort 德意志变体）：c = p − k（mod 26），加密=维吉尼亚解密、解密=维吉尼亚加密；非自反（与自反的标准 Beaufort 互为镜像方向） |
 | redefence | Redefence 栅栏 | Redefence：栅栏（W 型 zig-zag）的行序变体——按指定行序或关键词读出行。行序为恒等序时退化为标准栅栏。参数：栏数 rails / 读行序 order / 关键词 key（order 与 key 二选一） |
+| enigmaCC | Enigma（CyberChef 对齐） | CC Enigma 对齐：3/4 转子、I-VIII + Beta/Gamma、B/C/B Thin/C Thin、环设置/初始位置/插线板、Strict output（去非字母 + 5 字符分组）。 |
 
 ### 现代密码·分组（35 ops）
 
@@ -701,12 +702,12 @@ public/
 | opId | 名称 | 说明 |
 |---|---|---|
 | rsa | RSA | RSA 模幂加解密：加密 c=mᵉ mod n，解密 m=cᵈ mod n。支持 hex/base64 密文与明文字节串（解密直出 flag）；填 p,q 自动推 n 和 d。 |
-| ecdsaKeyGen | ECDSA 密钥对生成 | ECDSA 密钥对生成：secp256k1 / P-256 / P-384 / P-521 任选，输出私钥 d 与公钥（压缩 02/03‖X + 非压缩 04‖X‖Y 双格式）。随机源 crypto.getRandomValues 拒绝采样无偏。域参数：SEC 2 v2 / FIPS 186-4 D.1.2。 |
-| ecdsaSign | ECDSA 签名 | ECDSA 签名：输入消息（text/hex）+ 私钥 d，曲线 secp256k1/P-256/P-384/P-521，哈希 SHA-256/384/512，k 可选 RFC 6979 确定 k（可复现）或随机 k。输出 r,s 十进制+hex、DER hex、所用 k。RFC 6979 A.2.5 官方向量逐字验证。 |
-| ecdsaVerify | ECDSA 验签 | ECDSA 验签：输入消息 + 公钥（压缩/非压缩/X‖Y hex 自动识别，G=生成元）+ 签名（r;s 十进制/hex 或 DER hex 自动识别）。曲线四条任选，哈希 SHA-256/384/512。输出 w/u1/u2/R 全过程与合法性判定。 |
+| rsaGenKeyPair | RSA 密钥对生成 | 本地生成 RSA 密钥对（纯 JS BigInt，素数 Miller-Rabin 复用 primeGen），输出十进制 n/e/d/p/q/dp/dq/qinv + PEM（PKCS#1 / PKCS#8 / SPKI 三选一，DER 编码按 ITU-T X.690）。私钥 / 公钥分开下载按钮（PEM 主交付，DER / JWK 次级可选）。512 位已被现实分解仅作教学，实际使用至少 2048 位；2048 位约秒级、4096 位数秒级会阻塞页面，属预期 |
+| ecdsaKeyGen | ECDSA 密钥对生成 | ECDSA 密钥对生成：secp256k1 / P-256 / P-384 / P-521 任选，输出私钥 d 与公钥（压缩 02/03‖X + 非压缩 04‖X‖Y 双格式），可选 PEM/DER/JWK 输出。随机源 crypto.getRandomValues 拒绝采样无偏。域参数：SEC 2 v2 / FIPS 186-4 D.1.2。 |
+| ecdsaSign | ECDSA 签名 | ECDSA 签名：输入消息（text/hex）+ 私钥 d，曲线 secp256k1/P-256/P-384/P-521，哈希 SHA-256/384/512/SHA-1/MD5，k 可选 RFC 6979 确定 k（可复现）或随机 k。输出 r,s 十进制+hex、DER hex、所用 k。RFC 6979 A.2.5 官方向量逐字验证。 |
+| ecdsaVerify | ECDSA 验签 | ECDSA 验签：输入消息 + 公钥（压缩/非压缩/X‖Y hex 自动识别，G=生成元）+ 签名（r;s 十进制/hex 或 DER hex 自动识别）。曲线四条任选，哈希 SHA-256/384/512/SHA-1/MD5。输出 w/u1/u2/R 全过程与合法性判定。 |
 | ecdsaSigConvert | ECDSA 签名格式转换 | ECDSA 签名三格式互转：raw r;s（十进制/0x hex）↔ DER（ASN.1 SEQUENCE{r,s}，ITU-T X.690）↔ JOSE（r\|\|s 定宽 base64url，RFC 7515）。曲线参数决定 JOSE/raw-hex 的元素定宽（P-256=32B 等）。 |
 | eccCalc | ECC 点运算 | 椭圆曲线点运算计算器：点加/点减/标量乘/倍点。曲线四条预设（secp256k1/P-256/P-384/P-521）或自定义 p/a/b/Gx/Gy/n。点支持压缩 02/03‖X、非压缩 04‖X‖Y、裸 X‖Y、G（生成元）、O（无穷远点）；k 支持十进制/0x hex/负数。无穷远点输出 Infinity。 |
-| rsaGenKeyPair | RSA 密钥对生成 | 本地生成 RSA 密钥对（纯 JS BigInt，素数 Miller-Rabin 复用 primeGen），输出十进制 n/e/d/p/q/dp/dq/qinv + PEM（PKCS#1 / PKCS#8 / SPKI 三选一，DER 编码按 ITU-T X.690）。私钥 / 公钥分开下载按钮（PEM 主交付，DER / JWK 次级可选）。512 位已被现实分解仅作教学，实际使用至少 2048 位；2048 位约秒级、4096 位数秒级会阻塞页面，属预期 |
 | mlkemKeyGen | ML-KEM 密钥生成 | FIPS 203 ML-KEM-512/768/1024（后量子 KEM）密钥对生成，d/z 种子可固定复现（含 FO 变换）。纯 JS 实现，单次毫秒级 |
 | mlkemEncaps | ML-KEM 封装 | FIPS 203 封装：输入公钥 ek，输出密文 ct 与共享密钥 SS(32B)；随机性 m 可固定复现（含 ek 类型/模数检查） |
 | mlkemDecaps | ML-KEM 解封装 | FIPS 203 解封装：输入私钥 dk + 密文 ct，输出共享密钥 SS(32B)；密文被篡改时走隐式拒绝返回伪随机 K̄（含类型/哈希检查） |
@@ -776,7 +777,7 @@ public/
 | x448Shared | X448 共享密钥 | Curve448 上的 ECDH（RFC 7748 §6.2）：双方私钥算共享密钥（两侧互验一致），或我方私钥 + 对方公钥直接算。共享密钥可下载 |
 | gostSign | GOST R 34.10-2012 签名 | 俄罗斯国标 EC 签名（RFC 7091，哈希 Streebog-256/512 按参数集）：私钥留空随机生成，输出公钥 Q 与签名 ζ = R\|\|S（大端）。k 可固定供教学复算。过 RFC 7091 §7.2 官方向量 + pygost 对拍 |
 | gostVerify | GOST R 34.10-2012 验签 | 俄罗斯国标 EC 验签（RFC 7091 §6.2）：公钥 Q(x,y) + 签名 ζ = R\|\|S + 原消息，复算 C = z1·P + z2·Q 比对 x(C) mod q。篡改任一环节即失败 |
-| pgpGenKeyPair | PGP 密钥对生成 | PGP 密钥对生成（RFC 4880，openpgp.js v5.11.3）：Curve25519（默认）或 RSA-3072，可选口令保护私钥。输出 ASCII Armor 公/私钥块，公/私钥分开下载（私钥 ⚠ 敏感） |
+| pgpGenKeyPair | PGP 密钥对生成 | PGP 密钥对生成（RFC 4880，openpgp.js v5.11.3）：Curve25519（默认）/ RSA-1024/2048/3072/4096 / ECC P-256/P-384/P-521，可选口令保护私钥。输出 ASCII Armor 公/私钥块，公/私钥分开下载（私钥 ⚠ 敏感） |
 | pgpEncrypt | PGP 加密 | PGP 加密（RFC 4880 CFB/EAX，openpgp.js）：明文 + 公钥块 → ASCII Armor 密文；可选附带私钥签名（先签后加） |
 | pgpDecrypt | PGP 解密 | PGP 解密（openpgp.js）：ASCII Armor 密文 + 私钥块（+口令）→ 明文；密文若带签名顺带给出验签结果 |
 | pgpSign | PGP 签名 | PGP 签名（RFC 4880，openpgp.js）：明文 + 私钥块 → cleartext signed（可读签名文本）；产物 .sig |
@@ -842,8 +843,8 @@ public/
 | jwtNone | JWT None 攻击 | alg:none 无签名 JWT 构造 / 攻击检测 |
 | jweIdentify | JWE 结构识别 | JWE 紧凑序列化 5 段拆解（RFC 7516） |
 | pasetoIdentify | PASETO 识别 | PASETO 令牌结构识别（v1-v4 / local / public） |
-| jwtSign | JWT 签发 | JWT 签发（HS256/384/512 + RS256 + ES256，RFC 7519/7518） |
-| jwtVerify | JWT 验签 | JWT 三段解析 + 重算签名比对（HS*/RS256/ES256），指出不匹配段 |
+| jwtSign | JWT 签发 | JWT 签发（HS256/384/512 + RS256/384/512 + ES256/384/512 + None，RFC 7519/7518） |
+| jwtVerify | JWT 验签 | JWT 三段解析 + 重算签名比对（HS*/RS*/ES* + none），指出不匹配段 |
 | godzillaPhpXorBase64 | 哥斯拉 PHP_XOR_BASE64 | Godzilla webshell PHP_XOR_BASE64 流量解密（base64 + XOR，偏移 key[(i+1)&15]）。key 默认 3c6e0b8a9c15224a（密钥「key」派生） |
 | behinderAesEcb | 冰蝎 AES-ECB | Behinder(冰蝎) v3 默认 AES-128-ECB 流量解密（base64 + AES-ECB）。key 默认 e45e329feb5d925b（密码「rebeyond」派生） |
 | ror13Hash | ROR13 API 哈希 | PE 恶意软件 API 哈希（32 位循环右移 13 累加）。对输入逐字节累加 + ROR 13，输出 8 位 hex 哈希。单向不可逆。常见 API 权威向量: LoadLibraryA=0xEC0E4E8E、GetProcAddress=0x7C0DFCAA。 |
@@ -869,13 +870,13 @@ public/
 | mpcToy | 安全多方计算玩具（教学） | MPC 教学玩具：beaver 模式用三方加法分享 + Beaver 1991 乘法三元组完成一次 a×b，打印各方 share、掩码值 d/e 与重建自证，并演示单方 share 看不出明文；ot 模式模拟 1-of-2 不经意传输的「盲化 → 两条掩码消息 → 只解一条」流程。教学演示，非生产级：无 MAC/承诺/零知识证明，OT 是确定性 PRF 模拟（无 RSA/DDH 陷门，公开 seed 即可解出两条），不具备真实安全性 |
 | quantumToy | 量子算法玩具（Grover / Shor） | 量子算法 statevector 教学模拟：grover 走完整的 H→oracle 相位翻转→扩散演化，逐轮打印命中概率并与理论最优轮数 round(π/(4θ)-1/2) 对拍（常用近似 ⌈π/4·√N⌉ 在小 N 会高估 1 轮）；shor 只做 N=15/21 的顺序查找切片（模幂置换 + DFT + 连分数），输出周期与因子并自证 p×q=N。教学演示，非生产级：n≤5、无噪声/退相干/纠错、模幂直接作用在状态向量上而非线路级分解，N 稍大即指数爆炸 |
 
-### 哈希 / 校验（76 ops）
+### 哈希 / 校验（82 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
 | md5 | MD5 | MD5 消息摘要（128 位，RFC 1321，纯 JS） |
 | md4 | MD4 | MD4 消息摘要（128 位，RFC 1320，纯 JS，NTLM 基础） |
-| sha1 | SHA-1 | SHA-1 消息摘要（160 位，WebCrypto） |
+| sha1 | SHA-1 | SHA-1 消息摘要（160 位，FIPS 180-4 纯 JS）；Rounds 可调（默认 80，与 CyberChef SHA1 对齐） |
 | sha256 | SHA-256 | SHA-256 消息摘要（256 位，WebCrypto）；mode=all 时输出全部可用摘要（同 CyberChef Generate all hashes） |
 | sha384 | SHA-384 | SHA-384 消息摘要（384 位，WebCrypto） |
 | sha512 | SHA-512 | SHA-512 消息摘要（512 位，WebCrypto） |
@@ -937,6 +938,7 @@ public/
 | yescrypt | yescrypt 密钥派生 | yescrypt 内存硬口令 KDF（Solar Designer，openwall 官方参考实现）：flags=0 输出与经典 scrypt 完全一致；WORM=最小偏差；RW 默认=prehash + 12KB S-box pwxform + wrap 随机访问 + SCRAM 尾处理。抗 GPU/ASIC。参数 N（2 的幂）/r/p/t/dkLen。 |
 | blake3 | BLAKE3 | BLAKE3 加密哈希（O'Connor/Aumasson/Neves/Wilcox-O'Hearn 2020）：BLAKE2 G 函数 + Merkle 树 + 无限输出（XOF）。7 轮压缩，chunk=1024 字节。默认 32 字节输出，可扩展。官方 test_vectors 验证。 |
 | pearson | Pearson 哈希 | Pearson 快速哈希（CACM 1990）：h:=T[h^c] 逐字节迭代，T 为 0..255 置换表（Wikipedia 参考表）。极简非加密哈希，多字节输出用首字节替身扩展。可选输出 1..32 字节。 |
+| whirlpoolHash | Whirlpool（CC 变体/轮数） | Whirlpool-0 / Whirlpool-T / Whirlpool 三变体 + Rounds 1-10，输出小写 hex；参数与 CyberChef Whirlpool 对齐。 |
 | whirlpool | Whirlpool | Whirlpool 哈希（Barreto & Rijmen，ISO/IEC 10118-3:2004）：512 位输出，Miyaguchi-Preneel 模式套 AES 风格 512 位分组密码，8x8 字节状态 10 轮。S 盒按规范用 4 位 mini-box 生成，载入时跑官方向量自检。 |
 | skein | Skein | Skein 哈希（NIST SHA-3 决赛候选，Threefish 可调分组密码 Miyaguchi-Preneel 模式）：Skein-256/512/1024 状态，输出 224~1024 位。SHA-3 决赛圈里以速度著称，Skein-512-512 与 Threefish 同核。已过 Skein3Fish skein_golden_kat.txt 官方向量。 |
 | grostl | Grøstl | Grøstl 哈希（NIST SHA-3 决赛五强之一，Thomsen/Matusiewicz，公钥密码学背景）：Grøstl-256 用 512 位状态、Grøstl-512 用 1024 位状态，两个并行置换 P/Q 的宽管道压缩 h'=h⊕Q(m)⊕P(h⊕m)，双射结构保证高速。已过 C oracle（官方 NIST 提交编译）交叉验证。 |
@@ -949,6 +951,11 @@ public/
 | ipChecksum | TCP/IP 校验和 | RFC 1071 反码和校验：16 位大端分组、进位回卷、取反码，输出小写十六进制。口径同 CyberChef「TCP/IP Checksum」 |
 | xorChecksum | XOR 分块校验和 | 把输入按块大小分块，逐列异或后输出等长十六进制。口径同 CyberChef「XOR Checksum」 |
 | parityBit | 奇偶校验位 | 对二进制串计算偶/奇校验位：可放块首或块尾，可编码或解码，可按分隔符逐块处理。口径同 CyberChef「Parity Bit」 |
+| crcChecksum | CRC Checksum（CC 全预设） | CyberChef CRC Checksum 对齐：171 个命名 CRC 预设 + Custom（width/poly/init/refIn/refOut/xorOut），输出小写 hex。BigInt 支持 3-82 位宽度；不影响既有 crcGeneric/crc32/crc16。 |
+| generateAllChecksums | Generate all checksums（CC 对齐） | CyberChef Generate all checksums 对齐：按 CC 同顺序输出 171 个 CRC + Fletcher-8/16/32/64 + Adler-32，支持 Length (bits) 过滤与 Include names。 |
+| sha2 | SHA-2（CC 六档） | SHA-2 全六档（SHA-512/384/256/224/512-256/512-224）+ Rounds，输出小写 hex；参数与 CyberChef SHA2 对齐。 |
+| ctph | CTPH（模糊哈希） | Context Triggered Piecewise Hashing（Kornblum 2006，ctph.js 同算法），输出 bi:hash1:hash2。 |
+| generateAllHashes | Generate all hashes（CC 对齐） | CyberChef Generate all hashes 对齐：按 CC 同顺序输出 44 个摘要（含 Whirlpool 三变体、GOST、SSDEEP、CTPH），支持 Length (bits) 过滤与 Include names。 |
 
 ### 进制 / 字符集（83 ops）
 
@@ -1122,7 +1129,7 @@ public/
 | prngAttack | PRNG 破解（LCG / MT19937） | LCG 参数恢复（差分法推 a/c/m，可填已知模数）+ MT19937 状态恢复（624 输出 untemper + 预测下一值，Python random 标准） |
 | hashLengthExtension | 哈希长度扩展攻击（MD5/SHA1/SHA256） | Merkle-Damgård 弱点：从 H(secret) 和 len(secret) 构造 H(secret\|\|padding\|\|append) 而不知 secret。MD5/SHA-1/SHA-256 全部纯 JS 落地（内部 state 反推 + 续压），无需 hashpump。输入按显式 hex 解析，任意非 hex 字符显式报错 |
 
-### 压缩 / 归档（21 ops）
+### 压缩 / 归档（22 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1136,6 +1143,7 @@ public/
 | lzw | 标准 LZW（GIF/TIFF） | 经典变长码本 LZW 三档——GIF 档：LSB-first 位流、初始 256 项字节字典、clear 256 / EOD 257、9→12 位变宽；TIFF 档：MSB-first 位流 + early change（码长在码本 511/1023/2047 项时切换）、clear 256 / EOI 257、首新码 258、码本满先发 clear，条带末尾无 EOI 也容忍，输出为字节流（合法 UTF-8 给文本，否则给完整 hex）；定长档：MSB-first 定长 N 位，hex 呈现。≠ 既有 LZString op（JS 库变体，不等价） |
 | elias | Elias Gamma/Delta 编码 | universal 前缀码：gamma = ⌊log₂x⌋ 个 0 + 二进制原码；delta = gamma(⌊log₂x⌋+1) + 尾段。正整数 ↔ 位串双向 |
 | lz4Dec | LZ4 压缩 / 解压 | dir=decompress（默认）：块格式（token 高 4 位字面量/低 4 位匹配 + 255 续位 + 2 字节小端偏移）与帧格式（magic 0x184D2204、xxh32 头/块/内容校验）解压，支持帧外部字典；dir=compress：复用内部 lz4CompressBlock 产出裸块格式（block），不生成帧（frame），输出 hex/base64。hex/base64 输入自动识别 |
+| lz4Compress | LZ4 Frame 压缩（CC 对齐） | LZ4 Frame 压缩：与 CyberChef LZ4 Compress（lz4js）逐字节相同（FLG=0x40、BD=0x70、HC、uncompressed block 回退、EndMark），输出 hex/base64 或 .lz4 文件。 |
 | bzip2Dec | bzip2 解压 | 完整解压链：BZh 头 + π/√2 magic + Huffman(MTF+RUNA/RUNB) + BWT 逆变换 + RLE1 尾游程 + 块/文件 CRC 校验；含 0.9.0 时代已废弃的 randomized 档（按参考实现 BZ2_rNums 表逐字节反随机化）；纯 JS 自研，hex/base64 输入自动识别 |
 | lzstring | LZString 压缩 / 解压 | fmt=legacy（默认）：原有原始 LZW → JSON 数字数组，仅 Latin-1；fmt=base64 / utf16 / default：pieroxy/lz-string 标准 compressToBase64 / compressToUTF16 / compress，逐位兼容参考实现；中文与 emoji 请用三种标准格式（JS 按 UTF-16 码元处理，往返原样）；base64 最常用于网页/JS 题 |
 | sevenZipExtract | 7z 归档解析 / 解压 | 识别 7z 签名 + 解析 SignatureHeader/StartHeader（CRC 校验）；放置 public/wasm/7zz.js 后可真列表/解压（LZMA 等，wasm 缺失自动降级） |

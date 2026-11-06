@@ -35,6 +35,8 @@ import { register } from "./registry.js";
 import { ecMul, ecPointAdd, ecToAffine, mod, modInverse } from "./ecdsaReuseK.js";
 import { isProbablePrime, modPow } from "./primeGen.js";
 import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
+import { md5Bytes, sha1Bytes } from "./hash.js";
+import { derSeq, derInt, derOctetString, derOid, derBitString, derEncode, derToPem } from "./rsagen.js";
 
 // ============================================================
 // 曲线域参数（BigInt 常量表）
@@ -82,6 +84,13 @@ const CURVES = {
   },
 };
 
+const CURVE_OIDS = {
+  secp256k1: [1, 3, 132, 0, 10],
+  p256: [1, 2, 840, 10045, 3, 1, 7],
+  p384: [1, 3, 132, 0, 34],
+  p521: [1, 3, 132, 0, 35],
+};
+const CURVE_JWK = { secp256k1: "secp256k1", p256: "P-256", p384: "P-384", p521: "P-521" };
 const CURVE_OPTIONS = [
   { value: "secp256k1", label: "secp256k1（比特币/以太坊，SEC 2 v2）" },
   { value: "p256", label: "P-256 / secp256r1（NIST）" },
@@ -93,6 +102,8 @@ const HASHES = {
   sha256: { norm: "SHA-256", len: 32, label: "SHA-256" },
   sha384: { norm: "SHA-384", len: 48, label: "SHA-384" },
   sha512: { norm: "SHA-512", len: 64, label: "SHA-512" },
+  sha1: { norm: "SHA-1", len: 20, label: "SHA-1" },
+  md5: { norm: "MD5", len: 16, label: "MD5" },
 };
 
 // ============================================================
@@ -175,10 +186,24 @@ function b64urlToBytes(s, label = "base64url") {
 // （仓内无字节级导出实现，按 modern.js / jwtCrack.js 既有模式直调原生原语）
 // ============================================================
 async function shaBytes(normName, data) {
+  if (normName === "MD5") return md5Bytes(data);
+  if (normName === "SHA-1") return sha1Bytes(data);
   if (!globalThis.crypto?.subtle) throw new Error("当前环境不支持 WebCrypto（需 HTTPS 或 localhost）");
   return new Uint8Array(await crypto.subtle.digest(normName, data));
 }
+function hmacMd5(keyBytes, dataBytes) {
+  const BLOCK = 64;
+  let k = keyBytes.length > BLOCK ? md5Bytes(keyBytes) : keyBytes;
+  const k0 = new Uint8Array(BLOCK); k0.set(k);
+  const ipad = new Uint8Array(BLOCK), opad = new Uint8Array(BLOCK);
+  for (let i = 0; i < BLOCK; i++) { ipad[i] = k0[i] ^ 0x36; opad[i] = k0[i] ^ 0x5c; }
+  const inner = new Uint8Array(BLOCK + dataBytes.length); inner.set(ipad); inner.set(dataBytes, BLOCK);
+  const ih = md5Bytes(inner);
+  const outer = new Uint8Array(BLOCK + ih.length); outer.set(opad); outer.set(ih, BLOCK);
+  return md5Bytes(outer);
+}
 async function hmacShaBytes(normName, keyBytes, dataBytes) {
+  if (normName === "MD5") return hmacMd5(keyBytes, dataBytes);
   if (!globalThis.crypto?.subtle) throw new Error("当前环境不支持 WebCrypto（需 HTTPS 或 localhost）");
   const k = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: normName }, false, ["sign"]);
   return new Uint8Array(await crypto.subtle.sign("HMAC", k, dataBytes));
@@ -460,6 +485,13 @@ function parseSigInput(raw) {
 
 function msgToBytes(text, enc) {
   if (enc === "hex") return hexToBytes(text, "消息");
+  if (enc === "base64") {
+    const s = String(text == null ? "" : text).replace(/\s+/g, "");
+    const bin = atob(s);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
   return new TextEncoder().encode(String(text == null ? "" : text));
 }
 
@@ -473,6 +505,37 @@ function rawBytesOf(p) {
 // ============================================================
 // op 1 · ecdsaKeyGen
 // ============================================================
+function b64urlBytes(u8) {
+  let bin = "";
+  for (const b of u8) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function ecPrivateDer(c, d, Q) {
+  const bl = byteLen(c.n);
+  const dHex = bytesToHex(bigIntToBytes(d, bl, "d"));
+  const pub = hexToBytes(fmtUncompressed(Q, c));
+  return derEncode(derSeq(
+    derInt(1n),
+    derOctetString(hexToBytes(dHex)),
+    { tag: 0xa0, children: [derOid(CURVE_OIDS[c.key || ""] || [1, 2, 840, 10045, 3, 1, 7])] },
+    { tag: 0xa1, children: [derBitString(pub)] },
+  ));
+}
+function ecPkcs8Der(c, d, Q) {
+  return derEncode(derSeq(
+    derInt(0n),
+    derSeq(derOid([1, 2, 840, 10045, 2, 1]), derOid(CURVE_OIDS[c.key || ""] || [1, 2, 840, 10045, 3, 1, 7])),
+    derOctetString(ecPrivateDer(c, d, Q)),
+  ));
+}
+function ecSpkiDer(c, Q) {
+  const pub = hexToBytes(fmtUncompressed(Q, c));
+  return derEncode(derSeq(
+    derSeq(derOid([1, 2, 840, 10045, 2, 1]), derOid(CURVE_OIDS[c.key || ""] || [1, 2, 840, 10045, 3, 1, 7])),
+    derBitString(pub),
+  ));
+}
+
 function ecdsaKeyGenRun(_text, p = {}) {
   const c = getCurve(p.curve || "secp256k1");
   const d = randBelow(c.n);
@@ -480,6 +543,22 @@ function ecdsaKeyGenRun(_text, p = {}) {
   const bl = byteLen(c.n);
   const dHex = bytesToHex(bigIntToBytes(d, bl, "d"));
   const mainFmt = p.pubFormat || "uncompressed";
+  const outFmt = String(p.outputFormat || "report");
+  const curveKey = Object.keys(CURVES).find((k) => CURVES[k] === c) || "p256";
+  if (outFmt === "DER") return dHex;
+  if (outFmt === "PEM") {
+    return derToPem("PUBLIC KEY", ecSpkiDer({ ...c, key: curveKey }, Q)) + "\n" + derToPem("PRIVATE KEY", ecPkcs8Der({ ...c, key: curveKey }, d, Q));
+  }
+  if (outFmt === "JWK") {
+    const blp = byteLen(c.p);
+    const jwk = {
+      keys: [
+        { kty: "EC", crv: CURVE_JWK[curveKey], x: b64urlBytes(bigIntToBytes(Q[0], blp, "x")), y: b64urlBytes(bigIntToBytes(Q[1], blp, "y")), d: b64urlBytes(bigIntToBytes(d, byteLen(c.n), "d")), key_ops: ["sign"], kid: "PrivateKey" },
+        { kty: "EC", crv: CURVE_JWK[curveKey], x: b64urlBytes(bigIntToBytes(Q[0], blp, "x")), y: b64urlBytes(bigIntToBytes(Q[1], blp, "y")), key_ops: ["verify"], kid: "PublicKey" },
+      ],
+    };
+    return JSON.stringify(jwk, null, 4);
+  }
   const L = [];
   L.push("=== ECDSA 密钥对生成 ===");
   L.push(`曲线: ${c.name}（${c.std}）`);
@@ -522,7 +601,16 @@ async function ecdsaSignRun(text, p = {}) {
   const H = HASHES[hashKey];
   if (!H) throw new Error(`未知哈希：${hashKey}`);
   const kMode = p.kMode || "rfc6979";
-  const d = parseBigAuto(p.d, "私钥 d（十进制或 0x hex）");
+  let d;
+  const dRaw = String(p.d == null ? "" : p.d).trim();
+  if (dRaw.startsWith("-----BEGIN") || dRaw.startsWith("{")) {
+    const { parseKeyText } = await import("./pemkeys.js");
+    const kk = parseKeyText(dRaw);
+    if (kk.kty !== "EC" || kk.d == null) throw new Error("ECDSA Sign：PEM/JWK 须为 EC 私钥");
+    d = kk.d;
+  } else {
+    d = parseBigAuto(p.d, "私钥 d（十进制或 0x hex）");
+  }
   const raw = rawBytesOf(p);
   const msg = raw != null ? raw : msgToBytes(text, "text");
   const { r, s, k, e, h1 } = await ecdsaSignRaw(c, d, msg, hashKey, kMode);
@@ -574,10 +662,20 @@ async function ecdsaVerifyRun(text, p = {}) {
   const H = HASHES[hashKey];
   if (!H) throw new Error(`未知哈希：${hashKey}`);
   const raw = rawBytesOf(p);
-  const msg = raw != null ? raw : msgToBytes(text, "text");
+  const mf = String(p.msgFormat || "text");
+  const msg = raw != null ? raw : msgToBytes(text, mf);
   const h1 = await shaBytes(H.norm, msg);
   const e = hashToE(h1, c);
-  const Q = parsePoint(p.pub, c, "公钥");
+  let Q;
+  const pubRaw = String(p.pub == null ? "" : p.pub).trim();
+  if (pubRaw.startsWith("-----BEGIN") || pubRaw.startsWith("{")) {
+    const { parseKeyText } = await import("./pemkeys.js");
+    const kk = parseKeyText(pubRaw);
+    if (kk.kty !== "EC" || kk.x == null || kk.y == null) throw new Error("ECDSA Verify：PEM/JWK 须含 EC 公钥坐标");
+    Q = [kk.x, kk.y];
+  } else {
+    Q = parsePoint(p.pub, c, "公钥");
+  }
   if (!Q) throw new Error("公钥不能为无穷远点 O");
   const sig = parseSigInput(p.sig);
   const v = ecdsaVerifyRaw(c, Q, sig.r, sig.s, e);
@@ -774,12 +872,18 @@ register({
   family: "ecdsa", familyLabel: "keygen",
   cat: "asym",
   name: "ECDSA 密钥对生成",
-  desc: "ECDSA 密钥对生成：secp256k1 / P-256 / P-384 / P-521 任选，输出私钥 d 与公钥（压缩 02/03‖X + 非压缩 04‖X‖Y 双格式）。随机源 crypto.getRandomValues 拒绝采样无偏。域参数：SEC 2 v2 / FIPS 186-4 D.1.2。",
+  desc: "ECDSA 密钥对生成：secp256k1 / P-256 / P-384 / P-521 任选，输出私钥 d 与公钥（压缩 02/03‖X + 非压缩 04‖X‖Y 双格式），可选 PEM/DER/JWK 输出。随机源 crypto.getRandomValues 拒绝采样无偏。域参数：SEC 2 v2 / FIPS 186-4 D.1.2。",
   params: [
     { key: "curve", label: "曲线", type: "select", default: "secp256k1", options: CURVE_OPTIONS },
     { key: "pubFormat", label: "公钥主格式", type: "select", default: "uncompressed", options: [
       { value: "uncompressed", label: "非压缩 04‖X‖Y" },
       { value: "compressed", label: "压缩 02/03‖X" },
+    ] },
+    { key: "outputFormat", label: "Output Format", type: "select", default: "report", options: [
+      { value: "report", label: "报告（原有模式，含文件产物）" },
+      { value: "PEM", label: "PEM（SPKI 公钥 + PKCS#8 私钥）" },
+      { value: "DER", label: "DER（私钥 d hex，同 CC）" },
+      { value: "JWK", label: "JWK（公/私双密钥 JSON）" },
     ] },
   ],
   run: ecdsaKeyGenRun,
@@ -791,19 +895,21 @@ register({
   family: "ecdsa", familyLabel: "sign",
   cat: "asym",
   name: "ECDSA 签名",
-  desc: "ECDSA 签名：输入消息（text/hex）+ 私钥 d，曲线 secp256k1/P-256/P-384/P-521，哈希 SHA-256/384/512，k 可选 RFC 6979 确定 k（可复现）或随机 k。输出 r,s 十进制+hex、DER hex、所用 k。RFC 6979 A.2.5 官方向量逐字验证。",
+  desc: "ECDSA 签名：输入消息（text/hex）+ 私钥 d，曲线 secp256k1/P-256/P-384/P-521，哈希 SHA-256/384/512/SHA-1/MD5，k 可选 RFC 6979 确定 k（可复现）或随机 k。输出 r,s 十进制+hex、DER hex、所用 k。RFC 6979 A.2.5 官方向量逐字验证。",
   params: [
     { key: "curve", label: "曲线", type: "select", default: "secp256k1", options: CURVE_OPTIONS },
     { key: "hash", label: "哈希", type: "select", default: "sha256", options: [
       { value: "sha256", label: "SHA-256" },
       { value: "sha384", label: "SHA-384" },
       { value: "sha512", label: "SHA-512" },
+      { value: "sha1", label: "SHA-1" },
+      { value: "md5", label: "MD5" },
     ] },
     { key: "kMode", label: "k 模式", type: "select", default: "rfc6979", options: [
       { value: "rfc6979", label: "RFC 6979 确定 k（推荐，可复现）" },
       { value: "random", label: "随机 k" },
     ] },
-    { sensitive: true, key: "d", label: "私钥 d", type: "text", default: "", placeholder: "十进制或 0x hex（1 ≤ d < n）" },
+    { sensitive: true, key: "d", label: "私钥 d", type: "text", default: "", placeholder: "十进制/0x hex，或 EC 私钥 PEM/JWK" },
   ],
   run: ecdsaSignRun,
 });
@@ -814,15 +920,18 @@ register({
   family: "ecdsa", familyLabel: "verify",
   cat: "asym",
   name: "ECDSA 验签",
-  desc: "ECDSA 验签：输入消息 + 公钥（压缩/非压缩/X‖Y hex 自动识别，G=生成元）+ 签名（r;s 十进制/hex 或 DER hex 自动识别）。曲线四条任选，哈希 SHA-256/384/512。输出 w/u1/u2/R 全过程与合法性判定。",
+  desc: "ECDSA 验签：输入消息 + 公钥（压缩/非压缩/X‖Y hex 自动识别，G=生成元）+ 签名（r;s 十进制/hex 或 DER hex 自动识别）。曲线四条任选，哈希 SHA-256/384/512/SHA-1/MD5。输出 w/u1/u2/R 全过程与合法性判定。",
   params: [
     { key: "curve", label: "曲线", type: "select", default: "secp256k1", options: CURVE_OPTIONS },
     { key: "hash", label: "哈希", type: "select", default: "sha256", options: [
       { value: "sha256", label: "SHA-256" },
       { value: "sha384", label: "SHA-384" },
       { value: "sha512", label: "SHA-512" },
+      { value: "sha1", label: "SHA-1" },
+      { value: "md5", label: "MD5" },
     ] },
-    { key: "pub", label: "公钥 Q", type: "text", default: "", placeholder: "04‖X‖Y / 02|03‖X / X‖Y / G" },
+    { key: "pub", label: "公钥 Q", type: "text", default: "", placeholder: "04‖X‖Y / 02|03‖X / X‖Y / G / PEM / JWK" },
+    { key: "msgFormat", label: "消息格式", type: "select", default: "text", options: ["text", "hex", "base64"] },
     { key: "sig", label: "签名", type: "text", default: "", placeholder: "DER hex（30 开头）或 r;s 十进制/0x hex" },
   ],
   run: ecdsaVerifyRun,

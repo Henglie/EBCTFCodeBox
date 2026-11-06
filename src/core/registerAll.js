@@ -458,3 +458,6 @@ import "./t820DisasmX86.js"; // 反汇编 x86 disasmX86（forensic, run, CyberCh
 import "./detectExt3.js"; // EASY 30 op detect 补齐（须在所有 op 注册后）
 import "./detectSupplement.js"; // 编码类 detect 覆盖补齐（须在所有 op 注册后）
 
+import "./t842Crc.js"; // T842 候选：CRC Checksum 全 171 预设 + Generate all checksums（CC 对齐）
+import "./t842Hashes.js"; // T842 候选：SHA2 六档 + CTPH + Generate all hashes（CC 对齐）
+import "./t842Enigma.js"; // T842 候选：Enigma 3/4 转子全预设（CC 对齐）

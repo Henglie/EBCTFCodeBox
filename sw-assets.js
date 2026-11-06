@@ -1,4 +1,4 @@
-self.__EBCTF_ASSET_REV = "0530c58229d3054d";
+self.__EBCTF_ASSET_REV = "cb0fcae3e32a746a";
 self.__EBCTF_ASSETS = [
   "./",
   "./index.html",
@@ -354,6 +354,7 @@ self.__EBCTF_ASSETS = [
   "./src/core/edu/edu-t796.js",
   "./src/core/edu/edu-t813.js",
   "./src/core/edu/edu-t821.js",
+  "./src/core/edu/edu-t842.js",
   "./src/core/edu/edu-teach.js",
   "./src/core/edu/edu-text-bubblebabble.js",
   "./src/core/edu/edu-text-jsescape.js",
@@ -797,6 +798,9 @@ self.__EBCTF_ASSETS = [
   "./src/core/t820DisasmX86.js",
   "./src/core/t820Jq.js",
   "./src/core/t820Yara.js",
+  "./src/core/t842Crc.js",
+  "./src/core/t842Enigma.js",
+  "./src/core/t842Hashes.js",
   "./src/core/tar.js",
   "./src/core/text.js",
   "./src/core/textBlindWatermark.js",

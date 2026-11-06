@@ -213,6 +213,7 @@ import EDU_OPENSSL from "./edu/edu-openssl.js"; // OpenSSL Salted__ 一步式口
 import EDU_T796 from "./edu/edu-t796.js"; // CyberChef：HTTP Dechunk / 拆分颜色通道
 import EDU_T813 from "./edu/edu-t813.js"; // 10 op 科普（ipChecksum/xorChecksum/parityBit/hexToOid/oidToHex/fromHexContent/toHexContent/escapeSmartChars/removeDiacritics/stripHttpHeaders）
 import EDU_T821 from "./edu/edu-t821.js"; // 共 21 个新 op 科普
+import EDU_T842 from "./edu/edu-t842.js"; // T842：CRC 全预设 / 全部校验和 / SHA2 / CTPH / 全部哈希 / Whirlpool / LZ4 / Enigma
 
 // 合并所有分片。后者不覆盖前者（分区不重叠）；重叠时以后者为准，构建期应避免。
 const EDU = Object.assign(
@@ -386,6 +387,7 @@ const EDU = Object.assign(
   EDU_T796,
   EDU_T813,
   EDU_T821,
+  EDU_T842,
 );
 
 import { ZH as INTEGRATED, HASH_VECTORS, BASE_NOTES, EXTRA_ALIASES, CRC_PARAMS } from "./edu/edu-integrated.js";

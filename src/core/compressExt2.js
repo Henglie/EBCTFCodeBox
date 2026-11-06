@@ -1069,12 +1069,41 @@ function lz4DecRun(text, p) {
 
 const LZ4_MAX_COMPRESS_BYTES = 4 * 1024 * 1024;
 
+/** LZ4 Frame 压缩（与 CC lz4js compress 同输出）：FLG=0x40、BD=0x70、HC=xxh32(FLG||BD)>>8，
+ * 压缩后不小于原文时按 uncompressed block（size | 0x80000000）存原文，末尾 0 结束标记。 */
+export function lz4CompressFrame(bytes) {
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+  if (b.length > LZ4_MAX_COMPRESS_BYTES) {
+    throw new Error(`LZ4 Frame：输入 ${b.length} 字节超过上限 ${LZ4_MAX_COMPRESS_BYTES} 字节（4 MiB）`);
+  }
+  const header = new Uint8Array([0x04, 0x22, 0x4d, 0x18, 0x40, 0x70, 0]);
+  header[6] = (xxh32(header.subarray(4, 6)) >>> 8) & 0xff;
+  const parts = [header];
+  if (b.length === 0) {
+    parts.push(new Uint8Array([0, 0, 0, 0]));
+    const empty = new Uint8Array(11);
+    let eoff = 0;
+    for (const x of parts) { empty.set(x, eoff); eoff += x.length; }
+    return empty;
+  }
+  const block = Uint8Array.from(lz4CompressBlock(b));
+  const useRaw = block.length >= b.length;
+  const payload = useRaw ? b : block;
+  const size = new Uint8Array(4);
+  new DataView(size.buffer).setUint32(0, (payload.length | (useRaw ? 0x80000000 : 0)) >>> 0, true);
+  parts.push(size, payload);
+  parts.push(new Uint8Array([0, 0, 0, 0]));
+  let total = 0;
+  for (const x of parts) total += x.length;
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const x of parts) { out.set(x, off); off += x.length; }
+  return out;
+}
+
 /** LZ4 压缩：只产出裸 block（不伪造 frame），输出 hex 或 base64。 */
 function lz4CompressRun(text, p) {
   const fmt = (p && p.fmt) || "auto";
-  if (fmt === "frame") {
-    throw new Error("LZ4 压缩仅支持块格式（block）：本实现不生成 LZ4 Frame（无帧头/xxh32 校验），请改选 auto 或 block");
-  }
   let bytes;
   try {
     bytes = inputToBytes(text, p);
@@ -1085,7 +1114,7 @@ function lz4CompressRun(text, p) {
   if (bytes.length > LZ4_MAX_COMPRESS_BYTES) {
     throw new Error(`LZ4 压缩：输入 ${bytes.length} 字节超过上限 ${LZ4_MAX_COMPRESS_BYTES} 字节（4 MiB）`);
   }
-  const block = Uint8Array.from(lz4CompressBlock(bytes));
+  const block = fmt === "frame" ? lz4CompressFrame(bytes) : Uint8Array.from(lz4CompressBlock(bytes));
   const outEnc = (p && p.outEnc) || "hex";
   if (outEnc === "base64") return bytesToB64Str(block);
   if (outEnc === "hex") return bytesToHexStr(block);
@@ -1136,6 +1165,47 @@ register({
   ],
   run: lz4Run,
   acceptsBytes: true,
+});
+
+register({
+  id: "lz4Compress", family: "lz4", familyLabel: "compress", cat: "archive", name: "LZ4 Frame 压缩（CC 对齐）",
+  desc: "LZ4 Frame 压缩：与 CyberChef LZ4 Compress（lz4js）逐字节相同（FLG=0x40、BD=0x70、HC、uncompressed block 回退、EndMark），输出 hex/base64 或 .lz4 文件。",
+  params: [
+    { key: "inputMode", label: "输入编码", type: "select", default: "auto", options: [
+      { value: "auto", label: "自动（真字节 / UTF-8 文本）" },
+      { value: "text", label: "UTF-8 文本" },
+      { value: "hex", label: "Hex" },
+      { value: "base64", label: "Base64" },
+    ] },
+    { key: "outEnc", label: "输出编码", type: "select", default: "hex", options: [
+      { value: "hex", label: "Hex" },
+      { value: "base64", label: "Base64" },
+    ] },
+    { key: "toFile", label: "输出 .lz4 文件", type: "bool", default: false },
+  ],
+  acceptsBytes: true,
+  run: (t, p = {}) => {
+    let bytes;
+    if (p.rawBytes && p.rawBytes.length) bytes = p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes);
+    else {
+      const s = String(t == null ? "" : t);
+      if (p.inputMode === "hex") {
+        const h = s.trim().replace(/^0x/i, "").replace(/\s+/g, "");
+        if (!/^[0-9a-fA-F]*$/.test(h) || h.length % 2) throw new Error("LZ4 Frame：hex 输入非法");
+        bytes = new Uint8Array(h.length / 2);
+        for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16);
+      } else if (p.inputMode === "base64") {
+        const bin = atob(s.replace(/\s+/g, ""));
+        bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      } else bytes = new TextEncoder().encode(s);
+    }
+    const out = lz4CompressFrame(bytes);
+    const text = p.outEnc === "base64" ? bytesToB64Str(out) : bytesToHexStr(out);
+    if (p.toFile) return { text: "(LZ4 Frame 压缩成功，" + out.length + " 字节，已提供 .lz4 文件)\n" + text,
+      files: [{ name: "compressed.lz4", mime: "application/octet-stream", bytes: out }] };
+    return text;
+  },
 });
 
 /* ================================================================

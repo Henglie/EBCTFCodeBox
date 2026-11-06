@@ -4,7 +4,12 @@
 
 ## v0.1.15（开发中）
 
-- 开发中：源码注释清理与下一版缺口推进
+- 新增 8 个 CyberChef 对齐 op：CRC 全预设、全部校验和、SHA-2 六档、CTPH、全部哈希、Whirlpool 变体、LZ4 Frame 压缩、Enigma 对齐
+- 闭环 `moyue` 非默认密钥 classical 识别
+- CyberChef 矩阵 partial 清零：full 393 / equivalent 22 / blocked 23 / partial 0
+- 源码注释工程痕迹清理（core / UI / edu / 文档）
+- 主 op 增至 969
+- 六门文案 3017 键
 
 ## v0.1.14（2026-11-06）
 

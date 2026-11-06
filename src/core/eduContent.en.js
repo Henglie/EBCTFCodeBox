@@ -124,6 +124,7 @@ import EDU_EN_HISTORICAL from "./edu-en/edu-historical-machines.en.js"; // typex
 import EDU_EN_HISTORICAL_ATTACKS from "./edu-en/edu-historical-attacks.en.js"; // bombe/multipleBombe/colossus 3
 import EDU_EN_T813 from "./edu-en/edu-t813.en.js"; // English cards for the 10-op batch
 import EDU_EN_T822 from "./edu-en/edu-t822.en.js"; // English cards for the 21-op batch
+import EDU_EN_T842 from "./edu-en/edu-t842.en.js"; // English cards for the 8-op T842 batch
 
 const EDU_EN = Object.assign(
   {},
@@ -230,6 +231,7 @@ const EDU_EN = Object.assign(
   EDU_EN_HISTORICAL_ATTACKS,
   EDU_EN_T813,
   EDU_EN_T822,
+  EDU_EN_T842,
 );
 
 import { EN as INTEGRATED, HASH_VECTORS, BASE_NOTES, EXTRA_ALIASES, CRC_PARAMS } from "./edu/edu-integrated.js";

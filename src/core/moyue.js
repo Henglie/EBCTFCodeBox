@@ -43,6 +43,10 @@ function getAbra() {
 const SIG_JP = "桜込凪雫実沢";
 const SIG_CN = "玚俟玊欤瞐珏";
 
+const CLASSICAL_CHARS = new Set("关赴呈添停成走达行称见学听买作弹写定谈动旅返度开筑选流指换探放看报事泊现迸彰需飞游求御航歌读振登任留奏连知至致去画说进信取问笑视言人镜鹏曲霞绸裳路岩叶鲤月雪冰局恋福铃琴家天韵书莺璃雨文涧水花风棋楼鹤鸢灯雁星声树茶竹兰苗心语礼梦庭木驿火森夏光林物云夜城春空雀鹂鸳莹畅新高静美绿佳善良瀚明早宏青遥速慧绚绮寒冷银灵绣北临南俊捷骏益雅舒智谜彩余短秋乐怡瑞惠和纯悦迷长少近清远极安聪秀旧浩盈快悠后轻坚诚恒愈谨频笃湛昭朗祗攸徐咸皆恭弥允公淳嘉勤协永歆已忻谧稍尚竟悉渐颇辄曾欲应可能将请想必当之乎者也为把了而此斯仍与同亦是乃未莫或更使让非不何奈哉但却则况且似如若倘呼噫自以于曰夫在有初谓常然无道实本其今弗论居所受命固具继尝予虽复孰每便得矣故中上间唯某谁");
+const CLASSICAL_PUNCT = new Set(["\uFF0C", "\u3002", "\u3001", "\uFF1F"]);
+const CLASSICAL_FUNC = "之也而不其者以为有无则故是非所矣哉夫";
+
 const DEFAULT_KEY = "ABRACADABRA";
 
 function normKey(params) {
@@ -151,26 +155,50 @@ register({
   detect: (t) => {
     const s = (t || "").trim();
     if (s.length < 6) return 0;
+    const chars = [...s];
     let hasJp = false;
     let hasCn = false;
     let cjk = 0;
-    for (const c of s) {
+    let stray = 0;
+    let func = 0;
+    let topFunc = 0;
+    const funcHits = new Map();
+    for (const c of chars) {
       if (!hasJp && SIG_JP.indexOf(c) !== -1) hasJp = true;
       if (!hasCn && SIG_CN.indexOf(c) !== -1) hasCn = true;
       const cp = c.codePointAt(0);
-      if (cp >= 0x3400 && cp <= 0x9fff) cjk++;
+      if (cp >= 0x3400 && cp <= 0x9fff) {
+        cjk++;
+        if (!CLASSICAL_CHARS.has(c)) stray++;
+        if (CLASSICAL_FUNC.indexOf(c) !== -1) {
+          func++;
+          const n = (funcHits.get(c) || 0) + 1;
+          funcHits.set(c, n);
+          if (n > topFunc) topFunc = n;
+        }
+      } else if (!CLASSICAL_PUNCT.has(c) && c !== "\n" && c !== "\r") {
+        stray++;
+      }
     }
-    const cjkRatio = cjk / [...s].length;
+    const cjkRatio = cjk / chars.length;
+    const funcRatio = func / chars.length;
  // 传统模式含 JP+CN 标志字且以 CJK 为主 → 低置信度（防与其他 cn 编码误撞）。
     if (hasJp && hasCn && cjkRatio > 0.7) return 0.35;
  // 文言仿真模式无标志字：先按 CJK 占比粗筛，再用默认密钥试解做精确校验；
- // 密钥不符/非魔曰密文会抛错，不会误报（非默认密钥的 Classical 仍识别不了）。
+ // 密钥不符/非魔曰密文会抛错，不会误报；非默认密钥的 classical 走下方结构分支。
     if (cjkRatio > 0.7 && /[，。！？、]/.test(s)) {
       try {
         const out = moyueDecode(s, { mode: "classical", key: DEFAULT_KEY });
         if (typeof out === "string" && out.length > 0) return 0.3;
       } catch (e) { /* 非魔曰密文或非默认密钥 */ }
     }
+    const structural =
+      chars.length < 40
+        ? (topFunc >= 3 ? funcRatio >= 0.14 : topFunc === 2 && funcRatio >= 0.15)
+        : topFunc >= 3
+          ? funcRatio >= 0.09
+          : topFunc === 2 && funcRatio >= 0.12;
+    if (cjkRatio > 0.7 && chars.length >= 12 && stray === 0 && structural) return 0.24;
     return 0;
   },
 });

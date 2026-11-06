@@ -38,12 +38,23 @@ function emit(text, files, sensitive = false) {
   return { text: text + tail, files };
 }
 
+const PGP_ALG_SPEC = {
+  ecc: { type: "ecc", curve: "curve25519", label: "Curve25519（ECDH+EdDSA）" },
+  rsa3072: { type: "rsa", rsaBits: 3072, label: "RSA-3072" },
+  rsa1024: { type: "rsa", rsaBits: 1024, label: "RSA-1024" },
+  rsa2048: { type: "rsa", rsaBits: 2048, label: "RSA-2048" },
+  rsa4096: { type: "rsa", rsaBits: 4096, label: "RSA-4096" },
+  ecc256: { type: "ecc", curve: "p256", label: "ECC P-256" },
+  ecc384: { type: "ecc", curve: "p384", label: "ECC P-384" },
+  ecc521: { type: "ecc", curve: "p521", label: "ECC P-521" },
+};
 async function genKeys({ name, email, passphrase, alg }) {
   const o = await lib();
+  const spec = PGP_ALG_SPEC[alg] || PGP_ALG_SPEC.ecc;
   const r = await o.generateKey({
-    type: alg === "rsa3072" ? "rsa" : "ecc",
-    curve: alg === "rsa3072" ? undefined : "curve25519",
-    rsaBits: alg === "rsa3072" ? 3072 : undefined,
+    type: spec.type,
+    curve: spec.curve,
+    rsaBits: spec.rsaBits,
     // 实测：v5.11 只认对象形式且 email 需带 TLD（纯字符串形式报 Invalid user ID format）
     userIDs: [{ name: name || "EBCTFCodeBox", email: email || "user@local.dev" }],
     passphrase: passphrase || undefined,
@@ -63,14 +74,20 @@ async function readPriv(armored, passphrase) {
 register({
   id: "pgpGenKeyPair", cat: "asym",
   family: "pgp", familyLabel: "keygen", name: "PGP 密钥对生成",
-  desc: "PGP 密钥对生成（RFC 4880，openpgp.js v5.11.3）：Curve25519（默认）或 RSA-3072，可选口令保护私钥。输出 ASCII Armor 公/私钥块，公/私钥分开下载（私钥 ⚠ 敏感）",
+  desc: "PGP 密钥对生成（RFC 4880，openpgp.js v5.11.3）：Curve25519（默认）/ RSA-1024/2048/3072/4096 / ECC P-256/P-384/P-521，可选口令保护私钥。输出 ASCII Armor 公/私钥块，公/私钥分开下载（私钥 ⚠ 敏感）",
   params: [
     { key: "name", label: "用户名", type: "text", default: "EBCTFCodeBox" },
     { key: "email", label: "邮箱", type: "text", default: "user@local.dev" },
     { key: "passphrase", label: "私钥口令（可空）", type: "password", default: "", sensitive: true },
     { key: "alg", label: "算法", type: "select", default: "ecc", options: [
       { value: "ecc", label: "Curve25519（ECDH/EdDSA，推荐）" },
+      { value: "rsa1024", label: "RSA-1024" },
+      { value: "rsa2048", label: "RSA-2048" },
       { value: "rsa3072", label: "RSA-3072（兼容老客户端）" },
+      { value: "rsa4096", label: "RSA-4096" },
+      { value: "ecc256", label: "ECC P-256" },
+      { value: "ecc384", label: "ECC P-384" },
+      { value: "ecc521", label: "ECC P-521" },
     ] },
   ],
   run: async (_t, p) => {
@@ -78,7 +95,7 @@ register({
     const key = await (await lib()).readKey({ armoredKey: publicKey });
     const text = [
       "=== PGP 密钥对生成（RFC 4880）===",
-      `算法: ${p?.alg === "rsa3072" ? "RSA-3072" : "Curve25519（ECDH+EdDSA）"}`,
+      `算法: ${(PGP_ALG_SPEC[p?.alg] || PGP_ALG_SPEC.ecc).label}`,
       `KeyID: ${key.getKeyID().toHex()}`,
       `创建: ${key.getCreationTime().toISOString()}`,
       `用户: ${(key.getUserIDs()[0] || "")}`,

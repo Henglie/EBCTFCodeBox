@@ -69,14 +69,43 @@ const MUL = CIRC.map((c) => {
   return t;
 });
 
+const SBOX0 = Uint8Array.from([
+  0x68,0xd0,0xeb,0x2b,0x48,0x9d,0x6a,0xe4,0xe3,0xa3,0x56,0x81,0x7d,0xf1,0x85,0x9e,
+  0x2c,0x8e,0x78,0xca,0x17,0xa9,0x61,0xd5,0x5d,0x0b,0x8c,0x3c,0x77,0x51,0x22,0x42,
+  0x3f,0x54,0x41,0x80,0xcc,0x86,0xb3,0x18,0x2e,0x57,0x06,0x62,0xf4,0x36,0xd1,0x6b,
+  0x1b,0x65,0x75,0x10,0xda,0x49,0x26,0xf9,0xcb,0x66,0xe7,0xba,0xae,0x50,0x52,0xab,
+  0x05,0xf0,0x0d,0x73,0x3b,0x04,0x20,0xfe,0xdd,0xf5,0xb4,0x5f,0x0a,0xb5,0xc0,0xa0,
+  0x71,0xa5,0x2d,0x60,0x72,0x93,0x39,0x08,0x83,0x21,0x5c,0x87,0xb1,0xe0,0x00,0xc3,
+  0x12,0x91,0x8a,0x02,0x1c,0xe6,0x45,0xc2,0xc4,0xfd,0xbf,0x44,0xa1,0x4c,0x33,0xc5,
+  0x84,0x23,0x7c,0xb0,0x25,0x15,0x35,0x69,0xff,0x94,0x4d,0x70,0xa2,0xaf,0xcd,0xd6,
+  0x6c,0xb7,0xf8,0x09,0xf3,0x67,0xa4,0xea,0xec,0xb6,0xd4,0xd2,0x14,0x1e,0xe1,0x24,
+  0x38,0xc6,0xdb,0x4b,0x7a,0x3a,0xde,0x5e,0xdf,0x95,0xfc,0xaa,0xd7,0xce,0x07,0x0f,
+  0x3d,0x58,0x9a,0x98,0x9c,0xf2,0xa7,0x11,0x7e,0x8b,0x43,0x03,0xe2,0xdc,0xe5,0xb2,
+  0x4e,0xc7,0x6d,0xe9,0x27,0x40,0xd8,0x37,0x92,0x8f,0x01,0x1d,0x53,0x3e,0x59,0xc1,
+  0x4f,0x32,0x16,0xfa,0x74,0xfb,0x63,0x9f,0x34,0x1a,0x2a,0x5a,0x8d,0xc9,0xcf,0xf6,
+  0x90,0x28,0x88,0x9b,0x31,0x0e,0xbd,0x4a,0xe8,0x96,0xa6,0x0c,0xc8,0x79,0xbc,0xbe,
+  0xef,0x6e,0x46,0x97,0x5b,0xed,0x19,0xd9,0xac,0x99,0xa8,0x29,0x64,0x1f,0xad,0x55,
+  0x13,0xbb,0xf7,0x6f,0xb9,0x47,0x2f,0xee,0xb8,0x7b,0x89,0x30,0xd3,0x7f,0x76,0x82
+]);
+const CIRC0 = [1, 1, 3, 1, 5, 8, 9, 5];
+function buildMul(circ) {
+  return circ.map((c) => {
+    const t = new Uint8Array(256);
+    for (let x = 0; x < 256; x++) t[x] = gmul(x, c);
+    return t;
+  });
+}
+const MUL0 = buildMul(CIRC0);
+
+
 /* ---------- 轮函数 ρ[key] = σ[key] ∘ θ ∘ π ∘ γ ---------- */
 
 // γ 是逐字节的、π 是纯置换，两者可合并成一次寻址
-function roundFn(st, key, out, tmp) {
+function roundFn(st, key, out, tmp, sbox = SBOX, mul = MUL) {
   for (let i = 0; i < 8; i++) {
     for (let j = 0; j < 8; j++) {
       // π: 第 j 列下移 j 行 → 取源行 (i-j) mod 8；同时套 γ
-      tmp[i * 8 + j] = SBOX[st[((((i - j) % 8) + 8) % 8) * 8 + j]];
+      tmp[i * 8 + j] = sbox[st[((((i - j) % 8) + 8) % 8) * 8 + j]];
     }
   }
   for (let i = 0; i < 8; i++) {
@@ -85,7 +114,7 @@ function roundFn(st, key, out, tmp) {
       let v = 0;
       for (let k = 0; k < 8; k++) {
         // θ: b[i][j] = XOR_k a[i][k] ⊗ c[(j-k) mod 8]
-        v ^= MUL[((((j - k) % 8) + 8) % 8)][tmp[row + k]];
+        v ^= mul[((((j - k) % 8) + 8) % 8)][tmp[row + k]];
       }
       out[row + j] = v ^ key[row + j]; // σ
     }
@@ -96,7 +125,10 @@ function roundFn(st, key, out, tmp) {
 
 const ROUNDS = 10;
 
-function compress(H, block) {
+function compress(H, block, opts = {}) {
+  const sbox = opts.sbox || SBOX;
+  const mul = opts.mul || MUL;
+  const rounds = Math.max(1, Math.min(10, opts.rounds == null ? ROUNDS : opts.rounds));
   const K = H.slice();
   const Knext = new Uint8Array(64);
   const st = new Uint8Array(64);
@@ -106,14 +138,14 @@ function compress(H, block) {
 
   for (let i = 0; i < 64; i++) st[i] = block[i] ^ K[i]; // σ[K^0]
 
-  for (let r = 1; r <= ROUNDS; r++) {
+  for (let r = 1; r <= rounds; r++) {
     // 轮常量：仅第 0 行取 S[8(r-1)+j]，其余行恒 0
-    for (let j = 0; j < 8; j++) rc[j] = SBOX[8 * (r - 1) + j];
+    for (let j = 0; j < 8; j++) rc[j] = sbox[8 * (r - 1) + j];
 
-    roundFn(K, rc, Knext, tmp);
+    roundFn(K, rc, Knext, tmp, sbox, mul);
     K.set(Knext);
 
-    roundFn(st, K, stNext, tmp);
+    roundFn(st, K, stNext, tmp, sbox, mul);
     st.set(stNext);
   }
 
@@ -128,7 +160,9 @@ function compress(H, block) {
  * @param {Uint8Array} data 消息字节
  * @returns {Uint8Array} 64 字节摘要
  */
-export function whirlpool(data) {
+export function whirlpool(data) { return whirlpoolVariant(data, {}); }
+
+export function whirlpoolVariant(data, opts = {}) {
   const H = new Uint8Array(64);
   const n = data.length;
 
@@ -137,7 +171,7 @@ export function whirlpool(data) {
   const block = new Uint8Array(64);
   for (; off + 64 <= n; off += 64) {
     block.set(data.subarray(off, off + 64));
-    compress(H, block);
+    compress(H, block, opts);
   }
 
   // 填充：0x80 + 0 至 ≡32(mod 64) + 256 位大端比特长度
@@ -155,7 +189,7 @@ export function whirlpool(data) {
 
   for (let i = 0; i < tail.length; i += 64) {
     block.set(tail.subarray(i, i + 64));
-    compress(H, block);
+    compress(H, block, opts);
   }
   return H;
 }
@@ -221,6 +255,33 @@ function whirlpoolRun(text, p = {}) {
   lines.push(`大写: ${digest.toUpperCase()}`);
   return lines.join("\n");
 }
+
+export function whirlpoolVariantHex(data, variant = "Whirlpool", rounds = 10) {
+  const v = String(variant || "Whirlpool");
+  let sbox = SBOX, mul = MUL;
+  if (v === "Whirlpool-T") { sbox = SBOX; mul = MUL0; }
+  else if (v === "Whirlpool-0") { sbox = SBOX0; mul = MUL0; }
+  else if (v !== "Whirlpool") throw new Error("Whirlpool 变体仅支持 Whirlpool / Whirlpool-T / Whirlpool-0");
+  const r = Math.max(1, Math.min(10, Number(rounds) || 10));
+  return bytesToHex(whirlpoolVariant(data, { sbox, mul, rounds: r }));
+}
+
+register({
+  id: "whirlpoolHash",
+  cat: "hash",
+  name: "Whirlpool（CC 变体/轮数）",
+  desc: "Whirlpool-0 / Whirlpool-T / Whirlpool 三变体 + Rounds 1-10，输出小写 hex；参数与 CyberChef Whirlpool 对齐。",
+  acceptsBytes: true,
+  params: [
+    { key: "variant", label: "Variant", type: "select", default: "Whirlpool", options: ["Whirlpool", "Whirlpool-T", "Whirlpool-0"] },
+    { key: "rounds", label: "Rounds", type: "number", default: 10 },
+  ],
+  run: (t, p = {}) => {
+    const raw = p.rawBytes;
+    const data = raw != null ? (raw instanceof Uint8Array ? raw : new Uint8Array(raw)) : new TextEncoder().encode(String(t == null ? "" : t));
+    return whirlpoolVariantHex(data, p.variant || "Whirlpool", p.rounds == null ? 10 : p.rounds);
+  },
+});
 
 register({
   id: "whirlpool",

@@ -109,22 +109,22 @@ function emsaPkcs1v15(hashNorm, digest, k) {
 }
 
 /** RS256 签名（RFC 8017 §8.2.1）：s = EM^d mod n → 定长 k 字节。 */
-function rs256Sign(n, d, signingInputBytes) {
+function rsSign(n, d, signingInputBytes, hashNorm) {
   const k = byteLenOf(n);
-  const digest = shaBytes("SHA-256", signingInputBytes); // async 由调用方 await
+  const digest = shaBytes(hashNorm, signingInputBytes); // async 由调用方 await
   return digest.then((h) => {
-    const em = emsaPkcs1v15("SHA-256", h, k);
+    const em = emsaPkcs1v15(hashNorm, h, k);
     const sig = rsaPow(bytesToBigInt(em), d, n);
     return bigIntToBytesN(sig, k, "RSA 签名");
   });
 }
 
 /** RS256 验签（RFC 8017 §8.2.2）：m = s^e mod n，与期望 EM 全字节比对。 */
-async function rs256Verify(n, e, signingInputBytes, sigBytes) {
+async function rsVerify(n, e, signingInputBytes, sigBytes, hashNorm) {
   const k = byteLenOf(n);
   if (sigBytes.length !== k) return { valid: false, reason: `签名长度 ${sigBytes.length} ≠ 模长 k=${k}` };
-  const h = await shaBytes("SHA-256", signingInputBytes);
-  const emExpected = emsaPkcs1v15("SHA-256", h, k);
+  const h = await shaBytes(hashNorm, signingInputBytes);
+  const emExpected = emsaPkcs1v15(hashNorm, h, k);
   const m = rsaPow(bytesToBigInt(sigBytes), e, n);
   const emActual = bigIntToBytesN(m, k, "EM");
   return { valid: ctEqual(emExpected, emActual), reason: "EMSA-PKCS1-v1_5 编码比对" };
@@ -143,7 +143,18 @@ async function jwtSignRun(text, p = {}) {
   } catch {
     throw new Error("payload 须为合法 JSON（RFC 7519 §4 claims 对象）");
   }
-  const header = { alg, typ: "JWT" };
+  if (payloadObj && typeof payloadObj === "object" && !Array.isArray(payloadObj) && !Object.prototype.hasOwnProperty.call(payloadObj, "iat")) {
+    payloadObj.iat = Math.floor(Date.now() / 1000);
+  }
+  const header = { alg: alg === "None" ? "none" : alg, typ: "JWT" };
+  if (p.header != null && String(p.header).trim() !== "" && String(p.header).trim() !== "{}") {
+    let extra;
+    try { extra = JSON.parse(String(p.header)); } catch { throw new Error("Header 须为合法 JSON 对象"); }
+    if (!extra || typeof extra !== "object" || Array.isArray(extra)) throw new Error("Header 须为 JSON 对象");
+    Object.assign(header, extra);
+    header.alg = alg === "None" ? "none" : alg;
+    header.typ = "JWT";
+  }
   if (p.kid != null && String(p.kid).trim() !== "") header.kid = String(p.kid).trim();
 
   const headerB64 = b64urlEncodeBytes(te(JSON.stringify(header)));
@@ -157,23 +168,45 @@ async function jwtSignRun(text, p = {}) {
     const secret = String(p.secret == null ? "" : p.secret);
     if (!secret) throw new Error(`HS* 签发需要密钥参数 secret（${alg}）`);
     sigBytes = await hmacShaBytes(alg, te(secret), inputBytes);
-  } else if (alg === "RS256") {
-    const n = parseBigIntAuto(p.rsaN, "rsaN（RSA 模数 n，hex 或十进制）");
-    const d = parseBigIntAuto(p.rsaD, "rsaD（RSA 私钥指数 d）");
+  } else if (alg === "RS256" || alg === "RS384" || alg === "RS512") {
+    let n, d;
+    const pemRaw = String(p.rsaPem == null ? "" : p.rsaPem).trim();
+    if (pemRaw) {
+      const { parseKeyText } = await import("./pemkeys.js");
+      const kk = parseKeyText(pemRaw);
+      if (kk.kty !== "RSA" || kk.d == null) throw new Error("RS* 签发：PEM/JWK 须为 RSA 私钥");
+      n = kk.n; d = kk.d;
+    } else {
+      n = parseBigIntAuto(p.rsaN, "rsaN（RSA 模数 n，hex 或十进制）");
+      d = parseBigIntAuto(p.rsaD, "rsaD（RSA 私钥指数 d）");
+    }
     if (n <= 0xffn) throw new Error("rsaN 非法（过小）");
-    sigBytes = await rs256Sign(n, d, inputBytes);
-  } else if (alg === "ES256") {
-    const c = CURVES.p256;
-    const d = parseBigIntAuto(p.ecPriv, "ecPriv（P-256 私钥标量 d，hex 或十进制）");
-    const { r, s } = await ecdsaSignRaw(c, d, inputBytes, "sha256", "rfc6979");
-    // JOSE 签名格式：raw r||s 各 32 字节大端（RFC 7515/7518 §3.4）
-    const bl = 32;
+    const h = alg === "RS256" ? "SHA-256" : alg === "RS384" ? "SHA-384" : "SHA-512";
+    sigBytes = await rsSign(n, d, inputBytes, h);
+  } else if (alg === "ES256" || alg === "ES384" || alg === "ES512") {
+    const c = alg === "ES256" ? CURVES.p256 : alg === "ES384" ? CURVES.p384 : CURVES.p521;
+    const hashKey = alg === "ES256" ? "sha256" : alg === "ES384" ? "sha384" : "sha512";
+    let d;
+    const ecRaw = String(p.ecPriv == null ? "" : p.ecPriv).trim();
+    if (ecRaw.startsWith("-----BEGIN") || ecRaw.startsWith("{")) {
+      const { parseKeyText } = await import("./pemkeys.js");
+      const kk = parseKeyText(ecRaw);
+      if (kk.kty !== "EC" || kk.d == null) throw new Error("ES* 签发：PEM/JWK 须为 EC 私钥");
+      d = kk.d;
+    } else {
+      d = parseBigIntAuto(p.ecPriv, "ecPriv（EC 私钥标量 d，hex 或十进制）");
+    }
+    const { r, s } = await ecdsaSignRaw(c, d, inputBytes, hashKey, "rfc6979");
+    // JOSE 签名格式：raw r||s 定长大端（RFC 7515/7518 §3.4）
+    const bl = alg === "ES256" ? 32 : alg === "ES384" ? 48 : 66;
     const out = new Uint8Array(bl * 2);
     out.set(bigIntToBytesN(r, bl, "r"), 0);
     out.set(bigIntToBytesN(s, bl, "s"), bl);
     sigBytes = out;
+  } else if (alg === "None") {
+    sigBytes = new Uint8Array(0);
   } else {
-    throw new Error(`不支持的 alg: ${alg}（本工具支持 HS256/HS384/HS512/RS256/ES256）`);
+    throw new Error(`不支持的 alg: ${alg}（本工具支持 HS256/384/512、RS256/384/512、ES256/384/512、None）`);
   }
 
   const jwt = `${signingInput}.${b64urlEncodeBytes(sigBytes)}`;
@@ -183,7 +216,7 @@ async function jwtSignRun(text, p = {}) {
   L.push(`  b64url = ${headerB64}`);
   L.push(`payload = ${JSON.stringify(payloadObj)}`);
   L.push(`  b64url = ${payloadB64}`);
-  if (alg === "ES256") L.push(`k 模式: RFC 6979 确定 k（签名可复现）`);
+  if (alg.startsWith("ES")) L.push(`k 模式: RFC 6979 确定 k（签名可复现）`);
   L.push("");
   L.push(`签名 (hex, ${sigBytes.length} B) = ${bytesToHex(sigBytes)}`);
   L.push("");
@@ -273,24 +306,46 @@ async function jwtVerifyRun(text, p = {}) {
       const expect = await hmacShaBytes(alg, te(secret), signingInputBytes);
       ok = ctEqual(expect, sigBytes);
       detail = `重算 HMAC = ${bytesToHex(expect)} / 签名段 = ${bytesToHex(sigBytes)}`;
-    } else if (alg === "RS256") {
-      const n = parseBigIntAuto(p.rsaN, "rsaN（RSA 模数 n）");
-      const e = parseBigIntAuto(p.rsaE == null || p.rsaE === "" ? "65537" : p.rsaE, "rsaE");
-      const v = await rs256Verify(n, e, signingInputBytes, sigBytes);
+    } else if (alg === "RS256" || alg === "RS384" || alg === "RS512") {
+      let n, e;
+      const pemRaw = String(p.rsaPem == null ? "" : p.rsaPem).trim();
+      if (pemRaw) {
+        const { parseKeyText } = await import("./pemkeys.js");
+        const kk = parseKeyText(pemRaw);
+        if (kk.kty !== "RSA" || kk.n == null || kk.e == null) throw new Error("RS* 验签：PEM/JWK 须为 RSA 公钥");
+        n = kk.n; e = kk.e;
+      } else {
+        n = parseBigIntAuto(p.rsaN, "rsaN（RSA 模数 n）");
+        e = parseBigIntAuto(p.rsaE == null || p.rsaE === "" ? "65537" : p.rsaE, "rsaE");
+      }
+      const h = alg === "RS256" ? "SHA-256" : alg === "RS384" ? "SHA-384" : "SHA-512";
+      const v = await rsVerify(n, e, signingInputBytes, sigBytes, h);
       ok = v.valid;
       detail = v.valid === false && v.reason ? v.reason : "EMSA-PKCS1-v1_5 全字节比对（RFC 8017 §8.2.2）";
-    } else if (alg === "ES256") {
-      const c = CURVES.p256;
-      if (sigBytes.length !== 64) throw new Error(`ES256 签名须为 64 字节（r||s 各 32，RFC 7518 §3.4），当前 ${sigBytes.length}`);
-      const Q = parsePoint(p.ecPub, c, "ecPub（P-256 公钥点，04||X||Y hex 或压缩 hex）");
+    } else if (alg === "ES256" || alg === "ES384" || alg === "ES512") {
+      const c = alg === "ES256" ? CURVES.p256 : alg === "ES384" ? CURVES.p384 : CURVES.p521;
+      const bl = alg === "ES256" ? 32 : alg === "ES384" ? 48 : 66;
+      const hashNorm = alg === "ES256" ? "SHA-256" : alg === "ES384" ? "SHA-384" : "SHA-512";
+      const hashKey = alg === "ES256" ? "sha256" : alg === "ES384" ? "sha384" : "sha512";
+      if (sigBytes.length !== bl * 2) throw new Error(`${alg} 签名须为 ${bl * 2} 字节（r||s 各 ${bl}，RFC 7518 §3.4），当前 ${sigBytes.length}`);
+      let Q;
+      const pubRaw = String(p.ecPub == null ? "" : p.ecPub).trim();
+      if (pubRaw.startsWith("-----BEGIN") || pubRaw.startsWith("{")) {
+        const { parseKeyText } = await import("./pemkeys.js");
+        const kk = parseKeyText(pubRaw);
+        if (kk.kty !== "EC" || kk.x == null || kk.y == null) throw new Error(`${alg} 验签：PEM/JWK 须含 EC 公钥坐标`);
+        Q = [kk.x, kk.y];
+      } else {
+        Q = parsePoint(p.ecPub, c, `ecPub（${alg} 公钥点，04||X||Y hex 或压缩 hex）`);
+      }
       if (!Q) throw new Error("公钥不能为无穷远点");
-      const r = bytesToBigInt(sigBytes.subarray(0, 32));
-      const s = bytesToBigInt(sigBytes.subarray(32, 64));
-      const h1 = await shaBytes("SHA-256", signingInputBytes);
+      const r = bytesToBigInt(sigBytes.subarray(0, bl));
+      const s = bytesToBigInt(sigBytes.subarray(bl, bl * 2));
+      const h1 = await shaBytes(hashNorm, signingInputBytes);
       const e = hashToE(h1, c);
       const v = ecdsaVerifyRaw(c, Q, r, s, e);
       ok = v.valid;
-      detail = v.valid === false && v.reason ? v.reason : "ECDSA P-256 验签（FIPS 186-4）通过";
+      detail = v.valid === false && v.reason ? v.reason : `ECDSA ${alg} 验签（FIPS 186-4）通过`;
     } else {
       L.push(`✗ 不支持的 alg: ${alg || "(header 缺 alg)"}`);
       L.push("结论: 不合法（算法不支持）");
@@ -318,12 +373,13 @@ register({
   id: "jwtSign", family: "jwt", familyLabel: "sign",
   cat: "modern",
   name: "JWT 签发",
-  desc: "JWT 签发（HS256/384/512 + RS256 + ES256，RFC 7519/7518）",
+  desc: "JWT 签发（HS256/384/512 + RS256/384/512 + ES256/384/512 + None，RFC 7519/7518）",
   params: [
-    { key: "alg", label: "算法 alg", type: "select", default: "HS256", options: ["HS256", "HS384", "HS512", "RS256", "ES256"] },
+    { key: "alg", label: "算法 alg", type: "select", default: "HS256", options: ["HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "None"] },
     { sensitive: true, key: "secret", label: "HMAC 密钥 secret（HS* 用，text）", type: "text", default: "", placeholder: "HS256/384/512 必填" },
-    { key: "rsaN", label: "RSA 模数 n（RS256 用，hex 或十进制）", type: "text", default: "", placeholder: "RS256 必填" },
-    { sensitive: true, key: "rsaD", label: "RSA 私钥指数 d（RS256 用）", type: "text", default: "", placeholder: "RS256 必填" },
+    { key: "rsaPem", label: "RSA 私钥 PEM/JWK（RS* 用，可选；优先于 n/d）", type: "textarea", default: "", placeholder: "-----BEGIN PRIVATE KEY-----" },
+    { key: "rsaN", label: "RSA 模数 n（RS* 用，hex 或十进制）", type: "text", default: "", placeholder: "RS256 必填" },
+    { sensitive: true, key: "rsaD", label: "RSA 私钥指数 d（RS* 用）", type: "text", default: "", placeholder: "RS256 必填" },
     { sensitive: true, key: "ecPriv", label: "P-256 私钥 d（ES256 用，hex 或十进制）", type: "text", default: "", placeholder: "ES256 必填" },
     { key: "kid", label: "key id（可选，写入 header）", type: "text", default: "" },
   ],
@@ -334,12 +390,13 @@ register({
   id: "jwtVerify", family: "jwt", familyLabel: "verify",
   cat: "modern",
   name: "JWT 验签",
-  desc: "JWT 三段解析 + 重算签名比对（HS*/RS256/ES256），指出不匹配段",
+  desc: "JWT 三段解析 + 重算签名比对（HS*/RS*/ES* + none），指出不匹配段",
   params: [
     { sensitive: true, key: "secret", label: "HMAC 密钥 secret（HS* 用）", type: "text", default: "" },
-    { key: "rsaN", label: "RSA 模数 n（RS256 用）", type: "text", default: "" },
+    { key: "rsaPem", label: "RSA 公钥 PEM/JWK（RS* 用，可选；优先于 n/e）", type: "textarea", default: "" },
+    { key: "rsaN", label: "RSA 模数 n（RS* 用）", type: "text", default: "" },
     { key: "rsaE", label: "RSA 公钥指数 e（RS256 用，默认 65537）", type: "text", default: "65537" },
-    { key: "ecPub", label: "P-256 公钥（ES256 用，04||X||Y hex）", type: "text", default: "" },
+    { key: "ecPub", label: "EC 公钥（ES* 用，04||X||Y hex / PEM / JWK）", type: "text", default: "" },
   ],
   run: jwtVerifyRun,
 });
