@@ -16,7 +16,9 @@
  */
 export const LAYOUT_FORMAT = "CIL1";
 export const LAYOUT_VERSION = 1;
-export const LAYOUT_URL = new URL("../../public/data/codeimage/codeImageLayout.bin", import.meta.url);
+// 资产 URL 带版本查询：Chromium 对「.bin + force-cache」会按下载处理返回 204/0B，
+// 且会把空响应回填进 SW 缓存；带 query 可同时绕开浏览器 HTTP 缓存与旧 SW 缓存里的毒化条目。
+export const LAYOUT_URL = new URL("../../public/data/codeimage/codeImageLayout.bin?v=1", import.meta.url);
 
 const SLOT_FIELDS = Object.freeze(["slot", "row", "col", "x0", "y0", "x1", "y1", "bestD", "aspect"]);
 const SLOT_BYTES = SLOT_FIELDS.length * 2;
@@ -111,8 +113,9 @@ export function loadCodeImageLayout(opts = {}) {
   if (!fetchImpl) return Promise.resolve(null);
   const url = opts.url || LAYOUT_URL;
   _layoutPromise = Promise.resolve()
-    .then(() => fetchImpl(url, { cache: opts.cache || "force-cache" }))
-    .then((res) => (res && res.ok !== false ? res.arrayBuffer() : null))
+    // 不能 force-cache：Chromium 对 .bin + force-cache 会当下载处理，返回 204/0B。
+    .then(() => fetchImpl(url, { cache: opts.cache || "default" }))
+    .then((res) => (res && res.ok !== false && res.status !== 204 ? res.arrayBuffer() : null))
     .then((buf) => (buf ? decodeLayoutAsset(buf) : null))
     .catch(() => null);
   return _layoutPromise;

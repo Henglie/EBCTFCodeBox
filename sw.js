@@ -1,4 +1,4 @@
-// BUILD-STAMP: 820c519d54a0258a
+// BUILD-STAMP: 4c4bad0f04f64122
 importScripts("./sw-assets.js", "./sw-packs.js");
 
 // The asset generator synchronizes BUILD-STAMP with the resource revision.
@@ -395,11 +395,13 @@ self.addEventListener("fetch", (event) => {
   const siteRel = url.pathname.startsWith(SCOPE_DIR + "/") ? url.pathname.slice(SCOPE_DIR.length) : url.pathname;
   event.respondWith((async () => {
     const cached = await caches.match(request);
-    if (cached) return cached;
+    // 204/空响应是 Chromium 对 .bin + force-cache 的下载处理产物，不能当真值返回，
+    // 否则一次毒化会让该按需资产在线/离线永久空缓存。
+    if (cached && cached.status !== 204) return cached;
     const fillable = ASSET_SET.has(`.${siteRel}`) || isRuntimeCacheFirst(siteRel);
     try {
       const response = await fetch(request);
-      if (response.ok && fillable) {
+      if (response.ok && response.status !== 204 && fillable) {
         const cache = await caches.open(CACHE_NAME);
         cache.put(request, response.clone()).catch(() => {});
       }
