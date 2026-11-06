@@ -47,13 +47,13 @@
 | Baidu Netdisk | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
 | Quark | https://pan.quark.cn/s/3b7e573b19c0 | none |
 
-Current version **v0.1.14**. The source of truth is always the GitHub repository: [github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox).
+Current version **v0.1.15** (in development). The source of truth is always the GitHub repository: [github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox).
 
 ## Changelog
 
-## v0.1.14 (2026-11-06)
+## v0.1.15 (in development)
 
-> This release: new structured outbound encoders, text utilities, EN/ZH OCR and code-image recognition upgrades; the extension panel is rebuilt with batch offline-pack management; sensitive params are masked by default, heavy ops run explicitly, passphrases and private keys can be hidden; BOM toolbar state and modal route cleanup are fixed; main ops reach 961 and six core locales align at 3001 keys.
+> In development: source-comment cleanup and next-version gap work. v0.1.14 is complete but unpublished; see [CHANGELOG.md](./CHANGELOG.md) for the full changes.
 
 ## v0.1.13-beta
 

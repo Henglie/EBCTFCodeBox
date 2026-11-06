@@ -47,13 +47,13 @@
 | 百度网盘 | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
 | 夸克网盘 | https://pan.quark.cn/s/3b7e573b19c0 | 无 |
 
-当前版本 **v0.1.14**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
+当前版本 **v0.1.15**（开发中）。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
 
 ## 更新日志
 
-## v0.1.14（2026-11-06）
+## v0.1.15（开发中）
 
-> 本版主要变化：新增结构化出站编码、文本处理工具组、中英文 OCR 与编码图识图升级；扩展面板重构并支持离线包批量管理；敏感参数默认遮罩、重运算显式运行、口令与私钥可隐藏；BOM 工具条状态与弹窗切路由修复；主 op 增至 961，六门文案 3001 键。
+> 开发中：源码注释清理与下一版缺口推进。0.1.14 更新已结束、未发布，完整变更见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## v0.1.13-beta
 
