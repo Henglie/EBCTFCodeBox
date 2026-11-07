@@ -5,6 +5,25 @@
  * Keep keys in sync with en.js.
  */
 export default {
+  "ui.allops.collapseAll": "모두 접기",
+  "ui.allops.expandAll": "모두 펼치기",
+  "ui.ci.zoomIn": "확대",
+  "ui.ci.zoomOut": "축소",
+  "ui.ci.zoomReset": "확대 비율과 위치 초기화",
+  "ui.env.motionSpeed": "애니메이션 속도",
+  "ui.env.motionFast": "빠르게",
+  "ui.env.motionStandard": "표준",
+  "ui.env.motionRelaxed": "여유롭게",
+  "ui.home.localBadge": "로컬 작업 공간 · 외부 전송 없음",
+  "ui.home.inputLabel": "디코딩할 내용",
+  "ui.home.inputHint": "텍스트를 붙여넣거나 파일을 놓으세요. 모든 처리는 기기에서 이루어집니다.",
+  "ui.home.keyboardHint": "Enter: 디코딩 · Shift + Enter: 줄 바꿈 · Ctrl / ⌘ + K: 연산 검색",
+  "ui.home.toolsLabel": "다른 작업 도구",
+  "ui.home.browseHint": "카테고리별 탐색 및 검색",
+  "ui.home.recipeHint": "여러 인코딩·디코딩 단계 연결",
+  "ui.home.inspectHint": "바이트와 문자 자세히 보기",
+  "ui.home.convertHint": "진법 및 단위 변환",
+  "ui.topbar.more": "추가 작업",
  // ---- categories ----
   "cat.home": "홈 · 자동 디코딩",
   "cat.base": "Base 계열",

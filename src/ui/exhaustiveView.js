@@ -72,6 +72,12 @@ const eState = {
 
 let _seq = 0; // 防竞态：慢结果回来若非最新则丢弃
 
+export function clearExhaustiveIO() {
+  _seq++; eState.input = "";
+  document.querySelector(".exhaust-out")?.replaceChildren();
+  document.querySelector(".exhaust-stat")?.replaceChildren();
+}
+
 export function renderExhaustive(container) {
   container.innerHTML = "";
   const wrap = el("div", { class: "exhaust-view" });

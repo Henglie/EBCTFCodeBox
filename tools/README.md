@@ -11,6 +11,13 @@ fork 后想复现构建、自己打包发行，看这里。日常开发用不到
 | `subset_fonts.py` | 把天珩全字库 TTF 切成按 Unicode 区块的 woff2 分片（`public/fonts/`） | 只在换字库时跑。需 Python 3 + `pip install fonttools brotli`，源 TTF 自备（官网 cheonhyeong.com） |
 | `build_bkcrack.md` / `.sh` | bkcrack WASM 版的构建记录与脚本（上游 wasm 分支 + emscripten） | 只在升级 bkcrack 时看 / 跑 |
 | `pack_release.mjs` | 发行包打包与校验（见下） | 发版时 |
+| `ui_smoke.mjs` | 真实浏览器跨尺寸、控件、对比度及可选 PWA 验证 | 界面改动；参数与 Playwright 准备见 [开发指南](../CONTRIBUTING.md) |
+| `motion_check.mjs` | 确定性验证弹簧、低帧率与动效偏好 | 修改动效内核或节奏配置后 |
+| `io_mode_check.mjs` | 输入模式推导与全部字节消费端输入目标检查 | 修改注册表 / 输入区显示逻辑后 |
+| `ui_followup.mjs` | 三引擎定向验证输入框、BOM 诊断清理及代码编辑器桌面 / 手机布局 | 输入与编辑器回归复验 |
+| `workbench_check.mjs` | 可调三分区、窄屏、多字段、PCAP 文件输入、交换与报告；`--editor-only` 检查换行/粘贴/撤销 | 操作台与编辑器变更后；`--self-test` 检查纯 Node 夹具 |
+| `corners_check.mjs` | 连续曲率几何与真实像素、下拉外壳、焦点和阴影；`--app-perf` 检查千卡页面 | 形状绘制变更后，分别检查 Chromium / Firefox / WebKit |
+| `drafts_check.mjs` | 切页/刷新草稿、文件字节、多字段、图像恢复、跨标签清空与完整重置 | 草稿持久化、清空和启动路由修改后，使用隔离浏览器上下文 |
 
 ## gen_sw_assets 的双处同步（坑）
 

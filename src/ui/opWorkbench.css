@@ -1,0 +1,128 @@
+/* Only the operation controls/data row is divided. Education remains a sibling. */
+.op-workbench { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; align-items: start; }
+.op-config, .op-data { min-width: 0; }
+.op-config .param { min-width: 0; max-width: 100%; }
+.op-config .param > :is(input, select, .stepper, .exp-wrap, .param-bigbox) { min-width: 0; max-width: 100%; }
+.op-config .param > label:not(.switch) { white-space: normal; overflow-wrap: anywhere; }
+.op-splitter { display: none; }
+.op-workbench[data-layout="split"] {
+  grid-template-columns: minmax(0, var(--op-config-fr, 1fr)) 24px minmax(0, var(--op-data-fr, 1fr));
+}
+.op-workbench[data-layout="split"] > .op-config {
+  max-height: max(340px, calc(100dvh - 116px)); overflow: auto;
+  padding: 8px 12px 12px 0; scrollbar-width: thin; scrollbar-gutter: stable;
+}
+.op-workbench[data-layout="split"] .op-head { text-align: center; margin-bottom: 18px; }
+.op-workbench[data-layout="split"] .op-title {
+  position: relative; justify-content: center; flex-wrap: wrap; gap: 8px;
+  padding-inline: 36px; font-size: clamp(28px, 2.5vw, 40px); overflow-wrap: anywhere;
+}
+.op-workbench[data-layout="split"] .fav-btn {
+  position: absolute; inset-inline-end: 0; top: 0; margin: 0;
+  width: 32px; min-width: 32px; max-width: 32px; height: 32px; min-height: 32px; max-height: 32px;
+}
+.op-workbench[data-layout="split"] .fav-btn .msym { font-size: 23px; }
+.op-workbench[data-layout="split"] .op-desc { font-size: var(--fs-sm); text-align: start; margin-inline: auto; }
+.op-workbench[data-layout="split"] .op-params {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, max(180px, calc((100% - 32px) / 3))), 1fr));
+  gap: 12px 16px; align-items: start;
+}
+.op-workbench[data-layout="split"] .param { flex-wrap: wrap; width: 100%; min-width: 0; gap: 5px 8px; font-size: var(--fs-sm); }
+.op-workbench[data-layout="split"] .param-big,
+.op-workbench[data-layout="split"] .param:has(> .param-bigbox, > .exp-wrap) { grid-column: 1 / -1; }
+.op-workbench[data-layout="split"] .param > label:not(.switch) { flex-basis: 100%; white-space: normal; overflow-wrap: anywhere; }
+.op-workbench[data-layout="split"] .param:has(> .switch) { flex-wrap: nowrap; }
+.op-workbench[data-layout="split"] .param:has(> .switch) > label:not(.switch) { flex: 1; }
+.op-workbench[data-layout="split"] .param > :is(input, select, .stepper, .exp-wrap, .param-bigbox) { width: 100%; min-width: 0; }
+.op-workbench[data-layout="split"] .dir-seg { margin-bottom: 16px; }
+.op-workbench[data-layout="split"] #dirSeg { width: fit-content; margin-inline: auto; }
+.op-workbench[data-layout="split"] #dirSeg > button { flex: 0 0 auto; }
+.op-workbench[data-layout="split"] .ci-group { flex-wrap: wrap; gap: 10px; }
+.op-workbench[data-layout="split"] .ci-toggle-row { min-width: 0; }
+.op-workbench[data-layout="split"] .ci-toggle-label { white-space: normal; }
+.op-workbench[data-layout="split"] .ci-seg { min-width: 0; }
+.op-workbench[data-layout="split"] .ci-seg:last-child { margin-inline-start: auto; }
+.op-workbench[data-layout="split"] > .op-splitter {
+  display: block; position: relative; align-self: stretch; min-height: 100%;
+  cursor: col-resize; touch-action: none; user-select: none; border-radius: var(--r-full);
+  outline-offset: -3px;
+}
+.op-splitter::before {
+  content: ""; position: absolute; inset-block: 8px 14px; inset-inline-start: calc(50% - 1px);
+  width: 2px; border-radius: var(--r-full); background: var(--outline-var);
+  transition: background var(--dur-short) var(--ease);
+}
+.op-splitter::after {
+  content: ""; position: absolute; bottom: 6px; inset-inline-start: calc(50% - 5px);
+  width: 10px; height: 10px; border-radius: 50%; corner-shape: round; background: var(--outline-var);
+}
+.op-splitter:hover::before, .op-splitter:focus-visible::before,
+.is-resizing > .op-splitter::before { background: var(--primary); width: 4px; inset-inline-start: calc(50% - 2px); }
+.op-splitter:hover::after, .op-splitter:focus-visible::after,
+.is-resizing > .op-splitter::after { background: var(--primary); }
+.op-splitter:focus-visible { outline: none; }
+.op-splitter:focus-visible::after { box-shadow: 0 0 0 4px var(--focus-ring); }
+.is-resizing, .is-resizing * { cursor: col-resize !important; user-select: none !important; }
+.op-workbench[data-layout="split"] > .op-data { padding-inline-start: 12px; }
+.op-data .io { gap: 8px; }
+.op-data .io-editor-frame { position: relative; min-width: 0; }
+.op-data .io-editor-frame > .io-pane-head {
+  position: absolute; z-index: 2; top: 6px; inset-inline: 8px;
+  height: 30px; min-height: 30px; padding: 0; gap: 6px; flex-wrap: nowrap;
+  pointer-events: none;
+}
+.op-data .io-pane-tools { flex-wrap: nowrap; justify-content: flex-end; gap: 0; pointer-events: auto; }
+.op-data .io-pane-tools > .tool-btn, .op-data .io-tools-more > summary { width: 30px; height: 30px; min-width: 30px; min-height: 30px; }
+.op-data .io-pane-tools, .op-data .io-pane-title { background: var(--surface); border-radius: var(--r-sm); }
+.op-data .io-pane-output .io-pane-tools, .op-data .io-pane-output .io-pane-title { background: var(--surface-2); }
+.op-data .io-pane-title { flex: none; font-size: 12px; padding-inline: 4px; }
+.op-data .io-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; padding-block: 2px; }
+.op-data .io-actions > .primary { grid-column: 2; grid-row: 1; min-width: 112px; justify-content: center; }
+.op-data .io-actions > .io-swap { grid-column: 1; grid-row: 1; justify-self: end; }
+.op-data .io-actions > .io-chain { grid-column: 3; grid-row: 1; justify-self: start; }
+.op-data .io-actions > :is(.io-swap, .io-chain) { width: 44px; padding: 0; justify-content: center; }
+.op-data .io-report-footer { display: flex; justify-content: center; padding-top: 8px; }
+.op-data .io-report { min-height: 40px; padding: 8px 20px; background: var(--surface-3); border: 1px solid var(--outline-var); }
+.op-data .io-area { height: clamp(104px, calc((100dvh - 440px) / 2), 240px); padding-top: 44px; }
+.op-data .io-coding-bar { padding: 2px 0; }
+.op-data .io-coding-mount[hidden] { display: none; }
+.op-data .io-input-body > .io-none-hint { min-height: 88px; padding-top: 44px; }
+.op-data .io-input-body > .io-fields { padding-top: 40px; }
+.op-data .io-fields .io-area { padding-top: 12px; }
+.op-data .io-fields { flex-wrap: wrap; }
+.op-data .io-field { flex-basis: 220px; }
+.op-data .io-out-media { max-width: 100%; overflow-wrap: anywhere; }
+.op-workbench + .edu-card { margin-top: 28px; }
+.io-tools-more { position: relative; }
+.io-tools-more > summary { display: inline-flex; align-items: center; justify-content: center; list-style: none; cursor: pointer; }
+.io-tools-more > summary::-webkit-details-marker { display: none; }
+.io-tools-extra {
+  display: flex; position: absolute; inset-inline-end: 0; top: calc(100% + 6px);
+  width: max-content; max-width: 260px; padding: 6px; gap: 2px;
+  background: var(--surface-3); border-radius: var(--r-md); box-shadow: var(--el-2);
+}
+.io-tools-more:not([open]) > .io-tools-extra { display: none; }
+.env-layout-setting { padding-block: 12px; }
+.env-layout-seg { flex-wrap: wrap; max-width: 100%; }
+.env-layout-seg > button { white-space: normal; }
+@media (pointer: coarse) {
+  .op-workbench[data-layout="split"] { grid-template-columns: minmax(0, var(--op-config-fr, 1fr)) 44px minmax(0, var(--op-data-fr, 1fr)); }
+  .op-workbench[data-layout="split"] .fav-btn { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
+  .op-data .io-editor-frame > .io-pane-head { height: 44px; }
+  .op-data .io-pane-tools > .tool-btn, .op-data .io-tools-more > summary { width: 38px; min-width: 38px; min-height: 44px; }
+  .op-data .io-area { padding-top: 56px; }
+}
+@media (max-width: 600px) {
+  .op-config .param { flex-wrap: wrap; }
+  .op-config .param > label:not(.switch) { flex-basis: 100%; }
+  .op-config .param:has(> .switch) { flex-wrap: nowrap; }
+  .op-config .param:has(> .switch) > label:not(.switch) { flex: 1; }
+  .op-workbench[data-layout="stack"] .op-data .io-area { height: 160px; }
+  .op-data .io-pane-tools { gap: 0; }
+  .op-data .io-actions { gap: 8px; }
+  .op-data .io-actions > .primary { min-width: 116px; }
+}
+@media (forced-colors: active) {
+  .op-splitter::before, .op-splitter::after { background: CanvasText; }
+  .op-splitter:focus-visible { outline: 2px solid Highlight; }
+}

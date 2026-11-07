@@ -11,6 +11,25 @@
  * - Les gabarits {0}/{1}… sont conservés à l'identique.
  */
 export default {
+  "ui.allops.collapseAll": "Tout replier",
+  "ui.allops.expandAll": "Tout déplier",
+  "ui.ci.zoomIn": "Agrandir",
+  "ui.ci.zoomOut": "Réduire",
+  "ui.ci.zoomReset": "Réinitialiser le zoom et la position",
+  "ui.env.motionSpeed": "Rythme des animations",
+  "ui.env.motionFast": "Rapide",
+  "ui.env.motionStandard": "Standard",
+  "ui.env.motionRelaxed": "Détendu",
+  "ui.home.localBadge": "Espace local · Aucun envoi",
+  "ui.home.inputLabel": "Contenu à décoder",
+  "ui.home.inputHint": "Collez du texte ou déposez un fichier. Le traitement reste sur votre appareil.",
+  "ui.home.keyboardHint": "Entrée : décoder · Maj + Entrée : nouvelle ligne · Ctrl / ⌘ + K : rechercher une opération",
+  "ui.home.toolsLabel": "Autres outils",
+  "ui.home.browseHint": "Explorer et rechercher par catégorie",
+  "ui.home.recipeHint": "Enchaîner encodages et décodages",
+  "ui.home.inspectHint": "Examiner les octets et les caractères",
+  "ui.home.convertHint": "Convertir bases et unités",
+  "ui.topbar.more": "Autres actions",
  // ---- categories ----
   "cat.home": "Accueil · Décodage Auto",
   "cat.base": "Famille Base",

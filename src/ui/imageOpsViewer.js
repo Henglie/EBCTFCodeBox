@@ -11,6 +11,7 @@
 
 import { icon as iconSvg } from "./icons.js";
 import { attachModalLifecycle } from "./modalLifecycle.js";
+import { syncRange } from "./sharedControls.js";
 import {
   isImageLike,
   createHistory,
@@ -404,14 +405,7 @@ export function openImageOpsViewer(source, opts = {}) {
       "aria-label": label,
     });
     const out = el("output", { class: "imgops-range-value", text: "0" });
-    const syncFill = () => {
-      const min = Number(input.min) || -100;
-      const max = Number(input.max) || 100;
-      const val = Number(input.value) || 0;
-      const pct = max > min ? ((val - min) / (max - min)) * 100 : 50;
-      input.style.setProperty("--range-fill", pct + "%");
-    };
-    input.addEventListener("input", syncFill);
+    const syncFill = () => syncRange(input);
     syncFill();
     return {
       input,

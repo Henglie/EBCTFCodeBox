@@ -261,6 +261,8 @@ export function openDecodeStrength(opt = {}) {
       const lv = work.level;
       levelName.textContent = t("ui.ds.level." + lv);
       levelHint.textContent = t("ui.ds.hint." + lv);
+      slider.setAttribute("aria-valuetext", t("ui.ds.level." + lv));
+      Array.from(ticks.children).forEach((tick, index) => tick.classList.toggle("active", index === Number(slider.value)));
       syncCountLine();
     };
 

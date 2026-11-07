@@ -23,7 +23,7 @@
  */
 
 import {
-  CHARSETS, VIEWS, BIT_ORDERS, detectBom, sniffCharset, decodeText, encodeText,
+  CHARSETS, VIEWS, BIT_ORDERS, detectBom, decodeText, encodeText,
   bytesToView, viewToBytes, normalizeCharset, normalizeBitOrder,
 } from "../core/ioCoding.js";
 
@@ -32,7 +32,7 @@ const BOM_LABELS = new Set(CHARSETS.filter((c) => c.bom).map((c) => c.label));
 const FALLBACK = {
   "ui.io.charset": "字符集",
   "ui.io.charsetAuto": "自动识别",
-  "ui.io.charsetAutoHint": "按 BOM 与字节结构猜测，结果会标注置信度",
+  "ui.io.charsetAutoHint": "自动选择字符集，也可手动指定",
   "ui.io.view": "视图",
   "ui.io.view.text": "文本",
   "ui.io.view.hex": "十六进制",
@@ -230,7 +230,7 @@ function ensureStyles() {
   padding: var(--sp-1) 2px var(--sp-2); min-width: 0;
   font-size: var(--fs-sm); color: var(--on-surface-var);
 }
-.io-coding-field { display: inline-flex; align-items: center; gap: var(--sp-1); min-width: 0; }
+.io-coding-field { display: inline-flex; align-items: center; gap: var(--sp-1); min-width: 0; max-width: 100%; }
 .io-coding-field[hidden] { display: none; }
 .io-coding-label { white-space: nowrap; font-size: var(--fs-xs); color: var(--on-surface-var); }
 .io-coding-select {
@@ -242,13 +242,15 @@ function ensureStyles() {
 .io-coding-select:focus { outline: 2px solid var(--primary); border-color: transparent; }
 .io-coding-seg {
   display: inline-flex; background: var(--surface-2);
-  border-radius: var(--r-full); padding: 2px; max-width: 100%; overflow-x: auto;
+  border-radius: var(--r-full); padding: 2px; min-width: 0; max-width: 100%; overflow-x: auto;
 }
 .io-coding-seg button {
+  flex-shrink: 0;
   height: 26px; padding: 0 var(--sp-2); border-radius: var(--r-full);
   font-size: var(--fs-xs); color: var(--on-surface-var); white-space: nowrap;
 }
 .io-coding-seg button.on { background: var(--primary); color: var(--on-primary); font-weight: 600; }
+.io-coding-seg.m3-segmented { flex-shrink: 1; }
 .io-coding-bom {
   display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
   font-size: var(--fs-xs); cursor: pointer; user-select: none;
@@ -484,13 +486,15 @@ export function attachIoCodingToolbar(area, opts = {}) {
   }
 
   function reportWarnings(warnings) {
-    if (!warnings || !warnings.length) {
+    const visible = (warnings || []).filter(message => !/^按\s+.+?\s+猜测解码/.test(String(message)));
+    if (!visible.length) {
       setStatus("", "info");
+      status.title = "";
       return;
     }
-    const text = warnings.join(" ");
+    const text = visible.join(" ");
     setStatus(text, "warn");
-    status.title = warnings.join("\n");
+    status.title = visible.join("\n");
   }
 
   function showError(err) {
@@ -560,11 +564,9 @@ export function attachIoCodingToolbar(area, opts = {}) {
         setStatus(t("ui.io.bomDetected", bomHit.charset, bomHit.bomLen), "info");
         return;
       }
-      const sn = sniffCharset(bytes);
-      const top = sn.candidates.find((c) => c.charset === sn.best) || sn.candidates[0];
-      const conf = top ? Number(top.confidence).toFixed(3) : "0.000";
-      setStatus(t("ui.io.sniffed", sn.best, conf) + " · " + t("ui.io.sniffNote"), "warn");
-      status.title = top ? top.reason : status.textContent;
+      // Guessed-charset diagnostics do not belong beside the BOM control.
+      setStatus("", "info");
+      status.title = "";
     } catch (e) {
       showError(e);
     }

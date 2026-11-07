@@ -3,6 +3,25 @@
  * 807 keys, машинный перевод. Fallback: ru → zh → key.
  */
 export default {
+  "ui.allops.collapseAll": "Свернуть всё",
+  "ui.allops.expandAll": "Развернуть всё",
+  "ui.ci.zoomIn": "Увеличить",
+  "ui.ci.zoomOut": "Уменьшить",
+  "ui.ci.zoomReset": "Сбросить масштаб и положение",
+  "ui.env.motionSpeed": "Темп анимации",
+  "ui.env.motionFast": "Быстрый",
+  "ui.env.motionStandard": "Стандартный",
+  "ui.env.motionRelaxed": "Плавный",
+  "ui.home.localBadge": "Локальная среда · Без отправки данных",
+  "ui.home.inputLabel": "Данные для декодирования",
+  "ui.home.inputHint": "Вставьте текст или перетащите файл. Обработка выполняется на вашем устройстве.",
+  "ui.home.keyboardHint": "Enter: декодировать · Shift + Enter: новая строка · Ctrl / ⌘ + K: поиск операции",
+  "ui.home.toolsLabel": "Другие инструменты",
+  "ui.home.browseHint": "Обзор и поиск по категориям",
+  "ui.home.recipeHint": "Цепочки кодирования и декодирования",
+  "ui.home.inspectHint": "Просмотр байтов и символов",
+  "ui.home.convertHint": "Перевод систем счисления и единиц",
+  "ui.topbar.more": "Другие действия",
  // ---- categories ----
   "cat.home": "Главная · Авто-декод",
   "cat.base": "Семейство Base",

@@ -226,6 +226,24 @@ const S = {
 };
 
 const MOD = () => 1n << BigInt(S.width);
+let ioEpoch = 0;
+
+export function getQuickConvDraft() { return { ...S, value: S.value.toString(), rva: { ...S.rva }, date: { ...S.date }, asm: { ...S.asm } }; }
+export function restoreQuickConvDraft(saved) {
+  if (!saved || typeof saved.value !== "string") return;
+  try {
+    const value = BigInt(saved.value);
+    for (const key of Object.keys(S)) if (key in saved && key !== "value") S[key] = saved[key];
+    S.value = value;
+  } catch { /* Ignore damaged drafts. */ }
+}
+export function clearQuickConvIO() {
+  ioEpoch++; clearTimeout(_asmTimer);
+  S.value = 0n; S.expr = ""; S.rva = { base: "", off: "", va: "" };
+  S.unitQty = ""; S.money = ""; S.date = { from: "", to: "", base: "", n: "", wd: "" };
+  S.asm.input = ""; S.asm.lastOut = ""; S.asm.lastErr = false;
+  document.querySelector(".qc-asm-out")?.replaceChildren();
+}
 const MASK = () => MOD() - 1n;
 function toSigned(v) {
   const m = MOD();
@@ -975,6 +993,7 @@ function scheduleAsmRun() {
 }
 
 async function runAsmPanel() {
+  const epoch = ioEpoch;
   const A = S.asm;
   const outPre = $panel.querySelector(".qc-asm-out");
   if (!outPre) return;
@@ -985,11 +1004,13 @@ async function runAsmPanel() {
     const r = A.dir === "asm"
       ? await asmAssembleRun({ text: A.input, params: { arch: A.arch, syntax: A.syntax, base: A.base } })
       : await asmDisasmRun({ text: A.input, params: { arch: A.arch, enc: A.enc, syntax: A.syntax, base: A.base } });
+    if (epoch !== ioEpoch || !outPre.isConnected) return;
     A.lastOut = String(r);
     A.lastErr = false;
     outPre.textContent = A.lastOut;
     outPre.style.color = "";
   } catch (e) {
+    if (epoch !== ioEpoch || !outPre.isConnected) return;
     A.lastErr = true;
     outPre.textContent = "✗ " + (e && e.message ? e.message : String(e));
     outPre.style.color = "var(--error,#ff8a80)";

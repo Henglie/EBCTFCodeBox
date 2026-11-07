@@ -5,6 +5,25 @@
  * キーは en.js / zh.js と同期を保つこと。
  */
 export default {
+  "ui.allops.collapseAll": "すべて折りたたむ",
+  "ui.allops.expandAll": "すべて展開",
+  "ui.ci.zoomIn": "拡大",
+  "ui.ci.zoomOut": "縮小",
+  "ui.ci.zoomReset": "倍率と位置をリセット",
+  "ui.env.motionSpeed": "アニメーションの速さ",
+  "ui.env.motionFast": "すばやく",
+  "ui.env.motionStandard": "標準",
+  "ui.env.motionRelaxed": "ゆったり",
+  "ui.home.localBadge": "ローカル作業環境 · 外部送信なし",
+  "ui.home.inputLabel": "デコードする内容",
+  "ui.home.inputHint": "テキストを貼り付けるか、ファイルをドロップ。処理は端末内で完結します。",
+  "ui.home.keyboardHint": "Enter：デコード · Shift + Enter：改行 · Ctrl / ⌘ + K：演算を検索",
+  "ui.home.toolsLabel": "その他のツール",
+  "ui.home.browseHint": "カテゴリ別に閲覧・検索",
+  "ui.home.recipeHint": "複数の変換を組み合わせる",
+  "ui.home.inspectHint": "バイトと文字を詳しく表示",
+  "ui.home.convertHint": "基数と単位を相互変換",
+  "ui.topbar.more": "その他の操作",
  // ---- categories ----
   "cat.home": "ホーム · 自動デコード",
   "cat.base": "Base ファミリー",

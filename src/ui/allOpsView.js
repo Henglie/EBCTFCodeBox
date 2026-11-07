@@ -253,7 +253,11 @@ export function renderAllOpsView(host, options = {}) {
   search.append(input, clearButton);
 
   const count = el("div", { class: "allops-count", "aria-live": "polite" });
-  searchWrap.append(search, count);
+  const collapseAll = el("button", { class: "act-btn allops-collapse-all", type: "button" },
+    makeIcon("expand_more"), document.createTextNode(lt("ui.allops.collapseAll", "全部收起", "Collapse all")));
+  const expandAll = el("button", { class: "act-btn allops-expand-all", type: "button" },
+    makeIcon("expand_more"), document.createTextNode(lt("ui.allops.expandAll", "全部展开", "Expand all")));
+  searchWrap.append(search, el("div", { class: "allops-bulk" }, collapseAll, expandAll), count);
   head.append(searchWrap);
   page.append(head);
 
@@ -264,10 +268,20 @@ export function renderAllOpsView(host, options = {}) {
   const refreshCount = (matched, total) => {
     count.textContent = fmt(countTemplate, matched, total);
   };
+  let sections = [];
+  const refreshBulk = () => {
+    collapseAll.disabled = !sections.some(section => !section.node.classList.contains("is-collapsed"));
+    expandAll.disabled = !sections.some(section => section.node.classList.contains("is-collapsed"));
+  };
+  collapseAll.addEventListener("click", () => { for (const section of sections) section.setCollapsed(true); refreshBulk(); });
+  expandAll.addEventListener("click", () => { for (const section of sections) section.setCollapsed(false); refreshBulk(); });
 
   const applyFilter = (rawQuery) => {
+    applyFilter._cancel?.();
+    const previousQuery = _query;
     _query = String(rawQuery || "");
-    _searchCollapsed.clear();
+    if (_query !== previousQuery) _searchCollapsed.clear();
+    sections = [];
 
     const allGroups = getGroups();
     const query = _query.trim();
@@ -280,6 +294,7 @@ export function renderAllOpsView(host, options = {}) {
     body.innerHTML = "";
 
     if (!groups.length) {
+      refreshBulk();
       body.append(el("div", { class: "allops-empty", role: "status" },
         makeIcon("search", "allops-empty-icon"),
         el("div", { class: "allops-empty-title", text: emptyTitle }),
@@ -313,18 +328,19 @@ export function renderAllOpsView(host, options = {}) {
         el("span", { class: "allops-section-count", text: String(group.rows.length) }),
       );
 
-      header.addEventListener("click", () => {
-        const next = !section.classList.contains("is-collapsed");
+      const setCollapsed = (next) => {
         section.classList.toggle("is-collapsed", next);
         grid.hidden = next;
         header.setAttribute("aria-expanded", String(!next));
         header.setAttribute("aria-label", (next ? expandLabel : collapseLabel) + " · " + group.name);
         const caret = header.querySelector(".allops-caret");
         if (caret) caret.innerHTML = icon(next ? "chevron_right" : "expand_more");
-        if (query) _searchCollapsed.add(group.id);
-        else if (next) _collapsed.add(group.id);
-        else _collapsed.delete(group.id);
-      });
+        const collapsedSet = query ? _searchCollapsed : _collapsed;
+        if (next) collapsedSet.add(group.id);
+        else collapsedSet.delete(group.id);
+      };
+      header.addEventListener("click", () => { setCollapsed(!section.classList.contains("is-collapsed")); refreshBulk(); });
+      sections.push({ node: section, setCollapsed });
       header.setAttribute("aria-label", (collapsed ? expandLabel : collapseLabel) + " · " + group.name);
 
       section.append(header, grid);
@@ -332,6 +348,7 @@ export function renderAllOpsView(host, options = {}) {
       queue.push({ grid, rows: group.rows });
     }
     body.append(fragment);
+    refreshBulk();
 
     let queueIndex = 0;
     let rowIndex = 0;

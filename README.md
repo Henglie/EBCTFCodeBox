@@ -53,64 +53,29 @@
 
 ## v0.1.15（开发中）
 
-> 开发中：新增 8 个 CyberChef 对齐 op（CRC 全预设、全部校验和、SHA-2 六档、CTPH、全部哈希、Whirlpool 变体、LZ4 Frame、Enigma），CyberChef 矩阵 partial 清零，`moyue` 非默认密钥识别闭环，源码注释工程痕迹清理。0.1.14 更新已结束、未发布，完整变更见 [CHANGELOG.md](./CHANGELOG.md)。
+> 0.1.15 是面向 0.2.0 的 UI 优化开发版；0.1.14 已作为过渡开发版结束。完整历史见 [CHANGELOG.md](./CHANGELOG.md)。开发流程见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
-## v0.1.13-beta
+### 新增功能
 
-### 新增
-
-- dCode 扩展包 2026-11 批次：409 op，新增「阶乘位数与规模估算」；op 页显示新增/更新徽标与批次时间。
-- 新增 12 个主 op，主 op 总数 890：`dataConvert`、`bzip2Enc`、`extractAll`、`gostKeyWrap`、`falconKeyGen` / `falconSign`、`typex`、`sigaba`、`lorenz`、`bombe`、`multipleBombe`、`colossus`；覆盖 JSON/CSV/XML/YAML 转换、bzip2、专用文本提取、GOST Key Wrap、Falcon 与六种历史密码机。
-- 新增「全部算法」平铺页（890 卡、分类折叠、实时搜索）与 ≤860px 抽屉导航；配方工具栏重排为构建 / 执行 / 编辑 / 管理四行，F1 快捷键移至页头右上角；输入 / 输出编码工具栏各自独立，输出视图切换即时重格式化最近结果，不重跑算法。
-- 多文件 / 目录批处理支持逐条状态、单条下载与 ZIP 打包；设置中可管理 wasm / 字体 / 语言包 / 英文科普四个离线增强包。
-- 中 / 英 / 法 / 日 / 韩 / 俄六门核心界面文案保持 2927 键同构；其余语言按实际完成度显示，不虚报 100%。
-- 编码图自动识图：字形按阅读顺序切分、候选权重可配置，支持槽位→字符映射、逐字置信度与未知 `?`；没有标注就不按字母表猜。
-- 分组密码补齐 NoPadding/PKCS#7/Zero/Bit/ISO 10126/ANSI X9.23；AES-GCM 加 AAD/Include IV/tagLen；XTEA/RC6 rounds、ChaCha/Salsa 8/12 轮、PRESENT CBC、GOST 全模式。
-- 配方链补齐禁用/断点/单步/从某步、错误定位与前缀保留、结构撤销/重做、复制节点、Auto Bake、Magic、Fork/Merge/Subsection/Register/Conditional Jump 控制节点；不新增主 op。
-- 通用编辑框统一 Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y：op 输入、首页一把梭、字符显示器、配方输入、可展开输入框；粘贴/清空/外部写入都可撤销。
-- LZString pieroxy 标准格式、LZ4 压缩、regex 预设提取；一把梭多段解码保留双层进度条，运行条不再 sticky，卡片间距修复。
+- 普通独立算法采用「左菜单 / 中参数 / 右输入输出」可调三分区，手机及窄工作区恢复上下结构；科普与示例保持通栏。
+- 转换与输入输出对调放在两框之间；分隔条支持拖动、键盘调宽和复位，圆点收尾止于科普卡上方。
+- 中间与右侧默认等分；环境提供“自适配排版（新版）／始终单分区（传统）”，自适配模式横屏分区、竖屏纵向。
+- 各页面输入草稿在切页与刷新后保留，支持普通算法的多字段、文件字节与输出恢复；环境提供独立于完整重置的“一键清空输入输出”。
+- 新增 CRC 全预设、全部校验和、SHA-2 六档、CTPH、全部哈希、Whirlpool 变体、LZ4 Frame、Enigma 共 8 个 op，主 op 共 969 个。
 
 ### 修复
 
-- dCode 全部 op 取消边输边算：参数输入防抖，数学/数论等重运算改为显式按钮或 Ctrl+Enter 触发。
-- 阶乘移除 `n≤20000` 人为上限，改分治乘积 + BigInt；按实际内存预算展开，超限返回精确位数/内存估算并明确拒绝，不静默截断。
-- 数学/数论 P0：Harshad 改用 BigInt 不再丢 >2^53 精度；DFT 不再静默丢弃输入点；平方根/立方根/n 次根用 BigInt 精确根；超几何/二项概率改对数域不再 NaN；记数/区间类小上限改为输出或工作量预算。
-- 光栅拆图默认中灰 `#808080` 填充，黑/白笔画都可见；x/y 两轴都生成并在报告与自动预览中分组呈现；`auto` 以真实 alpha 为准。
-- 分组密码与参数校验：AES/DES/3DES 的 IV 长度必须匹配块长；GCM Include IV 支持 12 / 16 字节 nonce；hex 密钥 / IV / 密文含非法字符、RC2 有效位数越界、Bombe / MultipleBombe / Colossus 数值参数非法时均显式报错，不再静默补零、截断或回退默认值。
-- 配方链运行结束不再残留「执行中…」；链头文件载入后立即显示文件元数据与清除按钮。
-- 修复 9 个仅有执行入口的算法被误判为无输入框；历史密码机的多行转子 / 反射器参数恢复可编辑，并改为显式运行 + Worker 执行，避免大转子池冻结页面。
-- SM4-GCM 独立 tag 按 Latin1 / UTF-8 解析时不再误删末字节空白，末字节为 `0x20` 的合法 tag 可正常解密。
-- 一把梭二维码：1/2/4/16-bit/索引色/隔行 PNG 改走浏览器 canvas 解 RGBA 再送 ZXing；1-bit `QR.png` 实测恢复识别，不再报「仅支持 8 位 LSB」。
+- 恢复字频、流量分析等输入区及文件目标，修复自定义实现启用后的输入框显示。
+- 修复换行后继续键入错行、手机长参数与字符集工具条横溢，以及浅色批处理文字对比度。
+- 完善 `moyue` 非默认密钥识别。
 
-### 贡献者
+### 优化
 
-- 新增贡献者橙子（提出多个 Misc 逻辑代码修复）。
-- 新增贡献者 Tokeii（贡献改版图标、项目下游优化作者）。
-
-### 验证
-
-890 主 op；409 插件 op（全部关闭边输边算）；插件自测 110/110；padding/KAT 144、GOST 128、RC6 65、XSalsa20 11、SM4-GCM 28 项通过；配方链 Node 43+23、Playwright 47+42、既有 smoke 8 项通过；配方工具栏四行布局 1440/390 真浏览器 14/14；编辑框撤销 6/6；六门 i18n 2847 键同构；Typex 3/3、SIGABA 2/2、Lorenz SZ40/SZ42a 6 组公开向量、SZ42b 往返、Bombe 18/0、MultipleBombe 17/0、Colossus 215/0，三类攻击真浏览器 7/7；1-bit QR 实测命中；光栅 demo x=38/y=30/共 68 张，空白填充色 `#808080`。详见 [CHANGELOG.md](./CHANGELOG.md)。
-
-## v0.1.12
-
-### 新增
-
-- 云影密码（01248）双向 op；KNN A/B 分类；StegSolve 独立 op 页。
-- 栅栏密码补 Z 型，W 型支持 0–64 偏移并纳入一键解码。
-- 中文查字五件套：五笔 86/98、中文电码、郑码、四角号码、仓颉。
-- AEAD/PQC/ZIP/ECDH/RSA-OAEP/HPKE/Mach-O/WASM/GB18030/UTF-32/SHA-224/cSHAKE 等 op。
-- 文件分析流式插卡、自动隐写线索与文件产物；结果卡智能动作。
-- 官方插件页支持同源 addons/ 自动发现；dCode 扩展包 Beta，408 op。
-
-### 修复
-
-- 语言完成度改为真实翻译统计；固定中文第一、English 第二；弹窗切换路由自动关闭。
-- 修复 Phantom_QR 卡死、结果目录残留、TOC 圆点遮挡、runbar 对齐。
-- F5/QR 受限样本保持明确失败；pyc/bkcrack/imageDiff/archive 修复。
-
-### 验证
-
-878 主 op；408 插件 op；题库 110 题/153 文件；发行包清单 1630 项。详见 [CHANGELOG.md](./CHANGELOG.md)。
+- 维持 M3 Expressive 风格；Chromium 原生连续圆角，Firefox / WebKit 为常用控件自绘连续曲率，保留语义正圆。
+- 统一滑块与动效节奏、48px 紧凑顶栏、首页输入工作台、编码图浮动工具条与全部算法批量展开 / 收起。
+- 精简 BOM 提示及代码编辑器工具区，完善手机操作菜单、搜索键盘选择与焦点归还。
+- 参数自适应多列、标题放大且简介左对齐；编辑框工具内嵌，输出视图与报告下置，算法族超出部分改为下拉选择。
+- 新增文案优先中英文，其他维护语言在发布前对齐。
 
 ## 项目简介
 
@@ -275,6 +240,8 @@ PWA 已完整接线（`manifest.json` + `sw.js`）：首次在线访问后预缓
 WASM 多线程（`SharedArrayBuffer`）需跨源隔离头（COOP/COEP），`通用点我启动.py` 已默认下发；缺失时多线程 op 降级为单线程或提示不可用，不影响其余功能。首屏使用 HTTP/1.1 keep-alive、ES module 入口前置和字库懒加载；完整离线资源由 Service Worker 在页面加载后后台安装。
 
 ## 目录结构
+
+开发、分支协作与 PR 流程见 [CONTRIBUTING.md](./CONTRIBUTING.md)：日常开发集成到 `dev`，稳定发布从 `main` 产生。
 
 ```
 index.html          入口

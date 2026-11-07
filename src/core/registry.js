@@ -261,6 +261,9 @@ export const FAMILY_NAMES = {
  * 返回 null 表示签名无法解析 → 调用方保守按 text 处理，绝不因解析失败判 none。
  */
 function runFirstParam(src) {
+  if (src.includes("[native code]")) return null;
+  const singleArrow = /^(?:async\s+)?([A-Za-z_$][\w$]*)\s*=>/.exec(src);
+  if (singleArrow) return { first: singleArrow[1], body: src.slice(singleArrow[0].length) };
   const head = /^(?:async\s+)?(?:function\s*(?:\*\s*)?(?:[A-Za-z_$][\w$]*)?\s*)?/.exec(src);
   let i = head[0].length;
   if (src[i] !== "(") {
@@ -275,7 +278,12 @@ function runFirstParam(src) {
     else if (c === ")" || c === "]" || c === "}") { depth--; if (depth === 0) { end = j; break; } }
   }
   if (end === -1) return null;
-  return src.slice(i + 1, end).split(",")[0].trim().split("=")[0].trim();
+  const first = src.slice(i + 1, end).split(",")[0].trim().split("=")[0].trim();
+  if (first && !/^[A-Za-z_$][\w$]*$/.test(first)) return null;
+  const tail = src.slice(end + 1).trimStart();
+  if (tail.startsWith("=>")) return { first, body: tail.slice(2) };
+  if (tail.startsWith("{")) return { first, body: tail.slice(1) };
+  return null;
 }
 
 /**
@@ -291,20 +299,21 @@ function runFirstParam(src) {
 export function inferIoMode(op) {
   if (!op) return "text";
   if (op.io === "none" || op.io === "text") return op.io;
-  if (op._ioMode) return op._ioMode;
+  // File consumers need the input/drop target even if they only read params.rawBytes.
+  if (op.acceptsBytes) return "text";
+  if (op._ioMode && op._ioRun === op.run) return op._ioMode;
   let mode = "text";
   if (typeof op.encode !== "function" && typeof op.decode !== "function" && typeof op.run === "function") {
     try {
       const src = op.run.toString().trim();
-      const first = runFirstParam(src);
-      const arrow = src.indexOf("=>");
-      const body = arrow >= 0
-        ? src.slice(arrow + 2)
-        : src.slice(src.indexOf("{") + 1);
-      if (first !== null && (!first || first === "p" || !new RegExp("\\b" + first + "\\b").test(body))) mode = "none";
+      const signature = runFirstParam(src);
+      // Only the arrow directly after the argument list belongs to this function.
+      // Nested callbacks must not truncate the real function body.
+      if (signature && (!signature.first || !new RegExp("(^|[^\\w$])" + signature.first.replace(/\$/g, "\\$") + "(?=$|[^\\w$])").test(signature.body))) mode = "none";
     } catch { /* toString/解析异常按 text 处理，宁可多显示 */ }
   }
   op._ioMode = mode;
+  op._ioRun = op.run;
   return mode;
 }
 

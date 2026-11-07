@@ -35,6 +35,14 @@ import { cryptoTryAll } from "./core/cryptoTryAll.js";
 import { bridgeHealth } from "./core/localBridge.js";
 import { icon as iconSvg } from "./ui/icons.js";
 import { HLSpring } from "./ui/spring.js"; // 弹簧动效内核（总开关 ebctf.springMotion）
+import { initTopbarMenu } from "./ui/topbarMenu.js";
+import { initMotionPreferences } from "./ui/motionPreferences.js";
+import { initSharedControls } from "./ui/sharedControls.js";
+import { attachOpWorkbench } from "./ui/opWorkbench.js";
+import { setupContinuousCorners } from "./ui/continuousCorners.js";
+import { initOpLayout } from "./ui/layoutPreferences.js";
+import { attachFamilyOverflow } from "./ui/familyOverflow.js";
+import { createWorkspaceDrafts, newDraftIdentity } from "./ui/workspaceDrafts.js";
 // pinyinSearch（拼音全拼/首字母搜索兼容层，含 58KB 数据表）已改懒载，见 ensurePinyinSearch()，首屏闭包 -29KB gz
 import { FONT_PLANES, loadFontPlane, fontStatus, onFontStatusChange, humanSize, preloadAllPlanes } from "./ui/fontLoader.js";
 import { CTF_HOT, CTF_HOT_META } from "./core/ctfPresets.js";
@@ -61,6 +69,7 @@ import { attachEditorToolbar } from "./ui/editorToolbar.js"; // 通用编辑框�
 import { attachIoCodingToolbar } from "./ui/ioCodingToolbar.js"; // 全局 I/O 编码 + 文本/字节双模
 import { attachTextContextMenu } from "./ui/textContextMenu.js"; // 编辑框右键文本处理菜单
 import { attachEditHistory } from "./ui/editHistory.js"; // 通用编辑框撤销/重做（contenteditable/textarea）
+import { ioArea } from "./ui/ioArea.js";
 import { loadFavorites, isFavorite, toggleFavorite, openFavMenu } from "./ui/favorites.js";
 // 自定义算法（魔改）——UI 开关/编辑器 + Worker 沙箱执行（magic/穷举侧排除）
 import { renderCustomToggle } from "./ui/customImplEditor.js";
@@ -115,17 +124,18 @@ import "./core/opStubs.js"; // 惰载 stub 播种（须先于 detect 四件套�
 import "./core/detectExt.js"; // detect 补全扩展层
 import "./core/detectExt2.js"; // detect 大表补强（82 op 补 detect，提升一把梭命中率）
 
-import { renderRecipe, rState as recipeState, addRecipeOpAt, addRecipeFamilyAt, appendRecipeOpToTail, openRecipeFamilyAtTail } from "./ui/recipeView.js"; // 配方链 UI
-import { renderExhaustive } from "./ui/exhaustiveView.js"; // 穷举全解视图（一键全解码器穷举）
+import { renderRecipe, rState as recipeState, clearRecipeIO, addRecipeOpAt, addRecipeFamilyAt, appendRecipeOpToTail, openRecipeFamilyAtTail } from "./ui/recipeView.js"; // 配方链 UI
+import { renderExhaustive, clearExhaustiveIO } from "./ui/exhaustiveView.js"; // 穷举全解视图（一键全解码器穷举）
 // —— inspect / quickconv 两视图懒载（两子树 12 文件退出首屏闭包，约 -108KB gz）——
 // 首次切入对应视图才动态 import（视图切换=用户手势）；文件仍在 SW 预缓存（不匹配 EXCLUDE_RULES），离线可用。
 // dispose 未加载时为 no-op（切走时 _inspectMod 尚未 resolve → 模块无 DOM 实例，无需清理）。
 let _inspectMod = null, _quickConvMod = null, _stegSolveMod = null, _stegSolveModLoaded = null;
+let _inspectLoaded = null, _quickConvLoaded = null;
 function loadInspectView() {
-  return _inspectMod || (_inspectMod = import("./ui/universalViewer.js").catch((e) => { _inspectMod = null; throw e; }));
+  return _inspectMod || (_inspectMod = import("./ui/universalViewer.js").then(m => { _inspectLoaded = m; return m; }).catch((e) => { _inspectMod = null; throw e; }));
 }
 function loadQuickConvView() {
-  return _quickConvMod || (_quickConvMod = import("./ui/quickConv.js").catch((e) => { _quickConvMod = null; throw e; }));
+  return _quickConvMod || (_quickConvMod = import("./ui/quickConv.js").then(m => { _quickConvLoaded = m; return m; }).catch((e) => { _quickConvMod = null; throw e; }));
 }
 function loadStegSolvePage() {
   return _stegSolveMod || (_stegSolveMod = import("./ui/stegSolvePage.js")
@@ -199,6 +209,26 @@ try { state.navCollapsed = localStorage.getItem("ebctf_nav_collapsed") === "1"; 
 // 并订阅后续变更（含 randomSecure op 内切换档位）持久化。默认缺省 = system（行为不变）。
 try { installRandConfig(); } catch { /* 存储异常按默认 system 兜底 */ }
 
+const workspaceDrafts = createWorkspaceDrafts($ws, {
+  onStorageError: () => toast(t("ui.workbench.draftStorageError")),
+  onRestore: (key, record) => {
+    if (!key.startsWith("op:")) return;
+    const memo = record?.meta?.lastMemo;
+    _lastOpOutput = memo?.opId === state.opId ? memo : null;
+    if (_lastOpOutput) applyOpOutput(_lastOpOutput);
+  },
+  onClear: () => {
+    _convSeq++; clearTimeout(_paramConvertTimer);
+    cancelOpRun(); cancelMagic();
+    if (_activeFileCtrl) { _activeFileCtrl.cancelled = true; _activeFileCtrl = null; }
+    _lastOpOutput = null; state.homeInput = "";
+    clearRecipeIO(); clearExhaustiveIO();
+    _inspectLoaded?.clearUniversalViewerIO(); _quickConvLoaded?.clearQuickConvIO();
+    for (const selector of [".onekey-out", ".file-report", "#ioOutMedia"]) $ws.querySelector(selector)?.replaceChildren();
+    for (const host of $ws.querySelectorAll(".home-hero, .onekey-out")) if (host.__toc) destroyResultToc(host);
+  },
+});
+
 // ============ 工具函数 ============
 function el(tag, attrs = {}, ...children) {
   const n = document.createElement(tag);
@@ -245,73 +275,6 @@ function keyBtn(fn) {
 // - placeholder → data-placeholder + CSS :empty::before 模拟（div 无原生 placeholder）
 // - 粘贴强制纯文本（execCommand insertText / clipboardData text/plain）
 // - Enter 插入纯 "\n"（避免浏览器塞 <div>/<br> 导致 textContent 丢换行）
-function ioArea(attrs = {}) {
-  const a = { ...attrs };
-  const ph = a.placeholder; delete a.placeholder;
-  const ro = a.readonly === true || a.readonly === ""; delete a.readonly;
-  delete a.spellcheck; delete a.rows; // div 上无意义，统一处理
-  const div = el("div", a);
-  div.setAttribute("contenteditable", ro ? "false" : "true");
-  div.setAttribute("spellcheck", "false");
-  if (ph) div.setAttribute("data-placeholder", ph);
-  if (ro) div.classList.add("io-readonly");
- // .value 代理 textContent：读写纯文本，保留换行（配合 CSS white-space:pre-wrap）
-  Object.defineProperty(div, "value", {
-    get() { return this.textContent; },
-    set(v) { this.textContent = v == null ? "" : String(v); },
-    configurable: true,
-  });
-  if (!ro) {
- // 粘贴净化：只取纯文本，杜绝富文本/HTML 注入。
- // 不用 execCommand("insertText")：Chromium 会吞 \n（多行矩阵被拍平成单行）且返回 true，
- // 兜底分支永不触发。改为 Range 直插文本节点（.io-area 为 pre-wrap，\n 语义正确），
- // 并手动补发 input 事件（程序化 DOM 变更不触发原生 input，上层状态同步依赖它）。
-    div.addEventListener("paste", (e) => {
-      e.preventDefault();
-      const cd = e.clipboardData || window.clipboardData;
-      const text = cd ? cd.getData("text/plain") : "";
-      if (!text) return;
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount) {
-        const range = sel.getRangeAt(0);
-        range.deleteContents();
-        const node = document.createTextNode(text);
-        range.insertNode(node);
-        range.setStartAfter(node); range.collapse(true);
-        sel.removeAllRanges(); sel.addRange(range);
-      } else {
-        div.textContent = div.textContent + text;
-      }
-      div.dispatchEvent(new InputEvent("input", { bubbles: true }));
-    });
- // Enter → 纯 "\n"（不让浏览器插入 <div>/<br>，保证 textContent 换行语义正确）。
- // Ctrl/Meta+Enter 放行给上层的 convert 快捷键；Shift+Enter 也走纯换行。
- // 同粘贴：execCommand("insertText", "\n") 在 Chromium 吞换行 → Range 直插 + 补发 input。
-    div.addEventListener("keydown", (e) => {
-      if (e.isComposing || e.keyCode === 229) return;
-      if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        const sel = window.getSelection();
-        if (sel && sel.rangeCount) {
-          const range = sel.getRangeAt(0);
-          range.deleteContents();
-          const node = document.createTextNode("\n");
-          range.insertNode(node);
-          range.setStartAfter(node); range.collapse(true);
-          sel.removeAllRanges(); sel.addRange(range);
-          div.dispatchEvent(new InputEvent("input", { bubbles: true }));
-        }
-      }
-    });
- // 保险：内容删空后清掉浏览器残留的 <br>，让 :empty placeholder 重新生效
-    div.addEventListener("input", () => {
-      if (div.textContent === "") div.innerHTML = "";
-    });
-  }
-  if (!ro) attachEditHistory(div);
-  return div;
-}
-
 // 编辑框记事本化——全选 / 导出 / 快捷键。
 // 全选 io-area（textarea 与 contenteditable div 两种形态都要处理）。
 function selectAllIO(area) {
@@ -1003,6 +966,7 @@ function selectOp(id) {
 // 路由形态：#/home（首页一把梭）、#/op/<opId>（某个功能）。
 // writeHash 带 _routing 标志，避免自己写 hash 又触发 hashchange 造成二次渲染。
 let _routing = false;
+let _appBootReady = false;
 // 授权信息（启动异步 loadLicense 填入；未读到前按开源自编译默认显示）。
 let _license = OPENSOURCE_LICENSE;
 // 授权自定义软件名（2026-09-13 产品负责人新需求）：license payload.appName（签名保护）优先，
@@ -1107,13 +1071,14 @@ function selectOpFromRoute(id) {
   renderWorkspace();
 }
 window.addEventListener("hashchange", () => {
-  if (_routing) return; // 自己 writeHash 触发的，状态已同步，跳过
+  if (_routing || !_appBootReady) return; // Startup applies the latest route after draft hydration.
   applyRoute();
 });
 
 // ============ 工作区渲染 ============
 // 上次渲染的 view/opId——用于「真实视图切换才取消」的判定（见 renderWorkspaceInner 内）。
 let _wsView = null, _wsOpId = null;
+let disposeOpWorkbench = null;
 let _docTitleAll = false;
 function syncDocTitle() {
   const base = appDisplayName() || t("ui.brand.title");
@@ -1126,6 +1091,19 @@ function syncDocTitle() {
   }
 }
 function renderWorkspaceInner() {
+  workspaceDrafts.release();
+  const draftKey = state.view === "op" ? `op:${state.opId}` : state.view;
+  const savedDraft = workspaceDrafts.get(draftKey);
+  if (state.view === "op" && savedDraft?.meta?.params) {
+    const allowed = new Set((getOp(state.opId)?.params || []).map(param => param.key));
+    for (const [key, value] of Object.entries(savedDraft.meta.params)) if (allowed.has(key)) state.params[key] = value;
+    if (["encode", "decode"].includes(savedDraft.meta.dir)) state.dir = savedDraft.meta.dir;
+  }
+  if (state.view === "home" && savedDraft) state.homeInput = savedDraft.areas.find(area => area.key.includes("home-input"))?.text || "";
+  if (state.view === "recipe" && savedDraft?.meta?.recipeFile) {
+    recipeState.file = savedDraft.meta.recipeFile;
+    recipeState.inputKind = "file"; recipeState.fileMissing = false;
+  }
   syncDocTitle();
   // 离开字符显示器视图：释放 _rerender 闭包对旧视图 DOM 的引用（性能审计 H3，
   // hex 满载可达 13.9 万节点，不释放则逛其他视图的整段时间不可回收）
@@ -1136,6 +1114,7 @@ function renderWorkspaceInner() {
  // 重建，无破坏性）。仅在 view/opId 变化时取消：视图内重渲染（edu 懒加载/语言切换等
  // 同 view 重渲）不触发，避免误杀。
   if (state.view !== _wsView || state.opId !== _wsOpId) {
+    _convSeq++;
     if (opRunBusy()) cancelOpRun();
     if (state.view !== "home" && _activeFileCtrl) { _activeFileCtrl.cancelled = true; _activeFileCtrl = null; }
     _wsView = state.view;
@@ -1152,6 +1131,8 @@ function renderWorkspaceInner() {
       if (host.__toc) destroyResultToc(host);
     }
   }
+  disposeOpWorkbench?.();
+  disposeOpWorkbench = null;
   $ws.innerHTML = "";
   if (state.view === "home") return renderHome();
   if (state.view === "all") return renderAllOpsView($ws);
@@ -1160,13 +1141,13 @@ function renderWorkspaceInner() {
   if (state.view === "inspect") {
  // 懒载：首次切入才 import；import 完成时已切走则不渲染（竞态保护）
     return loadInspectView()
-      .then((m) => { if (state.view === "inspect") m.renderUniversalViewer($ws); })
+      .then((m) => { if (state.view === "inspect") { m.restoreUniversalViewerDraft?.(savedDraft?.meta?.inspect); m.renderUniversalViewer($ws); } })
       .catch((e) => { console.error("[inspect] 视图懒载失败：", e); });
   }
   if (state.view === "codeimg") return renderCodeImageViewer($ws);
   if (state.view === "quickconv") {
     return loadQuickConvView()
-      .then((m) => { if (state.view === "quickconv") m.renderQuickConv($ws); })
+      .then((m) => { if (state.view === "quickconv") { m.restoreQuickConvDraft?.(savedDraft?.meta?.quickconv); m.renderQuickConv($ws); } })
       .catch((e) => { console.error("[quickconv] 视图懒载失败：", e); });
   }
   if (state.view === "about") return renderAbout($ws);
@@ -1178,9 +1159,27 @@ function renderWorkspaceInner() {
 // 页面类的不要弹动」）：新内容渲染完成后容器纯淡入 150ms 无弹档——不加任何位移，杜绝弹跳感。
 // 同帧 set+to，初隐被重建内容遮住。仅 spring-motion 开时播；首屏不播；reduce-motion 下直切。
 let _wsMotionSeen = false;
+let _wsRenderGeneration = 0;
 function renderWorkspace() {
   const first = !_wsMotionSeen;
-  renderWorkspaceInner();
+  const generation = ++_wsRenderGeneration;
+  const rendered = renderWorkspaceInner();
+  const view = state.view, opId = state.opId, params = state.params;
+  const bindDraft = () => {
+    if (generation !== _wsRenderGeneration) return;
+    let direction = state.dir;
+    workspaceDrafts.bind(view === "op" ? `op:${opId}` : view, () => {
+      if (state.view === view && state.opId === opId) direction = state.dir;
+      return {
+        params: view === "op" ? params : undefined, dir: direction,
+        lastMemo: view === "op" && _lastOpOutput?.opId === opId ? _lastOpOutput : undefined,
+        recipeFile: view === "recipe" ? recipeState.file : undefined,
+        inspect: view === "inspect" ? _inspectLoaded?.getUniversalViewerDraft() : undefined,
+        quickconv: view === "quickconv" ? _quickConvLoaded?.getQuickConvDraft() : undefined,
+      };
+    });
+  };
+  if (rendered?.then) rendered.then(bindDraft); else bindDraft();
   _wsMotionSeen = true;
   if (first || !document.documentElement.classList.contains("spring-motion")) return;
   HLSpring.set($ws, { opacity: 0 });
@@ -1365,13 +1364,15 @@ function renderHome() {
   const wrap = el("div", { class: "home-hero" });
   wrap.append(
     el("div", { class: "op-head" },
-      el("div", { class: "op-title" }, msym("bolt_filled"), t("ui.home.title")),
+      el("div", { class: "home-local-badge" }, msym("lock"), t("ui.home.localBadge")),
+      el("h1", { class: "op-title" }, t("ui.home.title")),
       el("div", { class: "op-desc" }, t("ui.home.desc")),
     ),
   );
 
  // Magic 工具栏：crib 目标特征 + intensive 深度爆破开关
   const targetEditor = createTargetEditor();
+  targetEditor.element.classList.add("home-target-editor");
  // 密钥框（需求3）：填了 key → 一键解码把 AES/DES/RC4/XOR/vigenere 等带密钥加解密 op
  // 也纳入尝试，用 CTF 常考默认参数（IV=0、常见模式/编码组合）一起跑。空则不试 keyed。
   const keyInput = el("input", {
@@ -1435,19 +1436,16 @@ function renderHome() {
     el("div", { class: "magic-row" },
       el("label", { class: "magic-crib-label" }, t("ui.home.keyLabel"), keyInput),
     ),
- // 第三行：解码强度 + 上传文件 + 一键解码按钮
-    el("div", { class: "magic-row magic-row-actions" },
-      strengthBtn,
-      uploadBtn,
-      batchBtn,
-      runBtn,
-    ),
   );
+  const actions = el("div", { class: "magic-row magic-row-actions" },
+    strengthBtn, uploadBtn, batchBtn, runBtn);
 
  // 单一输入框：输入 = 拖放。粘贴文本 → Magic 解码；拖入文件 → 文本读内容解码，二进制跑 analyzeFile。
   const input = ioArea({
     class: "io-area home-input", placeholder: t("ui.home.placeholder"),
   });
+  input.setAttribute("aria-labelledby", "homeInputLabel");
+  input.setAttribute("aria-describedby", "homeInputHint");
   input.value = state.homeInput || "";              // 恢复上次输入，切菜单再回来进度不丢
   const fileReport = el("div", { class: "file-report" });
   const outWrap = el("div", { class: "onekey-out" });
@@ -1484,11 +1482,11 @@ function renderHome() {
   runBtn.addEventListener("click", () => { if (input.value.trim()) forceTrigger(); else input.focus(); });
  // 回车（非 Shift）也触发解码，键盘流用户方便。
   input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (input.value.trim()) forceTrigger(); }
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (input.value.trim()) forceTrigger(); }
   });
 
  // 回到首页时若有上次解码结果的输入，恢复渲染一次（不丢上次分析；一次性非逐字，不卡）。
-  if ((state.homeInput || "").trim()) setTimeout(forceTrigger, 0);
+  if (!workspaceDrafts.get("home") && (state.homeInput || "").trim()) setTimeout(forceTrigger, 0);
 
  // 同一入口处理拖入/点选文件：文本文件读进框跑解码，二进制文件跑文件分析；
  // 图片若扫出 LSB 文本载荷，自动填回输入框并继续智能解码（用户 2026-10-26 反馈）。
@@ -1561,7 +1559,36 @@ function renderHome() {
     exportName: "onekey-input.txt",
   });
 
-  wrap.append(toolbar, topBanner, homeToolbar, input, filePicker, fileReport, outWrap);
+  const studio = el("section", { class: "home-studio", "aria-labelledby": "homeInputLabel" },
+    el("div", { class: "home-editor-head" },
+      el("span", { class: "home-input-label", id: "homeInputLabel" }, t("ui.home.inputLabel")),
+      homeToolbar,
+    ),
+    topBanner, input,
+    el("div", { class: "home-input-hint", id: "homeInputHint" }, t("ui.home.inputHint")),
+    toolbar, actions,
+    el("div", { class: "home-keyboard-hint" }, t("ui.home.keyboardHint")),
+  );
+  const tools = el("section", { class: "home-tools", "aria-labelledby": "homeToolsLabel" },
+    el("h2", { class: "home-tools-label", id: "homeToolsLabel" }, t("ui.home.toolsLabel")));
+  const grid = el("div", { class: "home-tools-grid" });
+  for (const [route, glyph, label, hint] of [
+    ["all", "apps", "ui.nav.allOps", "browseHint"],
+    ["recipe", "account_tree", "ui.nav.recipe", "recipeHint"],
+    ["inspect", "visibility", "ui.nav.inspect", "inspectHint"],
+    ["quickconv", "calculate", "ui.nav.quickconv", "convertHint"],
+  ]) {
+    grid.append(el("a", { class: "home-tool-card", href: `#/${route}` },
+      msym(glyph, "home-tool-icon"),
+      el("div", { class: "home-tool-copy" },
+        el("span", { class: "home-tool-title" }, t(label)),
+        el("span", { class: "home-tool-hint" }, t(`ui.home.${hint}`)),
+      ),
+      msym("chevron_right", "home-tool-arrow"),
+    ));
+  }
+  tools.append(grid);
+  wrap.append(studio, filePicker, fileReport, outWrap, tools);
   $ws.append(wrap);
   input.focus();
 }
@@ -3012,15 +3039,18 @@ function openImageLightbox(url, alt) {
 // 文本 TextDecoder 进框；二进制转 hex。载入后 onLoaded(bytes) 触发 convert。
 async function loadFileIntoArea(ta, f, onLoaded) {
   if (!f) return;
+  const epoch = workspaceDrafts.epoch;
+  const sequence = ta._loadSeq = (ta._loadSeq || 0) + 1;
+  const curOp = getOp(state.opId);
   const bytes = new Uint8Array(await f.arrayBuffer());
+  if (epoch !== workspaceDrafts.epoch || sequence !== ta._loadSeq || !ta.isConnected) return;
  // 原始字节透传通道：文本/二进制都缓存，供吃 bytes 的 op 读取。
   ta._rawBytes = bytes;
   ta._rawFileName = f.name;
  // 分派：当前 op 声明 acceptsBytes（吃原始字节）→ 不转 hex，编辑框只显示占位提示
  // 真字节走 rawBytes 通道（修复「拖图片进框变一坨 hex」的痛点）。
  // 否则沿用文本/二进制判定：文本文件 TextDecoder 进框，二进制转 hex（hex-string op 需要）。
-  const curOp = getOp(state.opId);
-  if (curOp && curOp.acceptsBytes) {
+  if (curOp && curOp.acceptsBytes && !(curOp.textTransit && state.dir === "decode")) {
     ta.value = t("ui.op.fileLoaded", f.name, humanSize(bytes.length));
     ta._isFilePlaceholder = true;
     toast(t("ui.op.droppedBytes", f.name));
@@ -3061,7 +3091,7 @@ function attachDropDecode(ta, onLoaded, batchCtx) {
   ta.addEventListener("dragover", (e) => { e.preventDefault(); ta.classList.add("dragover"); });
   ta.addEventListener("dragleave", () => ta.classList.remove("dragover"));
  // 手动编辑 → 原始字节缓存失效（拖入的文件字节已与框内文本脱钩），占位态也一并解除
-  ta.addEventListener("input", () => { ta._rawBytes = null; ta._rawFileName = null; ta._isFilePlaceholder = false; });
+  ta.addEventListener("input", () => { ta._rawBytes = null; ta._rawFileName = null; ta._isFilePlaceholder = false; ta._loadSeq = (ta._loadSeq || 0) + 1; });
   ta.addEventListener("drop", async (e) => {
     e.preventDefault();
     ta.classList.remove("dragover");
@@ -3081,7 +3111,10 @@ function attachDropDecode(ta, onLoaded, batchCtx) {
 const FAM_LBL_ZH = { "fam.lbl.attack": "重用 k 攻击", "fam.lbl.sharedPub": "由公钥推导", "fam.lbl.homAdd": "同态加", "fam.lbl.scan": "扫描", "fam.lbl.formatBrute": "爆破", "fam.lbl.smartReport": "智能报告", "fam.lbl.rail": "经典栅栏", "fam.lbl.redefence": "Redefence 重排", "fam.lbl.compress": "压缩", "fam.lbl.decompress": "解压" };
 // 弹簧动效总开关：默认开（产品负责人 2026-09-12 真机验演示后批准第一批灰度）；'0'=整体回退 CSS 动画
 document.documentElement.classList.toggle("spring-motion", localStorage.getItem("ebctf.springMotion") !== "0");
-const _segThumbPos = new Map(); // 族滑块指示器跨渲染位置记忆
+initMotionPreferences();
+initOpLayout();
+initSharedControls();
+setupContinuousCorners();
 const _famSegScroll = new Map(); // 族滑块横向滚动位置跨重渲染保持（点档位后滚动条不跟手的反馈）
 function famLblText(lk) {
   const v = t(lk);
@@ -3340,7 +3373,7 @@ function renderOp() {
   if (op.family) {
     const famGrp = familyGroup(op.cat).find((g) => g.family === op.family);
     if (famGrp && famGrp.ops.length > 1) {
-      const famSeg = el("div", { class: "dir-seg fam-seg", role: "group", "aria-label": famGrp.name,
+      const famSeg = el("div", { class: "dir-seg fam-seg", role: "group", "aria-label": famGrp.name, "data-segment-key": `family:${op.family}`,
         oncontextmenu: e => showFavoriteMenu(e, { entries: famGrp.ops.map(m => ({ opId: m.id, label: opName(m) })) }) });
      // 滚动位置记忆：任何来源的滚动（拖条/滚轮/点档）都实时入 Map，重渲染后恢复
       famSeg.addEventListener("scroll", () => _famSegScroll.set(op.family, famSeg.scrollLeft), { passive: true });
@@ -3364,21 +3397,6 @@ function renderOp() {
           else if (x1 > famSeg.scrollLeft + famSeg.clientWidth - 4) famSeg.scrollLeft = x1 - famSeg.clientWidth + 4;
         }
       }
- // 弹簧滑动指示器（spring-motion 关闭时不渲染，回退 .on 背景样式）
-      if (document.documentElement.classList.contains("spring-motion")) {
-        const onBtn = famSeg.querySelector("button.on");
-        if (onBtn) {
-          const thumb = el("span", { class: "seg-thumb", "aria-hidden": "true" });
-          const tx = onBtn.offsetLeft;
-          thumb.style.width = onBtn.offsetWidth + "px";
-          const prev = _segThumbPos.get(op.family);
-          famSeg.append(thumb);
-          HLSpring.set(thumb, { x: prev == null ? tx : prev });
-          // 弹动缩减（产品裁决①）：bouncy150(ζ≈0.56,过冲13px) → 1422/57(名义ζ≈0.75,150ms档,过冲约减半)
-          if (prev != null && prev !== tx) HLSpring.to(thumb, { x: tx }, { stiffness: 1422, damping: 57 });
-          _segThumbPos.set(op.family, tx);
-        }
-      }
     }
   }
 
@@ -3399,6 +3417,21 @@ function renderOp() {
     return;
   }
 
+  const config = el("section", { class: "op-config", id: "opConfig", "aria-labelledby": "opConfigTitle" });
+  const title = head.querySelector(".op-title");
+  title.id = "opConfigTitle";
+  title.setAttribute("role", "heading");
+  title.setAttribute("aria-level", "1");
+  // Move the already-rendered heading/family controls; data and education stay separate.
+  config.append(...$ws.children);
+  const splitter = el("div", {
+    class: "op-splitter", role: "separator", tabindex: "0", "aria-orientation": "vertical",
+    "aria-controls": "opConfig", "aria-label": t("ui.workbench.resize"), title: t("ui.workbench.resizeHint"),
+  });
+  const data = el("section", { class: "op-data", "aria-label": t("ui.workbench.data") });
+  const workbench = el("div", { class: "op-workbench" }, config, splitter, data);
+  $ws.append(workbench);
+
  // 方向切换（仅双向 op 显示）
   const isDual = op.encode && op.decode;
   if (isDual) {
@@ -3407,24 +3440,14 @@ function renderOp() {
       el("button", { class: state.dir === "decode" ? "on" : "", onclick: () => { state.dir = "decode"; convert(); updateDirSeg(); } }, t("ui.op.decode")),
     );
     seg.id = "dirSeg";
-    $ws.append(seg);
-   // 方向滑块指示器：与族滑块同款滑轨+滑块（spring-motion 关闭时不渲染，回退 .on 背景样式）
-    if (document.documentElement.classList.contains("spring-motion")) {
-      const onBtn = seg.querySelector("button.on");
-      if (onBtn) {
-        const thumb = el("span", { class: "seg-thumb", "aria-hidden": "true" });
-        thumb.style.width = onBtn.offsetWidth + "px";
-        seg.append(thumb);
-        HLSpring.set(thumb, { x: onBtn.offsetLeft });
-      }
-    }
+    config.append(seg);
   }
 
  // 参数栏
   if (op.params.length) {
     const bar = el("div", { class: "op-params" });
     for (const d of op.params) bar.append(renderParam(op, d));
-    $ws.append(bar);
+    config.append(bar);
   }
 
  // 增强随机安全（每 op 内嵌勾选框，默认不勾）。
@@ -3435,13 +3458,13 @@ function renderOp() {
   if (opUsesRandom(op.id)) {
     const randHost = el("div", { class: "rand-sec-host" });
     renderRandSecureToggle(randHost);
-    $ws.append(randHost);
+    config.append(randHost);
   } else if (opExternalRand(op.id)) {
     // 随机在**内置第三方库**内部生成（不受本工具控制）→ 不挂开关，只如实说明「为什么没有」。
     const host = el("div", { class: "rand-sec-host" });
     host.append(el("div", { class: "rand-external-note" },
       msym("info"), el("span", {}, t("ui.rand.externalNote", externalRandLib(op.id)))));
-    $ws.append(host);
+    config.append(host);
   }
 
  // 高级 · 自定义实现（默认关；勾上 = 用用户 JS 替换本 op 的 encode/decode）。
@@ -3452,7 +3475,13 @@ function renderOp() {
     renderCustomToggle(ciRow, op.id, {
       op,
       dir: state.dir,
-      onToggle: () => convert(),
+      onToggle: () => {
+        syncInputVisibility();
+        _convSeq++; cancelOpRun(); _lastOpOutput = null;
+        outArea.value = "";
+        outArea.classList.remove("error"); outArea.style.color = "";
+        renderOutMedia(document.getElementById("ioOutMedia"), "");
+      },
       onTest: (code, cb) => {
         const inEl = document.getElementById("ioIn");
         const text = inEl ? inEl.value : "";
@@ -3460,7 +3489,7 @@ function renderOp() {
         runCustomWithTimeout({ code, dir: state.dir, input: text, params: state.params, rawBytes: rb }).then(cb);
       },
     });
-    $ws.append(ciRow);
+    config.append(ciRow);
   }
 
  // 纵向 IO：输入/输出上下堆叠，等宽撑满内容区。
@@ -3474,7 +3503,7 @@ function renderOp() {
   const ciSelf = getCustomImpl(op.id);
   const ciSelfOn = !!(ciSelf && ciSelf.enabled && ciSelf.code && ciSelf.code.trim());
   const ioMode = inferIoMode(op);
-  const showInput = ioMode !== "none" || ciSelfOn || hasFields;
+  let showInput = ioMode !== "none" || ciSelfOn || hasFields;
   // Whitespace programs require literal spaces, tabs and line feeds, not rich-text DOM.
   const inArea = op.verbatimInput
     ? el("textarea", { class: "io-area", placeholder: t("ui.op.inPlaceholder"), spellcheck: "false" })
@@ -3602,67 +3631,107 @@ function renderOp() {
     }
     runAct.classList.add("pending-run");
   }
-  const chainAct = el("button", { class: "act-btn", title: t("ui.op.chainToInput") },
-    msym("swap_vert"), " " + t("ui.op.chainToInput"));
+  const chainAct = el("button", { class: "act-btn io-chain", title: t("ui.op.chainToInput"), "aria-label": t("ui.op.chainToInput") },
+    msym("swap_vert"));
   chainAct.addEventListener("click", () => { inArea.value = outArea.value; invalidateFileBytes(inArea); convert(); });
 
+  const swapAct = el("button", { class: "act-btn io-swap", title: t("ui.op.swap"), "aria-label": t("ui.op.swap") }, msym("sync_alt"));
+  swapAct.addEventListener("click", () => {
+    const input = inArea.value, output = outArea.value;
+    _convSeq++;
+    _lastOpOutput = null;
+    cancelOpRun();
+    inArea.value = output;
+    invalidateFileBytes(inArea);
+    rememberOpOutput(op.id, input, input, null, { ...state.params });
+    applyOpOutput(_lastOpOutput);
+    inArea.__ioCoding?.refresh();
+  });
+
  // 导出报告：把本次运行的 op/参数/输入/输出/错误原样落成 MD（内嵌 JSON），不推断未验证结论。
-  const reportAct = el("button", { class: "act-btn", title: t("ui.op.report") }, msym("description"), " " + t("ui.op.report"));
+  const reportAct = el("button", { class: "act-btn io-report", title: t("ui.op.report") }, msym("description"), " " + t("ui.op.report"));
   reportAct.addEventListener("click", () => {
     const r = buildOpReport(op);
     cloudWarnGate(() => downloadBytes(new TextEncoder().encode(r.md), r.name, "text/markdown;charset=utf-8"));
   });
 
  // 输入区主体：多字段模式渲染 fieldAreas；io=none 且无自定义实现 → 细提示条替代巨型输入框。
-  const inputBody = hasFields
+  const inputBody = el("div", { class: "io-input-body" }, hasFields
     ? el("div", { class: "io-fields" }, ...fieldAreas)
     : (showInput ? inArea : el("div", { class: "io-none-hint" },
-        msym("info"), " 本操作无需主输入：填好参数后直接运行（自定义实现启用时会恢复输入框）"));
+        msym("info"), t("ui.workbench.noInput"))));
   // 统一清空：程序化 .value="" 不触发 input 监听，必须显式撤销文件字节通道与占位标记，
   // 否则清空后再运行会用旧文件字节复活旧结果（结果归属错乱）。
   const invalidateFileBytes = (ta) => {
     if (!ta) return;
+    ta._loadSeq = (ta._loadSeq || 0) + 1;
     ta._rawBytes = null;
     ta._rawFileName = null;
     ta._isFilePlaceholder = false;
   };
   const clearInputArea = (ta) => { if (!ta) return; ta.value = ""; invalidateFileBytes(ta); };
   const clearAll = () => {
+    _lastOpOutput = null;
+    cancelOpRun();
     clearInputArea(inArea);
     outArea.value = "";
+    outArea.classList.remove("error"); outArea.style.color = "";
+    outArea.__ioCoding?.formatOutput("");
     renderOutMedia(document.getElementById("ioOutMedia"), "");
     if (hasFields) fieldAreas.forEach((w) => clearInputArea(w.querySelector(".io-field-area")));
     // 在途结果归属：清空即作废未完成的转换，避免其迟到结果落回已清空的框。
     _convSeq++;
   };
 
+  const extraInputTools = el("details", { class: "io-tools-more" },
+    el("summary", { class: "tool-btn", title: t("ui.topbar.more"), "aria-label": t("ui.topbar.more") }, msym("expand_more")),
+    el("div", { class: "io-tools-extra" }, fontDec, fontInc,
+      el("button", {
+        class: "tool-btn batch-open", type: "button", title: t("ui.workbench.batch"), "aria-label": t("ui.workbench.batch"),
+        onclick: () => openBatchDialog(null, { op: currentBatchOp(), params: { ...state.params } }),
+      }, msym("layers")),
+      hasFields ? null : toolBtn("select_all", t("ui.op.selectAll"), () => selectAllIO(inArea)),
+      hasFields ? null : toolBtn("download", t("ui.op.export"), () => exportTextAsFile(inArea.value)),
+    ));
+  extraInputTools.addEventListener("click", event => {
+    if (event.target.closest("button")) {
+      extraInputTools.open = false;
+      extraInputTools.querySelector("summary").focus({ preventScroll: true });
+    }
+  });
+  extraInputTools.addEventListener("keydown", event => {
+    if (event.key === "Escape") { event.preventDefault(); extraInputTools.open = false; extraInputTools.querySelector("summary").focus(); }
+  });
+  for (const eventName of ["focusin", "pointerdown"]) workbench.addEventListener(eventName, event => {
+    // Observe the settled destination, avoiding Safari's transient BODY focus
+    // between pointer-down and the eventual button click.
+    if (!extraInputTools.contains(event.target)) extraInputTools.open = false;
+  });
+  const inputCodingMount = el("div", { class: "io-coding-mount io-coding-above" });
+  const outputCodingMount = el("div", { class: "io-coding-mount io-coding-below" });
   const io = el("div", { class: "io io-vert" },
- // 输入
-    el("div", { class: "io-pane" },
+  // 输入
+    el("div", { class: "io-pane io-pane-input" }, inputCodingMount,
+      el("div", { class: "io-editor-frame" },
       el("div", { class: "io-pane-head" },
         el("span", { class: "io-pane-title" }, t("ui.op.inTitle")),
         el("div", { class: "io-pane-tools" },
-          fontDec, fontInc,
-          el("button", {
-            class: "tool-btn batch-open", type: "button", title: "批量处理（当前 op）",
-            "aria-label": "批量处理（当前 op）",
-            onclick: () => openBatchDialog(null, { op: currentBatchOp(), params: { ...state.params } }),
-          }, msym("layers")),
           hasFields ? null : toolBtn("undo", t("ui.op.undo"), () => inArea.__editHistory?.undo()),
           hasFields ? null : toolBtn("redo", t("ui.op.redo"), () => inArea.__editHistory?.redo()),
           hasFields ? null : toolBtn("content_paste", t("ui.op.paste"), async () => { try { inArea.value = await navigator.clipboard.readText(); invalidateFileBytes(inArea); } catch { toast(t("ui.toast.clipFail")); } }),
           hasFields ? null : toolBtn("cloud_upload", t("ui.op.pickFile"), () => pickFileIntoArea(inArea, triggerConvert)),
-          hasFields ? null : toolBtn("select_all", t("ui.op.selectAll"), () => selectAllIO(inArea)),
-          hasFields ? null : toolBtn("download", t("ui.op.export"), () => exportTextAsFile(inArea.value)),
           toolBtn("delete", t("ui.op.clear"), clearAll),
+          extraInputTools,
         ),
       ),
       inputBody,
+      ),
     ),
  // 动作条（居中）：转换 / 配方链 / 导出报告
-    el("div", { class: "io-actions" }, runAct, chainAct, reportAct),
+    el("div", { class: "io-actions" }, swapAct, runAct, chainAct),
  // 输出
-    el("div", { class: "io-pane" },
+    el("div", { class: "io-pane io-pane-output" },
+      el("div", { class: "io-editor-frame" },
       el("div", { class: "io-pane-head" },
         el("span", { class: "io-pane-title" }, t("ui.op.outTitle")),
         el("div", { class: "io-pane-tools" },
@@ -3672,27 +3741,59 @@ function renderOp() {
         ),
       ),
       outArea,
+      ),
+      outputCodingMount,
+      el("div", { class: "io-report-footer" }, reportAct),
  // 出图类 op 的图片预览区（convert 检测输出中的 data:image URL 后填充，可预览+下载）。
       el("div", { class: "io-out-media", id: "ioOutMedia" }),
     ),
   );
-  $ws.append(io);
+  data.append(io);
 
   // 全局 I/O 编码工具栏：只在主输入框存在时挂；输出框引用交给 controller 统一格式化。
-  if (!hasFields && showInput) {
+  function attachCoding() {
+    if (hasFields || !showInput) return;
+    if (inArea.__ioCoding) {
+      if (!inArea.__ioCoding.element.isConnected) inputCodingMount.append(inArea.__ioCoding.element);
+      inArea.__ioCoding.element.hidden = false;
+      return;
+    }
     attachIoCodingToolbar(inArea, {
+      mount: inputCodingMount,
       outArea,
       onChange: () => triggerConvert(),
       getOp: () => op,
       getParams: () => state.params,
     });
     attachIoCodingToolbar(outArea, {
+      mount: outputCodingMount,
       scope: "output",
       onChange: () => rerenderOpOutput(),
       getOp: () => op,
       getParams: () => state.params,
     });
   }
+  function syncInputVisibility() {
+    if (!hasFields) {
+      const current = getCustomImpl(op.id);
+      const next = ioMode !== "none" || !!(current?.enabled && current.code?.trim());
+      if (next !== showInput) {
+        showInput = next;
+        if (showInput) inputBody.replaceChildren(inArea);
+        else {
+          inputBody.replaceChildren(el("div", { class: "io-none-hint" }, msym("info"), t("ui.workbench.noInput")));
+          // The controller toolbar lives beside its editor and must follow its visibility.
+        }
+      }
+    }
+    for (const button of [swapAct, chainAct]) button.disabled = !showInput || hasFields;
+    for (const button of io.querySelectorAll(".io-pane:first-child .io-pane-tools button")) button.disabled = !showInput;
+    const inputToolbar = inArea.__ioCoding?.element;
+    if (inputToolbar) inputToolbar.hidden = !showInput;
+    inputCodingMount.hidden = !showInput;
+    attachCoding();
+  }
+  syncInputVisibility();
 
  // 不做 input 实时转换（增删过程性能浪费）。Ctrl+Enter 快捷触发。
   inArea.addEventListener("keydown", (e) => {
@@ -3722,7 +3823,11 @@ function renderOp() {
  // 科普卡（输出框下方）：这是什么 / 原理 / 用法 / 示例 / 公式 / 贴士
   renderEduCard(op.id);
 
-  inArea.focus();
+  const stopWorkbench = attachOpWorkbench(workbench);
+  const family = config.querySelector(".fam-seg");
+  const stopFamily = family ? attachFamilyOverflow(family, { moreLabel: t("ui.workbench.moreAlgorithms"), ariaLabel: family.getAttribute("aria-label") }) : null;
+  disposeOpWorkbench = () => { stopFamily?.(); stopWorkbench(); };
+  if (inArea.isConnected && !family?.contains(document.activeElement)) inArea.focus({ preventScroll: true });
 }
 
 // ---- exe 型 op 渲染（requiresBridge）----
@@ -4035,7 +4140,7 @@ function renderCryptoTryAll(op) {
 }
 
 function toolBtn(icon, title, onclick) {
-  return el("button", { class: "tool-btn", title, onclick }, msym(icon));
+  return el("button", { class: "tool-btn", type: "button", title, "aria-label": title, onclick }, msym(icon));
 }
 function midBtn(icon, title, onclick, primary) {
   return el("button", { class: "mid-btn" + (primary ? " primary" : ""), title, onclick }, msym(icon));
@@ -4047,13 +4152,7 @@ function updateDirSeg() {
   const [enc, dec] = seg.querySelectorAll("button");
   enc.className = state.dir === "encode" ? "on" : "";
   dec.className = state.dir === "decode" ? "on" : "";
- // 滑块位移：族滑块同款弹簧（1422/57，150ms 档，名义 ζ≈0.75）；应用内「减少动效」
- // 开时由弹簧内核直切终值（spring.js to() 对 html.reduce-motion 直设，无新增状态）。
-  const thumb = seg.querySelector(".seg-thumb");
-  const onBtn = seg.querySelector("button.on");
-  if (!thumb || !onBtn) return;
-  thumb.style.width = onBtn.offsetWidth + "px";
-  HLSpring.to(thumb, { x: onBtn.offsetLeft }, { stiffness: 1422, damping: 57 });
+  // The shared segmented controller observes selection and updates its indicator.
 }
 
 function attachTextFileDrop(target, apply, accept) {
@@ -4337,7 +4436,7 @@ function rememberOpOutput(opId, value, outText, outFiles, params) {
   const p = { ...(params || {}) };
   delete p.rawBytes;
   delete p.rawFileName;
-  _lastOpOutput = { opId, value, outText, outFiles, params: p };
+  _lastOpOutput = { opId, value, outText, outFiles, params: p, runId: newDraftIdentity() };
 }
 
 function applyOpOutput(entry) {
@@ -4825,6 +4924,7 @@ function initTopbar() {
 
  // 顶栏搜索框：输入实时过滤 op（名称/别名/描述/id），面板列结果，点选跳转。
   initOpSearch();
+  initTopbarMenu();
 }
 
 // ---- 字库面板（顶栏「字库」下拉）----
@@ -5063,12 +5163,15 @@ let _searchActiveIdx = -1;
 // 避免它把期间新渲染的结果清掉（spring-motion 下关闭动画约 150ms，期间快速连打可复现）。
 let _searchPanelGen = 0;
 let _searchPanelClosing = false;
+let _searchReturnFocus = null;
 function initOpSearch() {
   const input = document.getElementById("opSearchInput");
   const panel = document.getElementById("opSearchPanel");
   if (!input || !panel) return;
 
   const closePanel = () => {
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
     const gen = ++_searchPanelGen;
     if (document.documentElement.classList.contains("spring-motion")) {
       _searchPanelClosing = true;
@@ -5084,6 +5187,7 @@ function initOpSearch() {
   };
 
   const pick = (id) => {
+    _searchReturnFocus = null;
     input.value = "";
     closePanel();
     input.blur();
@@ -5104,6 +5208,8 @@ function initOpSearch() {
     }
     panel.innerHTML = "";
     _searchActiveIdx = -1;
+    input.removeAttribute("aria-activedescendant");
+    input.setAttribute("aria-expanded", "true");
     if (!results.length) {
       panel.append(el("div", { class: "op-search-empty" }, t("ui.search.empty")));
       panel.classList.add("open");
@@ -5113,7 +5219,7 @@ function initOpSearch() {
       const r = s.e;
       // ：族内 op 结果显示名 =「族显示名 - op名」（命中项据此标注所属族）；非族 op 原名不变
       const dispName = r.famName ? (r.famName + " - " + r.name) : r.name;
-      const item = el("div", { class: "op-search-item", tabindex: "0", "data-idx": String(i), "data-opid": r.id, draggable: "true", title: t("ui.recipe.dragSearchHint"),
+      const item = el("div", { class: "op-search-item", tabindex: "-1", role: "option", id: `opSearchOption${i}`, "aria-selected": "false", "data-idx": String(i), "data-opid": r.id, draggable: "true", title: t("ui.recipe.dragSearchHint"),
         oncontextmenu: e => showFavoriteMenu(e, { opId: r.id }) },
         el("div", { class: "op-search-item-main" },
           el("span", { class: "op-search-item-name" }, dispName),
@@ -5158,9 +5264,14 @@ function initOpSearch() {
   const items = () => Array.from(panel.querySelectorAll(".op-search-item"));
   const setActive = (i) => {
     const all = items();
-    all.forEach((n) => n.classList.remove("active"));
+    all.forEach((n) => { n.classList.remove("active"); n.setAttribute("aria-selected", "false"); });
     _searchActiveIdx = i;
-    if (i >= 0 && all[i]) all[i].classList.add("active");
+    if (i >= 0 && all[i]) {
+      all[i].classList.add("active");
+      all[i].setAttribute("aria-selected", "true");
+      input.setAttribute("aria-activedescendant", all[i].id);
+      all[i].scrollIntoView({ block: "nearest" });
+    } else input.removeAttribute("aria-activedescendant");
   };
 
   input.addEventListener("input", () => {
@@ -5173,14 +5284,16 @@ function initOpSearch() {
     if (input.value.trim()) renderResults(searchOps(input.value));
   });
   input.addEventListener("keydown", (e) => {
+    if (e.isComposing) return;
     const all = items();
     if (e.key === "ArrowDown") {
       e.preventDefault();
       if (all.length) setActive((_searchActiveIdx + 1) % all.length);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      if (all.length) setActive((_searchActiveIdx - 1 + all.length) % all.length);
+      if (all.length) setActive(_searchActiveIdx < 0 ? all.length - 1 : (_searchActiveIdx - 1 + all.length) % all.length);
     } else if (e.key === "Enter") {
+      e.preventDefault();
       const all2 = items();
       if (_searchActiveIdx >= 0 && all2[_searchActiveIdx]) {
         all2[_searchActiveIdx].click();
@@ -5191,6 +5304,8 @@ function initOpSearch() {
       input.value = "";
       closePanel();
       input.blur();
+      if (_searchReturnFocus?.isConnected) _searchReturnFocus.focus({ preventScroll: true });
+      _searchReturnFocus = null;
     }
   });
  // 点面板外关闭
@@ -5538,6 +5653,7 @@ function applyStaticI18n() {
   setIcon("#btnAbout .msym", "info");
   setIcon("#topbarSearch .topbar-search-icon", "search");
   setIcon("#btnUpdate .msym", "update");
+  setIcon("#btnMoreActions .msym", "apps");
   setIcon("#btnTheme .msym", document.documentElement.getAttribute("data-theme") === "dark" ? "dark_mode" : "light_mode");
 
   const set = (sel, txt) => { const n = document.querySelector(sel); if (n) n.textContent = txt; };
@@ -5550,16 +5666,27 @@ function applyStaticI18n() {
   set("#btnPlugins .icon-btn-label", t("ui.plugin.btn"));
   set("#btnAllOps .icon-btn-label", allOpsLabel());
   set("#btnAbout .icon-btn-label", t("ui.about.btn"));
+  set("#btnThemeLabel", t("ui.topbar.theme"));
   const searchInput = document.getElementById("opSearchInput");
-  if (searchInput) searchInput.setAttribute("placeholder", t("ui.search.placeholder"));
+  if (searchInput) {
+    searchInput.setAttribute("placeholder", t("ui.search.placeholder"));
+    searchInput.setAttribute("aria-label", t("ui.search.placeholder"));
+    document.getElementById("opSearchPanel")?.setAttribute("aria-label", t("ui.search.placeholder"));
+  }
   const setAttr = (sel, attr, v) => { const n = document.querySelector(sel); if (n) n.setAttribute(attr, v); };
-  setAttr("#btnUpdate", "title", t("ui.topbar.update"));
+  setAttr("#btnUpdate", "title", `${t("ui.topbar.update")} · v${APP_VERSION}`);
+  setAttr("#btnUpdate", "aria-label", `${t("ui.topbar.update")} · v${APP_VERSION}`);
   setAttr("#btnRepo", "title", t("ui.topbar.repo"));
+  setAttr("#btnRepo", "aria-label", t("ui.topbar.repo"));
   setAttr("#btnTheme", "title", t("ui.topbar.theme"));
   setAttr("#btnLang", "title", t("ui.topbar.lang"));
   setAttr("#btnFont", "title", t("ui.env.btn"));
   setAttr("#btnAllOps", "title", allOpsLabel());
   setAttr("#btnAllOps", "aria-label", allOpsLabel());
+  setAttr("#btnMoreActions", "title", t("ui.topbar.more"));
+  setAttr("#btnMoreActions", "aria-label", t("ui.topbar.more"));
+  const shortcut = document.querySelector(".search-shortcut");
+  if (shortcut) shortcut.textContent = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘ K" : "Ctrl K";
   // 抽屉汉堡的 title/aria 也需随启动懒加载语言与手动切换同步（模块自初始化时 en 字典可能未就绪）。
   refreshMobileDrawerLabels();
 }
@@ -5633,6 +5760,7 @@ initPwa();
 // 加载屏遮白屏。模块顶层 import 已完成才执行到这，故进度从「初始化界面」起步。
 setLoadingProgress(60, "ui.loading.ui");
 applyStaticI18n();
+await workspaceDrafts.ready;
 initTopbar();
 initNavResizer();
 // 窄屏边界交叉时重渲导航：桌面 rail 态与窄屏完整抽屉态随视口宽度切换（navRail()），
@@ -5651,6 +5779,7 @@ applySavedAccent();
 // 加载完用精确 tonal 重算一次（渐进增强：A 路线已先出色，HCT 到位后无缝替换）。失败静默留 A 路线。
 enableHctEngine().then((ok) => { if (ok) reapplyAccent(); }).catch(() => { /* 降级留 A 路线 */ });
 // 按当前 hash 定位（#/op/xxx 直达该功能，刷新/中键多开保持）；无 hash → 首页
+_appBootReady = true;
 applyRoute();
 // 授权：异步读 license.bin 验签，写回 _license；若当前在关于页则重渲染以显示授权信息。
 // fire-and-forget，不阻塞启动。未读到 / 验签失败时 _license 保持开源自编译默认。
@@ -5862,6 +5991,7 @@ window.addEventListener("keydown", (e) => {
   if (!box) return;
   if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "k" || e.key === "K")) {
     e.preventDefault();
+    if (document.activeElement !== box) _searchReturnFocus = document.activeElement;
     box.focus();
     box.select();
     if (typeof box.scrollIntoView === "function") box.scrollIntoView({ block: "nearest" });

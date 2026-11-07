@@ -1,4 +1,4 @@
-// BUILD-STAMP: cb0fcae3e32a746a
+// BUILD-STAMP: bd6cf0f12a0c70bd
 importScripts("./sw-assets.js", "./sw-packs.js");
 
 // The asset generator synchronizes BUILD-STAMP with the resource revision.
@@ -351,7 +351,7 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("message", (event) => {
   const data = event.data;
-  if (data === "SKIP_WAITING") { self.skipWaiting(); return; }
+  if (data === "SKIP_WAITING") { event.waitUntil(self.skipWaiting()); return; }
   if (!data || typeof data !== "object") return;
   const port = event.ports && event.ports[0];
   if (data.type === "cache-pack") event.waitUntil(installPack(data, port, event.source));

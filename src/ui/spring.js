@@ -69,7 +69,10 @@
     var m = o.mass || 1, k = o.stiffness || 256;
     var c = (o.damping != null) ? o.damping
         : 2 * (o.dampingRatio != null ? o.dampingRatio : 1) * Math.sqrt(k * m);
-    return { k: k / m, c: c / m, onRest: o.onRest || null }; // 归一到 mass=1
+    // Time scaling preserves damping ratio and velocity-carry semantics.
+    var speed = global.document ? Number(document.documentElement.dataset.motionSpeed) : 1;
+    if (speed !== 0.75 && speed !== 1.25) speed = 1;
+    return { k: k / m / (speed * speed), c: c / m / speed, onRest: o.onRest || null };
   }
 
   function mk(v) { return { v: v, t: v, vel: 0 }; }
@@ -138,11 +141,13 @@
   function tick(now) {
     var dt = Math.min((now - lastT) / 1000, 1 / 30);
     lastT = now;
-    var SUB = 2, h = dt / SUB;          // 子步进×2：压低数值阻尼（c_eff≈c+k·h/2），大刚度小过冲不被吃
     running.forEach(function (el) {
       var st = states.get(el);
       if (!st) { running.delete(el); return; }
       var a = st.cfg, alive = false;
+      // Keep the integrator stable at low frame rates and the fastest cadence.
+      var SUB = Math.max(2, Math.ceil(dt * Math.max(a.c, 2 * Math.sqrt(a.k)) / 0.8));
+      var h = dt / SUB;
       for (var i = 0; i < PROPS.length; i++) {
         var p = st[PROPS[i]];
         for (var s2 = 0; s2 < SUB; s2++) {

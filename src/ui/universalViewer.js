@@ -160,6 +160,28 @@ const idsState = {
   deep: false,           // 分解树是否深度展开
 };
 const MAX_INPUT = 50000; // 输入上限（比穷举宽，因不做全解码）
+let inputEpoch = 0;
+
+export function getUniversalViewerDraft() {
+  const input = document.querySelector(".uv-input");
+  return { input: input ? input.value : uvState.input, activeTab: uvState.activeTab,
+    splitCodepoints: uvState.splitCodepoints, bytes: uvState.bytes, text: uvState.text, renderall: { ...uvState.renderall } };
+}
+export function restoreUniversalViewerDraft(saved) {
+  if (!saved || typeof saved.input !== "string") return;
+  uvState.input = saved.input;
+  if (typeof saved.activeTab === "string") uvState.activeTab = saved.activeTab;
+  uvState.splitCodepoints = !!saved.splitCodepoints;
+  uvState.bytes = saved.bytes ? new Uint8Array(saved.bytes) : null;
+  uvState.text = typeof saved.text === "string" ? saved.text : "";
+  if (saved.renderall) Object.assign(uvState.renderall, saved.renderall);
+  uvState._tabCache = null;
+}
+export function clearUniversalViewerIO() {
+  inputEpoch++; uvState.input = ""; uvState.text = ""; uvState.bytes = null; uvState._tabCache = null;
+  document.querySelector(".uv-stat")?.replaceChildren();
+  uvState._rerender?.();
+}
 const MAX_HEX_ROWS = 2048; // hex 视图最大行数（防爆）
 const MAX_UNICODE_ROWS = 2000; // unicode 表最大行数
 
@@ -1613,7 +1635,9 @@ export function renderUniversalViewer(container) {
     const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (file) {
       try {
+        const epoch = inputEpoch;
         const buf = await file.arrayBuffer();
+        if (epoch !== inputEpoch || !input.isConnected) return;
         const bytes = new Uint8Array(buf);
         input.value = bytesToHex(bytes, 100000);
         uvState.input = input.value;

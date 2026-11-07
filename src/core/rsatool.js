@@ -550,6 +550,7 @@ register({
 register({
   id: "rsaModinv", family: "rsa", familyLabel: "modinv",
   cat: "asym",
+  io: "none",
   name: "模逆（a⁻¹ mod m）",
   desc: "扩展欧几里得求 a 在模 m 下的乘法逆元；双向自反（encode/decode 互逆：inv(inv(a))=a）（参数框填 a 和 m，十进制；主输入框不再使用）",
   params: [

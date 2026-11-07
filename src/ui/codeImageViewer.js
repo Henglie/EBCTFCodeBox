@@ -609,7 +609,8 @@ function closeModal(immediate = false) {
   if (immediate || ov._closing) { ov.remove(); return; }
   ov._closing = true;
   ov.classList.add("ci-closing");
-  setTimeout(() => { if (ov.isConnected) ov.remove(); }, 250);
+  ov.addEventListener("animationend", event => { if (event.target === ov) ov.remove(); });
+  setTimeout(() => { if (ov.isConnected) ov.remove(); }, 250 * (Number(document.documentElement.dataset.motionSpeed) || 1) + 80);
 }
 
 function openModal(im) {
@@ -631,7 +632,22 @@ function openModal(im) {
 
   function applyTransform() {
     big.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+    zoomValue.textContent = `${Math.round(scale * 100)}%`;
   }
+  function zoomTo(next, cx = 0, cy = 0) {
+    next = Math.max(MIN, Math.min(MAX, next));
+    const ratio = next / scale;
+    tx = cx - (cx - tx) * ratio;
+    ty = cy - (cy - ty) * ratio;
+    scale = next;
+    applyTransform();
+  }
+  const resetZoom = () => { scale = 1; tx = 0; ty = 0; applyTransform(); };
+  const zoomValue = el("button", {
+    type: "button", class: "ci-modal-zoom", "aria-label": tt("ui.ci.zoomReset"), title: tt("ui.ci.zoomReset"), onclick: resetZoom,
+  }, "100%");
+  const zoomOut = el("button", { type: "button", "aria-label": tt("ui.ci.zoomOut"), title: tt("ui.ci.zoomOut"), onclick: () => zoomTo(scale / 1.25) }, "−");
+  const zoomIn = el("button", { type: "button", "aria-label": tt("ui.ci.zoomIn"), title: tt("ui.ci.zoomIn"), onclick: () => zoomTo(scale * 1.25) }, "+");
 
   const stage = el("div", { class: "ci-modal-stage" }, big);
 
@@ -644,11 +660,7 @@ function openModal(im) {
     const rect = stage.getBoundingClientRect();
     const cx = e.clientX - (rect.left + rect.width / 2);
     const cy = e.clientY - (rect.top + rect.height / 2);
-    const ratio = next / prev;
-    tx = cx - (cx - tx) * ratio;
-    ty = cy - (cy - ty) * ratio;
-    scale = next;
-    applyTransform();
+    zoomTo(next, cx, cy);
   }, { passive: false });
 
   let dragging = false, sx = 0, sy = 0, otx = 0, oty = 0;
@@ -671,9 +683,7 @@ function openModal(im) {
   };
   stage.addEventListener("pointerup", endDrag);
   stage.addEventListener("pointercancel", endDrag);
-  stage.addEventListener("dblclick", () => {
-    scale = 1; tx = 0; ty = 0; applyTransform();
-  });
+  stage.addEventListener("dblclick", resetZoom);
 
   const closeBtn = el("button", {
     class: "ci-modal-close", type: "button", title: tt("ui.ci.close"),
@@ -687,7 +697,7 @@ function openModal(im) {
         cnName(im).replace(/（待确认）$/, ""),
         unconf ? el("span", { class: "ci-badge" }, tt("ui.ci.unconfirmed")) : null,
       ),
-      el("div", { class: "ci-modal-meta" },
+      el("div", { class: "ci-modal-meta", title: [im.en, aliasStr, `${im.w}×${im.h}`, catLabel(im.cat)].filter(Boolean).join(" · ") },
         im.en ? el("span", { class: "ci-modal-en" }, im.en) : null,
         aliasStr ? el("span", { class: "ci-modal-alias" }, tt("ui.ci.alias") + "：" + aliasStr) : null,
         el("span", { class: "ci-modal-dim" }, im.w + "×" + im.h),
@@ -702,8 +712,16 @@ function openModal(im) {
     "aria-label": cnName(im).replace(/（待确认）$/, ""),
     onclick: (e) => e.stopPropagation(),
   }, head, stage,
-    el("div", { class: "ci-modal-hint" }, tt("ui.ci.zoomHint")),
+    el("div", { class: "ci-modal-hint" },
+      el("div", { class: "ci-modal-tools" }, zoomOut, zoomValue, zoomIn),
+      el("span", { class: "ci-modal-help" }, tt("ui.ci.zoomHint"))),
   );
+  dialog.addEventListener("keydown", event => {
+    if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
+    if (event.key === "+" || event.key === "=") { event.preventDefault(); zoomTo(scale * 1.25); }
+    else if (event.key === "-") { event.preventDefault(); zoomTo(scale / 1.25); }
+    else if (event.key === "0") { event.preventDefault(); resetZoom(); }
+  });
 
   _modalEl = el("div", { class: "ci-modal-overlay" }, dialog);
   document.body.append(_modalEl);
@@ -711,4 +729,3 @@ function openModal(im) {
 
   applyTransform();
 }
-

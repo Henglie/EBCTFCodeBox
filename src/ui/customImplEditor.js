@@ -21,6 +21,7 @@ import {
 } from "../core/customImplStore.js";
 import { probeSandbox } from "../core/customImplClient.js";
 import { icon as iconSvg } from "./icons.js";
+import { attachModalLifecycle } from "./modalLifecycle.js";
 
 // ---- CM6 bundle（单文件 ESM，已真浏览器验证） ----
 // ⚠ 性能审计 H2：821KB bundle 曾是顶层静态 import，随 main.js 进首屏关键路径——
@@ -190,10 +191,10 @@ function ensureCiCss() {
  */
 const CI_CSS = `
 /* ============ 开关行编组（产品负责人：开关与「编辑代码」是同一件事的两个入口，整组激活态） ============ */
-.ci-group{display:inline-flex;align-items:stretch;border:1px solid var(--outline);border-radius:var(--r-full);overflow:hidden;background:var(--surface-1);min-height:44px;transition:border-color var(--dur-short) var(--ease),background var(--dur-short) var(--ease);}
+.ci-group{display:inline-flex;align-items:stretch;border:0;border-radius:var(--r-full);overflow:hidden;background:var(--control-track);min-height:44px;transition:background var(--dur-short) var(--ease);}
 .ci-group.on{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 10%,var(--surface-1));}
 .ci-group .ci-seg{display:flex;align-items:center;gap:var(--sp-2);padding:0 var(--sp-3);}
-.ci-group .ci-seg+.ci-seg{border-inline-start:1px solid var(--outline-var);}
+.ci-group .ci-seg+.ci-seg{border:0;}
 .ci-toggle-row{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-2) 0;flex-wrap:wrap;}
 .ci-toggle-label{font-size:var(--fs-sm);color:var(--on-surface-var);cursor:pointer;user-select:none;white-space:nowrap;}
 /* ⚠ .ci-badge 与 codeImageViewer.css 同名冲突（其规则 position:absolute + padding:1px 6px 会让徽标脱流/变椭圆），此处显式覆盖 */
@@ -207,12 +208,12 @@ const CI_CSS = `
 .ci-mask{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:900;display:flex;align-items:center;justify-content:center;padding:var(--sp-4);animation:ci-fade var(--dur-medium) var(--ease-out);}
 @keyframes ci-fade{from{opacity:0}to{opacity:1}}
 .ci-mask.full{padding:0;}
-.ci-dialog{--ci-fs:13.5px;--ci-lh:20px;background:var(--surface-2);border:1px solid var(--outline-var);border-radius:var(--r-xl);max-width:1280px;width:100%;height:min(88vh,860px);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.18),0 1px 4px rgba(0,0,0,.08);animation:ci-pop var(--dur-medium) var(--ease-out);touch-action:manipulation;}
+.ci-dialog{--ci-fs:13.5px;--ci-lh:20px;position:relative;background:var(--surface-1);border:0;border-radius:var(--r-xl);max-width:1440px;width:100%;height:calc(100dvh - 32px);display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--el-3);animation:ci-pop var(--dur-medium) var(--ease-out);touch-action:manipulation;}
 @keyframes ci-pop{from{opacity:0;transform:scale(.96) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
 .ci-mask.full .ci-dialog{max-width:none;width:100%;height:100%;border-radius:0;border:0;animation:none;}
 
 /* ---- 头部（对齐 .ds-head：标题图标染 primary，右侧操作区靠右；全部 .ci-dialog 作用域，防泄漏污染编码图查询器同名类） ---- */
-.ci-dialog .ci-head{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-2) var(--sp-4);border-bottom:1px solid var(--outline-var);flex-wrap:wrap;flex:none;}
+.ci-dialog .ci-head{display:flex;align-items:center;gap:8px;padding:4px 12px;border:0;min-height:48px;flex-wrap:wrap;flex:none;}
 .ci-dialog .ci-head .msym{color:var(--primary);font-size:20px;flex:none;}
 .ci-dialog .ci-head h3{margin:0;font-size:var(--fs-md);font-weight:600;flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .ci-dialog .ci-head select{max-width:220px;}
@@ -229,9 +230,9 @@ const CI_CSS = `
 /* 二级左右分栏：CM6 编辑区 ｜ 权威源码 pre（产品负责人左右对照；头部共用一行，查找面板只有一个） */
 .ci-dialog .ci-main{display:flex;flex:1 1 0%;min-height:0;gap:var(--sp-1);align-items:stretch;flex-direction:row;}
 .ci-dialog .ci-main-left{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;gap:var(--sp-1);}
-.ci-editor-toolbar{display:flex;align-items:center;gap:var(--sp-1);padding:4px 8px;border:1px solid var(--outline-var);border-radius:var(--r-lg);background:var(--surface-2);flex-wrap:wrap;flex:none;margin:var(--sp-1) var(--sp-1) 0;}
+.ci-editor-toolbar{display:flex;align-items:center;gap:var(--sp-1);padding:2px 8px;border:0;border-radius:var(--r-md);background:transparent;flex-wrap:wrap;flex:none;margin:0;}
 .ci-editor-toolbar .ci-editor-title{flex:1;font-size:12px;color:var(--on-surface-var);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:60px;}
-.ci-editor-wrap{position:relative;flex:1;min-height:300px;overflow:hidden;background:var(--surface-2);border:1px solid var(--outline-var);border-radius:var(--r-lg);margin:var(--sp-1);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.ci-editor-wrap{position:relative;flex:1;min-height:0;overflow:hidden;background:var(--surface);border:1px solid var(--outline-var);border-radius:var(--r-lg);margin:0 8px 0;box-shadow:none;}
 .ci-editor-wrap .cm-editor{height:100%;}
 .ci-editor-wrap .cm-scroller{font-family:var(--mono,monospace);}
 .ci-editor-wrap .cm-content{min-height:100%;padding:8px 0;}
@@ -279,7 +280,7 @@ const CI_CSS = `
 .ci-dialog .ci-src-resize{flex:none;width:6px;cursor:col-resize;touch-action:none;background:transparent;border-radius:var(--r-full);transition:background var(--dur-short) var(--ease);margin:0 1px;}
 .ci-dialog .ci-src-resize:hover,.ci-dialog .ci-src-resize:active{background:color-mix(in srgb,var(--primary) 35%,transparent);}
 /* 右侧源码工具栏 = 左侧编辑区工具栏同款浮动卡片（同边距/同圆角/同底色，产品裁决两边一模一样） */
-.ci-dialog .ci-spanel-toolbar{display:flex;align-items:center;gap:var(--sp-1);padding:4px 8px;border:1px solid var(--outline-var);border-radius:var(--r-lg);background:var(--surface-2);flex-wrap:wrap;flex:none;margin:var(--sp-1) var(--sp-1) 0;}
+.ci-dialog .ci-spanel-toolbar{display:flex;align-items:center;gap:var(--sp-1);padding:2px 8px;border:0;border-radius:var(--r-md);background:transparent;flex-wrap:wrap;flex:none;margin:0;}
 .ci-dialog .ci-spanel-toolbar .ci-src-title{flex:1;font-size:12.5px;font-weight:600;color:var(--on-surface-var);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:60px;}
 /* 右侧源码内容卡片 = 左侧编辑区卡片同款 */
 .ci-dialog .ci-spanel-pre{flex:1;min-height:0;overflow:hidden;position:relative;margin:var(--sp-1);background:var(--surface-2);border:1px solid var(--outline-var);border-radius:var(--r-lg);box-shadow:0 1px 3px rgba(0,0,0,.08);}
@@ -331,9 +332,17 @@ const CI_CSS = `
 .ci-builtin .btn{width:100%;justify-content:center;}
 
 /* ---- 底部按钮区 ---- */
-.ci-foot{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-4);border-top:1px solid var(--outline-var);flex-wrap:wrap;}
+.ci-foot{display:flex;align-items:center;gap:6px;padding:4px 12px;border:0;flex-wrap:nowrap;overflow-x:auto;flex:none;min-height:48px;}
+.ci-foot .btn{white-space:nowrap;flex:none;min-height:36px;}
 .ci-foot .spacer{flex:1;}
-.ci-dialog select{background:var(--surface-1);border:1px solid var(--outline-var);border-radius:var(--r-sm);color:var(--on-surface);height:40px;box-sizing:border-box;padding:0 8px;font-size:12.5px;}
+.ci-dialog select{background:var(--control-track);border:0;border-radius:var(--r-md);color:var(--on-surface);height:36px;box-sizing:border-box;padding:0 10px;font-size:12.5px;}
+.ci-meta{display:flex;align-items:center;flex:none;min-height:26px;gap:8px;}
+.ci-meta .ci-status{flex:1;min-width:0;min-height:26px;border:0;padding:3px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ci-meta .ci-sandbox{max-width:48%;min-width:0;border:0;padding:3px 10px;}
+.ci-meta .ci-sandbox span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ci-dialog.ci-tools-hidden .ci-panel,.ci-dialog.ci-tools-hidden .ci-resize-v{display:none;}
+.ci-dialog .ci-src-resize[hidden]{display:none;}
+.ci-dialog .ci-body{position:relative;}
 
 /* ---- 危险语义色（app.css 按钮体系无 danger 变体，此处只着色不重写按钮本体） ---- */
 .ci-btn-danger{color:var(--error);}
@@ -371,6 +380,14 @@ html[data-theme="light"] .ci-dialog{--ci-hl-kw:#b4501a;--ci-hl-str:#256d47;--ci-
   .ci-dialog .ci-src-resize{width:auto;height:6px;cursor:row-resize;margin:0 var(--sp-3);}
   .ci-dialog .ci-editor-wrap{margin:0 var(--sp-1) var(--sp-1);}
   .ci-dialog .ci-editor-toolbar{margin:var(--sp-1) var(--sp-1) 0;}
+  .ci-dialog .ci-head h3{min-width:0;}
+  .ci-dialog .ci-head .ci-ops{order:3;flex:1 0 100%;margin:0;gap:4px;}
+  .ci-dialog .ci-head select{flex:1;min-width:0;max-width:none;}
+  .ci-dialog .ci-panel{position:absolute;inset:0 0 0 auto;width:min(86%,320px)!important;height:100%;flex-direction:column;overflow-y:auto;z-index:5;box-shadow:var(--el-3);}
+  .ci-dialog .ci-resize-v{display:none;}
+  .ci-dialog .ci-panel .ci-psec,.ci-dialog .ci-panel .ci-builtin{min-width:0;}
+  .ci-dialog .ci-panel .ci-psec.grow{flex:1;min-height:0;}
+  .ci-meta .ci-sandbox{max-width:44%;}
 }
 
 /* ---- 低高度（≤640px）：编辑器 min-height 归零，内部滚动接管（） ---- */
@@ -500,6 +517,7 @@ function builtinTemplate(op, dir) {
 
 /** 打开（或聚焦）某 op 的自定义实现编辑器。（async：首次会动态加载 CM6 bundle） */
 export async function openCustomImplEditor(opId, ctx = {}) {
+  const previousFocus = document.activeElement;
   ensureCiCss();
   const CM = await loadCM();
   const {
@@ -527,7 +545,9 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   const initialCode = saved.code || btpl || CUSTOM_TEMPLATE;
 
   const mask = el("div", { class: "ci-mask", onclick: (e) => { if (e.target === mask) close(); } });
-  const dialog = el("div", { class: "ci-dialog" });
+  const dialog = el("div", { class: "ci-dialog ci-tools-hidden", role: "dialog", "aria-modal": "true", "aria-label": t("ui.custom.editorTitle") + " · " + opId });
+  let lifecycle = null;
+  try { if (localStorage.getItem("ebctf.customImpl.tools") === "1") dialog.classList.remove("ci-tools-hidden"); } catch { /* Default to the editor. */ }
 
   // ---- 头部：标题 + 预设下拉 + 字号 + 查找 + 换行 + 源码 + 全屏（按钮行完全对齐） ----
   const presetSel = el("select", { title: t("ui.custom.preset") });
@@ -575,14 +595,27 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   const srcToggleBtn = iconBtn("code", t("ui.custom.srcToggle"), () => toggleSource());
   srcToggleBtn.classList.add("on", "ci-src-head-toggle");
   srcToggleBtn.setAttribute("aria-pressed", "true");
+  const toolsBtn = iconBtn("menu_book", t("ui.custom.helpers"), () => {
+    const hidden = dialog.classList.toggle("ci-tools-hidden");
+    toolsBtn.setAttribute("aria-expanded", String(!hidden));
+    toolsBtn.classList.toggle("on", !hidden);
+    try { localStorage.setItem("ebctf.customImpl.tools", hidden ? "0" : "1"); } catch { /* Session preference. */ }
+    requestAnimationFrame(() => view?.requestMeasure());
+  });
+  toolsBtn.classList.add("ci-tools-toggle");
+  toolsBtn.setAttribute("aria-expanded", String(!dialog.classList.contains("ci-tools-hidden")));
+  const headerClose = iconBtn("close", t("ui.custom.close"), () => close());
+  headerClose.classList.add("ci-header-close");
   dialog.append(el("div", { class: "ci-head" },
     msym("data_object"),
     el("h3", {}, t("ui.custom.editorTitle") + " · " + opId),
     el("div", { class: "ci-ops" },
       presetSel,
       srcToggleBtn,
+      toolsBtn,
       fullBtn,
     ),
+    headerClose,
   ));
 
   // ---- 主体：左右分栏 ----
@@ -747,7 +780,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   // 状态条 + 沙箱条（编辑区下方，全宽）
   const status = el("div", { class: "ci-status" });
   const sandboxBar = el("div", { class: "ci-sandbox" }, msym("terminal"), el("span", {}, "…"));
-  left.append(status, sandboxBar);
+  left.append(el("div", { class: "ci-meta" }, status, sandboxBar));
   body.append(left);
 
   // 可拖拽分隔条（宽屏竖向改面板宽，窄屏横向改面板高）
@@ -1086,6 +1119,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   }
 
   function close() {
+    lifecycle?.release(); lifecycle = null;
     try { ro.disconnect(); } catch { /* ignore */ }
     try { themeMo.disconnect(); } catch { /* ignore */ }
     if (view) { try { view.destroy(); } catch { /* ignore */ } }
@@ -1147,8 +1181,9 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     sPanel.classList.toggle("hidden", !hidden);
     srcToggleBtn.classList.toggle("on", hidden);
     srcToggleBtn.setAttribute("aria-pressed", String(hidden));
+    srcResize.hidden = !hidden;
     srcToggleBtn.title = hidden ? t("ui.custom.srcToggle") : t("ui.custom.srcClose");
-    if (!hidden && !_sourceLoaded) { _sourceLoaded = true; loadSource(); }
+    if (hidden && !_sourceLoaded) { _sourceLoaded = true; loadSource(); }
     requestAnimationFrame(() => { if (view) view.requestMeasure(); });
   }
 
@@ -1157,8 +1192,9 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   applyWrap(false); // 同步初始态（含按钮 on 视觉），不写 localStorage
   updateLineCol();
   view.focus();
-  // 默认展开权威源码（左右对照）；无 sourceFile 也走防御提示
-  if (!_sourceLoaded) { _sourceLoaded = true; loadSource(); }
+  // The editable implementation owns the initial canvas; source comparison is optional.
+  sPanel.classList.add("hidden"); srcResize.hidden = true;
+  srcToggleBtn.classList.remove("on"); srcToggleBtn.setAttribute("aria-pressed", "false");
 
   // 打开即见真算法：没有用户已保存代码时，后台生成完整依赖闭包并替换薄壳入口。
   // 只在编辑区仍等于初始内容时替换（用户手快开始编辑就绝不覆盖）。
@@ -1320,6 +1356,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     navigator.clipboard.writeText(fileText).then(() => toast(t("ui.custom.sourceCopied"))).catch(() => downloadText(fileText, opId + "-src.js", "text/javascript"));
   }
 
+  lifecycle = attachModalLifecycle(mask, { dialog, onClose: close, initialFocus: ".ci-editor-wrap .cm-content", restoreFocusTo: previousFocus });
   _editors.set(opId, { mask, close });
 }
 

@@ -1,0 +1,56 @@
+/* Load after controls.css/refinement.css. JS owns only these private paint
+   variables and attributes. No host clip/mask, containing block, pseudo-element
+   or DOM child is introduced. Author outline/focus and border widths survive.
+   Unsupported paint and semantic circles never receive data-cc-rendered.
+   Source paint states are sampled atomically; spatial CSS motion stays native. */
+@supports (corner-shape: superellipse(1.5)) {
+  /* The global element selector does not select native range pseudo-elements. */
+  input.m3-slider::-webkit-slider-runnable-track { corner-shape: var(--corner-panel, superellipse(1.5)); }
+  input.m3-slider::-webkit-slider-thumb { corner-shape: var(--corner-panel, superellipse(1.5)); }
+  input.m3-slider::-moz-range-track { corner-shape: var(--corner-panel, superellipse(1.5)); }
+  input.m3-slider::-moz-range-thumb { corner-shape: var(--corner-panel, superellipse(1.5)); }
+}
+@media screen and (forced-colors: none) {
+  [data-cc-rendered], [data-cc-measure] {
+    transition-property: var(--cc-transition, none) !important;
+  }
+  [data-cc-rendered]:not([data-cc-measure]) {
+    background-color: transparent !important;
+    background-image: none !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    border-image-source: var(--cc-image) !important;
+    border-image-slice: 0 fill !important;
+    border-image-width: 0 !important;
+    border-image-outset: var(--cc-outset, 0px) !important;
+    border-image-repeat: stretch !important;
+  }
+  select[data-cc-select][data-cc-rendered]:not([data-cc-measure]) {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    /* Preserve the native indicator gutter as effective end padding. The
+       authored start/block padding, text area and hit target remain intact. */
+    padding-inline-end: var(--cc-select-end) !important;
+    min-height: var(--cc-select-height) !important;
+  }
+  /* Do not combine vendor pseudo selectors: each engine rejects unknown ones.
+     The controls stylesheet remains the source of size/interaction geometry. */
+  input.m3-slider[data-cc-range]::-moz-range-track {
+    background: transparent !important;
+    border-image: var(--cc-track) 0 fill / 0 / 0 stretch !important;
+  }
+  input.m3-slider[data-cc-range]::-webkit-slider-runnable-track {
+    background: transparent !important;
+    border-image: var(--cc-track) 0 fill / 0 / 0 stretch !important;
+  }
+  input.m3-slider[data-cc-range]::-moz-range-thumb {
+    background: transparent !important;
+    box-shadow: none !important;
+    border-image: var(--cc-thumb) 0 fill / 0 / 6px stretch !important;
+  }
+  input.m3-slider[data-cc-range]::-webkit-slider-thumb {
+    background: transparent !important;
+    box-shadow: none !important;
+    border-image: var(--cc-thumb) 0 fill / 0 / 6px stretch !important;
+  }
+}

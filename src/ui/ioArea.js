@@ -9,7 +9,7 @@
  * 这样原有大量 `el.value` 读写代码几乎无需改动即可透明工作。
  * - readonly:true → contenteditable="false"（仍可选中复制），加 .io-readonly 类
  * - placeholder → data-placeholder + CSS :empty::before 模拟（div 无原生 placeholder）
- * - 粘贴强制纯文本（execCommand insertText / clipboardData text/plain）
+ * - 粘贴强制纯文本（clipboardData text/plain + Range）
  *
  * 零依赖（自带极简 el），供 main.js / recipeView / exhaustiveView 共用。
  */
@@ -36,13 +36,46 @@ export function ioArea(attrs = {}) {
   div.setAttribute("spellcheck", "false");
   if (ph) div.setAttribute("data-placeholder", ph);
   if (ro) div.classList.add("io-readonly");
+  // A terminal LF needs a final line box in contenteditable. BR contributes no
+  // textContent; unlike a zero-width character, it cannot leak into input data.
+  const syncCaretLine = () => {
+    const needed = !ro && div.textContent.endsWith("\n");
+    const markers = [...div.querySelectorAll("br[data-io-caret]")];
+    const marker = needed ? markers.pop() : null;
+    for (const node of markers) node.remove();
+    if (needed) {
+      const br = marker || document.createElement("br");
+      br.dataset.ioCaret = "";
+      if (div.lastChild !== br) div.append(br);
+    }
+  };
  // .value 代理 textContent：读写纯文本，保留换行（配合 CSS white-space:pre-wrap）
   Object.defineProperty(div, "value", {
     get() { return this.textContent; },
-    set(v) { this.textContent = v == null ? "" : String(v); },
+    set(v) { this.textContent = v == null ? "" : String(v); syncCaretLine(); },
     configurable: true,
   });
   if (!ro) {
+    let composing = false;
+    const insertPlainText = (text, inputType) => {
+      const sel = window.getSelection();
+      let range = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+      // A paste with a stale/outside selection must not modify another editor.
+      if (!range || !div.contains(range.startContainer) || !div.contains(range.endContainer)) {
+        range = document.createRange();
+        range.selectNodeContents(div); range.collapse(false);
+      }
+      range.deleteContents();
+      const node = document.createTextNode(text);
+      range.insertNode(node);
+      syncCaretLine();
+      // Keep the caret IN the inserted text, not at the parent boundary before
+      // Range.insertNode's empty split sibling. Browsers otherwise canonicalize
+      // that boundary to the preceding visual line when the next character arrives.
+      range.setStart(node, node.length); range.collapse(true);
+      if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+      div.dispatchEvent(new InputEvent("input", { bubbles: true, inputType, data: text }));
+    };
  // 粘贴净化：只取纯文本，杜绝富文本/HTML 注入。
  // 不用 execCommand("insertText")：Chromium 会吞 \n（多行矩阵被拍平成单行）且返回 true，
  // 兜底分支永不触发。改为 Range 直插文本节点（.io-area 为 pre-wrap，\n 语义正确），
@@ -52,41 +85,33 @@ export function ioArea(attrs = {}) {
       const cd = e.clipboardData || window.clipboardData;
       const text = cd ? cd.getData("text/plain") : "";
       if (!text) return;
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount) {
-        const range = sel.getRangeAt(0);
-        range.deleteContents();
-        const node = document.createTextNode(text);
-        range.insertNode(node);
-        range.setStartAfter(node); range.collapse(true);
-        sel.removeAllRanges(); sel.addRange(range);
-      } else {
-        div.textContent = div.textContent + text;
-      }
-      div.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      insertPlainText(text, "insertFromPaste");
     });
  // Enter → 纯 "\n"（不让浏览器插入 <div>/<br>，保证 textContent 换行语义正确）。
  // Ctrl/Meta+Enter 放行给上层的 convert 快捷键；Shift+Enter 也走纯换行。
  // 同粘贴：execCommand("insertText", "\n") 在 Chromium 吞换行 → Range 直插 + 补发 input。
     div.addEventListener("keydown", (e) => {
-      if (e.isComposing || e.keyCode === 229) return;
+      if (composing || e.isComposing || e.keyCode === 229) return;
       if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        const sel = window.getSelection();
-        if (sel && sel.rangeCount) {
-          const range = sel.getRangeAt(0);
-          range.deleteContents();
-          const node = document.createTextNode("\n");
-          range.insertNode(node);
-          range.setStartAfter(node); range.collapse(true);
-          sel.removeAllRanges(); sel.addRange(range);
-          div.dispatchEvent(new InputEvent("input", { bubbles: true }));
-        }
+        insertPlainText("\n", e.shiftKey ? "insertLineBreak" : "insertParagraph");
       }
     });
+    // Virtual keyboards can request a line break without a desktop keydown.
+    // A prevented keydown does not produce a native beforeinput, so Enter is not doubled.
+    div.addEventListener("beforeinput", (e) => {
+      if (composing || e.isComposing || !e.cancelable) return;
+      if (e.inputType === "insertParagraph" || e.inputType === "insertLineBreak") {
+        e.preventDefault(); insertPlainText("\n", e.inputType);
+      }
+    });
+    div.addEventListener("compositionstart", () => { composing = true; });
+    div.addEventListener("compositionend", () => { composing = false; syncCaretLine(); });
  // 保险：内容删空后清掉浏览器残留的 <br>，让 :empty placeholder 重新生效
-    div.addEventListener("input", () => {
+    div.addEventListener("input", (e) => {
+      if (composing || e.isComposing) return;
       if (div.textContent === "") div.innerHTML = "";
+      else syncCaretLine();
     });
   }
   if (!ro) attachEditHistory(div);

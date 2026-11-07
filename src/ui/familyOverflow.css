@@ -1,0 +1,38 @@
+/* Family choices use a contiguous visible prefix; the portal menu is outside scroll/clipping containers. */
+.dir-seg.fam-seg.family-overflow {
+  display: flex; flex-wrap: nowrap; width: 100%; min-width: 0; max-width: 100%;
+  overflow: hidden; white-space: nowrap; scrollbar-width: none;
+}
+.family-overflow > button { flex: 0 0 auto; }
+.family-overflow > button[hidden] { display: none !important; }
+.family-overflow > .family-more { flex: 0 1 auto; min-width: 44px; overflow: hidden; }
+.family-more-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.family-more-icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; }
+.family-overflow-menu {
+  position: fixed; z-index: 10030; box-sizing: border-box; min-width: 0; padding: 6px;
+  overflow: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  border: 0; border-radius: var(--r-lg, 20px); background: var(--surface-2, Canvas);
+  color: var(--on-surface, CanvasText); box-shadow: var(--shadow-2, 0 6px 24px #0003);
+  font: var(--fs-sm, 14px)/1.4 var(--font, sans-serif);
+}
+.family-overflow-choice {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 8px 12px;
+  border: 0; border-radius: var(--r-sm, 12px); background: transparent; color: inherit;
+  text-align: start; font: inherit; cursor: pointer;
+}
+.family-overflow-choice:hover { background: color-mix(in srgb, var(--on-surface, CanvasText) 8%, transparent); }
+.family-overflow-choice[aria-checked="true"] { background: var(--primary-container, Highlight); color: var(--on-primary-container, HighlightText); font-weight: 600; }
+.family-overflow-choice:focus-visible { outline: 2px solid var(--primary, Highlight); outline-offset: -2px; }
+.family-overflow-choice:disabled { opacity: .38; cursor: default; }
+.family-choice-check { width: 18px; flex: none; visibility: hidden; }
+.family-overflow-choice[aria-checked="true"] .family-choice-check { visibility: visible; }
+.family-choice-label { min-width: 0; overflow-wrap: anywhere; }
+@media (pointer: coarse) { .family-overflow-choice { min-height: 44px; } }
+@media (orientation: landscape) and (max-height: 600px) and (pointer: fine) {
+  .family-overflow-menu { padding: 4px; }
+  .family-overflow-choice { min-height: 36px; padding-block: 6px; }
+}
+@media (forced-colors: active) {
+  .family-overflow-menu { border: 1px solid CanvasText; }
+  .family-overflow-choice[aria-checked="true"] { outline: 1px solid Highlight; }
+}

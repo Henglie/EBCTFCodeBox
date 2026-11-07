@@ -53,64 +53,29 @@ Current version **v0.1.15** (in development). The source of truth is always the 
 
 ## v0.1.15 (in development)
 
-> In development: 8 new CyberChef-aligned ops (all-preset CRC, all checksums, SHA-2 six sizes, CTPH, all hashes, Whirlpool variants, LZ4 Frame, Enigma), CyberChef partial count cleared, `moyue` non-default-key detection closed, and source-comment cleanup. v0.1.14 is complete but unpublished; see [CHANGELOG.md](./CHANGELOG.md).
-
-## v0.1.13-beta
+> v0.1.15 is a UI-focused development release leading into v0.2.0. v0.1.14 has ended as a transitional development version. Full history: [CHANGELOG.md](./CHANGELOG.md). Development workflow: [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ### New
 
-- dCode extras 2026-11 batch: 409 ops, plus a factorial digit/scale estimator; op pages show new/updated badges with batch timestamps.
-- 12 new main ops (890 total): `dataConvert`, `bzip2Enc`, `extractAll`, `gostKeyWrap`, `falconKeyGen` / `falconSign`, `typex`, `sigaba`, `lorenz`, `bombe`, `multipleBombe` and `colossus`, covering JSON/CSV/XML/YAML conversion, bzip2, dedicated text extraction, GOST Key Wrap, Falcon and six historical cipher machines.
-- New "All Algorithms" flat page (890 cards, collapsible categories, live search) and a ≤860px drawer navigation; the recipe toolbar is rearranged into Build / Run / Edit / Manage rows, F1 moves to the top-right of the page header, and the input/output encoding toolbars are independent — switching the output view reformats the latest result instantly without re-running the algorithm.
-- Multi-file / folder batch processing with per-item status, single downloads and ZIP packaging; Settings manages four optional offline packs (wasm / fonts / language packs / English education content).
-- Chinese / English / French / Japanese / Korean / Russian core UI copy is structurally aligned at 2927 keys; other languages show their real coverage instead of a false 100%.
-- Code-image auto-recognition: reading-order glyph segmentation, configurable candidate weights, slot→character mappings, per-glyph confidence and unknown `?`; no alphabet-order guessing without labels.
-- Block ciphers now expose NoPadding/PKCS#7/Zero/Bit/ISO 10126/ANSI X9.23; AES-GCM adds AAD/Include IV/tagLen; XTEA/RC6 rounds, ChaCha/Salsa 8/12 rounds, PRESENT CBC and GOST modes.
-- Recipe chain gains disabled nodes, breakpoints, single-step/run-from, step-localized errors with prefix retention, structural undo/redo, node duplicate, Auto Bake, Magic and Fork/Merge/Subsection/Register/Conditional Jump control nodes without new main ops.
-- Unified Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y for op inputs, home one-key, character viewer, recipe input and expandable inputs; paste/clear/external writes are undoable.
-- LZString pieroxy formats, LZ4 compression and regex presets; multi-stage one-key decoding keeps both progress bars, run bars no longer sticky, and card spacing is fixed.
+- Ordinary standalone operations use resizable navigation / settings / input-output regions; mobile and narrow workspaces return to a vertical layout, with education and examples spanning the full content width.
+- Conversion and input/output swap sit between the editors; the divider supports dragging, keyboard resizing and reset, ending in a round dot above the education card.
+- Settings and data start equally sized; Environment offers adaptive landscape/portrait layout or an always-stacked traditional layout.
+- Page drafts survive navigation and refresh, including ordinary-operation fields, file bytes and outputs; Environment provides an input/output-only clear action separate from the full reset.
+- Eight new operations cover all-preset CRC, all checksums, six SHA-2 sizes, CTPH, all hashes, Whirlpool variants, LZ4 Frame and Enigma, bringing the main total to 969.
 
 ### Fixed
 
-- All dCode ops stop computing on every keystroke; parameter input is debounced and math/number-theory ops require an explicit Run/Ctrl+Enter.
-- Factorial no longer has an arbitrary `n<=20000` cap: divide-and-conquer BigInt product, memory-budgeted expansion, precise digit/memory estimate and explicit refusal when too large.
-- Math/number-theory P0: Harshad uses BigInt beyond 2^53; DFT no longer silently drops input points; square/cube/nth roots are exact for BigInt perfect powers; hypergeometric/binomial probabilities use log-space and no longer return NaN; small numeral/range caps became output/work budgets.
-- Raster split defaults to mid-gray `#808080` so black and white strokes both remain visible; x/y axes are both emitted and grouped in reports and auto previews; `auto` uses real alpha.
-- Block-cipher and parameter validation: AES/DES/3DES IV length must match the block size; GCM Include IV accepts 12- and 16-byte nonces; non-hex characters in keys / IVs / ciphertext, out-of-range RC2 effective bits, and invalid Bombe / MultipleBombe / Colossus numeric parameters now raise explicit errors instead of zero-padding, truncating or falling back to defaults.
-- The recipe run no longer leaves an "Executing…" banner behind; loading a chain-head file immediately shows its metadata and clear button.
-- Fixed 9 operations that only expose a run action being misclassified as input-less; multiline rotor / reflector parameters for the historical cipher machines are editable again, and those operations now run explicitly in a Worker so large rotor pools do not freeze the page.
-- SM4-GCM separate tags decoded as Latin1 / UTF-8 no longer have trailing whitespace trimmed, so a valid tag ending in `0x20` decrypts correctly.
-- One-key QR: 1/2/4/16-bit, indexed and interlaced PNGs now go through browser canvas to RGBA before ZXing; the 1-bit `QR.png` sample is recognized again instead of failing with "only 8-bit LSB".
+- Restored frequency-analysis and traffic-analysis editors and file targets; enabling custom implementations immediately restores the required input.
+- Fixed typing on the wrong line after Enter, horizontal overflow from mobile parameters and encoding controls, and light-theme batch-panel contrast.
+- Improved `moyue` detection with non-default keys.
 
-### Contributors
+### Improved
 
-- Added 橙子 (Chengzi) for multiple Misc logic fixes.
-- Added Tokeii for the redesigned icon and downstream optimizations.
-
-### Verification
-
-890 main ops; 409 plugin ops (all manual-run); plugin self-tests 110/110; padding/KAT 144, GOST 128, RC6 65, XSalsa20 11 and SM4-GCM 28 checks pass; recipe chain Node 43+23, Playwright 47+42 and existing smoke 8 pass; four-row recipe toolbar layout 14/14 at 1440/390; editor undo 6/6; six-language i18n aligned at 2847 keys; Typex 3/3, SIGABA 2/2, Lorenz SZ40/SZ42a 6 public vectors, SZ42b round-trip, Bombe 18/0, MultipleBombe 17/0, Colossus 215/0, and 7/7 in-browser attack tests; 1-bit QR recognized; raster demo x=38/y=30/68 with `#808080` blanks. See [CHANGELOG.md](./CHANGELOG.md).
-
-## v0.1.12
-
-### New
-
-- Yunying cipher (01248); KNN A/B classifier; standalone StegSolve page.
-- Rail Fence Z mode; W mode offset 0–64 and smart-decode support.
-- Five Chinese lookup codecs: Wubi 86/98, Chinese Telegraph, Zhengma, Four-Corner, Cangjie.
-- AEAD/PQC/ZIP/ECDH/RSA-OAEP/HPKE/Mach-O/WASM/GB18030/UTF-32/SHA-224/cSHAKE ops.
-- Streaming file analysis, automatic stego leads and artifacts; smart result actions.
-- Official plugin discovery from addons/; dCode plugin Beta with 408 ops.
-
-### Fixed
-
-- Real translation coverage; Chinese first, English second; language modal closes on route changes.
-- Phantom_QR hang, stale result TOC, TOC dot overlap and runbar alignment.
-- F5/QR limited samples stay explicit failures; pyc/bkcrack/imageDiff/archive fixes.
-
-### Verification
-
-878 main ops; 408 plugin ops; 110 challenges / 153 files; release package manifest 1630 items. See [CHANGELOG.md](./CHANGELOG.md).
+- Retains M3 Expressive styling: native continuous corners in Chromium and self-drawn continuous curvature on common Firefox / WebKit controls, preserving semantic circles.
+- Shared sliders and motion pace, a compact 48px top bar, input-focused home workspace, floating code-image controls and bulk category expand/collapse.
+- Compact BOM messages and code-editor tools, improved mobile action menus, keyboard search and focus restoration.
+- Adaptive multi-column parameters, larger titles with left-aligned descriptions, tools inside editor corners, output-view/report controls below the output, and overflow family choices in a dropdown.
+- New development copy prioritizes Chinese and English; other maintained locales align before release.
 
 ## Introduction
 

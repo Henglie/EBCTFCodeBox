@@ -127,6 +127,10 @@
   color: var(--on-surface-var);
   white-space: nowrap;
 }
+.allops-bulk { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.allops-bulk .act-btn { font-size: var(--fs-sm); font-weight: 500; white-space: nowrap; }
+.allops-bulk .msym { font-size: 18px; }
+.allops-collapse-all .msym { transform: rotate(180deg); }
 
 .allops-body {
   display: flex;

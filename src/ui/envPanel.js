@@ -20,6 +20,9 @@ import { icon as iconSvg } from "./icons.js";  // .msym 无字体 ligature，须
 import { THEME_VARIANTS } from "./themePicker.js";
 import { attachModalLifecycle } from "./modalLifecycle.js";
 import { getLocale } from "../i18n/index.js";
+import { getMotionSpeed, setMotionSpeed } from "./motionPreferences.js";
+import { getOpLayout, setOpLayout } from "./layoutPreferences.js";
+import { clearWorkspaceDrafts, resetWorkspaceDrafts } from "./workspaceDrafts.js";
 // 「增强随机安全」全局入口（并入本环境面板）。独立组件，自带轻量 el/i18n。
 import { renderRandSecureSection } from "./randSecurePanel.js";
 // 仅用于全局 pack-miss 提示（离线包缺失时告知用户）；离线包管理 UI 已迁至扩展面板。
@@ -272,6 +275,18 @@ function renderPanelContent(state) {
   wrap.append(renderThemeSection());
  // 强调色区（动态取色）
   wrap.append(renderAccentSection());
+  const clearIO = el("button", { type: "button", class: "act-btn env-clear-io", "aria-label": t("ui.env.clearIO") }, msym("delete"), t("ui.env.clearIO"));
+  clearIO.addEventListener("click", async () => {
+    clearIO.disabled = true;
+    try { await clearWorkspaceDrafts(); window.__ebctfToast?.(t("ui.env.clearedIO")); }
+    finally {
+      clearIO.disabled = false;
+      if (clearIO.isConnected && document.activeElement === document.body) clearIO.focus({ preventScroll: true });
+    }
+  });
+  wrap.append(el("div", { class: "env-section env-clear-io-box" },
+    el("div", { class: "env-section-title" }, t("ui.env.clearIO")),
+    el("div", { class: "env-reset-note" }, t("ui.env.clearIONote")), clearIO));
  // 一键重置区（危险操作，面板底部，产品负责人 2026-08-26 需求）
   wrap.append(renderResetSection());
   return wrap;
@@ -322,6 +337,7 @@ function confirmHardReset() {
 // 执行重置：localStorage / sessionStorage / Cookie / Cache Storage / Service Worker 全清，
 // 再注销 SW（防旧 SW 立刻重建缓存），最后强制刷新。清完的数据不可恢复，入口已做二次确认。
 async function hardResetApp() {
+  await resetWorkspaceDrafts();
   try { localStorage.clear(); } catch { /* 隐私模式 */ }
   try { sessionStorage.clear(); } catch { /* ignore */ }
  // Cookie：逐名删除（HttpOnly 的删不掉，本项目不设 HttpOnly cookie；path 逐级试）
@@ -501,6 +517,27 @@ function renderThemeSection() {
     sec.append(grid);
   }
   const reduced = el("input", { type: "checkbox", id: "envReduceMotion", "aria-label": t("ui.env.reduceMotion"), "aria-describedby": "envReduceMotionNote" });
+  const speed = el("select", { id: "envMotionSpeed", "aria-label": t("ui.env.motionSpeed") });
+  for (const [value, key] of [[0.75, "motionFast"], [1, "motionStandard"], [1.25, "motionRelaxed"]]) {
+    speed.append(el("option", { value: String(value) }, t(`ui.env.${key}`)));
+  }
+  speed.value = String(getMotionSpeed());
+  speed.addEventListener("change", () => setMotionSpeed(speed.value));
+  sec.append(el("label", { class: "env-motion-speed", for: "envMotionSpeed" },
+    el("span", {}, t("ui.env.motionSpeed")), speed));
+  const layout = el("div", { class: "dir-seg env-layout-seg", role: "group", "aria-label": t("ui.env.layout") });
+  for (const [value, key] of [["adaptive", "layoutAdaptive"], ["traditional", "layoutTraditional"]]) {
+    const button = el("button", { type: "button", class: getOpLayout() === value ? "on" : "", "aria-pressed": String(getOpLayout() === value) }, t(`ui.env.${key}`));
+    button.addEventListener("click", () => {
+      setOpLayout(value);
+      for (const item of layout.querySelectorAll("button")) {
+        item.classList.toggle("on", item === button);
+        item.setAttribute("aria-pressed", String(item === button));
+      }
+    });
+    layout.append(button);
+  }
+  sec.append(el("div", { class: "env-layout-setting" }, el("div", { class: "env-section-title" }, t("ui.env.layout")), layout));
   reduced.checked = document.documentElement.classList.contains("reduce-motion");
   reduced.addEventListener("change", () => {
     document.documentElement.classList.toggle("reduce-motion", reduced.checked);

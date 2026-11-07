@@ -48,6 +48,16 @@
   --r-lg: 16px;
   --r-xl: 28px;
   --r-full: 999px;
+  /* Continuous corners are a progressive enhancement of the M3 shape scale. */
+  --corner-panel: superellipse(1.5);
+  --line-subtle: color-mix(in srgb, var(--outline-var) 55%, transparent);
+  --focus-ring: color-mix(in srgb, var(--primary) 22%, transparent);
+  --workspace-bg: color-mix(in srgb, var(--surface) 75%, var(--surface-1));
+  --control-track: color-mix(in srgb, var(--primary) 12%, var(--surface-1));
+  --range-track: color-mix(in srgb, var(--primary) 70%, var(--surface-1));
+  --motion-scale: 1;
+  --nav-item-height: 48px;
+  --topbar-height: var(--nav-item-height);
 
  /* ---- 间距 ---- */
   --sp-1: 4px;
@@ -89,10 +99,10 @@
   --ease-emph: cubic-bezier(.2, 0, 0, 1);     /* emphasized */
   --ease-out: cubic-bezier(.05, .7, .1, 1);     /* M3 emphasized-decelerate（入场），原 M2 legacy (0,0,0,1) 已按规范改 */
   --ease-in: cubic-bezier(.3, 0, .8, .15);      /* M3 emphasized-accelerate（出场），原 M2 legacy (.3,0,1,1) 已按规范改 */
-  --dur-1: 75ms;    /* M3 short2 100ms ×0.75（恒烈定档：×0.5 太快看不清、×1.0 太慢，取 ¾） */
-  --dur-2: 150ms;   /* 恰为 M3 short3 标准档 */
-  --dur-3: 200ms;   /* medium1 250ms ×0.75 */
-  --dur-4: 250ms;   /* 恰为 M3 medium1 标准档 */
+  --dur-1: calc(75ms * var(--motion-scale));
+  --dur-2: calc(150ms * var(--motion-scale));
+  --dur-3: calc(200ms * var(--motion-scale));
+  --dur-4: calc(250ms * var(--motion-scale));
   --dur: var(--dur-2);   /* 默认过渡 */
  /* 语义别名（组件按语义引用，不直接用数字档） */
   --dur-short: var(--dur-2);    /* 小交互：hover/开关/按钮 150ms */

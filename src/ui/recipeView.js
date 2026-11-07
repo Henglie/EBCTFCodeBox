@@ -1929,8 +1929,10 @@ async function runChain(opts = {}) {
   }
 
   // 惰载 op 先补真实模块，再建执行图/校验；失败不吞，执行时会给明确 op 错误。
+  const loadSeq = _seq;
   _loadingOps = true;
-  try { await ensureChainOpsLoaded(); } finally { _loadingOps = false; }
+  try { await ensureChainOpsLoaded(); } finally { if (loadSeq === _seq) _loadingOps = false; }
+  if (loadSeq !== _seq || !out.isConnected) return false;
   normalizeNodeDirs();
   const graph = toGraph();
   const v = validateRecipe(graph);
@@ -2033,6 +2035,7 @@ async function runChain(opts = {}) {
       onStep,
     });
   } catch (e) {
+    if (seq !== _seq) return false;
     _running = false;
     _cancelRequested = false;
     rState.runState = "idle";
@@ -2046,6 +2049,7 @@ async function runChain(opts = {}) {
     return false;
   }
 
+  if (seq !== _seq) return false;
   _running = false;
   _cancelRequested = false;
   _lastRun = result;
@@ -2633,6 +2637,20 @@ function openControlMenu(anchor) {
   _ctlMenu = menu;
   document.addEventListener("pointerdown", _ctlMenuOutside, true);
   document.addEventListener("keydown", _ctlMenuKey, true);
+}
+
+export function clearRecipeIO() {
+  const unopenedDraft = !_bootRestored ? loadDraft() : null;
+  _seq++;
+  _cancelRequested = true;
+  _running = false; _loadingOps = false;
+  clearTimeout(_runTimer); clearTimeout(_draftTimer);
+  clearChainFile(); rState.input = ""; _lastRun = null; resetStepSession();
+  rState.runState = "idle"; rState.stale = false; _pending = false;
+  saveDraft(unopenedDraft ? { ...unopenedDraft, input: "", inputKind: "text", fileMeta: null, fileMissing: false } : serializeState());
+  for (const id of ["recipeIn", "recipeOut"]) { const area = document.getElementById(id); if (area) area.value = ""; }
+  for (const id of ["recipeOutFiles", "recipeSteps", "recipeRunStatus"]) document.getElementById(id)?.replaceChildren();
+  updateRunUi();
 }
 
 export { rState };
