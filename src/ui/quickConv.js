@@ -208,7 +208,6 @@ const S = {
   tab: "radix",
   width: 32,
   customWidth: 32,
-  signed: false, // 逆向场景（地址）默认无符号
   value: 0n, // 按 width 掩码后的位模式
   expr: "",
   rva: { base: "", off: "", va: "" },
@@ -340,7 +339,7 @@ function renderRadixPanel() {
   $panel.innerHTML = "";
   for (const k of Object.keys(R)) delete R[k];
 
-  // -- 工具条：字宽 + 符号 + 清零 --
+  // -- Toolbar: word width and reset; both decimal interpretations stay visible. --
   const bar = el("div", { class: "qc-bar qc-toolbar" });
   bar.append(el("span", { class: "qc-bar-label" }, tt("ui.qc.width")));
   R.widthChips = [];
@@ -399,13 +398,6 @@ function renderRadixPanel() {
   );
   bar.append(customBox);
   bar.append(el("span", { class: "qc-bar-sep" }));
-  for (const [sg, key] of [[false, "ui.qc.unsigned"], [true, "ui.qc.signed"]]) {
-    bar.append(el("button", {
-      class: "qc-chip" + (S.signed === sg ? " active" : ""),
-      type: "button",
-      onclick: () => { S.signed = sg; refreshAll(); },
-    }, tt(key)));
-  }
   bar.append(el("button", {
     class: "qc-chip qc-chip-ghost", type: "button",
     onclick: () => { S.value = 0n; R.notice.textContent = ""; refreshAll(); },
@@ -513,10 +505,18 @@ function refreshAll(skipId) {
   R.be.textContent = bytes.join(" ");
   R.le.textContent = bytes.slice().reverse().join(" ");
   renderBits();
-  // 有符号/无符号切换只影响 dec 行的解读，上面已统一重算
 }
 
 function renderBits() {
+  if (R.bitWidth === S.width && R.bitButtons) {
+    for (const [i, btn] of R.bitButtons) {
+      const on = ((S.value >> BigInt(i)) & 1n) === 1n;
+      if (btn.classList.contains('on') === on) continue;
+      btn.classList.toggle('on', on); btn.textContent = on ? '1' : '0';
+    }
+    return;
+  }
+  R.bitWidth = S.width; R.bitButtons = [];
   R.bitsWrap.innerHTML = "";
   if (S.width > 64) {
     R.bitsWrap.append(el("div", { class: "qc-hint" }, tt("ui.qc.bitmapWide")));
@@ -544,6 +544,7 @@ function renderBits() {
         refreshAll();
       },
     }, on ? "1" : "0");
+    R.bitButtons.push([i, btn]);
     const tick = el("span", { class: "qc-bit-tick" + (i % 8 === 0 ? " major" : "") }, String(i));
     group.append(el("div", { class: "qc-bitcell" }, btn, tick));
   }
@@ -556,7 +557,7 @@ function runExpr() {
   if (!src) return;
   try {
     // 算法层：手写递归下降解析器，无 eval（core/progCalc.js）
-    const { value } = evalProgExpr(src, { width: S.width, signed: S.signed });
+    const { value } = evalProgExpr(src, { width: S.width, signed: false });
     S.value = value;
     R.notice.textContent = "";
     refreshAll();

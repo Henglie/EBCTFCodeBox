@@ -1,8 +1,8 @@
 /*
  * batchPanel.js — 批处理面板（已由 main.js 接线：首页按钮 / 多文件拖入 / op 页按钮）。
  *
- * 本文件不 import main.js，不读全局 state，不碰 localStorage，
- * 所有能力一律从传入的 ctx 取：
+ * 本文件不 import main.js，不读全局 state；文件队列与产物走共享草稿管理。
+ * 算法能力从传入的 ctx 取：
  *
  *   ctx = {
  *     planBatch,   // src/core/batchRun.js 的 planBatch
@@ -27,6 +27,8 @@
  * 失败与跳过一律显式展示：预检被拒、类型不支持、读取失败、取消未派发，都写进
  * 行状态与结果表，不做静默丢弃。
  */
+
+import { connectSpecialDraft, newDraftIdentity } from './workspaceDrafts.js';
 
 const FALLBACK = {
   "ui.batch.title": "批量处理",
@@ -198,6 +200,7 @@ export function batchPanel(ctx) {
   let token = null;
   let busy = false;
   const notes = [];
+  let draft = null, generation = 0, disposed = false, binaryKey = newDraftIdentity();
 
   function note(msg) {
     notes.push(msg);
@@ -289,6 +292,7 @@ export function batchPanel(ctx) {
       });
     }
     renderList();
+    binaryKey = newDraftIdentity(); draft?.changed();
   }
 
   // 目录拖入：webkitGetAsEntry 递归收集。不支持的条目显式记进 notes，不静默丢。
@@ -322,6 +326,7 @@ export function batchPanel(ctx) {
 
   async function addDataTransfer(dt) {
     if (!dt) return;
+    const epoch = generation;
     const items = dt.items;
     const collected = [];
     const jobs = [];
@@ -363,7 +368,7 @@ export function batchPanel(ctx) {
         note(t("ui.batch.emptyDir", job.name));
       }
     }
-    if (collected.length) addFiles(collected);
+    if (collected.length && epoch === generation && !disposed) addFiles(collected);
   }
 
   // ---- 渲染 ----
@@ -514,15 +519,17 @@ export function batchPanel(ctx) {
     }
     // 空文件是用户明确选中的真实条目（不是空目录）：显式给一个长度 0 的 bytes，
     // 让预检区分「0 字节文件」与「没有任何内容的空条目」。
-    const plan = c.planBatch(entries.map((e) => ({
+    const pending = entries.filter(e => e.status !== 'ok' || !e.bytes);
+    if (!pending.length) return;
+    const epoch = ++generation;
+    const plan = c.planBatch(pending.map((e) => ({
       id: e.id, name: e.name, size: e.size, type: e.type,
       bytes: e.size === 0 ? EMPTY : undefined,
     })));
     lastPlan = plan;
     const rejectedById = new Map();
     for (let i = 0; i < plan.rejected.length; i++) rejectedById.set(plan.rejected[i].id, plan.rejected[i]);
-    for (let i = 0; i < entries.length; i++) {
-      const e = entries[i];
+    for (const e of pending) {
       const rej = rejectedById.get(e.id);
       e.status = rej ? "rejected" : "pending";
       e.reason = rej ? rej.reason : "";
@@ -531,6 +538,7 @@ export function batchPanel(ctx) {
       e.ms = 0;
     }
     renderList();
+    binaryKey = newDraftIdentity(); draft?.changed();
 
     if (!plan.stats.accepted) {
       note(t("ui.batch.noplan"));
@@ -546,6 +554,7 @@ export function batchPanel(ctx) {
     try {
       run = await c.runBatch(plan, async (item) => {
         const owner = byId.get(item.id);
+        if (epoch !== generation || disposed) throw new Error(t('ui.batch.cancelReason'));
         if (!owner) throw new Error("结果找不到对应条目：" + item.id);
         owner.status = "running";
         renderList();
@@ -556,9 +565,12 @@ export function batchPanel(ctx) {
           throw new Error(t("ui.batch.readFail", (e && e.message) ? e.message : String(e)));
         }
         const bytes = new Uint8Array(buf);
+        if (epoch !== generation || disposed) throw new Error(t('ui.batch.cancelReason'));
         const applied = await applyOp(bytes, owner.name);
+        if (epoch !== generation || disposed) throw new Error(t('ui.batch.cancelReason'));
         owner.out = { name: owner.name, text: applied.text, note: applied.note };
         owner.bytes = applied.bytes;
+        owner.status = 'ok'; binaryKey = newDraftIdentity(); draft?.changed();
         if (applied.note) owner.reason = applied.note;
         // 让出一次事件循环：纯 JS op 与 File.arrayBuffer 的 Promise 会连成微任务链，
         // 不让出的话定时器/取消点击要等整批跑完才处理，取消按钮形同虚设。
@@ -566,11 +578,13 @@ export function batchPanel(ctx) {
         return { size: applied.bytes.length };
       }, { concurrency: 1, cancelToken: token });
     } catch (e) {
+      if (epoch !== generation || disposed) return;
       setBusy(false);
       note(t("ui.batch.runFail", (e && e.message) ? e.message : String(e)));
       return;
     }
 
+    if (epoch !== generation || disposed) return;
     lastRun = run;
     for (let i = 0; i < run.results.length; i++) {
       const r = run.results[i];
@@ -590,7 +604,7 @@ export function batchPanel(ctx) {
     setBusy(false);
     renderList();
     renderResults(run);
-    summary.textContent = t("ui.batch.summary", plan.stats.total, run.stats.ok, run.stats.failed, run.stats.skipped, plan.stats.rejected);
+    updateSummary(); draft?.changed();
   }
 
   function makeZip() {
@@ -628,16 +642,19 @@ export function batchPanel(ctx) {
     else note(t("ui.batch.needCore", "makeCancelToken"));
   });
   btnZip.addEventListener("click", makeZip);
+  function clearQueue() {
+    generation++; token?.cancel(t('ui.batch.cancelReason')); token = null; setBusy(false);
+    binaryKey = newDraftIdentity();
+    entries = []; lastPlan = lastRun = null; notes.length = 0;
+    renderNotes(); renderList(); renderResults(null); summary.textContent = '';
+  }
+  function updateSummary() {
+    summary.textContent = t('ui.batch.summary', entries.length, entries.filter(e => e.status === 'ok').length,
+      entries.filter(e => e.status === 'fail').length, entries.filter(e => e.status === 'skipped').length, entries.filter(e => e.status === 'rejected').length);
+  }
   btnClear.addEventListener("click", () => {
     if (busy) return;
-    entries = [];
-    lastPlan = null;
-    lastRun = null;
-    notes.length = 0;
-    renderNotes();
-    renderList();
-    renderResults(null);
-    summary.textContent = "";
+    clearQueue(); draft?.changed();
   });
 
   drop.addEventListener("dragover", (e) => {
@@ -682,5 +699,28 @@ export function batchPanel(ctx) {
     run: lastRun ? lastRun.stats : null,
     notes: notes.slice(),
   });
+  draft = connectSpecialDraft(`batch:${c.op?.id || 'files'}:${c.op?.direction || c.params?.__dir || 'encode'}`, root, {
+    capture: () => ({ binaryKey, entries, params: c.params, notes, planStats: lastPlan?.stats, lastRun }),
+    restore(saved, current) {
+      if (!saved || entries.length || !current() || disposed) return;
+      binaryKey = saved.binaryKey || newDraftIdentity();
+      c.params = saved.params || c.params;
+      entries = (saved.entries || []).map(e => ({ ...e,
+        status: e.status === 'running' ? 'pending' : e.status,
+        reason: e.status === 'running' ? t('ui.batch.interrupted') : e.reason,
+      }));
+      for (const entry of entries) {
+        if (!(entry.file instanceof Blob) && !(entry.status === 'ok' && entry.bytes)) {
+          entry.status = 'fail'; entry.reason = t('ui.workbench.draftStorageError');
+        }
+      }
+      seq = entries.reduce((max, e) => Math.max(max, Number(String(e.id).slice(1)) + 1 || 0), 0);
+      notes.splice(0, notes.length, ...(saved.notes || [])); lastPlan = saved.planStats ? { stats: saved.planStats } : null;
+      lastRun = saved.lastRun || null; renderList(); renderResults(lastRun); renderNotes(); updateSummary();
+    },
+    clear: clearQueue,
+  });
+  root.ready = draft.ready;
+  root.dispose = () => { draft.dispose(); disposed = true; generation++; token?.cancel(t('ui.batch.cancelReason')); };
   return root;
 }

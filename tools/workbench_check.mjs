@@ -55,7 +55,7 @@ const uncovered = {
   multiFieldExecution: ["babaiCvp"],
   multiFieldChainPolicy: ["rsaCrt", "babaiCvp"],
   interactions: ["Firefox/WebKit native touch drag (trusted tap/capture covered; Playwright has no portable move API)", "browser zoom", "full offline PWA"],
-  productDecisions: ["Split-width persistence across reloads and global versus per-operation scope; current width is session-only"],
+  productDecisions: [], // Per-tool ratio persistence is covered by special_pages_check.
   artifacts: ["USB mouse track PNG", "USB keyboard rhythm PNG", "PCAPNG", "FTP files", "TLS/WPA decryption", "PCAP repair downloads"],
 };
 
@@ -222,6 +222,7 @@ try {
         ordered: config.nextElementSibling === split && split.nextElementSibling === data,
         controlsInside: [...ws.querySelectorAll(".op-head,.fam-seg,#dirSeg,.op-params,.ci-anchor,.rand-sec-host")].every(node => config.contains(node)),
         head: !!config.querySelector(".op-head"), io: !!io, paneCount: panes?.length || 0,
+        noInput: wb.dataset.inputMode === 'none', inputHidden: !!panes?.[0]?.hidden,
         role: split.getAttribute("role"), orientation: split.getAttribute("aria-orientation"), focusable: split.tabIndex >= 0,
         name: split.getAttribute("aria-label") || split.getAttribute("aria-labelledby"),
         wb: rect(wb), config: rect(config), data: rect(data),
@@ -241,7 +242,7 @@ try {
     check(result.direct && result.display === "grid" && result.ordered, `${label}: workspace > grid(config, separator, data)`);
     check(result.head && result.controlsInside && result.io && result.paneCount === 2, `${label}: controls and existing vertical IO preserved`);
     check(result.role === "separator" && result.name && (expected !== "split" || (result.orientation === "vertical" && result.focusable)), `${label}: named separator, keyboard-accessible in split layout`);
-    check(result.output.y >= result.input.bottom - 2 && result.actions.y >= result.input.bottom - 2
+    check((result.noInput ? result.inputHidden : result.output.y >= result.input.bottom - 2 && result.actions.y >= result.input.bottom - 2)
       && result.actions.bottom <= result.output.y + 2, `${label}: input / actions / output stay vertical`);
     check(result.frames === 2 && result.inputFramed && result.outputFramed && result.fieldsFramed && result.toolsFramed, `${label}: titles/tools live inside editor frames with absolute heads`);
     check(result.reportOutsideActions && result.reportAfterOutput && result.reportBelowOutput && result.outputCodingAfterEditor, `${label}: report/output coding follow the output editor`);
@@ -969,7 +970,7 @@ try {
   await run("no-input rsaEgcd: semantic hint and parameter-only execution", async () => {
     await page.setViewportSize({ width: 1600, height: 1000 });
     await go("op/rsaEgcd"); await contract("rsaEgcd", "split");
-    check(await page.locator("#ioIn").count() === 0 && await page.locator(".op-data .io-none-hint").isVisible(), "No fake main input for a parameter-only operation");
+    check(await page.locator("#ioIn").count() === 0 && await page.locator(".op-config .op-no-input-note").isVisible(), "No fake main input for a parameter-only operation");
     check(await action("chain").isDisabled() && await action("swap").isDisabled(), "No-input chain and swap are disabled");
     await (await parameter("a")).fill("30"); await (await parameter("b")).fill("18");
     await convert(); await output(/gcd\(a, b\) = 6/);
@@ -988,7 +989,7 @@ try {
     await (await parameter("a")).fill("3"); await (await parameter("m")).fill("11");
     for (const [index, direction] of ["encode", "decode"].entries()) {
       await page.locator("#dirSeg button").nth(index).click(); await convert(); await output(/^4$/, `rsaModinv ${direction}`);
-      check(await page.locator("#ioIn").count() === 0 && await page.locator(".op-data .io-none-hint").isVisible(), `${direction}: parameter-only execution has no main input`);
+      check(await page.locator("#ioIn").count() === 0 && await page.locator(".op-config .op-no-input-note").isVisible(), `${direction}: parameter-only execution has no main input`);
       check(await read("#p_a") === "3" && await read("#p_m") === "11", `${direction}: both parameters are preserved`);
     }
   });
@@ -1022,7 +1023,7 @@ try {
     ...specialOps.slice(2).map(id => [id, "#ioOut"])]) {
     await run(`${id}: independent display-only layout`, async () => {
       await page.setViewportSize({ width: 1600, height: 1000 }); await go(`op/${id}`, selector);
-      check(await page.locator(".op-workbench").count() === 0, `${id}: independent renderer remains independent`);
+      check(await page.locator(id === 'stegSolve' ? '.sspage-workbench' : '.op-workbench').count() === (id === 'stegSolve' ? 1 : 0), `${id}: approved special renderer boundary`);
       await noOverflow(`${id}-desktop`);
       await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(350); await noOverflow(`${id}-mobile`);
     });
@@ -1032,7 +1033,10 @@ try {
   for (const [i, route] of nonOpPages.entries()) {
     await run(`${route}: non-op display-only layout isolation`, async () => {
       await page.setViewportSize({ width: 1600, height: 1000 }); await go(route, selectors[i]);
-      check(await page.locator(".op-workbench,.op-splitter").count() === 0, `${route}: no ordinary-op wrapper leaks`);
+      if (route === 'recipe') check(await page.locator('.special-workbench').count() === 1, 'recipe: approved special workbench');
+      else if (route === 'codeimg') check(await page.locator('.ci-view > .ci-body').count() === 1 && await page.locator('.special-workbench').count() === 0,
+        'codeimg: restored original recognition-and-category layout');
+      else check(await page.locator(".op-workbench,.op-splitter").count() === 0, `${route}: no ordinary-op wrapper leaks`);
       await noOverflow(`${route}-desktop`);
       await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(350); await noOverflow(`${route}-mobile`);
     });

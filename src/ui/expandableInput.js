@@ -23,6 +23,7 @@
 import { icon as iconSvg } from "./icons.js";
 import { attachModalLifecycle } from "./modalLifecycle.js";
 import { attachEditHistory } from "./editHistory.js";
+import { enterSurface, exitSurface } from './expressiveMotion.js';
 
 // ---- 样式一次性注入（幂等） ----
 // export：main.js 的 openSectionView 也复用 .exp-* 遮罩/卡片样式，需在无输入框实例化的
@@ -112,6 +113,7 @@ export function expandableInput(opts = {}) {
  * @param {string} [labels.modalTitle="编辑"]
  * @param {string} [labels.cancelLabel="取消"]
  * @param {string} [labels.saveLabel="保存"]
+ * @param {boolean} [labels.readonly=false] Read-only result viewer, with no save action.
  * @returns { => void} close 关闭函数（外部可主动关）
  */
 export function openExpandModal(initialValue = "", onSave, labels = {}) {
@@ -121,13 +123,15 @@ export function openExpandModal(initialValue = "", onSave, labels = {}) {
     modalTitle = "编辑",
     cancelLabel = "取消",
     saveLabel = "保存",
+    readonly = false,
+    closeOnClear = readonly,
   } = labels;
 
   const overlay = document.createElement("div");
   overlay.className = "exp-overlay";
 
   const dialog = document.createElement("div");
-  dialog.className = "exp-dialog";
+  dialog.className = "exp-dialog exp-editor-dialog";
   dialog.setAttribute("role", "dialog");
   dialog.setAttribute("aria-modal", "true");
   dialog.setAttribute("aria-label", modalTitle);
@@ -151,7 +155,9 @@ export function openExpandModal(initialValue = "", onSave, labels = {}) {
   ta.className = "exp-textarea";
   ta.value = initialValue == null ? "" : String(initialValue);
   ta.spellcheck = false;
+  ta.readOnly = readonly;
   ta.setAttribute("autocomplete", "off");
+  ta.setAttribute("aria-label", modalTitle);
   attachEditHistory(ta);
 
  // 底部：取消 / 保存
@@ -165,11 +171,13 @@ export function openExpandModal(initialValue = "", onSave, labels = {}) {
   save.type = "button";
   save.className = "exp-action exp-save";
   save.innerHTML = iconSvg("save") + "<span>" + escapeText(saveLabel) + "</span>";
-  foot.append(cancel, save);
+  foot.append(cancel);
+  if (!readonly) foot.append(save);
 
   dialog.append(head, ta, foot);
   overlay.append(dialog);
   document.body.append(overlay);
+  enterSurface(dialog);
 
   let closed = false;
   function close() {
@@ -178,14 +186,15 @@ export function openExpandModal(initialValue = "", onSave, labels = {}) {
     document.removeEventListener("keydown", onKey);
     window.removeEventListener("hashchange", close);
     window.removeEventListener("popstate", close);
-    overlay.classList.add("exp-closing");
- // 出场动画后移除
-    setTimeout(() => {
+    window.removeEventListener('ebctf:workspace-clear', close);
+    overlay.style.pointerEvents = 'none';
+    exitSurface(dialog, () => {
       overlay.remove();
       if (previousFocus?.isConnected) previousFocus.focus();
-    }, 250);
+    });
   }
   function commit() {
+    if (closed) return;
     if (typeof onSave === "function") onSave(ta.value);
     close();
   }
@@ -200,6 +209,7 @@ export function openExpandModal(initialValue = "", onSave, labels = {}) {
   document.addEventListener("keydown", onKey);
   window.addEventListener("hashchange", close);
   window.addEventListener("popstate", close);
+  if (closeOnClear) window.addEventListener('ebctf:workspace-clear', close);
   attachModalLifecycle(overlay, { dialog, onClose: close, initialFocus: ta, restoreFocusTo: previousFocus });
 
  // 聚焦 + 光标置末尾

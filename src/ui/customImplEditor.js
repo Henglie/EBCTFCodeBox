@@ -4,11 +4,11 @@
  * 编辑器核心 = CodeMirror 6（CM6）：行号 / 等宽 / Tab 缩进 / 括号自动配对 / 语法高亮
  *   / 撤销重做 / 查找替换 / 自动换行 / 行操作全部由 CM6 原生提供。
  *  UI 外壳保留：错误行标记 / 变量与工具签名面板（点击插入）/ CTF 预设一键套用 / 导入导出 .js
- *   命名方案库（存·载入·删·导入导出 JSON，交互对齐 decodeStrength 的「我的方案」）。
+ *   未保存编辑会话恢复；测试与保存分开，异步回调归属到当前代码版本。
  *
- * 布局：头部按钮行（预设/字号/查找/换行/源码/全屏）→ .ci-body 左右分栏：
+ * 布局：头部（预设/源码/辅助工具/全屏）→ 独立代码工具条 → .ci-body 左右分栏：
  *   左 .ci-left（内嵌二级左右分栏：CM6 编辑区 | 只读权威源码 pre）→ 状态条 / 沙箱条
- *   右 .ci-panel（变量 / 工具签名面板）→ 方案库行 → 底部按钮行。
+ *   右 .ci-panel（变量 / 工具签名面板）→ 测试/保存/更多/关闭。
  * 查找只保留一个：CM6 搜索面板（Ctrl+F / F3 / Ctrl+D，searchKeymap 原生），焦点在编辑区
  * 搜编辑区；源码只读区用其自带搜索框。头部「查找」按钮统一打开 CM6 搜索面板。
  *
@@ -22,6 +22,8 @@ import {
 import { probeSandbox } from "../core/customImplClient.js";
 import { icon as iconSvg } from "./icons.js";
 import { attachModalLifecycle } from "./modalLifecycle.js";
+import { codeInputExtensions } from './customCodeInput.js';
+import { enterSurface } from './expressiveMotion.js';
 
 // ---- CM6 bundle（单文件 ESM，已真浏览器验证） ----
 // ⚠ 性能审计 H2：821KB bundle 曾是顶层静态 import，随 main.js 进首屏关键路径——
@@ -137,6 +139,11 @@ const _ZH = {
   "ui.custom.retry": "重试",
   "ui.custom.srcToggle": "权威源码",
   "ui.custom.srcClose": "收起源码",
+  "ui.custom.unsaved": "未保存",
+  "ui.custom.editingHint": "Tab 缩进 · Ctrl+S 保存 · Ctrl+Enter 测试 · Ctrl+M 切换 Tab 导航",
+  "ui.custom.resultStale": "代码已修改，请重新测试",
+  "ui.custom.draftRestored": "已恢复未保存的编辑",
+  "ui.custom.editsKept": "已保留当前编辑，未覆盖代码",
 };
 function t(key, ...args) {
   let s = key;
@@ -172,7 +179,7 @@ const CM_PHRASES = {
   "current match": "当前匹配",
 };
 
-// ============ 动态样式（index.html 冻结中，不能加 <link>，照 ensureIdsCss 模式注入） ============
+// ============ 动态样式（编辑器与入口组件各自作用域，避免同名类泄漏） ============
 let _ciCssInjected = false;
 function ensureCiCss() {
   if (_ciCssInjected) return;
@@ -205,37 +212,35 @@ const CI_CSS = `
 .ci-edit-btn .msym svg{width:18px;height:18px;}
 
 /* ============ 遮罩 + 弹窗（对齐 .ds-overlay/.ds-dialog 范本） ============ */
-.ci-mask{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:900;display:flex;align-items:center;justify-content:center;padding:var(--sp-4);animation:ci-fade var(--dur-medium) var(--ease-out);}
-@keyframes ci-fade{from{opacity:0}to{opacity:1}}
+.ci-mask{position:fixed;inset:0;background:color-mix(in srgb,var(--on-surface) 40%,transparent);z-index:900;display:flex;align-items:center;justify-content:center;padding:var(--sp-4);}
 .ci-mask.full{padding:0;}
-.ci-dialog{--ci-fs:13.5px;--ci-lh:20px;position:relative;background:var(--surface-1);border:0;border-radius:var(--r-xl);max-width:1440px;width:100%;height:calc(100dvh - 32px);display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--el-3);animation:ci-pop var(--dur-medium) var(--ease-out);touch-action:manipulation;}
-@keyframes ci-pop{from{opacity:0;transform:scale(.96) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.ci-dialog{--ci-fs:15px;--ci-lh:23px;position:relative;background:var(--surface-1);border:0;border-radius:var(--r-xl);max-width:1440px;width:100%;height:calc(100dvh - 32px);display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--elevation-floating,var(--el-3));touch-action:manipulation;}
 .ci-mask.full .ci-dialog{max-width:none;width:100%;height:100%;border-radius:0;border:0;animation:none;}
 
 /* ---- 头部（对齐 .ds-head：标题图标染 primary，右侧操作区靠右；全部 .ci-dialog 作用域，防泄漏污染编码图查询器同名类） ---- */
-.ci-dialog .ci-head{display:flex;align-items:center;gap:8px;padding:4px 12px;border:0;min-height:48px;flex-wrap:wrap;flex:none;}
+.ci-dialog .ci-head{display:flex;align-items:center;gap:12px;padding:8px 16px;border:0;min-height:64px;flex-wrap:wrap;flex:none;}
 .ci-dialog .ci-head .msym{color:var(--primary);font-size:20px;flex:none;}
 .ci-dialog .ci-head h3{margin:0;font-size:var(--fs-md);font-weight:600;flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .ci-dialog .ci-head select{max-width:220px;}
-.ci-dialog .ci-ops{margin-inline-start:auto;display:flex;align-items:center;gap:var(--sp-2);}
+.ci-dialog .ci-ops{margin-inline-start:auto;display:flex;align-items:center;gap:var(--sp-2);min-width:0;max-width:100%;}
 /* 激活态视觉反馈（审计 P3-17）：字号/换行/查找等 toggle 按钮按 .on 染主色，不再只变 title */
 .ci-dialog .ci-ops .btn-icon.on,.ci-dialog .ci-editor-toolbar .btn-icon.on,.ci-dialog .ci-spanel-toolbar .btn-icon.on{color:var(--primary);background:color-mix(in srgb,var(--primary) 14%,transparent);}
 
 /* ---- 主体：左右分栏（左编辑+源码 ｜ 右签名面板） ----
  * ⚠ 全部 .ci-dialog 作用域：codeImageViewer.css 同样使用 .ci-body/.ci-main（左树右栏），
  *   本样式后注入时全局规则会把它打成弹性条（编码图查询器变竖排的根因），必须隔离。 */
-.ci-dialog .ci-body{display:flex;flex:1;min-height:0;gap:0;align-items:stretch;}
+.ci-dialog .ci-body{display:flex;flex:1;min-height:0;gap:12px;align-items:stretch;padding:0 16px;}
 .ci-dialog .ci-left{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;}
 
 /* 二级左右分栏：CM6 编辑区 ｜ 权威源码 pre（产品负责人左右对照；头部共用一行，查找面板只有一个） */
-.ci-dialog .ci-main{display:flex;flex:1 1 0%;min-height:0;gap:var(--sp-1);align-items:stretch;flex-direction:row;}
+.ci-dialog .ci-main{display:flex;flex:1 1 0%;min-height:0;gap:8px;align-items:stretch;flex-direction:row;}
 .ci-dialog .ci-main-left{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;gap:var(--sp-1);}
-.ci-editor-toolbar{display:flex;align-items:center;gap:var(--sp-1);padding:2px 8px;border:0;border-radius:var(--r-md);background:transparent;flex-wrap:wrap;flex:none;margin:0;}
+.ci-editor-toolbar{display:flex;align-items:center;gap:4px;padding:0 0 8px;border:0;background:transparent;flex-wrap:wrap;flex:none;margin:0;}
 .ci-editor-toolbar .ci-editor-title{flex:1;font-size:12px;color:var(--on-surface-var);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:60px;}
-.ci-editor-wrap{position:relative;flex:1;min-height:0;overflow:hidden;background:var(--surface);border:1px solid var(--outline-var);border-radius:var(--r-lg);margin:0 8px 0;box-shadow:none;}
+.ci-editor-wrap{position:relative;flex:1;min-height:0;overflow:hidden;background:var(--surface);border:1px solid var(--outline-var);border-radius:var(--r-lg);margin:0;box-shadow:none;}
 .ci-editor-wrap .cm-editor{height:100%;}
-.ci-editor-wrap .cm-scroller{font-family:var(--mono,monospace);}
-.ci-editor-wrap .cm-content{min-height:100%;padding:8px 0;}
+.ci-editor-wrap .cm-scroller,.ci-spanel-pre .cm-scroller{font-family:var(--mono,monospace);font-variant-ligatures:none;font-feature-settings:"liga" 0,"calt" 0;line-height:var(--ci-lh);overscroll-behavior:contain;scroll-padding-block:16px;}
+.ci-editor-wrap .cm-content{min-height:100%;padding:12px 0;}
 .ci-editor-wrap .cm-line{padding:0 10px;direction:ltr;text-align:left;}
 .ci-editor-wrap .cm-gutters{background:var(--surface-1);border-inline-end:1px solid var(--outline-var);color:var(--on-surface-var);}
 .ci-editor-wrap .cm-gutterElement{padding:0 6px 0 10px;min-width:38px;box-sizing:border-box;}
@@ -246,11 +251,11 @@ const CI_CSS = `
 /* 查找面板（浮于编辑区/源码区内，主题化；M3 圆角 + 中文 + 紧凑简洁）。左右实例共用 :is() */
 :is(.ci-editor-wrap,.ci-spanel-pre) .cm-panels{background:var(--surface-2);color:var(--on-surface);border-color:transparent;border-radius:var(--r-md);box-shadow:0 2px 8px rgba(0,0,0,.12);}
 :is(.ci-editor-wrap,.ci-spanel-pre) .cm-panels.cm-panels-top{border-bottom:none;margin:var(--sp-2);}
-:is(.ci-editor-wrap,.ci-spanel-pre) .cm-panels input,:is(.ci-editor-wrap,.ci-spanel-pre) .cm-panels button{background:var(--surface-3);color:var(--on-surface);border:1px solid var(--outline-var);border-radius:var(--r-sm);font-size:13px;height:34px;box-sizing:border-box;}
+:is(.ci-editor-wrap,.ci-spanel-pre) .cm-panels input,:is(.ci-editor-wrap,.ci-spanel-pre) .cm-panels button{background:var(--control-track);color:var(--on-surface);border:0;border-radius:var(--r-sm);font-size:13px;height:36px;box-sizing:border-box;}
 :is(.ci-editor-wrap,.ci-spanel-pre) .cm-panels input{padding:0 8px;}
 :is(.ci-editor-wrap,.ci-spanel-pre) .cm-panels button{cursor:pointer;padding:0 10px;}
 :is(.ci-editor-wrap,.ci-spanel-pre) .cm-panels button:hover{background:var(--surface-hi);}
-:is(.ci-editor-wrap,.ci-spanel-pre) .cm-panels .cm-textfield{padding:0;}
+:is(.ci-editor-wrap,.ci-spanel-pre) .cm-panels .cm-textfield{padding:0 10px;}
 /* 搜索面板（产品负责人两轮定稿）：箭头/关闭钮 30×30 方形；带文字的按钮（替换/全部替换/全部）自适应变长，不硬塞 */
 :is(.ci-editor-wrap,.ci-spanel-pre) .cm-search{padding:5px 6px;gap:4px;flex-wrap:wrap;align-items:center;}
 :is(.ci-editor-wrap,.ci-spanel-pre) .cm-search .cm-textfield{width:180px;}
@@ -280,10 +285,10 @@ const CI_CSS = `
 .ci-dialog .ci-src-resize{flex:none;width:6px;cursor:col-resize;touch-action:none;background:transparent;border-radius:var(--r-full);transition:background var(--dur-short) var(--ease);margin:0 1px;}
 .ci-dialog .ci-src-resize:hover,.ci-dialog .ci-src-resize:active{background:color-mix(in srgb,var(--primary) 35%,transparent);}
 /* 右侧源码工具栏 = 左侧编辑区工具栏同款浮动卡片（同边距/同圆角/同底色，产品裁决两边一模一样） */
-.ci-dialog .ci-spanel-toolbar{display:flex;align-items:center;gap:var(--sp-1);padding:2px 8px;border:0;border-radius:var(--r-md);background:transparent;flex-wrap:wrap;flex:none;margin:0;}
+.ci-dialog .ci-spanel-toolbar{display:flex;align-items:center;gap:4px;padding:0 0 8px;border:0;background:transparent;flex-wrap:wrap;flex:none;margin:0;}
 .ci-dialog .ci-spanel-toolbar .ci-src-title{flex:1;font-size:12.5px;font-weight:600;color:var(--on-surface-var);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:60px;}
 /* 右侧源码内容卡片 = 左侧编辑区卡片同款 */
-.ci-dialog .ci-spanel-pre{flex:1;min-height:0;overflow:hidden;position:relative;margin:var(--sp-1);background:var(--surface-2);border:1px solid var(--outline-var);border-radius:var(--r-lg);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.ci-dialog .ci-spanel-pre{flex:1;min-height:0;overflow:hidden;position:relative;margin:0;background:var(--surface-2);border:1px solid var(--outline-var);border-radius:var(--r-lg);}
 /* 右侧权威源码 CM6 只读实例（与左侧同风格：等宽/行号/高亮，字号独立） */
 .ci-spanel-pre .cm-editor{height:100%;}
 .ci-spanel-pre .cm-scroller{font-family:var(--mono,monospace);}
@@ -304,7 +309,11 @@ const CI_CSS = `
 .ci-spanel-pre .ci-hl-fn{color:var(--ci-hl-fn);}
 
 /* ---- 状态条 / 沙箱条 ---- */
-.ci-status{display:flex;align-items:center;gap:var(--sp-2);padding:6px 12px;font-size:12px;border-top:1px solid var(--outline-var);color:var(--on-surface-var);min-height:30px;}
+.ci-status{display:flex;align-items:center;gap:12px;padding:8px 0;font-size:12px;color:var(--on-surface-var);min-height:32px;}
+.ci-position{flex:none;font-variant-numeric:tabular-nums;color:var(--on-surface-var);}
+.ci-status-message{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ci-draft-state{font-size:12px;color:var(--primary);padding:4px 8px;background:var(--control-track);border-radius:var(--r-full);}
+.ci-draft-state[hidden]{display:none;}
 .ci-status.err{color:var(--error);}
 .ci-status.ok{color:var(--success);}
 .ci-sandbox{display:flex;align-items:center;gap:6px;padding:5px 12px;font-size:11.5px;color:var(--on-surface-var);border-top:1px solid var(--outline-var);}
@@ -312,10 +321,10 @@ const CI_CSS = `
 .ci-sandbox .msym svg{width:14px;height:14px;}
 
 /* ---- 右侧签名面板（宽可拖拽，走 --ci-panel-w；窄屏转下方高度 --ci-panel-h） ---- */
-.ci-panel{width:var(--ci-panel-w,236px);flex:none;display:flex;flex-direction:column;background:var(--surface-1);border-inline-start:1px solid var(--outline-var);font-size:12px;min-height:0;}
+.ci-panel{width:var(--ci-panel-w,260px);flex:none;display:flex;flex-direction:column;background:var(--surface-2);border-radius:var(--r-lg);font-size:13px;min-height:0;}
 .ci-resize-v{flex:none;width:7px;cursor:col-resize;touch-action:none;position:relative;background:transparent;transition:background var(--dur-short) var(--ease);}
 .ci-resize-v:hover,.ci-resize-v:active{background:color-mix(in srgb,var(--primary) 35%,transparent);}
-.ci-panel h4{margin:0;padding:7px 10px;font-size:11.5px;font-weight:600;color:var(--on-surface-var);border-bottom:1px solid var(--outline-var);background:linear-gradient(rgba(0,0,0,.12),rgba(0,0,0,.12)) var(--surface-1);display:flex;align-items:center;gap:5px;position:sticky;top:0;z-index:1;}
+.ci-panel h4{margin:0;padding:12px;font-size:13px;font-weight:600;color:var(--on-surface-var);background:var(--surface-2);display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:1;}
 .ci-panel h4 .msym svg{width:14px;height:14px;}
 .ci-panel .ci-psec{overflow:auto;border-bottom:1px solid var(--outline-var);}
 .ci-panel .ci-psec.grow{flex:1;min-height:100px;}
@@ -323,7 +332,7 @@ const CI_CSS = `
 .ci-randwarn{display:flex;align-items:flex-start;gap:6px;margin:8px 8px 4px;padding:6px 8px;border:1px solid var(--outline-var);border-radius:var(--r-sm);color:var(--warning);font-size:11.5px;line-height:1.6;}
 .ci-randwarn .msym{flex:none;font-size:15px;}
 .ci-panel-filter input{width:100%;box-sizing:border-box;height:32px;background:var(--surface-2);border:1px solid var(--outline-var);border-radius:var(--r-sm);color:var(--on-surface);padding:0 8px;font-size:11.5px;}
-.ci-chip{display:block;width:100%;text-align:start;background:none;border:0;color:var(--on-surface-var);padding:6px 10px;cursor:pointer;font-family:var(--mono,monospace);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:ltr;}
+.ci-chip{display:block;width:100%;min-height:36px;text-align:start;background:none;border:0;color:var(--on-surface-var);padding:8px 12px;cursor:pointer;font-family:var(--mono,monospace);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:ltr;}
 .ci-chip:hover{background:color-mix(in srgb,var(--primary) 18%,transparent);color:var(--on-primary-container);}
 .ci-builtin{padding:6px 10px;border-bottom:1px solid var(--outline-var);}
 /* 「当前算法实现」灰色标题条圆角（产品裁决）：沿用 .ci-panel h4 灰底，四角圆角成胶囊标题 */
@@ -332,12 +341,21 @@ const CI_CSS = `
 .ci-builtin .btn{width:100%;justify-content:center;}
 
 /* ---- 底部按钮区 ---- */
-.ci-foot{display:flex;align-items:center;gap:6px;padding:4px 12px;border:0;flex-wrap:nowrap;overflow-x:auto;flex:none;min-height:48px;}
-.ci-foot .btn{white-space:nowrap;flex:none;min-height:36px;}
+.ci-foot{display:flex;align-items:center;gap:8px;padding:8px 16px 12px;border:0;flex-wrap:wrap;flex:none;min-height:60px;}
+.ci-foot .btn{white-space:nowrap;flex:none;min-height:44px;}
 .ci-foot .spacer{flex:1;}
-.ci-dialog select{background:var(--control-track);border:0;border-radius:var(--r-md);color:var(--on-surface);height:36px;box-sizing:border-box;padding:0 10px;font-size:12.5px;}
+.ci-dialog .btn:not(.btn-filled):not(.btn-icon):not(.btn-outlined){background:var(--control-track);color:var(--on-surface);}
+.ci-dialog .btn-icon{width:36px;height:36px;min-width:36px;}
+.ci-dialog .btn{font-size:var(--fs-sm);}
+.ci-dialog .ci-header-close{width:44px;height:44px;}
+.ci-dialog select{background:var(--control-track);border:0;border-radius:var(--r-md);color:var(--on-surface);height:44px;box-sizing:border-box;padding:0 12px;font-size:13px;}
+.ci-editor-more{position:relative;}
+.ci-editor-more>summary{list-style:none;}
+.ci-editor-more>summary::-webkit-details-marker{display:none;}
+.ci-editor-more-menu{position:absolute;inset-inline-end:0;bottom:calc(100% + 8px);width:220px;padding:8px;display:flex;flex-direction:column;gap:8px;background:var(--surface-3);border-radius:var(--r-lg);box-shadow:var(--elevation-floating,var(--el-3));z-index:10;}
+.ci-editor-more:not([open])>.ci-editor-more-menu{display:none;}
 .ci-meta{display:flex;align-items:center;flex:none;min-height:26px;gap:8px;}
-.ci-meta .ci-status{flex:1;min-width:0;min-height:26px;border:0;padding:3px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ci-meta .ci-status{flex:1;min-width:0;border:0;padding:8px 0;}
 .ci-meta .ci-sandbox{max-width:48%;min-width:0;border:0;padding:3px 10px;}
 .ci-meta .ci-sandbox span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ci-dialog.ci-tools-hidden .ci-panel,.ci-dialog.ci-tools-hidden .ci-resize-v{display:none;}
@@ -349,8 +367,8 @@ const CI_CSS = `
 .ci-btn-danger:hover{color:var(--error);filter:brightness(1.2);}
 
 /* ---- 语法高亮 token 色（唯一允许自定义色的地方；深浅主题各一组，随 html[data-theme] 切换） ---- */
-.ci-dialog{--ci-hl-kw:#ff8a65;--ci-hl-str:#a5d6a7;--ci-hl-com:#6f5f57;--ci-hl-num:#81d4fa;--ci-hl-fn:#ce93d8;--ci-hl-re:#ffcc80;}
-html[data-theme="light"] .ci-dialog{--ci-hl-kw:#b4501a;--ci-hl-str:#256d47;--ci-hl-com:#7d7a77;--ci-hl-num:#0061a4;--ci-hl-fn:#6750a4;--ci-hl-re:#8a5100;}
+.ci-dialog{--ci-hl-kw:#ff8a65;--ci-hl-str:#a5d6a7;--ci-hl-com:var(--on-surface-var);--ci-hl-num:#81d4fa;--ci-hl-fn:#ce93d8;--ci-hl-re:#ffcc80;}
+html[data-theme="light"] .ci-dialog{--ci-hl-kw:#b4501a;--ci-hl-str:#256d47;--ci-hl-com:var(--on-surface-var);--ci-hl-num:#0061a4;--ci-hl-fn:#6750a4;--ci-hl-re:#8a5100;}
 
 /* ---- 触屏（产品负责人「一定一定要适配触屏」：热区 ≥44×44；编辑区工具栏同为按钮组，一并覆盖） ---- */
 @media (hover:none){
@@ -360,6 +378,9 @@ html[data-theme="light"] .ci-dialog{--ci-hl-kw:#b4501a;--ci-hl-str:#256d47;--ci-
   .ci-chip{padding:10px 12px;}
   .ci-group{min-height:48px;}
   .ci-group .ci-seg{padding:0 var(--sp-4);}
+  .ci-dialog .cm-search button,.ci-dialog .cm-search .cm-textfield{min-height:44px;}
+  .ci-dialog .cm-search button{min-width:44px;}
+  .ci-dialog .cm-search label{min-height:44px;}
 }
 
 /* ---- 窄屏（≤860px）：签名面板下置 + 源码面板叠下（纵向），强制全屏 ----
@@ -370,24 +391,29 @@ html[data-theme="light"] .ci-dialog{--ci-hl-kw:#b4501a;--ci-hl-str:#256d47;--ci-
   .ci-dialog{height:100%;max-width:none;border-radius:0;}
   .ci-dialog .ci-body{flex-direction:column;}
   .ci-dialog .ci-resize-v{width:auto;height:7px;cursor:row-resize;align-self:stretch;}
-  .ci-dialog .ci-panel{width:auto;height:var(--ci-panel-h,168px);border-inline-start:0;border-top:1px solid var(--outline-var);flex-direction:row;overflow-x:auto;}
-  .ci-dialog .ci-panel .ci-psec{max-height:none;min-width:150px;border-bottom:0;border-inline-end:1px solid var(--outline-var);}
-  .ci-dialog .ci-panel .ci-psec:last-child{border-inline-end:0;}
-  .ci-dialog .ci-panel .ci-builtin{min-width:180px;border-bottom:0;border-inline-end:1px solid var(--outline-var);}
+  .ci-dialog .ci-panel .ci-psec{max-height:none;border-inline:0;}
   .ci-dialog .ci-main{flex-direction:column;gap:var(--sp-1);}
   .ci-dialog .ci-main-left{gap:var(--sp-1);}
   .ci-dialog .ci-spanel{width:auto;max-width:none;min-height:120px;height:40%;}
   .ci-dialog .ci-src-resize{width:auto;height:6px;cursor:row-resize;margin:0 var(--sp-3);}
-  .ci-dialog .ci-editor-wrap{margin:0 var(--sp-1) var(--sp-1);}
-  .ci-dialog .ci-editor-toolbar{margin:var(--sp-1) var(--sp-1) 0;}
+  .ci-dialog .ci-editor-wrap{margin:0;}
+  .ci-dialog .ci-editor-toolbar{margin:0;}
   .ci-dialog .ci-head h3{min-width:0;}
   .ci-dialog .ci-head .ci-ops{order:3;flex:1 0 100%;margin:0;gap:4px;}
-  .ci-dialog .ci-head select{flex:1;min-width:0;max-width:none;}
-  .ci-dialog .ci-panel{position:absolute;inset:0 0 0 auto;width:min(86%,320px)!important;height:100%;flex-direction:column;overflow-y:auto;z-index:5;box-shadow:var(--el-3);}
+  .ci-dialog .ci-head select{flex:1 1 0;width:0;min-width:0;max-width:100%;}
+  .ci-dialog .ci-panel{position:absolute;inset-block:0;inset-inline-end:0;inset-inline-start:auto;width:min(86%,320px)!important;height:100%;border:0;flex-direction:column;overflow-y:auto;z-index:5;box-shadow:var(--el-3);}
   .ci-dialog .ci-resize-v{display:none;}
   .ci-dialog .ci-panel .ci-psec,.ci-dialog .ci-panel .ci-builtin{min-width:0;}
   .ci-dialog .ci-panel .ci-psec.grow{flex:1;min-height:0;}
   .ci-meta .ci-sandbox{max-width:44%;}
+  .ci-dialog .ci-head{gap:8px;padding:8px 12px;}
+  .ci-dialog .ci-body{padding:0 12px;}
+  .ci-dialog .ci-foot{padding:8px 12px;}
+  .ci-dialog .ci-foot .spacer{display:none;}
+  .ci-dialog .ci-foot>.btn{flex:1;}
+  .ci-dialog .ci-draft-state{margin-inline-start:auto;}
+  .ci-dialog .ci-sandbox{display:none;}
+  .ci-dialog .ci-spanel{min-height:0;}
 }
 
 /* ---- 低高度（≤640px）：编辑器 min-height 归零，内部滚动接管（） ---- */
@@ -411,9 +437,12 @@ html[data-theme="light"] .ci-dialog{--ci-hl-kw:#b4501a;--ci-hl-str:#256d47;--ci-
 // ============ 开关行（挂在 op 参数栏后） ============
 
 const _editors = new Map();
+const _sessionDrafts = new Map();
+let editorEpoch = 0;
 
 /** 关掉所有已打开的编辑器（切 op / 切页面时调用，防旧 op 的弹窗滞留）。 */
 export function closeAllCustomEditors() {
+  editorEpoch++;
   for (const [, e] of _editors) { try { e.close(); } catch { /* ignore */ } }
   _editors.clear();
 }
@@ -518,19 +547,20 @@ function builtinTemplate(op, dir) {
 /** 打开（或聚焦）某 op 的自定义实现编辑器。（async：首次会动态加载 CM6 bundle） */
 export async function openCustomImplEditor(opId, ctx = {}) {
   const previousFocus = document.activeElement;
+  const epoch = editorEpoch;
   ensureCiCss();
   const CM = await loadCM();
+  if (epoch !== editorEpoch) return;
   const {
-    EditorView, EditorState, Compartment, keymap, lineNumbers,
-    highlightActiveLine, highlightActiveLineGutter, drawSelection,
-    defaultKeymap, history, historyKeymap, indentWithTab,
-    openSearchPanel, closeSearchPanel, searchKeymap,
-    syntaxHighlighting, HighlightStyle, tags, javascript, rectangularSelection,
-    closeBrackets, closeBracketsKeymap, bracketMatching,
+    EditorView, EditorState, Compartment, lineNumbers,
+    highlightActiveLine, highlightActiveLineGutter,
+    openSearchPanel, closeSearchPanel,
+    syntaxHighlighting, HighlightStyle, tags, javascript,
   } = CM;
   const old = _editors.get(opId);
   if (old && old.mask && document.body.contains(old.mask)) {
     old.mask.style.display = "flex";
+    old.focus?.();
     return;
   }
 
@@ -538,11 +568,15 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   const dir = ctx.dir || "encode";
   const saved = getCustomImpl(opId) || { enabled: false, code: "" };
   const presets = presetsFor(opId);
-  // 默认只载入「入口」（薄壳，几行）：不把整模块复制进用户代码 —— 那等于给每个 op 造一份
-  // 与上游脱钩的快照（doRun 会自动 doSave，点一次「运行」就落库），上游修 bug 再也到不了用户。
-  // 「看真算法」由右侧实时源码面板承担（永远最新）；「改真算法」是用户显式点「载入完整实现」。
+  // Show a small entry immediately, then hydrate the complete implementation
+  // only while the untouched document still belongs to this open editor.
+  // Testing is a preview; persistence belongs to the explicit Save action.
   const btpl = builtinTemplate(op, dir);
-  const initialCode = saved.code || btpl || CUSTOM_TEMPLATE;
+  const sessionDraft = _sessionDrafts.get(opId);
+  const initialCode = sessionDraft?.code ?? (saved.code || btpl || CUSTOM_TEMPLATE);
+  let closed = false, revision = 0, applyingDocument = false, running = false, runSeq = 0, lastTestRevision = null;
+  let savedDocument = null;
+  const sourceAbort = new AbortController();
 
   const mask = el("div", { class: "ci-mask", onclick: (e) => { if (e.target === mask) close(); } });
   const dialog = el("div", { class: "ci-dialog ci-tools-hidden", role: "dialog", "aria-modal": "true", "aria-label": t("ui.custom.editorTitle") + " · " + opId });
@@ -559,18 +593,21 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     presetSel.value = "";
   });
 
-  // 字号档位：与行高同档联动（行高仅作状态展示用，CM6 布局按 1.5em 折行）
+  // Font size and measured line height share one preference; code ligatures stay off.
   const FONT_STEPS = [[11.5, 17], [12.5, 19], [13.5, 20], [15, 23], [16.5, 25], [18.5, 28]];
-  let fontIdx = 2;
+  let fontIdx = window.matchMedia('(pointer:coarse)').matches ? 4 : 3;
   // 自动换行：触屏/窄屏默认开，桌面默认关；记住用户选择（localStorage 键 ebctf.customImpl.wrap）。
   let wrapOn;
+  let wrapExplicit = false;
+  const narrowMedia = window.matchMedia('(max-width:860px)');
   try {
     const w = localStorage.getItem("ebctf.customImpl.wrap");
+    wrapExplicit = w === '1' || w === '0';
     wrapOn = w === "1" ? true : (w === "0" ? false : window.matchMedia("(max-width:860px)").matches);
   } catch { wrapOn = window.matchMedia("(max-width:860px)").matches; }
 
   const iconBtn = (name, title, onclick) =>
-    el("button", { type: "button", class: "btn btn-icon", title, onclick }, msym(name));
+    el("button", { type: "button", class: "btn btn-icon", title, 'aria-label': title, onclick }, msym(name));
 
   const fullBtn = iconBtn("open_in_full", t("ui.custom.fullscreen"), () => {
     const on = mask.classList.toggle("full");
@@ -606,9 +643,11 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   toolsBtn.setAttribute("aria-expanded", String(!dialog.classList.contains("ci-tools-hidden")));
   const headerClose = iconBtn("close", t("ui.custom.close"), () => close());
   headerClose.classList.add("ci-header-close");
+  const draftState = el('span', { class: 'ci-draft-state', hidden: 'hidden' }, t('ui.custom.unsaved'));
   dialog.append(el("div", { class: "ci-head" },
     msym("data_object"),
     el("h3", {}, t("ui.custom.editorTitle") + " · " + opId),
+    draftState,
     el("div", { class: "ci-ops" },
       presetSel,
       srcToggleBtn,
@@ -627,6 +666,8 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   const mainLeft = el("div", { class: "ci-main-left" });
   // 左侧编辑区自己的工具栏（字号± / 自动换行 / 查找）——两侧各自独立
   const editorToolbar = el("div", { class: "ci-editor-toolbar" },
+    iconBtn('undo', t('ui.op.undo'), () => { view?.focus(); CM.historyKeymap.find(k => k.key === 'Mod-z')?.run(view); }),
+    iconBtn('redo', t('ui.op.redo'), () => { view?.focus(); CM.historyKeymap.find(k => k.key === 'Mod-y')?.run(view); }),
     iconBtn("text_decrease", t("ui.custom.zoomOut"), () => { if (fontIdx > 0) { fontIdx--; applyFont(); } }),
     iconBtn("text_increase", t("ui.custom.zoomIn"), () => { if (fontIdx < FONT_STEPS.length - 1) { fontIdx++; applyFont(); } }),
     wrapBtn,
@@ -644,7 +685,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   let _fullBuilding = false;
   // 右侧独立的字号档位与 Compartment（与左侧互不干扰）
   const SRC_FONT_STEPS = [[10, 15], [11.5, 17], [13.5, 20], [15, 23], [17, 26], [19, 29]];
-  let srcFontIdx = 1;
+  let srcFontIdx = 2;
   const srcFontComp = new Compartment();
   const srcThemeComp = new Compartment();
   // 源码面板自己的自动换行（默认开：只读对照，长行换行不断行号语义；记住选择）
@@ -656,6 +697,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   }
   function applySrcFont() {
     if (srcView) srcView.dispatch({ effects: srcFontComp.reconfigure(srcFontTheme()) });
+    sPanel.style.setProperty('--ci-lh', SRC_FONT_STEPS[srcFontIdx][1] + 'px');
   }
   // persist：仅用户点击时写 localStorage（初始化同步态不写，审计 P3-15）。
   // srcView 未就绪时只同步按钮态（fetch 失败下按钮初始态也不与 localStorage 脱节，审计 P2-5）。
@@ -729,10 +771,11 @@ export async function openCustomImplEditor(opId, ctx = {}) {
       javascript(),
       srcFontComp.of(srcFontTheme()),
       srcWrapComp.of(srcWrapOn ? [EditorView.lineWrapping] : []),
-      srcThemeComp.of(themeExt()),
+      srcThemeComp.of(themeExt(true)),
       EditorState.phrases.of(CM_PHRASES),
+      ...codeInputExtensions(CM, { readonly: true, label: t('ui.custom.sourceView'), onEscape: requestEditorEscape }),
       EditorView.theme({
-        "&": { backgroundColor: "var(--surface)", color: "var(--on-surface)" },
+        "&": { backgroundColor: "var(--surface-2)", color: "var(--on-surface)" },
         ".cm-content": { caretColor: "transparent" },
       }, { dark: isDark() }),
     ];
@@ -778,7 +821,9 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   } catch { /* 忽略 */ }
 
   // 状态条 + 沙箱条（编辑区下方，全宽）
-  const status = el("div", { class: "ci-status" });
+  const position = el('span', { class: 'ci-position', 'aria-live': 'off' });
+  const statusMessage = el('span', { class: 'ci-status-message', role: 'status', 'aria-live': 'polite' });
+  const status = el("div", { class: "ci-status", title: t('ui.custom.editingHint') }, position, statusMessage);
   const sandboxBar = el("div", { class: "ci-sandbox" }, msym("terminal"), el("span", {}, "…"));
   left.append(el("div", { class: "ci-meta" }, status, sandboxBar));
   body.append(left);
@@ -898,12 +943,18 @@ export async function openCustomImplEditor(opId, ctx = {}) {
 
   // ---- 底部按钮 ----
   const importInp = el("input", { type: "file", accept: ".js,.txt", style: "display:none" });
+  const runBtn = el('button', { type: 'button', class: 'btn btn-filled', title: 'Ctrl+Enter', onclick: () => doRun() }, t('ui.custom.run'));
+  const more = el('details', { class: 'ci-editor-more' },
+    el('summary', { class: 'btn btn-tonal', title: t('ui.topbar.more'), 'aria-label': t('ui.topbar.more') }, msym('expand_more')),
+    el('div', { class: 'ci-editor-more-menu' },
+      el('button', { type: 'button', class: 'btn', onclick: () => importInp.click() }, t('ui.custom.importBtn')),
+      el('button', { type: 'button', class: 'btn', onclick: () => downloadText(getCode(), 'custom-' + opId + '.js', 'text/javascript') }, t('ui.custom.exportBtn')),
+      el('button', { type: 'button', class: 'btn', onclick: () => setCode(CUSTOM_TEMPLATE) }, t('ui.custom.reset'))));
+  more.addEventListener('click', event => { if (event.target.closest('button')) { more.open = false; } });
   const foot = el("div", { class: "ci-foot" },
-    el("button", { type: "button", class: "btn btn-filled", onclick: () => doRun() }, t("ui.custom.run")),
-    el("button", { type: "button", class: "btn btn-tonal", onclick: () => doSave(false) }, t("ui.custom.save")),
-    el("button", { type: "button", class: "btn", onclick: () => importInp.click() }, t("ui.custom.importBtn")),
-    el("button", { type: "button", class: "btn", onclick: () => downloadText(getCode(), "custom-" + opId + ".js", "text/javascript") }, t("ui.custom.exportBtn")),
-    el("button", { type: "button", class: "btn", onclick: () => setCode(CUSTOM_TEMPLATE) }, t("ui.custom.reset")),
+    runBtn,
+    el("button", { type: "button", class: "btn btn-tonal", title: 'Ctrl+S', onclick: () => doSave(false) }, t("ui.custom.save")),
+    more,
     el("span", { class: "spacer" }),
     el("button", { type: "button", class: "btn", onclick: () => close() }, t("ui.custom.close")),
     importInp,
@@ -918,7 +969,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   const jsHighlight = HighlightStyle.define([
     { tag: tags.keyword, color: "var(--ci-hl-kw)" },
     { tag: [tags.string, tags.special(tags.string)], color: "var(--ci-hl-str)" },
-    { tag: tags.comment, color: "var(--ci-hl-com)", fontStyle: "italic" },
+    { tag: tags.comment, color: "var(--ci-hl-com)" },
     { tag: tags.number, color: "var(--ci-hl-num)" },
     { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: "var(--ci-hl-fn)" },
     { tag: tags.regexp, color: "var(--ci-hl-re)" },
@@ -933,9 +984,9 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   const wrapComp = new Compartment();
   const themeComp = new Compartment();
   const isDark = () => (document.documentElement.getAttribute("data-theme") || "dark") === "dark";
-  function themeExt() {
+  function themeExt(readonly = false) {
     return EditorView.theme({
-      "&": { backgroundColor: "var(--surface)", color: "var(--on-surface)" },
+      "&": { backgroundColor: readonly ? "var(--surface-2)" : "var(--surface)", color: "var(--on-surface)" },
       ".cm-content": { caretColor: "var(--on-surface)" },
     }, { dark: isDark() });
   }
@@ -989,50 +1040,47 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   function updateLineCol() {
     if (!view) return;
     const head = view.state.selection.main.head;
-    const upTo = view.state.doc.sliceString(0, head);
-    const nl = upTo.split("\n");
-    if (!status.classList.contains("err")) {
-      setStatus(t("ui.custom.lineCol", String(nl.length), String(nl[nl.length - 1].length + 1)));
-    }
+    const line = view.state.doc.lineAt(head);
+    const text = t('ui.custom.lineCol', String(line.number), String(head - line.from + 1));
+    if (position.textContent !== text) position.textContent = text;
+  }
+  function updateDirty() {
+    if (!view) return;
+    const dirty = !savedDocument || !view.state.doc.eq(savedDocument);
+    if (draftState.hidden === dirty) draftState.hidden = !dirty;
+    if (dialog.dataset.dirty !== String(dirty)) dialog.dataset.dirty = String(dirty);
   }
   function setStatus(msg, cls = "") {
-    status.textContent = msg;
-    status.className = "ci-status" + (cls ? " " + cls : "");
+    if (closed) return;
+    if (statusMessage.textContent !== msg) statusMessage.textContent = msg;
+    if (statusMessage.title !== msg) statusMessage.title = msg;
+    const className = 'ci-status' + (cls ? ' ' + cls : '');
+    if (status.className !== className) status.className = className;
   }
 
   view = new EditorView({
     parent: editorWrap,
     state: EditorState.create({
       doc: initialCode,
+      ...(sessionDraft?.selection ? { selection: sessionDraft.selection } : {}),
       extensions: [
         lineNumbers(),
         highlightActiveLine(),
         highlightActiveLineGutter(),
-        drawSelection(),
-        rectangularSelection(),
-        history(),
         syntaxHighlighting(jsHighlight),
         javascript(),
         EditorState.phrases.of(CM_PHRASES),
-        // 智能编辑：括号自动配对（输入 ( 补 ），选中文本按引号/括号整体包裹）、括号匹配高亮
-        closeBrackets(),
-        bracketMatching(),
-        keymap.of([
-          // 关闭面板优先；面板未开则关编辑器（对齐旧行为）
-          { key: "Escape", run: (v) => { if (closeSearchPanel(v)) return true; close(); return true; } },
-          { key: "Mod-h", run: (v) => { openSearchPanel(v); return true; } },
-          indentWithTab, // Tab 缩进 / Shift+Tab 反缩进
-          ...closeBracketsKeymap, // 括号自动配对快捷键
-          ...defaultKeymap,   // 行操作：Alt+↑↓ 移行 / Mod+/ 注释 / Shift-Mod-k 删行 / Mod-[ ] 缩进
-          ...searchKeymap,    // 查找：Mod-f / F3 / Mod-g / Mod-d 选词
-          ...historyKeymap,   // 撤销重做：Mod-z / Mod-y
-        ]),
+        ...codeInputExtensions(CM, { label: t('ui.custom.editorTitle'), onSave: () => doSave(false),
+          onRun: doRun, onEscape: requestEditorEscape }),
         fontComp.of(EditorView.theme({ "&": { fontSize: FONT_STEPS[fontIdx][0] + "px" } })),
         wrapComp.of([]),
         themeComp.of(themeExt()),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) {
+            revision++;
             if (_errLn > 0) { _errLn = -1; requestAnimationFrame(() => { placeErrMark(); applyErrGutterClass(); }); }
+            updateDirty();
+            if (!applyingDocument && lastTestRevision !== null && revision !== lastTestRevision) setStatus(t('ui.custom.resultStale'));
           }
           if (u.docChanged || u.selectionSet) updateLineCol();
         }),
@@ -1046,7 +1094,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   // 深浅主题切换跟随 html[data-theme]（左右两个独立 CM6 实例各自 reconfigure）
   const themeMo = new MutationObserver(() => {
     try { view.dispatch({ effects: themeComp.reconfigure(themeExt()) }); } catch { /* ignore */ }
-    if (srcView) { try { srcView.dispatch({ effects: srcThemeComp.reconfigure(themeExt()) }); } catch { /* ignore */ } }
+    if (srcView) { try { srcView.dispatch({ effects: srcThemeComp.reconfigure(themeExt(true)) }); } catch { /* ignore */ } }
   });
   themeMo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   // 错误行覆盖层随滚动重定位
@@ -1066,26 +1114,28 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   function getCode() {
     return view ? view.state.doc.toString() : "";
   }
-  function setCode(c) {
-    if (!view) return;
+  function setCode(c, { focus = true, atStart = true } = {}) {
+    if (!view || closed) return;
     const text = normCode(c);
-    view.dispatch({
-      changes: { from: 0, to: view.state.doc.length, insert: text },
-      selection: { anchor: text.length },
-      userEvent: "setCode", // 独立撤销组：套预设/载入方案后 Ctrl+Z 精确回退该步
-    });
-    view.focus();
+    applyingDocument = true;
+    try {
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: text },
+        selection: { anchor: atStart ? 0 : Math.min(view.state.selection.main.head, text.length) },
+        userEvent: "setCode",
+        scrollIntoView: focus,
+      });
+    } finally { applyingDocument = false; }
+    if (focus) view.focus();
     clearErr();
     setStatus("");
     updateLineCol();
   }
   function insertAtCursor(snippet) {
     if (!view) return;
-    const sel = view.state.selection.main;
     const text = normCode(snippet);
     view.dispatch({
-      changes: { from: sel.from, to: sel.to, insert: text },
-      selection: { anchor: sel.from + text.length },
+      ...view.state.replaceSelection(text),
       userEvent: "insert", // 独立撤销组
       scrollIntoView: true,
     });
@@ -1103,7 +1153,8 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     try { localStorage.setItem("ebctf.customImpl.fontIdx", String(fontIdx)); } catch { /* 隐私模式忽略 */ }
   }
   try {
-    const v = Number(localStorage.getItem("ebctf.customImpl.fontIdx"));
+    const stored = localStorage.getItem("ebctf.customImpl.fontIdx");
+    const v = stored == null ? NaN : Number(stored);
     if (Number.isInteger(v) && v >= 0 && v < FONT_STEPS.length) fontIdx = v;
   } catch { /* 忽略 */ }
 
@@ -1114,15 +1165,26 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     wrapBtn.classList.toggle("on", wrapOn);
     wrapBtn.setAttribute("aria-pressed", String(wrapOn));
     wrapBtn.title = t(wrapOn ? "ui.custom.wrapOn" : "ui.custom.wrapOff");
-    if (persist) try { localStorage.setItem("ebctf.customImpl.wrap", wrapOn ? "1" : "0"); } catch { /* 隐私模式 */ }
-    requestAnimationFrame(() => view.requestMeasure());
+    if (persist) { wrapExplicit = true; try { localStorage.setItem("ebctf.customImpl.wrap", wrapOn ? "1" : "0"); } catch { /* Session preference still works. */ } }
+    requestAnimationFrame(() => view?.requestMeasure());
   }
+  const syncResponsiveWrap = () => { if (!wrapExplicit && !closed) { wrapOn = narrowMedia.matches; applyWrap(false); } };
+  narrowMedia.addEventListener('change', syncResponsiveWrap);
 
   function close() {
+    if (closed) return;
+    if (view && (!savedDocument || !view.state.doc.eq(savedDocument))) {
+      _sessionDrafts.delete(opId);
+      _sessionDrafts.set(opId, { code: getCode(), selection: view.state.selection, scrollTop: view.scrollDOM.scrollTop, scrollLeft: view.scrollDOM.scrollLeft });
+      if (_sessionDrafts.size > 12) _sessionDrafts.delete(_sessionDrafts.keys().next().value);
+    } else _sessionDrafts.delete(opId);
+    closed = true; runSeq++; sourceAbort.abort();
+    narrowMedia.removeEventListener('change', syncResponsiveWrap);
     lifecycle?.release(); lifecycle = null;
     try { ro.disconnect(); } catch { /* ignore */ }
     try { themeMo.disconnect(); } catch { /* ignore */ }
     if (view) { try { view.destroy(); } catch { /* ignore */ } }
+    view = null;
     // 右侧只读源码实例同样必须销毁（CM6 view 持有 DOM 监听；不销毁则反复开关编辑器累积泄漏）
     if (srcView) { try { srcView.destroy(); } catch { /* ignore */ } srcView = null; fileText = ""; _sourceLoaded = false; }
     _sourcePromise = null;
@@ -1137,17 +1199,25 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     if (!code.trim()) { setStatus(t("ui.custom.noCode"), "err"); return false; }
     const cur = getCustomImpl(opId) || { enabled: false };
     saveCustomImpl(opId, { enabled: cur.enabled, code });
+    savedDocument = view.state.doc; _sessionDrafts.delete(opId); updateDirty();
     if (!silent) setStatus(t("ui.custom.saved"), "ok");
     if (typeof ctx.onStateChange === "function") ctx.onStateChange();
     if (cur.enabled && typeof ctx.onToggle === "function") ctx.onToggle(true);
     return true;
   }
   function doRun() {
-    if (!doSave(true)) return;
+    if (closed || running) return;
+    const code = getCode();
+    if (!code.trim()) { setStatus(t('ui.custom.noCode'), 'err'); return; }
     setStatus(t("ui.custom.run") + "…");
     clearErr();
     if (typeof ctx.onTest !== "function") { setStatus(t("ui.custom.runErr"), "err"); return; }
-    ctx.onTest(getCode(), (res) => {
+    const sequence = ++runSeq, testRevision = revision;
+    lastTestRevision = revision; running = true; runBtn.disabled = true; runBtn.setAttribute('aria-busy', 'true');
+    const done = res => {
+      if (closed || sequence !== runSeq) return;
+      running = false; runBtn.disabled = false; runBtn.removeAttribute('aria-busy');
+      if (revision !== testRevision) { setStatus(t('ui.custom.resultStale')); return; }
       if (res && res.ok) {
         const outText = res.out && typeof res.out === "object" ? String(res.out.text ?? "") : String(res.out ?? "");
         const files = res.out && typeof res.out === "object" && Array.isArray(res.out.files) ? res.out.files.length : 0;
@@ -1159,7 +1229,8 @@ export async function openCustomImplEditor(opId, ctx = {}) {
       const line = res && res.line ? "  " + t("ui.custom.errLine", String(res.line)) : "";
       setStatus(head + line + "：" + ((res && res.error) || ""), "err");
       if (res && res.line) markErrLine(res.line);
-    });
+    };
+    try { ctx.onTest(code, done); } catch (error) { done({ ok: false, error: error.message }); }
   }
   function firstLine(s) {
     const one = String(s || "").split("\n")[0];
@@ -1170,7 +1241,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     const f = importInp.files && importInp.files[0];
     if (!f) return;
     const rd = new FileReader();
-    rd.onload = () => { if (confirm(t("ui.custom.importWarn"))) setCode(String(rd.result || "")); };
+    rd.onload = () => { if (!closed && confirm(t("ui.custom.importWarn"))) setCode(String(rd.result || "")); };
     rd.readAsText(f, "utf-8");
     importInp.value = "";
   });
@@ -1190,25 +1261,34 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   // ---- 初始化 ----
   applyFont();
   applyWrap(false); // 同步初始态（含按钮 on 视觉），不写 localStorage
+  if (saved.code) savedDocument = normCode(saved.code) === normCode(initialCode)
+    ? view.state.doc : EditorState.create({ doc: saved.code }).doc;
+  updateDirty();
   updateLineCol();
   view.focus();
+  if (sessionDraft) {
+    setStatus(t('ui.custom.draftRestored'));
+    requestAnimationFrame(() => { if (!closed && view) { view.scrollDOM.scrollTop = sessionDraft.scrollTop; view.scrollDOM.scrollLeft = sessionDraft.scrollLeft; } });
+  }
   // The editable implementation owns the initial canvas; source comparison is optional.
   sPanel.classList.add("hidden"); srcResize.hidden = true;
   srcToggleBtn.classList.remove("on"); srcToggleBtn.setAttribute("aria-pressed", "false");
 
   // 打开即见真算法：没有用户已保存代码时，后台生成完整依赖闭包并替换薄壳入口。
   // 只在编辑区仍等于初始内容时替换（用户手快开始编辑就绝不覆盖）。
-  if (!saved.code && btpl && op && op.sourceFile) {
+  if (!sessionDraft && !saved.code && btpl && op && op.sourceFile) {
     const autoBaseline = normCode(initialCode);
+    const autoRevision = revision;
     setTimeout(() => {
       if (!mask.isConnected) return;
-      if (getCode() !== autoBaseline) return;
-      loadFullImplementation({ auto: true, baseline: autoBaseline });
+      if (revision !== autoRevision || getCode() !== autoBaseline) return;
+      loadFullImplementation({ auto: true, baseline: autoBaseline, expectedRevision: autoRevision });
     }, 30);
   }
 
   // 沙箱形态如实展示（降级到主线程时必须让用户知道）
   probeSandbox().then((info) => {
+    if (closed) return;
     const worker = info && info.mode === "worker";
     sandboxBar.className = "ci-sandbox" + (worker ? "" : " warn");
     sandboxBar.innerHTML = "";
@@ -1230,36 +1310,18 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   function loadSource() {
     const url = op && op.sourceFile;
     if (!url) return Promise.resolve("");
-    if (_sourcePromise) return _sourcePromise;
-    _sourcePromise = fetch(url).then((r) => {
+    if (_sourcePromise) return _sourcePromise.then(text => { mountSource(text); return text; });
+    _sourcePromise = fetch(url, { signal: sourceAbort.signal }).then((r) => {
       if (!r.ok) throw new Error(r.status + " " + r.statusText);
       return r.text();
     }).then((text) => {
       if (!sPre.isConnected) return text; // 编辑器已关闭（fetch 在途时 close）——别在孤儿节点上建实例（性能审计 M2）
       fileText = text;
-      // 首次加载：创建 CM6 只读 view（复用左侧高亮/主题/字号配置）
-      if (!srcView) {
-        sPre.innerHTML = ""; // 清掉可能的失败提示占位
-        srcView = new EditorView({
-          parent: sPre,
-          state: EditorState.create({
-            doc: text,
-            extensions: [
-              ...srcEditorExts(),
-              EditorState.readOnly.of(true),
-              EditorView.editable.of(false),
-              // 只读：只绑 Escape（关搜索面板），不绑任何编辑快捷键（审计 P3-18）
-              keymap.of([{ key: "Escape", run: (v) => !!closeSearchPanel(v) }]),
-            ],
-          }),
-        });
-        applySrcWrap(false); // 同步换行初始态到实例（localStorage 可能存的是关）
-      } else {
-        srcView.dispatch({ changes: { from: 0, to: srcView.state.doc.length, insert: text } });
-      }
+      mountSource(text);
       return text;
     }).catch((err) => {
-      _sourceLoaded = false; // 回滚：重新展开 / 点重试会再拉
+      if (closed) return '';
+      _sourceLoaded = false;
       _sourcePromise = null;
       sPre.innerHTML = "";
       sPre.append(el("div", { class: "ci-src-err" },
@@ -1274,6 +1336,25 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     });
     return _sourcePromise;
   }
+  function mountSource(text) {
+      if (closed || !text || sPanel.classList.contains('hidden')) return;
+      if (!srcView) {
+        sPre.innerHTML = ""; // 清掉可能的失败提示占位
+        srcView = new EditorView({
+          parent: sPre,
+          state: EditorState.create({
+            doc: text,
+            extensions: [
+              ...srcEditorExts(),
+            ],
+          }),
+        });
+        applySrcFont();
+        applySrcWrap(false); // 同步换行初始态到实例（localStorage 可能存的是关）
+      } else if (srcView.state.doc.toString() !== text) {
+        srcView.dispatch({ changes: { from: 0, to: srcView.state.doc.length, insert: text } });
+      }
+  }
 
   /** 依赖模块加载：只允许同源（或同为 file://），避免把插件 op 的 sourceFile 变成任意外发通道。 */
   async function fetchSourceModule(url) {
@@ -1283,7 +1364,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     if (u.protocol !== "file:" && u.origin !== location.origin) {
       throw new Error("拒绝跨域加载依赖：" + url);
     }
-    const r = await fetch(u.href, { cache: "no-cache" });
+    const r = await fetch(u.href, { cache: "no-cache", signal: sourceAbort.signal });
     if (!r.ok) throw new Error(r.status + " " + r.statusText);
     const rec = { url: u.href, text: await r.text() };
     _modCache.set(url, rec);
@@ -1296,8 +1377,8 @@ export async function openCustomImplEditor(opId, ctx = {}) {
    * auto=true 时只在用户未改动编辑区时自动替换（打开编辑器即看到真算法，但不覆盖已有编辑）。
    * 生成失败不破坏现有代码，状态条显式报错。
    */
-  async function loadFullImplementation({ auto = false, sync = false, baseline: base0 = null } = {}) {
-    if (_fullBuilding) return false;
+  async function loadFullImplementation({ auto = false, sync = false, baseline: base0 = null, expectedRevision = revision } = {}) {
+    if (_fullBuilding || closed) return false;
     if (!op || !op.sourceFile || !btpl) {
       if (!auto) setStatus(t("ui.custom.fullUnavailable"), "err");
       return false;
@@ -1311,6 +1392,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     setStatus(t("ui.custom.building"));
     try {
       const text = await loadSource();
+      if (closed) return false;
       if (!text) throw new Error(t("ui.custom.sourceNoFile"));
       const { buildSourceBundle } = await import("../core/customImplSource.js");
       const bundle = await buildSourceBundle({
@@ -1322,7 +1404,10 @@ export async function openCustomImplEditor(opId, ctx = {}) {
         loadModule: fetchSourceModule,
       });
       if (!bundle.ok) throw new Error((bundle.errors || []).join("；") || "未知错误");
-      if (auto && getCode() !== baseline) return false; // 用户已开始编辑 → 不覆盖
+      if (closed) return false;
+      if (revision !== expectedRevision || (auto && getCode() !== baseline)) {
+        setStatus(t('ui.custom.editsKept')); return false;
+      }
       const missing = (bundle.missing || []).filter(Boolean);
       // 自动模式只接受「依赖闭包完整」的结果；有未解析依赖时保留薄壳入口，避免把能跑的
       // 内置实现换成半成品（手动点「载入完整实现」仍允许，状态条会列出缺失项）。
@@ -1331,7 +1416,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
         setStatus(t("ui.custom.fullMissing", missing.slice(0, 8).join(", ")), "");
         return false;
       }
-      setCode(bundle.code);
+      setCode(bundle.code, { focus: !auto, atStart: !auto });
       let msg = t("ui.custom.fullLoaded", String(bundle.files.length), String(bundle.decls));
       if (bundle.warnings && bundle.warnings.length) {
         msg += "\n" + t("ui.custom.fullWarn", bundle.warnings.slice(0, 3).join("；"));
@@ -1343,6 +1428,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
       if (auto) toast(t("ui.custom.autoFull", String(bundle.files.length), String(bundle.decls)));
       return true;
     } catch (e) {
+      if (closed) return false;
       setStatus(t("ui.custom.fullFailed", (e && e.message) || String(e)), auto ? "" : "err");
       if (auto && !sync) toast(t("ui.custom.fullUnavailable"));
       return false;
@@ -1356,8 +1442,36 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     navigator.clipboard.writeText(fileText).then(() => toast(t("ui.custom.sourceCopied"))).catch(() => downloadText(fileText, opId + "-src.js", "text/javascript"));
   }
 
-  lifecycle = attachModalLifecycle(mask, { dialog, onClose: close, initialFocus: ".ci-editor-wrap .cm-content", restoreFocusTo: previousFocus });
-  _editors.set(opId, { mask, close });
+  function requestEditorEscape() {
+    if (more.open) { more.open = false; more.querySelector('summary').focus(); return true; }
+    if ((view && closeSearchPanel(view)) || (srcView && closeSearchPanel(srcView))) { view?.focus(); return true; }
+    if (isNarrow() && !dialog.classList.contains('ci-tools-hidden')) { toolsBtn.click(); toolsBtn.focus(); return true; }
+    close(); return true;
+  }
+  for (const name of ['pointerdown', 'focusin']) dialog.addEventListener(name, event => {
+    if (!more.contains(event.target)) more.open = false;
+  });
+  dialog.addEventListener('keydown', event => {
+    if (!(event.isComposing || event.keyCode === 229)) return;
+    if (event.key === 'Escape' || event.key === 'Enter' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's')) {
+      // Keep the IME's native action; only withhold application/CM shortcuts.
+      event.stopPropagation();
+    }
+  }, true);
+  dialog.addEventListener('keydown', event => {
+    if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
+    if (event.key === 'Escape') {
+      event.preventDefault(); event.stopPropagation();
+      requestEditorEscape();
+    } else if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey) {
+      if (event.key.toLowerCase() === 's') { event.preventDefault(); doSave(false); }
+      else if (event.key === 'Enter') { event.preventDefault(); doRun(); }
+    }
+  });
+  lifecycle = attachModalLifecycle(mask, { dialog, onClose: close, closeOnEscape: false,
+    initialFocus: ".ci-editor-wrap .cm-content", restoreFocusTo: previousFocus });
+  enterSurface(dialog);
+  _editors.set(opId, { mask, close, focus: () => view?.focus() });
 }
 
 function downloadText(text, filename, mime) {

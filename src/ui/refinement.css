@@ -1,16 +1,18 @@
 /* M3 refinement layer. All colors, motion and geometry consume theme tokens. */
 
-/* Native geometry; continuousCorners.js self-draws common rounded controls in
-   other engines without clipping their children. Semantic circles stay round. */
-@supports (corner-shape: superellipse(1.5)) {
-  * { corner-shape: var(--corner-panel); }
-  :where(.fav-btn, .stepper-btn, .mid-btn, .switch .knob, .about-capsule-avatar,
-    .env-accent-swatch, .swatch-dot, .mt575-dot, .m3-ripple-dot, .rtoc-dot,
-    .rtoc-rail-dot, .rtoc-close, .ds-close, .exp-close, .ci-modal-close,
-    .nav-drawer-toggle, #btnRepo, #btnTheme, #btnMoreActions) {
-    corner-shape: round;
-  }
-  .topbar-actions.actions-open :is(#btnRepo, #btnTheme) { corner-shape: var(--corner-panel); }
+/* All engines share continuousCorners.js paint geometry. Semantic circles keep
+   their native circle; CSS superellipses are not a second curvature model. */
+.ci-editor-wrap > .cm-editor, .ci-spanel-pre > .cm-editor {
+  border-radius: calc(var(--r-lg) - 1px); outline: none;
+}
+.ci-editor-wrap:focus-within, .ci-spanel-pre:focus-within {
+  outline: 2px solid var(--primary); outline-offset: 2px;
+}
+.ci-dialog > .ci-head, .exp-dialog > .exp-head {
+  border-start-start-radius: inherit; border-start-end-radius: inherit;
+}
+.ci-dialog > .ci-foot, .exp-dialog > .exp-foot {
+  border-end-start-radius: inherit; border-end-end-radius: inherit;
 }
 
 /* Tonal surfaces establish hierarchy; elevation is reserved for overlays. */
@@ -100,16 +102,42 @@ html .workspace select, html .env-panel select, html .ds-dialog select,
   border: 0; background-color: var(--control-track); border-radius: var(--r-md);
 }
 
+/* One inset/gap chain for environment groups, including text-only headings. */
+.env-panel { overscroll-behavior: contain; scrollbar-width: thin; scroll-padding-block: 12px; }
+.env-panel .env-section {
+  min-width: 0; padding: 12px; gap: 8px; border: 0;
+  border-radius: var(--r-md); background: var(--surface-1);
+}
+.env-panel .env-section-title { min-height: 24px; line-height: 24px; margin: 0; letter-spacing: .02em; }
+.env-panel .env-section-title:not(:first-child) { margin-block-start: 8px; }
+.env-panel .env-row { padding: 4px 0; min-width: 0; }
+.env-panel .env-row-label { white-space: normal; overflow-wrap: anywhere; }
+.env-panel .env-row-val { min-width: 0; }
+.env-panel :is(.env-mode-note, .env-accent-note, .env-reset-note) { padding: 0; margin: 0; }
+.env-panel .env-variant-grid { margin-top: 0; }
+.env-panel .env-motion-speed { padding: 0; min-height: 44px; }
+.env-panel .env-motion-speed select { min-height: 44px; min-width: 0; }
+.env-panel .env-layout-setting { padding: 0; }
+.env-panel .env-layout-setting > .env-section-title { margin-block-end: 8px; }
+.env-panel .env-motion-setting { background: var(--surface-2); }
+.env-panel :is(.env-clear-io, .env-reset-btn) { min-height: 44px; }
+.env-panel .env-reset-box { background: color-mix(in srgb, var(--error) 5%, var(--surface-1)); }
+.env-reset-dialog-actions { flex-wrap: wrap; }
+
+/* Expanded field editors share title/content/action edges and a 16px rhythm.
+   Keep the short-window scroll on this editor, not on unrelated exp dialogs. */
+.exp-dialog.exp-editor-dialog { gap: 16px; max-height: min(82dvh, calc(100dvh - 32px)); overflow: auto; }
+.exp-editor-dialog > .exp-head, .exp-editor-dialog > .exp-foot { margin: 0; flex-shrink: 0; }
+.exp-editor-dialog .exp-title { min-width: 0; overflow-wrap: anywhere; }
+.exp-editor-dialog > .exp-textarea { flex: 1 0 auto; min-height: min(180px, 25dvh); max-height: 52dvh; }
+.exp-editor-dialog > .exp-foot { flex-wrap: wrap; }
+.exp-editor-dialog .exp-action { min-height: 44px; }
+
 
 /* The input is the focal point; optional settings follow it in reading order. */
 .home-hero { max-width: 1000px; padding-block: 12px 24px; }
 .home-hero > .op-head { padding-inline: 4px; margin-bottom: 24px; }
 .home-hero .op-title { font-size: clamp(28px, 2.7vw, 38px); font-weight: 600; letter-spacing: -.035em; }
-.home-local-badge {
-  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px;
-  color: var(--primary); font-size: var(--fs-xs); font-weight: 600;
-}
-.home-local-badge .msym { font-size: 16px; }
 .home-hero .op-desc { max-width: none; font-size: var(--fs-sm); margin-top: 10px; }
 .home-studio {
   padding: 24px; background: var(--surface-1); border: 0;
@@ -167,12 +195,11 @@ html.reduce-motion .act-btn:active { transform: none; }
   transition: background-color var(--dur-3) var(--ease), color var(--dur-3) var(--ease);
 }
 .act-btn:not(.fav-btn), .chip-btn, .btn, .recipe-bake-btn {
-  transition: background var(--dur-short) var(--ease), color var(--dur-short) var(--ease),
-    border-radius var(--dur-3) var(--ease), transform var(--dur-short) cubic-bezier(.2, 1.25, .35, 1);
+  transition: background var(--dur-short) var(--ease), color var(--dur-short) var(--ease);
 }
 .act-btn:not(.fav-btn):active:not(:disabled), .chip-btn:active:not(:disabled),
 .btn:active:not(:disabled), .recipe-bake-btn:active:not(:disabled) {
-  border-radius: var(--r-md); transform: scale(.97);
+  transform: none;
 }
 .home-tool-icon { transition: transform var(--dur-3) cubic-bezier(.2, 1.25, .35, 1); }
 .home-hero > .op-head { animation: m3-reveal var(--dur-medium) var(--ease-out) backwards; }
@@ -289,7 +316,6 @@ html.reduce-motion .batch-panel button:active { transform: none; }
 }
 @media (forced-colors: active) {
   .home-tool-card, .home-studio, .workspace, .allops-card { border: 1px solid CanvasText; }
-  .home-local-badge { color: CanvasText; }
   :where(button, a, [role="button"], summary):focus-visible { outline-color: Highlight; }
   .ds-slider::-webkit-slider-runnable-track { background: GrayText; }
   .ds-slider::-webkit-slider-thumb { background: Highlight; }

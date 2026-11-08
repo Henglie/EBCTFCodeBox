@@ -1,4 +1,5 @@
 import { syncSegmentedControl } from "./sharedControls.js";
+import { enterSurface } from './expressiveMotion.js';
 
 const attached = new WeakMap();
 let sequence = 0;
@@ -98,6 +99,7 @@ export function attachFamilyOverflow(root, { moreLabel, ariaLabel } = {}) {
       root.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX, clientY }));
     });
     document.body.append(popup); setAttr(more, "aria-expanded", "true"); position();
+    if (popup) enterSurface(popup, 4);
     if (!popup) return;
     document.addEventListener("pointerdown", outside, true); document.addEventListener("keydown", dismiss, true);
     const buttons = choices();

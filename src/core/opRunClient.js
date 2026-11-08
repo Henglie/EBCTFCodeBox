@@ -25,14 +25,17 @@ function workerSupported() {
 
 function spawnWorker() {
   if (_worker) return _worker;
+  let worker;
   try {
-    _worker = new Worker(new URL("./opRunWorker.js", import.meta.url), { type: "module" });
+    worker = new Worker(new URL("./opRunWorker.js", import.meta.url), { type: "module" });
+    _worker = worker;
   } catch {
     _workerBroken = true;
     _worker = null;
     return null;
   }
-  _worker.addEventListener("message", (e) => {
+  worker.addEventListener("message", (e) => {
+    if (_worker !== worker) return;
     const m = e.data || {};
     const job = _pending.get(m.runId);
     if (!job) return;                       // 迟到的旧消息（已被取消/接管），弃
@@ -46,7 +49,11 @@ function spawnWorker() {
       job.reject(new Error(m.message || "op 执行失败"));
     }
   });
-  _worker.addEventListener("error", () => {
+  worker.addEventListener("error", event => {
+    // The caller receives an explicit rejected job. Do not also dispatch an
+    // uncaught window error, especially for an obsolete worker during reload.
+    event.preventDefault();
+    if (_worker !== worker) return;
     // Worker 崩了：全部在途任务按失败收场，下次惰性重建
     for (const [, job] of _pending) {
       if (job.timer) clearTimeout(job.timer);
@@ -54,9 +61,10 @@ function spawnWorker() {
     }
     _pending.clear();
     _workerBroken = true;
+    try { worker.terminate(); } catch { /* Already stopped. */ }
     _worker = null;
   });
-  return _worker;
+  return worker;
 }
 
 function failAll(message) {

@@ -1,4 +1,19 @@
 /* Shared M3 control geometry. Page-specific range/tab skins are overridden here. */
+input[type="checkbox"]:not(.switch input) {
+  appearance: none; -webkit-appearance: none; display: inline-block;
+  position: relative; width: 18px; height: 18px; min-width: 18px;
+  margin: 0; vertical-align: middle; flex: none; cursor: pointer;
+  border: 1px solid var(--outline); border-radius: var(--r-xs);
+  background: var(--surface); color: var(--on-primary);
+}
+input[type="checkbox"]:not(.switch input):checked { background: var(--primary); border-color: var(--primary); }
+input[type="checkbox"]:not(.switch input)::before {
+  content: ""; position: absolute; left: 5px; top: 2px; width: 4px; height: 8px;
+  border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); opacity: 0;
+}
+input[type="checkbox"]:not(.switch input):checked::before { opacity: 1; }
+input[type="checkbox"]:not(.switch input):focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+input[type="checkbox"]:disabled { cursor: not-allowed; }
 input[type="range"].m3-slider {
   appearance: none; -webkit-appearance: none; width: 100%; min-width: 0;
   height: 44px; margin: 0; padding: 0; border: 0; background: transparent;
@@ -57,8 +72,11 @@ input[type="range"].m3-slider:disabled { cursor: not-allowed; opacity: .38; }
 .m3-segment-thumb[hidden] { display: none; }
 .ds-depth-row.m3-segmented, .fam-seg.m3-segmented { width: 100%; }
 .ds-depth-row.m3-segmented > button { flex: 1 0 auto; }
-.io-coding-seg.m3-segmented { --segment-height: 28px; }
-.io-coding-seg.m3-segmented > button { font-size: var(--fs-xs); padding-inline: 10px; }
+.io-coding-seg.m3-segmented { --segment-height: 28px; width: 100%; }
+.io-coding-seg.m3-segmented > button { flex: 1 1 auto; min-width: 0; font-size: var(--fs-xs); padding-inline: 8px; }
+@media (max-width: 600px) {
+  .io-coding-seg.m3-segmented > button { padding-inline: 4px; }
+}
 @media (pointer: coarse) {
   .m3-segmented { --segment-height: 40px; }
   .io-coding-seg.m3-segmented { --segment-height: 36px; }

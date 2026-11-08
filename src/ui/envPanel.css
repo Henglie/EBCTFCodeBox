@@ -266,7 +266,7 @@
 
 /* ============ 窄屏适配（与 topbar-responsive.css 协同） ============ */
 @media (max-width: 480px) {
-  .env-panel { width: calc(100vw - 16px); inset-inline-end: 8px !important; }
+  .env-panel { width: calc(100vw - 16px); }
 }
 
 /* ============ 低高窗口（<640px 高）：面板占满可视高，内容内部滚 ============ */

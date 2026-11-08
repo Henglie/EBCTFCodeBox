@@ -1,0 +1,118 @@
+/* M3 editorial refinement: role, tone, containment and purposeful motion.
+   Shape geometry remains owned by the existing first-paint runtime. */
+:root {
+  --type-title-leading: 1.3;
+  --type-body-leading: 1.65;
+  --type-label-leading: 1.45;
+  --state-hover: 8%;
+  --state-pressed: 12%;
+  --surface-control: color-mix(in srgb, var(--primary) 5%, var(--surface-2));
+  --surface-selection: color-mix(in srgb, var(--primary) 10%, var(--surface-1));
+  --elevation-floating: 0 8px 24px -8px color-mix(in srgb, var(--on-surface) 18%, transparent), var(--el-2);
+}
+
+/* Chinese uses full natural spacing; numeric metadata never shifts its width. */
+.op-title, .home-hero .op-title, .allops-title, .qc-title, .recipe-head .op-title {
+  letter-spacing: normal; font-weight: 600; line-height: var(--type-title-leading);
+  text-wrap: balance;
+}
+.op-desc, .home-hero .op-desc, .qc-desc { line-height: var(--type-body-leading); text-wrap: pretty; overflow-wrap: anywhere; }
+.op-title > .msym:first-child, .qc-title > .msym:first-child {
+  display: inline-flex; flex: 0 0 40px; width: 40px; height: 40px; padding: 9px;
+  align-items: center; justify-content: center; border-radius: var(--r-md);
+  background: var(--primary-container); color: var(--on-primary-container);
+}
+.op-title > .msym:first-child svg, .qc-title > .msym:first-child svg { width: 22px; height: 22px; }
+.op-config .op-head { padding-block-end: 4px; }
+.op-config .op-desc { margin-top: 12px; }
+.op-config .op-params { background: var(--surface-1); padding: 20px; gap: 16px; }
+.op-config .param > label:not(.switch) { line-height: var(--type-label-leading); font-weight: 500; }
+.op-config .param > label { color: var(--on-surface-var); }
+.op-config .param :is(input:not([type="checkbox"]), select, textarea) { font-variant-numeric: tabular-nums; }
+.op-config .ci-anchor { margin-block-start: 20px; }
+.op-config .ci-toggle-label { font-size: var(--fs-xs); color: var(--on-surface-var); }
+.op-config .ci-edit-btn { font-size: var(--fs-xs); }
+.io-pane-title { font-weight: 600; letter-spacing: normal; }
+.io-coding-label, .io-coding-state { line-height: var(--type-label-leading); }
+.op-feedback, .allops-count, .nav-count, .recipe-run-status, .env-tool-version { font-variant-numeric: tabular-nums; }
+.op-feedback { gap: 8px; }
+.op-feedback [role="status"] { line-height: 1.5; }
+.op-data .io-actions > .primary { min-height: 48px; padding-inline: 24px; gap: 8px; font-weight: 600; }
+.op-data .io-actions > :is(.io-swap, .io-chain) { background: var(--surface-1); color: var(--on-surface-var); }
+.op-data .io-report { font-weight: 500; }
+
+/* Nested reading surfaces have one quiet tonal step rather than extra frames. */
+.edu-card { padding: 24px; }
+.edu-card-head { gap: 12px; margin-bottom: 24px; }
+.edu-card-title { font-weight: 600; letter-spacing: normal; }
+.edu-sec { margin-block: 0 24px; }
+.edu-sec:last-child { margin-bottom: 0; }
+.edu-sec-label { color: var(--primary); font-weight: 600; line-height: 1.5; }
+.edu-para { line-height: 1.8; }
+.edu-example { border: 0; background: var(--surface); padding: 16px; border-radius: var(--r-md); }
+.edu-aka-chip { border: 0; background: var(--surface-2); color: var(--on-surface-var); }
+.allops-card-name { font-size: var(--fs-base); font-weight: 600; line-height: 1.5; }
+.allops-card-id { font-size: var(--fs-xs); opacity: 1; color: var(--on-surface-var); }
+.allops-card-meta { color: var(--on-surface-var); }
+.allops-section-count { background: var(--surface-2); font-size: var(--fs-xs); }
+.allops-card { transition: background-color var(--dur-short) var(--ease); }
+.allops-card:focus-visible { outline-offset: -3px; }
+.home-tool-hint { font-size: var(--fs-xs); line-height: 1.5; }
+.home-tool-copy { gap: 4px; }
+.home-tool-card .home-tool-icon { width: 40px; height: 40px; flex-basis: 40px; padding: 8px; }
+.env-panel, .lang-menu, .family-overflow-menu, .io-tools-extra, .op-search-panel { box-shadow: var(--elevation-floating); }
+.env-panel .env-panel-head { border: 0; padding-block-end: 4px; }
+.env-panel .env-section-title { font-weight: 600; }
+.env-panel .env-privacy-note { font-weight: 500; }
+
+/* Stable full-round controls. No ripple: it was explicitly removed by product. */
+.act-btn:not(.fav-btn), .chip-btn, .btn, .recipe-bake-btn, .et-btn, .tool-btn,
+.home-tool-card, .home-tool-icon, .icon-btn {
+  transition: background-color var(--dur-short) var(--ease), color var(--dur-short) var(--ease);
+}
+.act-btn:not(.fav-btn):active:not(:disabled), .chip-btn:active:not(:disabled),
+.btn:active:not(:disabled), .recipe-bake-btn:active:not(:disabled), .home-tool-card:active,
+.icon-btn:active, .et-btn:active, .tool-btn:active { transform: none; }
+:is(.act-btn, .chip-btn, .btn, .recipe-bake-btn)[data-m3-pressed="true"]:not(:disabled) {
+  background-color: color-mix(in srgb, var(--on-surface) var(--state-pressed), var(--surface-3));
+}
+:is(.act-btn.primary, .recipe-bake-btn, .magic-run)[data-m3-pressed="true"]:not(:disabled) {
+  background-color: color-mix(in srgb, var(--on-primary) var(--state-pressed), var(--primary)); filter: none;
+}
+:is(.tool-btn, .et-btn, .icon-btn)[data-m3-pressed="true"]:not(:disabled) {
+  background-color: color-mix(in srgb, var(--on-surface) var(--state-pressed), var(--surface-1));
+}
+.home-tool-card:hover, .home-tool-card:hover .home-tool-icon { transform: none; }
+.home-hero > .op-head, .home-studio, .home-tool-card, .onekey-out > .onekey-card {
+  animation: none; /* No repeated carousel-like stagger when returning to work. */
+}
+.io-area[data-result-stale="true"] { border-style: dashed; }
+.op-feedback[data-state="stale"] { color: var(--on-surface-var); }
+.op-feedback[data-state="success"] .msym { color: var(--success); }
+.op-feedback[data-state="running"] .msym { animation: m3-status-turn 1s linear infinite; }
+.op-feedback[data-state="running"][data-immediate="true"] .msym { animation: none; }
+@keyframes m3-status-turn { to { transform: rotate(360deg); } }
+.exp-dialog, .env-panel, .lang-menu { transform-origin: 50% 0; }
+[data-m3-surface] { animation: none !important; }
+@keyframes exp-pop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes exp-pop-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(4px); } }
+@keyframes env-pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+@media (hover: hover) and (pointer: fine) {
+  .home-tool-card:hover { background-color: var(--surface-selection); }
+  .op-data .io-actions > :is(.io-swap, .io-chain):hover:not(:disabled) { background: var(--surface-2); color: var(--on-surface); }
+}
+@media (max-width: 600px) {
+  .op-config .op-params { padding: 16px; }
+  .edu-card { padding: 20px 16px; }
+  .home-tool-card .home-tool-icon { width: 32px; height: 32px; flex-basis: 32px; padding: 6px; }
+  .home-tool-card { gap: 8px; }
+  .home-tool-hint { font-size: 12px; }
+}
+html.reduce-motion .op-feedback .msym { animation: none !important; }
+html:not(.spring-motion) .op-feedback .msym { animation: none !important; }
+html.reduce-motion :is(.home-tool-card, .act-btn, .chip-btn, .btn, .recipe-bake-btn, .tool-btn, .et-btn) { transition: none !important; }
+@media (forced-colors: active) {
+  .io-area[data-result-stale="true"] { border-color: CanvasText; }
+  [data-m3-pressed="true"] { outline: 2px solid Highlight; }
+}

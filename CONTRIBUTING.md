@@ -70,11 +70,21 @@ node tools/motion_check.mjs
 node tools/workbench_check.mjs --base-url http://127.0.0.1:8180/ --channel msedge
 node tools/workbench_check.mjs --base-url http://127.0.0.1:8180/ --browser firefox --editor-only
 node tools/corners_check.mjs --base-url http://127.0.0.1:8180/ --browser webkit --app-perf
+node tools/alignment_check.mjs --base-url http://127.0.0.1:8180/ --channel msedge
+node tools/surfaces_check.mjs --base-url http://127.0.0.1:8180/ --channel msedge
+node tools/special_pages_check.mjs --base-url http://127.0.0.1:8180/ --channel msedge --audit-inputs
+node tools/draft_binary_check.mjs
+node tools/worker_lifecycle_check.mjs
+node tools/apple_profile_check.mjs
+node tools/expressive_check.mjs --base-url http://127.0.0.1:8180/ --channel msedge
+node tools/first_paint_check.mjs --base-url http://127.0.0.1:8180/ --channel msedge
 node tools/ui_followup.mjs --base-url http://127.0.0.1:8180/ --channel msedge
 node tools/drafts_check.mjs --base-url http://127.0.0.1:8180/ --channel msedge
 ```
 
 操作台检查包括桌面分栏、工作区自身宽度变化、手机堆叠、分隔条鼠标/键盘/RTL、真实转换与 PCAP 文件输入、多字段、参数式工具、自定义实现、独立页面隔离。`--editor-only` 检查真实键入、纯文本粘贴、换行、IME 事件及撤销重做；`--self-test` 无需浏览器，检查注册表与 PCAP 夹具；`--filter <正则>` 定向回归，`--json` 输出完整几何证据。圆角检查包含截图像素负控、描边/焦点/阴影、下拉外壳、动态控件与千卡页面性能，需分别跑三种引擎。
+
+对齐检查覆盖四种视图、编辑框间距、标题与正文起边、代码编辑器及旧草稿迁移；全局表面检查覆盖环境分组、短窗口/旋转定位、展开编辑器的标题/正文/动作、非工作台页面与弹出菜单。系统 select 的选项弹出菜单仍由浏览器和操作系统绘制，测试只核闭合外壳及原生选择行为。
 
 草稿检查覆盖切页、立即刷新、多字段、真实文件字节、图像结果、其他编辑页面、跨标签清空、IndexedDB 不可用时的文本回退、清空后的迟到文件与旧结果隔离，以及完整重置。仅使用隔离浏览器上下文。
 
@@ -91,11 +101,16 @@ git diff --check
 ## 界面约定
 
 - 视觉与交互向 Material 3 Expressive 对齐；容器优先以色阶和留白分组，搜索框与普通按钮不画常驻描边，编辑区保留封闭边界。
-- 常用非圆形控件（含按钮、输入框、菜单与滑轨）统一消费 `--corner-panel`。支持 `corner-shape` 时用原生超椭圆；其余引擎由 `continuousCorners.js` 用 C2 连续路径自绘底色、描边和阴影，宿主不裁切子元素。头像、旋钮与语义圆形按钮保持正圆；系统下拉弹出菜单、替换媒体及未支持的复杂背景保持原生处理，`inspect()` 返回具体原因。
-- 普通独立算法使用 `op-workbench`；自适配模式在横屏分栏、竖屏堆叠，环境可切换为始终传统纵向。参数与数据默认各半，拖动比例暂为会话态；支持左右键、Shift 大步进、Home/End 与 Enter/双击等分复位。科普卡必须作为操作台后置同级节点，分隔条不能伸入科普区域。
+- 非全圆矩形在三引擎由 `continuousCornersRuntime.js` 按 PixelCut 公开 UIKit shape_1 的四角原始参数绘制底色、描边、焦点与阴影；不得镜像一角代替四角、删减小数或另套超椭圆。`continuousCorners.js` 只作 ES module 门面，二者共用一个实现。入口在 head 通过经典脚本同步加载，DOM MutationObserver 检查点内完成新节点绘制，不等待 IO/下一 RAF，不用隐藏整页掩盖闪现。宿主不裁切浮层，CodeMirror 内容和媒体使用匹配裁剪。M3 正圆、胶囊与 range 圆弧保留原生几何；系统 select 弹出菜单和未支持复杂背景保留原生处理，`inspect()` 返回具体原因。该公开轮廓不声称与各代 Apple 私有实现逐像素一致。
+- 普通独立算法使用 `op-workbench`；自适配模式在横屏分栏、竖屏堆叠，环境可切换为始终传统纵向。参数与数据默认各半，比例按操作／特殊页面分别持久化；支持左右键、Shift 大步进、Home/End 与 Enter/双击等分复位。科普卡必须作为操作台后置同级节点，分隔条不能伸入科普区域。
 - 参数自适应两至三列，长编辑字段通栏；方向滑块保持自然宽度。输入输出工具内嵌编辑框右上角，输入视图在上、输出视图在下，报告为输出下方独立按钮。算法族从首个放不下的按钮开始进入下拉菜单，不能以横向滚动隐藏后续档位。
 - 工作区草稿以页面/算法分别保存在本机 IndexedDB，文本写入同步日志以保护立即刷新；文件字节单独保留。环境的“一键清空输入输出”清除草稿及文件，保留算法参数、配方结构与环境设置；完整重置同时清除草稿数据库。草稿恢复不应重新触发重计算。
+- 特殊页面复用 `specialWorkbench.js` 的分区与清理接口；配方中区放节点和参数，右侧放链头输入、最终输出和逐步结果，竖屏按输入→配方→输出排列。图鉴列表在窄屏有界滚动，选中后进入图像预览。
+- 图像与批处理通过 `connectSpecialDraft` 保存原始文件、参数与人工状态，不保存派生 RGBA 缓冲。`draftBinary.js` 将文件转换为可移植字节记录；恢复时重建 File/Blob，缺失文件明确显示，批处理原“运行中”恢复为待执行。保存代次与任务归属须同时校验，清空后旧结果不得复活。
+- 多字段工具保留各字段数值／文本契约；字段级工具操作不能清空其他字段。无需主输入的布局沿用注册契约，并由 fields、acceptsBytes 与有效自定义实现保守保护；不要根据名称或参数数量猜测。
 - 数值滑块及分段滑轨共用 `src/ui/sharedControls.js` / `controls.css`，不再新增各页私有皮肤。保留原生范围输入与按钮的键盘操作、ARIA 状态和 RTL 支持。
 - 环境面板提供快捷 / 标准 / 舒缓三档动效节奏，CSS 与弹簧共用同一偏好；装饰性运动服从减少动效设置。
+- `expressive.css`集中阅读角色、tonal层级、状态层与浮层提升，不用渐变/玻璃替代层次。正圆/胶囊按压不改轮廓、不缩放文字，不恢复已取消的涟漪。
+- `expressiveMotion.js`将小区块展开与浮层动效分开；反向从当前帧接续，关闭期间不可进入隐藏内容，退出完成事件决定移除。减动效即时完成，三档节奏只缩放动画时长，不缩放200ms等待指示阈值或计算时序。运行结果的stale身份与原始内容分别存储，动画不决定作业归属。
 - 开发期间新文案优先中文与英文；法文、日文、韩文、俄文等维护语言的对齐在发布前执行，缺译按现有机制回退。
 - 用户输入与密钥不外发。授权材料与本机内部资料不进入公开仓库；以 `.gitignore` 和发行白名单为准。

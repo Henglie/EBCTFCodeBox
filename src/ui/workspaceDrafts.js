@@ -1,3 +1,5 @@
+import { encodeDraftFiles, decodeDraftFiles } from './draftBinary.js';
+
 const DB_NAME = 'ebctf-workspace-drafts';
 const PREFIX = 'ebctf.workspaceDraft.';
 const CLEAR_KEY = 'ebctf.workspaceDraftClear';
@@ -22,6 +24,30 @@ function openDatabase() {
 }
 
 const clone = value => { try { return structuredClone(value); } catch { return null; } };
+const isBinary = value => ArrayBuffer.isView(value) || value instanceof ArrayBuffer || value instanceof Blob;
+function hasBinary(value, seen = new WeakSet()) {
+  if (!value || typeof value !== 'object') return false;
+  if (isBinary(value)) return true;
+  if (seen.has(value)) return false;
+  seen.add(value);
+  return Object.values(value).some(child => hasBinary(child, seen));
+}
+function mergeBinary(previous, next, seen = new WeakSet()) {
+  if (!previous || !next || typeof next !== 'object' || isBinary(next)) return;
+  if (seen.has(next)) return; seen.add(next);
+  for (const [key, value] of Object.entries(previous)) {
+    if (isBinary(value) && next[key] === undefined) next[key] = value;
+    else if (next[key] && typeof next[key] === 'object') mergeBinary(value, next[key], seen);
+  }
+}
+function retainFiles(original, snapshot, seen = new WeakSet()) {
+  if (!original || !snapshot || typeof snapshot !== 'object' || isBinary(snapshot) || seen.has(snapshot)) return;
+  seen.add(snapshot);
+  for (const [key, value] of Object.entries(original)) {
+    if (value instanceof Blob) snapshot[key] = value; // File/Blob data is immutable; reuse its byte checkpoint.
+    else if (snapshot[key] && typeof snapshot[key] === 'object') retainFiles(value, snapshot[key], seen);
+  }
+}
 const textOf = node => 'value' in node ? String(node.value ?? '') : node.textContent || '';
 function areas(root) {
   const counts = new Map();
@@ -35,6 +61,7 @@ function areas(root) {
 export function createWorkspaceDrafts(root, { onClear, onRestore, onStorageError } = {}) {
   const records = new Map();
   const byteVersions = new WeakMap();
+  const sources = new Set();
   let db = null, binding = null, timer = 0, generation = 0, suspended = false, reported = false, loaded = false;
   const observer = new MutationObserver(changes => {
     if (changes.some(change => {
@@ -52,6 +79,7 @@ export function createWorkspaceDrafts(root, { onClear, onRestore, onStorageError
       const old = new Map(previous.areas.map(area => [area.key, area]));
       for (const entry of record.areas) if (entry.rawBytes === undefined && entry.rawId && old.get(entry.key)?.rawId === entry.rawId) entry.rawBytes = old.get(entry.key).rawBytes;
       if (record.meta?.lastMemo?.runId && record.meta.lastMemo.runId === previous.meta?.lastMemo?.runId) record.meta.lastMemo = previous.meta.lastMemo;
+      if (record.meta?.special?.binaryKey && record.meta.special.binaryKey === previous.meta?.special?.binaryKey) mergeBinary(previous.meta.special, record.meta.special);
     }
     records.set(record.id, record);
   };
@@ -61,7 +89,7 @@ export function createWorkspaceDrafts(root, { onClear, onRestore, onStorageError
     if (db) await new Promise(resolve => {
       try {
         const request = db.transaction('drafts').objectStore('drafts').getAll();
-        request.onsuccess = () => { for (const record of request.result) merge(record); resolve(); };
+        request.onsuccess = () => { for (const record of request.result) merge(decodeDraftFiles(record)); resolve(); };
         request.onerror = () => resolve();
       } catch { resolve(); }
     });
@@ -82,20 +110,24 @@ export function createWorkspaceDrafts(root, { onClear, onRestore, onStorageError
     } catch { return false; }
   };
   const persist = record => {
-    const journal = backup(record), epoch = generation;
-    const write = () => {
+    const journal = backup(record), epoch = generation, binary = hasBinary(record);
+    const failed = () => { if ((!journal || binary) && !reported) { reported = true; onStorageError?.(); } };
+    const write = async () => {
       if (epoch !== generation) return;
-      if (!db) { if (!journal && !reported) { reported = true; onStorageError?.(); } return; }
+      if (!db) { failed(); return; }
       try {
+        const stored = record.meta?.special ? await encodeDraftFiles(record) : record;
+        if (epoch !== generation || records.get(record.id)?.updated !== record.updated || !db) return;
         const transaction = db.transaction('drafts', 'readwrite');
-        transaction.objectStore('drafts').put(record);
+        transaction.objectStore('drafts').put(stored);
         transaction.oncomplete = () => {
           // Remove only the exact journal that this transaction committed.
           // A newer keystroke may already have written its own reload protection.
           try { const saved = JSON.parse(localStorage.getItem(PREFIX + record.id)); if (saved?.updated === record.updated) localStorage.removeItem(PREFIX + record.id); } catch { /* No journal. */ }
         };
-        transaction.onerror = () => { if (!journal && !reported) { reported = true; onStorageError?.(); } };
-      } catch { if (!journal && !reported) { reported = true; onStorageError?.(); } }
+        transaction.onerror = failed;
+        transaction.onabort = failed;
+      } catch { failed(); }
     };
     if (loaded) write(); else ready.then(write);
   };
@@ -114,6 +146,7 @@ export function createWorkspaceDrafts(root, { onClear, onRestore, onStorageError
         rawId: node._rawBytes ? version.id : null,
         rawFileName: node._rawFileName || null, filePlaceholder: !!node._isFilePlaceholder,
         coding: node.__ioCoding?.getState(), error: node.classList.contains('error'),
+        stale: node.hasAttribute('data-result-stale'),
       });
     }
     const record = { id: binding.id, updated: Math.max(Date.now(), (previous?.updated || 0) + 1),
@@ -137,6 +170,7 @@ export function createWorkspaceDrafts(root, { onClear, onRestore, onStorageError
         const entry = saved.get(key); if (!entry) continue;
         if ('value' in node) node.value = entry.text; else node.textContent = entry.text;
         node.classList.toggle('error', !!entry.error);
+        if (entry.stale) node.setAttribute('data-result-stale', 'true'); else node.removeAttribute('data-result-stale');
         if (entry.error) node.style.color = 'var(--error)';
         node._rawBytes = entry.rawBytes ? new Uint8Array(entry.rawBytes) : null;
         if (node._rawBytes) byteVersions.set(node, { bytes: node._rawBytes, id: entry.rawId || newDraftIdentity() });
@@ -145,9 +179,9 @@ export function createWorkspaceDrafts(root, { onClear, onRestore, onStorageError
         const controller = node.__ioCoding, coding = entry.coding;
         if (controller && coding) {
           controller.setCharset(coding.charset, { emit: false });
+          controller.setBitOrder(coding.bitOrder, { emit: false });
           controller.setView(coding.view, { emit: false });
           controller.setKeepBom(coding.keepBom, { emit: false });
-          controller.setBitOrder(coding.bitOrder, { emit: false });
           controller.refresh();
         }
       }
@@ -158,6 +192,8 @@ export function createWorkspaceDrafts(root, { onClear, onRestore, onStorageError
   async function clearAll(broadcast = true) {
     clearTimeout(timer); timer = 0; generation++; suspended = true;
     try {
+      window.dispatchEvent(new Event('ebctf:workspace-clear'));
+      for (const source of [...sources]) source.clear();
       onClear?.();
       for (const { node } of areas(root)) {
         if ('value' in node) node.value = ''; else node.textContent = '';
@@ -165,6 +201,7 @@ export function createWorkspaceDrafts(root, { onClear, onRestore, onStorageError
         byteVersions.delete(node);
         node._loadSeq = (node._loadSeq || 0) + 1;
         node.__ioCoding?.refresh(); node.classList.remove('error');
+        node.removeAttribute('data-result-stale');
       }
       for (const [id, record] of records) records.set(id, { id, updated: Date.now(), areas: [], meta: {
         params: record.meta?.params, dir: record.meta?.dir,
@@ -189,14 +226,50 @@ export function createWorkspaceDrafts(root, { onClear, onRestore, onStorageError
   }, true);
   root.addEventListener('change', schedule, true);
   root.addEventListener('click', schedule);
-  window.addEventListener('pagehide', save);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
+  const saveAll = () => { save(); for (const source of sources) source.save(); };
+  window.addEventListener('pagehide', saveAll);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveAll(); });
   window.addEventListener('storage', event => { if (event.key === CLEAR_KEY && event.newValue) clearAll(false); });
   instance = { ready, get: id => records.get(id), bind, release, save, clearAll,
+    connect(id, root, hooks) {
+      let revision = 0, disposed = false, restoring = true;
+      const source = {
+        save() {
+          if (disposed || suspended || restoring) return;
+          revision++;
+          const previous = records.get(id);
+          const original = hooks.capture(), special = clone(original);
+          retainFiles(original, special);
+          const record = { id, updated: Math.max(Date.now(), (previous?.updated || 0) + 1), areas: [], meta: { special } };
+          records.set(id, record); persist(record);
+        },
+        clear() { revision++; restoring = false; hooks.clear?.(); },
+        changed() { revision++; restoring = false; source.save(); },
+        dispose() {
+          source.save(); disposed = true; revision++; sources.delete(source);
+          for (const name of ['input', 'change', 'click']) root?.removeEventListener(name, change);
+        },
+      };
+      const change = () => { revision++; restoring = false; queueMicrotask(source.save); };
+      for (const name of ['input', 'change', 'click']) root?.addEventListener(name, change);
+      sources.add(source);
+      const epoch = generation, startRevision = revision;
+      const current = () => !disposed && epoch === generation && revision === startRevision;
+      source.ready = ready.then(async () => {
+        if (!current()) return;
+        try { await hooks.restore?.(records.get(id)?.meta?.special, current); }
+        finally { if (current()) restoring = false; }
+      });
+      return source;
+    },
     get epoch() { return generation; },
-    close() { clearTimeout(timer); binding = null; suspended = true; observer.disconnect(); db?.close(); db = null; },
+    close() { clearTimeout(timer); binding = null; suspended = true; for (const source of [...sources]) source.dispose(); observer.disconnect(); db?.close(); db = null; },
   };
   return instance;
+}
+
+export function connectSpecialDraft(key, root, hooks) {
+  return instance?.connect(`special:${key}`, root, hooks) || { save() {}, changed() {}, dispose() {}, ready: Promise.resolve() };
 }
 
 export async function clearWorkspaceDrafts() { await instance?.clearAll(); }

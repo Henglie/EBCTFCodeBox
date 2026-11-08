@@ -15,9 +15,23 @@ fork 后想复现构建、自己打包发行，看这里。日常开发用不到
 | `motion_check.mjs` | 确定性验证弹簧、低帧率与动效偏好 | 修改动效内核或节奏配置后 |
 | `io_mode_check.mjs` | 输入模式推导与全部字节消费端输入目标检查 | 修改注册表 / 输入区显示逻辑后 |
 | `ui_followup.mjs` | 三引擎定向验证输入框、BOM 诊断清理及代码编辑器桌面 / 手机布局 | 输入与编辑器回归复验 |
+| `custom_editor_check.mjs` | 自定义代码缩进/配对/注释/撤销/粘贴/多选、查找与IME按键、保存与测试分离、会话草稿、源码竞态、长文档行列与触屏布局 | 三引擎；含新旧行列算法微基准，不将微基准当作整机输入延迟；可用 `--screenshots-dir` 留图 |
 | `workbench_check.mjs` | 可调三分区、窄屏、多字段、PCAP 文件输入、交换与报告；`--editor-only` 检查换行/粘贴/撤销 | 操作台与编辑器变更后；`--self-test` 检查纯 Node 夹具 |
 | `corners_check.mjs` | 连续曲率几何与真实像素、下拉外壳、焦点和阴影；`--app-perf` 检查千卡页面 | 形状绘制变更后，分别检查 Chromium / Firefox / WebKit |
+| `interaction_perf_check.mjs` | 实页切换、千卡滚动/悬停、OP 输入、快速换算的布局读取/圆角扫描和长任务；同时核位按钮复用与双十进制结果 | 同机同浏览器前后对照；`--verify` 验有界工作量，Chromium 可加 `--profile` 输出 CPU 热点；Firefox/WebKit 不把缺失 Long Tasks API 当零长任务证据 |
+| `alignment_check.mjs` | 字符集/四种视图、编辑框间距、标题基线、代码编辑器与旧草稿迁移 | 工作台对齐变更后，三引擎分别验证明暗与 320–1440px |
+| `surfaces_check.mjs` | 环境设置分组、短窗口边界、展开编辑器、非工作台圆角、菜单和报告对齐 | 三引擎真实页面；`--screenshots-dir` 留图，`--json` 输出几何证据；系统 select 弹出菜单仍由浏览器管理 |
+| `special_pages_check.mjs` | 配方/Fork/Merge、图形分区、裁剪恢复、独立字段、比例持久化、大报告/文件下载、特殊草稿、中断及清空竞态 | 三引擎；`--audit-inputs` 额外逐页核全部普通无主输入工具，使用隔离上下文 |
+| `draft_binary_check.mjs` | 文件草稿字节/类型/名称、空文件、共享引用与循环结构 | 无浏览器的存储协议检查；用户运行不依赖 Node |
+| `worker_lifecycle_check.mjs` | 取消后的迟到错误、新线程归属和真实线程失败回报 | 无浏览器的客户端生命周期夹具 |
+| `apple_profile_check.mjs` | 四角原始十进制参数、限幅公式与完整路径独立对拍 | 对照 PixelCut 公开 UIKit shape_1，不以镜像近似冒充逐角原值 |
+| `first_paint_check.mjs` | 冷启动、延迟主模块、动态插入/显示、真实弹窗逐帧形状与正圆/胶囊豁免 | 三引擎；不等待固定稳定后再断言，不以隐藏整页规避首帧 |
+| `expressive_check.mjs` | M3排版/对比度、稳定按压、展开反向、浮层中断、三档节奏、减少动效、结果有效性、IME及触屏 | 三引擎；`--capture before/after --screenshots-dir <已有目录>` 获取同视口明暗截图 |
 | `drafts_check.mjs` | 切页/刷新草稿、文件字节、多字段、图像恢复、跨标签清空与完整重置 | 草稿持久化、清空和启动路由修改后，使用隔离浏览器上下文 |
+| `feedback_check.mjs` | 工作台运行/错误/取消/恢复、只读键盘语义、密码框尾端动作和 44px 触屏工具 | 本地静态服务器；支持 `--browser`、`--channel`、`--screenshots-dir`，Playwright 仅开发依赖 |
+| `sm2_attack_check.mjs` / `sm2_attack_reference.py` | SM2 nonce 误用攻击独立对拍与异常样本 | Node + Windows `py -3.11` + 开发依赖 `gmssl==3.2.2`；运行时无需 Python |
+| `sm_attack_check.mjs` | SM3 长度扩展/HMAC、SM4 攻击与一键尝试差分回归 | Node OpenSSL 需提供 SM3、SM4 ECB/CBC/CTR/OFB/GCM |
+| `sm_attack_ui_check.mjs` | 9 个国密攻击 op 的真实执行、科普、文件产物与别名导航 | 本地服务器 + Playwright；前端测试将可选原生桥设为不可用 |
 
 ## gen_sw_assets 的双处同步（坑）
 

@@ -9,7 +9,7 @@
   <span>EternalBlaze CTF Codebox · EBCTFCodeBox</span>
 </h1>
 <p align="center">
-  <span align="center">A local-first, zero-upload codec / cryptography / steganalysis toolbox: 969 registered operations across 23 categories, most running entirely in your browser; Windows can additionally enable local-bridge capabilities, while macOS / Linux ship with double-click launchers.</span>
+  <span align="center">A local-first, zero-upload codec / cryptography / steganalysis toolbox: 978 registered operations across 23 categories, most running entirely in your browser; Windows can additionally enable local-bridge capabilities, while macOS / Linux ship with double-click launchers.</span>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 - [Introduction](#introduction)　　　　[Features](#features)
 - [Screenshots](#screenshots)　　　　[Running](#running)
 - [Platform Compatibility](#platform-compatibility)　　[Performance Requirements](#performance-requirements)
-- [Directory Structure](#directory-structure)　　　　[Full Codec List](#full-codec-list-969-ops--23-categories)
+- [Directory Structure](#directory-structure)　　　　[Full Codec List](#full-codec-list-978-ops--23-categories)
 - [Plugins & AI Access](#plugins--ai-access)　　[License](#license)
 - [Third-party Resources & Licenses](#third-party-resources--licenses)　　[Privacy](#privacy)
 - [Keywords](#keywords)
@@ -47,13 +47,13 @@
 | Baidu Netdisk | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
 | Quark | https://pan.quark.cn/s/3b7e573b19c0 | none |
 
-Current version **v0.1.15** (in development). The source of truth is always the GitHub repository: [github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox).
+Current version **v0.1.15**. The source of truth is always the GitHub repository: [github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox).
 
 ## Changelog
 
-## v0.1.15 (in development)
+## v0.1.15 (2026-11-08)
 
-> v0.1.15 is a UI-focused development release leading into v0.2.0. v0.1.14 has ended as a transitional development version. Full history: [CHANGELOG.md](./CHANGELOG.md). Development workflow: [CONTRIBUTING.md](./CONTRIBUTING.md).
+> v0.1.15 is a UI-focused release leading into v0.2.0. v0.1.14 has ended as a transitional version. Full history: [CHANGELOG.md](./CHANGELOG.md). Development workflow: [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ### New
 
@@ -61,21 +61,37 @@ Current version **v0.1.15** (in development). The source of truth is always the 
 - Conversion and input/output swap sit between the editors; the divider supports dragging, keyboard resizing and reset, ending in a round dot above the education card.
 - Settings and data start equally sized; Environment offers adaptive landscape/portrait layout or an always-stacked traditional layout.
 - Page drafts survive navigation and refresh, including ordinary-operation fields, file bytes and outputs; Environment provides an input/output-only clear action separate from the full reset.
-- Eight new operations cover all-preset CRC, all checksums, six SHA-2 sizes, CTPH, all hashes, Whirlpool variants, LZ4 Frame and Enigma, bringing the main total to 969.
+- Eight new operations cover all-preset CRC, all checksums, six SHA-2 sizes, CTPH, all hashes, Whirlpool variants, LZ4 Frame and Enigma.
+- Nine conditional SM2/SM3/SM4/ZUC cryptanalysis operations bring the main total to 978. SM3 joins dictionary/lookup verification and SM4 joins key-and-ciphertext auto-try.
+- Recipes keep Run / Step at the top of the left column, with node editing below and input, output and step results stacked on the right; automatic runs, breakpoints and reordering remain.
+- Code-image lookup restores recognition on top, a vertical category rail and the thumbnail grid; clicking a thumbnail opens the full-screen viewer directly. Recognition supports cropping, restoring the original and draft recovery; the recognition panel is capped at 800px and centered.
+- The custom implementation editor adopts the current UI and input model: two-space indent, bracket pairing, selection comment, undo/redo, multi-cursor insertion, search and source comparison. Save and test are separate, and unsaved code, selection and scroll position survive within the same page session.
+- Divider proportions persist per tool. Local drafts retain original images, recognition corrections, batch queues and completed products; interrupted work resumes only when requested.
 
 ### Fixed
 
 - Restored frequency-analysis and traffic-analysis editors and file targets; enabling custom implementations immediately restores the required input.
 - Fixed typing on the wrong line after Enter, horizontal overflow from mobile parameters and encoding controls, and light-theme batch-panel contrast.
 - Improved `moyue` detection with non-default keys.
+- Environment panels stay within short or resized viewports; expanded editors adapt to short windows and expose an accessible input name.
 
 ### Improved
 
-- Retains M3 Expressive styling: native continuous corners in Chromium and self-drawn continuous curvature on common Firefox / WebKit controls, preserving semantic circles.
+- Coordinated M3 visual and motion refinement: natural CJK title spacing, tonal icon containers, reading hierarchy and restrained overlay elevation; stable pressed shapes, interruptible disclosures and anchored surface transitions honor the existing motion preferences.
+- Editing keeps the previous result with an explicit stale-state label. Short tasks avoid spinner flashes, reduced motion preserves status text, and home shortcuts no longer replay staggered entrance effects.
+- Tonal parameter groups, compact running/completed/error/cancelled feedback and secondary report actions; named multiline editors, keyboard-readable readonly output, and 44px touch toolbar targets.
+- Fixed trailing password-reveal alignment in the split workbench and a parameter-blur/run race. SM4-CTR no longer mutates a caller's Node Buffer IV.
+
+- Retains M3 Expressive styling: all three engines use the original per-corner public UIKit measurements before the first visible frame for non-full-round rectangles, including editors, borders and focus outlines. M3 circles, capsules, range arcs and system select option menus keep their authored/native shapes.
 - Shared sliders and motion pace, a compact 48px top bar, input-focused home workspace, floating code-image controls and bulk category expand/collapse.
 - Compact BOM messages and code-editor tools, improved mobile action menus, keyboard search and focus restoration.
 - Adaptive multi-column parameters, larger titles with left-aligned descriptions, tools inside editor corners, output-view/report controls below the output, and overflow family choices in a dropdown.
-- New development copy prioritizes Chinese and English; other maintained locales align before release.
+- The home page drops the persistent “Local workspace · No uploads” capsule; Quick Convert drops the signed/unsigned switch while showing both decimal interpretations; recipe data aligns with the left column top.
+- Reduced repeated layout reads and corner rescans during navigation, thousand-card scrolling/hover, ordinary input and Quick Convert; Quick Convert updates bit buttons in place.
+- Chinese, English, French, Japanese, Korean and Russian now align with the current copy; other maintained locales keep their historical partial translations and fall back as before.
+- Charset controls and the four Text/Hex/Base64/Escaped views share alignment and height; environment groups and expanded editors use consistent insets, heading metrics and action sizes.
+- Each structured input field has its own paste, clear, import and expanded editor. Parameter-only tools use the data region for output, while byte consumers and enabled custom implementations retain their required input.
+- Long reports offer read-only expanded viewing, multiple products use file rows with on-demand previews, and narrow data columns move secondary tools into menus.
 
 ## Introduction
 
@@ -97,7 +113,7 @@ Core design:
 
 - **Local-first · zero upload**: Native ES modules, no framework, no build step. Core codecs run in-browser and never upload your input; "external link" ops only generate URLs. PWA updates fetch site assets only, the local bridge only talks to `127.0.0.1`, and external AI is only used after you configure an endpoint yourself.
 - **One-shot smart decoding**: Paste or drop content; it detects possible encoding chains and returns ranked decode candidates, with crib-based filtering and deep brute force.
-- **969 registered operations · 23 categories**: covering Base, text / transfer encodings, fancy CTF encodings, esoteric programming languages, Chinese / domestic encodings, classical ciphers, modern crypto (block / stream / asymmetric / other), hashes & checksums, radix & charsets (incl. primality testing and sieving), analysis / brute force, password attacks, compression & archives, password / archive cracking, forensics & traffic, file-format structures, data structures, images & QR codes, audio & video, steganography, plus 4 optional Windows GUI bridge entries. The complete list is generated automatically from the registry.
+- **978 registered operations · 23 categories**: covering Base, text / transfer encodings, fancy CTF encodings, esoteric programming languages, Chinese / domestic encodings, classical ciphers, modern crypto (block / stream / asymmetric / other), hashes & checksums, radix & charsets (incl. primality testing and sieving), analysis / brute force, password attacks, compression & archives, password / archive cracking, forensics & traffic, file-format structures, data structures, images & QR codes, audio & video, steganography, plus 4 optional Windows GUI bridge entries. The complete list is generated automatically from the registry.
 - **Decoding-strength quartet** (v0.1.2): strength levels + custom algorithm pool + a **separate brute-force channel** (XOR / Caesar / dictionary / rainbow-table / HMAC / PBE / Playfair / ZIP / CRC32 / bkcrack — results are grouped separately so they don't pollute the main ranking) + **decode depth 1–3**.
 - **Lenient matching mode** (v0.1.2): at the Enhanced / Very Strong / Maximum / Custom levels, algorithms are admitted by character-class count alone, so variant-encoding challenges (a "meow" table for 0/1, emoji-as-binary) also participate; Default / Fast keep strict domain detection.
 - **Key + ciphertext one-shot attack**: given ciphertext and a key, automatically enumerates AES / DES / 3DES / RC4 / XOR / Fernet × cipher modes × encoding combinations.
@@ -254,11 +270,11 @@ public/
 资料/               algorithm cross-check tables + research artifacts (dev-only; not shipped in release packages)
 ```
 
-## Full Codec List (969 ops · 23 categories)
+## Full Codec List (978 ops · 23 categories)
 
-> This section is generated from the real import closure; opId is the unique registry identifier.
+> The current registry contains 978 operations. The complete generated list is in [README.md](./README.md#编解码全清单978-ops--23-分类); opId is the unique registry identifier.
 
-> The table below keeps the v0.1.13 baseline entries (890 ops); the 71 ops added in v0.1.14 and the 8 added in v0.1.15 are listed in the changelog.
+> This English table preserves the v0.1.13 baseline (890 entries) and adds the 9 SM2/SM3/SM4/ZUC attack entries below (899 table entries). The other 79 operations added since that baseline are covered in the changelog and the complete Chinese list.
 
 ### Base (30 ops)
 
@@ -1015,11 +1031,20 @@ public/
 | rc4Visualize | RC4 KSA/PRGA Visualizer | Step-by-step RC4 internals: KSA's i/j/swap details scrambling the S table + the final S table + the PRGA keystream generation process; for teaching and recognizing KSA/PRGA signatures in reverse engineering |
 | extractAll | Dedicated Text Extractor | Batch-extract email/url/domain/ipv4/ipv6/mac/date/filepath/hash/flag/keyValue from text; dedupe keeping first occurrence, newline-separated by default; strict false-positive boundaries for 999.1.1.1, 1.2.3.4.5, aa:bb:cc and monkey = banana; budget overruns are rejected readably. |
 
-### Password Attacks (24 ops)
+### Password Attacks (33 ops)
 
 | opId | Name | Notes |
 |---|---|---|
 | aeadNonceReuse | AEAD Nonce Reuse (ChaCha20-Poly1305) | Known-plaintext attack on two ChaCha20-Poly1305 ciphertexts under the same key+nonce: paste both hex strings (with tags), fill the shared key/nonce/aad and one plaintext, recover the other. ChaCha20-Poly1305 only; no GCM forbidden attack. Parameters: key + nonce + aad + known mode + known plaintext + tag flag. |
+| sm2KnownPlaintext | SM2 Known-Plaintext Recovery | Same recipient key and repeated C1; recovers only covered bytes, without private-key extraction or C3 authentication. |
+| sm2NonceRecover | SM2 Signing Nonce Attacks | Leaked, repeated or affine-related nonces recover the private key; checks supplied digest equations and optionally the public key. |
+| sm2LeakedK | SM2 Leaked Encryption Nonce | Decrypts with k and recipient public key, checking C1 and C3. |
+| sm3LengthExtension | SM3 Length Extension | Continues from a full digest and byte count; produces the extended hash and binary suffix. Not an HMAC attack. |
+| sm4CtrReuse | SM4-CTR/OFB Keystream Reuse | Conditional known-plaintext recovery for repeated key/IV/stream position. |
+| sm4CbcBitflip | SM4-CBC Bit Flipping | Equal-length targeted modification of unauthenticated CBC; discloses preceding-block corruption. |
+| sm4EcbCodebook | SM4-ECB Codebook Recovery | Looks up complete 16-byte known blocks; unmatched blocks remain UNKNOWN. |
+| sm4GcmForgery | SM4-GCM Repeated-Nonce Forgery | Recovers GHASH candidates and authentication masks; forges full 16-byte tags under the same key/nonce. |
+| zucNonceReuse | ZUC Keystream Reuse | Known-plaintext recovery when key, IV and stream position repeat; no key/state extraction. |
 | ecdsaReuseK | ECDSA Nonce Reuse Attack | ECDSA nonce (k) reuse attack (CTF classic): two messages signed with the same private key and k (shared r) → pure number theory recovers k and private key d from (r,s1,s2,z1,z2,n). k=(z1-z2)/(s1-s2) mod n, d=(s1·k-z1)/r mod n. Built-in secp256k1/P-256; entering public key Qx/Qy enables automatic validation and resolves the s sign ambiguity |
 | hashDictCrack | Hash Dictionary Crack | MD5/SHA1/SHA256/NTLM weak-password demo with a small dictionary: built-in ~300 top weak passwords + digits-only + dates, verifies common passwords in seconds. This tool does not do large-scale cracking — for serious dictionary/mask attacks use hashcat (https://hashcat.net) or John the Ripper (https://www.openwall.com/john); for online lookup try CrackStation (https://crackstation.net) |
 | rainbowQuery | Rainbow Table Lookup | Local demo mini-table of ~300 built-in weak passwords (MD5/NTLM prebuilt O(1), SHA family on-the-fly), hits common weak passwords instantly. For real rainbow tables use the public site CrackStation (https://crackstation.net) or the offline tool rcracki-mt with public tables (https://github.com/iphelix/rcracki-mt); this tool bundles and downloads no rainbow-table data |
@@ -1316,6 +1341,7 @@ The list below follows the order of the "Authors & Contributors" section of the 
 - 二月犬 (Eryuequan): suggested the Ohou (Xianzi) codec, Hakimi ternary cipher and the Zako Whisper (official + Base8 variant).
 - 橙子 (Chengzi): proposed multiple Misc logic fixes.
 - Tokeii: contributed the redesigned icon and downstream optimizations.
+- Jason: proposed adding cryptanalysis tools for Chinese cryptographic standards.
 
 ## Community
 

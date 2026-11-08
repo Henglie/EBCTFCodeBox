@@ -748,7 +748,7 @@ function ofbCrypt(data, encBlock, bs, iv) {
 // CTR（计数器）：Ci = Pi ⊕ E_K(counter++)，counter 为 128 位大端递增（SP 800-38A）。
 function ctrCrypt(data, encBlock, bs, iv) {
   const out = new Uint8Array(data.length);
-  const ctr = iv.subarray(0, bs).slice(); // 拷贝，避免 incCounter 污染调用者 IV
+  const ctr = Uint8Array.from(iv.subarray(0, bs)); // Buffer.slice is a view, not a copy.
   for (let i = 0; i < data.length; i += bs) {
     const ks = encBlock(ctr);
     const n = Math.min(bs, data.length - i);

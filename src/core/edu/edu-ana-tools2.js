@@ -71,6 +71,7 @@ export default {
       { in: "e10adc3949ba59abbe56e057f20f883e", param: "algo=auto, dict=numeric, maxDigits=6", out: "命中 ✓ 算法: md5 明文: 123456 尝试: 123457 次", desc: "这是 123456 的 MD5，纯数字字典第 123457 个命中（含 0）" },
     ],
     tips: [
+      "SM3 需手动选择（64 hex 与 SHA-256 同长，auto 保留 SHA-256）；SM3 同步路径最多尝试 200 万次。",
       "auto 模式下 32 位优先试 MD5——如果实际是 NTLM 需手动指定。",
       "numeric 位数越大越慢：6 位 = 100 万次秒级，8 位 = 1 亿次需走 workerPool 并行。",
       "内置字典约 300 条，只覆盖最高频弱口令，用于快速验证；rockyou 级大字典请导出 hash 后用 hashcat（https://hashcat.net）或 John the Ripper（https://www.openwall.com/john）跑，在线反查可用 CrackStation（https://crackstation.net）。",

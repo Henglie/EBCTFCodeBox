@@ -16,7 +16,7 @@ export default {
     what: "Rainbow-table lookup: precompute hashes for common passwords into a table, so a digest can be reverse-looked up to its original in O(1), faster than cracking one by one.",
     principle:
       "Hashes are irreversible, but you can precompute a bunch of 'common password → digest' pairs into a table and look up the original directly from a target digest. The tool ships MD5/NTLM prebuilt tables (a small dictionary of a few hundred entries) for table lookup, and computes SHA-family tables on the fly to compare. A real rainbow table uses reduction chains to compress storage; this is a simplified direct lookup table.",
-    usage: "Paste the target hash; the tool reverse-looks it up in the built-in small dictionary table. A miss means it's not in the weak-password table.",
+    usage: "Paste the target hash. Select SM3 explicitly for on-the-fly small-dictionary comparison, not prebuilt rainbow chains. Auto still prefers SHA-256 for 64-hex digests. A miss only means the plaintext is absent from this dictionary.",
     examples: [
       { in: "21232f297a57a5a743894a0e4a801fc3", out: "admin", desc: "hit in the prebuilt table" },
     ],
@@ -28,7 +28,7 @@ export default {
     what: "HMAC key brute force: given a message and its HMAC value, brute a key dictionary to find which key was used. The mainstay of JWT weak-secret challenges.",
     principle:
       "HMAC(key, message) is determined jointly by the key and the message. Knowing the message and target HMAC, compute HMAC with each candidate key from the dictionary; a match is the correct key. The tool ships a top common-password + pure-numeric dictionary and supports HMAC-SHA1/256/384/512.",
-    usage: "Fill in the message, the target HMAC value, and choose the hash algorithm; the tool runs a dictionary brute for the key.",
+    usage: "Enter the message and target HMAC, then choose SHA-1/256/384/512 or SM3. The built-in dictionary tests weak keys. HMAC-SM3 uses RFC 2104's 64-byte ipad/opad construction and is not vulnerable to length extension.",
     examples: [
       { in: "message + HMAC-SHA256 value", param: "dictionary brute", out: "key=secret (if in the dictionary)" },
     ],

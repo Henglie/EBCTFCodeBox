@@ -12,8 +12,10 @@ import { ensureOp } from "../core/lazyCore.js";
 import { isExplicitRunOp, isLazyRunOp } from "../core/explicitRun.js";
 import { downloadBytes, cloudWarnGate, fmtByteSize } from "./download.js";
 import { icon as iconSvg } from "./icons.js";
-import { attachEditorToolbar } from "./editorToolbar.js";
+import { attachInlineEditorToolbar } from "./editorToolbar.js";
+import { createIoEditorFrame } from './ioEditorFrame.js';
 import { ioArea } from "./ioArea.js"; // 天珩连字：输入/输出改 contenteditable div（textarea 吞 OpenType 特性）
+import { createSpecialWorkbench } from "./specialWorkbench.js";
 import { expandableInput, openExpandModal } from "./expandableInput.js";
 import { decodeUtf8Lossless } from "../core/bytesIo.js";
 import {
@@ -1796,6 +1798,18 @@ function stepRow(step) {
     el("span", { class: "recipe-step-idx", style: step.error ? "color:var(--error)" : "" }, head),
     el("code", { class: "recipe-step-out", style: step.error ? "color:var(--error)" : "" }, step.error ? step.error : (step.text || "")),
   );
+  row.tabIndex = 0;
+  row.setAttribute("role", "button");
+  row.setAttribute("aria-label", head);
+  const inspect = () => {
+    const area = document.getElementById("recipeStepOut"), label = document.getElementById("recipeStepLabel");
+    if (!area || !label) return;
+    area.value = step.error || step.text || ""; label.textContent = head;
+    document.getElementById("recipeStepInspector").open = true;
+    for (const card of document.querySelectorAll('.recipe-node')) card.classList.toggle('step-selected', card.dataset.uid === step.nodeId);
+  };
+  row.addEventListener("click", inspect);
+  row.addEventListener("keydown", event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); inspect(); } });
   return row;
 }
 function renderStepRows(steps) {
@@ -2258,6 +2272,8 @@ function onGlobalRecipeKey(e) {
 // 模块级缓存首屏拿到的 host。index.html 无 #recipeHost
 // 内部 mutation 函数均无参调用 renderRecipe，此前 host 为 null 直接 return → DOM 不重建。
 let _recipeHost = null;
+let _recipeWorkbench = null;
+export function disposeRecipeView() { _recipeWorkbench?.dispose(); _recipeWorkbench = null; closeRecipeHelp(); }
 export function renderRecipe(container) {
   const host = container || _recipeHost || document.getElementById("recipeHost");
   if (!host) return;
@@ -2267,6 +2283,7 @@ export function renderRecipe(container) {
   ensureGlobalKeyHandler();
   _focusedNodeIndex = _focusedNodeUid ? rState.nodes.findIndex((n) => n.uid === _focusedNodeUid) : -1;
   restoreOnce();
+  disposeRecipeView();
   host.innerHTML = "";
 
   const wrap = el("div", { class: "recipe-view" });
@@ -2298,7 +2315,7 @@ export function renderRecipe(container) {
   const runRow = el("div", { class: "recipe-bar-row recipe-bar-run" });
   const editRow = el("div", { class: "recipe-bar-row recipe-bar-edit" });
   const storeRow = el("div", { class: "recipe-bar-row recipe-bar-store" });
-  bar.append(buildRow, runRow, editRow, storeRow);
+   bar.append(buildRow, editRow, storeRow);
   buildRow.append(el("span", { class: "recipe-bar-label" }, tt("ui.recipe.groupBuild")));
   runRow.append(el("span", { class: "recipe-bar-label" }, tt("ui.recipe.groupRun")));
   editRow.append(el("span", { class: "recipe-bar-label" }, tt("ui.recipe.groupEdit")));
@@ -2317,7 +2334,11 @@ export function renderRecipe(container) {
   }, msym("account_tree"), " " + tt("ui.recipe.controlMenu")));
   const stepChk = el("input", { type: "checkbox", id: "recipeStepToggle" });
   stepChk.checked = rState.showSteps;
-  stepChk.addEventListener("change", () => { rState.showSteps = stepChk.checked; maybeRunChain(); });
+  stepChk.addEventListener("change", () => {
+    rState.showSteps = stepChk.checked;
+    const inspector = document.getElementById('recipeStepInspector'); if (inspector) inspector.open = stepChk.checked;
+    maybeRunChain();
+  });
  // M3 修正：原 label 嵌套 label（HTML 违规，label 不能嵌套 label，会导致点击穿透/switch 失灵）
  // 改为 div 容器 + label.switch + span 文案，点击行为正确
   runRow.append(el("div", { class: "recipe-step-toggle" },
@@ -2339,6 +2360,11 @@ export function renderRecipe(container) {
   ));
   editRow.append(el("button", { class: "icon-btn recipe-mini-btn", id: "recipeUndo", title: tt("ui.recipe.undo"), "aria-label": tt("ui.recipe.undo"), onclick: undoStructure }, msym("undo")));
   editRow.append(el("button", { class: "icon-btn recipe-mini-btn", id: "recipeRedo", title: tt("ui.recipe.redo"), "aria-label": tt("ui.recipe.redo"), onclick: redoStructure }, msym("redo")));
+  editRow.append(el('button', { class: 'recipe-clear-btn', id: 'recipeToggleArguments', type: 'button', 'aria-pressed': 'false',
+    onclick: event => {
+      const hidden = wrap.classList.toggle('recipe-arguments-hidden');
+      event.currentTarget.setAttribute('aria-pressed', String(hidden));
+    } }, msym('tune'), tt('ui.recipe.toggleArguments')));
   editRow.append(el("button", { class: "recipe-clear-btn", id: "recipeMagicBtn", title: "Magic 自动识别并生成配方", onclick: (e) => runRecipeMagic(e.currentTarget) }, msym("auto_awesome"), " Magic"));
   editRow.append(el("button", { class: "recipe-clear-btn", onclick: clearChain }, msym("delete_sweep"), " " + tt("ui.recipe.clear")));
   runRow.append(el("button", { class: "recipe-clear-btn", id: "recipeStepBtn", title: tt("ui.recipe.step"), onclick: stepRun }, msym("play_arrow"), " " + tt("ui.recipe.step")));
@@ -2409,13 +2435,7 @@ export function renderRecipe(container) {
   wrap.append(bar);
 
  // 输入
-  wrap.append(el("label", { class: "recipe-io-label" }, tt("ui.recipe.inputLabel")));
-  const inArea = ioArea({ class: "io-area recipe-io", id: "recipeIn", placeholder: tt("ui.recipe.inputPh") });
- // 链头文件按钮：放在构建行，音频/图像类预设靠它一把梭，无需手抄 hex
-  buildRow.append(el("button", {
-    type: "button", class: "recipe-clear-btn", title: tt("ui.recipe.pickFile"),
-    onclick: () => pickChainFile(inArea),
-  }, msym("attach_file"), " " + tt("ui.recipe.pickFile")));
+   const inArea = ioArea({ class: "io-area recipe-io", id: "recipeIn", placeholder: tt("ui.recipe.inputPh") });
   if (rState.fileMissing) inArea.setAttribute("data-placeholder", tt("ui.recipe.fileMissing"));
   inArea.value = rState.input;
  // 手动编辑输入 → 链头文件字节失效（与单 op 输入框同口径），避免 op 读到过期字节
@@ -2430,9 +2450,6 @@ export function renderRecipe(container) {
   };
   inArea.addEventListener("input", onInputEdited);
   attachChainDrop(inArea);
- // 编辑框记事本化——输入框挂工具条（粘贴/清空/字号/全选/导出 + Ctrl+A/S）+ 快捷键。
-  wrap.append(attachEditorToolbar(inArea, { onChange: onInputEdited, exportName: "recipe-input.txt" }));
-  wrap.append(inArea);
 
   if (rState.fileMissing || (rState.inputKind === "file" && rState.fileMeta)) {
     const meta = rState.fileMeta;
@@ -2467,11 +2484,22 @@ export function renderRecipe(container) {
   } else {
     // Subsection 分组：组内节点缩进；折叠时隐藏到下一个 Subsection 前（只影响显示）。
     const marks = subsectionMarks();
+    let depth = 0;
+    const depths = rState.nodes.map(node => {
+      if (isControlNode(node) && node.control === 'merge') depth = Math.max(0, depth - 1);
+      const current = depth;
+      if (isControlNode(node) && node.control === 'fork') depth++;
+      return current;
+    });
     let rendered = 0;
     for (let i = 0; i < rState.nodes.length; i++) {
       const node = rState.nodes[i];
       if (rendered) chain.append(el("div", { class: "recipe-arrow" }, msym("arrow_downward")));
       const card = renderNodeCard(node, i);
+      if (depths[i]) {
+        card.dataset.branchDepth = String(depths[i]);
+        card.style.marginInlineStart = `${Math.min(3, depths[i]) * 12 + (marks.indent[i] ? 22 : 0)}px`;
+      }
       if (marks.indent[i]) card.classList.add("in-subsection");
       chain.append(card);
       rendered++;
@@ -2519,19 +2547,49 @@ export function renderRecipe(container) {
     addNode(opId, dropIndexFromY(chain, e.clientY));
   });
   wrap.append(chain);
+  chain.addEventListener('click', event => {
+    if (event.target.closest('button, input, textarea, select, .recipe-node-params, [contenteditable="true"]')) return;
+    const card = event.target.closest('.recipe-node');
+    const step = [...(_lastRun?.steps || [])].reverse().find(step => step.nodeId === card?.dataset.uid);
+    if (step) stepRow(step).click();
+  });
 
- // 每步结果（可选）
+  // 每步结果（可选）
   wrap.append(el("div", { class: "recipe-steps", id: "recipeSteps" }));
 
  // 输出
-  wrap.append(el("label", { class: "recipe-io-label" }, tt("ui.recipe.outputLabel")));
-  const outArea = ioArea({ class: "io-area recipe-io", id: "recipeOut", readonly: true, placeholder: tt("ui.recipe.outputPh") });
- // 输出框接编辑器工具条（只读：复制/全选/导出/字号）
-  wrap.append(attachEditorToolbar(outArea, { readonly: true, exportName: "recipe-output.txt" }));
-  wrap.append(outArea);
-  wrap.append(el("div", { class: "io-out-files", id: "recipeOutFiles" }));
+   const outArea = ioArea({ class: "io-area recipe-io", id: "recipeOut", readonly: true, placeholder: tt("ui.recipe.outputPh") });
 
+   const workbench = createSpecialWorkbench('page:recipe', 'recipe-workbench');
+   workbench.element.dataset.inputMode = 'text';
+   _recipeWorkbench = workbench;
+   const inputTitle = tt('ui.recipe.inputLabel'), outputTitle = tt('ui.recipe.outputLabel');
+   inArea.setAttribute('aria-label', inputTitle); outArea.setAttribute('aria-label', outputTitle);
+   const inputBlock = el('section', { class: 'recipe-input-block io-pane io-pane-input' },
+     createIoEditorFrame(inputTitle, attachInlineEditorToolbar(inArea, {
+       onChange: onInputEdited, exportName: 'recipe-input.txt', title: inputTitle,
+       onPickFile: () => pickChainFile(inArea), pickFileLabel: tt('ui.recipe.pickFile'),
+     }), inArea));
+   const fileNote = wrap.querySelector(':scope > .recipe-bake-hint:not(#recipeBakeHint)');
+   if (fileNote) inputBlock.append(fileNote);
+   const outputBlock = el('section', { class: 'recipe-output-block io-pane io-pane-output' },
+     createIoEditorFrame(outputTitle, attachInlineEditorToolbar(outArea, {
+       readonly: true, exportName: 'recipe-output.txt', title: outputTitle,
+     }), outArea), el('div', { class: 'io-out-files', id: 'recipeOutFiles' }));
+  const steps = wrap.querySelector('#recipeSteps');
+  const inspector = el('details', { class: 'recipe-step-inspector', id: 'recipeStepInspector' },
+    el('summary', {}, tt('ui.recipe.showSteps')));
+  inspector.open = rState.showSteps;
+  const stepArea = ioArea({ id: 'recipeStepOut', class: 'io-area recipe-io', readonly: true, 'aria-label': tt('ui.recipe.showSteps') });
+   const stepFrame = createIoEditorFrame('', attachInlineEditorToolbar(stepArea, {
+     readonly: true, exportName: 'recipe-step.txt', title: tt('ui.recipe.showSteps'),
+   }), stepArea);
+   stepFrame.querySelector('.io-pane-title').id = 'recipeStepLabel';
+   inspector.append(steps, el('div', { class: 'io-pane io-pane-output' }, stepFrame));
+   workbench.config.append(runRow, bar, wrap.querySelector('.recipe-drag-hint'), chain, wrap.querySelector('#recipeBakeHint'));
+  workbench.data.append(inputBlock, outputBlock, inspector);
   host.append(wrap);
+  workbench.mount(wrap);
   if (structureHistory.size() === 0) resetStructureHistory("init");
   updateRunUi();
   reflectPending();   // 重建后同步 Bake 高亮/挂起提示（大输入下切视图回来仍显挂起）

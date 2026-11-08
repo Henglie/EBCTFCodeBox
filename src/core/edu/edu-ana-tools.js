@@ -16,7 +16,7 @@ export default {
     what: "彩虹表查询：对常见口令预先算好哈希建成表，拿摘要一查就能反推原文。本卡讲原理 + 本地演示小表，真查表请用公开彩虹表。",
     principle:
       "哈希不可逆，但可以「提前算好一堆常见口令 → 摘要」存成表，查的时候拿目标摘要直接反查原文。本工具内置 MD5/NTLM 预建表只有几百条，是教学用的简化直查表（真正的彩虹表用降维链压缩存储），不是真彩虹表。本工具不做大规模查表——公开彩虹表站点 CrackStation（https://crackstation.net）收录了海量 MD5/SHA1/SHA256 反查记录，离线可用 rcracki-mt（https://github.com/iphelix/rcracki-mt）配公开彩虹表。",
-    usage: "粘目标哈希，工具在内置小字典表里反查原文。查不到就说明不在弱口令表内。",
+    usage: "粘目标哈希，工具在内置小字典表里反查原文。SM3 需手动选择，用小字典实时计算，不是预建彩虹链；auto 的 64 hex 仍默认 SHA-256。查不到只表示不在此字典内。",
     examples: [
       { in: "21232f297a57a5a743894a0e4a801fc3", out: "admin", desc: "命中预建表" },
     ],
@@ -28,7 +28,7 @@ export default {
     what: "HMAC 密钥爆破：给一段消息和它的 HMAC 值，用小字典演示穷举密钥的原理。JWT 弱密钥题可先拿它快验，大字典请交给外部工具。",
     principle:
       "HMAC(key, message) 结果由密钥和消息共同决定。已知 message 和目标 HMAC，就拿字典里每个候选 key 算一遍 HMAC，撞中即为正确密钥。工具内置 top 常见口令 + 纯数字字典，支持 HMAC-SHA1/256/384/512。",
-    usage: "填消息、目标 HMAC 值、选哈希算法，工具跑字典爆破密钥。",
+    usage: "填消息、目标 HMAC 值、选 SHA-1/256/384/512 或 SM3，工具跑内置字典验证弱密钥。HMAC-SM3 依 RFC 2104 的 64B ipad/opad 构造，不适用长度扩展攻击。",
     examples: [
       { in: "message + HMAC-SHA256 值", param: "字典爆破", out: "key=secret（若在字典内）" },
     ],

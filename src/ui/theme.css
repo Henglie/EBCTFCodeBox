@@ -49,7 +49,8 @@
   --r-xl: 28px;
   --r-full: 999px;
   /* Continuous corners are a progressive enhancement of the M3 shape scale. */
-  --corner-panel: superellipse(1.5);
+  --corner-panel: round; /* Neutral CSS fallback; the shared SVG profile owns paint. */
+  --continuous-corner-profile: apple-continuous-measured;
   --line-subtle: color-mix(in srgb, var(--outline-var) 55%, transparent);
   --focus-ring: color-mix(in srgb, var(--primary) 22%, transparent);
   --workspace-bg: color-mix(in srgb, var(--surface) 75%, var(--surface-1));

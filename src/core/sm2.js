@@ -16,6 +16,7 @@
  */
 import { register } from "./registry.js";
 import { sm3Bytes } from "./hashExt.js";
+import { finishBytesDecode } from "./bytesIo.js";
 import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 
 // ============================================================
@@ -347,7 +348,7 @@ function sm2Decrypt(cipher, dB, format = "c1c3c2") {
   if (cipher[0] !== 4) throw new Error("SM2 密文 C1 非非压缩点（前缀须为 04）");
   const c1x = bytesToBig(cipher.subarray(1, 33));
   const c1y = bytesToBig(cipher.subarray(33, 65));
-  if (!onCurve(c1x, c1y)) throw new Error("SM2 密文 C1 不在曲线上");
+  assertPublicKey(c1x, c1y, "SM2 密文 C1");
   const S = ptAffine(ptMul(dB, [c1x, c1y]));
   if (!S) throw new Error("SM2 解密 [dB]C1 为无穷远点");
   const x2 = S[0], y2 = S[1];
@@ -595,6 +596,7 @@ register({
   desc: "SM2 私钥解密（GB/T 32918.4-2016）：输入 SM2 密文（04 前缀，hex/base64），用私钥 d 解出明文。自动适配 C1||C3||C2 / C1||C2||C3 序",
   params: [
     { sensitive: true, key: "privKey", label: "私钥 d（hex）", type: "text", default: "", placeholder: "32 字节 hex" },
+    { key: "c1Encoding", label: "C1 点编码", type: "select", default: "04", options: [{ value: "04", label: "04||x||y（65B）" }, { value: "xy", label: "x||y（64B，无04前缀）" }] },
     { key: "format", label: "密文格式", type: "select", default: "c1c3c2", options: [
       { value: "c1c3c2", label: "C1||C3||C2（GB/T 32918.4 序）" },
       { value: "c1c2c3", label: "C1||C2||C3（GM/T 0009-2023 序）" },
@@ -605,9 +607,12 @@ register({
     if (p && p.enc != null && String(p.enc).toLowerCase() !== "hex") {
       throw new Error("enc 该参数已废弃，请改用输入视图");
     }
-    const data = rawBytesOf(p) || encAutoDecode(text);
+    let data = rawBytesOrNull(p, text) || encAutoDecode(text);
+    const encoding = p.c1Encoding || "04";
+    if (!["04", "xy"].includes(encoding)) throw new Error("C1 点编码须为 04 或 xy");
+    if (encoding === "xy") data = concat(new Uint8Array([4]), data);
     const d = parseBigHex(p.privKey, "私钥");
-    return encEncode(sm2Decrypt(data, d, p.format || "c1c3c2"), "utf8");
+    return finishBytesDecode(sm2Decrypt(data, d, p.format || "c1c3c2"), { name: "sm2-decrypted.bin" });
   },
   acceptsBytes: true,
 });

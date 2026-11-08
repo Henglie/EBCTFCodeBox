@@ -9,7 +9,7 @@
   <span>恒烈 CTF 编码工具箱 · EBCTFCodeBox</span>
 </h1>
 <p align="center">
-  <span align="center">本地优先、零外发的编解码 / 加解密 / 隐写分析工具箱：969 个注册操作覆盖 23 类能力，绝大多数在浏览器本地运行，Windows 另可启用本地桥能力，macOS / Linux 提供双击启动器。</span>
+  <span align="center">本地优先、零外发的编解码 / 加解密 / 隐写分析工具箱：978 个注册操作覆盖 23 类能力，绝大多数在浏览器本地运行，Windows 另可启用本地桥能力，macOS / Linux 提供双击启动器。</span>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 - [项目简介](#项目简介)　　　　[特点](#特点)
 - [界面预览](#界面预览)　　　　[运行](#运行)
 - [平台兼容性](#平台兼容性)　　[性能要求](#性能要求)
-- [目录结构](#目录结构)　　　　[编解码全清单](#编解码全清单969-ops--23-分类)
+- [目录结构](#目录结构)　　　　[编解码全清单](#编解码全清单978-ops--23-分类)
 - [插件与 AI 接入](#插件与-ai-接入)　[开源协议](#开源协议)
 - [第三方资源与许可](#第三方资源与许可)　[隐私](#隐私)
 - [关键词 / Keywords](#关键词--keywords)
@@ -47,13 +47,13 @@
 | 百度网盘 | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
 | 夸克网盘 | https://pan.quark.cn/s/3b7e573b19c0 | 无 |
 
-当前版本 **v0.1.15**（开发中）。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
+当前版本 **v0.1.15**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
 
 ## 更新日志
 
-## v0.1.15（开发中）
+## v0.1.15（2026-11-08）
 
-> 0.1.15 是面向 0.2.0 的 UI 优化开发版；0.1.14 已作为过渡开发版结束。完整历史见 [CHANGELOG.md](./CHANGELOG.md)。开发流程见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
+> 0.1.15 是面向 0.2.0 的 UI 优化版本；0.1.14 已作为过渡版本结束。完整历史见 [CHANGELOG.md](./CHANGELOG.md)。开发流程见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
 ### 新增功能
 
@@ -61,21 +61,36 @@
 - 转换与输入输出对调放在两框之间；分隔条支持拖动、键盘调宽和复位，圆点收尾止于科普卡上方。
 - 中间与右侧默认等分；环境提供“自适配排版（新版）／始终单分区（传统）”，自适配模式横屏分区、竖屏纵向。
 - 各页面输入草稿在切页与刷新后保留，支持普通算法的多字段、文件字节与输出恢复；环境提供独立于完整重置的“一键清空输入输出”。
-- 新增 CRC 全预设、全部校验和、SHA-2 六档、CTPH、全部哈希、Whirlpool 变体、LZ4 Frame、Enigma 共 8 个 op，主 op 共 969 个。
+- 新增 CRC 全预设、全部校验和、SHA-2 六档、CTPH、全部哈希、Whirlpool 变体、LZ4 Frame、Enigma 共 8 个 op。
+- 新增 9 个有明确条件的 SM2／SM3／SM4／ZUC 攻击工具；SM3 接入字典与查表，SM4 接入一键尝试，主 op 共 978 个。
+- 配方链在左列顶部执行 / 单步，节点编排与参数留在左列，右侧上下显示输入、输出与逐步结果；自动执行、断点与重排保留。
+- 编码图恢复顶部识图、桌面竖向分类侧栏与缩略图网格，单击缩略图直接打开全屏查看器；识图支持裁剪调整、恢复原图和草稿恢复；自动识图模块最大 800px 水平居中。
+- 自定义算法编辑器统一新版 UI 与输入体验：两空格缩进、括号配对、选区注释、撤销重做、多选插入、查找与源码对照；保存与测试分离，同页会话可恢复未保存代码、选区和滚动位置。
+- 分隔比例按工具保存；图像原文件、识图校正、批处理队列和完成产物支持本地草稿恢复，中断任务由用户继续。
 
 ### 修复
 
 - 恢复字频、流量分析等输入区及文件目标，修复自定义实现启用后的输入框显示。
 - 修复换行后继续键入错行、手机长参数与字符集工具条横溢，以及浅色批处理文字对比度。
 - 完善 `moyue` 非默认密钥识别。
+- 修复三分区密码小眼睛居中、运行与参数 blur 防抖冲突，以及 SM4-CTR 在 Node Buffer 下污染 IV。
+- 修复环境面板在短窗口与旋转后的底部越界；展开编辑器适配短窗口并补齐输入名称。
 
 ### 优化
 
-- 维持 M3 Expressive 风格；Chromium 原生连续圆角，Firefox / WebKit 为常用控件自绘连续曲率，保留语义正圆。
+- 视觉与动效配套精修：自然中文排版、统一图标容器与阅读层级、克制的浮层阴影；稳定按压、可反向展开、锚定弹层过渡，保留现有 M3 风格与动效偏好。
+- 输入变化后保留并标记上次结果；短任务避免加载转动闪现，减少动效保留状态文字，首页不再重复错峰入场。
+- 维持 M3 Expressive 风格；三引擎逐角使用公开 UIKit 测量原始参数，首个可见帧前完成非全圆矩形绘制，统一编辑框、描边与焦点；M3 正圆、胶囊、滑轨及系统下拉选项菜单保留原生形状。
 - 统一滑块与动效节奏、48px 紧凑顶栏、首页输入工作台、编码图浮动工具条与全部算法批量展开 / 收起。
 - 精简 BOM 提示及代码编辑器工具区，完善手机操作菜单、搜索键盘选择与焦点归还。
 - 参数自适应多列、标题放大且简介左对齐；编辑框工具内嵌，输出视图与报告下置，算法族超出部分改为下拉选择。
-- 新增文案优先中英文，其他维护语言在发布前对齐。
+- 首页移除常驻“本地工作台 · 零外发”胶囊；快速换算移除有符号 / 无符号切换，两种十进制结果同时显示；配方右侧整组与左列顶部对齐。
+- 优化页面切换、千卡滚动与悬停、普通输入和快速换算的重复布局读取与圆角重扫；快速换算位按钮原位更新。
+- 中文、英文、法文、日文、韩文、俄文已对齐当前文案；其余维护语言保留历史部分翻译并按现有机制回退。
+- 参数区色阶分组，统一运行／完成／错误／取消反馈与次要报告动作；编辑区支持键盘读取和只读语义，触屏工具命中区 44px。
+- 字符集与文本／十六进制／Base64／转义字节四种视图统一起边与高度；环境分组和展开编辑器统一内边距、标题行高及动作尺寸。
+- 多字段输入独立提供粘贴、清空、导入和展开；无需主输入的参数工具充分展示输出，保留字节输入及有效自定义实现所需的编辑框。
+- 长报告可只读展开，多个产物采用文件列表和按需预览；窄数据列自动收纳次要工具，避免分隔条拖动后横溢。
 
 ## 项目简介
 
@@ -97,7 +112,7 @@
 
 - **本地优先 · 零外发**：原生 ES module，无框架、无构建步骤。核心编解码在浏览器本地执行，不上传用户输入；「外链」只生成 URL。PWA 更新仅下载本站资源，本地桥只访问 `127.0.0.1`，外部 AI 仅在用户主动配置 endpoint 后启用。
 - **一把梭智能解码**：粘贴或拖入内容，自动识别可能的编码链并给出候选解码结果，支持 crib 目标特征过滤与深度爆破。
-- **969 个注册操作 · 23 分类**：覆盖 Base、文本传输、花式 CTF、深奥编程语言、中文本土、古典密码、现代加密（分组 / 流 / 非对称 / 其他）、哈希校验、进制字符集（含素数判定与筛选）、分析爆破、密码攻击、压缩归档、口令与归档破解、取证流量、文件格式结构、数据结构、图像与二维码、音频音视频、隐写及 4 个可选 Windows GUI 桥入口。完整清单由 registry 自动生成。
+- **978 个注册操作 · 23 分类**：覆盖 Base、文本传输、花式 CTF、深奥编程语言、中文本土、古典密码、现代加密（分组 / 流 / 非对称 / 其他）、哈希校验、进制字符集（含素数判定与筛选）、分析爆破、密码攻击、压缩归档、口令与归档破解、取证流量、文件格式结构、数据结构、图像与二维码、音频音视频、隐写及 4 个可选 Windows GUI 桥入口。完整清单由 registry 自动生成。
 - **解码强度四件套**（v0.1.2）：强度档位 + 自定义算法池 + **暴力爆破独立通道**（XOR/凯撒/字典/彩虹表/HMAC/PBE/Playfair/ZIP/CRC32/bkcrack，结果单独归组展示不污染主排序）+ **解析层数 1~3 选择**。
 - **宽松判定模式**（v0.1.2）：增强/极强/最强/自定义档只按字符种类数放行算法，变体编码题（「喵呜」表 0/1、emoji 表二进制）也能参与解码；默认/快速档保持严格定义域识别。
 - **密钥+密文一键尝试**：给定密文与密钥，自动枚举 AES/DES/3DES/RC4/XOR/Fernet × 多种模式 × 多种编码组合。
@@ -256,7 +271,7 @@ public/
 资料/              算法码表核对资料 + 研究成果（开发资料，不随发行包分发）
 ```
 
-## 编解码全清单（969 ops · 23 分类）
+## 编解码全清单（978 ops · 23 分类）
 
 > 本节由 `node tools/gen_readme_ops.mjs` 从主入口真实 import 闭包生成；opId 即注册表唯一标识。
 
@@ -1067,15 +1082,15 @@ public/
 | extractAll | 专用文本提取器 | 从文本批量提取 email/url/domain/ipv4/ipv6/mac/date/filepath/hash/flag/keyValue；去重保序、默认换行分隔；对 999.1.1.1、1.2.3.4.5、aa:bb:cc、monkey = banana、compass: north 等误报边界做了严格约束；超输入/匹配/输出预算直接可读拒绝，不截断。 |
 | haversine | Haversine 球面距离 | 输入 lat1,lng1,lat2,lng2（逗号分隔四值），按 Haversine 公式与 R=6371000 m 输出两点球面距离（米）。口径同 CyberChef「Haversine distance」 |
 
-### 密码攻击（24 ops）
+### 密码攻击（33 ops）
 
 | opId | 名称 | 说明 |
 |---|---|---|
 | aeadNonceReuse | AEAD nonce 重用（ChaCha20-Poly1305） | 同一 key+nonce 下两条 ChaCha20-Poly1305 密文的已知明文攻击：主输入粘贴两组密文 hex（换行/竖线/逗号分隔，默认各含末尾 16B tag），再填其中一侧明文，即可恢复 ChaCha20 密钥流并解出另一侧明文；默认验证两条 tag。范围仅限 ChaCha20-Poly1305 的 keystream 重用，不含 GCM forbidden attack。 |
 | ecdsaReuseK | ECDSA nonce 重用攻击 | ECDSA nonce(k) 重用攻击（CTF 经典）：同私钥同 k 签两条消息（共享 r）→ 由 (r,s1,s2,z1,z2,n) 纯数论恢复 k 与私钥 d。k=(z1-z2)/(s1-s2) mod n, d=(s1·k-z1)/r mod n。内置 secp256k1/P-256，填公钥 Qx/Qy 可自动校验并消除 s 符号歧义。 |
-| hashDictCrack | 哈希字典爆破（小字典演示） | MD5/SHA1/SHA256/NTLM 弱口令小字典演示：内置约 300 条 top 弱口令 + 纯数字 + 日期，秒级验证常见口令。本工具不做大规模爆破——正式字典/掩码爆破请用 hashcat（https://hashcat.net）或 John the Ripper（https://www.openwall.com/john），在线反查可用 CrackStation（https://crackstation.net） |
-| rainbowQuery | 彩虹表查询（本地演示小表） | 本地内置约 300 条弱口令的演示小表（MD5/NTLM 预建 O(1)，SHA 系实时查），验证常见弱口令一查即中。真彩虹表请用公开彩虹表站点 CrackStation（https://crackstation.net）或离线工具 rcracki-mt 配公开表（https://github.com/iphelix/rcracki-mt），本工具不内置也不下载任何彩虹表数据 |
-| hmacKeyBrute | HMAC 密钥爆破（小字典演示） | 给定消息 + HMAC 值，用内置小字典（top 口令 + 纯数字）演示 HMAC-SHA1/256/384/512 密钥穷举。本工具不做大规模爆破——大字典请用 hashcat（https://hashcat.net）或 John the Ripper（https://www.openwall.com/john）的 HMAC 格式 |
+| hashDictCrack | 哈希字典爆破（小字典演示） | MD5/SHA1/SHA256/NTLM/SM3 小字典验证，支持弱口令、数字和日期。SM3 需手动选择，最多 200 万次；auto 的 64 hex 仍默认 SHA-256。 |
+| rainbowQuery | 彩虹表查询（本地演示小表） | 本地弱口令演示小表：MD5/NTLM 预建，SHA/SM3 实时小字典比较；SM3 需手动选择。不下载外部彩虹表，未命中只表示不在此字典内。 |
+| hmacKeyBrute | HMAC 密钥爆破（小字典演示） | 给定消息与 HMAC 值，用内置弱口令／数字／日期字典验证 SHA-1/256/384/512 或 SM3 的弱密钥，最多尝试 200 万次。不是长度扩展攻击。 |
 | rsaSmallE | RSA 小 e 攻击（整数开根） | e 很小时对密文 c 开 e 次整数根恢复 m（含 c+k·n 试探应对 m^e 略大于 n） |
 | rsaCommonModulus | RSA 共模攻击 | 同一 n 同一明文 m，不同互质 e1/e2 加密 → 扩展欧几里得恢复 m（参数框填 c1 和 c2，十进制；主输入框不再使用） |
 | rsaWiener | RSA Wiener 攻击（连分数） | 连分数展开 e/n 找收敛子，恢复小 d 密钥（适用 d < n^(1/4)/3；参数框填 e 和 n，十进制；主输入框不再使用） |
@@ -1089,12 +1104,21 @@ public/
 | rsaBonehDurfee | RSA Boneh-Durfee 提示 | d < N^0.292 条件检查 + 格攻击方法说明（参数框填 n/e，十进制；主输入框不再使用） |
 | bombe | Bombe 图灵炸弹机 | Enigma 已知明文 crib 攻击（3/4 转子），输出 rotor stops、部分接线板与解密预览 |
 | multipleBombe | Multiple Bombe 批量炸弹机 | 未知转子组合时批量运行 Bombe，按预览/crib 匹配与接线板完整度评分排序输出候选 |
+| sm2KnownPlaintext | SM2 已知明文攻击（随机数复用） | 同一接收方公钥、相同 C1 的两条 SM2 密文，利用一侧已知明文片段恢复另一侧对应字节。无需私钥；仅恢复覆盖范围，不验证 C3，也不恢复私钥。 |
+| sm2NonceRecover | SM2 签名随机数攻击（私钥恢复） | 已知签名 k，或同一私钥两次签名复用 k，按 SM2 方程恢复私钥。输入 JSON 的 r1/s1/e1、r2/s2/e2 或 k 均为 hex；e=SM3(ZA\|\|M)。校验签名方程，可选公钥交叉验证。 |
+| sm2LeakedK | SM2 加密随机数泄露解密 | 已知加密临时随机数 k 与接收方公钥，无需私钥恢复 SM2 明文；核对 C1=[k]G 并验证 C3。 |
+| sm3LengthExtension | SM3 长度扩展攻击 | 已知 SM3(secret\|\|message) 与原始总字节数，续算追加数据后的摘要及 glue\|\|append。适用于错误的前缀 MAC，不适用于 HMAC-SM3。 |
 | pbeAesBrute | PBE-AES 口令爆破（小字典演示） | PBKDF2+AES 弱口令小字典演示：input=密文(hex/base64)，逐口令 PBKDF2 派生 key 解 AES，crib 命中或高可打印率即报，覆盖 openssl enc -pbkdf2 密文。本工具不做大规模爆破——正式爆破请把密文喂给 John the Ripper / hashcat 的 PBKDF2 格式（https://www.openwall.com/john、https://hashcat.net） |
 | rsaBatchGcd | RSA 公共因子分解（批量 GCD） | 多个 RSA 模数 N 两两求 GCD，找公共素因子分解 |
 | rsaHastad | RSA Hastad 广播攻击 | 同一明文用相同 e 和多个互质 n 加密，CRT 合并后开 e 次根恢复明文 |
 | rsaPollardPm1 | RSA Pollard p-1 分解 | Pollard p-1 算法分解 RSA 模数 N（适用 p-1 B-光滑；输入框填 N，每行一个或逗号分隔） |
 | prngAttack | PRNG 破解（LCG / MT19937） | LCG 参数恢复（差分法推 a/c/m，可填已知模数）+ MT19937 状态恢复（624 输出 untemper + 预测下一值，Python random 标准） |
 | hashLengthExtension | 哈希长度扩展攻击（MD5/SHA1/SHA256） | Merkle-Damgård 弱点：从 H(secret) 和 len(secret) 构造 H(secret\|\|padding\|\|append) 而不知 secret。MD5/SHA-1/SHA-256 全部纯 JS 落地（内部 state 反推 + 续压），无需 hashpump。输入按显式 hex 解析，任意非 hex 字符显式报错 |
+| sm4CtrReuse | SM4-CTR/OFB 密钥流复用攻击 | 同一 SM4 key、相同 IV/计数器起点与流偏移；CTR/OFB raw ciphertext only。两条密文与一侧已知明文恢复另一侧覆盖字节；不恢复密钥，不验证 MAC。 |
+| zucNonceReuse | ZUC 密钥流复用攻击 | 同一 ZUC key+IV 与流偏移；raw ciphertext only。两条密文与一侧已知明文恢复另一侧覆盖字节；不恢复密钥，不验证 MAC。 |
+| sm4CbcBitflip | SM4-CBC 位翻转构造 | 已知一段明文，修改 IV 或前一密文块，构造同长度目标片段；无 MAC 的 CBC 才可用。修改非首块会破坏前一明文块。主输入 IV\|\|ciphertext hex。 |
+| sm4EcbCodebook | SM4-ECB 已知明文码本攻击 | 同一密钥下，完整 16B 明密文块组成码本，恢复目标密文中的已知块。未匹配块保留未知，不推测密钥或未知字节。主输入目标密文 hex。 |
+| sm4GcmForgery | SM4-GCM nonce 重用认证伪造 | 同一 key+nonce 的至少两条 SM4-GCM 样本 aadHex\|ctHex\|tagHex，恢复 GHASH H 与认证掩码并伪造 tag；完整 16B tag，推荐第三条样本筛候选。不恢复 SM4 key。 |
 
 ### 压缩 / 归档（22 ops）
 
@@ -1395,6 +1419,7 @@ AI 的联网出口只有可选的 `aiClient`，且必须用户自备 endpoint + 
 - 二月犬：提出补充哦齁编码（仙子曰）、哈基米加密（三进制）与杂鱼密语（官方版及 Base8 变体）。
 - 橙子：提出多个 Misc 逻辑代码修复。
 - Tokeii：贡献改版图标，项目下游优化作者。
+- Jason：提出增加国密攻击工具。
 
 ## Community
 

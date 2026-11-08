@@ -1,0 +1,71 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { recoverSM2Plaintext, recoverSM2SigningKey, decryptSM2LeakedK } from "../src/core/sm2Attacks.js";
+import { sm2Encrypt, sm2Decrypt, sm2Sign, CURVE, ptMul, ptAffine } from "../src/core/sm2.js";
+import { hexToBytes, bytesToHex } from "../src/core/bytesIo.js";
+import { getOp, defaultParams } from "../src/core/registry.js";
+
+const proc = spawnSync("py", ["-3.11", fileURLToPath(new URL("./sm2_attack_reference.py", import.meta.url))], { encoding: "utf8", timeout: 20000, env: { ...process.env, PYTHONIOENCODING: "utf-8" } });
+assert.equal(proc.status, 0, proc.stderr);
+export const reference = JSON.parse(proc.stdout);
+let checks = 0;
+const equal = (a, b, label) => { assert.deepEqual(a, b, label); checks++; };
+const rejects = (fn, pattern) => { assert.throws(fn, pattern); checks++; };
+const reorder = value => value.slice(0, 130) + value.slice(194) + value.slice(130, 194);
+for (const [index, sample] of reference.cases.entries()) {
+  const m1 = hexToBytes(sample.m1), m2 = hexToBytes(sample.m2), d = BigInt("0x" + sample.d), k = BigInt("0x" + sample.k);
+  const Q = ptAffine(ptMul(d, [CURVE.Gx, CURVE.Gy]));
+  // Both implementations encrypt/decrypt identical real messages; no output adjustment.
+  equal(bytesToHex(sm2Encrypt(m1, ...Q, k).cipher), sample.c1, `reference encryption ${index}`);
+  equal(bytesToHex(sm2Encrypt(m2, ...Q, k).cipher), sample.c2, `reference encryption target ${index}`);
+  equal(bytesToHex(sm2Decrypt(hexToBytes(sample.c1), d)), sample.m1, "reference -> application decryption");
+  equal(bytesToHex(sm2Decrypt(sm2Encrypt(m2, ...Q, k).cipher, d)), sample.m2, "application round trip");
+  for (const encoding of ["04", "xy"]) for (const order1 of ["c1c3c2", "c1c2c3"]) for (const order2 of ["c1c3c2", "c1c2c3"]) {
+    const normalize = (value, order) => (order === "c1c2c3" ? reorder(value) : value).slice(encoding === "xy" ? 2 : 0);
+    const input = { knownCipher: normalize(sample.c1, order1), targetCipher: normalize(sample.c2, order2), known: sample.m1, knownEncoding: "hex", order1, order2, c1Encoding: encoding };
+    const actual = recoverSM2Plaintext(input), count = Math.min(m1.length, m2.length);
+    equal(bytesToHex(actual.recovered), sample.m2.slice(0, count * 2), "known plaintext recovery across layouts");
+    equal(actual.partial, count !== m2.length, "partial output marked");
+    equal(actual.c3Verified, false, "no authentication overclaim");
+    const segment = recoverSM2Plaintext({ ...input, known: sample.m1.slice(4, 12), offset: 2 });
+    equal(bytesToHex(segment.recovered), sample.m2.slice(4, 12), "known fragment at byte offset");
+  }
+  const actual = recoverSM2SigningKey(sample.sig);
+  const c2Only = recoverSM2Plaintext({ cipherFormat: "c2", knownCipher: sample.c1.slice(194), targetCipher: sample.c2.slice(194), known: sample.m1, knownEncoding: "hex" });
+  equal(bytesToHex(c2Only.recovered), sample.m2.slice(0, Math.min(m1.length, m2.length) * 2), "C2-only with independent binary ciphertext");
+  equal(c2Only.c1Checked, false, "C2-only never claims a C1 check");
+  equal(actual.privateKey, sample.d, "two-signature private key recovery");
+  equal(actual.nonce, sample.k, "reused nonce recovered");
+  equal(actual.publicKey, sample.publicKey, "derived public key matches independent implementation");
+  equal(recoverSM2SigningKey({ ...sample.sig, k: sample.k }, "known").privateKey, sample.d, "leaked nonce attack");
+  equal(recoverSM2SigningKey(sample.related, "related").privateKey, sample.d, "affine-related nonces");
+  equal(bytesToHex(decryptSM2LeakedK(sample.c2, { k: sample.k, publicKey: sample.publicKey })), sample.m2, "encryption nonce leak with C3 validation");
+  const corrupted = sample.c2.slice(0, -2) + (sample.c2.endsWith("00") ? "01" : "00");
+  rejects(() => decryptSM2LeakedK(corrupted, { k: sample.k, publicKey: sample.publicKey }), /C3 authentication/);
+  rejects(() => decryptSM2LeakedK(sample.c2, { k: (k + 1n).toString(16), publicKey: sample.publicKey }), /does not match C1/);
+  const signature = sm2Sign(m1, d, new TextEncoder().encode("1234567812345678"), null, null, k);
+  equal(signature.r.toString(16).padStart(64, "0"), sample.sig.r1, "reference r");
+  equal(signature.s.toString(16).padStart(64, "0"), sample.sig.s1, "reference s");
+  rejects(() => recoverSM2SigningKey({ ...sample.sig, e1: "0" }), /does not match/);
+  rejects(() => recoverSM2SigningKey({ ...sample.sig, r2: sample.sig.r1, s2: sample.sig.s1 }), /Degenerate/);
+  rejects(() => recoverSM2SigningKey({ ...sample.sig, k: "0" }, "known"), /out of range/);
+  const other = ptAffine(ptMul(d + 1n, [CURVE.Gx, CURVE.Gy]));
+  const wrongPub = "04" + other.map(v => v.toString(16).padStart(64, "0")).join("");
+  rejects(() => recoverSM2SigningKey({ ...sample.sig, publicKey: wrongPub }), /public key mismatch/);
+  const otherCipher = bytesToHex(sm2Encrypt(m2, ...Q, k + 1n).cipher);
+  rejects(() => recoverSM2Plaintext({ knownCipher: sample.c1, targetCipher: otherCipher, known: "x" }), /C1 mismatch/);
+  rejects(() => recoverSM2Plaintext({ knownCipher: sample.c1, targetCipher: sample.c2, known: "x", offset: -1 }), /out of bounds/);
+  const output = getOp("sm2KnownPlaintext").run(sample.c2, { ...defaultParams(getOp("sm2KnownPlaintext")), knownCipher: sample.c1, known: sample.m1, knownEncoding: "hex" });
+  equal(bytesToHex(output.files[0].bytes), sample.m2.slice(0, Math.min(m1.length, m2.length) * 2), "download product matches recovery");
+  equal(output.text.includes("[object Object]"), false, "UTF-8 report uses the lossless decoder contract");
+  equal(getOp("sm2NonceRecover").run(JSON.stringify(sample.sig), {}).includes(sample.d), true, "operation entry");
+}
+rejects(() => recoverSM2SigningKey({ r1: "z", s1: "1", e1: "0" }), /hexadecimal/);
+rejects(() => recoverSM2SigningKey({ r1: "1", s1: "1", e1: "0" }, "invalid"), /reuse/);
+const sample = reference.cases[0];
+rejects(() => recoverSM2Plaintext({ knownCipher: "04" + "00".repeat(96) + "01", targetCipher: sample.c2, known: "x" }), /invalid point/);
+rejects(() => recoverSM2Plaintext({ knownCipher: sample.c1, targetCipher: "04zz", known: "x" }), /hex/);
+rejects(() => recoverSM2Plaintext({ knownCipher: sample.c1, targetCipher: sample.c2, known: "", offset: 0 }), /length/);
+console.log(JSON.stringify({ reference: reference.reference, version: reference.version, cases: reference.cases.length, checks, verdict: "PASS" }));
+if (process.argv.includes("--example")) console.log(JSON.stringify(reference.cases[0], null, 2));

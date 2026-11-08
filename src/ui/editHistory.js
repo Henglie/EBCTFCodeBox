@@ -27,6 +27,9 @@ function isReadonly(area) {
 }
 
 function getSel(area) {
+  // Newly constructed fields have no live selection. Asking window.getSelection
+  // while rebuilding a page can force layout of the entire outgoing workspace.
+  if (!area.isConnected) return { start: 0, end: 0 };
   if (typeof area.selectionStart === "number" && typeof area.selectionEnd === "number") {
     return { start: area.selectionStart, end: area.selectionEnd };
   }

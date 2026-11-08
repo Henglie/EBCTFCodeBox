@@ -30,6 +30,39 @@
  * -7 untemper：Python random 源码 + ctf-wiki crypto/prng/problem
  */
 import { register } from "./registry.js";
+import { hexToBytes, bytesToHex } from "./bytesIo.js";
+
+// Microsoft UCRT rand(): state=214013*state+2531011, (state>>16)&32767.
+// Taking rand()%256 hides the high eight seed bits for every future byte.
+export function msvcrtRandomBytes(seed, length) {
+  if (!Number.isSafeInteger(seed) || seed < 0 || seed > 0xffffffff || !Number.isInteger(length) || length < 0 || length > 4096) throw new Error("MSVCRT seed/length 越界");
+  let state = seed >>> 0;
+  return Uint8Array.from({ length }, () => { state = (Math.imul(state, 214013) + 2531011) >>> 0; return (state >>> 16) & 255; });
+}
+export function recoverMsvcrtBytes(input, { yearStart = 2020, yearEnd = 2030, predictBytes = 16 } = {}) {
+  const bytes = typeof input === "string" ? hexToBytes(input.trim().replace(/^0x/i, "").replace(/\s+/g, "")) : input;
+  if (!(bytes instanceof Uint8Array) || bytes.length < 6 || bytes.length > 256) throw new Error("MSVCRT 字节恢复需要6–256个连续 rand()%256 输出（hex）");
+  yearStart = Number(yearStart); yearEnd = Number(yearEnd); predictBytes = Number(predictBytes);
+  if (!Number.isInteger(yearStart) || !Number.isInteger(yearEnd) || yearStart < 1900 || yearEnd > 9999 || yearEnd < yearStart || yearEnd - yearStart > 200 || !Number.isInteger(predictBytes) || predictBytes < 0 || predictBytes > 256) throw new Error("日期范围最多200年，预测最多256B");
+  const mask = 0xffffff, inverseA = Number(modInverse(214013n, 0x1000000n)), candidates = [];
+  for (let low = 0; low <= 0xffff; low++) {
+    const initial = (bytes[0] << 16) | low;
+    let state = initial, valid = true;
+    for (let i = 1; i < bytes.length; i++) { state = (Math.imul(state, 214013) + 2531011) & mask; if ((state >>> 16) !== bytes[i]) { valid = false; break; } }
+    if (valid) {
+      const seed24 = Math.imul((initial - 2531011) & mask, inverseA) & mask;
+      candidates.push({ seed24, equivalentSeeds: 256, prediction: msvcrtRandomBytes(seed24, bytes.length + predictBytes).slice(bytes.length), dates: [] });
+    }
+  }
+  for (let year = yearStart; year <= yearEnd; year++) for (let month = 1; month <= 12; month++) {
+    const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    for (let day = 1; day <= days; day++) {
+      const seed = year * 10000 + month * 100 + day, candidate = candidates.find(c => (seed & mask) === c.seed24);
+      if (candidate) candidate.dates.push(seed);
+    }
+  }
+  return candidates;
+}
 
 // ============================================================
 // 通用工具
@@ -269,6 +302,12 @@ function temper(y) {
 // ============================================================
 function prngAttackRun(text, p) {
   const mode = (p && p.mode) || "lcg";
+  if (mode === "msvcrtBytes") {
+    const candidates = recoverMsvcrtBytes(text, p || {});
+    return ["MSVCRT rand()%256 连续字节恢复 / Byte-output recovery", `候选 seed mod 2^24: ${candidates.length}`,
+      ...candidates.flatMap(c => [`seed mod 2^24 = ${c.seed24} (0x${c.seed24.toString(16).padStart(6, "0")})`, `YYYYMMDD candidates = ${c.dates.join(", ") || "none in selected range"}`, `next bytes = ${bytesToHex(c.prediction)}`]),
+      "每个低24位候选有256个不可区分的32位seed；只有日期等外部约束可进一步确定。不是glibc rand。"].join("\n");
+  }
   const lines = [];
   lines.push("=== PRNG 破解（" + (mode === "lcg" ? "LCG 参数恢复" : "MT19937 状态恢复") + "） ===");
   lines.push("");
@@ -360,11 +399,15 @@ register({
     {
       key: "mode", label: "模式", type: "select", default: "lcg",
       options: [
-        { value: "lcg", label: "LCG 参数恢复（glibc rand 类）" },
+        { value: "lcg", label: "LCG 完整状态输出参数恢复" },
         { value: "mt19937", label: "MT19937 状态恢复（Python random）" },
+        { value: "msvcrtBytes", label: "MSVCRT rand()%256 字节截断／日期seed恢复" },
       ],
     },
     { key: "modulus", label: "已知模数 m（LCG 可选，留空自动推）", type: "text", default: "", placeholder: "如 2147483648 (2^31) 或 0x80000000，留空自动推" },
+    { key: "yearStart", label: "日期seed起始年（MSVCRT）", type: "number", default: 2020 },
+    { key: "yearEnd", label: "日期seed结束年（MSVCRT，最多200年）", type: "number", default: 2030 },
+    { key: "predictBytes", label: "预测后续字节数（MSVCRT）", type: "number", default: 16, min: 0, max: 256 },
   ],
   run: prngAttackRun,
 });

@@ -17,6 +17,7 @@
  * 红线：纯前端零外发；不改变 eduContent.js 数据与 API 本体。
  */
 let _mod = null;
+let _aliases = null;
 let _resolveReady = null;
 const _ready = new Promise((res) => { _resolveReady = res; });
 // 闲时再拉科普数据（1.4MB zh 分片不再与首屏关键资源抢带宽；
@@ -42,7 +43,8 @@ export function getEduSync(opId, locale) {
 }
 
 export function eduAliasesSync() {
-  return _mod ? _mod.eduAliases() : null;
+  if (!_mod) return null;
+  return _aliases || (_aliases = _mod.eduAliases());
 }
 
 export function registerEduEn(enData) {

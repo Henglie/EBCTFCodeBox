@@ -23,6 +23,8 @@
  */
 import { register } from "./registry.js";
 import { md5, ntlm, sha, hmac } from "./hash.js";
+import { sm3, sm3Bytes } from "./hashExt.js";
+import { bytesToHex } from "./bytesIo.js";
 
 // ============================================================
 // 内置小字典（top 弱口令，约 300 条精选）
@@ -88,11 +90,13 @@ for (const w of TOP_DICT) {
 // md5 / ntlm 同步纯 JS；sha / hmac 异步走 WebCrypto
 // ============================================================
 function calcHashSync(algo, text) {
+  if (algo === "sm3") return sm3(text);
   if (algo === "md5") return md5(text);
   if (algo === "ntlm") return ntlm(text).toLowerCase();
   return null; // sha 系需异步
 }
 async function calcHashAsync(algo, text) {
+  if (algo === "sm3") return sm3(text);
   if (algo === "md5") return md5(text);
   if (algo === "ntlm") return ntlm(text).toLowerCase();
   if (algo === "sha1") return await sha("SHA-1", text);
@@ -304,8 +308,8 @@ async function hashDictCrackRun(hash, p) {
   }
 
  // 算法合法性
-  if (!["md5", "ntlm", "sha1", "sha256"].includes(algo)) {
-    return `不支持的算法: ${algo}（支持 md5/ntlm/sha1/sha256）`;
+  if (!["md5", "ntlm", "sha1", "sha256", "sm3"].includes(algo)) {
+    return `不支持的算法: ${algo}（支持 md5/ntlm/sha1/sha256/sm3）`;
   }
 
  // 范围预估
@@ -318,7 +322,7 @@ async function hashDictCrackRun(hash, p) {
   const candidates = getDictIterable(dictName, maxDigits);
 
  // 同步算法快速路径（md5 / ntlm 纯 JS，无 Promise 开销）
-  if (algo === "md5" || algo === "ntlm") {
+  if (algo === "md5" || algo === "ntlm" || algo === "sm3") {
     let tried = 0;
     for (const pt of candidates) {
       tried++;
@@ -326,6 +330,7 @@ async function hashDictCrackRun(hash, p) {
       if (h === target) {
         return `命中 ✓\n算法: ${algo}\n字典: ${dictName}\n明文: ${pt}\n尝试: ${tried} 次`;
       }
+      if (algo === "sm3" && tried >= 2000000) return `中止: SM3 尝试次数超 200 万上限（已试 ${tried}）`;
     }
     return `未命中 ✗\n算法: ${algo}\n字典: ${dictName}\n尝试: ${tried} 次\n建议: 换字典 / 增大 numeric 位数 / 导入大字典`;
   }
@@ -392,7 +397,7 @@ async function rainbowQueryRun(hash, p) {
   }
 
  // SHA 系列：实时查表（无预建表，因 WebCrypto 异步不便预建）
-  if (algo === "sha1" || algo === "sha256") {
+  if (algo === "sha1" || algo === "sha256" || algo === "sm3") {
     for (const pt of TOP_DICT_DEDUP) {
       const h = await calcHashAsync(algo, pt);
       if (h === target) {
@@ -402,13 +407,21 @@ async function rainbowQueryRun(hash, p) {
     return `未命中 ✗（${algo} 字典 ${TOP_DICT_DEDUP.length} 条无记录）`;
   }
 
-  return `不支持的算法: ${algo}（支持 auto/md5/ntlm/sha1/sha256）`;
+  return `不支持的算法: ${algo}（支持 auto/md5/ntlm/sha1/sha256/sm3）`;
 }
 
 // ============================================================
 // HMAC 密钥爆破（给定消息 + HMAC 值，穷举密钥字典）
 // 输入: HMAC 哈希值；参数: 消息 + 算法 + 字典
 // ============================================================
+export function hmacSM3(key, message) {
+  let bytes = new TextEncoder().encode(key);
+  if (bytes.length > 64) bytes = sm3Bytes(bytes);
+  const data = new TextEncoder().encode(message), inner = new Uint8Array(64 + data.length), outer = new Uint8Array(96);
+  for (let i = 0; i < 64; i++) { inner[i] = (bytes[i] || 0) ^ 0x36; outer[i] = (bytes[i] || 0) ^ 0x5c; }
+  inner.set(data, 64); outer.set(sm3Bytes(inner), 64);
+  return bytesToHex(sm3Bytes(outer));
+}
 async function hmacKeyBruteRun(hmacHash, p) {
   const target = String(hmacHash || "").trim().toLowerCase();
   if (!target) return "（空输入，请填入待爆破的 HMAC 值）";
@@ -417,7 +430,7 @@ async function hmacKeyBruteRun(hmacHash, p) {
   const dictName = (p && p.dict) || "top1000";
   const maxDigits = Math.max(1, Math.min(8, Number((p && p.maxDigits) || 6)));
 
-  const validAlgos = ["SHA-1", "SHA-256", "SHA-384", "SHA-512"];
+  const validAlgos = ["SHA-1", "SHA-256", "SHA-384", "SHA-512", "SM3"];
   if (!validAlgos.includes(algo)) {
     return `不支持的算法: ${algo}（支持 ${validAlgos.join("/")}）`;
   }
@@ -430,7 +443,7 @@ async function hmacKeyBruteRun(hmacHash, p) {
   let tried = 0;
   for (const key of candidates) {
     tried++;
-    const h = await hmac(algo, key, message);
+    const h = algo === "SM3" ? hmacSM3(key, message) : await hmac(algo, key, message);
     if (h === target) {
       return `命中 ✓\n算法: HMAC-${algo}\n字典: ${dictName}\n消息: ${message}\n密钥: ${key}\n尝试: ${tried} 次`;
     }
@@ -457,13 +470,14 @@ register({
   id: "hashDictCrack",
   cat: "crypto",
   name: "哈希字典爆破（小字典演示）",
-  desc: "MD5/SHA1/SHA256/NTLM 弱口令小字典演示：内置约 300 条 top 弱口令 + 纯数字 + 日期，秒级验证常见口令。本工具不做大规模爆破——正式字典/掩码爆破请用 hashcat（https://hashcat.net）或 John the Ripper（https://www.openwall.com/john），在线反查可用 CrackStation（https://crackstation.net）",
+  desc: "MD5/SHA1/SHA256/NTLM/SM3 小字典验证，支持弱口令、数字和日期。SM3 需手动选择，最多 200 万次；auto 的 64 hex 仍默认 SHA-256。",
   params: [
     { key: "algo", label: "算法", type: "select", default: "auto", options: [
       { value: "auto", label: "自动（按长度猜）" },
       { value: "md5", label: "MD5" },
       { value: "sha1", label: "SHA-1" },
       { value: "sha256", label: "SHA-256" },
+      { value: "sm3", label: "SM3（国密，需手动选择）" },
       { value: "ntlm", label: "NTLM" },
     ] },
     { key: "dict", label: "字典", type: "select", default: "top1000", options: [
@@ -481,7 +495,7 @@ register({
   id: "rainbowQuery",
   cat: "crypto",
   name: "彩虹表查询（本地演示小表）",
-  desc: "本地内置约 300 条弱口令的演示小表（MD5/NTLM 预建 O(1)，SHA 系实时查），验证常见弱口令一查即中。真彩虹表请用公开彩虹表站点 CrackStation（https://crackstation.net）或离线工具 rcracki-mt 配公开表（https://github.com/iphelix/rcracki-mt），本工具不内置也不下载任何彩虹表数据",
+  desc: "本地弱口令演示小表：MD5/NTLM 预建，SHA/SM3 实时小字典比较；SM3 需手动选择。不下载外部彩虹表，未命中只表示不在此字典内。",
   params: [
     { key: "algo", label: "算法", type: "select", default: "auto", options: [
       { value: "auto", label: "自动（按长度猜）" },
@@ -489,6 +503,7 @@ register({
       { value: "ntlm", label: "NTLM" },
       { value: "sha1", label: "SHA-1" },
       { value: "sha256", label: "SHA-256" },
+      { value: "sm3", label: "SM3（国密，需手动选择）" },
     ] },
   ],
   run: rainbowQueryRun,
@@ -498,9 +513,10 @@ register({
   id: "hmacKeyBrute",
   cat: "crypto",
   name: "HMAC 密钥爆破（小字典演示）",
-  desc: "给定消息 + HMAC 值，用内置小字典（top 口令 + 纯数字）演示 HMAC-SHA1/256/384/512 密钥穷举。本工具不做大规模爆破——大字典请用 hashcat（https://hashcat.net）或 John the Ripper（https://www.openwall.com/john）的 HMAC 格式",
+  desc: "给定消息与 HMAC 值，用内置弱口令／数字／日期字典验证 SHA-1/256/384/512 或 SM3 的弱密钥，最多尝试 200 万次。不是长度扩展攻击。",
   params: [
     { key: "algo", label: "算法", type: "select", default: "SHA-256", options: [
+      { value: "SM3", label: "SM3（国密）" },
       { value: "SHA-1", label: "HMAC-SHA-1" },
       { value: "SHA-256", label: "HMAC-SHA-256" },
       { value: "SHA-384", label: "HMAC-SHA-384" },

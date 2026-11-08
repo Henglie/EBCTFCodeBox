@@ -3,9 +3,11 @@ import { t, getLocale } from "../i18n/index.js";
 import { icon } from "./icons.js";
 import { eduContentReady, eduAliasesSync } from "../core/eduContent.defer.js";
 import { synonymsOf } from "./searchSynonyms.js";
+import { setDisclosure } from './expressiveMotion.js';
 
 const HIDDEN_OP_IDS = new Set(["cryptoTryAll"]);
-const CARD_CHUNK = 160;
+// Leave room for style/layout and first-frame corner drawing after each batch.
+const CARD_CHUNK = 40;
 
 const _collapsed = new Set();
 const _searchCollapsed = new Set();
@@ -330,7 +332,8 @@ export function renderAllOpsView(host, options = {}) {
 
       const setCollapsed = (next) => {
         section.classList.toggle("is-collapsed", next);
-        grid.hidden = next;
+        if (next && grid.contains(document.activeElement)) header.focus({ preventScroll: true });
+        setDisclosure(grid, !next);
         header.setAttribute("aria-expanded", String(!next));
         header.setAttribute("aria-label", (next ? expandLabel : collapseLabel) + " · " + group.name);
         const caret = header.querySelector(".allops-caret");
@@ -384,7 +387,10 @@ export function renderAllOpsView(host, options = {}) {
     };
   };
 
-  const onSearch = () => applyFilter(input.value);
+  let composing = false;
+  const onSearch = () => { if (!composing) applyFilter(input.value); };
+  input.addEventListener('compositionstart', () => { composing = true; });
+  input.addEventListener('compositionend', () => { composing = false; applyFilter(input.value); });
   input.addEventListener("input", onSearch);
   input.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {

@@ -107,12 +107,15 @@ try {
   check(header.labelOffset <= 1 && header.brandOffset <= 1 && header.versionInside && header.versionParent, `Brand/update alignment: ${JSON.stringify(header)}`);
   check(await page.locator(".home-tool-card").count() === 4, "Four working home shortcuts");
   await screenshot("home-light");
-  const curve = await page.locator(".home-studio").evaluate(node => ({
-    supported: CSS.supports("corner-shape", "superellipse(1.5)"),
-    actual: getComputedStyle(node).getPropertyValue("corner-shape"),
-  }));
-  if (curve.supported) check(curve.actual.includes("1.5"), "Native continuous corners applied");
-  if (curve.supported) check(await page.locator(".magic-run").evaluate(node => getComputedStyle(node).getPropertyValue("corner-shape").includes("1.5")), "Buttons share continuous curvature");
+  const curve = await page.locator(".home-studio").evaluate(async node => {
+    const api = (await import(new URL("src/ui/continuousCorners.js", document.baseURI).href)).setupContinuousCorners();
+    return { mode: api.mode, profile: api.stats().profile, applied: api.inspect(node)?.applied };
+  });
+  check(curve.applied && curve.profile === "apple-continuous-measured", "Shared Apple-style continuous profile applied");
+  check(await page.locator(".magic-run").evaluate(async node => {
+    const api = (await import(new URL('src/ui/continuousCorners.js', document.baseURI).href)).setupContinuousCorners();
+    return !node.hasAttribute('data-cc-rendered') && api.inspect(node)?.reason === 'pill';
+  }), "M3 full-round action retains its native capsule");
 
   // Composition commits must not start decoding. The regular Enter path must work.
   await page.locator(".home-input").fill("ZmxhZ3t1aV9zbW9rZX0=");
@@ -218,6 +221,10 @@ try {
   await page.locator(".ci-card").first().click();
   await page.locator(".ci-modal-dialog").waitFor();
   await page.waitForFunction(() => document.querySelector(".ci-modal-img")?.naturalWidth > 0);
+  await page.locator('.ci-modal-dialog').evaluate(async node => {
+    await Promise.all(node.getAnimations().filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime))
+      .map(animation => animation.finished.catch(() => {})));
+  });
   await page.waitForTimeout(350);
   const viewer = await page.evaluate(() => ({
     stage: document.querySelector(".ci-modal-stage").getBoundingClientRect().height,

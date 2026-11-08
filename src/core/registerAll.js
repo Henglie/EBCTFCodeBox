@@ -183,6 +183,8 @@ import "./rotspecial.js"; // Rot 任意位移 + ROT8000（classic/fancy）
 import "./pickle.js"; // Pickle 反汇编（analysis, run 型, 危险 opcode 告警）
 import "./jjencode.js"; // JJEncode（JS 符号混淆编码, fancy）
 import "./sm2.js"; // 国密 SM2 完整运算（GB/T 32918-2016：签名/验签+加密/解密）
+import "./sm2Attacks.js";
+import "./sm3Extension.js";
 import "./sm.js"; // 国密 ZUC 流密码（GB/T 33133.1-2016 完整实现；SM2/SM9 已独立成模块）
 import "./pairing.js"; // SM9 双线性对内核（BN 曲线 R-ate pairing：Fp2/Fp4/Fp12 扩域塔 + Miller + finalExp）
 import "./sm9ops.js"; // 国密 SM9 完整运算（GB/T 38635-2020：标识密钥生成/签名/验签/加密/解密五档族）
@@ -407,6 +409,7 @@ import "./falconVerify.js"; // Falcon-512/1024 公钥解析 + 验签 falconPkPar
 import "./poseidon.js"; // Poseidon/Poseidon2 哈希 poseidon+poseidon2（hash, run, BN254/BLS12-381 官方实例）
 import "./kzg.js"; // KZG/EIP-4844 kzgVerify+kzgCommit+kzgBlobParse（asym/filefmt, 主网可信设置）
 import "./gcmAttack.js"; // GCM forbidden attack gcmForbidden（crack, run, nonce 重用恢复 H+伪造 tag）
+import "./sm4Attacks.js";
 import "./ntruCca2.js"; // NTRU CCA-2 ntruCca2Encrypt/Decrypt（asym, 双向, EESS/P1363.1 + MGF 绑定）
 import "./xoodyak.js"; // Xoodyak xoodyakHash+xoodyakAead（hash/modern, NIST LWC 决赛 KAT）
 import "./sshKey.js"; // OpenSSH 私钥 sshKeyParse（asym, run, openssh-key-v1+bcrypt_pbkdf）

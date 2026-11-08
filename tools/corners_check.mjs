@@ -13,7 +13,8 @@ import { createRequire } from 'node:module';
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
-import { CORNER_EXPONENT, cornerCubics, continuousCornerPath, createCornerSVG, normalizeRadii, splitCSS } from '../src/ui/continuousCorners.js';
+import { CORNER_PROFILE, APPLE_CORNER_EXTENT, cornerCubics, continuousCornerPath, createCornerSVG, normalizeRadii, splitCSS } from '../src/ui/continuousCorners.js';
+import { CORE_OP_STUBS } from '../src/core/lazyTables.generated.js';
 
 const option = (key, fallback) => { const i = process.argv.indexOf(key); return i < 0 ? fallback : process.argv[i + 1]; };
 let checks = 0;
@@ -23,21 +24,36 @@ const cubic = (p, t) => [0, 1].map(axis => p.reduce((s, point, i) => s + [1, 3, 
 const derivative = (p, end) => end ? p[3].map((v, i) => 3 * (v - p[2][i])) : p[1].map((v, i) => 3 * (v - p[0][i]));
 const second = (p, end) => end ? p[3].map((v, i) => 6 * (v - 2 * p[2][i] + p[1][i])) : p[2].map((v, i) => 6 * (v - 2 * p[1][i] + p[0][i]));
 const cross = (a, b) => a[0] * b[1] - a[1] * b[0];
-const [first, last] = cornerCubics();
+const curves = cornerCubics(), first = curves[0], last = curves.at(-1);
 check(first.flat().every(Number.isFinite) && last.flat().every(Number.isFinite), 'Finite cubic controls');
 check(close(cross(derivative(first, false), second(first, false)), 0), 'Zero start curvature at straight edge');
 check(close(cross(derivative(last, true), second(last, true)), 0), 'Zero end curvature at straight edge');
-check(first[3].every((v, i) => close(v, last[0][i])), 'C0 at diagonal');
-check(derivative(first, true).every((v, i) => close(v, derivative(last, false)[i])), 'C1 at diagonal');
-check(second(first, true).every((v, i) => close(v, second(last, false)[i])), 'C2 at diagonal');
-check(close(first[3][0] ** CORNER_EXPONENT + (1 - first[3][1]) ** CORNER_EXPONENT, 1), 'Native superellipse(1.5) diagonal');
-let maxRadialError = 0;
-for (const points of [first, last]) for (let i = 0; i <= 10000; i++) {
-  const [x, y] = cubic(points, i / 10000);
-  const error = Math.abs((x ** CORNER_EXPONENT + (1 - y) ** CORNER_EXPONENT) ** (1 / CORNER_EXPONENT) - 1);
-  maxRadialError = Math.max(maxRadialError, error);
+check(CORNER_PROFILE === 'apple-continuous-measured' && curves.length === 3, 'Single measured Apple-style profile');
+check(close(APPLE_CORNER_EXTENT, 1.52866483), 'Published UIKit straight-edge extent');
+check(close(first[1][0] * APPLE_CORNER_EXTENT, APPLE_CORNER_EXTENT - 1.08849323), 'Independent published first control');
+check(close(curves[1][1][1] * APPLE_CORNER_EXTENT, .16905899), 'Independent published middle control');
+check(curves.flat(2).every(v => Number.isFinite(v) && v >= 0 && v <= 1), 'Profile stays inside its corner box');
+for (const points of curves) {
+  let previous = [-1, -1];
+  for (let i = 0; i <= 100; i++) { const p = cubic(points, i / 100); check(p.every((v, axis) => v >= previous[axis] - 1e-12), 'No curvature loop or reversal'); previous = p; }
 }
-check(maxRadialError < .008, `Native Lamé radial deviation < 0.8% radius (${maxRadialError})`);
+// Independent contour: published coordinate measurements, not the production path.
+const measured = [
+  [[1.52866483, 0], [1.08849323, 0], [.86840689, 0], [.66993427, .065496]],
+  [[.63149399, .074911], [.37282392, .16905899], [.16906013, .37282401], [.07491176, .63149399]],
+  [[.07491176, .63149399], [0, .86840701], [0, 1.08849299], [0, 1.52866483]],
+];
+const referenceRadius = 48 / 1.52866483;
+const referencePolygon = measured.flatMap(points => Array.from({ length: 101 }, (_, i) => { const [x, y] = cubic(points, i / 100); return [y * referenceRadius, x * referenceRadius]; }));
+referencePolygon.push([48, 48]);
+const referenceInside = (x, y) => {
+  let inside = false;
+  for (let i = 0, j = referencePolygon.length - 1; i < referencePolygon.length; j = i++) {
+    const a = referencePolygon[i], b = referencePolygon[j];
+    if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
+  }
+  return inside;
+};
 check(normalizeRadii(80, 20, [999, 999, 999, 999]).every(r => r.every(v => close(v, 10))), 'CSS overlapping-radius common scale');
 check(normalizeRadii(100, 60, [[70, 40], [30, 10], [10, 20], [20, 30]])[0][1] < 40, 'Asymmetric elliptical-radius normalization');
 const path = continuousCornerPath(120, 60, [[20, 12], [0, 0], [18, 18], [8, 8]]);
@@ -62,7 +78,8 @@ const selectPaint = { ...paint, padding: [12, 12, 12, 12], select: { gutter: 18,
 check(createCornerSVG(selectPaint).svg.includes('stroke="#008800"'), 'Select chevron uses source foreground color');
 check(createCornerSVG({ ...selectPaint, direction: 'rtl' }).svg.includes('M17 46L21 50L25 46'), 'Select chevron mirrors into logical end gutter');
 check(createCornerSVG({ ...paint, image: 'linear-gradient(45deg, transparent 50%, green 50%)', size: '5px 5px', position: 'calc(100% - 16px) 50%', repeat: 'no-repeat' }).svg.includes('x="139"'), 'Authored select arrow supports linear calc end placement');
-console.log(`Geometry: ${checks} PASS; max normalized radial deviation ${maxRadialError.toFixed(8)} (${(maxRadialError * 28).toFixed(3)}px at radius 28)`);
+check(createCornerSVG({ ...paint, outlineWidth: 2, outlineOffset: 3, outlineStyle: 'solid', outlineColor: '#008800' }).svg.includes('data-outline="true"'), 'Focus outline uses the vector profile');
+console.log(`Geometry: ${checks} PASS; ${CORNER_PROFILE}`);
 
 const base = option('--base-url', undefined);
 if (!base) {
@@ -166,14 +183,13 @@ if (!base) {
     await page.waitForFunction(() => document.getElementById('panel').hasAttribute('data-cc-rendered'));
     await settle();
     let image = await pixels();
-    check(blue(image.at(48, 48)), 'Self-drawn actual DOM corner contains the superellipse-only pixel');
-    check(white(image.at(248, 48)), 'Ordinary border-radius negative control excludes the same pixel');
+    check(blue(image.at(64, 64)), 'Self-drawn actual DOM interior is painted');
+    check(white(image.at(241, 41)), 'Ordinary border-radius negative control has a corner cutout');
     check(white(image.at(41, 41)), 'Self-drawn curve excludes the square-corner pixel');
     let contour = 0;
-    for (let y = 1; y < 32; y += 2) for (let x = 1; x < 32; x += 2) {
-      const radial = (((32 - x - .5) / 32) ** CORNER_EXPONENT + ((32 - y - .5) / 32) ** CORNER_EXPONENT) ** (1 / CORNER_EXPONENT);
-      if (Math.abs(radial - 1) < .06) continue;
-      check(radial < 1 ? blue(image.at(40 + x, 40 + y)) : white(image.at(40 + x, 40 + y)), `Independent Lamé contour pixel (${x},${y})`);
+    for (let y = 1; y < 47; y += 2) for (let x = 1; x < 47; x += 2) {
+      if (referencePolygon.some(([u, v]) => Math.hypot(u - x - .5, v - y - .5) < 1.5)) continue;
+      check(referenceInside(x + .5, y + .5) ? blue(image.at(40 + x, 40 + y)) : white(image.at(40 + x, 40 + y)), `Independent UIKit-profile contour pixel (${x},${y})`);
       contour++;
     }
     check(contour > 150, 'Curvature checked against independent numerical contour, not class labels');
@@ -189,7 +205,7 @@ if (!base) {
     check(blue(image.at(420, 330)) && image.at(540, 330)[0] > 150, 'Linear-gradient source paint preserved');
     check(blue(image.at(410, 432)) && image.at(402, 432)[0] > 150, 'Positioned repeated gradient tiles preserve actual pixels');
     check(image.at(480, 291)[0] > 130 && image.at(480, 291)[1] < 100, 'Inset shadow is visible');
-    check(blue(image.at(47, 607)) && white(image.at(41, 601)), 'Select closed shell has continuous-curvature pixels');
+    check(blue(image.at(52, 612)) && white(image.at(41, 601)), 'Select closed shell has continuous-curvature pixels');
     check(await page.locator('#select').evaluate(node => node.hasAttribute('data-cc-select') && getComputedStyle(node).appearance === 'none'), 'Successful select shell alone disables native appearance');
     for (const id of ['select', 'select-rtl', 'select-disabled', 'select-auto', 'select-custom']) {
       const size = await page.locator(`#${id}`).evaluate(node => {
@@ -215,8 +231,8 @@ if (!base) {
       const image = decodeURIComponent(node.style.getPropertyValue('--cc-image'));
       return !/<text|UTF-8|UTF-16|ASCII|utf8|utf16/.test(image);
     }), 'Select SVG never contains selected text or option values');
-    check(await page.locator('#select-image').evaluate(node => !node.hasAttribute('data-cc-select') && getComputedStyle(node).appearance === window.beforeSelects[node.id].appearance && window.cornerTest.inspect(node).reason === 'background-image'), 'Unsupported radial select keeps native appearance');
-    check(await page.locator('#select-list').evaluate(node => !node.hasAttribute('data-cc-select') && window.cornerTest.inspect(node).reason === 'native-listbox'), 'Multiple select/listbox remains native');
+    check(await page.locator('#select-image').evaluate(node => node.hasAttribute('data-cc-select') && window.cornerTest.inspect(node).applied), 'Radial-gradient select uses the shared profile');
+    check(await page.locator('#select-list').evaluate(node => node.hasAttribute('data-cc-select') && node.multiple && node.size === 2), 'Listbox shell shares the profile and preserves native semantics');
     await page.locator('#select').selectOption('utf16'); await settle();
     check(await page.locator('#select').inputValue() === 'utf16', 'Native selected value and selectOption semantics preserved');
     await page.locator('#select').selectOption('utf8');
@@ -247,19 +263,20 @@ if (!base) {
     check(!white(image.at(320, 340)), 'Floating menu pixels are not clipped');
     await page.locator('#panel').evaluate(node => { node.style.width = '212px'; node.style.height = '112px'; node.style.borderRadius = '24px'; });
     await settle(); image = await pixels();
-    check((await rect('#panel')).width === 212 && blue(image.at(235, 96)) && blue(image.at(46, 46)), 'Resize redraw follows new size and smaller corner radius');
+    check((await rect('#panel')).width === 212 && blue(image.at(235, 96)) && blue(image.at(50, 50)), 'Resize redraw follows new size and smaller corner radius');
     await page.evaluate(() => document.documentElement.classList.add('dark')); await settle(); image = await pixels();
     check(image.at(100, 80)[0] === 33 && image.at(100, 80)[2] === 74, 'Theme change redraws computed source color');
     await page.evaluate(() => document.documentElement.classList.remove('dark')); await settle();
     await page.locator('#scroller').evaluate(node => { node.scrollTop = 500; }); await settle();
     check(await page.locator('#scrolled').evaluate(node => node.hasAttribute('data-cc-rendered')), 'Intersection entering nested scroller mounts self-drawn panel');
     const scrolled = await rect('#scrolled'); image = await pixels();
-    check(blue(image.at(scrolled.x + 8, scrolled.y + 8)), 'Scrolled curve remains aligned in actual pixels');
+    check(blue(image.at(scrolled.x + 12, scrolled.y + 12)), 'Scrolled curve remains aligned in actual pixels');
     await page.locator('.m3-segment-thumb').evaluate(node => { node.style.transform = 'translateX(120px)'; node.style.width = '120px'; }); await settle();
-    check(await page.locator('.m3-segment-thumb').evaluate(node => node.hasAttribute('data-cc-rendered')), 'Dynamic segmented thumb is self-drawn');
+    check(await page.locator('.m3-segment-thumb').evaluate(node => !node.hasAttribute('data-cc-rendered') && window.cornerTest.inspect(node)?.reason === 'pill'), 'Dynamic M3 segmented thumb retains its authored capsule');
     const range = await rect('#range'); image = await pixels();
     const selected = image.at(range.x + 24, range.y + 22), unselected = image.at(range.x + 200, range.y + 22);
-    check(selected[0] > 100 && selected[1] < 100 && unselected.slice(0, 3).every(v => v >= 155 && v <= 180), 'Actual native range track shows self-drawn selected/unselected paint');
+    check(selected[0] > 100 && selected[1] < 100 && unselected.slice(0, 3).every(v => v >= 155 && v <= 180), 'Actual native M3 range retains selected/unselected paint');
+    check(await page.locator('#range').evaluate(node => !node.hasAttribute('data-cc-range')), 'M3 range circular end caps are not replaced');
     await page.locator('#range').evaluate(node => node.style.setProperty('--range-progress', '75%')); await settle(); image = await pixels();
     check(image.at(range.x + 140, range.y + 22)[1] < 100, 'Programmatic range progress redraws');
     await page.locator('#range').focus(); await page.locator('#range').press('ArrowRight');
@@ -275,7 +292,7 @@ if (!base) {
     await page.locator('#dense').evaluate(node => node.replaceChildren()); await settle();
     check((await page.evaluate(() => window.cornerTest.stats())).tracked < 100, 'Removed dynamic cards release observers/state');
     await page.locator('#select').evaluate(node => { node.multiple = true; node.size = 2; }); await settle();
-    check(await page.locator('#select').evaluate(node => !node.hasAttribute('data-cc-select') && getComputedStyle(node).appearance === window.beforeSelects[node.id].appearance), 'Single-to-multiple mutation restores native appearance');
+    check(await page.locator('#select').evaluate(node => node.hasAttribute('data-cc-select') && node.multiple && node.size === 2), 'Single-to-multiple mutation preserves the shared shell and native semantics');
     await page.locator('#select').evaluate(node => { node.multiple = false; node.size = 0; }); await settle();
     check(await page.locator('#select').evaluate(node => node.hasAttribute('data-cc-select')), 'Multiple-to-single mutation remounts the closed shell');
     await page.emulateMedia({ media: 'print' }); await settle();
@@ -300,7 +317,7 @@ if (!base) {
         await app.locator('.allops-card').first().waitFor();
         // The real view deliberately mounts cards in idle chunks. Font readiness
         // and a first visible card do not mean all 969 cards have been mounted.
-        await app.waitForFunction(() => document.querySelectorAll('.allops-card').length === 969);
+        await app.waitForFunction(expected => document.querySelectorAll('.allops-card').length === expected, CORE_OP_STUBS.length);
         await app.evaluate(async moduleURL => { await document.fonts.ready; window.cornerPerf = (await import(moduleURL)).setupContinuousCorners(); }, moduleURL);
         await app.waitForFunction(() => {
           const stats = window.cornerPerf.stats(), now = performance.now();
@@ -313,10 +330,10 @@ if (!base) {
           return { cards: cards.length, elements: document.querySelectorAll('*').length, text: text.length,
             observedText: text.filter(node => api.inspect(node)).length, observedCards: cards.filter(node => api.inspect(node)).length, stats: api.stats() };
         });
-        check(initial.cards === 969, `Actual all-operations card count: ${initial.cards}`);
+        check(initial.cards === CORE_OP_STUBS.length, `Actual all-operations card count: ${initial.cards}`);
         if (initial.stats.mode === 'svg') {
-          check(initial.observedCards === 969 && initial.observedText === 0, 'Actual 969 cards observed, unpainted labels/glyphs get no IO');
-          check(initial.stats.tracked < initial.elements / 2 && initial.stats.tracked < 969 * 4 + 400 && initial.stats.visible < 400, `Actual page IO/RO bounded: ${JSON.stringify(initial)}`);
+          check(initial.observedCards === CORE_OP_STUBS.length && initial.observedText === 0, 'All cards observed; unpainted labels/glyphs get no IO');
+          check(initial.stats.tracked < initial.elements / 2 && initial.stats.tracked < CORE_OP_STUBS.length * 4 + 400 && initial.stats.visible < 400, `Actual page IO/RO bounded: ${JSON.stringify(initial)}`);
           await app.waitForTimeout(250);
           check(await app.evaluate(frames => window.cornerPerf.stats().frames === frames, initial.stats.frames), 'Actual all-operations page has no idle renderer polling');
           await app.locator('.allops-card').last().scrollIntoViewIfNeeded();

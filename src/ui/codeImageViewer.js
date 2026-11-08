@@ -4,6 +4,7 @@
 // 自持 el/msym（icon 注水），tt/window.__ebctfT 兜底 i18n（不进主表）。零外发。
 import { icon as iconSvg } from "./icons.js";
 import { attachModalLifecycle } from "./modalLifecycle.js";
+import { connectSpecialDraft, newDraftIdentity } from "./workspaceDrafts.js";
 // A0 槽位布局 sidecar：仅在打开本页时按需 fetch（public/data/codeimage/codeImageLayout.bin），
 // 不参与分类；加载失败静默回退，不影响识图。
 import { layoutSlotFor, loadCodeImageLayout } from "../core/codeImageLayout.js";
@@ -40,7 +41,7 @@ function toast(msg) {
 // i18n 未接线时的中文兜底
 const CI_FALLBACK = {
   "ui.ci.title": "编码图查询器",
-  "ui.ci.desc": "244 张图形编码对照表：外星文字 / 游戏文字 / 古代文字 / 符号 / 旗语手语 / 条码等，人肉对照解码用。",
+  "ui.ci.desc": "图形编码对照表：外星文字 / 游戏文字 / 古代文字 / 符号 / 旗语手语 / 条码等，支持查询、对照与本地识图。",
   "ui.ci.search": "搜索名称 / 别名…",
   "ui.ci.all": "全部",
   "ui.ci.empty": "无匹配结果。",
@@ -60,6 +61,8 @@ const CI_FALLBACK = {
   "ui.ci.cat.barcode": "条码",
   "ui.ci.cat.other": "其他",
   "ui.ci.rec.title": "自动识图",
+  "ui.ci.rec.editImage": "裁剪 / 调整图像",
+  "ui.ci.rec.original": "恢复原图",
   "ui.ci.rec.desc": "上传题目图片：先跑二维码/条形码解码，再做字形与整图对照，给出最可能的编码样式和对照表。全程本地计算。",
   "ui.ci.rec.upload": "上传题目图片",
   "ui.ci.rec.drop": "或把图片拖到这里",
@@ -187,7 +190,10 @@ function layoutCellId(chartId, slot) {
 }
 
 // ---- 渲染主入口 ----
+let activeViewer = null;
+export function disposeCodeImageViewer() { activeViewer?.(); activeViewer = null; }
 export async function renderCodeImageViewer(container) {
+  disposeCodeImageViewer();
   container.innerHTML = "";
   const wrap = el("div", { class: "ci-view" });
 
@@ -196,12 +202,14 @@ export async function renderCodeImageViewer(container) {
     el("div", { class: "op-desc" }, tt("ui.ci.desc")),
   ));
 
-  const rec = buildRecognizePanel();
+  const rec = buildRecognizePanel(im => selectChart(im));
   wrap.append(rec.root);
-
-  const body = el("div", { class: "ci-body" });
+  const body = el('div', { class: 'ci-body' });
   wrap.append(body);
   container.append(wrap);
+  activeViewer = () => { rec.dispose(); closeModal(); };
+  await rec.ready;
+  if (!wrap.isConnected) return;
 
   // 打开编码图页才开始加载布局（不等它，页面先渲染）。
   ensureLayout();
@@ -210,6 +218,7 @@ export async function renderCodeImageViewer(container) {
     try {
       const r = await fetch(MANIFEST_URL, { cache: "force-cache" });
       ciState.manifest = await r.json();
+      if (!wrap.isConnected) return;
     } catch (err) {
       body.append(el("div", { class: "ci-empty" }, tt("ui.ci.loadFail") + "：" + (err && err.message || err)));
       return;
@@ -233,6 +242,13 @@ export async function renderCodeImageViewer(container) {
   main.append(grid);
   body.append(side, main);
 
+  function selectChart(im) {
+    if (!im) return;
+    ciState.selected = im.id;
+    rec.changed();
+    openModal(im);
+  }
+
   const cardById = new Map();
   let allBuilt = false;
 
@@ -253,7 +269,7 @@ export async function renderCodeImageViewer(container) {
   function treeItem(cat, label, ic, count) {
     return el("button", {
       class: "ci-tree-item" + (ciState.activeCat === cat ? " active" : ""),
-      onclick: () => { ciState.activeCat = cat; buildTree(); applyFilter(); },
+      onclick: () => { ciState.activeCat = cat; buildTree(); applyFilter(); rec.changed(); },
     },
       msym(ic, "ci-tree-ic"),
       el("span", { class: "ci-tree-label" }, label),
@@ -283,7 +299,7 @@ export async function renderCodeImageViewer(container) {
       const card = el("button", {
         class: "ci-card",
         title: cnName(im),
-        onclick: () => openModal(im),
+        onclick: () => selectChart(im),
       },
         el("div", { class: "ci-thumb" }, thumb),
         el("div", { class: "ci-card-name" }, cnName(im).replace(/（待确认）$/, "")),
@@ -320,6 +336,7 @@ export async function renderCodeImageViewer(container) {
       ciState.query = searchBox.value.trim();
       buildTree();
       applyFilter();
+      rec.changed();
     }, 120);
   });
 
@@ -328,28 +345,40 @@ export async function renderCodeImageViewer(container) {
 }
 
 // ---- 自动识图面板 ----
-function buildRecognizePanel() {
+function buildRecognizePanel(onSelect) {
   let manifest = [];
   let busy = false;
+  let lastFile = null, originalFile = null, lastBytes = null, lastResult = null, selectedCandidate = null;
+  let identity = newDraftIdentity(), readSeq = 0, runSeq = 0, previewUrl = null, disposed = false;
+  let pendingMaps = {};
+  let draft = null;
+  const releasePreview = () => { if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = null; };
+  function reset() {
+    readSeq++; runSeq++; releasePreview(); busy = false;
+    input.value = ''; result.replaceChildren(); status.textContent = ''; resetBtn.hidden = true;
+    lastFile = originalFile = lastBytes = lastResult = selectedCandidate = null; identity = newDraftIdentity();
+    pendingMaps = {};
+    syncActions();
+  }
 
   const input = el("input", { type: "file", accept: "image/*", class: "ci-rec-file" });
-  const drop = el("div", { class: "ci-rec-drop" },
+  const drop = el("div", { class: "ci-rec-drop", role: 'button', tabindex: '0', 'aria-label': tt('ui.ci.rec.upload') },
     msym("upload", "ci-rec-drop-ic"),
     el("div", { class: "ci-rec-drop-main" }, tt("ui.ci.rec.upload")),
     el("div", { class: "ci-rec-drop-sub" }, tt("ui.ci.rec.drop")),
   );
-  const status = el("div", { class: "ci-rec-status" });
+  const status = el("div", { class: "ci-rec-status", role: 'status', 'aria-live': 'polite' });
   const result = el("div", { class: "ci-rec-result" });
   const resetBtn = el("button", {
     class: "ci-rec-reset", type: "button", hidden: "hidden",
     onclick: () => {
-      input.value = ""; result.innerHTML = ""; status.textContent = ""; resetBtn.hidden = true;
-      lastFile = null; lastBytes = null;
+      reset(); draft?.changed();
     },
   }, tt("ui.ci.rec.reset"));
 
   const pick = () => { if (!busy) input.click(); };
   drop.addEventListener("click", pick);
+  drop.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); pick(); } });
   input.addEventListener("change", () => { if (input.files && input.files[0]) handleFile(input.files[0]); });
   drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("drag"); });
   drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
@@ -360,44 +389,54 @@ function buildRecognizePanel() {
     if (f) handleFile(f);
   });
 
-  let lastFile = null;
-  let lastBytes = null;
-
-  async function handleFile(file) {
+  async function handleFile(file, edited = false) {
     if (!file || !/^image\//i.test(file.type || "")) { status.textContent = tt("ui.ci.rec.fail", "不是图片文件"); return; }
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    lastFile = file;
-    lastBytes = bytes;
-    await runRecognition();
+    const sequence = ++readSeq; runSeq++;
+    if (!edited) originalFile = file;
+    lastFile = file; lastBytes = lastResult = null; identity = newDraftIdentity();
+    busy = true; releasePreview(); result.replaceChildren(); status.textContent = tt('ui.ci.rec.running'); syncActions(); draft?.changed();
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if (disposed || sequence !== readSeq || !root.isConnected) return;
+      lastFile = file;
+      lastBytes = bytes;
+      lastResult = null; identity = newDraftIdentity(); draft?.changed();
+      await runRecognition();
+    } catch (error) { if (!disposed && sequence === readSeq) { busy = false; syncActions(); status.textContent = tt('ui.ci.rec.fail', error.message); } }
   }
 
   async function runRecognition() {
     if (!lastFile || !lastBytes) return;
+    const sequence = ++runSeq, file = lastFile, bytes = lastBytes;
     busy = true;
+    syncActions();
     result.innerHTML = "";
     status.textContent = tt("ui.ci.rec.running");
     resetBtn.hidden = false;
     try {
       const fp = await loadFingerprints();
       const { recognizeCodeImage } = await import("../core/codeImageRecognize.js");
-      const r = await recognizeCodeImage(lastBytes.slice(), {
+      const r = await recognizeCodeImage(bytes.slice(), {
         manifest,
         fingerprints: fp && fp.images,
         mappings: loadGlyphMaps(),
       });
-      renderResult(r, lastFile);
+      if (disposed || sequence !== runSeq || file !== lastFile || !root.isConnected) return;
+      lastResult = r; renderResult(r, file); draft?.changed();
       status.textContent = "";
     } catch (e) {
-      status.textContent = tt("ui.ci.rec.fail", e && e.message ? e.message : e);
+      if (!disposed && sequence === runSeq) status.textContent = tt("ui.ci.rec.fail", e && e.message ? e.message : e);
     } finally {
-      busy = false;
+      if (sequence === runSeq) { busy = false; syncActions(); }
     }
   }
 
   function renderResult(r, file) {
+    releasePreview();
     result.innerHTML = "";
+    previewUrl = URL.createObjectURL(file);
     const preview = el("div", { class: "ci-rec-preview" },
-      el("img", { src: URL.createObjectURL(file), alt: file.name }),
+      el("img", { src: previewUrl, alt: file.name || 'image' }),
       el("div", { class: "ci-rec-meta" },
         el("div", { class: "ci-rec-name" }, file.name),
         el("div", { class: "ci-rec-sub" }, (r.width || 0) + "×" + (r.height || 0)),
@@ -432,6 +471,7 @@ function buildRecognizePanel() {
     }
 
     const cands = r.candidates || [];
+    const sequenceHost = el('div', { class: 'ci-rec-sequence-host' });
     const box = el("div", { class: "ci-rec-block" },
       el("div", { class: "ci-rec-block-title" }, msym("travel_explore"), tt("ui.ci.rec.candidates")),
     );
@@ -443,7 +483,13 @@ function buildRecognizePanel() {
         const im = c.image;
         const card = el("button", {
           class: "ci-rec-cand", type: "button",
-          onclick: () => openModal(im),
+          'aria-pressed': String(selectedCandidate === im.id),
+          onclick: () => {
+            selectedCandidate = im.id; onSelect?.(im);
+            for (const button of result.querySelectorAll('.ci-rec-cand')) button.setAttribute('aria-pressed', String(button === card));
+            sequenceHost.replaceChildren(); appendSequenceBlock(sequenceHost, r, r.sequences?.find(seq => seq.chartId === im.id));
+            draft?.changed();
+          },
         },
           el("img", { src: thumbSrc(im), alt: cnName(im), loading: "lazy" }),
           el("div", { class: "ci-rec-cand-main" },
@@ -460,7 +506,8 @@ function buildRecognizePanel() {
       box.append(list);
     }
     result.append(box);
-    appendSequenceBlock(result, r, (r.sequences || [])[0]);
+    appendSequenceBlock(sequenceHost, r, r.sequences?.find(seq => seq.chartId === selectedCandidate) || r.sequences?.[0]);
+    result.append(sequenceHost);
     result.append(el("div", { class: "ci-rec-hint" }, tt("ui.ci.rec.hint")));
   }
 
@@ -542,6 +589,7 @@ function buildRecognizePanel() {
       if (!editor.childNodes.length) buildEditor();
     });
     block.append(mapBtn, editor);
+    if (pendingMaps[seq.chartId]) { editor.hidden = false; buildEditor(); }
 
     function buildEditor() {
       const maps = loadGlyphMaps();
@@ -554,11 +602,14 @@ function buildRecognizePanel() {
         const refCell = layoutCellId(seq.chartId, slot);
         const inp = el("input", {
           class: "ci-rec-map-inp", type: "text", maxlength: "8",
-          placeholder: "?", value: old[slot] || "", "aria-label": tt("ui.ci.rec.slot", slot),
+          placeholder: "?", value: pendingMaps[seq.chartId]?.[slot] ?? old[slot] ?? "", "aria-label": tt("ui.ci.rec.slot", slot),
         });
         inp.dataset.slot = String(slot);
         if (refCell) inp.dataset.cell = refCell;
         inputs.push(inp);
+        inp.addEventListener('input', () => {
+          (pendingMaps[seq.chartId] ||= {})[slot] = inp.value; draft?.changed();
+        });
         rows.append(el("label", { class: "ci-rec-map-row" },
           el("span", { class: "ci-rec-map-slot", title: refCell || null }, tt("ui.ci.rec.slot", slot)), inp));
       }
@@ -573,6 +624,7 @@ function buildRecognizePanel() {
         const next = loadGlyphMaps();
         next[seq.chartId] = labels;
         saveGlyphMaps(next);
+        delete pendingMaps[seq.chartId];
         toast(tt("ui.ci.rec.mappingSaved"));
         await runRecognition();
       });
@@ -590,9 +642,45 @@ function buildRecognizePanel() {
     ),
     drop, input, status, result,
   );
+  const run = el('button', { type: 'button', class: 'act-btn', onclick: () => { if (!busy) { if (lastBytes) runRecognition(); else if (lastFile) handleFile(lastFile, true); } } }, msym('play_arrow'), tt('ui.op.convert'));
+  const edit = el('button', { type: 'button', class: 'act-btn', onclick: async () => {
+    if (!lastFile || busy) return;
+    const file = lastFile, sequence = readSeq;
+    const { openImageOpsViewer } = await import('./imageOpsViewer.js');
+    if (disposed || sequence !== readSeq || file !== lastFile) return;
+    openImageOpsViewer(file, { title: file.name, bytes: lastBytes, onUse: async url => {
+      const blob = await (await fetch(url)).blob();
+      if (disposed || sequence !== readSeq || file !== lastFile) return;
+      await handleFile(new File([blob], file.name || 'image.png', { type: 'image/png' }), true);
+    } });
+  } }, msym('crop'), tt('ui.ci.rec.editImage'));
+  const original = el('button', { type: 'button', class: 'act-btn', onclick: () => { if (originalFile && !busy) handleFile(originalFile); } }, msym('undo'), tt('ui.ci.rec.original'));
+  function syncActions() { run.disabled = edit.disabled = !lastFile || busy; original.disabled = !originalFile || busy; drop.setAttribute('aria-disabled', String(busy)); }
+  root.append(el('div', { class: 'ci-rec-actions' }, run, edit, original));
+  syncActions();
+  draft = connectSpecialDraft('codeimg', root, {
+    capture: () => ({ binaryKey: identity, file: lastFile, original: originalFile, fileName: lastFile?.name || (lastFile ? 'image' : ''), result: lastResult,
+      selectedCandidate, pendingMaps, view: { activeCat: ciState.activeCat, query: ciState.query, selected: ciState.selected } }),
+    restore: async (saved, current) => {
+      if (!saved || !current()) return;
+      Object.assign(ciState, { activeCat: saved.view?.activeCat || 'all', query: saved.view?.query || '', selected: saved.view?.selected || null });
+      if (!(saved.file instanceof Blob)) { if (saved.fileName) status.textContent = tt('ui.workbench.draftFileMissing'); return; }
+      const sequence = readSeq, bytes = new Uint8Array(await saved.file.arrayBuffer());
+      if (!current() || sequence !== readSeq) return;
+      identity = saved.binaryKey || newDraftIdentity(); lastFile = saved.file; originalFile = saved.original || saved.file;
+      lastBytes = bytes; lastResult = saved.result; selectedCandidate = saved.selectedCandidate;
+      pendingMaps = saved.pendingMaps || {};
+      resetBtn.hidden = false;
+      syncActions();
+      if (lastResult) renderResult(lastResult, lastFile);
+      else status.textContent = tt('ui.workbench.pending');
+    },
+    clear: reset,
+  });
 
   return {
-    root,
+    root, result, ready: draft.ready, changed: () => draft.changed(),
+    dispose() { draft.dispose(); disposed = true; readSeq++; runSeq++; releasePreview(); },
     setManifest(list) { manifest = list || []; },
   };
 }

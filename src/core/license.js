@@ -12,11 +12,11 @@
  *   appName：可选自定义软件名（2026-09-13 产品负责人新需求）——签发时写入，运行期替换顶栏品牌/
  *   页面标题/关于页应用名；未声明或缺省回退内置名（向后兼容旧 5 份 license）。
  *
- * 私钥只在 授权/ 目录的签发工具里（不上传 git），任何人无私钥都伪造不出通过验签的 bin。
+ * 私钥只由发布方的签发工具离线保管（不进入仓库），任何人无私钥都伪造不出通过验签的 bin。
  * 公钥公开无妨——只能验签不能签发。
  */
 
-// 内嵌公钥（SPKI DER，base64）。对应 授权/private_key.pem 的私钥。
+// 内嵌公钥（SPKI DER，base64）。对应签发工具持有的私钥。
 const PUBLIC_KEY_B64 =
   "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEkOkYdb4i7EAZ1KukarDW12eqfLQf1S18MlgIqVp7H7jqOJdZotjIigSMYPDtvSJdYdydRwfpFXXJ273987Ke3w==";
 

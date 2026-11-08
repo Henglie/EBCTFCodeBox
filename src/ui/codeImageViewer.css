@@ -305,6 +305,8 @@
 .ci-rec {
   display: flex;
   flex-direction: column;
+  width: min(100%, 800px);
+  align-self: center;
   gap: var(--sp-2);
   padding: var(--sp-3);
   border: 1px solid var(--outline-var);

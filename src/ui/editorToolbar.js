@@ -10,6 +10,7 @@
 // Ctrl+Z 撤销走浏览器/textarea 原生，不干预。
 import { icon as iconSvg } from "./icons.js";
 import { attachTextContextMenu } from "./textContextMenu.js";
+import { openExpandModal } from './expandableInput.js';
 
 function el(tag, attrs = {}, ...children) {
   const n = document.createElement(tag);
@@ -40,6 +41,10 @@ const ET_FALLBACK = {
   "ui.op.fontInc": "放大字号",
   "ui.toast.copied": "已复制",
   "ui.toast.clipFail": "剪贴板读取失败",
+  "ui.op.undo": "撤销",
+  "ui.op.redo": "重做",
+  "ui.topbar.more": "更多操作",
+  "ui.expand.title": "展开编辑",
 };
 function tt(key) {
   try { if (typeof window !== "undefined" && window.__ebctfT) { const s = window.__ebctfT(key); if (s && s !== key) return s; } } catch { /* 回退 */ }
@@ -126,6 +131,58 @@ export function attachEditorToolbar(area, opts = {}) {
     }
   });
 
+  return bar;
+}
+
+/** Compact OP-style tools, reusing the editor actions and keyboard bindings. */
+export function attachInlineEditorToolbar(area, opts = {}) {
+  const legacy = attachEditorToolbar(area, opts);
+  const buttons = [...legacy.children];
+  for (const button of buttons) button.className = 'tool-btn';
+  const ro = opts.readonly === true;
+  const [paste, clear, copy, select, download, dec, inc] = ro ? [null, null, ...buttons] : buttons;
+  const bar = el('div', { class: 'io-pane-tools' });
+  const more = el('details', { class: 'io-tools-more' },
+    el('summary', { class: 'tool-btn', title: tt('ui.topbar.more'), 'aria-label': tt('ui.topbar.more') }, msym('expand_more')));
+  const extra = el('div', { class: 'io-tools-extra' });
+  const button = (name, key, action) => {
+    const node = tbtn(name, tt(key), action); node.className = 'tool-btn'; return node;
+  };
+  if (ro) {
+    bar.append(copy, download);
+    extra.append(select, dec, inc);
+  } else {
+    for (const [name, key] of [['undo', 'ui.op.undo'], ['redo', 'ui.op.redo']]) {
+      const action = () => area.__editHistory?.[name]();
+      bar.append(button(name, key, action));
+      const compact = button(name, key, action); compact.classList.add('io-touch-tool'); extra.append(compact);
+    }
+    bar.append(paste);
+    if (opts.onPickFile) {
+      const pick = () => opts.onPickFile();
+      const label = opts.pickFileLabel || tt('ui.op.pickFile');
+      const upload = tbtn('cloud_upload', label, pick); upload.className = 'tool-btn'; bar.append(upload);
+      const compact = tbtn('cloud_upload', label, pick); compact.className = 'tool-btn io-compact-file'; extra.append(compact);
+    }
+    bar.append(clear);
+    extra.append(copy, select, download, dec, inc);
+  }
+  extra.append(button('open_in_full', 'ui.expand.title', () => {
+    more.open = false; more.querySelector('summary').focus({ preventScroll: true });
+    openExpandModal(area.value, ro ? null : value => {
+      area.value = value; opts.onChange?.();
+    }, { modalTitle: opts.title, readonly: ro });
+  }));
+  more.append(extra); bar.append(more);
+  more.addEventListener('click', event => {
+    if (!event.target.closest('button')) return;
+    more.open = false; more.querySelector('summary').focus({ preventScroll: true });
+  });
+  more.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault(); more.open = false; more.querySelector('summary').focus({ preventScroll: true });
+  });
+  for (const name of ['focusin', 'pointerdown']) area.addEventListener(name, () => { more.open = false; });
   return bar;
 }
 

@@ -1,9 +1,28 @@
 import { getOpLayout } from './layoutPreferences.js';
 
-// Keep the chosen ratio during the session; a fresh session starts equally split.
-let preferredRatio = .5;
+const RATIO_KEY = 'ebctf.workbenchRatios';
+const sessionRatios = new Map();
+export function loadWorkbenchRatio(key) {
+  if (!key) return .5;
+  try {
+    const value = JSON.parse(localStorage.getItem(RATIO_KEY) || '{}')[key];
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0 && value < 1) return value;
+  } catch { /* Session memory still works when storage is unavailable. */ }
+  return sessionRatios.get(key) ?? .5;
+}
+function saveRatio(key, ratio) {
+  if (!key) return;
+  sessionRatios.set(key, ratio);
+  try {
+    let saved = JSON.parse(localStorage.getItem(RATIO_KEY) || '{}');
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) saved = {};
+    localStorage.setItem(RATIO_KEY, JSON.stringify({ ...saved, [key]: ratio }));
+  } catch { /* Keep this tool's session preference. */ }
+}
 
 export function attachOpWorkbench(workbench) {
+  const key = workbench.dataset.workbenchKey;
+  let preferredRatio = loadWorkbenchRatio(key);
   const splitter = workbench.querySelector('.op-splitter');
   const config = workbench.querySelector('.op-config');
   const landscape = matchMedia('(orientation: landscape)');
@@ -32,8 +51,8 @@ export function attachOpWorkbench(workbench) {
     splitter.setAttribute('aria-valuemax', String(Math.floor(maximum)));
     splitter.setAttribute('aria-valuenow', String(Math.round(actual)));
   }
-  const resize = value => { preferredRatio = Math.max(minimum, Math.min(maximum, value)) / (available || 1); layout(); };
-  const reset = () => { preferredRatio = .5; layout(); };
+  const resize = value => { preferredRatio = Math.max(minimum, Math.min(maximum, value)) / (available || 1); saveRatio(key, preferredRatio); layout(); };
+  const reset = () => { preferredRatio = .5; saveRatio(key, preferredRatio); layout(); };
   splitter.addEventListener('pointerdown', event => {
     if (event.button !== 0 || workbench.dataset.layout !== 'split') return;
     layout();
@@ -71,13 +90,18 @@ export function attachOpWorkbench(workbench) {
   window.addEventListener('ebctf:op-layout', layout);
   layout();
   // IO keeps focus without scrolling the workspace past its operation title.
-  config.addEventListener('focusin', event => {
-    if (workbench.dataset.layout === 'split') event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  });
+  const focusConfig = event => {
+    if (workbench.dataset.layout !== 'split') return;
+    const target = event.target.getBoundingClientRect(), box = config.getBoundingClientRect();
+    if (target.top < box.top + 8) config.scrollTop += target.top - box.top - 8;
+    else if (target.bottom > box.bottom - 8) config.scrollTop += target.bottom - box.bottom + 8;
+  };
+  config.addEventListener('focusin', focusConfig);
   return () => {
     stop(); observer.disconnect();
     landscape.removeEventListener('change', layout);
     window.removeEventListener('resize', layout);
     window.removeEventListener('ebctf:op-layout', layout);
+    config.removeEventListener('focusin', focusConfig);
   };
 }

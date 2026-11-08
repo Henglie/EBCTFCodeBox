@@ -1,4 +1,4 @@
-// BUILD-STAMP: bd6cf0f12a0c70bd
+// BUILD-STAMP: 9cf25f3860079e51
 importScripts("./sw-assets.js", "./sw-packs.js");
 
 // The asset generator synchronizes BUILD-STAMP with the resource revision.
@@ -11,7 +11,7 @@ const BATCH_SIZE = 32;
 const ASSET_SET = new Set(ASSETS);
 
 // ---------------------------------------------------------------------------
-// 离线增强包（T709）：包条目已全部被 EXCLUDE_RULES 剔除，默认首屏预缓存不受影响。
+// 离线增强包：包条目已全部被 EXCLUDE_RULES 剔除，默认首屏预缓存不受影响。
 // 包只在用户点「安装」时下载，install / activate 都不预取（44.39 MiB 不能回到首屏）。
 // 缓存独立前缀 + rev：条目一变 rev 变，旧包缓存由 activate 清理，不参与 shell 增量协商。
 // ---------------------------------------------------------------------------

@@ -10,6 +10,8 @@
  */
 import { icon as iconSvg } from "./icons.js";
 import { downloadBytes } from "./download.js";
+import { createSpecialWorkbench } from "./specialWorkbench.js";
+import { connectSpecialDraft, newDraftIdentity } from "./workspaceDrafts.js";
 import {
   STEGSOLVE_TRANSFORMS,
   applyStegSolveTransform,
@@ -192,6 +194,7 @@ export function disposeStegSolvePage() {
 export function renderStegSolvePage(host, op) {
   disposeStegSolvePage();
   const seq = ++_pageSeq;
+  let primarySeq = 0, secondarySeq = 0, reportSeq = 0, draft = null;
   ensureStegSolvePageStyles();
 
   const state = {
@@ -217,6 +220,7 @@ export function renderStegSolvePage(host, op) {
     fileReport: "",
     fileReportDone: false,
     disposed: false,
+    file: null, secondFile: null, binaryKey: newDraftIdentity(),
   };
 
   const page = el("div", { class: "sspage" });
@@ -438,14 +442,21 @@ export function renderStegSolvePage(host, op) {
     if (combineResult) downloadPNG(combineResult, safeName(state.name) + `_combine${combineMode.value}.png`);
   });
   async function loadCombineFile(file) {
+    const sequence = ++secondarySeq;
+    state.secondFile = file; state.combineImage = null; combineResult = null; combineSave.disabled = true;
+    state.binaryKey = newDraftIdentity(); draft?.changed();
     try {
       status(`正在读取 ${file.name || "第二张图"}…`);
       const bytes = new Uint8Array(await file.arrayBuffer());
       const decoded = await decodeFramesWithFallback(bytes);
+      if (state.disposed || sequence !== secondarySeq || !page.isConnected) return;
       if (!decoded.frames.length) throw new Error("第二张图没有可解码帧");
       state.combineImage = decoded.frames[0];
+      state.secondFile = file; state.binaryKey = newDraftIdentity();
       renderCombine();
+      draft?.changed();
     } catch (e) {
+      if (state.disposed || sequence !== secondarySeq) return;
       state.combineImage = null;
       combineResult = null;
       combineSave.disabled = true;
@@ -500,11 +511,13 @@ export function renderStegSolvePage(host, op) {
   );
   async function runFileReport() {
     if (!state.bytes) { status("请先打开图像", "warn"); return; }
+    const sequence = ++reportSeq, bytes = state.bytes, name = state.name;
     formatBtn.disabled = true;
     formatOut.textContent = "正在分析文件结构…";
     try {
       const fa = await import("../core/fileAnalysis.js");
-      const r = await fa.analyzeFile(state.bytes, state.name || "image");
+      const r = await fa.analyzeFile(bytes, name || "image");
+      if (state.disposed || sequence !== reportSeq || bytes !== state.bytes) return;
       const lines = [];
       lines.push(`File: ${state.name}`);
       lines.push(`Size: ${state.bytes.length} bytes · Detected: ${r.detected || r.ext || "unknown"}`);
@@ -517,11 +530,13 @@ export function renderStegSolvePage(host, op) {
       state.fileReport = formatOut.textContent;
       state.fileReportDone = true;
       status("文件格式报告已生成", "ok");
+      draft?.changed();
     } catch (e) {
+      if (state.disposed || sequence !== reportSeq) return;
       formatOut.textContent = "报告生成失败：" + (e && e.message ? e.message : e);
       status("报告生成失败", "error");
     } finally {
-      formatBtn.disabled = false;
+      if (sequence === reportSeq) formatBtn.disabled = false;
     }
   }
   formatBtn.addEventListener("click", runFileReport);
@@ -542,24 +557,26 @@ export function renderStegSolvePage(host, op) {
   const tabBar = el("div", { class: "sspage-tabs", role: "tablist", "aria-label": "StegSolve 功能" });
   const panels = { transform: transformPanel, extract: extractPanel, frame: framePanel, combine: combinePanel, stereo: stereoPanel, format: formatPanel };
   const tabButtons = new Map();
+  const controlPanels = new Map();
   for (const def of tabDefs) {
     const b = el("button", { type: "button", class: "sspage-tab", role: "tab", "aria-selected": def.id === state.tab ? "true" : "false" }, msym(def.icon), el("span", {}, def.label));
     b.addEventListener("click", () => switchTab(def.id));
     tabButtons.set(def.id, b);
     tabBar.append(b);
   }
-  function switchTab(id) {
+  function switchTab(id, restoring = false) {
     state.tab = id;
     for (const [tid, b] of tabButtons) {
       b.classList.toggle("active", tid === id);
       b.setAttribute("aria-selected", String(tid === id));
     }
     for (const [pid, panel] of Object.entries(panels)) panel.hidden = pid !== id;
+    for (const [pid, panel] of controlPanels) panel.hidden = pid !== id;
     if (!state.sourceImage) return;
     if (id === "frame") renderFrame();
     if (id === "combine") renderCombine();
     if (id === "stereo") renderStereo();
-    if (id === "format" && !state.fileReportDone) runFileReport();
+    if (id === "format" && !state.fileReportDone && !restoring) runFileReport();
     if (id === "extract") syncExtractCount();
   }
 
@@ -569,8 +586,10 @@ export function renderStegSolvePage(host, op) {
   }
 
   // ---- Load image ----
-  function applyLoaded(decoded, name, bytes) {
+  function applyLoaded(decoded, name, bytes, file = new Blob([bytes])) {
+    reportSeq++;
     state.bytes = bytes;
+    state.file = file; state.binaryKey = newDraftIdentity();
     state.name = name;
     state.format = decoded.format;
     state.frames = decoded.frames;
@@ -598,24 +617,42 @@ export function renderStegSolvePage(host, op) {
 
   async function loadFile(file) {
     if (!file) return;
+    const sequence = ++primarySeq;
+    reportSeq++; state.file = file; state.name = file.name || 'image'; state.bytes = state.sourceImage = null;
+    state.frames = []; state.fileReport = ''; state.fileReportDone = false; _lastTransform = null;
+    extractOut.textContent = formatOut.textContent = ''; combineSave.disabled = true;
+    for (const canvas of page.querySelectorAll('canvas')) { canvas.width = canvas.height = 1; }
+    state.binaryKey = newDraftIdentity(); saveBtn.disabled = true; draft?.changed();
     try {
       status(`正在读取 ${file.name || "图像"}…`);
       const bytes = new Uint8Array(await file.arrayBuffer());
       const decoded = await decodeFramesWithFallback(bytes);
+      if (state.disposed || sequence !== primarySeq || !page.isConnected) return;
       if (!decoded.frames || !decoded.frames.length) throw new Error("没有可解码帧");
-      applyLoaded(decoded, file.name || "image", bytes);
+      applyLoaded(decoded, file.name || "image", bytes, file);
+      draft?.changed();
     } catch (e) {
+      if (state.disposed || sequence !== primarySeq) return;
       status("打开失败：" + (e && e.message ? e.message : e), "error");
     }
   }
 
   async function loadBytes(bytes, name) {
+    const sequence = ++primarySeq;
+    reportSeq++; state.file = new Blob([bytes]); state.name = name || 'image'; state.bytes = state.sourceImage = null;
+    state.frames = []; state.fileReport = ''; state.fileReportDone = false; _lastTransform = null;
+    extractOut.textContent = formatOut.textContent = ''; combineSave.disabled = true;
+    for (const canvas of page.querySelectorAll('canvas')) { canvas.width = canvas.height = 1; }
+    state.binaryKey = newDraftIdentity(); saveBtn.disabled = true; draft?.changed();
     try {
       status(`正在解析 ${name || "图像"}…`);
       const decoded = await decodeFramesWithFallback(bytes);
+      if (state.disposed || sequence !== primarySeq || !page.isConnected) return;
       if (!decoded.frames || !decoded.frames.length) throw new Error("没有可解码帧");
       applyLoaded(decoded, name || "image", bytes);
+      draft?.changed();
     } catch (e) {
+      if (state.disposed || sequence !== primarySeq) return;
       status("打开失败：" + (e && e.message ? e.message : e), "error");
     }
   }
@@ -677,8 +714,71 @@ export function renderStegSolvePage(host, op) {
     if (f) loadFile(f);
   });
 
-  page.append(toolbar, fileInput, drop, tabBar, ...tabDefs.map((d) => panels[d.id]), statusEl);
+  const workbench = createSpecialWorkbench('op:stegSolve', 'sspage-workbench');
+  workbench.config.append(toolbar, fileInput, drop, tabBar);
+  for (const def of tabDefs) {
+    const panel = panels[def.id], controls = el('div', { class: 'sspage-controls', 'data-controls': def.id });
+    for (const child of [...panel.children]) if (!child.matches('.sspage-viewport, .sspage-extract-out')) controls.append(child);
+    controls.hidden = def.id !== state.tab;
+    controlPanels.set(def.id, controls); workbench.config.append(controls); workbench.data.append(panel);
+  }
+  const expand = btn(window.__ebctfT?.('ui.ci.zoom') || 'Expand', 'open_in_full', { onclick: async () => {
+    const canvas = panels[state.tab]?.querySelector('canvas');
+    if (!canvas || !state.sourceImage) return;
+    const source = canvas.toDataURL('image/png');
+    const { openImageOpsViewer } = await import('./imageOpsViewer.js');
+    if (!state.disposed && page.isConnected) openImageOpsViewer(source, { title: state.name });
+  } });
+  workbench.data.append(expand, statusEl);
+  page.append(workbench.element);
   host.append(page);
+  workbench.mount(page);
+  switchTab(state.tab, true);
+
+  draft = connectSpecialDraft('stegsolve', page, {
+    capture: () => ({ binaryKey: state.binaryKey, file: state.file, secondFile: state.secondFile, name: state.name,
+      transformIndex: state.transformIndex, zoom: state.zoom, tab: state.tab, frameIndex: state.frameIndex,
+      combineMode: Number(combineMode.value), stereoOffset: state.stereoOffset,
+      bits: Object.fromEntries(Object.entries(state.extract.bits).map(([key, bits]) => [key, [...bits]])),
+      order: extractOrder.value, scan: extractScan.value, planeOrder: extractPlane.value, includeHex: extractHex.checked,
+      extractText: extractOut.textContent, fileReport: state.fileReport,
+      scroll: { x: transformViewport.scrollLeft, y: transformViewport.scrollTop } }),
+    restore: async (saved, current) => {
+      if (!saved || pending || !current()) return;
+      if (!(saved.file instanceof Blob)) { if (saved.name) status(window.__ebctfT?.('ui.workbench.draftFileMissing') || 'Draft file missing', 'error'); return; }
+      const sequence = primarySeq;
+      try {
+        const bytes = new Uint8Array(await saved.file.arrayBuffer()), decoded = await decodeFramesWithFallback(bytes);
+        const second = saved.secondFile ? await decodeFramesWithFallback(new Uint8Array(await saved.secondFile.arrayBuffer())) : null;
+        if (!current() || sequence !== primarySeq || state.disposed) return;
+        applyLoaded(decoded, saved.name || 'image', bytes, saved.file);
+        state.binaryKey = saved.binaryKey; state.secondFile = saved.secondFile; state.combineImage = second?.frames?.[0] || null;
+        state.transformIndex = Math.max(0, Math.min(STEGSOLVE_TRANSFORMS.length - 1, Number(saved.transformIndex) || 0));
+        state.zoom = Math.max(10, Math.min(1000, Number(saved.zoom) || 100)); zoomRange.value = String(state.zoom);
+        state.frameIndex = Number(saved.frameIndex) || 0; state.stereoOffset = Number(saved.stereoOffset) || 0;
+        combineMode.value = String(saved.combineMode || 0);
+        for (const key of ['a', 'r', 'g', 'b']) state.extract.bits[key] = new Set((saved.bits?.[key] || []).filter(n => Number.isInteger(n) && n >= 0 && n <= 7));
+        extractOrder.value = saved.order || 'msb'; extractScan.value = saved.scan || 'row'; extractPlane.value = saved.planeOrder || 'RGB';
+        extractHex.checked = saved.includeHex !== false; syncExtractChecks(); syncExtractCount();
+        extractOut.textContent = saved.extractText || ''; state.fileReport = saved.fileReport || ''; state.fileReportDone = !!state.fileReport;
+        formatOut.textContent = state.fileReport || '点「生成报告」分析文件结构。';
+        renderTransform(); renderCombine(); renderFrame(); renderStereo();
+        switchTab(panels[saved.tab] ? saved.tab : 'transform', true);
+        status(window.__ebctfT?.('ui.workbench.draftRestored') || 'Draft restored', 'ok');
+        requestAnimationFrame(() => { if (current()) { transformViewport.scrollLeft = saved.scroll?.x || 0; transformViewport.scrollTop = saved.scroll?.y || 0; } });
+      } catch (error) { if (current()) status(error.message, 'error'); }
+    },
+    clear() {
+      primarySeq++; secondarySeq++; reportSeq++;
+      state.bytes = state.file = state.secondFile = state.sourceImage = state.combineImage = null; state.frames = [];
+      state.binaryKey = newDraftIdentity(); state.name = ''; state.fileReport = ''; state.fileReportDone = false;
+      _lastTransform = combineResult = stereoResult = null; nameEl.textContent = ''; metaEl.textContent = '';
+      drop.hidden = false; saveBtn.disabled = true; combineSave.disabled = true; formatBtn.disabled = false;
+      fileInput.value = combineFile.value = ''; extractOut.textContent = formatOut.textContent = '';
+      for (const canvas of page.querySelectorAll('canvas')) { canvas.width = canvas.height = 1; }
+      status('', 'info');
+    },
+  });
 
   const pending = takePendingStegSolve();
   if (pending) {
@@ -694,6 +794,7 @@ export function renderStegSolvePage(host, op) {
 
   const api = {
     dispose() {
+      draft.dispose(); workbench.dispose(); primarySeq++; secondarySeq++; reportSeq++;
       state.disposed = true;
       window.removeEventListener("keydown", onKey);
       try { page.remove(); } catch { /* ignore */ }
@@ -703,4 +804,3 @@ export function renderStegSolvePage(host, op) {
   _active = api;
   return api;
 }
-

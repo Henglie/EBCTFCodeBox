@@ -92,7 +92,7 @@ try {
   check(/x = 23/.test(await value('#ioOut')), 'Multi-field output survives refresh');
   await go('op/pcapParse');
   const bytes = Buffer.from('d4c3b2a1020004000000000000000000ffff000001000000', 'hex');
-  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.locator('.io-pane-input button[aria-label="选择文件"]').click()]);
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.locator('.io-pane-input').getByRole('button', { name: '选择文件', exact: true }).click()]);
   await chooser.setFiles({ name: 'draft.pcap', mimeType: 'application/vnd.tcpdump.pcap', buffer: bytes });
   await page.waitForFunction(() => document.getElementById('ioIn')?._rawBytes?.length === 24);
   // Wait for the IndexedDB transaction to commit, not for a fixed async predicate.

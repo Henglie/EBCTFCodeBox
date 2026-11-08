@@ -49,7 +49,7 @@ function sm3GG(x, y, z, j) {
 function sm3P0(x) { return (x ^ rotl32(x, 9) ^ rotl32(x, 17)) >>> 0; }
 function sm3P1(x) { return (x ^ rotl32(x, 15) ^ rotl32(x, 23)) >>> 0; }
 
-function sm3Compress(V, W, rounds = 64) {
+export function sm3Compress(V, W, rounds = 64) {
  // V: 8×uint32 (状态), W: 68×uint32 (扩展消息)
   const W1 = new Array(64);
   for (let j = 0; j < 64; j++) {

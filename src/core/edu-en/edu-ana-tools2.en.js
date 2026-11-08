@@ -72,6 +72,7 @@ export default {
       { in: "e10adc3949ba59abbe56e057f20f883e", param: "algo=auto, dict=numeric, maxDigits=6", out: "hit ✓ algorithm: md5 plaintext: 123456 attempts: 123457", desc: "this is the MD5 of 123456; the pure-numeric dictionary hits on the 123457th (including 0)" },
     ],
     tips: [
+      "Select SM3 explicitly: its 64-hex digest has the same length as SHA-256, which auto continues to prefer. The SM3 path stops after 2 million attempts.",
       "In auto mode, 32-bit tries MD5 first — if it's actually NTLM you must specify manually.",
       "More numeric digits = slower: 6 digits = 1 million attempts (seconds), 8 digits = 100 million attempts, needs workerPool parallelism.",
       "The top weak-password dictionary is about 300 entries, covering common weak passwords like password/123456/admin, enough for CTF.",

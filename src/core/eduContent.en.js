@@ -15,6 +15,7 @@
 
 import { registerEduEn } from "./eduContent.js";
 import EDU_EN_OPENSSL from "./edu-en/edu-openssl.en.js";
+import EDU_EN_SM_ATTACKS from "./edu-en/edu-sm-attacks.en.js";
 import EDU_EN_T796 from "./edu-en/edu-t796.en.js";
 import E_EN_CTF_CIPHER_EXT from "./edu-en/edu-ctf-cipher-ext.en.js";
 
@@ -270,5 +271,6 @@ for (const [id, out] of Object.entries(HASH_VECTORS)) {
 Object.assign(EDU_EN, E_EN_TOKEN_SIGNING);
 Object.assign(EDU_EN, EDU_EN_OPENSSL);
 Object.assign(EDU_EN, EDU_EN_T796);
+Object.assign(EDU_EN, EDU_EN_SM_ATTACKS);
 registerEduEn(EDU_EN);
 export default EDU_EN;

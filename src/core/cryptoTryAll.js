@@ -17,7 +17,7 @@ import { candidateSignals } from "./magic/smartCandidates.js";
  * cryptoTryAll({ cipherText, keyText, ivText?, crib? }, opts?) -> Promise<candidate[]>
  * candidate = { algo, mode?, pad?, keyEnc, cipherEnc, ivEnc?, plaintext, confidence, matchesCrib }
  *
- * 依赖： modern.js 高层 API（就位）； scorer（就位）。TEA/SM4 待。
+ * 依赖：modern.js / modernExt.js 高层 API 与本地 scorer。
  */
 import { register } from "./registry.js";
 import { aesDecrypt, desDecrypt, des3Decrypt, rc4, xorCrypt, fernetDecrypt } from "./modern.js";
@@ -148,9 +148,10 @@ export async function cryptoTryAll(input, opts = {}) {
   const timeBudgetMs = opts.timeBudgetMs || 3000;
   const minConfidence = opts.minConfidence != null ? opts.minConfidence : 0.5;
  // algos 大小写不敏感：归一到规范名（UI/用户传 "xor"/"aes" 也能命中）。
-  const _canon = { AES: "AES", DES: "DES", "3DES": "3DES", RC4: "RC4", XOR: "XOR", FERNET: "Fernet", RABBIT: "Rabbit" };
-  const algos = (opts.algos || ["AES", "DES", "3DES", "RC4", "XOR", "Fernet", "Rabbit"])
+  const _canon = { AES: "AES", SM4: "SM4", DES: "DES", "3DES": "3DES", RC4: "RC4", XOR: "XOR", FERNET: "Fernet", RABBIT: "Rabbit" };
+  const algos = (opts.algos || ["AES", "SM4", "DES", "3DES", "RC4", "XOR", "Fernet", "Rabbit"])
     .map((a) => _canon[String(a).toUpperCase()] || a);
+  const sm4Decrypt = algos.includes("SM4") ? (await import("./modernExt.js")).sm4Decrypt : null;
   const modes = opts.modes || BLOCK_MODES;
   const encodings = opts.encodings || ENCODINGS;
  // keyEnc 额外含口令 MD5 派生（md5=16B裸摘要 / md5hex=32字符hex当ASCII）——口令爆破主力模式。
@@ -238,6 +239,7 @@ export async function cryptoTryAll(input, opts = {}) {
  // 块密码：AES / DES / 3DES（按密钥长度筛选）
       const blockAlgos = [];
       if (algos.includes("AES") && [16, 24, 32].includes(keyBytes.length)) blockAlgos.push(["AES", 16, aesDecrypt]);
+      if (algos.includes("SM4") && keyBytes.length === 16) blockAlgos.push(["SM4", 16, sm4Decrypt]);
       if (algos.includes("DES") && keyBytes.length === 8) blockAlgos.push(["DES", 8, desDecrypt]);
       if (algos.includes("3DES") && [16, 24].includes(keyBytes.length)) blockAlgos.push(["3DES", 8, des3Decrypt]);
 

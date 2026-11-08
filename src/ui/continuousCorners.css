@@ -1,15 +1,10 @@
 /* Load after controls.css/refinement.css. JS owns only these private paint
-   variables and attributes. No host clip/mask, containing block, pseudo-element
-   or DOM child is introduced. Author outline/focus and border widths survive.
-   Unsupported paint and semantic circles never receive data-cc-rendered.
+   variables and attributes. Container overflow/containing blocks and children
+   are untouched. Replaced media alone gets a matching clip. Outline/focus paint
+   uses the same SVG curve; author border and outline widths survive.
+   Unsupported paint, semantic circles and full-round M3 capsules never receive
+   data-cc-rendered. Their authored circular arcs remain the only shape.
    Source paint states are sampled atomically; spatial CSS motion stays native. */
-@supports (corner-shape: superellipse(1.5)) {
-  /* The global element selector does not select native range pseudo-elements. */
-  input.m3-slider::-webkit-slider-runnable-track { corner-shape: var(--corner-panel, superellipse(1.5)); }
-  input.m3-slider::-webkit-slider-thumb { corner-shape: var(--corner-panel, superellipse(1.5)); }
-  input.m3-slider::-moz-range-track { corner-shape: var(--corner-panel, superellipse(1.5)); }
-  input.m3-slider::-moz-range-thumb { corner-shape: var(--corner-panel, superellipse(1.5)); }
-}
 @media screen and (forced-colors: none) {
   [data-cc-rendered], [data-cc-measure] {
     transition-property: var(--cc-transition, none) !important;
@@ -19,11 +14,16 @@
     background-image: none !important;
     border-color: transparent !important;
     box-shadow: none !important;
+    outline-color: transparent !important;
     border-image-source: var(--cc-image) !important;
     border-image-slice: 0 fill !important;
     border-image-width: 0 !important;
     border-image-outset: var(--cc-outset, 0px) !important;
     border-image-repeat: stretch !important;
+  }
+  [data-cc-media]:not([data-cc-measure]), [data-cc-content]:not([data-cc-measure]) {
+    clip-path: var(--cc-clip);
+    border-radius: 0 !important;
   }
   select[data-cc-select][data-cc-rendered]:not([data-cc-measure]) {
     appearance: none !important;
@@ -32,25 +32,5 @@
        authored start/block padding, text area and hit target remain intact. */
     padding-inline-end: var(--cc-select-end) !important;
     min-height: var(--cc-select-height) !important;
-  }
-  /* Do not combine vendor pseudo selectors: each engine rejects unknown ones.
-     The controls stylesheet remains the source of size/interaction geometry. */
-  input.m3-slider[data-cc-range]::-moz-range-track {
-    background: transparent !important;
-    border-image: var(--cc-track) 0 fill / 0 / 0 stretch !important;
-  }
-  input.m3-slider[data-cc-range]::-webkit-slider-runnable-track {
-    background: transparent !important;
-    border-image: var(--cc-track) 0 fill / 0 / 0 stretch !important;
-  }
-  input.m3-slider[data-cc-range]::-moz-range-thumb {
-    background: transparent !important;
-    box-shadow: none !important;
-    border-image: var(--cc-thumb) 0 fill / 0 / 6px stretch !important;
-  }
-  input.m3-slider[data-cc-range]::-webkit-slider-thumb {
-    background: transparent !important;
-    box-shadow: none !important;
-    border-image: var(--cc-thumb) 0 fill / 0 / 6px stretch !important;
   }
 }

@@ -34,8 +34,21 @@ export function ioArea(attrs = {}) {
   const div = el("div", a);
   div.setAttribute("contenteditable", ro ? "false" : "true");
   div.setAttribute("spellcheck", "false");
+  div.setAttribute("role", "textbox");
+  div.setAttribute("aria-multiline", "true");
+  div.setAttribute("aria-readonly", String(ro));
+  if (ro && !div.hasAttribute("tabindex")) div.tabIndex = 0;
   if (ph) div.setAttribute("data-placeholder", ph);
+  if (ph && !div.hasAttribute("aria-label") && !div.hasAttribute("aria-labelledby")) div.setAttribute("aria-label", ph);
   if (ro) div.classList.add("io-readonly");
+  if (ro) {
+    // WebKit may keep the insertion selection in the previous editable even
+    // after a readonly textbox receives focus. Read-only typing must not edit it.
+    div.addEventListener('beforeinput', event => { if (event.cancelable) event.preventDefault(); });
+    div.addEventListener('keydown', event => {
+      if (!event.ctrlKey && !event.metaKey && !event.altKey && (event.key.length === 1 || ['Enter', 'Backspace', 'Delete'].includes(event.key))) event.preventDefault();
+    });
+  }
   // A terminal LF needs a final line box in contenteditable. BR contributes no
   // textContent; unlike a zero-width character, it cannot leak into input data.
   const syncCaretLine = () => {

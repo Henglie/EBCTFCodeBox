@@ -23,7 +23,7 @@
  */
 
 import {
-  CHARSETS, VIEWS, BIT_ORDERS, detectBom, decodeText, encodeText,
+  CHARSETS, VIEWS, detectBom, decodeText, encodeText,
   bytesToView, viewToBytes, normalizeCharset, normalizeBitOrder,
 } from "../core/ioCoding.js";
 
@@ -91,6 +91,7 @@ const VIEW_PLACEHOLDER = {
 };
 
 const DEFAULT_STATE = { charset: "auto", view: "text", keepBom: false, bitOrder: "msb" };
+const TOOLBAR_VIEWS = ["text", "hex", "base64", "escaped"];
 let globalState = { ...DEFAULT_STATE };
 let globalOutputState = { ...DEFAULT_STATE };
 
@@ -101,7 +102,7 @@ export function getIoCodingDefaults() {
 export function setIoCodingDefaults(patch) {
   const p = patch || {};
   if (p.charset != null) globalState.charset = normalizeCharsetChoice(p.charset);
-  if (p.view != null) globalState.view = normalizeViewChoice(p.view);
+  if (p.view != null) { const view = normalizeViewChoice(p.view); globalState.view = TOOLBAR_VIEWS.includes(view) ? view : "hex"; }
   if (p.keepBom != null) globalState.keepBom = !!p.keepBom;
   if (p.bitOrder != null) globalState.bitOrder = normalizeBitOrder(p.bitOrder);
   return { ...globalState };
@@ -226,15 +227,16 @@ function ensureStyles() {
   style.id = STYLE_ID;
   style.textContent = `
 .io-coding-bar {
-  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-1) var(--sp-2);
-  padding: var(--sp-1) 2px var(--sp-2); min-width: 0;
+  display: grid; grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center; gap: var(--sp-2); padding: 0; min-width: 0;
   font-size: var(--fs-sm); color: var(--on-surface-var);
 }
-.io-coding-field { display: inline-flex; align-items: center; gap: var(--sp-1); min-width: 0; max-width: 100%; }
+.io-coding-field { display: contents; }
 .io-coding-field[hidden] { display: none; }
-.io-coding-label { white-space: nowrap; font-size: var(--fs-xs); color: var(--on-surface-var); }
+.io-coding-label { grid-column: 1; white-space: nowrap; font-size: var(--fs-xs); line-height: 1.5; color: var(--on-surface-var); }
+.io-coding-field > :not(.io-coding-label) { grid-column: 2; min-width: 0; max-width: 100%; }
 .io-coding-select {
-  height: 30px; max-width: 190px; padding: 0 var(--sp-2);
+  height: 36px; width: min(190px, 100%); padding: 0 var(--sp-3);
   background: var(--field-bg); color: var(--on-surface);
   border: 1px solid var(--outline); border-radius: var(--r-sm);
   font: inherit; font-size: var(--fs-sm); min-width: 0;
@@ -242,7 +244,7 @@ function ensureStyles() {
 .io-coding-select:focus { outline: 2px solid var(--primary); border-color: transparent; }
 .io-coding-seg {
   display: inline-flex; background: var(--surface-2);
-  border-radius: var(--r-full); padding: 2px; min-width: 0; max-width: 100%; overflow-x: auto;
+  border-radius: var(--r-full); padding: 4px; min-width: 0; max-width: 100%; overflow-x: auto;
 }
 .io-coding-seg button {
   flex-shrink: 0;
@@ -252,22 +254,22 @@ function ensureStyles() {
 .io-coding-seg button.on { background: var(--primary); color: var(--on-primary); font-weight: 600; }
 .io-coding-seg.m3-segmented { flex-shrink: 1; }
 .io-coding-bom {
-  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+  grid-column: 2; display: inline-flex; align-items: center; justify-self: start;
+  gap: var(--sp-2); min-height: 24px; white-space: nowrap;
   font-size: var(--fs-xs); cursor: pointer; user-select: none;
 }
 .io-coding-bom input { margin: 0; accent-color: var(--primary); }
 .io-coding-bom.disabled { opacity: .5; cursor: not-allowed; }
 .io-coding-status {
-  flex: 1 1 220px; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; font-size: var(--fs-xs); color: var(--on-surface-var);
+  grid-column: 2; min-width: 0; overflow-wrap: anywhere;
+  white-space: normal; font-size: var(--fs-xs); line-height: 1.5; color: var(--on-surface-var);
 }
 .io-coding-status.warn { color: var(--warning, #8a6d00); }
 .io-coding-status.error { color: var(--error, #b3261e); }
 .io-coding-status:empty { display: none; }
-@media (max-width: 600px) {
-  .io-coding-bar { align-items: stretch; }
-  .io-coding-select { max-width: none; }
-  .io-coding-status { flex-basis: 100%; }
+@media (pointer: coarse) {
+  .io-coding-select { height: 44px; }
+  .io-coding-bom { min-height: 44px; }
 }
 `;
   document.head.append(style);
@@ -307,7 +309,7 @@ export function attachIoCodingToolbar(area, opts = {}) {
 
   const viewSeg = el("div", { class: "io-coding-seg", role: "group", "aria-label": t("ui.io.view") });
   const viewBtns = new Map();
-  for (const v of VIEWS) {
+  for (const v of TOOLBAR_VIEWS) {
     const b = el("button", {
       type: "button",
       class: "io-coding-view" + (v === state.view ? " on" : ""),
@@ -319,16 +321,6 @@ export function attachIoCodingToolbar(area, opts = {}) {
     viewBtns.set(v, b);
     viewSeg.append(b);
   }
-
-  const bitOrderSel = el("select", { class: "io-coding-select", "aria-label": t("ui.io.bitOrder"), title: t("ui.io.bitOrderHint") });
-  for (const o of BIT_ORDERS) {
-    bitOrderSel.append(el("option", { value: o, title: t("ui.io.bitOrder." + o) }, t("ui.io.bitOrder." + o)));
-  }
-  const bitOrderField = el("span", { class: "io-coding-field io-coding-bitorder" },
-    el("span", { class: "io-coding-label" }, t("ui.io.bitOrder")),
-    bitOrderSel,
-  );
-  bitOrderSel.addEventListener("change", () => controller.setBitOrder(bitOrderSel.value));
 
   const bomInput = el("input", { type: "checkbox", "aria-label": t("ui.io.keepBom") });
   const bomLabel = el("label", { class: "io-coding-bom", title: t("ui.io.keepBomHint") },
@@ -346,7 +338,6 @@ export function attachIoCodingToolbar(area, opts = {}) {
       el("span", { class: "io-coding-label" }, t("ui.io.view")),
       viewSeg,
     ),
-    bitOrderField,
     bomLabel,
     status,
   );
@@ -402,8 +393,6 @@ export function attachIoCodingToolbar(area, opts = {}) {
       b.classList.toggle("on", on);
       b.setAttribute("aria-pressed", String(on));
     }
-    bitOrderSel.value = state.bitOrder;
-    bitOrderField.hidden = state.view !== "bits";
     const supports = bomSupported(state.charset);
     bomInput.checked = state.keepBom && supports;
     bomInput.disabled = !supports;
@@ -761,7 +750,23 @@ export function attachIoCodingToolbar(area, opts = {}) {
     outArea: opts.outArea || null,
     ready: false,
     setCharset(label, o) { commit({ charset: label }, !(o && o.emit === false)); },
-    setView(view, o) { commit({ view }, !(o && o.emit === false)); },
+    setView(view, o) {
+      // Old drafts used binary/Base32 display modes. Migrate actual bytes to Hex;
+      // no invisible mode and no accidental reinterpretation of the old text.
+      if (view === "bits" || view === "base32") {
+        try {
+          const bytes = area._rawBytes || parseViewBytes(area.value, view, state.bitOrder);
+          area.value = bytesToView(bytes, "hex");
+          area._isFilePlaceholder = false;
+          commit({ view: "hex" }, false);
+        } catch (error) {
+          commit({ view: "text" }, false);
+          showError(error);
+        }
+        return;
+      }
+      commit({ view }, !(o && o.emit === false));
+    },
     setKeepBom(v, o) { commit({ keepBom: !!v }, !(o && o.emit === false)); },
     setBitOrder(v, o) { commit({ bitOrder: v }, !(o && o.emit === false)); },
     getState() { return { ...state }; },

@@ -39,6 +39,8 @@ export const EXPLICIT_RUN_OPS = [
   "getAllCasings", "playfairCrack", "subCipherSolver",
   // crypto/hash：字典爆破与高迭代派生
   "hashDictCrack", "hmacKeyBrute", "pbeAesBrute", "pbkdf2",
+  // GCM polynomial factorization is cancellable and stays off the UI thread.
+  "gcmForbidden", "sm4GcmForgery",
   // block：2DES 中间相遇（keyBits 20 位实测 23s）
   "des2Mitm",
   // crack：归档/口令/碰撞

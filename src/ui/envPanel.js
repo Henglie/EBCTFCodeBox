@@ -23,6 +23,7 @@ import { getLocale } from "../i18n/index.js";
 import { getMotionSpeed, setMotionSpeed } from "./motionPreferences.js";
 import { getOpLayout, setOpLayout } from "./layoutPreferences.js";
 import { clearWorkspaceDrafts, resetWorkspaceDrafts } from "./workspaceDrafts.js";
+import { enterSurface } from './expressiveMotion.js';
 // 「增强随机安全」全局入口（并入本环境面板）。独立组件，自带轻量 el/i18n。
 import { renderRandSecureSection } from "./randSecurePanel.js";
 // 仅用于全局 pack-miss 提示（离线包缺失时告知用户）；离线包管理 UI 已迁至扩展面板。
@@ -154,6 +155,8 @@ async function detectEnvironment() {
 let _panel = null;
 let _detecting = false;
 let _offDocClick = null;   // 点外关闭监听（性能审计 M3：所有关闭路径统一自摘，防随开合次数累积）
+let _positionAnchor = null;
+const repositionPanel = () => { if (_positionAnchor) positionPanel(_positionAnchor); };
 
 // ---- 离线包缺失全局提示 ----
 // 离线包管理 UI 已迁至扩展面板（pluginPanel.js）；此监听在模块加载时绑定
@@ -185,9 +188,14 @@ export function openEnvPanel(anchor) {
     anchor.focus();
   });
   document.body.append(_panel);
+  _positionAnchor = anchor;
   positionPanel(anchor);
+  window.addEventListener("resize", repositionPanel);
+  window.visualViewport?.addEventListener("resize", repositionPanel);
+  window.visualViewport?.addEventListener("scroll", repositionPanel);
  // 首次渲染：检测中态
   _panel.append(renderPanelContent({ mode: "detecting" }));
+  enterSurface(_panel, -4);
   // 触发懒检测
   runDetect();
  // 点面板外关闭
@@ -212,6 +220,10 @@ export function openEnvPanel(anchor) {
 
 /** 关闭面板。 */
 export function closeEnvPanel() {
+  window.removeEventListener("resize", repositionPanel);
+  window.visualViewport?.removeEventListener("resize", repositionPanel);
+  window.visualViewport?.removeEventListener("scroll", repositionPanel);
+  _positionAnchor = null;
   if (_offDocClick) { document.removeEventListener("click", _offDocClick); _offDocClick = null; }
   if (_panel) { _panel.remove(); _panel = null; }
   _detecting = false;
@@ -233,8 +245,16 @@ export function renderEnvPanel(container) {
 function positionPanel(anchor) {
   if (!_panel || !anchor) return;
   const r = anchor.getBoundingClientRect();
-  _panel.style.top = (r.bottom + 6) + "px";
-  _panel.style.right = (window.innerWidth - r.right) + "px";
+  const viewport = window.visualViewport;
+  const width = viewport?.width ?? window.innerWidth, height = viewport?.height ?? window.innerHeight;
+  const x = viewport?.offsetLeft ?? 0, y = viewport?.offsetTop ?? 0;
+  const panelWidth = Math.min(380, Math.max(0, width - 16));
+  const top = Math.max(y + 8, Math.min(r.bottom + 6, y + height - Math.min(120, height - 16) - 8));
+  _panel.style.top = `${top}px`;
+  _panel.style.left = `${Math.max(x + 8, Math.min(r.right - panelWidth, x + width - panelWidth - 8))}px`;
+  _panel.style.right = "auto";
+  _panel.style.maxWidth = `${Math.max(0, width - 16)}px`;
+  _panel.style.maxHeight = `${Math.max(0, Math.min(height * (height < 640 ? .94 : .76), y + height - top - 8))}px`;
 }
 
 // 触发懒检测（面板已打开）
