@@ -19,7 +19,7 @@
 import { register } from "./registry.js";
 import { dataURLToBytes, decodePNG, rgbaToDataURL } from "./stegoPixels.js";
 import { inflateRaw } from "./pcapDeep.js";
-import { isLimitError } from "./limitGuard.js";
+import { checkLimit, isLimitError } from "./limitGuard.js";
 
 // ============ lsbImage：通用 LSB 像素隐写 ============
 // 每 channel 最低位藏 1 bit，前 32 bit 存消息字节长度（big-endian）
@@ -465,7 +465,7 @@ function imageDataToDataURL(imageData, type = "image/png") {
 // 用 createImageBitmap 把字节解成位图、画到 canvas 后 getImageData 取真 RGBA（4 字节/像素，
 // 通吃 PNG/JPG/BMP/GIF）。不填白底，尽量保留原像素——LSB/位平面提取依赖像素低位不被改动。
 // 注意：半透明像素经 canvas 往返可能因预乘 alpha 有取整误差；隐写题多为不透明图，无碍。
-async function _decodeImageToImageData(bytes) {
+async function _decodeImageToImageData(bytes, params) {
   if (typeof createImageBitmap !== "function" || typeof document === "undefined") {
     throw new Error("图像解码需要浏览器环境（createImageBitmap/canvas 不可用）");
   }
@@ -477,6 +477,18 @@ async function _decodeImageToImageData(bytes) {
     throw new Error("无法解码图片：格式不支持或文件损坏（支持 PNG/JPG/BMP/GIF）");
   }
   const w = bmp.width, h = bmp.height;
+  // 像素预算：位图已解出尺寸，但在建 canvas/取 RGBA（约 4 字节/像素）之前先确认，
+  // 避免大 JPEG/BMP/WebP/GIF 绕过 16M/64M 阈值直接分配数百 MB。取消/硬上限错误
+  // 不在此处捕获，原样上抛给 opRunClient（软阈值在非浏览器/Worker 下报确认码）。
+  checkLimit({
+    scope: "stegoImage.canvasPixels",
+    actual: w * h,
+    soft: 16 * 1024 * 1024,
+    hard: 64 * 1024 * 1024,
+    params,
+    label: `图片 canvas 解码（${_sniffImageMime(u8).replace(/^image\//, "").toUpperCase()} ${w}×${h}）`,
+    unit: "像素",
+  });
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
@@ -514,7 +526,7 @@ async function _inputImageData(text, p) {
   if (!bytes || !bytes.length) {
     throw new Error("请拖入或粘贴图片文件（支持 PNG/JPG/BMP/GIF）");
   }
-  return _decodeImageToImageData(bytes);
+  return _decodeImageToImageData(bytes, p);
 }
 
 // ============ (text, p) 适配层：把像素类算法接上 UI 的 acceptsBytes 管线 ============
@@ -600,7 +612,7 @@ async function imageDiffOp(text, p = {}) {
   let bytes2;
   try { bytes2 = _b64ToBytes(img2src); } catch (e) { bytes2 = new Uint8Array(0); }
   if (!bytes2.length) throw new Error("第二张图解析失败：请粘贴有效的 base64/dataURL");
-  const image2 = await _decodeImageToImageData(bytes2);
+  const image2 = await _decodeImageToImageData(bytes2, p);
   return imageDataToDataURL(imageDiffTransform(imageData, { ...p, image2 }));
 }
 

@@ -6,6 +6,7 @@ const MAX_IMAGE_PIXELS = 16 * 1024 * 1024;            // 单帧画布像素软�
 const MAX_IMAGE_PIXELS_HARD = 64 * 1024 * 1024;       // 确认后的画布/单帧硬上限
 const MAX_TOTAL_FRAME_PIXELS = 64 * 1024 * 1024;      // 实际累计帧像素软阈值
 const MAX_TOTAL_FRAME_PIXELS_HARD = 256 * 1024 * 1024;// 确认后的累计帧像素硬上限
+const MAX_RETAINED_FRAME_BYTES_HARD = 512 * 1024 * 1024; // 保留帧 RGBA 字节硬上限
 
 function checkCanvasLimit(w, h, pixels, params, kind) {
   if (pixels <= MAX_IMAGE_PIXELS) return params;
@@ -47,6 +48,22 @@ function checkTotalFramePixels(total, params, kind) {
     unit: "像素",
   });
   return withLimit(params, { _allowLimitOverride: true });
+}
+
+function reserveFrameBytes(kind, retained, next, w, h) {
+  const total = retained + next;
+  if (total > MAX_RETAINED_FRAME_BYTES_HARD) {
+    checkLimit({
+      scope: `stegSolve.${kind}.retainedFrameBytes`,
+      actual: total,
+      soft: MAX_RETAINED_FRAME_BYTES_HARD,
+      hard: MAX_RETAINED_FRAME_BYTES_HARD,
+      params: null,
+      label: `${kind.toUpperCase()} 保留帧 RGBA (${w}×${h}×4)`,
+      unit: "字节",
+    });
+  }
+  return total;
 }
 
 export const CHANNELS = [
@@ -266,6 +283,7 @@ export function decodeGifFrames(bytes, opts = {}) {
   const maxFrames = Number.isFinite(wantedFrames) && wantedFrames > 0 ? Math.floor(wantedFrames) : Infinity;
   const canvas = new Uint8ClampedArray(W * H * 4);
   const frames = [];
+  let retainedFrameBytes = 0;
   let gce = { delay: 0, dispose: 0, transparent: -1 };
   let loop = null;
   let prevDispose = 0;
@@ -320,6 +338,7 @@ export function decodeGifFrames(bytes, opts = {}) {
     }
     if (!palette) palette = new Uint8Array(768);
     if (pos >= b.length) break;
+    retainedFrameBytes = reserveFrameBytes("gif", retainedFrameBytes, W * H * 4, W, H);
     const minCodeSize = b[pos++];
     const sub = readSubBlocks(b, pos);
     pos = sub.pos;
@@ -329,6 +348,7 @@ export function decodeGifFrames(bytes, opts = {}) {
 
     if (prevDispose === 2 && prevRect) clearRect(canvas, W, H, prevRect.left, prevRect.top, prevRect.w, prevRect.h);
     else if (prevDispose === 3 && prevSnapshot) canvas.set(prevSnapshot);
+    prevSnapshot = null;
     const snapshot = gce.dispose === 3 ? canvas.slice() : null;
 
     drawGifFrame(canvas, W, H, { left, top, w: fw, h: fh, indices }, palette, gce.transparent);
@@ -347,6 +367,7 @@ export function decodeGifFrames(bytes, opts = {}) {
     prevSnapshot = snapshot;
     gce = { delay: 0, dispose: 0, transparent: -1 };
   }
+  prevSnapshot = null;
   if (!frames.length) throw new Error("GIF 未包含可解码帧");
   const more = pos < b.length && b[pos] !== 0x3b;
   return { format: "gif", width: W, height: H, total: frames.length, loop, frames, truncated: frames.length >= maxFrames && more };
@@ -490,6 +511,7 @@ export function decodeAPNGFrames(bytes, opts = {}) {
   const maxFrames = Number.isFinite(wantedFrames) && wantedFrames > 0 ? Math.floor(wantedFrames) : Infinity;
   const canvas = new Uint8ClampedArray(W * H * 4);
   const frames = [];
+  let retainedFrameBytes = 0;
   let prev = null;
   let prevSnapshot = null;
   let usedIdat = false;
@@ -506,6 +528,7 @@ export function decodeAPNGFrames(bytes, opts = {}) {
       if (prev.dispose === 1) clearRect(canvas, W, H, prev.x, prev.y, prev.width, prev.height);
       else if (prev.dispose === 2 && prevSnapshot) canvas.set(prevSnapshot);
     }
+    prevSnapshot = null;
     if (!def.width || !def.height) {
       throw new Error(`APNG 帧尺寸非法（${def.width}×${def.height}）。`);
     }
@@ -513,6 +536,7 @@ export function decodeAPNGFrames(bytes, opts = {}) {
     totalFramePixels += framePixels;
     limitParams = checkFramePixels(def.width, def.height, framePixels, limitParams, "apng");
     limitParams = checkTotalFramePixels(totalFramePixels, limitParams, "apng");
+    retainedFrameBytes = reserveFrameBytes("apng", retainedFrameBytes, W * H * 4, W, H);
     const snapshot = def.dispose === 2 ? canvas.slice() : null;
     const fihdr = Object.assign({}, ihdr, { width: def.width, height: def.height });
     const img = decodePNG(apngFramePNG(fihdr, palette, trns, data), {
@@ -534,6 +558,7 @@ export function decodeAPNGFrames(bytes, opts = {}) {
     prev = def;
     prevSnapshot = snapshot;
   }
+  prevSnapshot = null;
   if (!frames.length) throw new Error("APNG 未能解出帧");
   return {
     format: "apng", width: W, height: H, total: actl ? actl.numFrames : frames.length,

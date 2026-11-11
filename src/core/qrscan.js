@@ -805,8 +805,10 @@ function zxSourceOf(h, index) {
 }
 
 // ZXing 在病态图上可能长时间不返回（Phantom_QR 两张图会卡死主线程）。
-// 浏览器里放进独立 Worker，6s 硬超时后 terminate；Node/无 Worker 环境才回退直调。
-function zxingViaWorker(rgba, w, h, options) {
+// 浏览器里放进独立 Worker，硬超时后 terminate；Node/无 Worker 环境才回退直调。
+// timeoutMs 由调用方按「整文件总预算」裁剪，单次调用默认 6s 上限。
+const ZXING_WORKER_TIMEOUT_MS = 6000;
+function zxingViaWorker(rgba, w, h, options, timeoutMs) {
   if (typeof Worker !== "function") return Promise.resolve({ fallback: true });
   let worker;
   try {
@@ -814,6 +816,9 @@ function zxingViaWorker(rgba, w, h, options) {
   } catch {
     return Promise.resolve({ fallback: true });
   }
+  const wait = Number.isFinite(timeoutMs) && timeoutMs > 0
+    ? timeoutMs
+    : ZXING_WORKER_TIMEOUT_MS;
   return new Promise((resolve) => {
     let settled = false;
     const finish = (value) => {
@@ -823,7 +828,7 @@ function zxingViaWorker(rgba, w, h, options) {
       try { worker.terminate(); } catch { /* ignore */ }
       resolve(value);
     };
-    const timer = setTimeout(() => finish({ timeout: true, hits: [] }), 6000);
+    const timer = setTimeout(() => finish({ timeout: true, hits: [] }), Math.max(1, wait));
     worker.onmessage = (event) => finish(event.data || { hits: [] });
     worker.onerror = () => finish({ error: "worker", hits: [] });
     try {
@@ -837,11 +842,22 @@ function zxingViaWorker(rgba, w, h, options) {
 
 async function tryZxing(rgba, w, h, opt = {}) {
   if (!rgba || !w || !h) return null;
+  const deadline = Number.isFinite(opt.deadline) ? opt.deadline : null;
+  const attemptCap = Number.isFinite(opt.zxAttemptMs) && opt.zxAttemptMs > 0
+    ? opt.zxAttemptMs
+    : ZXING_WORKER_TIMEOUT_MS;
+  const remaining = () => (deadline == null ? Infinity : deadline - Date.now());
+  if (remaining() <= 0) return null;
   try {
     const formats = qrZxingFormatsOf(opt.formats);
     const workerScan = async (options) => {
-      const r = await zxingViaWorker(rgba, w, h, options);
-      if (r.fallback) return zxingReadRgba(rgba, w, h, options);
+      const left = remaining();
+      if (left <= 0) return null;
+      const r = await zxingViaWorker(rgba, w, h, options, Math.min(attemptCap, left));
+      if (r.fallback) {
+        if (remaining() <= 0) return null;
+        return zxingReadRgba(rgba, w, h, options);
+      }
       if (r.timeout || r.error) return null;
       return r.hits || [];
     };
@@ -849,6 +865,7 @@ async function tryZxing(rgba, w, h, opt = {}) {
     if (!hits || !hits.length) {
       // 失败重试：tryDownscale 对「超小图/1D 码」不友好；但超时后不再重试，避免双倍卡死。
       if (hits === null) return null;
+      if (remaining() <= 0) return null;
       hits = await workerScan({ formats, tryDownscale: false });
     }
     if (!hits || !hits.length) return null;
@@ -902,6 +919,7 @@ function zxingHitToResult(h, n) {
 export async function scanRgba(rgba, w, h, opt = {}) {
   const t0 = Date.now();
   const jpeg = !!(opt && opt.jpeg);
+  const deadline = Number.isFinite(opt.deadline) ? opt.deadline : null;
   _checkPixels(w * h, `二维码扫描 ${w}×${h}`, opt, jpeg);
   const zxHits = await tryZxing(rgba, w, h, opt);
   if (zxHits) {
@@ -909,6 +927,13 @@ export async function scanRgba(rgba, w, h, opt = {}) {
     diag.zxing = { hits: zxHits };
     diag.ms = Date.now() - t0;
     return { ok: true, result: zxingHitToResult(zxHits[0], zxHits.length), diag, zxHits };
+  }
+  // 整文件总预算已用尽：不再跑自研 legacy 回退，避免后续帧继续叠加耗时。
+  if (deadline != null && Date.now() >= deadline) {
+    const diag = newDiag(w, h);
+    diag.ms = Date.now() - t0;
+    diag.legacySkipped = "budget";
+    return { ok: false, result: null, error: "扫描总预算已用尽", diag };
   }
   // 大图不走自研 legacy 回退：Phantom_QR 的 1200×800 / 2400×1600 图会让
   // scanGrayDiag 的病态路径长时间不返回。ZXing 已超时/无命中时直接交给上层
@@ -919,7 +944,12 @@ export async function scanRgba(rgba, w, h, opt = {}) {
     diag.legacySkipped = "large-image";
     return { ok: false, result: null, error: "大图跳过 legacy 回退（防卡死）", diag };
   }
-  return scanGrayDiag(rgbaToGray(rgba, w, h, opt, jpeg), w, h, opt);
+  const legacyOpt = deadline == null ? opt : Object.assign({}, opt, {
+    budgetMs: Math.min(
+      opt.budgetMs == null ? 8000 : opt.budgetMs,
+      Math.max(1, deadline - Date.now())),
+  });
+  return scanGrayDiag(rgbaToGray(rgba, w, h, opt, jpeg), w, h, legacyOpt);
 }
 
 async function qrScanImage(input, p = {}) {

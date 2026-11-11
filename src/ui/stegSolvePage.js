@@ -12,6 +12,7 @@ import { icon as iconSvg } from "./icons.js";
 import { downloadBytes } from "./download.js";
 import { createSpecialWorkbench } from "./specialWorkbench.js";
 import { connectSpecialDraft, newDraftIdentity } from "./workspaceDrafts.js";
+import { isLimitError } from "../core/limitGuard.js";
 import {
   STEGSOLVE_TRANSFORMS,
   applyStegSolveTransform,
@@ -142,7 +143,8 @@ async function decodeFramesWithFallback(bytes) {
   try {
     return Object.assign({ note: "" }, decodeImageFrames(bytes));
   } catch (err) {
-    if (!(err.code === "BROWSER_DECODE_REQUIRED" || err.format || /不支持|无法|不完整|非法/.test(err.message) || ["png", "apng", "gif"].includes(format))) throw err;
+    if (isLimitError(err)) throw err;
+    if (!(err.code === "BROWSER_DECODE_REQUIRED" || err.format || /不支持|无法|不完整|非法/.test(err.message))) throw err;
     const multi = await decodeWithImageDecoder(bytes, format);
     if (multi && multi.length) return { format, width: multi[0].width, height: multi[0].height, total: multi.length, loop: null, frames: multi, note: "canvas/ImageDecoder 解码" };
     const frame = await decodeWithCanvas(bytes, format);

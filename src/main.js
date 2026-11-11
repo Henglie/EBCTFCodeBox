@@ -1441,6 +1441,28 @@ function renderHome() {
     spellcheck: "false",
   });
   keyInput.value = state.homeKey || "";
+  // 音频预览上限：只作用于拖入音频的自动分析，0 = 全量（默认不变）。
+  // 与 op 页的 previewMinutes 同一语义，但文件分析没有独立参数面板，故在此提供可改入口并持久化。
+  if (state.fileAudioPreviewMinutes === undefined) {
+    state.fileAudioPreviewMinutes = readFileAudioPreviewMinutes();
+  }
+  const audioPreviewInput = el("input", {
+    type: "number", class: "magic-crib magic-audio-preview",
+    min: "0", step: "0.5", inputmode: "decimal",
+    placeholder: t("ui.home.audioPreviewPlaceholder"),
+    title: t("ui.home.audioPreviewHint"),
+    style: "max-width:150px",
+  });
+  audioPreviewInput.value = String(state.fileAudioPreviewMinutes);
+  const syncAudioPreview = () => {
+    state.fileAudioPreviewMinutes = normalizeAudioPreviewMinutes(audioPreviewInput.value);
+    saveFileAudioPreviewMinutes(state.fileAudioPreviewMinutes);
+  };
+  audioPreviewInput.addEventListener("input", syncAudioPreview);
+  audioPreviewInput.addEventListener("change", () => {
+    syncAudioPreview();
+    audioPreviewInput.value = String(state.fileAudioPreviewMinutes);
+  });
  // 解码强度（替代原「深度爆破 / 多层链式」两个裸开关）：按钮开弹窗，
  // 内含 5 档预设滑块（快速→最强，按 CTF 考点热→冷逐层放开）+ 参与算法多选 + 命名方案。
  // 文本/文件两套配置各存各的（弹窗内切页签）。配置存 localStorage，回首页沿用上次。
@@ -1492,9 +1514,11 @@ function renderHome() {
     el("div", { class: "magic-row" },
       targetEditor.element,
     ),
- // 第二行：密钥
+  // 第二行：密钥 / 音频预览
     el("div", { class: "magic-row" },
       el("label", { class: "magic-crib-label" }, t("ui.home.keyLabel"), keyInput),
+      el("label", { class: "magic-crib-label", title: t("ui.home.audioPreviewHint") },
+        t("ui.home.audioPreviewLabel"), audioPreviewInput),
     ),
   );
   const actions = el("div", { class: "magic-row magic-row-actions" },
@@ -1578,7 +1602,10 @@ function renderHome() {
       forceTrigger();   // 拖入/上传文本文件 = 明确意图，直接解码一次（非逐字，不卡）
       return;
     }
-    const info = await handleFile(f, fileReport, state.fileStrength, ctrl, token, { bytes });
+    const info = await handleFile(f, fileReport, state.fileStrength, ctrl, token, {
+      bytes,
+      audioPreviewMinutes: state.fileAudioPreviewMinutes,
+    });
     if (_activeFileCtrl === ctrl) _activeFileCtrl = null;
     if (info && info.lsbText) {
       input.value = info.lsbText;
@@ -2547,6 +2574,29 @@ function isTextFile(bytes, name = "") {
   }
 }
 
+// ---- 文件分析：音频预览时长设置（0 = 全量；仅作用于拖入音频的子链）----
+const FILE_AUDIO_PREVIEW_KEY = "ebctf_file_audio_preview_minutes";
+const FILE_AUDIO_PREVIEW_DEFAULT = 0;
+function normalizeAudioPreviewMinutes(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : FILE_AUDIO_PREVIEW_DEFAULT;
+}
+function readFileAudioPreviewMinutes() {
+  try {
+    const raw = localStorage.getItem(FILE_AUDIO_PREVIEW_KEY);
+    if (raw == null || raw === "") return FILE_AUDIO_PREVIEW_DEFAULT;
+    return normalizeAudioPreviewMinutes(raw);
+  } catch { return FILE_AUDIO_PREVIEW_DEFAULT; }
+}
+function saveFileAudioPreviewMinutes(value) {
+  const n = normalizeAudioPreviewMinutes(value);
+  try { localStorage.setItem(FILE_AUDIO_PREVIEW_KEY, String(n)); } catch { /* 隐私模式只保留会话态 */ }
+  return n;
+}
+function fmtAudioPreviewMinutes(value) {
+  return Number.isFinite(value) ? String(+value.toFixed(3)) : "?";
+}
+
 // ---- 智能分析三链懒载（fileAnalysis/imageAnalysis/audioAnalysis，含 QR·pcap·inflate·音频子树，退出首屏闭包）----
 // 触发：首次拖入文件分析时（handleFile 内 await）+ 启动后空闲预热；失败允许下次重试。
 let _analysisChains = null;
@@ -2588,6 +2638,9 @@ async function handleFile(file, outWrap, fileStrength, control = null, token = 0
   const fileCfg = fileStrength && fileStrength.level
     ? fileStrength
     : (loadLastConfig("file") || { level: "normal", customIds: [] });
+  const audioPreviewMinutes = normalizeAudioPreviewMinutes(
+    opts.audioPreviewMinutes != null ? opts.audioPreviewMinutes : readFileAudioPreviewMinutes()
+  );
   const fileResolved = resolveDecodeConfig({ ...fileCfg, scope: "file" });
   const ctrl = control || { paused: false, cancelled: false };
   const myToken = isolated ? 0 : (token || ++_fileRunSeq);
@@ -2673,7 +2726,22 @@ async function handleFile(file, outWrap, fileStrength, control = null, token = 0
         extra = await chains.analyzeImageAsync(bytes, file.name, report.detected, { control: ctrl, onSection: emitImage });
         await flushSections();
       } else if (ext === "wav" || /wav|audio/i.test(mime)) {
-        extra = chains.analyzeAudio(bytes, file.name, report.detected);
+        const scopeText = audioPreviewMinutes > 0
+          ? "仅分析前 " + fmtAudioPreviewMinutes(audioPreviewMinutes) + " 分钟（WAV PCM 生效；非 WAV 仅格式识别）"
+          : "全量分析（0 = 全量；仅 WAV PCM 支持预览截断）";
+        progress(scopeText, 30);
+        extra = chains.analyzeAudio(bytes, file.name, report.detected, { previewMinutes: audioPreviewMinutes });
+        if (extra && Array.isArray(extra.sections)) {
+          extra.sections.unshift({
+            id: "audio-preview-scope",
+            title: "音频分析范围",
+            level: "info",
+            icon: "graphic_eq",
+            badge: "音频",
+            priority: 55,
+            body: scopeText,
+          });
+        }
       } else if (ext === "7z" || bytes.length >= 6 && bytes[0] === 0x37 && bytes[1] === 0x7a && bytes[2] === 0xbc && bytes[3] === 0xaf && bytes[4] === 0x27 && bytes[5] === 0x1c) {
         extra = await analyze7zFile(bytes);
       } else if (ext === "pyc" || ext === "exe" || (bytes.length >= 2 && bytes[0] === 0x4d && bytes[1] === 0x5a)) {

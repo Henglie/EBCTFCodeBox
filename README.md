@@ -70,7 +70,7 @@
 - GIF 多帧移除 30 秒墙钟和每帧 2 秒压缩等待，浏览器原生 PNG 编码，实测 39ms / ZIP 59KB。
 - 修复确认后嵌套解码仍失败、Worker 确认状态串任务、超时僵尸 Worker、`postMessage` 泄漏。
 - 修复 `LIMIT_CANCEL/HARD` 被 canvas/direct/7z 吞掉，穷举取消二次执行。
-- 修复批量 `allowAll` 泄漏、重复确认、ZIP Deflate 错误码丢失、Service Worker 更新后仍跑旧 JS。
+- 修复批量 `allowAll` 泄漏、重复确认、ZIP Deflate 错误码丢失、Service Worker 更新后仍跑旧 JS。\n- 补充修复：StegSolve 不再吞 LIMIT、图片分析 GIF 单次解码、PNG 块选择导出、音频自动分析预览、MCP 调用超时、16-bit PNG/灰度+Alpha 像素、文件分析与 magic 取消语义。
 - 清理敏感来源命名；`资料/` 不入库。
 
 ### 已知限制

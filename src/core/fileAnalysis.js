@@ -39,6 +39,7 @@ import { zwScan } from "./stegoText.js";
 import { decodeUtf8Lossless } from "./bytesIo.js";
 // ZIP 加密真伪实测内核（与「压缩/归档归一分析」同源，单向 import 不改 compress.js 行为）
 import { zipEncryptionScan, parseZipCentralDirectory } from "./compress.js";
+import { isLimitError, isLimitCancelError, isLimitHardError } from "./limitGuard.js";
 
 // BOM 保真的严格 UTF-8 解码（bytesIo 单一源）：非法序列抛 TypeError（同旧 fatal TextDecoder 语义），
 // 唯一行为差异是合法 BOM（U+FEFF 开头）不再被静默吞掉。
@@ -939,7 +940,10 @@ function extractOoxmlText(bytes) {
       if (method === 0) xmlBytes = comp;                 // stored 未压缩
       else if (method === 8) xmlBytes = inflateRaw(comp); // deflate
       else continue;                                      // 其它压缩法（bzip2/lzma）不支持
-    } catch { continue; } // 解压失败跳过该部件，不阻断
+    } catch (e) {
+      if (isLimitError(e)) throw e; // 资源上限必须上抛，不能当部件损坏静默跳过
+      continue;                      // 解压失败跳过该部件，不阻断
+    }
     const xml = new TextDecoder("utf-8", { fatal: false }).decode(xmlBytes); // OOXML 恒为 UTF-8
     const txt = xmlToText(xml);
     if (txt) out += (out ? "\n" : "") + txt;
@@ -1393,6 +1397,52 @@ export async function analyzeFile(bytes, name = "", opts = {}) { // pcap 人话�
     };
   }
 
+  // 资源上限/用户取消不是普通分析失败：写明确跳过段；用户取消则整轮立即收尾。
+  let limitCancelled = false;
+  const _limitSkipInfo = (e) => {
+    if (!isLimitError(e)) return null;
+    if (isLimitCancelError(e)) return { kind: "cancel", label: "用户取消（资源软阈值确认被拒绝）" };
+    if (isLimitHardError(e)) return { kind: "hard", label: "资源硬上限" };
+    return { kind: "confirm", label: "资源软阈值未确认" };
+  };
+  const _noteLimitSkip = (id, step, e) => {
+    const info = _limitSkipInfo(e);
+    if (!info) return null;
+    if (info.kind === "cancel") limitCancelled = true;
+    sections.push({
+      id: "limit-skip-" + id,
+      title: step + " · 因资源限制跳过",
+      level: "warn",
+      icon: "speed",
+      body: `● ${step}：因${info.label}跳过。\n原因：${String((e && e.message) || e)}\n本段未执行或未完成，不代表该项无结果。`,
+      priority: 75,
+      collapsed: false,
+      defaultOpen: true,
+      source: "fileAnalysis",
+      badge: info.kind === "cancel" ? "已取消" : "超限跳过",
+    });
+    return info;
+  };
+  const _runLimitStep = (id, step, fn) => {
+    try {
+      return { ok: true, value: fn() };
+    } catch (e) {
+      if (!isLimitError(e)) throw e;
+      _noteLimitSkip(id, step, e);
+      return { ok: false, value: null };
+    }
+  };
+  const _limitAbortResult = () => {
+    finalizeSections(sections, { source: "fileAnalysis" });
+    return {
+      name, size,
+      mime, ext: detected ? detected.ext : null,
+      extConsistent: extConsist ? extConsist.ok : null,
+      detected: detected ? detected.desc : null,
+      sections,
+    };
+  };
+
  // 1. 文件信息（合并：文件头 magic 识别 + 扩展名一致性）
   {
     const infoLines = [];
@@ -1420,17 +1470,23 @@ export async function analyzeFile(bytes, name = "", opts = {}) { // pcap 人话�
   }
   await yieldUI();
 
- // 2. pcap/pcapng 协议级分析（拖入即跑 TCP 重组/HTTP 提取/DNS 隧道/ICMP 载荷，免去手动逐个 op）
+  // 2. pcap/pcapng 协议级分析（拖入即跑 TCP 重组/HTTP 提取/DNS 隧道/ICMP 载荷，免去手动逐个 op）
   if (detected && (detected.ext === "pcap" || detected.ext === "pcapng")) {
-    const [{ analyzePcapBytes }, { analyzeTrafficBytes }] = await Promise.all([import("./pcapDeep.js"), _trafficChain()]);
-    const pcapSections = analyzePcapBytes(u8a);
-    for (const s of pcapSections) sections.push(s);
-    // 追加人类可读结论：USB 键鼠还原 / HTTP·DNS·TLS 摘要 / MQTT 主题表 / flag 与明文
-    // （纯 JS、零依赖、无 DOM；失败只产生一条 warn 小节，不影响既有分析）
-    const trafficSections = analyzeTrafficBytes(u8a);
-    for (const s of trafficSections) sections.push(s);
+    try {
+      const [{ analyzePcapBytes }, { analyzeTrafficBytes }] = await Promise.all([import("./pcapDeep.js"), _trafficChain()]);
+      const pcapSections = analyzePcapBytes(u8a);
+      for (const s of pcapSections) sections.push(s);
+      // 追加人类可读结论：USB 键鼠还原 / HTTP·DNS·TLS 摘要 / MQTT 主题表 / flag 与明文
+      // （纯 JS、零依赖、无 DOM；失败只产生一条 warn 小节，不影响既有分析）
+      const trafficSections = analyzeTrafficBytes(u8a);
+      for (const s of trafficSections) sections.push(s);
+    } catch (e) {
+      if (!isLimitError(e)) throw e;
+      _noteLimitSkip("pcap", "pcap/pcapng 协议级分析", e);
+    }
   }
   await yieldUI();
+  if (limitCancelled) return _limitAbortResult();
 
  // 3. 文件尾附加数据（附带 actions：文本 + 二进制双份存盘）
   const trailing = checkTrailingData(u8a, detected);
@@ -1500,7 +1556,9 @@ export async function analyzeFile(bytes, name = "", opts = {}) { // pcap 人话�
 
  // 5.0 OOXML（docx/xlsx/pptx）正文：zip 内 XML 是 deflate 压缩的，直接扫字节只见压缩流乱码。
  //    解压对应部件 → 剥 XML 标签 → 抽正文文本（中文 flag/情报在此才现真身）。
-  const ooxml = checkOoxmlText(u8a, detected);
+  const ooxmlR = _runLimitStep("ooxml", "文档正文（解压 OOXML）", () => checkOoxmlText(u8a, detected));
+  if (limitCancelled) return _limitAbortResult();
+  const ooxml = ooxmlR.value;
   if (ooxml) {
     const bn = baseName(name);
     sections.push({
@@ -1608,8 +1666,10 @@ export async function analyzeFile(bytes, name = "", opts = {}) { // pcap 人话�
   }
   await yieldUI();
 
- // 9. ZIP 伪加密（识别伪加密 → 自动输出清除加密位的修正 ZIP）
-  const zip = checkZipPseudoEnc(u8a, detected);
+  // 9. ZIP 伪加密（识别伪加密 → 自动输出清除加密位的修正 ZIP）
+  const zipR = _runLimitStep("zip", "ZIP 加密检测", () => checkZipPseudoEnc(u8a, detected));
+  if (limitCancelled) return _limitAbortResult();
+  const zip = zipR.value;
   if (zip) {
     let body = zip.msg;
     const sec = {
@@ -1702,7 +1762,9 @@ export async function analyzeFile(bytes, name = "", opts = {}) { // pcap 人话�
   await yieldUI();
 
   // 13. PNG 逐块 CRC 校验 + 文本块
-  const pc = pngChunkCrcReport(u8a);
+  const pcR = _runLimitStep("png-chunks", "PNG 逐块 CRC 校验", () => pngChunkCrcReport(u8a));
+  if (limitCancelled) return _limitAbortResult();
+  const pc = pcR.value;
   if (pc) {
     const failed = pc.chunks.filter((c) => c.crcOk === false);
     const passed = pc.chunks.filter((c) => c.crcOk === true).length;
@@ -1763,7 +1825,9 @@ export async function analyzeFile(bytes, name = "", opts = {}) { // pcap 人话�
   await yieldUI();
 
   // 14. 图片 LSB 各通道提取
-  const lsb = analyzeLsb(u8a, detected);
+  const lsbR = _runLimitStep("lsb", "图片 LSB 通道提取", () => analyzeLsb(u8a, detected));
+  if (limitCancelled) return _limitAbortResult();
+  const lsb = lsbR.value;
   if (lsb) {
     const lsbSec = {
       id: "lsb", title: "图片 LSB 通道提取",
@@ -1830,8 +1894,12 @@ export async function analyzeFile(bytes, name = "", opts = {}) { // pcap 人话�
           }
         }
       }
-    } catch { /* lsbDeep 未落地时静默跳过 */ }
+    } catch (e) {
+      // 非资源类失败维持旧行为（静默跳过）；资源上限/取消必须显式记录。
+      if (isLimitError(e)) _noteLimitSkip("lsb-deep", "LSB 深度扫描", e);
+    }
   }
+  if (limitCancelled) return _limitAbortResult();
   await yieldUI();
 
   // 15. 图片 EXIF / XMP 元数据
@@ -1916,7 +1984,11 @@ export async function analyzeFile(bytes, name = "", opts = {}) { // pcap 人话�
         });
       }
     }
-  } catch { /* imageThumb 未落地 / 解析失败不阻断 */ }
+  } catch (e) {
+    // imageThumb 未落地 / 解析失败维持静默；资源上限/取消必须显式记录。
+    if (isLimitError(e)) _noteLimitSkip("image-thumb", "EXIF / JFIF 缩略图", e);
+  }
+  if (limitCancelled) return _limitAbortResult();
   await yieldUI();
 
   finalizeSections(sections, { source: "fileAnalysis" });

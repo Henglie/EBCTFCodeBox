@@ -11,7 +11,9 @@
  *
  * 导出：
  *   pngChunkCrcReport(bytes) → {sig,chunks:[{type,len,crcOk,storedCrc,calcCrc}],texts:[{type,kw,val}],anyCrcFail} | null
- *   pngChunkRawExport(bytes) → {chunks:[{type,len,offset,raw}], plte, trns, indexStream, ihdr} | null
+ *   pngChunkRawExport(bytes, params, selectedChunks) → {chunks:[{index,type,len,offset,raw}], plte, trns, indexStream, ihdr, selection} | null
+ *     selectedChunks = 逗号分隔的块索引（0 基）/ 4 字母类型，如 "0,3,IDAT"；undefined/null = 全部块（兼容旧调用），
+ *     空串/空数组 = 不导出任何块。给了选中集合时，块数/总字节预算与 PLTE/tRNS/indexStream 均只针对选中块。
  *     raw = 整块原字节（长度+类型+数据+CRC，逐字节保留）；
  *     indexStream = 调色板图（色彩类型 3）unfilter 后的逐行索引位流（W3C PNG §9：过滤单位 1 字节）。
  */
@@ -120,6 +122,53 @@ function _hexBytes(b, n) {
   const end = Math.min(b.length, n);
   for (let i = 0; i < end; i++) s += b[i].toString(16).padStart(2, "0");
   return s;
+}
+
+/**
+ * 解析块选择集合：支持逗号/空白分隔的 0 基索引或 4 字母块类型（如 "0,3,IDAT"）。
+ * undefined/null → null（调用方保持旧的“全部块”语义）；空串/空数组 → {indexes:[],types:[]}（不导出）。
+ * 已解析对象原样返回，便于报告层先判空再透传给导出层，避免重复解析。
+ */
+function parsePngChunkSelection(sel) {
+  if (sel == null) return null;
+  if (typeof sel === "object" && !Array.isArray(sel) &&
+      Array.isArray(sel.indexes) && Array.isArray(sel.types)) return sel;
+  const list = Array.isArray(sel) ? sel : String(sel).split(/[,，;；\s]+/);
+  const indexes = [], types = [];
+  for (const raw of list) {
+    const tok = String(raw).trim();
+    if (!tok) continue;
+    if (/^\d+$/.test(tok)) {
+      const n = Number(tok);
+      if (!Number.isSafeInteger(n)) throw new Error(`selectedChunks 索引非法: ${tok}`);
+      if (!indexes.includes(n)) indexes.push(n);
+    } else if (/^[A-Za-z]{4}$/.test(tok)) {
+      if (!types.includes(tok)) types.push(tok);
+    } else {
+      throw new Error(`selectedChunks 项非法: "${tok}"（支持块索引或 4 字母类型，如 0,3,IDAT）`);
+    }
+  }
+  return { indexes, types };
+}
+
+/** 把选中集合解析为块下标：类型优先精确匹配，文件里无同大小写类型时忽略大小写。 */
+function _resolveChunkSelection(chunks, selection) {
+  if (!selection) return { picked: chunks.map((_, i) => i), unmatched: [] };
+  const idxSet = new Set(selection.indexes);
+  const unmatched = [];
+  for (const n of selection.indexes) if (n >= chunks.length) unmatched.push(String(n));
+  const exact = new Set(), loose = new Set();
+  for (const t of selection.types) {
+    if (chunks.some((c) => c.type === t)) exact.add(t);
+    else if (chunks.some((c) => c.type.toLowerCase() === t.toLowerCase())) loose.add(t.toLowerCase());
+    else unmatched.push(t);
+  }
+  const picked = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const type = chunks[i].type;
+    if (idxSet.has(i) || exact.has(type) || loose.has(type.toLowerCase())) picked.push(i);
+  }
+  return { picked, unmatched };
 }
 
 /** PNG 逐块 CRC 校验 + 文本提取。非 PNG 返回 null。
@@ -242,19 +291,24 @@ function pngIndexStream(bytes, ihdrInfo, params) {
 
 /**
  * 原块逐字节导出 + PLTE/tRNS + 调色板索引位流。非 PNG 返回 null。
+ * selectedChunks：索引/类型选中集合（见 parsePngChunkSelection）；undefined/null = 全部块（旧行为）。
  * chunks[].raw 含 长度(4)+类型(4)+数据(len)+CRC(4) 整块原字节，逐字节保留。
+ * 预算先于任何 slice 且只统计选中块；PLTE/tRNS 仅在对应块被选中时导出；
+ * 索引位流需要全部 IDAT 块被选中，部分选中时跳过并在 indexError 说明。
  */
-function pngChunkRawExport(bytes, params) {
+function pngChunkRawExport(bytes, params, selectedChunks) {
   if (!pngCheckSig(bytes)) return null;
   const chunks = pngParseChunks(bytes);
-  if (chunks.length > MAX_CHUNKS) {
+  const selection = parsePngChunkSelection(selectedChunks);
+  const { picked, unmatched } = _resolveChunkSelection(chunks, selection);
+  if (picked.length > MAX_CHUNKS) {
     checkLimit({
       scope: "pngChunks.export.chunkCount",
-      actual: chunks.length,
+      actual: picked.length,
       soft: MAX_CHUNKS,
       hard: MAX_CHUNKS_HARD,
       params,
-      label: "PNG 块数量",
+      label: "PNG 导出选中块数量",
       unit: " 个",
     });
   }
@@ -267,9 +321,9 @@ function pngChunkRawExport(bytes, params) {
       compression: bytes[ihdr.dataOff + 10], filter: bytes[ihdr.dataOff + 11], interlace: bytes[ihdr.dataOff + 12],
     };
   }
-  // 统一预算先于任何 slice：先统计全部要导出的原块字节数，确认通过后再逐块复制。
-  // 旧实现边切边算，超限时已经复制了软阈值内的数据才弹确认。
-  const exportTotal = chunks.reduce((n, c) => {
+  // 统一预算先于任何 slice：只统计选中块的原块字节数，确认通过后再逐块复制。
+  const exportTotal = picked.reduce((n, i) => {
+    const c = chunks[i];
     const totalLen = Math.min(c.len + 12, Math.max(0, bytes.length - c.totalOff));
     return n + totalLen;
   }, 0);
@@ -280,27 +334,46 @@ function pngChunkRawExport(bytes, params) {
     soft: MAX_EXPORT_TOTAL,
     hard: MAX_EXPORT_TOTAL_HARD,
     params,
-    label: "PNG 原块导出",
+    label: selection ? "PNG 原块导出（选中块）" : "PNG 原块导出",
     unit: " 字节",
   });
   const out = [];
   let plte = null, trns = null;
   let exportTruncated = false;
-  for (const c of chunks) {
+  for (const i of picked) {
     if (out.length >= MAX_CHUNKS_HARD) { exportTruncated = true; break; }
+    const c = chunks[i];
     const totalLen = Math.min(c.len + 12, Math.max(0, bytes.length - c.totalOff));
-    out.push({ type: c.type, len: c.len, offset: c.totalOff, raw: bytes.slice(c.totalOff, c.totalOff + totalLen) });
+    out.push({ index: i, type: c.type, len: c.len, offset: c.totalOff, raw: bytes.slice(c.totalOff, c.totalOff + totalLen) });
     if (c.type === "PLTE") plte = { count: Math.floor(c.len / 3), bytes: bytes.slice(c.dataOff, c.dataOff + c.len) };
     if (c.type === "tRNS") trns = { count: c.len, bytes: bytes.slice(c.dataOff, c.dataOff + c.len) };
   }
+  const selectedSet = new Set(picked);
+  const idatIndexes = [];
+  for (let i = 0; i < chunks.length; i++) if (chunks[i].type === "IDAT") idatIndexes.push(i);
+  const allIdatSelected = idatIndexes.length > 0 && idatIndexes.every((i) => selectedSet.has(i));
   let indexStream = null, indexError = null;
   if (ihdrInfo && ihdrInfo.colorType === 3 && ihdrInfo.interlace === 0) {
-    try { indexStream = pngIndexStream(bytes, ihdrInfo, params); } catch (e) {
-      if (isLimitError(e)) throw e;
-      indexError = (e && e.message) || String(e);
+    if (selection && !allIdatSelected) {
+      if (idatIndexes.length) {
+        indexError = `索引位流需要全部 ${idatIndexes.length} 个 IDAT 块，当前仅选中 ${idatIndexes.filter((i) => selectedSet.has(i)).length} 个，已跳过`;
+      }
+    } else {
+      try { indexStream = pngIndexStream(bytes, ihdrInfo, params); } catch (e) {
+        if (isLimitError(e)) throw e;
+        indexError = (e && e.message) || String(e);
+      }
     }
   }
-  return { chunks: out, plte, trns, indexStream, indexError, ihdr: ihdrInfo, exportTruncated };
+  return {
+    chunks: out, plte, trns, indexStream, indexError, ihdr: ihdrInfo, exportTruncated,
+    selection: selection ? {
+      indexes: selection.indexes,
+      types: selection.types,
+      selectedCount: out.length,
+      unmatched,
+    } : null,
+  };
 }
 
-export { pngChunkCrcReport, pngChunkRawExport, pngIndexStream, _inflateZlib };
+export { pngChunkCrcReport, pngChunkRawExport, pngIndexStream, parsePngChunkSelection, _inflateZlib };

@@ -26,6 +26,13 @@
 - 修复批量 `allowAll` 泄漏、morse/f5/StegSolve 重复确认、ZIP Deflate 丢失限额错误码、7z 200 条静默截断。
 - 修复 Service Worker 先 reload 后预缓存导致继续跑旧 JS；改为 install 完成预缓存再 activating。
 - 移除敏感来源的算法名、注释与搜索别名明文引用；`资料/` 不入库；旧 git 历史未重写。
+- StegSolve 页面/弹窗不再把 LIMIT 错误回退给 canvas/ImageDecoder 吞掉。
+- 图片分析 GIF 改为单次流式解码；ZXing 改为整文件共享总预算，不再每帧固定 6 秒。
+- PNG 块新增 `selectedChunks`，默认只报告；导出只处理选中块并先预算。
+- 音频自动文件分析接入 `previewMinutes`，首页可设置“仅分析前 N 分钟”并持久化。
+- MCP 浏览器 in-process 增加调用级 deadline；stdio 重 op 按风险/能力自动选择 Worker，不再依赖易漏的固定白名单。
+- 修复 16-bit PNG 样本缩放全黑问题；修复 `colorType=4`（灰度+Alpha）alpha 索引错误。
+- 文件分析 / 自动隐写 / magic 剩余 catch 不再静默吞掉 `LIMIT_CANCEL/HARD`；取消后停止后续 key/通道。
 
 ### 优化与验证
 

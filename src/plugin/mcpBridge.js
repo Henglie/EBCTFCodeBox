@@ -247,6 +247,115 @@ async function nodeFs() {
 function hostEnv(name) {
   try { return typeof process !== "undefined" && process.env ? process.env[name] : undefined; } catch { return undefined; }
 }
+
+// ---------------------------------------------------------------------------
+// 调用级 deadline / 取消：stdio server、CLI 共用。op 内部多为同步循环，
+// 无法协作式中断；这里保证调用方按时拿到结构化错误，重 op 的硬隔离由
+// mcp/server.mjs 的 worker runner terminate 负责。
+// ---------------------------------------------------------------------------
+export const DEFAULT_CALL_TIMEOUT_MS = 30 * 1000;
+
+function parseTimeoutMs(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
+
+/** 显式参数 > EBCTF_MCP_CALL_TIMEOUT_MS > 默认 30s；0 表示不限时。 */
+export function resolveCallTimeoutMs(value) {
+  const fromArg = parseTimeoutMs(value);
+  if (fromArg !== null) return fromArg;
+  const fromEnv = parseTimeoutMs(hostEnv("EBCTF_MCP_CALL_TIMEOUT_MS"));
+  if (fromEnv !== null) return fromEnv;
+  return DEFAULT_CALL_TIMEOUT_MS;
+}
+
+/** 统一的结构化超时错误（与 limitGuard 错误同风格）。 */
+export function makeTimeoutError(timeoutMs, toolName) {
+  const err = new Error(
+    `MCP 工具调用超时（${timeoutMs}ms）${toolName ? `：${toolName}` : ""}。` +
+    "服务端已放弃本次结果，可缩小输入后重试。"
+  );
+  err.code = "EBCTF_TIMEOUT";
+  err.retryable = true;
+  err.meta = { timeoutMs, tool: toolName || null };
+  return err;
+}
+
+/** 取消错误（notifications/cancelled 或进程关闭时使用）。 */
+export function makeCancelledError(toolName, reason = "调用已取消") {
+  const err = new Error(`${reason}${toolName ? `：${toolName}` : ""}`);
+  err.code = "EBCTF_CANCELLED";
+  err.cancelled = true;
+  err.retryable = false;
+  err.meta = { tool: toolName || null };
+  return err;
+}
+
+/** 超时错误 → MCP content 结果（isError:true，保留 code/retryable）。 */
+export function timeoutToolResult(err) {
+  const payload = {
+    code: "EBCTF_TIMEOUT",
+    message: err && err.message ? err.message : "MCP 工具调用超时",
+    meta: err && err.meta !== undefined ? err.meta : null,
+    retryable: true,
+  };
+  return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], isError: true };
+}
+
+/**
+ * 给任意异步调用加总 deadline + 取消信号。
+ * 成功/超时/取消都会清理 timer 与 abort 监听。
+ * 同步 op 会饿死 timer：等它返回后再按实际耗时补判一次，避免「明明超时却返回成功」；
+ * 无法中断的同步调用仍会占住当前线程，但调用方不会永久等不到结果。
+ * @param {() => Promise<any>} run
+ * @param {{timeoutMs?:number, signal?:AbortSignal, toolName?:string}} [opts]
+ */
+export async function withCallDeadline(run, opts = {}) {
+  const timeoutMs = resolveCallTimeoutMs(opts.timeoutMs);
+  const { signal, toolName } = opts;
+  if (signal && signal.aborted) throw makeCancelledError(toolName);
+
+  const startedAt = Date.now();
+  let timer = null;
+  let onAbort = null;
+  const runPromise = Promise.resolve().then(run).then((value) => {
+    if (timeoutMs > 0 && Date.now() - startedAt >= timeoutMs) {
+      throw makeTimeoutError(timeoutMs, toolName);
+    }
+    return value;
+  });
+  const flights = [runPromise];
+  if (timeoutMs > 0) {
+    flights.push(new Promise((_, reject) => {
+      timer = setTimeout(() => reject(makeTimeoutError(timeoutMs, toolName)), timeoutMs);
+    }));
+  }
+  if (signal) {
+    flights.push(new Promise((_, reject) => {
+      onAbort = () => reject(makeCancelledError(toolName));
+      signal.addEventListener("abort", onAbort, { once: true });
+    }));
+  }
+  try {
+    return await Promise.race(flights);
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+    if (signal && onAbort) signal.removeEventListener("abort", onAbort);
+  }
+}
+
+/**
+ * callMcpTool + 调用级 deadline/取消（stdio server、CLI 用）。
+ * 内层 deadline 关闭，只由本包装器计时/取消，避免双 timer 与重复结算。
+ */
+export function callMcpToolWithTimeout(name, args = {}, opts = {}) {
+  return withCallDeadline(
+    () => callMcpTool(name, args, { deadline: false }),
+    { ...opts, toolName: name }
+  );
+}
 // 工作区限制默认关闭（与旧行为一致，允许工作区外路径）。
 // 仅当显式设置 EBCTF_MCP_WORKSPACE 或 EBCTF_MCP_RESTRICT=1 时才强制限制在工作区内；
 // EBCTF_MCP_ALLOW_OUTSIDE=1 仍可单独关闭该限制。
@@ -518,7 +627,7 @@ function structuredErrorPayload(e, { allowOverLimit = false } = {}) {
 // 本地 dispatch：执行一个 MCP 工具调用，返回 MCP 规范的 content 结果。
 // @returns {Promise<{content:{type:string,text:string}[], isError?:boolean}>}
 // ---------------------------------------------------------------------------
-export async function callMcpTool(name, args = {}) {
+async function dispatchMcpTool(name, args = {}) {
   const wrap = (text, isError = false) => ({ content: [{ type: "text", text: clampText(text) }], isError });
   const json = (obj, isError = false) => {
     const capped = clampJsonResult(obj);
@@ -716,6 +825,32 @@ export async function callMcpTool(name, args = {}) {
   }
 }
 
+/**
+ * 执行一个 MCP 工具调用，返回 MCP 规范的 content 结果。
+ * 默认带调用级 deadline（30s；EBCTF_MCP_CALL_TIMEOUT_MS / opts.timeoutMs 覆盖，0=不限时）。
+ * 超时返回结构化 {code:"EBCTF_TIMEOUT", retryable:true}；取消保留 rejected（stdio 需不回包）。
+ * opts.deadline === false 供外层已自带 deadline 的调用方（stdio worker / CLI）关闭内层计时。
+ * @param {string} name
+ * @param {object} [args]
+ * @param {{timeoutMs?:number, signal?:AbortSignal, deadline?:boolean}} [opts]
+ * @returns {Promise<{content:{type:string,text:string}[], isError?:boolean}>}
+ */
+export async function callMcpTool(name, args = {}, opts = {}) {
+  if (opts.deadline === false) return dispatchMcpTool(name, args);
+  try {
+    return await withCallDeadline(() => dispatchMcpTool(name, args), {
+      timeoutMs: opts.timeoutMs,
+      signal: opts.signal,
+      toolName: name,
+    });
+  } catch (e) {
+    // 取消是控制流，交给调用方决定是否回包；超时/其余异常转结构化 tool result。
+    if (e && (e.cancelled === true || e.code === "EBCTF_CANCELLED")) throw e;
+    const capped = clampJsonResult(structuredErrorPayload(e));
+    return { content: [{ type: "text", text: capped.text }], isError: true };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // MCP resources 列表（符合 MCP 规范的 resource 描述符）。这是资源面的单一事实源：
 // resources/list、exportManifest 全都读它，改一处三端同步，绝不各处手写第二份。
@@ -797,9 +932,12 @@ export function readMcpResourceContents(uri) {
  * 处理一条 MCP JSON-RPC 请求（in-process 形态）。
  * 支持 initialize / tools/list / tools/call / resources/list / resources/read。
  * 让页面内或插件内的 MCP host 能直接喂请求、拿响应，无需真的开网络端口。
+ * tools/call 默认 30s deadline（opts.timeoutMs / params.timeoutMs / params._meta.timeoutMs /
+ * EBCTF_MCP_CALL_TIMEOUT_MS 覆盖；0=不限时），超时返回结构化 EBCTF_TIMEOUT。
  * @param {{id?:any, method:string, params?:object}} req
+ * @param {{timeoutMs?:number, signal?:AbortSignal}} [opts]
  */
-export async function handleMcpRequest(req) {
+export async function handleMcpRequest(req, opts = {}) {
   const { id, method, params } = req || {};
   const ok = (result) => ({ jsonrpc: "2.0", id, result });
   const err = (code, message) => ({ jsonrpc: "2.0", id, error: { code, message } });
@@ -816,8 +954,21 @@ export async function handleMcpRequest(req) {
   }
   if (method === "tools/call") {
     const { name, arguments: args } = params || {};
-    const result = await callMcpTool(name, args || {});
-    return ok(result);
+    let timeoutMs = opts.timeoutMs;
+    if (timeoutMs === undefined && params) {
+      timeoutMs = params.timeoutMs;
+      if (timeoutMs === undefined && params._meta) timeoutMs = params._meta.timeoutMs;
+    }
+    try {
+      const result = await callMcpTool(name, args || {}, { timeoutMs, signal: opts.signal });
+      return ok(result);
+    } catch (e) {
+      if (e && e.code === "EBCTF_TIMEOUT") return ok(timeoutToolResult(e));
+      if (e && (e.cancelled === true || e.code === "EBCTF_CANCELLED")) {
+        return err(-32800, e.message || `调用已取消：${name}`);
+      }
+      throw e;
+    }
   }
   if (method === "resources/list") {
     return ok(listMcpResources());

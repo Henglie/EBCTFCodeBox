@@ -16,6 +16,7 @@
  *   node mcp/cli.mjs read --file pcap.pcap [--max-bytes 65536] [--encoding auto]
  *
  * 参数：--param key=value（可重复）；--json 输出原始 MCP JSON。
+ *      --timeout <ms> 单次调用总超时（默认 30s；0=不限时；也可设 EBCTF_MCP_CALL_TIMEOUT_MS）。
  * 退出码：0 成功；1 工具返回 isError；2 用法错误。
  */
 import { readFile } from "node:fs/promises";
@@ -23,7 +24,9 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const ADAPTER = new URL("./ebctf-core-adapter.mjs", import.meta.url);
+const BRIDGE = new URL("../src/plugin/mcpBridge.js", import.meta.url);
 const { callMcpTool, MCP_TOOLS } = await import(ADAPTER.href);
+const { callMcpToolWithTimeout, resolveCallTimeoutMs, timeoutToolResult } = await import(BRIDGE.href);
 
 function usage() {
   const text = `恒烈 CTF 工具箱 CLI（与 MCP 同一能力面）
@@ -40,6 +43,7 @@ function usage() {
   read     读本地文件      --file <路径> [--max-bytes N] [--encoding auto|utf8|hex|base64]
 
 全局：--json（原始 MCP JSON 输出）
+      --timeout <ms>（单次调用总超时，默认 30s；0=不限时）
 `;
   process.stderr.write(text);
 }
@@ -145,9 +149,16 @@ async function main() {
     return;
   }
 
-  const r = await callMcpTool(tool, payload);
+  let r;
+  try {
+    r = await callMcpToolWithTimeout(tool, payload, { timeoutMs: resolveCallTimeoutMs(args.timeout) });
+  } catch (e) {
+    if (e && e.code === "EBCTF_TIMEOUT") r = timeoutToolResult(e);
+    else throw e;
+  }
   if (args.json) process.stdout.write(JSON.stringify(r, null, 2) + "\n");
   else printResult(r);
+  if (r && r.isError) process.exitCode = 1;
 }
 
 try {

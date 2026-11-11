@@ -19,7 +19,7 @@
 import { register } from "./registry.js";
 import { encodePNG } from "./mcMap.js";
 import { inflateRaw } from "./pcapDeep.js";
-import { pngChunkRawExport } from "./pngChunks.js";
+import { pngChunkRawExport, parsePngChunkSelection } from "./pngChunks.js";
 
 // ============ 通用工具（自包含，不依赖 stegoImage2 内部函数） ============
 
@@ -383,18 +383,29 @@ function pngChunkListRun(text, p) {
   const hasIccp = chunks.some((c) => c.type === "iCCP");
   if (hasIccp) lines.push("", "⚠ 检测到 iCCP chunk（ICC profile），可用 iccStrip op 剥离");
 
-  // 原块/PLTE/索引流导出（p.exportRaw）：raw = 长度+类型+数据+CRC 整块原字节。
-  // 报告与导出分离：默认只输出文本报告；只有用户显式勾选 exportRaw 才走原块导出，
-  // 且预算在 pngChunkRawExport 内先于任何 slice 完成，报告文本不携带 base64。
-  if (p && (p.exportRaw === true || p.exportRaw === 1 || p.exportRaw === "1" || p.exportRaw === "true")) {
-    const rx = pngChunkRawExport(bytes, p);
-    const files = (rx.chunks || []).map((c, i) => ({
-      name: `chunk_${String(i).padStart(2, "0")}_${c.type}.bin`,
+  // 原块/PLTE/索引流导出（p.exportRaw + p.selectedChunks）：raw = 长度+类型+数据+CRC 整块原字节。
+  // 报告与导出分离：默认只输出文本报告；勾选 exportRaw 后还需给出 selectedChunks
+  //（索引或 4 字母类型，如 "0,3,IDAT"），只导出选中块；空选择明确提示仅报告。
+  // 预算在 pngChunkRawExport 内先于任何 slice、只针对选中块完成，报告文本不携带 base64。
+  const exportRawOn = !!(p && (p.exportRaw === true || p.exportRaw === 1 || p.exportRaw === "1" || p.exportRaw === "true"));
+  if (exportRawOn) {
+    const selection = parsePngChunkSelection(p.selectedChunks);
+    if (!selection || (!selection.indexes.length && !selection.types.length)) {
+      lines.push("", "导出: 未选择块，仅报告。如需导出原块，请在 selectedChunks 填写块索引或类型（如 0,3,IDAT）。");
+      return lines.join("\n");
+    }
+    const rx = pngChunkRawExport(bytes, p, selection);
+    const files = (rx.chunks || []).map((c) => ({
+      name: `chunk_${String(c.index).padStart(2, "0")}_${c.type}.bin`,
       mime: "application/octet-stream",
       bytes: c.raw,
     }));
     const rawTotal = (rx.chunks || []).reduce((n, c) => n + c.raw.length, 0);
-    lines.push("", `导出: 原块 ${files.length} 个，共 ${rawTotal} 字节（逐块文件见下载）`);
+    const sel = rx.selection || selection;
+    const requested = [...sel.indexes.map(String), ...sel.types].join(",");
+    const unmatched = sel.unmatched && sel.unmatched.length ? `；未匹配: ${sel.unmatched.join(",")}` : "";
+    lines.push("", `导出: 选中块 ${files.length} 个（请求: ${requested}${unmatched}），共 ${rawTotal} 字节（逐块文件见下载）`);
+    if (files.length === 0) lines.push("⚠ 选中集合没有匹配任何块，未生成原块文件");
     if (rx.plte) {
       lines.push("", `导出: PLTE ${rx.plte.count} 项（${rx.plte.bytes.length} 字节）`);
       files.push({ name: "PLTE.bin", mime: "application/octet-stream", bytes: rx.plte.bytes });
@@ -1181,6 +1192,7 @@ register({
   desc: "列举 PNG 所有 chunk（IHDR/PLTE/tEXt/zTXt/iTXt/bKGD/iCCP/IDAT/IEND 等），解析文本块与元数据（压缩文本经仓库内 inflate 解出，无需 pako）；可导出逐块原字节（含长度/类型/CRC）、PLTE 调色板与调色板索引位流",
   params: [
     { key: "exportRaw", label: "导出原块 / PLTE / 索引流", type: "bool", default: false },
+    { key: "selectedChunks", label: "导出块选择（索引/类型，逗号分隔；空=不导出）", type: "text", default: "", placeholder: "0,3,IDAT" },
   ],
   run: pngChunkListRun,
   acceptsBytes: true,

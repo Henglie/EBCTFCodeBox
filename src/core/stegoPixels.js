@@ -7,7 +7,7 @@
  *
  * 提供：
  * - decodePNG(bytes) → {width, height, data: Uint8ClampedArray(RGBA)}
- *   支持 colorType 0/2/3/4/6 × bitDepth 8（16 取高字节、1/2/4 解位深打包），
+ *   支持 colorType 0/2/3/4/6 × bitDepth 8（16 位按完整样本 65535→255 缩放、1/2/4 解位深打包），
  *   调色板 PLTE + tRNS 透明，非隔行；越界调色板索引钳位到末项（同浏览器容忍语义，
  *   CTF 载体常被隐写工具二次加工出越界索引，不因此抛错）。
  * - encodePNG / rgbaToDataURL —— 转发 mcMap.js 的零依赖 PNG 编码器（zlib stored 块）。
@@ -26,6 +26,8 @@ const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const MAX_PIXELS_DEFAULT = 16 * 1024 * 1024; // 单图软阈值（RGBA 输出约 64 MiB）
 const MAX_PIXELS_HARD = 64 * 1024 * 1024;    // 确认后的硬上限
 const MAX_INFLATE_SLACK = 1024 * 1024;       // 解压输出允许超出扫描线的余量
+const MIN_INFLATE_SOFT = 96 * 1024 * 1024;   // inflate 软阈值下限（容纳 12MP 16-bit 扫描线）
+const MAX_INFLATE_HARD = 256 * 1024 * 1024;  // 安全硬上限（与 pcapDeep.inflateRaw 一致）
 function u32be(b, o) {
   return ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
 }
@@ -115,8 +117,20 @@ export function decodePNG(bytes, opts = {}) {
   if (!Number.isSafeInteger(expect) || expect < 0) throw new Error("PNG 扫描线尺寸溢出");
   // 按扫描线预期量限制 inflate 输出：正常 PNG 恰好 expect 字节；只放 1 MiB 余量，
   // 防止小图 IDAT 解压出几十 MB（inflate 炸弹）后再丢弃。
+  // 软阈值与扫描线预算对齐：12MP 16-bit（RGB 约 69 MiB / RGBA 约 92 MiB）正常解码
+  // 不应在 inflate 阶段单独弹确认；像素级阈值已在上面统一判定。硬上限仍是安全上限。
+  const inflateSoft = Math.max(MIN_INFLATE_SOFT, expect);
+  checkLimit({
+    scope: "stegoPixels.inflate",
+    actual: expect,
+    soft: inflateSoft,
+    hard: MAX_INFLATE_HARD,
+    params,
+    label: `PNG inflate 扫描线（${width}×${height}，${bitDepth}-bit）`,
+    unit: " 字节",
+  });
   const raw = inflateRaw(idat.subarray(2, idat.length - 4), expect + MAX_INFLATE_SLACK,
-    pixels > maxPixels ? withLimit(params, { _allowLimitOverride: true }) : params);
+    withLimit(params, { _allowLimitOverride: true }));
   if (raw.length < expect) throw new Error("PNG 数据不完整（期望 " + expect + " 字节，实际 " + raw.length + "）");
   const filtered = raw.subarray(0, expect);
 
@@ -151,12 +165,17 @@ export function decodePNG(bytes, opts = {}) {
     }
   }
 
-  // 解位深（1/2/4bit 打包展开）与 16bit 降高字节
+  // 解位深（1/2/4bit 打包展开）与 16bit 降 8bit
   let strideOut = width * channels;
   let samples = px;
   if (bitDepth === 16) {
+    // 取完整 16 位样本按 65535→255 缩放（= 四舍五入除以 257）。
+    // 旧实现只取高字节、后续又按 65535 归一化，结果恒为 0/1，整图近全黑。
     const s2 = new Uint8Array(height * strideOut);
-    for (let i = 0, j = 0; i < px.length; i += 2, j++) s2[j] = px[i];
+    for (let i = 0, j = 0; i < px.length; i += 2, j++) {
+      const v = (px[i] << 8) | px[i + 1];
+      s2[j] = Math.round((v * 255) / 65535);
+    }
     samples = s2;
   } else if (bitDepth < 8) {
     const perByte = 8 / bitDepth;
@@ -176,15 +195,17 @@ export function decodePNG(bytes, opts = {}) {
 
   // colorType → RGBA
   const out = new Uint8ClampedArray(width * height * 4);
-  const maxVal = (1 << bitDepth) - 1; // 位深 <8 时归一（本实现按 0-255 直通，bitDepth=8 主路径）
+  // 仅 1/2/4bit 样本需要归一到 0-255；8bit 直通，16bit 已在上一步按 65535→255 缩放。
+  const lowDepth = bitDepth < 8;
+  const maxVal = lowDepth ? (1 << bitDepth) - 1 : 255;
   for (let i = 0; i < width * height; i++) {
-    const r = i * channels, g = r + 1, b4 = r + 2, a = r + 3;
+    const r = i * channels, g = r + 1, b4 = r + 2;
     let R, G, B, A = 255;
     switch (colorType) {
       case 0: R = G = B = samples[i]; break; // 灰度
       case 2: R = samples[r]; G = samples[g]; B = samples[b4]; break; // RGB
-      case 4: R = G = B = samples[r]; A = samples[a]; break; // 灰度+alpha
-      case 6: R = samples[r]; G = samples[g]; B = samples[b4]; A = samples[a]; break; // RGBA
+      case 4: R = G = B = samples[r]; A = samples[r + 1]; break; // 灰度+alpha
+      case 6: R = samples[r]; G = samples[g]; B = samples[b4]; A = samples[r + 3]; break; // RGBA
       case 3: { // 调色板
         // 越界索引钳位到最后一项而非抛错：CTF 载体常被隐写/二次加工工具改出越界索引
         //（Arnold 猫脸暴破的实际崩点），浏览器解码同款容忍（截到调色板边界），抛错会把
@@ -200,10 +221,10 @@ export function decodePNG(bytes, opts = {}) {
     const o4 = i * 4;
     out[o4] = R; out[o4 + 1] = G; out[o4 + 2] = B; out[o4 + 3] = A;
   }
-  if (maxVal !== 255 && colorType !== 3) {
+  if (lowDepth && colorType !== 3) {
     // 位深 <8 的灰度/RGB：归一化到 0-255（低位数 × 255/maxVal 取整）
     for (let i = 0; i < out.length; i++) {
-      if (i % 4 === 3 && colorType === 4) continue;
+
       out[i] = Math.round((out[i] * 255) / maxVal);
     }
   }

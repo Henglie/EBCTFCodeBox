@@ -15,7 +15,7 @@ import { mp3stegoDecode } from "./mp3stego.js";
 import { buildZip } from "./batchRun.js";
 import { alphaStripScan } from "./alphaStrip.js";
 import { carve } from "./foremostJs.js";
-import { isLimitError } from "./limitGuard.js";
+import { isLimitError, isLimitCancelError, isLimitHardError } from "./limitGuard.js";
 
 const MAX_TEXT = 6000;
 
@@ -105,6 +105,30 @@ async function waitControl(control) {
   return !control.cancelled;
 }
 
+// 资源上限/用户取消不是「算法失败」：分类后写明确跳过段，绝不混进普通未命中。
+function limitSkipInfo(e) {
+  if (!isLimitError(e)) return null;
+  if (isLimitCancelError(e)) return { kind: "cancel", label: "用户取消（资源软阈值确认被拒绝）" };
+  if (isLimitHardError(e)) return { kind: "hard", label: "资源硬上限" };
+  return { kind: "confirm", label: "资源软阈值未确认" };
+}
+
+function pushLimitSkipSection(sections, id, title, info, message) {
+  sections.push({
+    id: "stego-auto-limit-" + id,
+    title: "隐写自动尝试 · " + title + "（因资源限制跳过）",
+    level: "warn",
+    icon: "speed",
+    body: `● ${title}：因${info.label}跳过，未继续尝试后续密钥/算法。\n原因：${message || "资源受限"}\n本段未执行，不代表该隐写算法无结果。`,
+    priority: 70,
+    collapsed: false,
+    defaultOpen: true,
+    source: "stegoFileScan",
+    badge: info.kind === "cancel" ? "已取消" : "超限跳过",
+    actions: [],
+  });
+}
+
 function opsFor(ext) {
   if (ext === "jpg" || ext === "jpeg") return JPEG_OPS;
   if (ext === "wav") return WAV_OPS;
@@ -140,7 +164,9 @@ export async function scanStegoFile(bytes, name = "", opts = {}) {
     }
     return n;
   };
+  let limitCancelled = false;
   for (const spec of list) {
+    if (limitCancelled) break;
     if (skip.has(spec.id)) continue;
     if (!(await waitControl(opts.control))) break;
     const op = getOp(spec.id);
@@ -149,6 +175,8 @@ export async function scanStegoFile(bytes, name = "", opts = {}) {
     const keys = spec.keyed ? keyCandidates(name, opts.key) : [""];
     let out = null;
     let err = "";
+    let limitInfo = null;
+    let limitMessage = "";
     for (const k of keys) {
       if (!(await waitControl(opts.control))) break;
       try {
@@ -162,8 +190,14 @@ export async function scanStegoFile(bytes, name = "", opts = {}) {
       } catch (e) {
         out = null;
         err = String((e && e.message) || e);
-        // 用户取消/硬上限时停止该算法的其余 key，避免重复弹确认或继续重跑。
-        if (isLimitError(e)) break;
+        // 资源上限/用户取消：不是算法失败。停止该算法其余 key；用户取消则整轮立即收尾。
+        const info = limitSkipInfo(e);
+        if (info) {
+          limitInfo = info;
+          limitMessage = err;
+          if (info.kind === "cancel") limitCancelled = true;
+          break;
+        }
       }
       const t = typeof out === "string" ? out : (out && out.text) || "";
       const timed = /timeout/i.test(err);
@@ -176,11 +210,13 @@ export async function scanStegoFile(bytes, name = "", opts = {}) {
     const timeout = /timeout/i.test(err);
     const produced = !!out && !timeout && !err && text.trim().length > 0
       && !/失败|错误|未命中|未找到|需要密钥|无结果|failed|error|not found/i.test(text);
-    const body = timeout
-      ? `● ${spec.label}：超时（${spec.timeout}ms）已中止，未产出结果。`
-      : err
-        ? `● ${spec.label}：${err}`
-        : clip(text || "（无文本输出）");
+    const body = limitInfo
+      ? `● ${spec.label}：因${limitInfo.label}跳过（${limitMessage || "资源受限"}），未继续尝试其余密钥/参数。`
+      : timeout
+        ? `● ${spec.label}：超时（${spec.timeout}ms）已中止，未产出结果。`
+        : err
+          ? `● ${spec.label}：${err}`
+          : clip(text || "（无文本输出）");
     sections.push({
       id: "stego-auto-" + spec.id,
       title: "隐写自动尝试 · " + spec.label,
@@ -191,12 +227,15 @@ export async function scanStegoFile(bytes, name = "", opts = {}) {
       collapsed: !hit && !produced,
       defaultOpen: hit || produced,
       source: "stegoFileScan",
-      badge: hit ? "命中" : produced ? "已解出" : (timeout ? "超时" : "尝试"),
+      badge: limitInfo
+        ? (limitInfo.kind === "cancel" ? "已取消" : "超限跳过")
+        : hit ? "命中" : produced ? "已解出" : (timeout ? "超时" : "尝试"),
       actions: out ? actionsOf(out, name) : [],
       _stegoHit: hit,
     });
   }
 
+  if (limitCancelled) return sections;
   if (!(await waitControl(opts.control))) return sections;
   if ((ext === "jpg" || ext === "jpeg" || ext === "png" || ext === "bmp") && !skip.has("foremost")) {
     try {
@@ -242,7 +281,13 @@ export async function scanStegoFile(bytes, name = "", opts = {}) {
           actions: acts,
         });
       }
-    } catch { /* foremost 只尝试，失败静默 */ }
+    } catch (e) {
+      const info = limitSkipInfo(e);
+      if (info) {
+        pushLimitSkipSection(sections, "foremost", "内嵌文件分离（foremost）", info, String((e && e.message) || e));
+        if (info.kind === "cancel") return sections;
+      }
+    }
   }
 
   if (!(await waitControl(opts.control))) return sections;
@@ -275,7 +320,13 @@ export async function scanStegoFile(bytes, name = "", opts = {}) {
           _stegoHit: hit,
         });
       }
-    } catch { /* alpha 条带只尝试，格式不符时静默跳过 */ }
+    } catch (e) {
+      const info = limitSkipInfo(e);
+      if (info) {
+        pushLimitSkipSection(sections, "alpha-strip", "alpha 条带（3 bit/样本）", info, String((e && e.message) || e));
+        if (info.kind === "cancel") return sections;
+      }
+    }
   }
 
   if (!(await waitControl(opts.control))) return sections;
@@ -334,7 +385,15 @@ export async function scanStegoFile(bytes, name = "", opts = {}) {
           ],
         });
       }
-    } catch { /* 光栅只尝试，超限/格式不符时静默跳过 */ }
+    } catch (e) {
+      // rasterStego 的资源上限用 RASTER_LIMIT_* code 表达，同样不能静默吞掉。
+      const info = limitSkipInfo(e) || (e && typeof e.code === "string" && e.code.startsWith("RASTER_LIMIT_")
+        ? { kind: "hard", label: "光栅拆图资源上限" } : null);
+      if (info) {
+        pushLimitSkipSection(sections, "raster", "光栅拆图", info, String((e && e.message) || e));
+        if (info.kind === "cancel") return sections;
+      }
+    }
   }
 
   if (!(await waitControl(opts.control))) return sections;
@@ -356,12 +415,20 @@ export async function scanStegoFile(bytes, name = "", opts = {}) {
       });
     } else {
       let r = null;
+      let limitInfo = null;
       try {
         r = mp3stegoDecode(u8, { password: key });
       } catch (e) {
-        r = { ok: false, reason: String((e && e.message) || e) };
+        limitInfo = limitSkipInfo(e);
+        if (limitInfo) {
+          pushLimitSkipSection(sections, "mp3stego", "MP3Stego", limitInfo, String((e && e.message) || e));
+        } else {
+          r = { ok: false, reason: String((e && e.message) || e) };
+        }
       }
-      if (r && r.ok) {
+      if (limitInfo) {
+        if (limitInfo.kind === "cancel") return sections;
+      } else if (r && r.ok) {
         const text = String(r.text || "");
         const hit = looksHit(text);
         const acts = [];

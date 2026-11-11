@@ -38,6 +38,7 @@ function combinedAdmit(opId, text) {
  * 保留「允许同 op 连用」（base64(base64(x)) 场景）。
  */
 import { OPS, defaultParams, getOp } from "../registry.js";
+import { isLimitError, isLimitCancelError, isLimitHardError } from "../limitGuard.js";
 import { entropy, freqDist, chiSquareScore, isPrintableRatio, asciiPlaintextAdjustment } from "./scorer.js";
 import { EN as EN_FREQ, ZH as ZH_FREQ } from "./langfreq.js";
 import { meaningfulTextBonus, hasMeaningfulToken } from "./wordlist.js";
@@ -126,6 +127,7 @@ const DEFAULTS = {
   signal: null,           // AbortSignal（看门狗/新输入接管）——aborted 立即收尾返回已有候选
   onPartial: null,        // 流式部分结果回调 (candidates)=>void——按新增候选数节流，不中断后台继续
   onProgress: null,       // 进度回调 ({phase,done,total,opId,label,percent})=>void
+  onLimitSkip: null,      // 资源上限/用户取消跳过回调 ({opId,tag,kind,message})=>void——不改候选
   _control: null,         // 内部：共享暂停控制对象 {paused:boolean}（Worker/主线程降级同款）
   yieldEvery: 40,         // 每跑 N 个 op 让出一次主线程（宏任务）：UI 可刷新/倒计时可走/abort 可收
 };
@@ -827,6 +829,28 @@ export async function magicDecode(input, opts = {}) {
   // 每个 yield 点检查 control.paused；暂停期间用定时器让出事件循环（非忙等），done 计数不推进，
   // 恢复后从原处继续。暂停不消耗 guard，也不存在墙钟死线可被暂停耗尽。
   const control = o._control && typeof o._control === "object" ? o._control : null;
+
+ // ---- 资源上限/用户取消：不能当普通「无结果」静默跳过 ----
+  // LIMIT_CANCEL → 整轮立即收尾（不再跑下一个 key/算法）；LIMIT_HARD/CONFIRM → 跳过该 op
+  // 的其余参数组合。跳过记录经 onLimitSkip 回调 + 返回数组不可枚举属性显式暴露。
+  const limitStops = [];
+  let limitCancelled = false;
+  const noteLimitStop = (e, opId, tag) => {
+    if (!isLimitError(e)) return false;
+    const cancel = isLimitCancelError(e);
+    const kind = cancel ? "cancel" : isLimitHardError(e) ? "hard" : "confirm";
+    const entry = {
+      opId: String(opId || ""),
+      tag: tag || "",
+      kind,
+      message: String((e && e.message) || e) || (cancel ? "用户取消" : "资源受限"),
+    };
+    limitStops.push(entry);
+    if (cancel) limitCancelled = true;
+    try { if (typeof o.onLimitSkip === "function") o.onLimitSkip(entry); } catch { /* 回调异常不影响解码 */ }
+    return true;
+  };
+
   const waitIfPaused = async () => {
     if (!control || !control.paused) return aborted();
     while (control.paused) {
@@ -956,7 +980,7 @@ export async function magicDecode(input, opts = {}) {
     return aborted();
   };
   emitProgress("detect", null, "", true);  // 起始 0%
-  while (queue.length > 0) {
+  scan: while (queue.length > 0 && !limitCancelled) {
     if (guard++ > o.guard) break; // 确定性工作量预算耗尽 → 收尾
     if (await waitIfPaused()) break;      // 暂停协作：恢复后从这里继续
     if (aborted()) break;                 // 新输入接管 / 用户中断 → 立即收尾
@@ -1046,7 +1070,11 @@ export async function magicDecode(input, opts = {}) {
           let decoded;
           try {
             decoded = await decodeWithTimeout(op.decode, cur.text, params);
-          } catch {
+          } catch (e) {
+            if (noteLimitStop(e, opId, tag)) {
+              if (limitCancelled) break scan;   // 用户取消：整轮立即收尾
+              break;                            // 资源上限：该 op 其余参数不再尝试
+            }
             continue;
           }
           if (decoded == null) continue;
@@ -1075,7 +1103,11 @@ export async function magicDecode(input, opts = {}) {
         let decoded;
         try {
           decoded = await decodeWithTimeout(fn, cur.text, defaultParams(op));
-        } catch {
+        } catch (e) {
+          if (noteLimitStop(e, op.id, "")) {
+            if (limitCancelled) break scan;   // 用户取消：整轮立即收尾
+            continue;                          // 资源上限：跳过该 op，不阻塞其余
+          }
           continue;   // 抛错 / 超时（永不 resolve 的图像/音频 op）→ 跳过，不阻塞其余
         }
         if (decoded == null) continue;
@@ -1109,7 +1141,11 @@ export async function magicDecode(input, opts = {}) {
           let decoded;
           try {
             decoded = await decodeWithTimeout(op.decode, cur.text, params);
-          } catch {
+          } catch (e) {
+            if (noteLimitStop(e, opId, tag)) {
+              if (limitCancelled) break scan;   // 用户取消：不再试下一个 key/op
+              break;                            // 资源上限：该 op 其余 key/参数不再尝试
+            }
             continue;
           }
           if (decoded == null) continue;
@@ -1139,7 +1175,10 @@ export async function magicDecode(input, opts = {}) {
         // 计分地板保持 domainAdmit 口径：scope 的声明集大于 domain 意见集，
         // 若对 domain 无意见的 op 也套 0.15 地板，会搅动它与 raw 计分 op 的相对排序。
         score = domainAdmit(op.id, cur.text) === true ? Math.max(0.15, op.detect(cur.text)) : op.detect(cur.text);
-      } catch {
+      } catch (e) {
+        if (noteLimitStop(e, op.id, "")) {
+          if (limitCancelled) break scan;
+        }
         continue;
       }
       // lenient（增强+/自定义档，产品负责人 2026-08-03）：detect 未命中但输入字符种类数与
@@ -1157,7 +1196,11 @@ export async function magicDecode(input, opts = {}) {
         // magic 改用首候选；op 页仍按用户/默认参数执行）。
         const magicParams = op.magicParams ? { ...defaultParams(op), ...op.magicParams } : defaultParams(op);
         decoded = await decodeWithTimeout(op.decode, cur.text, magicParams);
-      } catch {
+      } catch (e) {
+        if (noteLimitStop(e, op.id, "")) {
+          if (limitCancelled) break scan;   // 用户取消：整轮立即收尾
+          continue;                          // 资源上限：跳过该 op，不阻塞其余
+        }
         continue;
       }
       if (decoded == null) continue;
@@ -1175,9 +1218,22 @@ export async function magicDecode(input, opts = {}) {
     }
     if (cur.depth === 0) maybePartial(true);  // 阶段收尾补一次快照
   }
-  finishProgress(!aborted());
+  finishProgress(!aborted() && !limitCancelled);
 
   const cands = finalizeResults(results, o);
+  // 资源上限/取消跳过记录：不可枚举属性，不参与排序/序列化；调用方按需读取。
+  if (limitStops.length) {
+    try {
+      Object.defineProperty(cands, "limitStops", {
+        value: limitStops.slice(), enumerable: false, configurable: true,
+      });
+      if (limitCancelled) {
+        Object.defineProperty(cands, "limitCancelled", {
+          value: true, enumerable: false, configurable: true,
+        });
+      }
+    } catch { /* 附加失败不影响解码结果 */ }
+  }
  // 可解释性：把模型预测（11 类 top5 概率 + 18 维特征）附到返回候选——
  // 用不可枚举属性，不参与 JSON 序列化/结构化克隆/展开，纯调试展示层（UI 后续可读 cands.byteStatProbe）。
   if (byteStatProbe) {

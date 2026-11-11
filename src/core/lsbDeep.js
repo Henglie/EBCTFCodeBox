@@ -12,12 +12,14 @@
  * 性能策略：
  * - 每组合先只抽探测前缀（默认 768B；大图 384B），排序后只对靠前候选重抽
  *   detailBytes（默认 8192B），避免全图 × 全组合的平方级开销。
- * - 像素数 > 1MP 时自动缩短探测前缀、限制返回候选数；>16MP 直接返回空数组 +
- *   原因（可在 opts.maxPixels 覆盖），不冒卡死风险。
+ * - 像素数 > 1MP 时自动缩短探测前缀、限制返回候选数；像素上限与 limitGuard 对齐
+ *   （默认 16Mi 软 / 64Mi 硬，超软阈值弹确认，确认后继续）。opts.maxPixels 显式传入
+ *   时作为用户自定义硬上限，超限抛 LIMIT_HARD，不静默跳过。
  * - 单图常规尺寸目标 <800ms；返回数组的 meta.elapsedMs 记录实际耗时。
  *
- * 失败语义：不抛异常，返回空数组，`arr.reason` 给出原因；成功时 `arr.meta`
- * 记录尺寸/组合数/耗时等（二者均为数组附加属性，JSON 序列化时丢失）。
+ * 失败语义：除资源限制（LIMIT_CONFIRM / LIMIT_HARD / LIMIT_CANCEL）外不抛异常，
+ * 返回空数组，`arr.reason` 给出原因；成功时 `arr.meta` 记录尺寸/组合数/耗时等
+ * （二者均为数组附加属性，JSON 序列化时丢失）。
  *
  * 候选字段：
  *   { channel, channelIndices, bit, order, scan, offset, text, preview,
@@ -39,7 +41,7 @@
  * lsbDeepScan 产生，内部保留只读像素引用（非枚举 _source）；也可先传 bytes。
  */
 import { decodePNG, encodePNG, rgbaToDataURL } from "./stegoPixels.js";
-import { isLimitError } from "./limitGuard.js";
+import { checkLimit, isLimitError } from "./limitGuard.js";
 import { decodeBmpPixels } from "./lsbExtract.js";
 
 const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -51,7 +53,9 @@ const DEFAULT_DETAIL = 8192;
 const DEFAULT_MAX_TEXT = 4096;
 const DEFAULT_PREVIEW_LIMIT = 8;
 const DEFAULT_PREVIEW_SIDE = 256;
-const DEFAULT_MAX_PIXELS = 16_000_000;
+const DEFAULT_SOFT_PIXELS = 16 * 1024 * 1024;
+const DEFAULT_HARD_PIXELS = 64 * 1024 * 1024;
+const LEGACY_DEFAULT_MAX_PIXELS = 16_000_000;
 const DEFAULT_LARGE_PIXELS = 1_000_000;
 const DEFAULT_EXPORT_BYTES = 1024 * 1024;
 
@@ -113,12 +117,28 @@ function peekDimensions(b) {
   return null;
 }
 
-function decodeSource(input) {
+/**
+ * 解析像素上限：
+ * - 未传 / legacy 默认 16,000,000 / 16Mi：默认档 16Mi 软 + 64Mi 硬（可确认放宽）。
+ * - 其他显式值：用户自定义硬上限（软 = 硬 = maxPixels；超过直接 LIMIT_HARD，不静默跳过）。
+ */
+function resolvePixelLimits(o) {
+  const raw = o && o.maxPixels;
+  const n = raw == null || raw === "" ? NaN : Math.floor(Number(raw));
+  if (!Number.isFinite(n) || n <= 0 || n === LEGACY_DEFAULT_MAX_PIXELS || n === DEFAULT_SOFT_PIXELS) {
+    return { custom: false, soft: DEFAULT_SOFT_PIXELS, hard: DEFAULT_HARD_PIXELS };
+  }
+  return { custom: true, soft: n, hard: n };
+}
+
+function decodeSource(input, limitOpts = null) {
   const bytes = asBytes(input);
   if (!bytes || bytes.length < 8) return { ok: false, reason: "输入为空或不是图片字节" };
   if (isPng(bytes)) {
     try {
-      const img = decodePNG(bytes);
+      const img = decodePNG(bytes, limitOpts
+        ? { maxPixels: limitOpts.soft, hardMaxPixels: limitOpts.hard, params: limitOpts.params }
+        : {});
       if (!img || !img.width || !img.height) return { ok: false, reason: "PNG 解码结果为空" };
       return {
         ok: true,
@@ -130,7 +150,7 @@ function decodeSource(input) {
     }
   }
   if (isBmp(bytes)) {
-    const dec = decodeBmpPixels(bytes);
+    const dec = decodeBmpPixels(bytes, limitOpts && limitOpts.params);
     if (!dec) return { ok: false, reason: "BMP 解码失败" };
     if (dec.unsupported) return { ok: false, reason: "BMP 解码失败：" + dec.unsupported };
     return {
@@ -555,7 +575,9 @@ function emptyResult(reason, extra) {
  * @param {boolean} [opts.includePreviews=false] 靠前候选附带 previewPng(dataURL)
  * @param {number} [opts.previewLimit=8]
  * @param {number} [opts.previewMaxSide=256] 预览图长边上限（0=原尺寸）
- * @param {number} [opts.maxPixels=16000000] 安全上限，超限直接返回空数组+原因
+ * @param {number} [opts.maxPixels] 用户自定义硬上限；省略（或 legacy 16,000,000）时
+ *   默认 16Mi 软 / 64Mi 硬，超软阈值抛 LIMIT_CONFIRM（主线程弹确认 / Worker 由
+ *   opRunClient 重试），确认后继续；显式自定义值超限抛 LIMIT_HARD
  * @param {number} [opts.largePixels=1000000] 大图阈值（缩短前缀/减少候选）
  * @param {string|RegExp} [opts.flagRegex] 追加 flag 正则
  * @returns {Array} 候选数组（meta/reason 为附加属性）
@@ -567,13 +589,22 @@ export function lsbDeepScan(bytes, opts = {}) {
   if (!probeInput || probeInput.length < 8) return emptyResult("输入为空或不是图片字节");
 
   const dims = peekDimensions(probeInput);
-  const maxPixels = clampInt(o.maxPixels, 1, Number.MAX_SAFE_INTEGER, DEFAULT_MAX_PIXELS);
-  if (dims && dims.width * dims.height > maxPixels) {
-    return emptyResult(`图片过大（${dims.width}×${dims.height}=${dims.width * dims.height} 像素，上限 ${maxPixels}）；为避免卡死已跳过，可用 opts.maxPixels 放宽`);
+  const limits = resolvePixelLimits(o);
+  const peeking = dims ? dims.width * dims.height : 0;
+  if (peeking > 0) {
+    checkLimit({
+      scope: "lsbDeep.pixels",
+      actual: peeking,
+      soft: limits.soft,
+      hard: limits.hard,
+      params: o,
+      label: `LSB 图像 ${dims.width}×${dims.height}`,
+      unit: " 像素",
+    });
   }
 
   const decodedAt = now();
-  const dec = decodeSource(probeInput);
+  const dec = decodeSource(probeInput, { ...limits, params: o });
   const decodedMs = Math.round((now() - decodedAt) * 10) / 10;
   if (!dec.ok) return emptyResult(dec.reason);
   const source = dec.source;

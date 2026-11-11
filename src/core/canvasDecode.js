@@ -66,40 +66,65 @@ function drawableToDecoded(src, w, h) {
   return { width: w, height: h, channels: 4, samples, colorType: 6, depth: 8 };
 }
 
-// GIF 多帧：WebCodecs ImageDecoder 逐帧。无该 API 时返回 null（调用方回退首帧）。
-// maxFrames 上界防止超大 GIF 拖垮浏览器。
-async function decodeGifFrames(bytes, maxFrames) {
+// GIF multi-frame stream: WebCodecs ImageDecoder, one frame at a time.
+// Returns null when the API is unavailable so caller can fall back to first frame.
+// maxFrames bounds a huge GIF without materializing every frame.
+async function openGifStream(bytes, maxFrames) {
   if (typeof ImageDecoder === "undefined") return null;
   let dec;
   try {
- // 复制到独立 ArrayBuffer（bytes 可能是别处 buffer 的视图）
+ // Copy to an independent ArrayBuffer (bytes may be a view into another buffer).
     const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
     dec = new ImageDecoder({ data: buf, type: "image/gif" });
     await dec.tracks.ready;
     const track = dec.tracks.selectedTrack;
-    const count = track && track.frameCount ? track.frameCount : 1;
-    const lim = Math.min(count, maxFrames);
-    const frames = [];
-    for (let i = 0; i < lim; i++) {
-      const res = await dec.decode({ frameIndex: i });
-      const image = res.image; // VideoFrame
-      const w = image.displayWidth || image.codedWidth;
-      const h = image.displayHeight || image.codedHeight;
-      const decoded = drawableToDecoded(image, w, h);
-      if (image.close) image.close();
-      if (decoded) frames.push(decoded);
-    }
-    return frames.length ? { frames, total: count } : null;
+    const total = track && track.frameCount ? track.frameCount : 1;
+    const lim = Math.min(total, maxFrames);
+    let index = 0;
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      if (dec && dec.close) {
+        try { dec.close(); } catch (_) { /* ignore */ }
+      }
+    };
+    return {
+      mime: "image/gif",
+      total,
+      async next() {
+        while (!closed && index < lim) {
+          let image = null;
+          try {
+            const res = await dec.decode({ frameIndex: index++ });
+            image = res.image; // VideoFrame
+            const w = image.displayWidth || image.codedWidth;
+            const h = image.displayHeight || image.codedHeight;
+            const decoded = drawableToDecoded(image, w, h);
+            if (decoded) return decoded;
+          } catch (_) {
+            close();
+            return null;
+          } finally {
+            if (image && image.close) {
+              try { image.close(); } catch (_) { /* ignore */ }
+            }
+          }
+        }
+        close();
+        return null;
+      },
+      async close() { close(); },
+    };
   } catch (_) {
-    return null;
-  } finally {
     if (dec && dec.close) {
       try { dec.close(); } catch (_) { /* ignore */ }
     }
+    return null;
   }
 }
 
-// createImageBitmap 单帧解码（JPEG，及 GIF 无 ImageDecoder 时的首帧回退）。
+// createImageBitmap single-frame decode (JPEG, and GIF fallback without ImageDecoder).
 async function decodeSingleFrame(bytes, mime) {
   if (typeof createImageBitmap === "undefined" || typeof Blob === "undefined") return null;
   const blob = new Blob([bytes], { type: mime });
@@ -114,15 +139,31 @@ async function decodeSingleFrame(bytes, mime) {
   return decoded;
 }
 
+// Single-frame stream (JPEG / PNG / BMP via canvas). Lazy: decode on first next().
+function openSingleStream(bytes, mime) {
+  let used = false;
+  let closed = false;
+  return {
+    mime,
+    total: 1,
+    async next() {
+      if (used || closed) return null;
+      used = true;
+      return await decodeSingleFrame(bytes, mime);
+    },
+    async close() { closed = true; },
+  };
+}
+
 // ------------------------------------------------------------
-// 主入口：decodeToPixelFrames(bytes)
-// 仅处理 JPEG / GIF（detectCanvasMime 命中）；其余返回 null。
-// 返回 { mime, frames:[decoded,...], total } | null
-// - JPEG：frames 恒 1 帧。
-// - GIF：ImageDecoder 可用 → 全部帧（上界 maxFrames）；否则首帧。
-// total 为源实际帧数（可能 > frames.length，被 maxFrames 截断）。
+// Main entry: openPixelFrameStream(bytes, opts)
+// Yields decoded frames one by one, so callers can release pixels before
+// decoding the next frame. Returns { mime, total, next(), close() } | null.
+// - JPEG/PNG/BMP: one frame.
+// - GIF: all frames via ImageDecoder (bounded by maxFrames) or first frame.
+// total is the source frame count (may be > frames yielded due to maxFrames).
 // ------------------------------------------------------------
-export async function decodeToPixelFrames(bytes, opts = {}) {
+export async function openPixelFrameStream(bytes, opts = {}) {
   if (!bytes || bytes.length === 0) return null;
   const u8a = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   const mime = opts.mime || detectCanvasMime(u8a);
@@ -130,15 +171,35 @@ export async function decodeToPixelFrames(bytes, opts = {}) {
   const maxFrames = opts.maxFrames || 30;
 
   if (mime === "image/gif") {
-    const multi = await decodeGifFrames(u8a, maxFrames);
-    if (multi) return { mime, frames: multi.frames, total: multi.total };
-    const first = await decodeSingleFrame(u8a, mime);
-    return first ? { mime, frames: [first], total: 1 } : null;
+    const gif = await openGifStream(u8a, maxFrames);
+    if (gif) return gif;
   }
-
- // JPEG（及未来可扩展的单帧格式）
-  const decoded = await decodeSingleFrame(u8a, mime);
-  return decoded ? { mime, frames: [decoded], total: 1 } : null;
+  return openSingleStream(u8a, mime);
 }
 
-export default { detectCanvasMime, decodeToPixelFrames };
+// Release frame pixel storage as soon as analysis no longer needs it.
+export function releaseDecoded(decoded) {
+  if (!decoded) return;
+  try { decoded.samples = null; } catch (_) { /* ignore */ }
+  decoded.released = true;
+}
+
+// Compatibility entry: collect every frame. imageAnalysis now prefers the
+// streaming API so 30x1080p frames are not kept resident at once.
+export async function decodeToPixelFrames(bytes, opts = {}) {
+  const stream = await openPixelFrameStream(bytes, opts);
+  if (!stream) return null;
+  try {
+    const frames = [];
+    for (;;) {
+      const frame = await stream.next();
+      if (!frame) break;
+      frames.push(frame);
+    }
+    return frames.length ? { mime: stream.mime, frames, total: stream.total } : null;
+  } finally {
+    try { await stream.close(); } catch (_) { /* ignore */ }
+  }
+}
+
+export default { detectCanvasMime, openPixelFrameStream, releaseDecoded, decodeToPixelFrames };

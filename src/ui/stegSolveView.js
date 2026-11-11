@@ -2,6 +2,7 @@ import { attachModalLifecycle } from "./modalLifecycle.js";
 import { ensureExpStyles } from "./expandableInput.js";
 import { icon as iconSvg } from "./icons.js";
 import { downloadBytes } from "./download.js";
+import { isLimitError } from "../core/limitGuard.js";
 import {
   CHANNELS,
   COMBINE_MODES,
@@ -142,7 +143,8 @@ async function decodeFramesWithFallback(bytes) {
   try {
     return Object.assign({ note: "" }, decodeImageFrames(bytes));
   } catch (err) {
-    if (!(err.code === "BROWSER_DECODE_REQUIRED" || err.format || /隔行|不完整|非法|不支持/.test(err.message) || ["png", "apng", "gif"].includes(format))) {
+    if (isLimitError(err)) throw err;
+    if (!(err.code === "BROWSER_DECODE_REQUIRED" || err.format || /隔行|不完整|非法|不支持/.test(err.message))) {
       throw err;
     }
     const multi = await decodeWithImageDecoder(bytes, format);

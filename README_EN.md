@@ -70,7 +70,7 @@ Current version **v0.2.0-beta**. The source of truth is always the GitHub reposi
 - GIF frame extraction removes the 30-second wall clock and 2-second per-frame compression wait; native PNG encoding, 39ms / 59KB ZIP measured.
 - Fixed nested decode still failing after confirmation, worker limit-state leaking across jobs, zombie workers after timeout, and pending leaks on `postMessage` failure.
 - Fixed `LIMIT_CANCEL/HARD` being swallowed by canvas/direct/7z fallbacks and exhaustive decode re-running after cancel.
-- Fixed batch `allowAll` leakage, duplicate confirmations, lost ZIP Deflate error codes, and the Service Worker serving old JS after update.
+- Fixed batch `allowAll` leakage, duplicate confirmations, lost ZIP Deflate error codes, and the Service Worker serving old JS after update.\n- Additional fixes: StegSolve no longer swallows LIMIT, image-analysis GIF decodes once, PNG block selection export, audio auto-analysis preview, MCP call timeout, 16-bit PNG/gray+alpha pixels, and file-analysis/magic cancel semantics.
 - Removed sensitive source-name references; `资料/` is not tracked.
 
 ### Known limitations

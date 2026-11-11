@@ -1,4 +1,4 @@
-self.__EBCTF_ASSET_REV = "d70f3c7d5eb87edc";
+self.__EBCTF_ASSET_REV = "41dcdf743eb8ee47";
 self.__EBCTF_ASSETS = [
   "./",
   "./index.html",
