@@ -52,9 +52,65 @@ import { decodeToPixelFrames } from "./canvasDecode.js";
 // 半色调的通用检测。与工具页扫码**同一条链**（qrscan.scanRgba），保证两入口结论一致。
 import { scanRgba } from "./qrscan.js";
 import { finalizeSections } from "./fileAnalysis.js";
+import { checkLimit, withLimit } from "./limitGuard.js";
 
 // flag 正则（照 section schema 契约，冻结）
 const FLAG_RE = /(flag|ctf|key)\{[^}]+\}/i;
+
+const IMAGE_PIXELS_SOFT = 16 * 1024 * 1024;
+const IMAGE_PIXELS_HARD = 64 * 1024 * 1024;
+const JPEG_PIXELS_SOFT = 36 * 1024 * 1024;
+const JPEG_PIXELS_HARD = 144 * 1024 * 1024;
+
+function _limitParamsOf(opts) {
+  if (opts && opts.params && typeof opts.params === "object") return opts.params;
+  if (opts && typeof opts === "object") return opts;
+  const g = globalThis.__ebctfLimitParams;
+  return g && typeof g === "object" ? g : null;
+}
+
+function _budgetOf(jpeg) {
+  return jpeg
+    ? { soft: JPEG_PIXELS_SOFT, hard: JPEG_PIXELS_HARD }
+    : { soft: IMAGE_PIXELS_SOFT, hard: IMAGE_PIXELS_HARD };
+}
+
+function _checkPixels(pixels, label, params, jpeg = false) {
+  const n = Number(pixels);
+  const b = _budgetOf(jpeg);
+  if (!Number.isFinite(n) || n <= b.soft) return;
+  checkLimit({
+    scope: "imageAnalysis.pixels",
+    actual: n,
+    soft: b.soft,
+    hard: b.hard,
+    params: _limitParamsOf(params),
+    label,
+    unit: " 像素",
+  });
+}
+
+function _isJpeg(bytes) {
+  return !!bytes && bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+}
+
+function _canvasFrameDims(bytes) {
+  if (!bytes || bytes.length < 10) return null;
+  if (_isJpeg(bytes)) {
+    try {
+      const parsed = jpegParse(bytes);
+      const sof = parsed && parsed.sof;
+      if (sof && sof.width && sof.height) return { width: sof.width, height: sof.height, jpeg: true };
+    } catch { /* 交给 canvas 解码器报错 */ }
+    return null;
+  }
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) {
+    const w = bytes[6] | (bytes[7] << 8);
+    const h = bytes[8] | (bytes[9] << 8);
+    if (w && h) return { width: w, height: h, jpeg: false };
+  }
+  return null;
+}
 
 // 合法 QR 模块尺寸：21+4k，k=0..40 → 21..177
 const QR_MIN_SIZE = 21;
@@ -216,10 +272,11 @@ function candidateModules(K) {
 // 非方形载体：按轴裁边后，对每个合法模块数 M 直接最近邻重采样为 M×M
 //（每模块一投，拉伸把模块节距拉齐；最多 40 投×2 反色×5 阈值，有界），
 // 靠解码端 finder/格式/纠错校验淘汰错解，不额外穷举。
-function tryDecodeQr(decoded) {
+function tryDecodeQr(decoded, params = null, jpeg = false) {
   const W = decoded.width, H = decoded.height;
   const square = W === H;
   if (!square && (W < 21 || H < 21)) return null; // 非方且短边不足最小 QR
+  _checkPixels(W * H, `二维码整图分析 ${W}×${H}`, params, jpeg);
 
   const thresholds = [128, 64, 96, 160, 192];
   for (const th of thresholds) {
@@ -297,9 +354,10 @@ function canvasMimeForImage(bytes) {
   return "";
 }
 
-function decodedToRgba(decoded) {
+function decodedToRgba(decoded, params = null, jpeg = false) {
   const { width: w, height: h, channels: ch, samples: s } = decoded;
   if (!w || !h || !s) return null;
+  _checkPixels(w * h, `二维码 RGBA ${w}×${h}`, params, jpeg);
   const out = new Uint8ClampedArray(w * h * 4);
   if (ch >= 4) {
     for (let i = 0, j = 0; j < w * h; i += ch, j++) {
@@ -406,16 +464,25 @@ function legacyExtraOf(r) {
 }
 
 /** 对图片字节跑统一扫描链，返回 section 数组（无命中/引擎不可用 → []）。 */
-async function unifiedQrSections(bytes, name, control = null) {
+async function unifiedQrSections(bytes, name, control = null, params = null) {
   const sections = [];
   let frames = null;
-  const png = decodePngPixels(bytes) || decodeBmpPixels(bytes);
-  if (png && !png.unsupported) frames = [{ decoded: png, info: null }];
+  let limitConfirmed = false;
+  const png = decodePngPixels(bytes, params) || decodeBmpPixels(bytes, params);
+  if (png && !png.unsupported) {
+    frames = [{ decoded: png, info: null }];
+    limitConfirmed = true;
+  }
   if (!frames) {
     let pack = null;
     // 1/2/4/16-bit PNG、索引色、隔行等自包含解码不支持的图，仍可交给浏览器 canvas
     // 解成 RGBA 再读码；不要因为 LSB 解码器不支持位深就直接判二维码失败。
     const mime = canvasMimeForImage(bytes);
+    const dim = _canvasFrameDims(bytes);
+    if (dim) {
+      _checkPixels(dim.width * dim.height, `canvas 解码 ${dim.width}×${dim.height}`, params, dim.jpeg);
+      limitConfirmed = true;
+    }
     try { pack = await decodeToPixelFrames(bytes, mime ? { mime } : {}); } catch { pack = null; }
     if (pack && pack.frames && pack.frames.length) {
       const multi = pack.total > 1 || pack.frames.length > 1;
@@ -423,17 +490,21 @@ async function unifiedQrSections(bytes, name, control = null) {
     }
   }
   if (!frames) return sections;
+  const jpeg = _isJpeg(bytes);
   for (const { decoded, info } of frames) {
     if (!(await waitControl(control))) break;
-    const rgba = decodedToRgba(decoded);
+    const frameParams = limitConfirmed ? withLimit(params, { _allowLimitOverride: true }) : params;
+    const rgba = decodedToRgba(decoded, frameParams, jpeg);
     if (!rgba) continue;
+    const confirmed = withLimit(params, { _allowLimitOverride: true });
     let r = null;
     // 大图/高噪图不要开 ZXing 的 full tryHarder + 64 符号搜索：
     // Phantom_QR 两张图会在这里把主线程拖死。大图降级为有限符号、关闭 downscale 重试。
     const big = decoded.width * decoded.height > 800000;
+    const budget = _budgetOf(jpeg);
     const scanOpt = big
-      ? { budgetMs: DRAGIN_SCAN_BUDGET_MS, tryHarder: false, tryDownscale: false, maxNumberOfSymbols: 8 }
-      : { budgetMs: DRAGIN_SCAN_BUDGET_MS };
+      ? { budgetMs: DRAGIN_SCAN_BUDGET_MS, tryHarder: false, tryDownscale: false, maxNumberOfSymbols: 8, params: confirmed, softPixels: budget.soft, hardPixels: budget.hard }
+      : { budgetMs: DRAGIN_SCAN_BUDGET_MS, params: confirmed, softPixels: budget.soft, hardPixels: budget.hard };
     try { r = await scanRgba(rgba, decoded.width, decoded.height, scanOpt); } catch { r = null; }
     if (!r || !r.ok) continue;
     const W = decoded.width, H = decoded.height;
@@ -471,14 +542,14 @@ async function unifiedQrSections(bytes, name, control = null) {
 // skipQr: true 表示 ZXing 层已给出二维码结论，本层不再重复尝试（避免自相矛盾）。
 // 返回 section 数组（可能为空）。
 // ------------------------------------------------------------
-function buildQrSections(decoded, name, frame, skipQr) {
+function buildQrSections(decoded, name, frame, skipQr, params = null) {
   const sections = [];
   const suffix = frame ? "-f" + frame.index : "";
   const frameTag = frame ? "（第 " + (frame.index + 1) + "/" + frame.total + " 帧）" : "";
   if (skipQr) return sections;
 
   if (true) {
-    const qr = tryDecodeQr(decoded);
+    const qr = tryDecodeQr(decoded, params);
     if (qr) {
       const stretched = decoded.width !== decoded.height;
       const text = qr.text || "";
@@ -602,10 +673,11 @@ function _colorPixelMap(decoded, targetKey, maxW = 96, maxH = 64) {
   }
   return rows.join("\n");
 }
-function buildColorFreqSections(decoded, name, frameInfo) {
+function buildColorFreqSections(decoded, name, frameInfo, params = null) {
   const { width, height, channels, samples } = decoded;
   const total = width * height;
   if (!total || !samples || !channels) return [];
+  _checkPixels(total, `颜色分析 ${width}×${height}`, params);
   const prefix = frameInfo ? "帧#" + (frameInfo.index + 1) + " " : "";
   const MAX_COLORS = 4096; // 超过视为连续色调/照片，颜色隐写无意义
   const freq = new Map();
@@ -770,14 +842,15 @@ export function analyzeImage(bytes, name = "", detected, opts) {
   if (!bytes || bytes.length === 0) return null;
   const u8a = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   const skipQr = !!(opts && opts.skipQr);
+  const limitParams = _limitParamsOf(opts);
 
  // 宽高修复优先于像素解码：宽高被改过的图，像素解码本身就会失败，
  // 若放在解码之后就会被 null 早退吞掉——而那恰恰是最需要出修复文件的情况。
   const sizeSections = buildSizeRecoverSections(u8a, name);
 
   // 像素解码：PNG 优先，再 BMP。两者均自包含 magic 判断。
-  let decoded = decodePngPixels(u8a);
-  if (!decoded) decoded = decodeBmpPixels(u8a);
+  let decoded = decodePngPixels(u8a, limitParams);
+  if (!decoded) decoded = decodeBmpPixels(u8a, limitParams);
   if (!decoded) return sizeSections.length
     ? { sections: finalizeSections(sizeSections, { source: "imageAnalysis" }) }
     : null; // 非 PNG/BMP → 交给其他分析
@@ -800,10 +873,11 @@ export function analyzeImage(bytes, name = "", detected, opts) {
   }
 
   // ---- 二维码识别（核心）----
+  const confirmed = withLimit(limitParams, { _allowLimitOverride: true });
   const sections = sizeSections.slice();
-  for (const s of buildQrSections(decoded, name, null, skipQr)) sections.push(s);
+  for (const s of buildQrSections(decoded, name, null, skipQr, confirmed)) sections.push(s);
   // ---- 颜色频率统计 + 稀有色像素提取 ----
-  for (const s of buildColorFreqSections(decoded, name, null)) sections.push(s);
+  for (const s of buildColorFreqSections(decoded, name, null, confirmed)) sections.push(s);
   return sections.length
     ? { sections: finalizeSections(sections, { source: "imageAnalysis" }) }
     : null;
@@ -823,6 +897,7 @@ export function analyzeImage(bytes, name = "", detected, opts) {
 export async function analyzeImageAsync(bytes, name = "", detected, opts = {}) {
   const control = opts && opts.control ? opts.control : null;
   const onSection = typeof opts.onSection === "function" ? opts.onSection : null;
+  const limitParams = _limitParamsOf(opts);
   const emit = (list) => {
     if (!onSection) return;
     for (const s of list || []) {
@@ -835,14 +910,14 @@ export async function analyzeImageAsync(bytes, name = "", detected, opts = {}) {
   const u8a = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
 
   // ---- ① 统一读码链优先（ZXing 工业级检测器 + 自研几何链）----
-  const zxSections = await unifiedQrSections(u8a, name, control);
+  const zxSections = await unifiedQrSections(u8a, name, control, limitParams);
   if (!(await waitControl(control))) return null;
   emit(zxSections);
   const zxHit = zxSections.length > 0;
 
   // PNG/BMP 走同步自包含解码（保持既有行为不变；ZXing 已命中则抑制其二维码段，避免自相矛盾）。
   if (!(await waitControl(control))) return null;
-  const sync = analyzeImage(u8a, name, detected, { skipQr: zxHit });
+  const sync = analyzeImage(u8a, name, detected, { skipQr: zxHit, params: limitParams });
   const baseSections = [];
   let syncUnsupported = false;
   if (sync) {
@@ -869,6 +944,8 @@ export async function analyzeImageAsync(bytes, name = "", detected, opts = {}) {
  // canvas 解码到 RGBA 像素帧（JPEG/GIF/1-bit PNG/索引色 PNG 都可走），逐帧跑 QR 识别。
   let framePack;
   const canvasMime = canvasMimeForImage(u8a);
+  const canvasDim = _canvasFrameDims(u8a);
+  if (canvasDim) _checkPixels(canvasDim.width * canvasDim.height, `canvas 解码 ${canvasDim.width}×${canvasDim.height}`, limitParams, canvasDim.jpeg);
   try {
     framePack = await decodeToPixelFrames(u8a, canvasMime ? { mime: canvasMime } : {});
   } catch (_) {
@@ -893,11 +970,13 @@ export async function analyzeImageAsync(bytes, name = "", detected, opts = {}) {
   const sections = [...zxSections, ...baseSections, ...sizeSections];
   for (let i = 0; i < frames.length; i++) {
     if (!(await waitControl(control))) break;
+    if (!canvasDim) _checkPixels(frames[i].width * frames[i].height, `像素分析 ${frames[i].width}×${frames[i].height}`, limitParams, _isJpeg(u8a));
+    const frameLimitParams = withLimit(limitParams, { _allowLimitOverride: true });
     const frameInfo = multi ? { index: i, total } : null;
-    const secs = buildQrSections(frames[i], name, frameInfo, zxHit);
+    const secs = buildQrSections(frames[i], name, frameInfo, zxHit, frameLimitParams);
     emit(secs);
     for (const s of secs) sections.push(s);
-    const colorSecs = buildColorFreqSections(frames[i], name, frameInfo);
+    const colorSecs = buildColorFreqSections(frames[i], name, frameInfo, frameLimitParams);
     emit(colorSecs);
     for (const s of colorSecs) sections.push(s);
   }

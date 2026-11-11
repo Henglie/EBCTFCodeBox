@@ -4,6 +4,7 @@ import { createTargetEditor, renderCandidateRow } from "./smartResultView.js";
 // 复用 core/exhaustiveDecode.js。独立模块，自带轻量 el/msym，不反向依赖 main.js（低耦合）。
 import { getOp } from "../core/registry.js";
 import { exhaustiveDecode } from "../core/exhaustiveDecode.js";
+import { ensureAll } from "../core/lazyCore.js";
 import { icon as iconSvg } from "./icons.js";
 import { ioArea } from "./ioArea.js"; // 天珩连字：输入改 contenteditable div（textarea 吞 OpenType 特性）
 
@@ -52,12 +53,15 @@ const EXHAUST_FALLBACK = {
   "ui.exhaust.onlyHit": "只看高亮命中",
   "ui.exhaust.showAll": "显示全部",
   "ui.exhaust.hideGarbage": "隐藏乱码",
+  "ui.exhaust.deepScan": "深度扫描（含重型算法）",
+  "ui.exhaust.deepScanConfirm": "深度扫描可能 30 秒以上，是否继续？",
   "ui.exhaust.tooLong": "输入过长（上限 {0} 字符），请缩短或用左侧单项解码。",
   "ui.exhaust.empty": "无解码结果。",
   "ui.exhaust.stat": "共 {0} 项结果，{1} 项命中 flag 特征",
   "ui.exhaust.copied": "已复制结果",
   "ui.exhaust.copyHint": "点击复制",
   "ui.exhaust.running": "穷举中…",
+  "ui.exhaust.loadFailed": "算法模块加载失败，无法开始穷举。请重试或检查网络 / 缓存后刷新。",
   "ui.exhaust.branchCount": "{0} 个分支",
   "ui.exhaust.hitCount": "{0} 条疑似命中",
   "ui.exhaust.defaultParam": "默认",
@@ -68,6 +72,8 @@ const eState = {
   input: "",
   onlyHit: false,     // 只看命中
   hideGarbage: false, // 隐藏低可打印率乱码
+  deepScan: false,    // 深度扫描：包含重型算法（默认关闭）
+  deepScanAck: false, // 本次勾选已确认耗时提示
 };
 
 let _seq = 0; // 防竞态：慢结果回来若非最新则丢弃
@@ -101,6 +107,8 @@ export function renderExhaustive(container) {
   onlyHitCb.checked = eState.onlyHit;
   const hideGarbageCb = el("input", { type: "checkbox", id: "exhaustHideGarbage" });
   hideGarbageCb.checked = eState.hideGarbage;
+  const deepScanCb = el("input", { type: "checkbox", id: "exhaustDeepScan" });
+  deepScanCb.checked = eState.deepScan;
   const toolbar = el("div", { class: "exhaust-toolbar" },
     runBtn,
     el("label", { class: "exhaust-switch-label", for: "exhaustOnlyHit" },
@@ -110,6 +118,10 @@ export function renderExhaustive(container) {
     el("label", { class: "exhaust-switch-label", for: "exhaustHideGarbage" },
       el("span", { class: "switch" }, hideGarbageCb, el("span", { class: "track" }), el("span", { class: "knob" })),
       el("span", {}, tt("ui.exhaust.hideGarbage")),
+    ),
+    el("label", { class: "exhaust-switch-label", for: "exhaustDeepScan" },
+      el("span", { class: "switch" }, deepScanCb, el("span", { class: "track" }), el("span", { class: "knob" })),
+      el("span", {}, tt("ui.exhaust.deepScan")),
     ),
   );
 
@@ -121,16 +133,38 @@ export function renderExhaustive(container) {
     eState.input = input.value;
     eState.onlyHit = onlyHitCb.checked;
     eState.hideGarbage = hideGarbageCb.checked;
+    eState.deepScan = deepScanCb.checked;
     const q = input.value.trim();
+    if (!q) return;
+    if (eState.deepScan && !eState.deepScanAck) {
+      if (!window.confirm(tt("ui.exhaust.deepScanConfirm"))) {
+        deepScanCb.checked = false;
+        eState.deepScan = false;
+        return;
+      }
+      eState.deepScanAck = true;
+    }
     out.innerHTML = "";
     statBar.textContent = "";
-    if (!q) return;
     const seq = ++_seq;
     statBar.textContent = tt("ui.exhaust.running");
+    // 冷启动直链 #/exhaust 时注册表里可能仍是惰载 stub（无 decode/run），
+    // 先补齐全量算法面再穷举，否则会得到空结果。
+    try {
+      await ensureAll();
+    } catch (e) {
+      if (seq !== _seq) return;
+      statBar.textContent = "";
+      out.append(el("div", { class: "exhaust-empty" },
+        tt("ui.exhaust.loadFailed") + "\n" + ((e && e.message) || String(e))));
+      return;
+    }
+    if (seq !== _seq) return; // 加载期间输入已变，放弃本轮
     const r = await exhaustiveDecode(q, {
       targets: targetEditor.getTargets(),
       onlyChanged: true,
       onlyPrintable: eState.hideGarbage,
+      excludeHeavy: !eState.deepScan,
     });
     if (seq !== _seq) return; // 过期
     if (r.tooLong) { statBar.textContent = ""; out.append(el("div", { class: "exhaust-empty" }, tt("ui.exhaust.tooLong", r.maxInput))); return; }
@@ -140,6 +174,10 @@ export function renderExhaustive(container) {
   runBtn.addEventListener("click", run);
   onlyHitCb.addEventListener("change", run);
   hideGarbageCb.addEventListener("change", run);
+  deepScanCb.addEventListener("change", () => {
+    if (!deepScanCb.checked) eState.deepScanAck = false;
+    run();
+  });
  // 输入变化实时跑（防抖）
   let _t = null;
   input.addEventListener("input", () => { eState.input = input.value; clearTimeout(_t); _t = setTimeout(run, 250); });
@@ -165,14 +203,20 @@ export function renderExhaustive(container) {
   if ((eState.input || "").trim()) setTimeout(run, 0);
 }
 
+// 首屏最多渲染的结果卡片数；其余按需追加，避免一次穷举把整页卡死。
+const RESULT_CARD_LIMIT = 50;
+
 // 渲染两级分组结果（外层分类 / 内层算法折叠卡片）+ flag 三档高亮。
 // 同一算法的多条穷举分支归到一个可折叠 <details> 卡片，命中组默认展开、其余折叠。
+// 首屏只建 50 张算法卡；「显示全部」按需增量 append，数据仍保留在 r.groups 里。
 function renderResults(out, statBar, r) {
   out.innerHTML = "";
   statBar.textContent = tt("ui.exhaust.stat", r.total, r.hits);
   if (!r.total) { out.append(el("div", { class: "exhaust-empty" }, tt("ui.exhaust.empty"))); return; }
 
   const wantOnlyHit = eState.onlyHit;
+  const pending = [];
+  let rendered = 0;
   for (const g of r.groups) {
  // 先过滤 onlyHit，再看该分类是否还有算法组
     const algos = (g.algos || []).map((a) => {
@@ -188,12 +232,37 @@ function renderResults(out, statBar, r) {
       el("span", { class: "exhaust-cat-count" }, String(algos.reduce((n, a) => n + a.items.length, 0))),
     );
     catBox.append(head);
-    for (const a of algos) catBox.append(renderAlgo(a, wantOnlyHit));
     out.append(catBox);
+    let boxRendered = 0;
+    for (const a of algos) {
+      const make = () => renderAlgo(a, wantOnlyHit);
+      if (rendered < RESULT_CARD_LIMIT) { catBox.append(make()); rendered++; boxRendered++; }
+      else pending.push({ host: catBox, make });
+    }
+    if (!boxRendered) catBox.setAttribute("hidden", "");
   }
- // onlyHit 下若全空
-  if (wantOnlyHit && !out.querySelector(".exhaust-row")) {
+ // onlyHit 下若全空（还有待加载项时不算空）
+  if (wantOnlyHit && !out.querySelector(".exhaust-row") && !pending.length) {
     out.append(el("div", { class: "exhaust-empty" }, tt("ui.exhaust.empty")));
+  }
+  if (pending.length) {
+    const btn = el("button", { type: "button", class: "act-btn exhaust-more" },
+      tt("ui.exhaust.showAll") + " (" + pending.length + ")");
+    btn.addEventListener("click", () => {
+      btn.remove();
+      const frags = new Map();
+      for (const p of pending.splice(0)) {
+        const node = p.make();
+        let frag = frags.get(p.host);
+        if (!frag) { frag = document.createDocumentFragment(); frags.set(p.host, frag); }
+        frag.append(node);
+      }
+      for (const [host, frag] of frags) {
+        host.removeAttribute("hidden");
+        host.append(frag);
+      }
+    });
+    out.append(btn);
   }
 }
 
@@ -227,4 +296,4 @@ function renderRow(it) {
   return renderCandidateRow(it, { copied: () => window.__ebctfToast?.(tt("ui.exhaust.copied")) });
 }
 
-export { eState };
+export { eState, renderResults as renderExhaustiveResults };

@@ -19,9 +19,13 @@
  */
 import { inflateRaw } from "./pcapDeep.js";
 import { encodePNG, rgbaToDataURL } from "./mcMap.js";
+import { checkLimit, withLimit } from "./limitGuard.js";
 
 // ---- PNG chunk 遍历 ----
 const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const MAX_PIXELS_DEFAULT = 16 * 1024 * 1024; // 单图软阈值（RGBA 输出约 64 MiB）
+const MAX_PIXELS_HARD = 64 * 1024 * 1024;    // 确认后的硬上限
+const MAX_INFLATE_SLACK = 1024 * 1024;       // 解压输出允许超出扫描线的余量
 function u32be(b, o) {
   return ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
 }
@@ -30,8 +34,16 @@ function u32be(b, o) {
  * 纯 JS PNG 解码 → RGBA 像素。字节序/过滤全部按 PNG 规范实现，
  * 与 PIL/numpy 参照实现逐像素等价。
  */
-export function decodePNG(bytes) {
+export function decodePNG(bytes, opts = {}) {
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const optObj = (opts && typeof opts === "object") ? opts : {};
+  const wantedMax = typeof opts === "number" ? opts : optObj.maxPixels;
+  const maxPixels = Number.isFinite(Number(wantedMax)) && Number(wantedMax) > 0
+    ? Math.floor(Number(wantedMax)) : MAX_PIXELS_DEFAULT;
+  const hardLimitRaw = Number(optObj.hardMaxPixels);
+  const hardPixels = Number.isFinite(hardLimitRaw) && hardLimitRaw > maxPixels
+    ? Math.floor(hardLimitRaw) : Math.max(MAX_PIXELS_HARD, maxPixels);
+  const params = optObj.params || null;
   for (let i = 0; i < 8; i++) if (b[i] !== PNG_SIG[i]) throw new Error("PNG 签名错误");
   let pos = 8;
   let width = 0, height = 0, bitDepth = 8, colorType = 6, interlace = 0;
@@ -69,6 +81,22 @@ export function decodePNG(bytes) {
   if (bitDepth === 16 && colorType === 3) throw new Error("PNG 调色板不支持 16 位");
   if (colorType === 3 && !palette) throw new Error("PNG 调色板缺失 PLTE 块");
 
+  const pixels = width * height;
+  if (!Number.isSafeInteger(pixels) || pixels <= 0) {
+    throw new Error(`PNG 尺寸非法：${width}×${height}=${pixels} 像素。`);
+  }
+  if (pixels > maxPixels) {
+    checkLimit({
+      scope: "stegoPixels.decodePNG.pixels",
+      actual: pixels,
+      soft: maxPixels,
+      hard: hardPixels,
+      params,
+      label: `PNG 图像 ${width}×${height}`,
+      unit: "像素",
+    });
+  }
+
   // IDAT 拼接 → zlib 去头(2)/去尾(4 adler) → raw inflate
   let idatLen = 0;
   for (const c of idatChunks) idatLen += c.length;
@@ -76,7 +104,6 @@ export function decodePNG(bytes) {
   let o = 0;
   for (const c of idatChunks) { idat.set(c, o); o += c.length; }
   if (idat.length < 6) throw new Error("PNG IDAT 缺失");
-  const raw = inflateRaw(idat.subarray(2, idat.length - 4));
 
   // 扫描线：每行前导 1 字节 filter。bpp = filter 回推字节距（<8bit 恒 1，规范如此）
   const bpp = Math.ceil((channels * bitDepth) / 8);
@@ -85,6 +112,11 @@ export function decodePNG(bytes) {
   // 1/2/4bit 调色板与灰度图全部崩。8/16bit 下与原式等值，零行为变化。
   const stride = Math.ceil((width * channels * bitDepth) / 8);
   const expect = height * (stride + 1);
+  if (!Number.isSafeInteger(expect) || expect < 0) throw new Error("PNG 扫描线尺寸溢出");
+  // 按扫描线预期量限制 inflate 输出：正常 PNG 恰好 expect 字节；只放 1 MiB 余量，
+  // 防止小图 IDAT 解压出几十 MB（inflate 炸弹）后再丢弃。
+  const raw = inflateRaw(idat.subarray(2, idat.length - 4), expect + MAX_INFLATE_SLACK,
+    pixels > maxPixels ? withLimit(params, { _allowLimitOverride: true }) : params);
   if (raw.length < expect) throw new Error("PNG 数据不完整（期望 " + expect + " 字节，实际 " + raw.length + "）");
   const filtered = raw.subarray(0, expect);
 

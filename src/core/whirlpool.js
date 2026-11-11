@@ -273,8 +273,8 @@ register({
   desc: "Whirlpool-0 / Whirlpool-T / Whirlpool 三变体 + Rounds 1-10，输出小写 hex；参数与 CyberChef Whirlpool 对齐。",
   acceptsBytes: true,
   params: [
-    { key: "variant", label: "Variant", type: "select", default: "Whirlpool", options: ["Whirlpool", "Whirlpool-T", "Whirlpool-0"] },
-    { key: "rounds", label: "Rounds", type: "number", default: 10 },
+    { key: "variant", label: "变体", labelKey: "op.whirlpoolHash.param.variant", type: "select", default: "Whirlpool", options: ["Whirlpool", "Whirlpool-T", "Whirlpool-0"] },
+    { key: "rounds", label: "轮数", labelKey: "op.whirlpoolHash.param.rounds", type: "number", default: 10 },
   ],
   run: (t, p = {}) => {
     const raw = p.rawBytes;

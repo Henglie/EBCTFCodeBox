@@ -49,6 +49,7 @@ import threading
 import webbrowser
 import functools
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import unquote, urlsplit
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -86,6 +87,19 @@ EXTRA_MIME = {
 }
 
 
+# 静态服务拒绝清单：授权工程 / VCS 元数据 / 备份 / 私钥类文件永不外露。
+# 只影响直接 HTTP 访问，不移动/删除任何文件；前端正常资源（src/public/addons/…）不受影响。
+DENY_DIR_NAMES = frozenset({
+    ".git", ".svn", ".hg", ".ssh", "授权", "备份", "backup", "backups",
+})
+DENY_FILE_PREFIXES = (
+    "private_key", "private-key", "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519",
+    "keygen", "encrypt_key",
+)
+DENY_FILE_SUFFIXES = (".pem", ".key", ".pfx", ".p12", ".keystore")
+DENY_FILE_EXACT = frozenset({"sign.mjs", "private_key.enc"})
+
+
 class Handler(SimpleHTTPRequestHandler):
     """静态文件处理器：修正 MIME + 可缓存重验（默认）/ 强制不缓存（--dev）。"""
 
@@ -97,6 +111,61 @@ class Handler(SimpleHTTPRequestHandler):
     #   False（默认）→ 只 no-cache，浏览器可吃 304 二次刷新秒开；
     #   True（--dev）→ no-store 强制每次全量重拉，供调试用。
     dev_mode = False
+
+    def _host_ok(self):
+        """只接受本机 Host（localhost / 127.0.0.1 / ::1），防 DNS rebinding。"""
+        host = self.headers.get("Host", "")
+        if not host:
+            return False
+        try:
+            hostname = (urlsplit("//" + host.strip()).hostname or "").lower()
+        except ValueError:
+            return False
+        return hostname in ("localhost", "127.0.0.1", "::1")
+
+    def _path_allowed(self, raw_path):
+        """拒绝授权目录 / VCS 元数据 / 备份 / 私钥类文件（含多重百分号编码与反斜杠变体）。"""
+        try:
+            clean = urlsplit(raw_path).path
+        except (ValueError, UnicodeError):
+            return False
+        # 反复解码直到稳定：SimpleHTTPRequestHandler 会再做一次 unquote，
+        # 只解一层会让 %252egit / %25E6%258E%2588... 变成 .git / 授权 后绕过。
+        for _ in range(5):
+            try:
+                decoded = unquote(clean)
+            except (ValueError, UnicodeError):
+                return False
+            if decoded == clean:
+                break
+            clean = decoded
+        else:
+            return False  # 嵌套编码过深，直接拒绝
+        if "\x00" in clean:
+            return False
+        parts = [p for p in clean.replace("\\", "/").split("/") if p not in ("", ".")]
+        if any(p == ".." for p in parts):
+            return False
+        low = [p.lower() for p in parts]
+        if any(p in DENY_DIR_NAMES for p in low):
+            return False
+        if not low:
+            return True
+        name = low[-1]
+        if name in DENY_FILE_EXACT:
+            return False
+        if name.startswith(DENY_FILE_PREFIXES) or name.endswith(DENY_FILE_SUFFIXES):
+            return False
+        return True
+
+    def send_head(self):
+        if not self._host_ok():
+            self.send_error(403, "Forbidden Host")
+            return None
+        if not self._path_allowed(self.path):
+            self.send_error(404, "Not Found")
+            return None
+        return super().send_head()
 
     def guess_type(self, path):
         ext = os.path.splitext(path)[1].lower()

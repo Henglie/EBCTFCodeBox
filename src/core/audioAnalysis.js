@@ -29,6 +29,22 @@
 import { dtmfDecode, parseWavPcm, goertzel as goertzelDtmf, ROW, COL } from "./dtmfWav.js";
 import { parseWav, readPcmSamples, goertzel } from "./audiostego.js";
 import { decodeUtf8Lossless } from "./bytesIo.js";
+import { checkLimit, withLimit } from "./limitGuard.js";
+
+const AUDIO_BYTES_SOFT = 128 * 1024 * 1024;
+const AUDIO_BYTES_HARD = 512 * 1024 * 1024;
+const AUDIO_FRAMES_SOFT = 8 * 1024 * 1024;
+const AUDIO_FRAMES_HARD = 32 * 1024 * 1024;
+
+function readPreviewMinutes(p) {
+  const v = Number(p && p.previewMinutes);
+  return Number.isFinite(v) && v > 0 ? v : 0;
+}
+
+function fmtMinutes(v) {
+  if (!Number.isFinite(v)) return "?";
+  return String(+v.toFixed(3));
+}
 
 // BOM 保真的严格 UTF-8 解码（bytesIo 单一源）：非法序列抛 TypeError（同旧 fatal TextDecoder 语义），
 // 唯一行为差异是合法 BOM（U+FEFF 开头）不再被静默吞掉。
@@ -250,7 +266,7 @@ function extractAudioLsb(bytes) {
 // detected: 可选，fileAnalysis 的 detected 对象({ext,mime}) 或 null
 // 返回 { sections:[...] } | null（null = 非音频，调用方应忽略）
 // ============================================================
-export function analyzeAudio(bytes, name = "", detected) {
+export function analyzeAudio(bytes, name = "", detected, params = null) {
   if (!bytes || bytes.length === 0) return null;
   const u8a = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
 
@@ -260,6 +276,20 @@ export function analyzeAudio(bytes, name = "", detected) {
   const isF = isFlac(u8a);
   const isO = isOgg(u8a);
   if (!isW && !isM && !isF && !isO) return null;
+
+  let limitParams = (params && typeof params === "object") ? params : null;
+  if (u8a.length > AUDIO_BYTES_SOFT) {
+    checkLimit({
+      scope: "audioAnalysis.inputBytes",
+      actual: u8a.length,
+      soft: AUDIO_BYTES_SOFT,
+      hard: AUDIO_BYTES_HARD,
+      params: limitParams,
+      label: "音频输入",
+      unit: " 字节",
+    });
+    limitParams = withLimit(limitParams, { _allowLimitOverride: true });
+  }
 
  // ---- 非 WAV：无自包含 PCM 解码器，仅标注格式 + 提示 ----
   if (!isW) {
@@ -277,21 +307,52 @@ export function analyzeAudio(bytes, name = "", detected) {
     };
   }
 
- // ---- WAV 分支：跑 DTMF / SSTV / LSB ----
+  // ---- WAV 分支：跑 DTMF / SSTV / LSB ----
   const sections = [];
+  const previewMinutes = readPreviewMinutes(params);
+  let previewBytes = u8a;
 
  // WAV 结构信息
   const w = parseWav(u8a);
   let wavInfoLine = "WAV (RIFF/WAVE)";
   if (w.ok && w.fmt) {
     const f = w.fmt;
-    const dur = (f.sampleRate > 0 && w.data) ? (Math.floor(w.data.actual / (f.channels * (f.bitsPerSample >> 3))) / f.sampleRate) : 0;
+    const frameBytes = f.channels * (f.bitsPerSample >> 3);
+    const totalFrames = frameBytes > 0 && w.data ? Math.floor(w.data.actual / frameBytes) : 0;
+    let analysisFrames = totalFrames;
+    let previewTruncated = false;
+    if (previewMinutes > 0 && f.sampleRate > 0 && frameBytes > 0) {
+      const cap = Math.ceil(previewMinutes * 60 * f.sampleRate);
+      if (Number.isFinite(cap) && cap < analysisFrames) {
+        analysisFrames = Math.max(1, cap);
+        previewTruncated = true;
+      }
+    }
+    if (analysisFrames > AUDIO_FRAMES_SOFT) {
+      checkLimit({
+        scope: "audioAnalysis.frames",
+        actual: analysisFrames,
+        soft: AUDIO_FRAMES_SOFT,
+        hard: AUDIO_FRAMES_HARD,
+        params: limitParams,
+        label: "WAV 采样帧",
+        unit: " 帧",
+      });
+    }
+    if (previewTruncated && w.data) {
+      previewBytes = u8a.subarray(0, Math.min(u8a.length, w.data.offset + analysisFrames * frameBytes));
+    }
+    const dur = (f.sampleRate > 0 && w.data) ? (totalFrames / f.sampleRate) : 0;
     const durStr = dur > 0 ? (dur.toFixed(3) + "s") : "?";
     wavInfoLine = "WAV: " + f.sampleRate + " Hz / " + f.bitsPerSample + " bit / " + f.channels + " ch / " + durStr;
+    if (previewMinutes > 0) {
+      wavInfoLine += "\n预览: 仅分析前 " + fmtMinutes(previewMinutes) + " 分钟（原始 " + fmtMinutes(dur / 60) + " 分钟）"
+        + (previewTruncated ? "，分析帧 " + analysisFrames + " / " + totalFrames : "，未超过总时长");
+    }
   }
 
- // ① DTMF 识别
-  const dtmf = detectDtmf(u8a);
+  // ① DTMF 识别
+  const dtmf = detectDtmf(previewBytes);
   if (dtmf && dtmf.seq) {
     const seq = dtmf.seq;
     const hasFlag = FLAG_RE.test(seq);
@@ -315,11 +376,11 @@ export function analyzeAudio(bytes, name = "", detected) {
     }
   }
 
- // ② SSTV 模式识别
-  const sstv = detectSstv(u8a);
+  // ② SSTV 模式识别
+  const sstv = detectSstv(previewBytes);
   if (sstv && sstv.syncAt >= 0) {
     const lines = [wavInfoLine];
-    lines.push("检出 1200Hz 起始同步脉冲 @ ~" + (sstv.syncAt / (parseWavPcm(u8a).sampleRate || 8000)).toFixed(3) + "s");
+    lines.push("检出 1200Hz 起始同步脉冲 @ ~" + (sstv.syncAt / (parseWavPcm(previewBytes).sampleRate || 8000)).toFixed(3) + "s");
     if (sstv.vis != null) {
       lines.push("VIS 码: " + sstv.vis + " (0x" + sstv.vis.toString(16) + ")");
       lines.push("识别模式: " + (sstv.mode || "未知（VIS " + sstv.vis + " 不在常见模式表内）"));
@@ -336,8 +397,8 @@ export function analyzeAudio(bytes, name = "", detected) {
     });
   }
 
- // ③ 音频 LSB 提取
-  const lsb = extractAudioLsb(u8a);
+  // ③ 音频 LSB 提取
+  const lsb = extractAudioLsb(previewBytes);
   if (lsb) {
     const hasFlag = lsb.text ? FLAG_RE.test(lsb.text) : false;
     const lines = [wavInfoLine];

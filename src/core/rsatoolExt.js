@@ -40,17 +40,12 @@ import {
   iroot,
 } from "./rsatool.js";
 import { lllReduce } from "./lllAttack.js";
+import { modPow as fastModPow } from "./primeGen.js"; // 共享 Montgomery+窗口快路径
 
 // ============ 通用工具 ============
 function modPow(base, exp, mod) {
-  base = ((base % mod) + mod) % mod;
-  let result = 1n;
-  while (exp > 0n) {
-    if (exp & 1n) result = (result * base) % mod;
-    base = (base * base) % mod;
-    exp >>= 1n;
-  }
-  return result;
+  if (mod === 1n) return exp > 0n ? 0n : 1n; // 保留原边界语义
+  return fastModPow(base, exp, mod); // 底数归一化 / 负指数返回 1 与原实现一致
 }
 
 function modInverse(a, m) {

@@ -32,6 +32,122 @@
  */
 import { register } from "./registry.js";
 import { decodePNG, dataURLToBytes, encodePNG, rgbaToDataURL } from "./stegoPixels.js";
+import { checkLimit, withLimit, isLimitError } from "./limitGuard.js";
+
+const IMAGE_PIXELS_SOFT = 16 * 1024 * 1024;
+const IMAGE_PIXELS_HARD = 64 * 1024 * 1024;
+const JPEG_PIXELS_SOFT = 36 * 1024 * 1024;
+const JPEG_PIXELS_HARD = 144 * 1024 * 1024;
+
+const _imageMeta = new WeakMap();
+
+function _limitParams(params) {
+  if (params && typeof params === "object") return params;
+  const g = globalThis.__ebctfLimitParams;
+  return g && typeof g === "object" ? g : null;
+}
+
+function _budgetOf(jpeg) {
+  return jpeg
+    ? { soft: JPEG_PIXELS_SOFT, hard: JPEG_PIXELS_HARD }
+    : { soft: IMAGE_PIXELS_SOFT, hard: IMAGE_PIXELS_HARD };
+}
+
+function _checkPixels(pixels, label, params, jpeg = false) {
+  const n = Number(pixels);
+  const b = _budgetOf(jpeg);
+  if (!Number.isFinite(n) || n <= b.soft) return;
+  checkLimit({
+    scope: "imageToolbox.pixels",
+    actual: n,
+    soft: b.soft,
+    hard: b.hard,
+    params: _limitParams(params),
+    label,
+    unit: " 像素",
+  });
+}
+
+function _limitParamsForImage(img, params) {
+  const meta = img && _imageMeta.get(img);
+  return meta && meta.confirmed ? withLimit(params, { _allowLimitOverride: true }) : params;
+}
+
+/** gifCompose 总像素预算（对齐 StegSolve 单帧/累计 16M 软 / 64M 硬）。 */
+function _checkGifTotalPixels(total, label, params) {
+  const n = Number(total);
+  if (!Number.isFinite(n) || n <= IMAGE_PIXELS_SOFT) return params;
+  checkLimit({
+    scope: "imageToolbox.gif.totalPixels",
+    actual: n,
+    soft: IMAGE_PIXELS_SOFT,
+    hard: IMAGE_PIXELS_HARD,
+    params: _limitParams(params),
+    label,
+    unit: " 像素",
+  });
+  return withLimit(params, { _allowLimitOverride: true });
+}
+
+function _checkImageAlloc(img, label, params) {
+  const meta = img && _imageMeta.get(img);
+  _checkPixels(img.width * img.height, label, _limitParamsForImage(img, params), !!(meta && meta.jpeg));
+}
+
+function _markDecoded(img, jpeg) {
+  if (img && typeof img === "object") _imageMeta.set(img, { jpeg: !!jpeg, confirmed: true });
+  return img;
+}
+
+function _isJpegBytes(bytes) {
+  return !!bytes && bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+}
+
+function _u16be(b, o) { return ((b[o] << 8) | b[o + 1]) >>> 0; }
+function _u32be(b, o) { return ((b[o] * 0x1000000) + (b[o + 1] << 16) + (b[o + 2] << 8) + b[o + 3]) >>> 0; }
+function _u16le(b, o) { return (b[o] | (b[o + 1] << 8)) >>> 0; }
+function _u32le(b, o) { return (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0; }
+
+function _sniffDims(bytes) {
+  const b = bytes;
+  if (!b || b.length < 10) return null;
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 && b.length >= 24) {
+    const w = _u32be(b, 16), h = _u32be(b, 20);
+    if (w && h) return { width: w, height: h, jpeg: false };
+  }
+  if (b[0] === 0x42 && b[1] === 0x4d && b.length >= 26) {
+    const w = _u32le(b, 18) | 0;
+    const h = Math.abs(_u32le(b, 22) | 0);
+    if (w > 0 && h > 0) return { width: w, height: h, jpeg: false };
+  }
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38 && b.length >= 10) {
+    const w = _u16le(b, 6), h = _u16le(b, 8);
+    if (w && h) return { width: w, height: h, jpeg: false };
+  }
+  if (_isJpegBytes(b)) {
+    let pos = 2;
+    while (pos + 4 <= b.length) {
+      if (b[pos] !== 0xff) { pos++; continue; }
+      let marker = b[pos + 1];
+      while (marker === 0xff && pos + 2 < b.length) { pos++; marker = b[pos + 1]; }
+      if (marker === 0xd8 || marker === 0xd9 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+        pos += 2;
+        continue;
+      }
+      const len = _u16be(b, pos + 2);
+      if (len < 2) break;
+      const isSof = (marker >= 0xc0 && marker <= 0xc3) || (marker >= 0xc5 && marker <= 0xc7) ||
+        (marker >= 0xc9 && marker <= 0xcb) || (marker >= 0xcd && marker <= 0xcf);
+      if (isSof && pos + 9 <= b.length) {
+        const h = _u16be(b, pos + 5), w = _u16be(b, pos + 7);
+        if (w && h) return { width: w, height: h, jpeg: true };
+        break;
+      }
+      pos += 2 + len;
+    }
+  }
+  return null;
+}
 
 // ============================================================
 // 共用：输入解码 / 输出封装
@@ -48,10 +164,17 @@ function _toolInBytes(text, p, opName) {
 }
 
 /** 浏览器 canvas 解码兜底（JPEG/GIF/BMP/WebP 等 decodePNG 不吃的格式）。 */
-async function _canvasDecode(bytes) {
+async function _canvasDecode(bytes, params = null, jpeg = null) {
   if (typeof document === "undefined") throw new Error("无浏览器 canvas");
+  const isJpeg = jpeg == null ? _isJpegBytes(bytes) : !!jpeg;
   const blob = new Blob([bytes]);
   const bmp = await createImageBitmap(blob);
+  try {
+    _checkPixels(bmp.width * bmp.height, `canvas 解码图像 ${bmp.width}×${bmp.height}`, params, isJpeg);
+  } catch (e) {
+    bmp.close && bmp.close();
+    throw e;
+  }
   const canvas = document.createElement("canvas");
   canvas.width = bmp.width;
   canvas.height = bmp.height;
@@ -66,12 +189,21 @@ async function _canvasDecode(bytes) {
 async function _toolDecodeImage(text, p, opName) {
   const bytes = _toolInBytes(text, p, opName);
   if (bytes.length < 8) throw new Error(opName + "：输入不是有效图片（数据过短）");
+  const dim = _sniffDims(bytes);
+  const jpeg = dim ? dim.jpeg : _isJpegBytes(bytes);
+  let limitParams = p;
+  if (dim) {
+    _checkPixels(dim.width * dim.height, `${opName} 图像 ${dim.width}×${dim.height}`, p, dim.jpeg);
+    limitParams = withLimit(p, { _allowLimitOverride: true });
+  }
   try {
-    return decodePNG(bytes);
+    return _markDecoded(decodePNG(bytes, { params: limitParams }), false);
   } catch (pngErr) {
+    if (isLimitError(pngErr)) throw pngErr;
     try {
-      return await _canvasDecode(bytes);
-    } catch {
+      return _markDecoded(await _canvasDecode(bytes, limitParams, jpeg), jpeg);
+    } catch (canvasErr) {
+      if (isLimitError(canvasErr)) throw canvasErr;
       throw new Error(
         opName + "：无法解码图片——不是有效图片或格式不支持（PNG 全型支持；" +
         "JPG/BMP/GIF/WebP 需浏览器环境）"
@@ -199,6 +331,7 @@ async function imageCompressOp(text, p = {}) {
   if (typeof document === "undefined") {
     throw new Error("imageCompress：JPEG/WebP 重编码需要浏览器 canvas 环境（纯 Node 环境仅支持 PNG 输出）");
   }
+  _checkImageAlloc(img, `imageCompress 画布 ${img.width}×${img.height}`, p);
   const canvas = document.createElement("canvas");
   canvas.width = img.width;
   canvas.height = img.height;
@@ -287,6 +420,7 @@ async function imageFrostedOp(text, p = {}) {
   const img = await _toolDecodeImage(text, p, "imageFrosted");
   const w = img.width, h = img.height, d = img.data;
   const n = w * h;
+  _checkImageAlloc(img, `imageFrosted 通道缓存 ${w}×${h}`, p);
   const ch = [new Float64Array(n), new Float64Array(n), new Float64Array(n)];
   for (let i = 0, j = 0; i < d.length; i += 4, j++) {
     ch[0][j] = d[i]; ch[1][j] = d[i + 1]; ch[2][j] = d[i + 2];
@@ -314,6 +448,7 @@ async function imageSketchOp(text, p = {}) {
   const img = await _toolDecodeImage(text, p, "imageSketch");
   const w = img.width, h = img.height, d = img.data;
   const n = w * h;
+  _checkImageAlloc(img, `imageSketch 灰度缓存 ${w}×${h}`, p);
   const gray = new Float64Array(n);
   for (let i = 0, j = 0; i < d.length; i += 4, j++) {
     gray[j] = _lum601(d[i], d[i + 1], d[i + 2]);
@@ -678,23 +813,38 @@ async function gifComposeOp(text, p = {}) {
   ];
   // 收集帧：拖入真字节优先为第一帧，其后主输入/追加参数按序
   const frames = [];
+  const refs = _collectImageRefs(text, p);
+  const imageCount = (p && p.rawBytes && p.rawBytes.length ? 1 : 0) + refs.length;
+  let limitParams = p;
   if (p && p.rawBytes && p.rawBytes.length) {
     try {
       frames.push(await _toolDecodeImage(null, p, "gifCompose"));
     } catch (e) {
+      if (isLimitError(e)) throw e;
       const m1 = String((e && e.message) || "无法解码").replace(/^gifCompose：/, "");
       throw new Error("gifCompose：第 1 张（拖入文件）解码失败——" + m1);
     }
   }
-  const refs = _collectImageRefs(text, p);
+  // 首帧尺寸即合成画布尺寸：解码其余帧前先按总像素预算确认，避免先解码大量帧再拒绝。
+  const checkEarlyTotal = () => {
+    if (!frames.length || imageCount < 2) return;
+    const fw = frames[0].width, fh = frames[0].height;
+    limitParams = _checkGifTotalPixels(fw * fh * imageCount,
+      `gifCompose 总像素 ${fw}×${fh}×${imageCount}`, limitParams);
+  };
+  checkEarlyTotal();
   for (let i = 0; i < refs.length; i++) {
+    let decoded;
     try {
       const bytes = dataURLToBytes(refs[i]);
-      frames.push(await _toolDecodeImageBytes(bytes, "gifCompose"));
+      decoded = await _toolDecodeImageBytes(bytes, "gifCompose", limitParams);
     } catch (e) {
+      if (isLimitError(e)) throw e;
       const m2 = String((e && e.message) || "不是有效图片").replace(/^gifCompose：/, "");
       throw new Error("gifCompose：第 " + (frames.length + 1) + " 张图片解码失败——" + m2);
     }
+    frames.push(decoded);
+    if (frames.length === 1) checkEarlyTotal();
   }
   if (frames.length < 2) {
     throw new Error("gifCompose：至少需要两张图片（当前 " + frames.length +
@@ -702,6 +852,10 @@ async function gifComposeOp(text, p = {}) {
   }
   // 等尺寸化到首帧
   const fw = frames[0].width, fh = frames[0].height;
+  const totalPx = fw * fh * frames.length;
+  // 在 fitted 分配前做最终总像素校验（确认后复用 limitParams 放行后续换算）。
+  limitParams = _checkGifTotalPixels(totalPx,
+    `gifCompose 合成 ${fw}×${fh}×${frames.length}`, limitParams);
   const fitted = frames.map((fr, i) => {
     if (fr.width === fw && fr.height === fh) return fr;
     if (fitMode === "scale") {
@@ -728,10 +882,6 @@ async function gifComposeOp(text, p = {}) {
     }
     return { width: fw, height: fh, data: canvasData };
   });
-  const totalPx = fw * fh * fitted.length;
-  if (totalPx > 4 * 1024 * 1024) {
-    throw new Error("gifCompose：总像素量过大（" + totalPx + " > 4194304），请缩小图片尺寸或减少帧数");
-  }
   const { palette, frames: quantized } = _quantizeFrames(fitted, 256);
   const delayCs = Math.round(delayMs / 10);
   const bytes = _buildGif89a(quantized, palette, delayCs, loop);
@@ -752,14 +902,23 @@ async function gifComposeOp(text, p = {}) {
 }
 
 /** 图片字节 → RGBA（gifCompose 帧解码用，两级策略同 _toolDecodeImage）。 */
-async function _toolDecodeImageBytes(bytes, opName) {
+async function _toolDecodeImageBytes(bytes, opName, p = null) {
   if (bytes.length < 8) throw new Error(opName + "：输入不是有效图片（数据过短）");
+  const dim = _sniffDims(bytes);
+  const jpeg = dim ? dim.jpeg : _isJpegBytes(bytes);
+  let limitParams = p;
+  if (dim) {
+    _checkPixels(dim.width * dim.height, `${opName} 图像 ${dim.width}×${dim.height}`, p, dim.jpeg);
+    limitParams = withLimit(p, { _allowLimitOverride: true });
+  }
   try {
-    return decodePNG(bytes);
+    return _markDecoded(decodePNG(bytes, { params: limitParams }), false);
   } catch (pngErr) {
+    if (isLimitError(pngErr)) throw pngErr;
     try {
-      return await _canvasDecode(bytes);
-    } catch {
+      return _markDecoded(await _canvasDecode(bytes, limitParams, jpeg), jpeg);
+    } catch (canvasErr) {
+      if (isLimitError(canvasErr)) throw canvasErr;
       throw new Error(
         opName + "：无法解码图片——不是有效图片或格式不支持（PNG 全型支持；" +
         "JPG/BMP/GIF/WebP 需浏览器环境）"
@@ -946,7 +1105,7 @@ async function spriteSheetOp(text, p = {}) {
     } catch (e) {
       throw new Error(OPN + "：追加第 " + (i + 1) + " 行不是有效图片数据（每行一个 base64/dataURL）");
     }
-    frames.push(await _toolDecodeImageBytes(bytes, OPN));
+    frames.push(await _toolDecodeImageBytes(bytes, OPN, p));
   }
   const cols = _intInRange(OPN, p.cols, 1, 1024, "每行列数");
   const fw = frames[0].width, fh = frames[0].height;
@@ -957,7 +1116,9 @@ async function spriteSheetOp(text, p = {}) {
     }
   }
   const rows = Math.ceil(frames.length / cols);
-  const out = { data: new Uint8ClampedArray(fw * cols * fh * rows * 4), width: fw * cols, height: fh * rows };
+  const outW = fw * cols, outH = fh * rows;
+  _checkPixels(outW * outH, `${OPN} 合成 ${outW}×${outH}`, p, false);
+  const out = { data: new Uint8ClampedArray(outW * outH * 4), width: outW, height: outH };
   for (const [i, fr] of frames.entries()) {
     const r = Math.floor(i / cols), c = i % cols;
     for (let y = 0; y < fh; y++) {

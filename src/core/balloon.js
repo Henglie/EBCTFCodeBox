@@ -104,9 +104,9 @@ function balloonHash(counter, a, b) {
 
 // 主函数：balloon(password, salt, sCost, tCost, delta) → Uint8Array(32)
 function balloon(password, salt, sCost, tCost, delta = MIN_DELTA) {
-  if (sCost < 1) throw new Error("sCost 须 ≥ 1");
-  if (tCost < 1) throw new Error("tCost 须 ≥ 1");
-  if (delta < MIN_DELTA) throw new Error(`delta 须 ≥ ${MIN_DELTA}`);
+  if (!Number.isInteger(sCost) || sCost < 1) throw new Error("sCost 须为 ≥1 的整数");
+  if (!Number.isInteger(tCost) || tCost < 1) throw new Error("tCost 须为 ≥1 的整数");
+  if (!Number.isInteger(delta) || delta < MIN_DELTA) throw new Error(`delta 须为 ≥${MIN_DELTA} 的整数`);
   const buffer = new Uint8Array(sCost * HASH_LEN);
   const counter = new Uint8Array(8);
   const idxBlock = new Uint8Array(16 + HASH_LEN); // t||m||i(各 8B) + 32B hash 区
@@ -171,6 +171,13 @@ function decodeInput(s, enc) {
   return new TextEncoder().encode(t);
 }
 
+function intParam(value, fallback, name, min) {
+  if (value == null || String(value).trim() === "") return fallback;
+  const n = Number(String(value).trim());
+  if (!Number.isSafeInteger(n) || n < min) throw new Error(`balloon：${name} 必须为 ≥${min} 的整数（当前 ${value}）`);
+  return n;
+}
+
 function balloonRun(text, p = {}) {
   const lines = [];
   lines.push("=== Balloon 内存硬 KDF（Boneh 2016，SHA-256 实例）===");
@@ -179,25 +186,17 @@ function balloonRun(text, p = {}) {
   const saltEnc = p.saltEnc || "utf8";
   const pass = decodeInput(text, passEnc);
   const salt = decodeInput(p.salt != null ? p.salt : "", saltEnc);
-  const sCostRaw = p.sCost != null && String(p.sCost).trim() !== "" ? String(p.sCost).trim() : null;
-  const sCost = sCostRaw !== null ? parseInt(sCostRaw, 10) : 1024;
-  if (sCostRaw !== null && (!Number.isInteger(sCost) || sCost <= 0)) throw new Error("balloon：sCost 必须为正整数");
-  const tCostRaw = p.tCost != null && String(p.tCost).trim() !== "" ? String(p.tCost).trim() : null;
-  const tCost = tCostRaw !== null ? parseInt(tCostRaw, 10) : 3;
-  if (tCostRaw !== null && (!Number.isInteger(tCost) || tCost <= 0)) throw new Error("balloon：tCost 必须为正整数");
-  const delta = parseInt(p.delta, 10) || MIN_DELTA;
+  const sCost = intParam(p.sCost, 1024, "sCost", 1);
+  const tCost = intParam(p.tCost, 3, "tCost", 1);
+  const delta = intParam(p.delta, MIN_DELTA, "delta", MIN_DELTA);
   lines.push(`口令: ${pass.length} 字节（${passEnc}）`);
   lines.push(`盐:   ${salt.length} 字节（${saltEnc}）`);
   lines.push(`参数: sCost=${sCost}, tCost=${tCost}, delta=${delta}`);
   lines.push(`预计内存: ~${((sCost * 32) / 1024 / 1024).toFixed(2)} MB（sCost×32B）`);
   lines.push("");
-  try {
-    const dk = balloon(pass, salt, sCost, tCost, delta);
-    lines.push("--- 派生密钥 (Derived Key) ---");
-    lines.push("hex: " + bytesToHex(dk));
-  } catch (e) {
-    lines.push("✗ " + (e.message || String(e)));
-  }
+  const dk = balloon(pass, salt, sCost, tCost, delta);
+  lines.push("--- 派生密钥 (Derived Key) ---");
+  lines.push("hex: " + bytesToHex(dk));
   return lines.join("\n");
 }
 

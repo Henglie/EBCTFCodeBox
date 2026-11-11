@@ -65,15 +65,19 @@ function modInv(a, m) {
 export function hnpRecover(sigs, curveN, xBound) {
   const n = curveN;
   const b = Math.min(xBound, 1 << 24);
+  const bound = BigInt(b);
+  const rInv = modInv(sigs[0].r, n);
+  const s0 = sigs[0].s, h0 = sigs[0].h, t0 = sigs[0].t;
   const out = [];
-  for (let x = 0n; x < BigInt(b); x++) {
-    const k0 = ((sigs[0].t + x) % n + n) % n;
-    const d = ((((sigs[0].s * k0 - sigs[0].h) % n) + n) % n) * modInv(sigs[0].r, n) % n;
+  for (let x = 0n; x < bound; x++) {
+    const k0 = ((t0 + x) % n + n) % n;
+    const d = ((((s0 * k0 - h0) % n) + n) % n) * rInv % n;
     let ok = true;
     for (let i = 1; i < sigs.length && ok; i++) {
-      const ki = ((sigs[i].t + x) % n + n) % n;
-      const lhs = (sigs[i].s * ki) % n;
-      const rhs = (((sigs[i].h + sigs[i].r * d) % n) + n) % n;
+      const sig = sigs[i];
+      const ki = ((sig.t + x) % n + n) % n;
+      const lhs = (sig.s * ki) % n;
+      const rhs = (((sig.h + sig.r * d) % n) + n) % n;
       if (lhs !== rhs) ok = false;
     }
     if (ok) out.push({ x, d });

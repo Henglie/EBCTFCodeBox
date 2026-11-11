@@ -1,4 +1,4 @@
-self.__EBCTF_ASSET_REV = "9cf25f3860079e51";
+self.__EBCTF_ASSET_REV = "d70f3c7d5eb87edc";
 self.__EBCTF_ASSETS = [
   "./",
   "./index.html",
@@ -543,6 +543,7 @@ self.__EBCTF_ASSETS = [
   "./src/core/lib/sjcl.js",
   "./src/core/license.js",
   "./src/core/lightweightStream.js",
+  "./src/core/limitGuard.js",
   "./src/core/lllAttack.js",
   "./src/core/localBridge.js",
   "./src/core/lolcode.js",

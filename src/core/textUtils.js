@@ -601,11 +601,92 @@ function toKebabCaseOp(input, p) {
 // ============================================================
 // 21. Count occurrences — 照抄 operations/CountOccurrences.mjs（toggleString → mode+search）
 // ============================================================
+// 编译前结构检查：拒绝会导致灾难性回溯（ReDoS）的危险嵌套量词。
+// 判据：分组内已含可变长度量词（* / + / ? / {m,n} / {m,}），又被 * / + / {m,} 修饰，
+// 或又被大上界 {m,n} 修饰；显式预算 1000 次分组展开。正常正则不受影响。
+function readRegexQuantifier(pattern, i) {
+  const ch = pattern[i];
+  if (ch === "*" || ch === "+") return { end: i + 1, kind: "unbounded", max: Infinity };
+  if (ch === "?") return { end: i + 1, kind: "variable", max: 1 };
+  if (ch === "{") {
+    const m = /^\{(\d+)(?:,(\d*))?\}/.exec(pattern.slice(i));
+    if (!m) return null;
+    const lo = Number(m[1]);
+    let end = i + m[0].length;
+    if (m[2] === undefined) return { end, kind: "exact", max: lo };
+    if (m[2] === "") return { end, kind: "unbounded", max: Infinity };
+    const hi = Number(m[2]);
+    return { end, kind: hi === lo ? "exact" : "variable", max: hi };
+  }
+  return null;
+}
+function assertSafeCountRegex(pattern) {
+  const newFrame = (start) => ({ varLen: false, altStart: start, alts: [] });
+  const stack = [newFrame(0)];
+  let i = 0, inClass = false;
+  while (i < pattern.length) {
+    const ch = pattern[i];
+    const frame = stack[stack.length - 1];
+    if (ch === "\\") { i += 2; continue; }
+    if (inClass) {
+      if (ch === "]") inClass = false;
+      i++;
+      continue;
+    }
+    if (ch === "[") { inClass = true; i++; continue; }
+    if (ch === "(") {
+      let skip = 1;
+      if (pattern[i + 1] === "?") {
+        if (pattern[i + 2] === "<" && pattern[i + 3] !== "=" && pattern[i + 3] !== "!") {
+          const close = pattern.indexOf(">", i + 3);
+          skip = close === -1 ? 2 : close + 1 - i;
+        } else {
+          skip = pattern[i + 2] === "<" ? 4 : 3;
+        }
+      }
+      stack.push({ varLen: false });
+      i += skip;
+      continue;
+    }
+    if (ch === ")") {
+      if (stack.length > 1) {
+        const inner = stack.pop();
+        let q = readRegexQuantifier(pattern, i + 1);
+        if (q) {
+          if (pattern[q.end] === "?") q = { ...q, end: q.end + 1 }; // lazy/possessive 后缀
+          if (inner.varLen && q.kind === "unbounded") {
+            throw new Error("countOccurrences: 正则含危险嵌套量词（分组内已有可变长度量词，又被 * / + / {m,} 修饰），可能触发灾难性回溯（ReDoS），已拒绝。请改写正则或改用简单字符串模式。");
+          }
+          if (inner.varLen && q.kind === "variable" && q.max > 1000) {
+            throw new Error("countOccurrences: 正则含危险嵌套量词（分组内可变长度，又被大上界 {m,n} 修饰，展开预算超过 1000），可能触发灾难性回溯（ReDoS），已拒绝。请缩小上界或改写正则。");
+          }
+          const parent = stack[stack.length - 1];
+          parent.varLen = parent.varLen || inner.varLen || q.kind !== "exact";
+          i = q.end;
+          continue;
+        }
+        const parent = stack[stack.length - 1];
+        parent.varLen = parent.varLen || inner.varLen;
+      }
+      i++;
+      continue;
+    }
+    const q = readRegexQuantifier(pattern, i);
+    if (q) {
+      if (q.kind !== "exact") stack[stack.length - 1].varLen = true;
+      i = q.end;
+      if (pattern[i] === "?") i++;
+      continue;
+    }
+    i++;
+  }
+}
 function countOccurrencesOp(input, p) {
   p = p || {};
   const search = p.search == null ? "" : String(p.search);
   const type = p.mode || "Simple string";
   if (type === "Regex" && search) {
+    assertSafeCountRegex(search);
     try {
       const regex = new RegExp(search, "gi");
       const matches = String(input).match(regex);

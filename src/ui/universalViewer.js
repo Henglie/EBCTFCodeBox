@@ -572,22 +572,38 @@ function renderInvisibleView(text) {
 // ============================================================
 // 轻量 Markdown 解析器（纯前端，零依赖，零外发）。
 // 支持：标题 # / 粗体 ** / 斜体 * / 无序·有序列表 / 行内代码 ` / 代码块 ``` / 链接 [] / 表格。
-function escHtml(s) {
-  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+export function escHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Markdown 链接 URL 安全化：仅放行安全协议，并把仍可能突破属性的字符百分号编码。
+// 入参 u 已过 escHtml（引号已实体化），这里再兜一层，防未来调用顺序变化。
+export function mdSafeUrl(u) {
+  const s = String(u || "");
+  if (!/^(https?:|mailto:|#|\/|\.\/|\.\.\/)/i.test(s)) return "#";
+  return s.replace(/[\u0000-\u0020"'<>`\\]/g, (c) => "%" + c.charCodeAt(0).toString(16).padStart(2, "0"));
 }
 
 // 行内元素（入参须已 HTML 转义）。顺序：行内代码 → 链接 → 粗 → 斜。
+// URL 先存占位符再还原：避免后续 **/* 替换把标签注入 href 属性（链接文字仍参与强调解析）。
 function mdInline(s) {
   const codes = [];
-  s = s.replace(/`([^`]+)`/g, (m, c) => { codes.push(c); return "" + (codes.length - 1) + ""; });
+  const urls = [];
+  s = s.replace(/`([^`]+)`/g, (m, c) => { codes.push(c); return "\uE000" + (codes.length - 1) + "\uE001"; });
  // 链接 [text](url)——url 已转义，仅放行安全协议，否则降级为 #
   s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, t, u) => {
-    const safe = /^(https?:|mailto:|#|\/|\.\/|\.\.\/)/i.test(u) ? u : "#";
-    return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${t}</a>`;
+    urls.push(mdSafeUrl(u));
+    return `<a href="\uE002${urls.length - 1}\uE003" target="_blank" rel="noopener noreferrer">${t}</a>`;
   });
   s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   s = s.replace(/\*([^*]+)\*/g, "<em>$1</em>");
-  s = s.replace(/(\d+)/g, (m, i) => `<code>${codes[+i]}</code>`);
+  s = s.replace(/\uE000(\d+)\uE001/g, (m, i) => `<code>${codes[+i]}</code>`);
+  s = s.replace(/\uE002(\d+)\uE003/g, (m, i) => urls[+i] || "#");
   return s;
 }
 
@@ -598,7 +614,7 @@ function mdSplitRow(line) {
   return s.split("|").map((c) => c.trim());
 }
 
-function mdToHtml(src) {
+export function mdToHtml(src) {
   const lines = String(src).replace(/\r\n?/g, "\n").split("\n");
   const out = [];
   let i = 0;
@@ -670,8 +686,8 @@ function mdToHtml(src) {
 // 也避开 mdInline 已占用的 /），跑完 Markdown 生成 HTML 后，再把占位符
 // 还原成 <span data-tex> 交给 KaTeX 就地渲染。最终 HTML 落在单一 .uv-md-body 容器里
 // 该容器 CSS 用 var(--font-content)（天珩），故 CJK 冷僻字/堆叠字由天珩渲染。
-const MATH_PH_OPEN = "";   // 数学占位符起（避开 mdInline 的 /）
-const MATH_PH_CLOSE = "";
+const MATH_PH_OPEN = "\uE010";   // 数学占位符起（避开 mdInline 的 \uE000/\uE001）
+const MATH_PH_CLOSE = "\uE011";
 
 // 抽取数学片段：返回 {text: 带占位符的源, maths: [{tex, display}]}
 function extractMath(src) {

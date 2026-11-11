@@ -24,7 +24,8 @@
  * 安全：
  * - 条目名可能含 ../、绝对路径、盘符、控制字符；本工具从不写文件系统，下载产物
  *   一律压平为安全 basename，并在报告里标「路径穿越风险」。
- * - 解压输出受 inflateRaw 的 64 MiB 单流上限与提取总预算约束；条目数/文件数有上限。
+ * - 解压输出受 inflateRaw 的单流上限与提取预算约束；条目/文件数/总输出走
+ *   checkLimit：软阈值可确认放宽到硬上限，超过硬上限明确拒绝。
  *
  * 零外发：全部本地字节计算，无网络、无桥、无 DOM。
  */
@@ -35,6 +36,7 @@ import { findEocd, crc32Bytes } from "./zipRepair.js";
 import {
   keysFromPassword, decryptByte, updateKeys, parseAesExtra,
 } from "./zipCrack.js";
+import { checkLimit, withLimit, isLimitError } from "./limitGuard.js";
 
 // ============================================================
 // 基础工具
@@ -52,9 +54,14 @@ function isSig(b, o, sig) {
   return true;
 }
 
-const MAX_ENTRIES = 10000;          // 列表/提取条目上限
-const MAX_FILES = 200;              // 单次下载文件数上限
-const MAX_TOTAL_OUT = 64 * 1024 * 1024; // 单次提取总输出上限（与 inflateRaw 单流上限同口径）
+const MAX_ENTRIES = 10000;                // 列表/提取条目软阈值
+const MAX_ENTRIES_HARD = 40000;           // 确认后的条目硬上限
+const MAX_FILES = 1000;                   // 单次下载文件数软阈值（可确认放宽）
+const MAX_FILES_HARD = 5000;              // 确认后的下载文件数硬上限
+const MAX_TOTAL_OUT = 256 * 1024 * 1024;  // 单次提取总输出软阈值（可确认放宽）
+const MAX_TOTAL_OUT_HARD = 1024 * 1024 * 1024; // 确认后的总输出硬上限
+const MAX_ENTRY_OUT = 256 * 1024 * 1024;  // 单成员输出软阈值（可确认放宽）
+const MAX_ENTRY_OUT_HARD = 1024 * 1024 * 1024; // 单成员输出硬上限
 const PREVIEW_LIMIT = 800;          // 单条文本预览字符数
 const PREVIEW_ENTRIES = 20;         // 报告中最多内联预览的条目数
 
@@ -208,7 +215,7 @@ function findAesExtra(extraList, bytes) {
  * @returns {{entries:Array, prefixDelta:number, comment:string}}
  * @throws 不是 ZIP / ZIP64 / 分卷 / 中央目录损坏
  */
-function parseZip(bytes) {
+function parseZip(bytes, params) {
   if (!bytes || bytes.length < 22) {
     throw new Error("不是 ZIP：输入不足 22 字节（EOCD 最小长度）。");
   }
@@ -234,6 +241,17 @@ function parseZip(bytes) {
   if (cdSize === 0 && count === 0) {
     return { entries: [], prefixDelta: 0, comment: "" };
   }
+  if (count > MAX_ENTRIES) {
+    checkLimit({
+      scope: "zipExtract.entries",
+      actual: count,
+      soft: MAX_ENTRIES,
+      hard: MAX_ENTRIES_HARD,
+      params,
+      label: "ZIP 条目数",
+      unit: " 个",
+    });
+  }
   if (cdOff + cdSize > bytes.length) {
     throw new Error(`中央目录越界：声明偏移 ${cdOff} + 大小 ${cdSize} > 输入 ${bytes.length} 字节（文件截断？）。`);
   }
@@ -246,9 +264,6 @@ function parseZip(bytes) {
     else throw new Error("中央目录签名不符：EOCD 偏移处与 EOCD 反推处都没有 50 4B 01 02（损坏/加密头/ZIP64？）。");
   }
   const prefixDelta = base - cdOff;
-  if (count > MAX_ENTRIES) {
-    throw new Error(`条目数 ${count} 超过单次解析上限 ${MAX_ENTRIES}。`);
-  }
 
   const entries = [];
   let p = base;
@@ -325,12 +340,15 @@ function joinFlags(a, b) {
 // 解压 / 解密
 // ============================================================
 
-function decompressPayload(comp, method, entryName) {
+function decompressPayload(comp, method, entryName, params) {
   const label = entryName ? `条目「${entryName}」` : "条目";
   if (method === 0) return new Uint8Array(comp);
   if (method === 8) {
-    try { return inflateRaw(comp); }
-    catch (e) { throw new Error(`${label} Deflate 解压失败：${e && e.message ? e.message : String(e)}`); }
+    try { return inflateRaw(comp, undefined, params); }
+    catch (e) {
+      if (isLimitError(e)) throw e;
+      throw new Error(`${label} Deflate 解压失败：${e && e.message ? e.message : String(e)}`);
+    }
   }
   throw new Error(`${label}不支持的压缩方法 ${method}（${methodLabel(method)}）：本工具只解 Stored(0) / Deflate(8)。`);
 }
@@ -378,7 +396,7 @@ function verifyPayload(payload, entry, opts = {}) {
 /**
  * 提取单条。返回 { bytes, pseudo, crypto } 或抛错（带人话原因）。
  */
-function extractOne(bytes, entry, password, verify = true) {
+function extractOne(bytes, entry, password, verify = true, params) {
   if (entry.isDir) throw new Error("目录条目，无文件内容");
   const local = readLocalHeader(bytes, entry);
   const flags = joinFlags(entry.flags, local.flags);
@@ -390,8 +408,16 @@ function extractOne(bytes, entry, password, verify = true) {
   if (flags & 0x40) {
     throw new Error("强加密条目（flag bit6）暂不支持内容解密；未输出任何伪造明文。");
   }
-  if (entry.size > MAX_TOTAL_OUT) {
-    throw new Error(`原始大小 ${entry.size} 字节超过单条 ${MAX_TOTAL_OUT / (1024 * 1024)} MiB 提取上限。`);
+  if (entry.size > MAX_ENTRY_OUT) {
+    checkLimit({
+      scope: "zipExtract.entrySize",
+      actual: entry.size,
+      soft: MAX_ENTRY_OUT,
+      hard: MAX_ENTRY_OUT_HARD,
+      params,
+      label: `ZIP 条目「${entry.name}」`,
+      unit: " 字节",
+    });
   }
   if (entry.compSize === 0 && entry.size !== 0) {
     throw new Error("压缩大小为 0 但原始大小非 0（需要数据描述符或头部未回填），无法定位数据。");
@@ -403,7 +429,7 @@ function extractOne(bytes, entry, password, verify = true) {
   const encrypted = (flags & 1) !== 0;
 
   if (!encrypted) {
-    const payload = decompressPayload(comp, entry.method, entry.name);
+    const payload = decompressPayload(comp, entry.method, entry.name, params);
     verifyPayload(payload, entry, { skipCrc: !verify });
     return { bytes: payload, pseudo: false, crypto: "" };
   }
@@ -411,7 +437,7 @@ function extractOne(bytes, entry, password, verify = true) {
   // 加密位=1：先判断伪加密（数据实际是明文），再尝试 ZipCrypto 口令解密。
   let plainError = null;
   try {
-    const plain = decompressPayload(comp, entry.method, entry.name);
+    const plain = decompressPayload(comp, entry.method, entry.name, params);
     verifyPayload(plain, entry, { skipCrc: !verify });
     return { bytes: plain, pseudo: true, crypto: "" };
   } catch (e) {
@@ -427,7 +453,7 @@ function extractOne(bytes, entry, password, verify = true) {
   } catch (e) {
     throw new Error(`密码错误或加密数据损坏：${e && e.message ? e.message : String(e)}；明文试解也失败（${plainError && plainError.message ? plainError.message : "未知"}）。未输出任何伪造明文。`);
   }
-  const payload = decompressPayload(decrypted, entry.method, entry.name);
+  const payload = decompressPayload(decrypted, entry.method, entry.name, params);
   verifyPayload(payload, entry, { skipCrc: !verify });
   return { bytes: payload, pseudo: false, crypto: "ZipCrypto" };
 }
@@ -486,7 +512,7 @@ function zipEntriesRun(text, p) {
   let data;
   try { data = inputToBytes(text, pp); }
   catch (e) { throw new Error("输入解析失败：" + (e && e.message ? e.message : String(e))); }
-  const z = parseZip(data);
+  const z = parseZip(data, pp);
 
   const lines = [];
   lines.push("=== ZIP 条目列表 ===");
@@ -593,7 +619,7 @@ function zipExtractRun(text, p) {
   let data;
   try { data = inputToBytes(text, pp); }
   catch (e) { throw new Error("输入解析失败：" + (e && e.message ? e.message : String(e))); }
-  const z = parseZip(data);
+  const z = parseZip(data, pp);
   if (z.entries.length === 0) {
     throw new Error("ZIP 中央目录为空，没有可提取的条目。");
   }
@@ -618,6 +644,7 @@ function zipExtractRun(text, p) {
   let ok = 0, failed = 0, skipped = 0;
   let totalOut = 0;
   let previews = 0;
+  let limitParams = pp;
 
   for (const e of selected) {
     const tag = `[${e.index + 1}] ${displayName(e.name) || "(空名)"}`;
@@ -626,28 +653,50 @@ function zipExtractRun(text, p) {
       lines.push(`${tag} — 目录条目，跳过`);
       continue;
     }
-    if (files.length >= MAX_FILES) {
-      failed++;
-      lines.push(`${tag} — 跳过：本次下载文件数已达上限 ${MAX_FILES}`);
-      continue;
+    if (files.length + 1 > MAX_FILES) {
+      checkLimit({
+        scope: "zipExtract.fileCount",
+        actual: files.length + 1,
+        soft: MAX_FILES,
+        hard: MAX_FILES_HARD,
+        params: limitParams,
+        label: "ZIP 下载文件数",
+        unit: " 个",
+      });
+      limitParams = withLimit(limitParams, { _allowLimitOverride: true });
     }
     if (totalOut + e.size > MAX_TOTAL_OUT) {
-      failed++;
-      lines.push(`${tag} — ✗ 跳过：本次提取总输出将超过 ${MAX_TOTAL_OUT / (1024 * 1024)} MiB 预算`);
-      continue;
+      checkLimit({
+        scope: "zipExtract.totalOutput",
+        actual: totalOut + e.size,
+        soft: MAX_TOTAL_OUT,
+        hard: MAX_TOTAL_OUT_HARD,
+        params: limitParams,
+        label: "ZIP 提取总输出",
+        unit: " 字节",
+      });
+      limitParams = withLimit(limitParams, { _allowLimitOverride: true });
     }
     let r;
     try {
-      r = extractOne(data, e, pp.password, pp.verify !== false);
+      r = extractOne(data, e, pp.password, pp.verify !== false, limitParams);
     } catch (err) {
+      if (isLimitError(err)) throw err;
       failed++;
       lines.push(`${tag} — ✗ ${err && err.message ? err.message : String(err)}`);
       continue;
     }
     if (totalOut + r.bytes.length > MAX_TOTAL_OUT) {
-      failed++;
-      lines.push(`${tag} — ✗ 跳过：本次提取总输出超过 ${MAX_TOTAL_OUT / (1024 * 1024)} MiB 预算`);
-      continue;
+      checkLimit({
+        scope: "zipExtract.totalOutput",
+        actual: totalOut + r.bytes.length,
+        soft: MAX_TOTAL_OUT,
+        hard: MAX_TOTAL_OUT_HARD,
+        params: limitParams,
+        label: "ZIP 提取总输出",
+        unit: " 字节",
+      });
+      limitParams = withLimit(limitParams, { _allowLimitOverride: true });
     }
     totalOut += r.bytes.length;
     ok++;

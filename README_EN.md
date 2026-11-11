@@ -47,9 +47,36 @@
 | Baidu Netdisk | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
 | Quark | https://pan.quark.cn/s/3b7e573b19c0 | none |
 
-Current version **v0.1.15**. The source of truth is always the GitHub repository: [github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox).
+Current version **v0.2.0-beta**. The source of truth is always the GitHub repository: [github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox).
 
 ## Changelog
+
+## v0.2.0-beta (2026-11-11)
+
+> v0.2.0 beta focuses on resource limits, stability, MCP and large-output handling; the v0.1.15 UI and 978-operation baseline are preserved. Full history: [CHANGELOG.md](./CHANGELOG.md).
+
+### New and improved
+
+- Unified resource-limit confirmation: soft-limit prompts, hard caps, cancellation and one-shot retry across images/GIF/audio/archives/LZMA/LZ4/DeepSound/PNG/FFT.
+- MCP returns structured `code/meta/retryable`, adds `allowOverLimit`; outputs over 128KB are not inlined and require `outputDir`, returning `omitted`/path.
+- Audio gains a `previewMinutes` option to analyze only the first N minutes.
+- ZIP/7z/TAR share file-count and total-size limits; 7z no longer silently truncates at 800 entries and TAR uses the unified confirmation path.
+- Global 128KB inline limit: large results are download/save only; ZIP repair no longer embeds the whole archive as base64.
+- StegSolve uses a single full-width column, the drop area opens a file picker, and the menu item is pinned/highlighted in its category.
+- Parameter labels support Chinese/English switching; contributor “Jiangbei” added.
+
+### Fixes
+
+- GIF frame extraction removes the 30-second wall clock and 2-second per-frame compression wait; native PNG encoding, 39ms / 59KB ZIP measured.
+- Fixed nested decode still failing after confirmation, worker limit-state leaking across jobs, zombie workers after timeout, and pending leaks on `postMessage` failure.
+- Fixed `LIMIT_CANCEL/HARD` being swallowed by canvas/direct/7z fallbacks and exhaustive decode re-running after cancel.
+- Fixed batch `allowAll` leakage, duplicate confirmations, lost ZIP Deflate error codes, and the Service Worker serving old JS after update.
+- Removed sensitive source-name references; `资料/` is not tracked.
+
+### Known limitations
+
+- bridge token / Origin / Content-Type hardening, GIF double-decode in image analysis, PNG block-selection UI, and audio auto-analysis preview wiring remain for follow-up.
+- See the local progress.md (not tracked) for details.
 
 ## v0.1.15 (2026-11-08)
 

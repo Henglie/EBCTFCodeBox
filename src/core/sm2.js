@@ -128,21 +128,93 @@ function ptAdd(P, Q) {
   const Z3 = mod((mod((Z1 + Z2) * (Z1 + Z2), p) - Z1Z1 - Z2Z2) * H, p);
   return [X3, Y3, Z3];
 }
+/** wNAF 展开（低位到高位，数字为奇数且 |d| < 2^(w-1)）。 */
+function sm2WnafDigits(k, w) {
+  const digits = [];
+  const nw = 1n << BigInt(w);
+  const half = nw >> 1n;
+  let kk = k;
+  while (kk > 0n) {
+    let d = 0n;
+    if (kk & 1n) {
+      d = kk & (nw - 1n);
+      if (d >= half) d -= nw;
+      kk -= d;
+    }
+    digits.push(Number(d));
+    kk >>= 1n;
+  }
+  return digits;
+}
+
+/** 预计算奇数倍点表 [1P, 3P, 5P, …]（雅可比坐标）。 */
+function sm2PrecomputeOdd(Px, Py, w) {
+  const count = 1 << (w - 2);
+  const table = new Array(count);
+  const base = [mod(Px, p), mod(Py, p), 1n];
+  table[0] = base;
+  if (count > 1) {
+    const two = ptDouble(base);
+    for (let i = 1; i < count; i++) table[i] = ptAdd(table[i - 1], two);
+  }
+  return table;
+}
+
+const _sm2GTableCache = new Map();
+
+function sm2GTable(w) {
+  let t = _sm2GTableCache.get(w);
+  if (t) return t;
+  t = sm2PrecomputeOdd(Gx, Gy, w);
+  _sm2GTableCache.set(w, t);
+  return t;
+}
+
+function sm2TableAdd(R, table, d) {
+  if (d > 0) return ptAdd(R, table[(d - 1) >> 1]);
+  const T = table[(-d - 1) >> 1];
+  return ptAdd(R, [T[0], mod(p - T[1], p), T[2]]);
+}
+
+/** k·P（雅可比输出；P 为基点 G 时复用预计算表）。 */
+function ptMulW(k, Px, Py) {
+  if (k <= 0n) return [0n, 1n, 0n];
+  const w = k > (1n << 400n) ? 6 : 5;
+  const isG = Px === Gx && Py === Gy;
+  const table = isG ? sm2GTable(w) : sm2PrecomputeOdd(Px, Py, w);
+  const digits = sm2WnafDigits(k, w);
+  let R = [0n, 1n, 0n];
+  for (let i = digits.length - 1; i >= 0; i--) {
+    if (R[2] !== 0n) R = ptDouble(R);
+    if (digits[i] !== 0) R = sm2TableAdd(R, table, digits[i]);
+  }
+  return R;
+}
+
+/** k1·P + k2·G（Shamir 联合 wNAF，验签用）。 */
+function ptMulAdd2(k1, Px, Py, k2) {
+  const w = 5;
+  const t1 = (Px === Gx && Py === Gy) ? sm2GTable(w) : sm2PrecomputeOdd(Px, Py, w);
+  const t2 = sm2GTable(w);
+  const d1 = sm2WnafDigits(k1, w);
+  const d2 = sm2WnafDigits(k2, w);
+  const len = Math.max(d1.length, d2.length);
+  let R = [0n, 1n, 0n];
+  for (let i = len - 1; i >= 0; i--) {
+    if (R[2] !== 0n) R = ptDouble(R);
+    if (d1[i]) R = sm2TableAdd(R, t1, d1[i]);
+    if (d2[i]) R = sm2TableAdd(R, t2, d2[i]);
+  }
+  return R;
+}
+
 function ptMul(k, P) {
   // ⚠ 修复（2026-09-05 产品裁决）：旧版把输入 Z 强制置 1（[P0,P1,1n]），雅可比输入（Z≠1）会算出错误坐标。
   // 现对 Z≠1 的 3 元输入先转仿射；2 元仿射输入与 Z=1 输入行为不变。负 k 沿用旧语义（返回无穷远）。
   let A = P;
   if (P.length > 2 && mod(P[2], p) !== 1n) A = ptAffine(P);
   if (!A) return [0n, 1n, 0n]; // 无穷远点
-  let R = [0n, 1n, 0n];
-  let Q = [mod(A[0], p), mod(A[1], p), 1n];
-  let kk = k;
-  while (kk > 0n) {
-    if (kk & 1n) R = ptAdd(R, Q);
-    Q = ptDouble(Q);
-    kk >>= 1n;
-  }
-  return R;
+  return ptMulW(k, mod(A[0], p), mod(A[1], p));
 }
 function ptAffine(P) {
   if (P[2] === 0n) return null;
@@ -253,7 +325,8 @@ function assertScalar(x, label) {
 }
 function assertPublicKey(x, y, label = "SM2 公钥") {
   if (x < 0n || x >= p || y < 0n || y >= p || !onCurve(x, y)) throw new Error(`${label} 不在 sm2p256v1 曲线上`);
-  if (ptMul(n, [x, y])[2] !== 0n) throw new Error(`${label} 阶不为 n`);
+  // sm2p256v1 的群阶 n 为素数且协因子 h=1：任意非无穷远仿射点阶必为 n，
+  // 故原 n·P 校验（恒为无穷远点）是冗余完整标量乘，这里省略以省一次点乘。
 }
 
 // ============================================================
@@ -299,10 +372,7 @@ function sm2Verify(m, r, s, pubX, pubY, ida = defaultIda()) {
   const e = bytesToBig(sm3Bytes(concat(za, m)));
   const t = mod(r + s, n);
   if (t === 0n) return false;
-  const G = [Gx, Gy];
-  const R1 = ptMul(s, G);
-  const R2 = ptMul(t, [pubX, pubY]);
-  const point = ptAffine(ptAdd(R1, R2));
+  const point = ptAffine(ptMulAdd2(t, pubX, pubY, s)); // [t]P + [s]G
   if (!point) return false;
   return mod(e + point[0], n) === r;
 }

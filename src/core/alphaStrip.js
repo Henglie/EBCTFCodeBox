@@ -11,6 +11,7 @@
  */
 import { decodePNG } from "./stegoPixels.js";
 import { decodeBMP } from "./rasterStego.js";
+import { isLimitError } from "./limitGuard.js";
 
 const MAX_SAMPLES = 8192;
 const MAX_PIXELS = 16_000_000;
@@ -34,7 +35,8 @@ function alphaSamples(bytes) {
     } else if (b.length >= 2 && b[0] === 0x42 && b[1] === 0x4d) {
       img = decodeBMP(b);
     }
-  } catch {
+  } catch (e) {
+    if (isLimitError(e)) throw e;
     return null;
   }
   if (!img || !img.data || !img.width || !img.height) return null;

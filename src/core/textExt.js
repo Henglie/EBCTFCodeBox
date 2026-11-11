@@ -637,6 +637,8 @@ register({
   id: "leetSpeak", cat: "text", name: "Leet Speak (1337)",
   desc: "经典 1337 字母替换（A→4, E→3, O→0 等）",
   encode: leetEncode, decode: leetDecode,
+  // 双向替换对任意文本都能“解码”出噪声，不进一键解码/穷举/magic 自动池（手动运行仍可）。
+  noAuto: true,
 });
 
 register({

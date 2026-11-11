@@ -26,6 +26,7 @@ import subprocess
 import tempfile
 import shutil
 import platform
+import threading
 import time
 try:
     import winreg  # Windows 注册表（读系统强调色）
@@ -87,10 +88,66 @@ TIMEOUT = 60  # 秒
 # 按 tool 给独立超时（秒）。默认 60s，特殊工具在此覆盖。
 TOOL_TIMEOUTS = {
 }
-MAX_STDIN = 50 * 1024 * 1024  # 50MB
+
+
+def _env_int(name, default, minimum=1):
+    """读正整数环境变量；非法/越界回退默认值（启动不因配置写错而崩）。"""
+    try:
+        value = int(str(os.environ.get(name, "")).strip())
+    except (TypeError, ValueError):
+        return default
+    return value if value >= minimum else default
+
+# 请求体在读取前先按上限拒绝（防 Content-Length 巨大导致内存耗尽）。
+# 两级：默认软上限 128 MiB，超了直接 413；仅当请求头 X-EBCTF-Allow-Large: 1 时
+# 放宽到硬上限 512 MiB。硬上限是绝对天花板，任何请求头都不能越过；两者均可用 env 调整。
+MAX_BODY_SOFT = _env_int("EBCTF_BRIDGE_MAX_BODY", 128 * 1024 * 1024)
+MAX_BODY_HARD = _env_int("EBCTF_BRIDGE_MAX_BODY_HARD", 512 * 1024 * 1024)
+if MAX_BODY_SOFT > MAX_BODY_HARD:
+    MAX_BODY_SOFT = MAX_BODY_HARD
+MAX_BODY = MAX_BODY_SOFT  # 兼容旧名：默认软上限
+# 解码后的输入尺寸（stdin / 单文件 / files 总量）统一两级口径：
+# 软上限 128 MiB 默认生效；带 X-EBCTF-Allow-Large: 1 放宽到硬上限 512 MiB；
+# 硬上限是绝对天花板，任何请求头都不能越过。与环境变量共用同一套上限。
+MAX_STDIN = _env_int("EBCTF_BRIDGE_MAX_STDIN", 128 * 1024 * 1024)
+MAX_STDIN_HARD = _env_int("EBCTF_BRIDGE_MAX_STDIN_HARD", 512 * 1024 * 1024)
+MAX_FILE_BYTES = _env_int("EBCTF_BRIDGE_MAX_FILE_BYTES", 128 * 1024 * 1024)
+MAX_FILE_BYTES_HARD = _env_int("EBCTF_BRIDGE_MAX_FILE_BYTES_HARD", 512 * 1024 * 1024)
+MAX_FILES_TOTAL = _env_int("EBCTF_BRIDGE_MAX_FILES_TOTAL", 128 * 1024 * 1024)
+MAX_FILES_TOTAL_HARD = _env_int("EBCTF_BRIDGE_MAX_FILES_TOTAL_HARD", 512 * 1024 * 1024)
+# 软上限不得高于硬上限（防 env 配反后软限制形同虚设）。
+if MAX_STDIN > MAX_STDIN_HARD:
+    MAX_STDIN = MAX_STDIN_HARD
+if MAX_FILE_BYTES > MAX_FILE_BYTES_HARD:
+    MAX_FILE_BYTES = MAX_FILE_BYTES_HARD
+if MAX_FILES_TOTAL > MAX_FILES_TOTAL_HARD:
+    MAX_FILES_TOTAL = MAX_FILES_TOTAL_HARD
+# /api/run 的 files 表条目数上限。
+MAX_FILES = _env_int("EBCTF_BRIDGE_MAX_FILES", 32)
+
+
+def _b64_encoded_limit(byte_limit):
+    """解码后上限 → base64 编码长度上限（4/3 膨胀，向上取整）。"""
+    return 4 * ((int(byte_limit) + 2) // 3)
+
+
+def _mib(n):
+    """字节数转 MiB 文本（整数；错误文案用）。"""
+    return "%d MiB" % (int(n) // (1024 * 1024))
+
+
+# 工具输出捕获上限（stdout/stderr 各自）。两级：默认软上限 16 MiB；带
+# X-EBCTF-Allow-Large: 1 时放宽到硬上限 64 MiB。超限截断并在响应里标注。
+MAX_TOOL_OUTPUT_SOFT = _env_int("EBCTF_BRIDGE_MAX_TOOL_OUTPUT", 16 * 1024 * 1024)
+MAX_TOOL_OUTPUT_HARD = _env_int("EBCTF_BRIDGE_MAX_TOOL_OUTPUT_HARD", 64 * 1024 * 1024)
+if MAX_TOOL_OUTPUT_SOFT > MAX_TOOL_OUTPUT_HARD:
+    MAX_TOOL_OUTPUT_SOFT = MAX_TOOL_OUTPUT_HARD
+MAX_TOOL_OUTPUT = MAX_TOOL_OUTPUT_SOFT  # 兼容旧名：默认软上限
 # 前端页面端口不固定（start.py 8180 起，用户也可能自己起别的端口），且可能用 127.0.0.1 或 localhost 打开。
 # 故按请求 Origin 反射放行：只认本机来源（localhost/127.0.0.1/::1 任意端口），外部站点一律拒绝。
 ALLOWED_ORIGIN_HOSTS = {"localhost", "127.0.0.1", "::1"}
+# 大请求/大输出放行头：仅放宽到硬上限，不能越过硬上限。
+ALLOW_LARGE_HEADER = "X-EBCTF-Allow-Large"
 
 # ---- 环境探测：CTF 常用本机工具版本，供顶栏「环境管理」面板懒检测 ----
 # (key, [候选命令名或绝对路径], [version 参数], 是否取 stderr)。
@@ -218,13 +275,15 @@ DECOMPILE_TOOLS = {
     # pylingual：3.9+ 大模型反编（实验，需手动装 + HF_ENDPOINT 镜像）
     "pylingual": ["pylingual"],
     # pycdc（Decompyle++）：2.7/3.x 的兜底反编器。注意 PATH 上可能存在同名但完全
-    # 无关的 pycdc（本机 Python314\Scripts\pycdc.exe 就是另一个产品），因此探测必须
-    # 校验 `-h` 输出含 input.pyc；只靠「文件存在」会把假工具当成可用。
-    "pycdc": [
-        os.path.join(os.path.dirname(ROOT), "PyKC", "third_party", "bin", "pycdc.exe"),
+    # 无关的 pycdc（本机 Python314\Scripts\pycdc.exe 就是另一个产品），因此：
+    #   ① 只接受绝对路径（项目内置路径 / 用户显式 EBCTF_PYCDC_PATH 白名单）；
+    #   ② 探测仍校验 `-h` 输出含 input.pyc。
+    # 不再从 PATH 盲找同名命令，避免把无关程序当反编器执行。
+    "pycdc": ([
         os.path.join(ROOT, "tools", "exe", "cli", "pycdc.exe"),
-        "pycdc",
-    ],
+        os.path.join(os.path.dirname(ROOT), "PyKC", "third_party", "bin", "pycdc.exe"),
+    ] + ([os.environ.get("EBCTF_PYCDC_PATH", "").strip()]
+         if os.path.isabs(os.environ.get("EBCTF_PYCDC_PATH", "").strip()) else [])),
     # 7-Zip：容器解压（部分打包壳）
     "7z": [r"C:\Program Files\7-Zip\7z.exe", "7z"],
 }
@@ -419,7 +478,89 @@ def _decode_tool_output(raw):
     except UnicodeDecodeError:
         return raw.decode("utf-8", "replace")
 
-def _run_decompiler(tool_key, pyc_path, workdir, timeout=None):
+def _truncate_note(limit=MAX_TOOL_OUTPUT):
+    return ("\n…（输出已截断：超过 %d 字节上限，可用 EBCTF_BRIDGE_MAX_TOOL_OUTPUT / "
+            "EBCTF_BRIDGE_MAX_TOOL_OUTPUT_HARD 调整）" % limit)
+
+
+def _drain_limited(stream, limit, sink, state):
+    """持续读干管道，只保留前 limit 字节；超限置 state[0]=True（防止子进程写满管道阻塞）。"""
+    try:
+        while True:
+            chunk = stream.read(65536)
+            if not chunk:
+                break
+            room = limit - len(sink)
+            if room > 0:
+                sink.extend(chunk[:room])
+            if len(chunk) > max(room, 0):
+                state[0] = True
+    except (OSError, ValueError):
+        pass
+    finally:
+        try:
+            stream.close()
+        except (OSError, ValueError):
+            pass
+
+
+def _run_capture(cmd, input_bytes=None, timeout=None, cwd=None, env=None,
+                 limit=MAX_TOOL_OUTPUT):
+    """subprocess 参数数组 + shell=False；stdout/stderr 边读边截，内存占用不随输出膨胀。
+
+    返回 (exitCode, stdout_bytes, stderr_bytes, stdout_truncated, stderr_truncated)。
+    超时抛 subprocess.TimeoutExpired（先 kill 子进程，避免残留）。"""
+    proc = subprocess.Popen(
+        cmd,
+        stdin=subprocess.PIPE if input_bytes is not None else subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=cwd,
+        env=env,
+        shell=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    out, err = bytearray(), bytearray()
+    out_trunc, err_trunc = [False], [False]
+    readers = [
+        threading.Thread(target=_drain_limited, args=(proc.stdout, limit, out, out_trunc), daemon=True),
+        threading.Thread(target=_drain_limited, args=(proc.stderr, limit, err, err_trunc), daemon=True),
+    ]
+
+    def feed_stdin():
+        try:
+            if input_bytes:
+                proc.stdin.write(input_bytes)
+            proc.stdin.close()
+        except (OSError, ValueError):
+            pass
+
+    writer = threading.Thread(target=feed_stdin, daemon=True) if input_bytes is not None else None
+    for thread in readers:
+        thread.start()
+    if writer is not None:
+        writer.start()
+    timed_out = False
+    try:
+        code = proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        proc.kill()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+    finally:
+        if writer is not None:
+            writer.join(timeout=2)
+        for thread in readers:
+            thread.join(timeout=5)
+    if timed_out:
+        raise subprocess.TimeoutExpired(cmd, timeout)
+    return code, bytes(out), bytes(err), out_trunc[0], err_trunc[0]
+
+
+def _run_decompiler(tool_key, pyc_path, workdir, timeout=None, output_limit=None):
     """调白名单反编工具于单个 pyc。subprocess 参数数组 shell=False。"""
     exe = _resolve_tool(tool_key)
     if not exe:
@@ -428,6 +569,7 @@ def _run_decompiler(tool_key, pyc_path, workdir, timeout=None):
                 "error": ("%s 已找到但不可用（探测失败）" % tool_key) if found
                          else ("%s 未安装（本机不可用，需手动安装）" % tool_key)}
     limit = timeout if timeout is not None else DECOMPILE_TIMEOUT
+    out_limit = output_limit if output_limit is not None else MAX_TOOL_OUTPUT
     env = dict(os.environ)
     env["PYTHONUTF8"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
@@ -439,23 +581,26 @@ def _run_decompiler(tool_key, pyc_path, workdir, timeout=None):
         # uncompyle6 / decompyle3 / pycdc：默认把反编源码写 stdout
         cmd = [exe, pyc_path]
     try:
-        proc = subprocess.run(
-            cmd, capture_output=True, timeout=limit,
-            cwd=workdir, env=env, shell=False,
-        )
-        src = _decode_tool_output(proc.stdout)
-        err = _decode_tool_output(proc.stderr)
+        code, stdout_raw, stderr_raw, src_truncated, err_truncated = _run_capture(
+            cmd, timeout=limit, cwd=workdir, env=env, limit=out_limit)
+        src = _decode_tool_output(stdout_raw)
+        err = _decode_tool_output(stderr_raw)
+        if src_truncated:
+            src += _truncate_note(out_limit)
+        if err_truncated:
+            err += _truncate_note(out_limit)
         return {
-            "ok": proc.returncode == 0 or bool(src.strip()),
-            "tool": tool_key, "exe": exe, "exitCode": proc.returncode,
+            "ok": code == 0 or bool(src.strip()),
+            "tool": tool_key, "exe": exe, "exitCode": code,
             "source": src, "stderr": err,
+            "sourceTruncated": src_truncated, "stderrTruncated": err_truncated,
         }
     except subprocess.TimeoutExpired:
         return {"ok": False, "tool": tool_key, "error": "反编超时（%ds）" % limit}
     except Exception as e:
         return {"ok": False, "tool": tool_key, "error": "反编异常: %s" % e}
 
-def _decompile_pyc_bytes(data, workdir, label="input.pyc"):
+def _decompile_pyc_bytes(data, workdir, label="input.pyc", output_limit=None):
     """反编单个 pyc（字节）。按候选链逐个尝试，返回含 pyVersion/tool/source 的结果。"""
     if len(data) < 8:
         return {"ok": False, "error": "文件过小，非有效 pyc"}
@@ -474,7 +619,8 @@ def _decompile_pyc_bytes(data, workdir, label="input.pyc"):
             attempts.append({"tool": tool_key, "error": "总预算耗尽，未尝试"})
             break
         r = _run_decompiler(tool_key, fp, workdir,
-                            timeout=max(5, min(PYC_DECOMPILE_TIMEOUT, int(remain))))
+                            timeout=max(5, min(PYC_DECOMPILE_TIMEOUT, int(remain))),
+                            output_limit=output_limit)
         if r.get("ok") and (r.get("source") or "").strip():
             result.update(r)
             result["ok"] = True
@@ -489,7 +635,7 @@ def _decompile_pyc_bytes(data, workdir, label="input.pyc"):
     result["error"] = (note + "；" if note else "") + ("反编失败（" + detail + "）" if detail else "无可用反编工具")
     return result
 
-def _decompile_exe_bytes(data, workdir, label="input.exe"):
+def _decompile_exe_bytes(data, workdir, label="input.exe", output_limit=None):
     """反编 PyInstaller 打包 exe：解包 → 逐 pyc 反编。骨架：pyinstxtractor 未装时占位。"""
     kind_avail, ref = _resolve_pyinstxtractor()
     if not kind_avail:
@@ -505,8 +651,7 @@ def _decompile_exe_bytes(data, workdir, label="input.exe"):
     else:
         cmd = [sys.executable, "-m", ref, fp]
     try:
-        subprocess.run(cmd, capture_output=True, timeout=DECOMPILE_TIMEOUT,
-                       cwd=workdir, shell=False)
+        _run_capture(cmd, timeout=DECOMPILE_TIMEOUT, cwd=workdir, limit=0)
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": "解包超时（%ds）" % DECOMPILE_TIMEOUT}
     except Exception as e:
@@ -541,7 +686,7 @@ def _decompile_exe_bytes(data, workdir, label="input.exe"):
                 except Exception as e:
                     files.append({"name": n, "ok": False, "error": "读取失败: %s" % e})
                     continue
-                r = _decompile_pyc_bytes(d, workdir, label=n)
+                r = _decompile_pyc_bytes(d, workdir, label=n, output_limit=output_limit)
                 r["name"] = n
                 files.append(r)
             if truncated:
@@ -558,10 +703,28 @@ def _decompile_exe_bytes(data, workdir, label="input.exe"):
         result["note"] = "已达总体预算，返回部分结果（未覆盖全部 pyc）"
     return result
 
+_WIN_RESERVED_NAMES = (
+    {"CON", "PRN", "AUX", "NUL"}
+    | {"COM%d" % i for i in range(1, 10)}
+    | {"LPT%d" % i for i in range(1, 10)}
+)
+
 def _safe_label(name, exts):
-    """文件名安全化：basename + 拒路径穿越 + 校验扩展名。非法返回 None。"""
-    base = os.path.basename(str(name or ""))
-    if not base or ".." in base or "/" in base or "\\" in base:
+    """文件名安全化：basename + 拒路径穿越 / Windows 保留名 / 尾部点空格 / <>:"|?*。
+    非法返回 None。"""
+    raw = str(name or "").replace("\\", "/")
+    # Windows 文件名非法字符 + 控制字符：在 basename 之前检查，避免 "a:b" 被 ntpath
+    # 当成盘符/ADS 截成 "b" 后绕过拒绝。
+    if any(ch in raw for ch in '<>:"|?*') or any(ord(ch) < 32 for ch in raw):
+        return None
+    base = os.path.basename(raw)
+    if not base or base in (".", "..") or ".." in base or "/" in base:
+        return None
+    # 尾部点 / 空格在 Windows 上会被静默剥掉，造成同名碰撞
+    if base[-1] in (" ", "."):
+        return None
+    # 保留设备名（不分大小写；CON.txt / COM1.tar.gz / "CON .txt" 同样保留）
+    if base.split(".")[0].rstrip(" .").upper() in _WIN_RESERVED_NAMES:
         return None
     low = base.lower()
     if exts and not any(low.endswith(e) for e in exts):
@@ -630,6 +793,32 @@ def decompile_env():
     }
 
 class BridgeHandler(BaseHTTPRequestHandler):
+    def _allow_large(self):
+        """请求头显式带 X-EBCTF-Allow-Large: 1 才放宽到硬上限。"""
+        return str(self.headers.get(ALLOW_LARGE_HEADER, "") or "").strip() == "1"
+
+    def _output_limit(self):
+        return MAX_TOOL_OUTPUT_HARD if self._allow_large() else MAX_TOOL_OUTPUT_SOFT
+
+    def _stdin_limit(self):
+        return MAX_STDIN_HARD if self._allow_large() else MAX_STDIN
+
+    def _file_limit(self):
+        return MAX_FILE_BYTES_HARD if self._allow_large() else MAX_FILE_BYTES
+
+    def _files_total_limit(self):
+        return MAX_FILES_TOTAL_HARD if self._allow_large() else MAX_FILES_TOTAL
+
+    def _limit_error(self, label, limit, soft, hard):
+        """统一尺寸超限文案：软上限标「可放宽」，硬上限标「不可越过」。"""
+        if limit >= hard:
+            return ("%s 超过硬上限 %d 字节（%s；硬上限不可越过，"
+                    "可用对应 EBCTF_BRIDGE_*_HARD 环境变量调整）"
+                    % (label, hard, _mib(hard)))
+        return ("%s 超过软上限 %d 字节（%s）；可在请求头带 %s: 1 放宽到硬上限 %d 字节（%s），"
+                "或降低输入体积后重试"
+                % (label, soft, _mib(soft), ALLOW_LARGE_HEADER, hard, _mib(hard)))
+
     def _cors(self):
         # 反射本机 Origin（修 127.0.0.1 vs localhost 不一致导致的 CORS 拦截）；无 Origin 请求（curl/同源）不带该头
         from urllib.parse import urlparse
@@ -641,7 +830,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 self.send_header("Access-Control-Allow-Origin", origin)
                 self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, " + ALLOW_LARGE_HEADER)
         self.send_header("Cache-Control", "no-cache")
 
     def _send_json(self, code, obj):
@@ -652,6 +841,32 @@ class BridgeHandler(BaseHTTPRequestHandler):
         self._cors()
         self.end_headers()
         self.wfile.write(body)
+
+    def _read_json_body(self):
+        """读取并解析 JSON 请求体。先校验 Content-Length，再读字节（防超大 body 占内存）。"""
+        raw_len = self.headers.get("Content-Length")
+        if raw_len is None or str(raw_len).strip() == "":
+            length = 0
+        else:
+            try:
+                length = int(str(raw_len).strip())
+            except (TypeError, ValueError):
+                raise ValueError("Content-Length 非法")
+            if length < 0:
+                raise ValueError("Content-Length 非法")
+        allow_large = self._allow_large()
+        limit = MAX_BODY_HARD if allow_large else MAX_BODY_SOFT
+        if length > limit:
+            if allow_large:
+                raise OverflowError(
+                    "请求体超过硬上限 %d 字节（软上限 %d；硬上限不可越过，"
+                    "可用 EBCTF_BRIDGE_MAX_BODY_HARD 调整）" % (MAX_BODY_HARD, MAX_BODY_SOFT))
+            raise OverflowError(
+                "请求体超过软上限 %d 字节（可在请求头带 %s: 1 放宽到硬上限 %d；"
+                "可用 EBCTF_BRIDGE_MAX_BODY / EBCTF_BRIDGE_MAX_BODY_HARD 调整）"
+                % (MAX_BODY_SOFT, ALLOW_LARGE_HEADER, MAX_BODY_HARD))
+        raw = self.rfile.read(length) if length else b""
+        return json.loads(raw.decode("utf-8") or "{}")
 
     def do_OPTIONS(self):
         self.send_response(204)
@@ -720,9 +935,10 @@ class BridgeHandler(BaseHTTPRequestHandler):
             })
             return
         try:
-            length = int(self.headers.get("Content-Length", 0))
-            raw = self.rfile.read(length) if length else b""
-            req = json.loads(raw.decode("utf-8") or "{}")
+            req = self._read_json_body()
+        except OverflowError as e:
+            self._send_json(413, {"ok": False, "error": str(e)})
+            return
         except Exception as e:
             self._send_json(400, {"ok": False, "error": "请求解析失败: %s" % e})
             return
@@ -748,14 +964,36 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
         stdin_bytes = b""
         if stdin_b64:
+            if not isinstance(stdin_b64, str):
+                self._send_json(400, {"ok": False, "error": "stdin 必须是 base64 字符串"})
+                return
+            stdin_limit = self._stdin_limit()
+            # 解码前按 base64 编码长度预检：避免超大字符串先解码再拒绝（内存峰值翻倍）。
+            if len(stdin_b64) > _b64_encoded_limit(stdin_limit):
+                self._send_json(400, {"ok": False, "error": self._limit_error(
+                    "stdin（base64 编码长度 %d，解码后超过上限）" % len(stdin_b64),
+                    stdin_limit, MAX_STDIN, MAX_STDIN_HARD)})
+                return
             try:
                 stdin_bytes = base64.b64decode(stdin_b64)
-                if len(stdin_bytes) > MAX_STDIN:
-                    self._send_json(400, {"ok": False, "error": "stdin 超过 50MB 限制"})
-                    return
             except Exception as e:
                 self._send_json(400, {"ok": False, "error": "stdin base64 解码失败: %s" % e})
                 return
+            # 双保险：异常编码（含填充/空白）解码后仍逐字节复核。
+            if len(stdin_bytes) > stdin_limit:
+                self._send_json(400, {"ok": False, "error": self._limit_error(
+                    "stdin（解码后 %d 字节）" % len(stdin_bytes),
+                    stdin_limit, MAX_STDIN, MAX_STDIN_HARD)})
+                return
+
+        if files is None:
+            files = {}
+        if not isinstance(files, dict):
+            self._send_json(400, {"ok": False, "error": "files 必须是 {name: base64} 对象"})
+            return
+        if len(files) > MAX_FILES:
+            self._send_json(400, {"ok": False, "error": "files 条目数超过 %d 上限" % MAX_FILES})
+            return
 
         tmpdir = tempfile.mkdtemp(prefix="bridge_")
         # 按 tool 取独立超时（默认 60s，长任务可在 TOOL_TIMEOUTS 覆盖；现 CLI 白名单已清空）。
@@ -764,14 +1002,40 @@ class BridgeHandler(BaseHTTPRequestHandler):
         try:
             # 写输入文件，替换 args 里的 {name} 占位符 → 临时文件绝对路径
             file_map = {}
-            for name, b64 in (files or {}).items():
+            files_total = 0
+            file_limit = self._file_limit()
+            total_limit = self._files_total_limit()
+            for name, b64 in files.items():
+                if not isinstance(name, str) or not isinstance(b64, str):
+                    self._send_json(400, {"ok": False, "error": "files 的键与值都必须是字符串"})
+                    return
+                # 解码前按 base64 编码长度预检单文件上限。
+                if len(b64) > _b64_encoded_limit(file_limit):
+                    self._send_json(400, {"ok": False, "error": self._limit_error(
+                        "文件 %s（base64 编码长度 %d，解码后超过单文件上限）" % (name, len(b64)),
+                        file_limit, MAX_FILE_BYTES, MAX_FILE_BYTES_HARD)})
+                    return
                 try:
                     data = base64.b64decode(b64)
                 except Exception as e:
                     self._send_json(400, {"ok": False, "error": "文件 %s base64 解码失败: %s" % (name, e)})
                     return
-                # 防路径穿越：只用 basename
-                safe_name = os.path.basename(name)
+                if len(data) > file_limit:
+                    self._send_json(400, {"ok": False, "error": self._limit_error(
+                        "文件 %s（解码后 %d 字节）" % (name, len(data)),
+                        file_limit, MAX_FILE_BYTES, MAX_FILE_BYTES_HARD)})
+                    return
+                files_total += len(data)
+                if files_total > total_limit:
+                    self._send_json(400, {"ok": False, "error": self._limit_error(
+                        "files 总大小（解码后 %d 字节）" % files_total,
+                        total_limit, MAX_FILES_TOTAL, MAX_FILES_TOTAL_HARD)})
+                    return
+                # 防路径穿越 / Windows 保留名 / 非法字符
+                safe_name = _safe_label(name, None)
+                if not safe_name:
+                    self._send_json(400, {"ok": False, "error": "文件名字非法: %s" % name})
+                    return
                 fp = os.path.join(tmpdir, safe_name)
                 with open(fp, "wb") as f:
                     f.write(data)
@@ -783,19 +1047,24 @@ class BridgeHandler(BaseHTTPRequestHandler):
                     a = a.replace("{" + name + "}", fp)
                 real_args.append(a)
 
-            # subprocess.run 参数数组，shell=False（防注入核心）
-            proc = subprocess.run(
+            # subprocess 参数数组，shell=False（防注入核心）；stdout/stderr 边读边截。
+            output_limit = self._output_limit()
+            exit_code, stdout_bytes, stderr_bytes, stdout_truncated, stderr_truncated = _run_capture(
                 [exe] + real_args,
-                input=stdin_bytes,
-                capture_output=True,
+                input_bytes=stdin_bytes,
                 timeout=tool_timeout,
                 cwd=tmpdir,
+                limit=output_limit,
             )
             self._send_json(200, {
                 "ok": True,
-                "exitCode": proc.returncode,
-                "stdout": base64.b64encode(proc.stdout).decode("ascii"),
-                "stderr": base64.b64encode(proc.stderr).decode("ascii"),
+                "exitCode": exit_code,
+                "stdout": base64.b64encode(stdout_bytes).decode("ascii"),
+                "stderr": base64.b64encode(stderr_bytes).decode("ascii"),
+                # 输出捕获上限：超限已截断，前端据此明确提示（不伪装成完整输出）
+                "stdoutTruncated": stdout_truncated,
+                "stderrTruncated": stderr_truncated,
+                "outputLimit": output_limit,
             })
         except subprocess.TimeoutExpired:
             self._send_json(504, {"ok": False, "error": "执行超时（%ds）" % tool_timeout})
@@ -815,12 +1084,10 @@ class BridgeHandler(BaseHTTPRequestHandler):
             })
             return
         try:
-            length = int(self.headers.get("Content-Length", 0))
-            if length > MAX_STDIN:
-                self._send_json(400, {"ok": False, "error": "文件超过 50MB 限制"})
-                return
-            raw = self.rfile.read(length) if length else b""
-            req = json.loads(raw.decode("utf-8") or "{}")
+            req = self._read_json_body()
+        except OverflowError as e:
+            self._send_json(413, {"ok": False, "error": str(e)})
+            return
         except Exception as e:
             self._send_json(400, {"ok": False, "error": "请求解析失败: %s" % e})
             return
@@ -830,13 +1097,25 @@ class BridgeHandler(BaseHTTPRequestHandler):
         if not data_b64:
             self._send_json(400, {"ok": False, "error": "缺少 data（文件 base64）"})
             return
+        data_limit = self._file_limit()
+        if not isinstance(data_b64, str):
+            self._send_json(400, {"ok": False, "error": "data 必须是 base64 字符串"})
+            return
+        # 解码前按 base64 编码长度预检单文件上限。
+        if len(data_b64) > _b64_encoded_limit(data_limit):
+            self._send_json(400, {"ok": False, "error": self._limit_error(
+                "data（base64 编码长度 %d，解码后超过单文件上限）" % len(data_b64),
+                data_limit, MAX_FILE_BYTES, MAX_FILE_BYTES_HARD)})
+            return
         try:
             data = base64.b64decode(data_b64)
         except Exception as e:
             self._send_json(400, {"ok": False, "error": "data base64 解码失败: %s" % e})
             return
-        if len(data) > MAX_STDIN:
-            self._send_json(400, {"ok": False, "error": "文件超过 50MB 限制"})
+        if len(data) > data_limit:
+            self._send_json(400, {"ok": False, "error": self._limit_error(
+                "data（解码后 %d 字节）" % len(data),
+                data_limit, MAX_FILE_BYTES, MAX_FILE_BYTES_HARD)})
             return
 
         # 自动判形态：MZ 头 → exe；否则按 pyc。显式 kind 优先。
@@ -849,11 +1128,12 @@ class BridgeHandler(BaseHTTPRequestHandler):
             label = "input." + kind
 
         tmpdir = tempfile.mkdtemp(prefix="decompile_")
+        output_limit = self._output_limit()
         try:
             if kind == "exe":
-                result = _decompile_exe_bytes(data, tmpdir, label=label)
+                result = _decompile_exe_bytes(data, tmpdir, label=label, output_limit=output_limit)
             else:
-                result = _decompile_pyc_bytes(data, tmpdir, label=label)
+                result = _decompile_pyc_bytes(data, tmpdir, label=label, output_limit=output_limit)
             result.setdefault("kind", kind)
             self._send_json(200, result)
         except Exception as e:
@@ -875,9 +1155,10 @@ class BridgeHandler(BaseHTTPRequestHandler):
             })
             return
         try:
-            length = int(self.headers.get("Content-Length", 0))
-            raw = self.rfile.read(length) if length else b""
-            req = json.loads(raw.decode("utf-8") or "{}")
+            req = self._read_json_body()
+        except OverflowError as e:
+            self._send_json(413, {"ok": False, "error": str(e)})
+            return
         except Exception as e:
             self._send_json(400, {"ok": False, "error": "请求解析失败: %s" % e})
             return
@@ -904,16 +1185,40 @@ class BridgeHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass  # 静默访问日志
 
+EXTENSION_REQUIRED_FILES = (
+    os.path.join("mcp", "extension_bridge.py"),
+    os.path.join("mcp", "extension_worker.mjs"),
+    os.path.join("mcp", "worker", "csp_safe_ops.json"),
+)
+
+def _extension_assets_missing():
+    return [rel for rel in EXTENSION_REQUIRED_FILES
+            if not os.path.isfile(os.path.join(ROOT, rel))]
+
 def create_extension_server(web_origins=()):
-    import importlib.util
-    name = "_ebctf_extension_bridge"
-    runtime = sys.modules.get(name)
-    if runtime is None:
-        spec = importlib.util.spec_from_file_location(name, os.path.join(ROOT, "mcp", "extension_bridge.py"))
-        runtime = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(runtime)
-        sys.modules[name] = runtime
-    return runtime.create_server(ROOT, BridgeHandler, web_origins)
+    """启动本地桥。扩展桥文件缺失/导入失败 → 降级为纯 Python 桥（/api/* 可用），
+    明确提示而不是启动即崩溃。端口占用仍按原逻辑抛 OSError（不静默换端口）。"""
+    missing = _extension_assets_missing()
+    if not missing:
+        try:
+            import importlib.util
+            name = "_ebctf_extension_bridge"
+            runtime = sys.modules.get(name)
+            if runtime is None:
+                spec = importlib.util.spec_from_file_location(
+                    name, os.path.join(ROOT, "mcp", "extension_bridge.py"))
+                runtime = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(runtime)
+                sys.modules[name] = runtime
+            return runtime.create_server(ROOT, BridgeHandler, web_origins)
+        except Exception as exc:
+            missing = ["mcp/extension_bridge.py（导入失败：%s）" % type(exc).__name__]
+    # 降级：仅保留 bridge.py 自带 /api/* handlers，扩展 /v1/* 不可用。
+    sys.stderr.write(
+        "[bridge] 警告：扩展桥必需文件缺失或不可用（%s），已降级为纯 Python 桥；"
+        "/api/* 正常，/v1/* 不可用。请补齐发行包中的 mcp/extension_bridge.py、"
+        "mcp/extension_worker.mjs、mcp/worker/csp_safe_ops.json。\n" % "、".join(missing))
+    return ThreadingHTTPServer(("127.0.0.1", 8181), BridgeHandler)
 
 
 def main():

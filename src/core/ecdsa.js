@@ -32,7 +32,7 @@
  * 红线：core 层零 UI/DOM 依赖；纯本地零外发；无 emoji。
  */
 import { register } from "./registry.js";
-import { ecMul, ecPointAdd, ecToAffine, mod, modInverse } from "./ecdsaReuseK.js";
+import { ecPointAdd, ecToAffine, mod, modInverse } from "./ecdsaReuseK.js";
 import { isProbablePrime, modPow } from "./primeGen.js";
 import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
 import { md5Bytes, sha1Bytes } from "./hash.js";
@@ -112,10 +112,10 @@ const HASHES = {
 const HEX_RE = /^[0-9a-fA-F]+$/;
 
 function hexToBytes(h, label = "hex") {
-  let s = String(h == null ? "" : h).trim().replace(/^0x/i, "").replace(/\s+/g, "");
+  const s = String(h == null ? "" : h).trim().replace(/^0x/i, "").replace(/[\s:]/g, "");
   if (!s) throw new Error(`缺少 ${label} 输入`);
-  if (!HEX_RE.test(s)) throw new Error(`${label} 含非 hex 字符`);
-  if (s.length % 2) s = "0" + s;
+  if (!HEX_RE.test(s)) throw new Error(`${label} 含非 hex 字符（仅允许 0-9a-fA-F、空白、冒号、0x 前缀）`);
+  if (s.length % 2) throw new Error(`${label} 长度必须为偶数（当前 ${s.length} 个 hex 字符）`);
   const out = new Uint8Array(s.length / 2);
   for (let i = 0; i < out.length; i++) out[i] = parseInt(s.slice(i * 2, i * 2 + 2), 16);
   return out;
@@ -185,9 +185,74 @@ function b64urlToBytes(s, label = "base64url") {
 // WebCrypto 字节级 SHA / HMAC（FIPS 180-4 / RFC 2104）
 // （仓内无字节级导出实现，按 modern.js / jwtCrack.js 既有模式直调原生原语）
 // ============================================================
+// SHA-256 纯 JS（FIPS 180-4 §6.2.2）：RFC 6979 的 HMAC_DRBG 会做多次小输入 HMAC，
+// 走 WebCrypto 的 importKey/sign 每轮都有异步调度开销；此处用 32 位整数压缩，
+// 单次 HMAC 约 6µs（WebCrypto 约 32µs，实测 5x）。SHA-384/512 仍走 WebCrypto（带钥缓存）。
+const SHA256_K = [
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+];
+const SHA256_IV = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+
+function sha256Bytes(msg) {
+  const bitLenHi = Math.floor(msg.length / 0x20000000);
+  const bitLenLo = (msg.length << 3) >>> 0;
+  const paddedLen = (((msg.length + 8) >> 6) + 1) << 6;
+  const padded = new Uint8Array(paddedLen);
+  padded.set(msg);
+  padded[msg.length] = 0x80;
+  const dv = new DataView(padded.buffer);
+  dv.setUint32(paddedLen - 8, bitLenHi, false);
+  dv.setUint32(paddedLen - 4, bitLenLo, false);
+  const H = SHA256_IV.slice();
+  const w = new Uint32Array(64);
+  for (let off = 0; off < paddedLen; off += 64) {
+    for (let t = 0; t < 16; t++) w[t] = dv.getUint32(off + t * 4, false);
+    for (let t = 16; t < 64; t++) {
+      const s0 = ((w[t - 15] >>> 7) | (w[t - 15] << 25)) ^ ((w[t - 15] >>> 18) | (w[t - 15] << 14)) ^ (w[t - 15] >>> 3);
+      const s1 = ((w[t - 2] >>> 17) | (w[t - 2] << 15)) ^ ((w[t - 2] >>> 19) | (w[t - 2] << 13)) ^ (w[t - 2] >>> 10);
+      w[t] = (w[t - 16] + s0 + w[t - 7] + s1) >>> 0;
+    }
+    let [a, b, c, d, e, f, g, h] = H;
+    for (let t = 0; t < 64; t++) {
+      const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+      const ch = (e & f) ^ (~e & g);
+      const t1 = (h + S1 + ch + SHA256_K[t] + w[t]) >>> 0;
+      const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (S0 + maj) >>> 0;
+      h = g; g = f; f = e; e = (d + t1) >>> 0;
+      d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+    }
+    H[0] = (H[0] + a) >>> 0; H[1] = (H[1] + b) >>> 0; H[2] = (H[2] + c) >>> 0; H[3] = (H[3] + d) >>> 0;
+    H[4] = (H[4] + e) >>> 0; H[5] = (H[5] + f) >>> 0; H[6] = (H[6] + g) >>> 0; H[7] = (H[7] + h) >>> 0;
+  }
+  const out = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) out[i] = (H[i >> 2] >>> (24 - (i & 3) * 8)) & 0xff;
+  return out;
+}
+
+function hmacSha256(keyBytes, dataBytes) {
+  const BLOCK = 64;
+  const k = keyBytes.length > BLOCK ? sha256Bytes(keyBytes) : keyBytes;
+  const ipad = new Uint8Array(BLOCK + dataBytes.length), opad = new Uint8Array(BLOCK + 32);
+  for (let i = 0; i < BLOCK; i++) { ipad[i] = (k[i] ?? 0) ^ 0x36; opad[i] = (k[i] ?? 0) ^ 0x5c; }
+  ipad.set(dataBytes, BLOCK);
+  const ih = sha256Bytes(ipad);
+  opad.set(ih, BLOCK);
+  return sha256Bytes(opad);
+}
+
 async function shaBytes(normName, data) {
   if (normName === "MD5") return md5Bytes(data);
   if (normName === "SHA-1") return sha1Bytes(data);
+  if (normName === "SHA-256") return sha256Bytes(data);
   if (!globalThis.crypto?.subtle) throw new Error("当前环境不支持 WebCrypto（需 HTTPS 或 localhost）");
   return new Uint8Array(await crypto.subtle.digest(normName, data));
 }
@@ -202,10 +267,26 @@ function hmacMd5(keyBytes, dataBytes) {
   const outer = new Uint8Array(BLOCK + ih.length); outer.set(opad); outer.set(ih, BLOCK);
   return md5Bytes(outer);
 }
+
+// HMAC CryptoKey 缓存（SHA-384/512）：RFC 6979 里同一 K 会连续用 2 次，
+// 缓存最近 8 个 key，省掉重复 importKey 的异步往返。
+const _hmacKeyCache = new Map();
+const HMAC_KEY_CACHE_MAX = 8;
+async function importHmacKeyCached(normName, keyBytes) {
+  const id = normName + ":" + bytesToHex(keyBytes);
+  const hit = _hmacKeyCache.get(id);
+  if (hit) return hit;
+  const k = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: normName }, false, ["sign"]);
+  if (_hmacKeyCache.size >= HMAC_KEY_CACHE_MAX) _hmacKeyCache.delete(_hmacKeyCache.keys().next().value);
+  _hmacKeyCache.set(id, k);
+  return k;
+}
+
 async function hmacShaBytes(normName, keyBytes, dataBytes) {
   if (normName === "MD5") return hmacMd5(keyBytes, dataBytes);
+  if (normName === "SHA-256") return hmacSha256(keyBytes, dataBytes);
   if (!globalThis.crypto?.subtle) throw new Error("当前环境不支持 WebCrypto（需 HTTPS 或 localhost）");
-  const k = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: normName }, false, ["sign"]);
+  const k = await importHmacKeyCached(normName, keyBytes);
   return new Uint8Array(await crypto.subtle.sign("HMAC", k, dataBytes));
 }
 
@@ -243,6 +324,135 @@ function onCurve(x, y, c) {
 }
 
 // ============================================================
+// 雅可比坐标点运算 + wNAF（窗口）标量乘（性能层，输出与 ecMul 等价）
+// ============================================================
+function jacDouble(P, a, p) {
+  const [X1, Y1, Z1] = P;
+  if (Z1 === 0n || Y1 === 0n) return [0n, 1n, 0n];
+  const A = mod(X1 * X1, p);
+  const B = mod(Y1 * Y1, p);
+  const C = mod(B * B, p);
+  const Z1sq = mod(Z1 * Z1, p);
+  const D = mod(2n * (mod((X1 + B) * (X1 + B), p) - A - C), p);
+  const E = mod(3n * A + a * mod(Z1sq * Z1sq, p), p);
+  const F = mod(E * E, p);
+  const X3 = mod(F - 2n * D, p);
+  const Y3 = mod(E * (D - X3) - 8n * C, p);
+  const Z3 = mod(2n * Y1 * Z1, p);
+  return [X3, Y3, Z3];
+}
+
+function jacAdd(P, Q, a, p) {
+  if (P[2] === 0n) return Q;
+  if (Q[2] === 0n) return P;
+  const [X1, Y1, Z1] = P, [X2, Y2, Z2] = Q;
+  const Z1Z1 = mod(Z1 * Z1, p);
+  const Z2Z2 = mod(Z2 * Z2, p);
+  const U1 = mod(X1 * Z2Z2, p);
+  const U2 = mod(X2 * Z1Z1, p);
+  const S1 = mod(Y1 * Z2 * Z2Z2, p);
+  const S2 = mod(Y2 * Z1 * Z1Z1, p);
+  if (U1 === U2) {
+    if (S1 !== S2) return [0n, 1n, 0n];
+    return jacDouble(P, a, p);
+  }
+  const H = mod(U2 - U1, p);
+  const I = mod((2n * H) * (2n * H), p);
+  const J = mod(H * I, p);
+  const rr = mod(2n * (S2 - S1), p);
+  const V = mod(U1 * I, p);
+  const X3 = mod(rr * rr - J - 2n * V, p);
+  const Y3 = mod(rr * (V - X3) - 2n * S1 * J, p);
+  const Z3 = mod((mod((Z1 + Z2) * (Z1 + Z2), p) - Z1Z1 - Z2Z2) * H, p);
+  return [X3, Y3, Z3];
+}
+
+/** wNAF 展开：d_i 为奇数且 |d_i| < 2^(w-1)，低位到高位。 */
+function wnafDigits(k, w) {
+  const digits = [];
+  const nw = 1n << BigInt(w);
+  const half = nw >> 1n;
+  let kk = k;
+  while (kk > 0n) {
+    let d = 0n;
+    if (kk & 1n) {
+      d = kk & (nw - 1n);
+      if (d >= half) d -= nw;
+      kk -= d;
+    }
+    digits.push(Number(d));
+    kk >>= 1n;
+  }
+  return digits;
+}
+
+/** 预计算奇数倍点表 [1P, 3P, 5P, …]（雅可比坐标）。 */
+function precomputeOdd(Px, Py, a, p, w) {
+  const count = 1 << (w - 2);
+  const table = new Array(count);
+  const base = [mod(Px, p), mod(Py, p), 1n];
+  table[0] = base;
+  if (count > 1) {
+    const two = jacDouble(base, a, p);
+    for (let i = 1; i < count; i++) table[i] = jacAdd(table[i - 1], two, a, p);
+  }
+  return table;
+}
+
+const _gTableCache = new Map();
+const G_TABLE_CACHE_MAX = 8;
+
+function gTable(c, w) {
+  const id = `${c.p.toString(16)}|${c.a.toString(16)}|${c.Gx.toString(16)}|${c.Gy.toString(16)}|${w}`;
+  let t = _gTableCache.get(id);
+  if (t) return t;
+  t = precomputeOdd(c.Gx, c.Gy, c.a, c.p, w);
+  if (_gTableCache.size >= G_TABLE_CACHE_MAX) _gTableCache.delete(_gTableCache.keys().next().value);
+  _gTableCache.set(id, t);
+  return t;
+}
+
+function tableAdd(R, table, d, a, p) {
+  if (d > 0) return jacAdd(R, table[(d - 1) >> 1], a, p);
+  const T = table[(-d - 1) >> 1];
+  return jacAdd(R, [T[0], mod(p - T[1], p), T[2]], a, p);
+}
+
+/** k·P（输出雅可比；P 为曲线 G 时复用预计算表）。 */
+function ecMulCurve(c, k, Px, Py) {
+  if (k <= 0n) return [0n, 1n, 0n];
+  const w = bitLen(k) > 400 ? 6 : 5;
+  const isG = c.Gx != null && Px === c.Gx && Py === c.Gy;
+  const table = isG ? gTable(c, w) : precomputeOdd(Px, Py, c.a, c.p, w);
+  const digits = wnafDigits(k, w);
+  let R = [0n, 1n, 0n];
+  for (let i = digits.length - 1; i >= 0; i--) {
+    if (R[2] !== 0n) R = jacDouble(R, c.a, c.p);
+    if (digits[i] !== 0) R = tableAdd(R, table, digits[i], c.a, c.p);
+  }
+  return R;
+}
+
+/** k1·P1 + k2·P2（Shamir 联合 wNAF；验签用，省一遍倍点链）。 */
+function ecMulAdd2(c, k1, P1x, P1y, k2, P2x, P2y) {
+  const w = 5;
+  const isG = c.Gx != null && P1x === c.Gx && P1y === c.Gy;
+  const t1 = isG ? gTable(c, w) : precomputeOdd(P1x, P1y, c.a, c.p, w);
+  const t2 = precomputeOdd(P2x, P2y, c.a, c.p, w);
+  const d1 = wnafDigits(k1, w);
+  const d2 = wnafDigits(k2, w);
+  const len = Math.max(d1.length, d2.length);
+  let R = [0n, 1n, 0n];
+  for (let i = len - 1; i >= 0; i--) {
+    if (R[2] !== 0n) R = jacDouble(R, c.a, c.p);
+    const a1 = d1[i] || 0, a2 = d2[i] || 0;
+    if (a1 !== 0) R = tableAdd(R, t1, a1, c.a, c.p);
+    if (a2 !== 0) R = tableAdd(R, t2, a2, c.a, c.p);
+  }
+  return R;
+}
+
+// ============================================================
 // 点解析 / 序列化
 // ============================================================
 /** 解析点 hex：02/03‖X（压缩，需解压）｜04‖X‖Y｜X‖Y 裸拼接；"G"=生成元；"O"/"inf"=无穷远点(返回 null) */
@@ -254,7 +464,7 @@ function parsePoint(raw, c, label) {
     if (c.Gx == null) throw new Error(`曲线 ${c.name} 未提供生成元 G（自定义曲线需填 Gx/Gy）`);
     return [c.Gx, c.Gy];
   }
-  const h = s.replace(/^0x/i, "").replace(/\s+/g, "");
+  const h = s.replace(/^0x/i, "").replace(/[\s:]/g, "");
   if (!HEX_RE.test(h)) throw new Error(`${label} 含非 hex 字符`);
   const bl = byteLen(c.p);
   if (h.length === 4 * bl + 2) {
@@ -302,7 +512,7 @@ function fmtUncompressed(P, c) {
   return "04" + bytesToHex(bigIntToBytes(P[0], bl, "x")) + bytesToHex(bigIntToBytes(P[1], bl, "y"));
 }
 function pubParseDescribe(raw) {
-  const h = String(raw == null ? "" : raw).trim().replace(/^0x/i, "").replace(/\s+/g, "");
+  const h = String(raw == null ? "" : raw).trim().replace(/^0x/i, "").replace(/[\s:]/g, "");
   if (/^04/i.test(h)) return "非压缩 04‖X‖Y";
   if (/^0[23]/i.test(h)) return "压缩 02/03‖X";
   if (/^g$/i.test(h)) return "生成元 G";
@@ -360,7 +570,7 @@ async function ecdsaSignRaw(c, d, msgBytes, hashKey, kMode) {
   for (;;) {
     if (guard++ > 16) throw new Error("签名重试超限（概率≈0，输入异常）");
     k = kMode === "rfc6979" ? await rfc6979K(d, h1, c, hashKey) : randBelow(c.n);
-    const R = ecToAffine(ecMul(k, c.Gx, c.Gy, c.a, c.p), c.p);
+    const R = ecToAffine(ecMulCurve(c, k, c.Gx, c.Gy), c.p);
     if (!R) continue;
     r = mod(R[0], c.n);
     if (r === 0n) continue;
@@ -378,10 +588,7 @@ function ecdsaVerifyRaw(c, Q, r, s, e) {
   const w = modInverse(s, n);
   const u1 = mod(e * w, n);
   const u2 = mod(r * w, n);
-  const R = ecToAffine(
-    ecPointAdd(ecMul(u1, c.Gx, c.Gy, a, p), ecMul(u2, Q[0], Q[1], a, p), a, p),
-    p
-  );
+  const R = ecToAffine(ecMulAdd2(c, u1, c.Gx, c.Gy, u2, Q[0], Q[1]), p);
   if (!R) return { valid: false, reason: "R = u1·G + u2·Q 为无穷远点", u1, u2 };
   const v = mod(R[0], n);
   return { valid: v === r, v, R, u1, u2, w };
@@ -466,7 +673,7 @@ function derToSig(b) {
 function parseSigInput(raw) {
   const str = String(raw == null ? "" : raw).trim();
   if (!str) throw new Error("缺少签名输入");
-  const compact = str.replace(/^0x/i, "").replace(/\s+/g, "");
+  const compact = str.replace(/^0x/i, "").replace(/[\s:]/g, "");
   if (/^[0-9a-f]+$/i.test(compact) && /^30/i.test(compact) && compact.length % 2 === 0 && compact.length >= 8) {
     try {
       const { r, s, trailing } = derToSig(hexToBytes(compact));
@@ -539,7 +746,7 @@ function ecSpkiDer(c, Q) {
 function ecdsaKeyGenRun(_text, p = {}) {
   const c = getCurve(p.curve || "secp256k1");
   const d = randBelow(c.n);
-  const Q = ecToAffine(ecMul(d, c.Gx, c.Gy, c.a, c.p), c.p);
+  const Q = ecToAffine(ecMulCurve(c, d, c.Gx, c.Gy), c.p);
   const bl = byteLen(c.n);
   const dHex = bytesToHex(bigIntToBytes(d, bl, "d"));
   const mainFmt = p.pubFormat || "uncompressed";
@@ -611,20 +818,22 @@ async function ecdsaSignRun(text, p = {}) {
   } else {
     d = parseBigAuto(p.d, "私钥 d（十进制或 0x hex）");
   }
+  const mf = String(p.msgFormat || "text");
+  if (!["text", "hex", "base64"].includes(mf)) throw new Error(`未知消息格式：${mf}（可选 text / hex / base64）`);
   const raw = rawBytesOf(p);
-  const msg = raw != null ? raw : msgToBytes(text, "text");
+  const msg = raw != null ? raw : msgToBytes(text, mf);
   const { r, s, k, e, h1 } = await ecdsaSignRaw(c, d, msg, hashKey, kMode);
-  const Q = ecToAffine(ecMul(d, c.Gx, c.Gy, c.a, c.p), c.p);
+  const Q = ecToAffine(ecMulCurve(c, d, c.Gx, c.Gy), c.p);
   const bl = byteLen(c.n);
   const rHex = bytesToHex(bigIntToBytes(r, bl, "r"));
   const sHex = bytesToHex(bigIntToBytes(s, bl, "s"));
   const der = sigToDer(r, s);
   const L = [];
   L.push("=== ECDSA 签名 ===");
-  L.push(`曲线: ${c.name}（${c.std}）  哈希: ${H.label}  消息编码: text`);
+  L.push(`曲线: ${c.name}（${c.std}）  哈希: ${H.label}  消息编码: ${mf}`);
   L.push(`k 模式: ${kMode === "rfc6979" ? "RFC 6979 确定 k（同输入同签名，可复现）" : "随机 k（crypto.getRandomValues）"}`);
   L.push("");
-  L.push(`消息 (text) = ${JSON.stringify(String(text))}`);
+  L.push(`消息 (${mf}) = ${mf === "text" ? JSON.stringify(String(text)) : bytesToHex(msg)}`);
   L.push(`h1 = ${H.label}(msg) = ${bytesToHex(h1)}`);
   L.push(`e  = 左取 ${bitLen(c.n)} 位 = ${e}`);
   L.push("");
@@ -663,6 +872,7 @@ async function ecdsaVerifyRun(text, p = {}) {
   if (!H) throw new Error(`未知哈希：${hashKey}`);
   const raw = rawBytesOf(p);
   const mf = String(p.msgFormat || "text");
+  if (!["text", "hex", "base64"].includes(mf)) throw new Error(`未知消息格式：${mf}（可选 text / hex / base64）`);
   const msg = raw != null ? raw : msgToBytes(text, mf);
   const h1 = await shaBytes(H.norm, msg);
   const e = hashToE(h1, c);
@@ -681,9 +891,9 @@ async function ecdsaVerifyRun(text, p = {}) {
   const v = ecdsaVerifyRaw(c, Q, sig.r, sig.s, e);
   const L = [];
   L.push("=== ECDSA 验签 ===");
-  L.push(`曲线: ${c.name}（${c.std}）  哈希: ${H.label}  消息编码: text`);
+  L.push(`曲线: ${c.name}（${c.std}）  哈希: ${H.label}  消息编码: ${mf}`);
   L.push("");
-  L.push(`消息 (text) = ${JSON.stringify(String(text))}`);
+  L.push(`消息 (${mf}) = ${mf === "text" ? JSON.stringify(String(text)) : bytesToHex(msg)}`);
   L.push(`h1 = ${bytesToHex(h1)}`);
   L.push(`e  = ${e}`);
   L.push("");
@@ -732,9 +942,11 @@ function ecdsaSigConvertRun(text, p = {}) {
     r = rr; s = ss;
   } else if (from === "jose") {
     const b = b64urlToBytes(raw, "JOSE 签名");
-    if (b.length % 2 !== 0 || b.length < 8) throw new Error(`JOSE 签名字节长度须为偶数且 ≥8（${c.name} 应为 ${2 * bl} 字节）`);
-    r = bytesToBigInt(b.slice(0, b.length / 2));
-    s = bytesToBigInt(b.slice(b.length / 2));
+    if (b.length !== 2 * bl) {
+      throw new Error(`JOSE 签名字节长度须严格等于 2×byteLen(n) = ${2 * bl} 字节（${c.name}），当前 ${b.length} 字节`);
+    }
+    r = bytesToBigInt(b.slice(0, bl));
+    s = bytesToBigInt(b.slice(bl));
   } else {
     throw new Error(`未知来源格式：${from}`);
   }
@@ -842,7 +1054,7 @@ function eccCalcRun(_text, p = {}) {
     let Pt = negated ? [P[0], mod(c.p - P[1], c.p)] : P;
     if (negated) L.push(`k < 0 → k·P = (-k)·(-P)，-P = ${fmtShort(Pt, c, bl)}`);
     L.push(`k = ${k}${negated || (c.n && k >= c.n) ? `（有效 k = ${kEff}${negated ? "，作用于 -P" : ""}）` : ""}  k (hex) = ${k.toString(16)}`);
-    const R = ecToAffine(ecMul(kEff, Pt[0], Pt[1], c.a, c.p), c.p);
+    const R = ecToAffine(ecMulCurve(c, kEff, Pt[0], Pt[1]), c.p);
     L.push("");
     L.push(`结果 R = ${!R ? "Infinity (无穷远点 O)" : ""}`);
     if (R) {
@@ -879,7 +1091,7 @@ register({
       { value: "uncompressed", label: "非压缩 04‖X‖Y" },
       { value: "compressed", label: "压缩 02/03‖X" },
     ] },
-    { key: "outputFormat", label: "Output Format", type: "select", default: "report", options: [
+    { key: "outputFormat", label: "输出格式", labelKey: "op.ecdsaKeyGen.param.outputFormat", type: "select", default: "report", options: [
       { value: "report", label: "报告（原有模式，含文件产物）" },
       { value: "PEM", label: "PEM（SPKI 公钥 + PKCS#8 私钥）" },
       { value: "DER", label: "DER（私钥 d hex，同 CC）" },
@@ -895,7 +1107,7 @@ register({
   family: "ecdsa", familyLabel: "sign",
   cat: "asym",
   name: "ECDSA 签名",
-  desc: "ECDSA 签名：输入消息（text/hex）+ 私钥 d，曲线 secp256k1/P-256/P-384/P-521，哈希 SHA-256/384/512/SHA-1/MD5，k 可选 RFC 6979 确定 k（可复现）或随机 k。输出 r,s 十进制+hex、DER hex、所用 k。RFC 6979 A.2.5 官方向量逐字验证。",
+  desc: "ECDSA 签名：输入消息（text/hex/base64，默认 text）+ 私钥 d，曲线 secp256k1/P-256/P-384/P-521，哈希 SHA-256/384/512/SHA-1/MD5，k 可选 RFC 6979 确定 k（可复现）或随机 k。输出 r,s 十进制+hex、DER hex、所用 k。RFC 6979 A.2.5 官方向量逐字验证。",
   params: [
     { key: "curve", label: "曲线", type: "select", default: "secp256k1", options: CURVE_OPTIONS },
     { key: "hash", label: "哈希", type: "select", default: "sha256", options: [
@@ -909,6 +1121,7 @@ register({
       { value: "rfc6979", label: "RFC 6979 确定 k（推荐，可复现）" },
       { value: "random", label: "随机 k" },
     ] },
+    { key: "msgFormat", label: "消息格式", type: "select", default: "text", options: ["text", "hex", "base64"] },
     { sensitive: true, key: "d", label: "私钥 d", type: "text", default: "", placeholder: "十进制/0x hex，或 EC 私钥 PEM/JWK" },
   ],
   run: ecdsaSignRun,

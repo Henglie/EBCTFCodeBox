@@ -90,11 +90,26 @@ function ladder(k, u) {
   return mod(x2 * inv(z2));
 }
 
+// Curve25519 低阶 u 坐标（0/1/p-1 及两个 8 阶点；非规范编码经 mod p 归约后同样覆盖）
+const LOW_ORDER_U = new Set([
+  0n,
+  1n,
+  P - 1n,
+  325606250916557431795983626356110631294008115727848805560023387167927233504n,
+  39382357235489614581723060781553021112529911719440698176882885853963445705823n,
+]);
+
 /** X25519(k_bytes, u_bytes) → 32 字节 result（little-endian）。 */
 function x25519(kBytes, uBytes) {
   const k = clampScalar(kBytes);
   const u = decodeU(uBytes);
+  if (LOW_ORDER_U.has(u)) {
+    throw new Error("X25519 公钥为低阶点（u=0/1/p-1 或 8 阶点），已拒绝：低阶公钥会导致共享密钥落入小群");
+  }
   const res = ladder(k, u);
+  if (res === 0n) {
+    throw new Error("X25519 共享密钥为全零（对方公钥低阶或无效），已拒绝返回全零结果");
+  }
   return encodeLE(res, 32);
 }
 

@@ -706,14 +706,14 @@ register({
   params: [
     { key: "bruteMode", label: "模式", type: "select", default: "auto", options: [
       { value: "auto", label: "自动求位移（打分排名）" },
-      { value: "rot13", label: "ROT13 Brute Force（1..25）" },
-      { value: "rot47", label: "ROT47 Brute Force（1..93）" },
+      { value: "rot13", label: "ROT13 爆破（1..25）", labelKey: "op.caesarBrute.param.rot13Brute" },
+      { value: "rot47", label: "ROT47 爆破（1..93）", labelKey: "op.caesarBrute.param.rot47Brute" },
     ] },
     { key: "rotateLower", label: "ROT13：旋转小写字母", type: "bool", default: true },
     { key: "rotateUpper", label: "ROT13：旋转大写字母", type: "bool", default: true },
     { key: "rotateNumbers", label: "ROT13：旋转数字", type: "bool", default: false },
-    { key: "sampleLength", label: "Sample length（0=全部）", type: "number", default: 100 },
-    { key: "sampleOffset", label: "Sample offset", type: "number", default: 0 },
+    { key: "sampleLength", label: "样本长度（0=全部）", labelKey: "op.caesarBrute.param.sampleLength", type: "number", default: 100 },
+    { key: "sampleOffset", label: "样本偏移", labelKey: "op.caesarBrute.param.sampleOffset", type: "number", default: 0 },
     { key: "printAmount", label: "输出位移量", type: "bool", default: true },
     { key: "crib", label: "Crib（已知明文，过滤结果）", type: "text", default: "" },
   ],

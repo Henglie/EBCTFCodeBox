@@ -82,7 +82,7 @@ register({
   id: "md2", cat: "hash", name: "MD2", family: "md", familyLabel: "MD2",
   desc: "MD2 消息摘要（128 位，RFC 1319，256 字节置换表 + 校验字节，纯 JS）；Rounds 与 CyberChef 对齐（默认 18）",
   params: [
-    { key: "rounds", label: "Rounds", type: "number", default: 18, placeholder: "默认 18" },
+    { key: "rounds", label: "轮数", labelKey: "op.md2.param.rounds", type: "number", default: 18, placeholder: "默认 18" },
   ],
   run: (t, p) => md2(p?.rawBytes ?? t, Number((p && p.rounds) || 18)),
 });

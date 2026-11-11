@@ -29,7 +29,7 @@
  * 命名不冲突、互不 import。
  */
 import { register } from "./registry.js";
-import { generatePrime, isProbablePrime, modPow } from "./primeGen.js";
+import { generatePrime, modPow, modPowCrt } from "./primeGen.js";
 
 // ============================================================
 // 数论基础：gcd / 扩展欧几里得 / 模逆
@@ -305,11 +305,16 @@ export function rsaGenerateKey(bits, eValue = 65537n) {
   for (;;) {
     if (++guard > 500) throw new Error("多次尝试未获合格 p,q（极罕见；检查 e 是否过大或非素数）");
     p = generatePrime(half);
-    q = generatePrime(half);
-    if (p === q) continue;                                    // FIPS 186-4 B.3.3：p != q
-    if (gcd(e, p - 1n) !== 1n || gcd(e, q - 1n) !== 1n) continue; // e 与 φ(n) 不互素 → 重生成 p,q
-    n = p * q;
-    if (n.toString(2).length !== bits) continue;              // 保证 n 恰为标称位长
+    if (gcd(e, p - 1n) !== 1n) continue;                      // e 与 p-1 不互素 → 重生成 p
+    for (;;) {
+      if (++guard > 500) throw new Error("多次尝试未获合格 p,q（极罕见；检查 e 是否过大或非素数）");
+      q = generatePrime(half);
+      if (q === p) continue;                                  // FIPS 186-4 B.3.3：p != q
+      if (gcd(e, q - 1n) !== 1n) continue;                    // e 与 q-1 不互素 → 换 q
+      n = p * q;
+      if (n.toString(2).length !== bits) continue;            // 保证 n 恰为标称位长（保留 p，只换 q）
+      break;
+    }
     phi = (p - 1n) * (q - 1n);
     d = modInv(e, phi);                                       // 此处必有逆
     break;
@@ -318,11 +323,12 @@ export function rsaGenerateKey(bits, eValue = 65537n) {
   const dq = d % (q - 1n);
   const qinv = modInv(q, p);
 
-  // 生成后一致性自检（防御性，正常永远不触发）
-  if (!isProbablePrime(p) || !isProbablePrime(q)) throw new Error("内部错误：p/q 素性复检失败");
+  // 生成后一致性自检（防御性，正常永远不触发）。p/q 已在 generatePrime 内通过
+  // 完整 MR（固定基 + 随机基），此处不再重复 37 轮复检（纯冗余，约占 keygen 1/3 时间）。
+  if (p <= 1n || q <= 1n || p === q || p * q !== n) throw new Error("内部错误：p/q 素性复检失败");
   if ((e * d) % phi !== 1n) throw new Error("内部错误：e*d ≢ 1 (mod φ)");
   const probe = 0x4242424242424242n % n; // m < n 的固定探针
-  if (modPow(modPow(probe, e, n), d, n) !== probe) throw new Error("内部错误：加解密往返自检失败");
+  if (modPowCrt(modPow(probe, e, n), d, n, p, q, dp, dq, qinv) !== probe) throw new Error("内部错误：加解密往返自检失败");
 
   return { bits, n, e, d, p, q, dp, dq, qinv };
 }

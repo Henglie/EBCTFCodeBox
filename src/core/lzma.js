@@ -1,7 +1,13 @@
+import { checkLimit, withLimit } from "./limitGuard.js";
+
 const WASM_URL = new URL("../../public/wasm/7zz.js", import.meta.url).href;
 const MAX_U64 = 0xFFFFFFFFFFFFFFFFn;
-const DEFAULT_MAX_INPUT = 128 * 1024 * 1024;
-const DEFAULT_MAX_OUTPUT = 64 * 1024 * 1024;
+const DEFAULT_MAX_INPUT = 128 * 1024 * 1024;        // 输入软阈值
+const DEFAULT_MAX_INPUT_HARD = 512 * 1024 * 1024;   // 确认后的输入硬上限
+// LZMA-alone/raw 的声明 unpack size 在解压前即校验；7z-wasm 实际写盘后才可读 size，
+// 因此在读回阶段（picked.size / data.length）再校验，超限直接拒绝而不是分配 JS 缓冲。
+const DEFAULT_MAX_OUTPUT = 64 * 1024 * 1024;       // 软阈值
+const DEFAULT_MAX_OUTPUT_HARD = 256 * 1024 * 1024; // 确认后的硬上限
 const EMPTY_RAW = Uint8Array.from([0x00, 0x83, 0xFF, 0xFB, 0xFF, 0xFF, 0xC0, 0x00, 0x00, 0x00]);
 const EMPTY_PROPS = { lc: 3, lp: 0, pb: 2, dictSize: 1 << 23 };
 
@@ -250,6 +256,60 @@ function nextId(prefix) {
   return prefix + "_" + Date.now().toString(36) + "_" + _seq;
 }
 
+const PRESIZE_MIN_TOTAL = 8 * 1024 * 1024;
+
+function fsNodePath(node) {
+  const parts = [];
+  let n = node;
+  for (let i = 0; n && i < 256; i++) {
+    if (n.name && n.name !== "/") parts.push(n.name);
+    if (!n.parent || n.parent === n) break;
+    n = n.parent;
+  }
+  return parts.reverse().join("/");
+}
+
+function takeFileBytes(FS, full) {
+  let data = null;
+  try {
+    const node = FS.lookupPath ? FS.lookupPath(full, { follow: true }).node : null;
+    const contents = node && node.contents;
+    const used = node ? Number(node.usedBytes) : NaN;
+    const bytesView = contents instanceof Uint8Array
+      ? contents
+      : (contents && ArrayBuffer.isView(contents) && contents.BYTES_PER_ELEMENT === 1
+        ? new Uint8Array(contents.buffer, contents.byteOffset, contents.byteLength) : null);
+    if (bytesView && Number.isSafeInteger(used) && used >= 0 && used <= bytesView.length) {
+      data = bytesView.subarray(0, used);
+    }
+  } catch { data = null; }
+  if (data === null) {
+    try { data = FS.readFile(full); } catch { data = new Uint8Array(0); }
+  }
+  try { FS.unlink(full); } catch { }
+  return data;
+}
+
+function installPresizeHook(FS, outDir, declaredSize) {
+  const MEMFS = FS && FS.filesystems && FS.filesystems.MEMFS;
+  const table = MEMFS && MEMFS.ops_table && MEMFS.ops_table.file && MEMFS.ops_table.file.stream;
+  if (!table || typeof table.write !== "function" || typeof MEMFS.resizeFileStorage !== "function") return null;
+  const orig = table.write;
+  const prefix = outDir + "/";
+  const hook = function (stream, buffer, offset, length, position, canOwn) {
+    try {
+      const node = stream && stream.node;
+      if (node && position === 0 && node.usedBytes === 0 && length > 0 && declaredSize > length) {
+        const full = fsNodePath(node);
+        if (full && full.startsWith(prefix)) MEMFS.resizeFileStorage(node, declaredSize);
+      }
+    } catch { }
+    return orig.apply(this, arguments);
+  };
+  table.write = hook;
+  return () => { if (table.write === hook) table.write = orig; };
+}
+
 function concatBytes(a, b) {
   const out = new Uint8Array(a.length + b.length);
   out.set(a, 0);
@@ -271,13 +331,46 @@ function outputFiles(FS, dir) {
   return names;
 }
 
+function resolveInputLimits(opts) {
+  const maxInput = opts.maxInput != null ? Number(opts.maxInput) : DEFAULT_MAX_INPUT;
+  const hardInput = opts.hardMaxInput != null
+    ? Math.max(Number(opts.hardMaxInput), maxInput)
+    : Math.max(DEFAULT_MAX_INPUT_HARD, maxInput);
+  if (!Number.isSafeInteger(maxInput) || maxInput < 0) throw new LzmaError("BAD_OPTION", "maxInput must be a non-negative integer");
+  if (!Number.isSafeInteger(hardInput) || hardInput < maxInput) throw new LzmaError("BAD_OPTION", "hardMaxInput must be a non-negative integer >= maxInput");
+  return { maxInput, hardInput };
+}
+
+/** 输入超软阈值时走统一确认；返回带 override 的参数供后续嵌套检查复用。 */
+function checkInputBudget(actual, maxInput, hardInput, params, label, scope) {
+  if (actual <= maxInput) return params;
+  checkLimit({
+    scope: scope || "lzma.input",
+    actual,
+    soft: maxInput,
+    hard: hardInput,
+    params,
+    label,
+    unit: " 字节",
+  });
+  return withLimit(params, { _allowLimitOverride: true });
+}
+
 export async function lzmaDecode(input, opts = {}) {
   const bytes = toBytes(input);
-  const maxInput = opts.maxInput != null ? Number(opts.maxInput) : DEFAULT_MAX_INPUT;
+  const { maxInput, hardInput } = resolveInputLimits(opts);
   const maxOutput = opts.maxOutput != null ? Number(opts.maxOutput) : DEFAULT_MAX_OUTPUT;
-  if (!Number.isSafeInteger(maxInput) || maxInput < 0) throw new LzmaError("BAD_OPTION", "maxInput must be a non-negative integer");
+  const hardOutput = opts.hardMaxOutput != null
+    ? Math.max(Number(opts.hardMaxOutput), maxOutput)
+    : Math.max(DEFAULT_MAX_OUTPUT_HARD, maxOutput * 4);
+  const params = opts.params || opts._limitParams
+    || (opts._allowLimitOverride ? opts : null)
+    || null;
+  let limitParams = params;
   if (!Number.isSafeInteger(maxOutput) || maxOutput < 0) throw new LzmaError("BAD_OPTION", "maxOutput must be a non-negative integer");
-  if (bytes.length > maxInput) throw new LzmaError("LIMIT_INPUT", "compressed input exceeds maxInput");
+  if (!Number.isSafeInteger(hardOutput) || hardOutput < maxOutput) throw new LzmaError("BAD_OPTION", "hardMaxOutput must be a non-negative integer >= maxOutput");
+  limitParams = checkInputBudget(bytes.length, maxInput, hardInput, limitParams,
+    "LZMA 压缩输入", "lzma.input");
 
   const format = opts.format || "auto";
   let stream;
@@ -294,7 +387,18 @@ export async function lzmaDecode(input, opts = {}) {
     if (sizeBig !== MAX_U64) {
       if (sizeBig > BigInt(Number.MAX_SAFE_INTEGER)) throw new LzmaError("BAD_SIZE", "LZMA size is too large");
       declaredSize = Number(sizeBig);
-      if (declaredSize > maxOutput) throw new LzmaError("LIMIT_OUTPUT", "declared output exceeds maxOutput");
+      if (declaredSize > maxOutput) {
+        checkLimit({
+          scope: "lzma.declaredOutput",
+          actual: declaredSize,
+          soft: maxOutput,
+          hard: hardOutput,
+          params: limitParams,
+          label: "LZMA 声明输出",
+          unit: " 字节",
+        });
+        limitParams = withLimit(limitParams, { _allowLimitOverride: true });
+      }
     }
     if (stream.length === 0) throw new LzmaError("TRUNCATED", "LZMA stream is empty");
   } else if (format === "raw") {
@@ -304,7 +408,18 @@ export async function lzmaDecode(input, opts = {}) {
     if (opts.size != null) {
       const n = Number(opts.size);
       if (!Number.isSafeInteger(n) || n < 0) throw new LzmaError("BAD_SIZE", "size must be a non-negative integer");
-      if (n > maxOutput) throw new LzmaError("LIMIT_OUTPUT", "declared output exceeds maxOutput");
+      if (n > maxOutput) {
+        checkLimit({
+          scope: "lzma.declaredOutput",
+          actual: n,
+          soft: maxOutput,
+          hard: hardOutput,
+          params: limitParams,
+          label: "LZMA 声明输出",
+          unit: " 字节",
+        });
+        limitParams = withLimit(limitParams, { _allowLimitOverride: true });
+      }
       declaredSize = n;
     }
     header = makeAlone(propsBytes, declaredSize);
@@ -315,6 +430,19 @@ export async function lzmaDecode(input, opts = {}) {
 
   return withWasm(async (mod) => {
     const FS = mod.FS;
+    const checkOutputBudget = (actual, label) => {
+      if (actual <= maxOutput) return;
+      checkLimit({
+        scope: "lzma.output",
+        actual,
+        soft: maxOutput,
+        hard: hardOutput,
+        params: limitParams,
+        label: label || "LZMA 解压输出",
+        unit: " 字节",
+      });
+      limitParams = withLimit(limitParams, { _allowLimitOverride: true });
+    };
     const id = nextId("lzma_in");
     const file = id + ".lzma";
     const outDir = id + "_out";
@@ -322,7 +450,14 @@ export async function lzmaDecode(input, opts = {}) {
     try {
       FS.writeFile(file, archive);
       try { FS.mkdir(outDir); } catch { }
-      const res = run7z(mod, ["x", file, "-o" + outDir, "-y"]);
+      const restorePresize = declaredSize != null && declaredSize > PRESIZE_MIN_TOTAL
+        ? installPresizeHook(FS, outDir, declaredSize) : null;
+      let res;
+      try {
+        res = run7z(mod, ["x", file, "-o" + outDir, "-y"]);
+      } finally {
+        if (restorePresize) restorePresize();
+      }
       if (res.code !== 0) {
         const tail = res.out.trim().split("\n").slice(-4).join(" | ");
         throw new LzmaError("DECODE_FAILED", "7z extraction failed (exit " + res.code + ")" + (tail ? ": " + tail : ""));
@@ -330,13 +465,23 @@ export async function lzmaDecode(input, opts = {}) {
       const files = outputFiles(FS, outDir);
       if (files.length === 0) throw new LzmaError("DECODE_FAILED", "7z produced no output file");
       files.sort((a, b) => a.name.localeCompare(b.name));
+      // 读取前的总字节预检：7z-wasm 已写出的虚拟 FS 无法回滚，但绝不把超预算产物再读进 JS 堆。
+      let totalSize = 0;
+      for (const f of files) {
+        checkOutputBudget(f.size, "LZMA 单文件输出");
+        totalSize += f.size;
+        checkOutputBudget(totalSize, "LZMA 解压总输出");
+      }
       const picked = files[0];
-      if (picked.size > maxOutput) throw new LzmaError("LIMIT_OUTPUT", "output exceeds maxOutput");
+      checkOutputBudget(picked.size, "LZMA 解压输出");
       if (declaredSize != null && picked.size !== declaredSize) {
         throw new LzmaError("SIZE_MISMATCH", "output size " + picked.size + " != declared " + declaredSize);
       }
-      const data = new Uint8Array(FS.readFile(picked.full));
-      if (data.length > maxOutput) throw new LzmaError("LIMIT_OUTPUT", "output exceeds maxOutput");
+      for (const f of files) {
+        if (f !== picked) { try { FS.unlink(f.full); } catch { } }
+      }
+      const data = takeFileBytes(FS, picked.full);
+      checkOutputBudget(data.length, "LZMA 解压输出");
       if (declaredSize != null && data.length !== declaredSize) {
         throw new LzmaError("SIZE_MISMATCH", "output size " + data.length + " != declared " + declaredSize);
       }
@@ -500,9 +645,12 @@ function parse7zLzma(bytes) {
 }
 
 async function encodeInternal(data, opts) {
-  const maxInput = opts.maxInput != null ? Number(opts.maxInput) : DEFAULT_MAX_INPUT;
-  if (!Number.isSafeInteger(maxInput) || maxInput < 0) throw new LzmaError("BAD_OPTION", "maxInput must be a non-negative integer");
-  if (data.length > maxInput) throw new LzmaError("LIMIT_INPUT", "input exceeds maxInput");
+  const { maxInput, hardInput } = resolveInputLimits(opts);
+  const params = opts.params || opts._limitParams
+    || (opts._allowLimitOverride ? opts : null)
+    || null;
+  checkInputBudget(data.length, maxInput, hardInput, params,
+    "LZMA 待压缩输入", "lzma.encodeInput");
 
   if (data.length === 0) {
     const propsBytes = propsToBytes(EMPTY_PROPS);
@@ -539,7 +687,7 @@ async function encodeInternal(data, opts) {
       let st;
       try { st = FS.stat(archiveFile); } catch { throw new LzmaError("ENCODE_FAILED", "7z produced no archive"); }
       if (!st.size) throw new LzmaError("ENCODE_FAILED", "7z produced an empty archive");
-      const archive = new Uint8Array(FS.readFile(archiveFile));
+      const archive = FS.readFile(archiveFile);
       const parsed = parse7zLzma(archive);
       if (parsed.unpackSize !== data.length) {
         throw new LzmaError("ENCODE_FAILED", "7z unpack size " + parsed.unpackSize + " != input " + data.length);

@@ -32,4 +32,25 @@ export function assertUsableRsaExponent(e, label = "公钥指数 e") {
   return be;
 }
 
-export default { rsaKeyWarnings, assertUsableRsaExponent };
+/** n 不可用于 RSA 运算时抛错（n 必须 >3 且为奇数；偶数 n 不可能是两个奇素数之积）。 */
+export function assertUsableRsaModulus(n, label = "模数 n") {
+  let bn;
+  try {
+    bn = typeof n === "bigint" ? n : BigInt(String(n));
+  } catch {
+    throw new Error(`${label} 不是合法整数`);
+  }
+  if (bn <= 3n) throw new Error(`${label}=${bn} 不合法：RSA 模数必须 > 3`);
+  if ((bn & 1n) === 0n) throw new Error(`${label}=${bn} 为偶数：RSA 模数必须是奇数（n=p·q，p/q 为奇素数）`);
+  return bn;
+}
+
+/** 校验 RSA 公钥 (n,e) 并返回弱密钥提示；明显无效参数直接抛错。 */
+export function assertUsableRsaPublicKey(n, e) {
+  const bn = assertUsableRsaModulus(n);
+  const be = assertUsableRsaExponent(e);
+  if (be >= bn) throw new Error(`公钥指数 e=${be} 须小于模数 n=${bn}`);
+  return { n: bn, e: be, warnings: rsaKeyWarnings(bn, be) };
+}
+
+export default { rsaKeyWarnings, assertUsableRsaExponent, assertUsableRsaModulus, assertUsableRsaPublicKey };

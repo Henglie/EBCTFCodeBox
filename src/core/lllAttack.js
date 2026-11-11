@@ -8,7 +8,8 @@
  * - 原论文 Lenstra, Lenstra & Lovász 1982《Factoring polynomials with rational coefficients》。
  * 为杜绝浮点误差，Gram–Schmidt 正交化（GSO）与 μ 系数全程用 **BigInt 精确有理数**（Fraction {n,d}）
  * 计算，δ 默认 3/4（标准参数），可选 99/100（更强归约）。基向量本身保持整数（BigInt）。
- * 本实现每次 size-reduce / swap 后重算 GSO（对 CTF 小规模矩阵足够，避免增量更新的实现风险）。
+ * 初始 GSO 精确计算一次；此后 size-reduce 只更新 μ 的第 k 行（b*_k 不变），swap 按
+ * Lenstra–Lenstra–Lovász 标准增量公式更新 μ 与 Bn——结果与整表重算逐值一致。
  *
  * 背包低密度攻击照 CJLOSS 构造（Coster, Joux, LaMacchia, Odlyzko, Schnorr 1992
  * 《Improved low-density subset sum algorithms》，在 Lagarias–Odlyzko 1985 基础上加 ±1/2 平移
@@ -112,6 +113,15 @@ function gso(B) {
   return { mu, bstar, Bn };
 }
 
+function fsubInt(a, q) { return fmk(a.n - q * a.d, a.d); }
+function fsubMulInt(a, q, b) { return fmk(a.n * b.d - q * b.n * a.d, a.d * b.d); }
+function fsubMulFrac(a, b, c) {
+  return fmk(a.n * b.d * c.d - b.n * c.n * a.d, a.d * b.d * c.d);
+}
+function faddMulFrac(a, b, c) {
+  return fmk(a.n * b.d * c.d + b.n * c.n * a.d, a.d * b.d * c.d);
+}
+
 // ============================================================
 // LLL 归约（标准伪码，δ 有理参数，默认 3/4）
 // Cohen Alg 2.6.3 / Wikipedia。就地归约整数基 B（会被修改），返回同一 B。
@@ -120,19 +130,22 @@ function gso(B) {
 function lllReduce(B, delta, maxIter) {
   const n = B.length;
   if (n === 0) return B;
-  let { mu, Bn } = gso(B);
+  const { mu, Bn } = gso(B);
   let k = 1;
   let iter = 0;
   const LIMIT = maxIter || 200000;
   while (k < n) {
     if (++iter > LIMIT) throw new Error(`LLL 迭代超过上限 ${LIMIT}，输入可能过大或病态`);
- // ---- size reduction：对 j = k-1..0 ----
+ // ---- size reduction：对 j = k-1..0。b*_k 与 Bn[k] 不变，只更新 μ 第 k 行 ----
     for (let j = k - 1; j >= 0; j--) {
-      const q = fround(mu[k][j]); // 最近整数
-      if (q !== 0n) {
-        for (let t = 0; t < B[k].length; t++) B[k][t] -= q * B[j][t];
-        ({ mu, Bn } = gso(B)); // 基已变 → 重算 GSO
-      }
+      const mk = mu[k];
+      const q = fround(mk[j]); // 最近整数
+      if (q === 0n) continue;
+      const rowK = B[k], rowJ = B[j];
+      for (let t = 0; t < rowK.length; t++) rowK[t] -= q * rowJ[t];
+      const mj = mu[j];
+      for (let l = 0; l < j; l++) mk[l] = fsubMulInt(mk[l], q, mj[l]);
+      mk[j] = fsubInt(mk[j], q);
     }
  // ---- Lovász 条件：Bn[k] >= (δ - μ_{k,k-1}^2)·Bn[k-1] ----
     const muk = mu[k][k - 1];
@@ -140,9 +153,27 @@ function lllReduce(B, delta, maxIter) {
     if (fcmp(Bn[k], rhs) >= 0) {
       k += 1;
     } else {
- // 交换 b_k, b_{k-1}
-      const tmp = B[k]; B[k] = B[k - 1]; B[k - 1] = tmp;
-      ({ mu, Bn } = gso(B));
+ // 交换 b_k, b_{k-1}（Cohen 2.6.3 / Wikipedia 增量更新）
+      const Bk1 = Bn[k - 1];
+      const Bk = Bn[k];
+      const muSq = fmul(muk, muk);
+      const Bnew = fadd(Bk, fmul(muSq, Bk1)); // Bn[k-1]'
+      const rowTmp = B[k]; B[k] = B[k - 1]; B[k - 1] = rowTmp;
+      for (let j = 0; j < k - 1; j++) {
+        const t = mu[k][j];
+        mu[k][j] = mu[k - 1][j];
+        mu[k - 1][j] = t;
+      }
+      const newMuk = fdiv(fmul(muk, Bk1), Bnew);
+      mu[k][k - 1] = newMuk;
+      Bn[k - 1] = Bnew;
+      Bn[k] = fdiv(fmul(Bk1, Bk), Bnew);
+      for (let i = k + 1; i < n; i++) {
+        const t = mu[i][k];
+        const mik = fsubMulFrac(mu[i][k - 1], muk, t);
+        mu[i][k] = mik;
+        mu[i][k - 1] = faddMulFrac(t, newMuk, mik);
+      }
       k = Math.max(k - 1, 1);
     }
   }

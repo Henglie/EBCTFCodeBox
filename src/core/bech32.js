@@ -27,7 +27,15 @@ import { register } from "./registry.js";
 // 工具：hex ↔ bytes
 // ============================================================
 function hexToBytes(s) {
-  const clean = s.replace(/[^0-9a-fA-F]/g, "");
+  // 严格校验：只接受 hex 字符与空白（空白仅作分隔）；不再静默剔除任意杂字符
+  // （旧实现会把 "zz41" 洗成 "41"，把非法输入当合法数据编码）。
+  let clean = String(s).trim();
+  if (/^0x/i.test(clean)) clean = clean.slice(2);
+  clean = clean.replace(/\s+/g, "");
+  if (!/^[0-9a-fA-F]*$/.test(clean)) {
+    const bad = [...clean].find((ch) => !/[0-9a-fA-F]/.test(ch));
+    throw new Error("hex 含非十六进制字符: " + JSON.stringify(bad));
+  }
   if (clean.length % 2) throw new Error("hex 长度必须为偶数");
   const out = new Uint8Array(clean.length / 2);
   for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);

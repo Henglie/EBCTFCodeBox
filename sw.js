@@ -1,9 +1,9 @@
-// BUILD-STAMP: 9cf25f3860079e51
+// BUILD-STAMP: d70f3c7d5eb87edc
 importScripts("./sw-assets.js", "./sw-packs.js");
 
 // The asset generator synchronizes BUILD-STAMP with the resource revision.
 
-const APP_VERSION = "0.1.15";
+const APP_VERSION = "0.2.0-beta";
 const CACHE_PREFIX = "ebctf-shell-";
 const CACHE_NAME = `${CACHE_PREFIX}${APP_VERSION}-${self.__EBCTF_ASSET_REV}`;
 const ASSETS = self.__EBCTF_ASSETS;
@@ -318,26 +318,53 @@ async function precacheAll() {
   }
 }
 
-// install 不等预缓存完成（H1 瘦身后配套时序修正，2026-08-26）：立即进入 activating，
-// 尽早 clients.claim() 接管页面——否则 9.6MB/506 项预缓存下载期间页面发出的按需
-// fetch（如首次切拼字 tab 取 ids.dat）不被本 SW 拦截、无法回填，在线用过≠离线可用。
-// 预缓存挪到 activate 里做；其间未命中的请求走「网络 → 回填」，与预缓存结果最终一致。
-self.addEventListener("install", () => {});
+// install 先完成预缓存再进入 activating，避免 controllerchange 后页面从旧缓存拿到旧 JS。
+// activate 只在旧 SW 升级等未完成 install 预缓存的场景兜底，完成后再 clients.claim()。
+// 预缓存失败则 install 失败、旧版本继续服务，不交付新旧混合的离线缓存。
+let precacheDone = false;
+
+self.addEventListener("install", (event) => {
+  event.waitUntil((async () => {
+    try {
+      await precacheAll();
+      precacheDone = true;
+    } catch (e) {
+      // 安装阶段预缓存失败时不要激活新版本：继续由旧 SW 提供服务，避免新旧文件混合。
+      console.error("PWA 预缓存失败，保留旧版本:", e && e.message ? e.message : e);
+      throw e;
+    }
+  })());
+});
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
-    await self.clients.claim();               // 先接管（毫秒级），再后台预缓存
-    try {
-      await precacheAll();
-    } catch (e) {
+    // 先完成新缓存再接管；避免 controllerchange 后页面先拿到旧缓存里的旧 JS。
+    let cacheExisted = true;
+    try { cacheExisted = await caches.has(CACHE_NAME); } catch { cacheExisted = true; }
+    let precacheOk = true;
+    if (!precacheDone) {
+      try {
+        await precacheAll();
+        precacheDone = true;
+      } catch (e) {
       // 预缓存失败不挂掉 activate（挂了 SW 线程会被终止，fetch 全裸奔）；
       // 静态站 404 才会走到这里，DevTools console 可见，下次 SW 更新重试。
+      // 关键：失败时保留旧 shell 缓存——否则新缓存只写了一半又删旧版，离线直接缺资产。
+      // 只删除「本次新建且不完整」的 CACHE_NAME；activate 前已存在的同 rev 完整缓存保留。
+      precacheOk = false;
+      if (!cacheExisted) {
+        try { await caches.delete(CACHE_NAME); } catch { /* 删除失败不阻断 activate */ }
+      }
       console.error("PWA 预缓存失败:", e && e.message);
+      }
     }
-    const keys = await caches.keys();
-    await Promise.all(keys
-      .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
-      .map((key) => caches.delete(key)));
+    await self.clients.claim();
+    if (precacheOk) {
+      const keys = await caches.keys();
+      await Promise.all(keys
+        .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+        .map((key) => caches.delete(key)));
+    }
 
     // 旧 rev 的包缓存必须清掉：字体包一份就 31 MiB，不能永久占配额。
     // 升级后旧包会被判为未安装，由页面侧 pack-status 对账兜住（localStorage 不当作已装判据）。

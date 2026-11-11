@@ -7,7 +7,7 @@
  * crazy 运算（trit 真值表）由前两字生成。in 的 EOF 约定 59048。
  * 「v」halt 指令（值 81）为规范内指令，执行器/生成器均以它收尾。
  *
- * 对拍基准：权威规范 + zb3/malbolge-vm（malbolge-tools 参照页内嵌 VM，MIT）行为双源，
+ * 对拍基准：权威规范 + malbolge-vm（malbolge-tools 参照页内嵌 VM，MIT）行为双源，
  * 七个官方样例（Hello World EU / wat / cat / cat.nmb / crackme / sep / encrypted）
  * 逐字节一致（独立测试脚本对拍）。本文件为自研实现，未拷贝参照代码。
  *
@@ -75,7 +75,7 @@ function loadProgram(src) {
   if (!chars.length) throw new Error("Malbolge 装载错误：程序为空（或全部为空白）。");
   const mem = new Uint32Array(MEM_SIZE);
   for (let i = 0; i < chars.length; i++) mem[i] = chars[i];
-  // 补满方向经参照机反解对齐：crazy(次前字, 前字)（zb3 op(x,y)=crazy(y,x)，x=首参）
+  // 补满方向经参照机反解对齐：crazy(次前字, 前字)（参照机 op(x,y)=crazy(y,x)，x=首参）
   for (let i = Math.max(chars.length, 2); i < MEM_SIZE; i++)
     mem[i] = crazy(mem[i - 2], mem[i - 1]);
   return { mem, a: 0, c: 0, d: 0 };

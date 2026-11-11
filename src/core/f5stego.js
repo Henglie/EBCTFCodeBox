@@ -48,6 +48,7 @@
  */
 import { register } from "./registry.js";
 import { reencodeJpeg } from "./jpegRewrite.js";
+import { checkLimit, withLimit, isLimitError } from "./limitGuard.js";
 
 // ============================================================
 // 输入解析（hex / base64 → Uint8Array）。自备，不 import。
@@ -336,10 +337,18 @@ function f5extract(coeffSrc, key) {
 // ============================================================
 // JPEG 熵解码器（忠实移植 f5stegojs 的 parse + decodeScan）
 // 仅解出各分量 DCT 系数（comp.blocks）；不做反量化/IDCT/上采样。
-// maxPixels：尺寸护栏（默认较大值），与 randPool 无关（randPool 后续按系数个数分配）。
+// maxPixels：尺寸护栏（默认 36M 像素，与旧实现一致），与 randPool 无关（randPool 后续按系数个数分配）。
+// DCT 系数延后到第一个 SOS 才分配：仅 SOF 的伪造 21 字节 JPEG 不得先吃数百 MB。
+// 另设 DCT 系数总字节预算：带 SOS 的极端采样因子/伪造尺寸也不允许无限放大 blocks。
 // ============================================================
-function parseJpeg(data, maxPixels) {
-  maxPixels = maxPixels || 6000 * 6000;
+const MAX_JPEG_PIXELS = 6000 * 6000;
+const MAX_JPEG_PIXELS_HARD = 144 * 1024 * 1024;
+const MAX_JPEG_BLOCK_BYTES = 256 * 1024 * 1024;
+const MAX_JPEG_BLOCK_BYTES_HARD = 512 * 1024 * 1024;
+function parseJpeg(data, maxPixels, params) {
+  maxPixels = maxPixels || MAX_JPEG_PIXELS;
+  const hardPixels = Math.max(MAX_JPEG_PIXELS_HARD, maxPixels * 4);
+  let limitParams = params;
   let offset = 0;
 
   function _buildHuffmanTable(nrcodes, values) {
@@ -660,11 +669,57 @@ function parseJpeg(data, maxPixels) {
 
   const self = { _raw: data, jfif: null, APPn: [], qts: [], frame: null, tail: null };
 
-  let markerHi, markerLo, i, j, resetInterval, component;
+  // SOS 到来前不分配系数：SOF-only 的 21 字节伪造件在 SOF 阶段只做尺寸/分量校验，
+  // 不产生任何 blocks/Int16Array（旧实现在 SOF 即分配，6000×6000×3 分量可吃 ~209MB）。
+  function allocFrameBlocks(frame) {
+    if (frame.blocksAllocated) return;
+    const mcusPerLine = frame.mcusPerLine;
+    const mcusPerColumn = frame.mcusPerColumn;
+    const plan = [];
+    let totalBlockBytes = 0;
+    for (let ci = 0; ci < frame.components.length; ci++) {
+      const comp = frame.components[ci];
+      const blocksPerLine = Math.ceil((Math.ceil(frame.samplesPerLine / 8) * comp.h) / frame.maxH);
+      const blocksPerColumn = Math.ceil((Math.ceil(frame.scanLines / 8) * comp.v) / frame.maxV);
+      const blocksPerLineForMcu = mcusPerLine * comp.h;
+      const blocksPerColumnForMcu = mcusPerColumn * comp.v;
+      const blockCount = blocksPerColumnForMcu * blocksPerLineForMcu;
+      totalBlockBytes += blockCount * 64 * 2 + blockCount * 2;
+      plan.push({ blocksPerLine, blocksPerColumn, blocksPerLineForMcu, blocksPerColumnForMcu, blockCount });
+    }
+    if (totalBlockBytes > MAX_JPEG_BLOCK_BYTES) {
+      checkLimit({
+        scope: "f5stego.jpeg.dctBlockBytes",
+        actual: totalBlockBytes,
+        soft: MAX_JPEG_BLOCK_BYTES,
+        hard: MAX_JPEG_BLOCK_BYTES_HARD,
+        params: limitParams,
+        label: "JPEG DCT 系数内存",
+        unit: " 字节",
+      });
+      limitParams = withLimit(limitParams, { _allowLimitOverride: true });
+    }
+    for (let ci = 0; ci < frame.components.length; ci++) {
+      const comp = frame.components[ci];
+      const p = plan[ci];
+      comp.blocks = new Int16Array(p.blockCount * 64);
+      comp.blocksDC = new Int16Array(p.blockCount);
+      comp.blocksPerLine = p.blocksPerLine;
+      comp.blocksPerColumn = p.blocksPerColumn;
+      comp.blocksPerLineForMcu = p.blocksPerLineForMcu;
+      comp.blocksPerColumnForMcu = p.blocksPerColumnForMcu;
+    }
+    frame.blocksAllocated = true;
+  }
+
+  let markerHi, markerLo, i, j, resetInterval, component, scans = 0;
   const huffmanTablesAC = [], huffmanTablesDC = [];
 
   while (1) {
-    if (offset >= data.length) throw new Error("unexpected EOF");
+    if (offset >= data.length) {
+      if (self.frame && !scans) throw new Error("JPEG 缺少扫描数据（仅有 SOF、无 SOS），已拒绝分配 DCT 系数。");
+      throw new Error("unexpected EOF");
+    }
     markerHi = data[offset++];
     markerLo = data[offset++];
 
@@ -688,13 +743,31 @@ function parseJpeg(data, maxPixels) {
           componentIds: {},
           maxH: 1, maxV: 1,
         };
-        if (self.frame.scanLines * self.frame.samplesPerLine > maxPixels) throw new Error("Image is too big.");
+        if (!self.frame.scanLines || !self.frame.samplesPerLine) {
+          throw new Error(`JPEG 尺寸非法（${self.frame.samplesPerLine}×${self.frame.scanLines}）。`);
+        }
+        const jpegPixels = self.frame.scanLines * self.frame.samplesPerLine;
+        if (jpegPixels > maxPixels) {
+          checkLimit({
+            scope: "f5stego.jpeg.pixels",
+            actual: jpegPixels,
+            soft: maxPixels,
+            hard: hardPixels,
+            params: limitParams,
+            label: `JPEG 图像 ${self.frame.samplesPerLine}×${self.frame.scanLines}`,
+            unit: " 像素",
+          });
+        }
         const componentsCount = data[offset++];
+        if (!(componentsCount >= 1 && componentsCount <= 4)) {
+          throw new Error(`JPEG 分量数非法（${componentsCount}，应为 1-4）。`);
+        }
         let componentId, maxH = 0, maxV = 0;
         for (i = 0; i < componentsCount; i++) {
           componentId = data[offset];
           const h = data[offset + 1] >> 4;
           const v = data[offset + 1] & 15;
+          if (!h || !v) throw new Error("JPEG 采样因子非法（h/v 为 0）。");
           if (maxH < h) maxH = h;
           if (maxV < v) maxV = v;
           const qId = data[offset + 2];
@@ -704,23 +777,8 @@ function parseJpeg(data, maxPixels) {
         }
         self.frame.maxH = maxH;
         self.frame.maxV = maxV;
-        const mcusPerLine = Math.ceil(self.frame.samplesPerLine / 8 / maxH);
-        const mcusPerColumn = Math.ceil(self.frame.scanLines / 8 / maxV);
-        for (i = 0; i < self.frame.components.length; i++) {
-          component = self.frame.components[i];
-          const blocksPerLine = Math.ceil((Math.ceil(self.frame.samplesPerLine / 8) * component.h) / maxH);
-          const blocksPerColumn = Math.ceil((Math.ceil(self.frame.scanLines / 8) * component.v) / maxV);
-          const blocksPerLineForMcu = mcusPerLine * component.h;
-          const blocksPerColumnForMcu = mcusPerColumn * component.v;
-          component.blocks = new Int16Array(blocksPerColumnForMcu * blocksPerLineForMcu * 64);
-          component.blocksDC = new Int16Array(blocksPerColumnForMcu * blocksPerLineForMcu);
-          component.blocksPerLine = blocksPerLine;
-          component.blocksPerColumn = blocksPerColumn;
-          component.blocksPerLineForMcu = blocksPerLineForMcu;
-          component.blocksPerColumnForMcu = blocksPerColumnForMcu;
-        }
-        self.frame.mcusPerLine = mcusPerLine;
-        self.frame.mcusPerColumn = mcusPerColumn;
+        self.frame.mcusPerLine = Math.ceil(self.frame.samplesPerLine / 8 / maxH);
+        self.frame.mcusPerColumn = Math.ceil(self.frame.scanLines / 8 / maxV);
       }
 
       if (markerLo === 0xc4) {
@@ -741,6 +799,9 @@ function parseJpeg(data, maxPixels) {
       if (markerLo === 0xdd) resetInterval = readUint16();
 
       if (markerLo === 0xda) {
+        if (!self.frame) throw new Error("SOS before SOF");
+        allocFrameBlocks(self.frame);
+        scans++;
         readUint16();
         const selectorsCount = data[offset++];
         const components = [];
@@ -772,6 +833,7 @@ function parseJpeg(data, maxPixels) {
   }
 
   if (!self.frame) throw new Error("bad jpeg");
+  if (!scans) throw new Error("JPEG 缺少扫描数据（仅有 SOF、无 SOS），已拒绝分配 DCT 系数。");
   if (offset < data.length) self.tail = data.subarray(offset);
   return self;
 }
@@ -879,8 +941,9 @@ function f5stegoRun(text, p) {
  // ---- 解 JPEG ----
   let jpeg;
   try {
-    jpeg = parseJpeg(bytes);
+    jpeg = parseJpeg(bytes, undefined, p);
   } catch (e) {
+    if (isLimitError(e)) throw e;
     L.push("✗ JPEG 熵解码失败: " + (e.message || String(e)));
     L.push("  可能是：非 JPEG / 罕见特性 / 文件损坏。F5 提取需要能完整解出 DCT 系数。");
     return L.join("\n");
@@ -1170,12 +1233,12 @@ function f5PackHeader(payload) {
 }
 
 /** F5 嵌入主入口：载体 JPEG + 载荷 → 隐写 JPEG。kOpt 显式矩阵参数（0 = 自动）。 */
-function f5embedBytes(jpegBytes, payload, key, kOpt) {
+function f5embedBytes(jpegBytes, payload, key, kOpt, params) {
   if (!payload || payload.length === 0) throw new Error("载荷为空：F5 嵌入至少需要 1 字节");
   if (payload.length > 8388607) throw new Error("载荷过大（上限 8388607 字节）");
   if (!key || key.length === 0) throw new Error("key needed");
 
-  const parsed = parseJpeg(jpegBytes);
+  const parsed = parseJpeg(jpegBytes, undefined, params);
   const frame = parsed.frame;
   let compIdx = 0;
   for (let i = 0; i < frame.components.length; i++) {
@@ -1278,8 +1341,9 @@ function f5stegoEncodeOp(text, p) {
 
   let out;
   try {
-    out = f5embedBytes(carrier, payload, key, kOpt);
+    out = f5embedBytes(carrier, payload, key, kOpt, p);
   } catch (e) {
+    if (isLimitError(e)) throw e;
     L.push(`✗ 嵌入失败: ${e.message || String(e)}`);
     L.push("  常见原因：容量不足（换更大载体图或更短消息）/ k 越界 / 渐进式 JPEG。");
     return L.join("\n");

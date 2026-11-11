@@ -17,16 +17,41 @@
  * 回传主线程展示，不崩线程。本通道只调度显式触发白名单（explicitRun）与爆破池成员，
  * 均为纯计算 op，DOM 类 op 正常走主线程 convert() 旧路径。
  */
-import "./registerAll.js";
 import { getOp } from "./registry.js";
+import { withLimitContext } from "./limitGuard.js";
+import { OP_FILE_MAP } from "./lazyTables.generated.js";
+
+// 惰载：按 opId 只 import 其源文件；映射缺失或加载失败再回退全量 registerAll。
+let _fallbackAll = null;
+async function loadOp(opId) {
+  const op = getOp(opId);
+  if (op) return op;
+  const file = OP_FILE_MAP[opId];
+  if (file) {
+    try {
+      await import(file);
+      const loaded = getOp(opId);
+      if (loaded) return loaded;
+    } catch { /* 回退全量注册 */ }
+  }
+  if (!_fallbackAll) {
+    _fallbackAll = import("./registerAll.js").catch((err) => { _fallbackAll = null; throw err; });
+  }
+  await _fallbackAll;
+  return getOp(opId);
+}
 
 self.postMessage({ type: "ready" });
 
-self.onmessage = async (e) => {
-  const msg = e.data || {};
-  if (msg.type !== "run") return;
+async function runOne(msg) {
   const { runId, opId, input, params, dir } = msg;
-  const op = getOp(opId);
+  let op;
+  try {
+    op = await loadOp(opId);
+  } catch (err) {
+    self.postMessage({ type: "error", runId, message: (err && err.message) || String(err) });
+    return;
+  }
   if (!op) {
     self.postMessage({ type: "error", runId, message: "op 未注册: " + opId });
     return;
@@ -37,7 +62,8 @@ self.onmessage = async (e) => {
     return;
   }
   try {
-    const out = await fn.call(op, input, params || {});
+    // 串行执行：单 Worker 上多个异步 op 交错会互相覆盖 __ebctfLimitParams。
+    const out = await withLimitContext(params || {}, () => fn.call(op, input, params || {}));
     try {
       self.postMessage({ type: "final", runId, out });
     } catch {
@@ -45,6 +71,20 @@ self.onmessage = async (e) => {
       self.postMessage({ type: "final", runId, out: String(out) });
     }
   } catch (err) {
-    self.postMessage({ type: "error", runId, message: (err && err.message) || String(err) });
+    self.postMessage({
+      type: "error",
+      runId,
+      message: (err && err.message) || String(err),
+      code: err && err.code ? err.code : undefined,
+      meta: err && err.meta ? err.meta : undefined,
+    });
   }
+}
+
+let _queue = Promise.resolve();
+self.onmessage = (e) => {
+  const msg = e.data || {};
+  if (msg.type !== "run") return;
+  // 单飞队列：保证同一时刻只有一个 op 读写资源确认上下文。
+  _queue = _queue.then(() => runOne(msg)).catch(() => {});
 };

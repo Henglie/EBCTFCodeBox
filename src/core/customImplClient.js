@@ -42,6 +42,20 @@ function buildRandSpec() {
 /** 死循环看门狗时长。2s（与 compress.js TIMEOUT_MS 同量级；需求文档写「700ms 级」是下限参考）。 */
 export const CUSTOM_TIMEOUT_MS = 2000;
 
+// 主线程降级路径无法安全硬杀同步死循环，只能如实警告（中英双语，UI 必须可见）。
+const MAIN_THREAD_WARNING =
+  "主线程降级执行：Worker 不可用或崩溃，无 Worker 隔离，同步死循环无法强制终止"
+  + "（Main-thread fallback: Worker unavailable or crashed, no Worker isolation; "
+  + "a synchronous infinite loop cannot be forcibly terminated）";
+
+/** 主线程入口的可见警告：优先走页面 toast，非 UI 环境静默跳过。 */
+function warnMainThreadVisible() {
+  try {
+    const host = typeof window !== "undefined" ? window : globalThis;
+    if (host && typeof host.__ebctfToast === "function") host.__ebctfToast(MAIN_THREAD_WARNING);
+  } catch { /* 非 UI 环境忽略 */ }
+}
+
 function spawnWorker() {
   if (_worker || _workerBroken) return _worker;
   if (typeof Worker === "undefined") { _workerBroken = true; return null; }
@@ -79,13 +93,68 @@ function killWorker() {
   }
 }
 
+/**
+ * 取消在途自定义实现（页面隐藏/卸载时释放 Worker）。
+ * 用明确结果兑现 pending，避免走 null 分支触发主线程补跑。
+ * @returns {boolean} 是否有在途任务被取消
+ */
+export function cancelCustomImpl() {
+  const waiting = [..._pending.values()];
+  _pending.clear();
+  _running = false;
+  killWorker();
+  for (const finish of waiting) {
+    try {
+      finish({ ok: false, error: "自定义实现已取消", cancelled: true, sandbox: "worker" });
+    } catch { /* 单个回调异常不影响其余 */ }
+  }
+  return waiting.length > 0;
+}
+
+function tr(key, fallback) {
+  try {
+    const f = globalThis.__ebctfT;
+    if (typeof f === "function") {
+      const s = f(key);
+      if (typeof s === "string" && s && s !== key) return s;
+    }
+  } catch { /* i18n 未接线时回退中文 */ }
+  return fallback;
+}
+
 /** 主线程直跑（降级路径 / Worker 不可用 / 增强随机性生效时）。 */
 async function runOnMainThread(req) {
   // 主线程直连统一随机源 → H.randBytes 跟随「增强随机性」当前档位。
+  // 这里没有超时看门狗：同步死循环无法安全硬杀，故显式警告而非假装有超时。
+  // 入口先给可见警告（toast），再让出一次事件循环确保它在可能卡死前完成绘制。
+  warnMainThreadVisible();
+  await new Promise((resolve) => {
+    try { setTimeout(resolve, 0); } catch { resolve(); }
+  });
+  if (typeof globalThis.confirm === "function") {
+    let ok = false;
+    try {
+      ok = !!globalThis.confirm(tr(
+        "ui.custom.mainThreadConfirm",
+        "无 Worker 隔离，死循环可能冻结页面；是否继续？",
+      ));
+    } catch { /* 确认框异常按取消处理 */ }
+    if (!ok) {
+      return {
+        ok: false,
+        error: "已取消：未进入无 Worker 隔离的主线程执行",
+        cancelled: true,
+        sandbox: "main",
+        degraded: true,
+        warning: MAIN_THREAD_WARNING,
+      };
+    }
+  }
+  console.warn("[customImpl] " + MAIN_THREAD_WARNING);
   const res = await runCustomImpl({ ...req, helpers: buildHelpers(_mainRandProvider) });
   return res.ok
-    ? { ok: true, out: res.out, sandbox: "main" }
-    : { ok: false, error: res.error, line: res.line ?? null, phase: res.phase || null, reason: res.reason || null, sandbox: "main" };
+    ? { ok: true, out: res.out, sandbox: "main", degraded: true, warning: MAIN_THREAD_WARNING }
+    : { ok: false, error: res.error, line: res.line ?? null, phase: res.phase || null, reason: res.reason || null, sandbox: "main", degraded: true, warning: MAIN_THREAD_WARNING };
 }
 
 /**
@@ -181,4 +250,4 @@ export function probeSandbox(timeoutMs = 1500) {
   });
 }
 
-export default { runCustomWithTimeout, probeSandbox, CUSTOM_TIMEOUT_MS };
+export default { runCustomWithTimeout, cancelCustomImpl, probeSandbox, CUSTOM_TIMEOUT_MS };

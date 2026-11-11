@@ -116,12 +116,18 @@ function camelliaFLINV(flIn, ke) {
 // ============================================================
 // 密钥调度
 // ============================================================
+function strictHex(input, label) {
+  const s = String(input == null ? "" : input).replace(/0x/gi, "").replace(/[\s:,]+/g, "");
+  if (!/^[0-9a-fA-F]*$/.test(s)) throw new Error(`${label}含非法 hex 字符（仅允许 0-9/A-F、空白、0x、冒号等分隔）`);
+  if (s.length % 2) throw new Error(`${label} hex 长度必须为偶数（当前 ${s.length} 位）`);
+  return s;
+}
 const SIGMA = [
   0xA09E667F3BCC908Bn, 0xB67AE8584CAA73B2n, 0xC6EF372FE94F82BEn,
   0x54FF53A5F1D36F1Cn, 0x10E527FADE682D1Dn, 0xB05688C2B3E6C1FDn,
 ];
 function camelliaKeySchedule(keyHex) {
-  const c = keyHex.replace(/[^0-9a-fA-F]/g, "");
+  const c = strictHex(keyHex, "Camellia 密钥");
   if (![32, 48, 64].includes(c.length)) throw new Error("Camellia 密钥须为 128/192/256 位（32/48/64 hex）");
   let K = 0n;
   for (let i = 0; i < c.length; i++) K = (K << 4n) | BigInt(parseInt(c[i], 16));
@@ -235,10 +241,10 @@ function camelliaDecryptBlock(C, sk, rounds) {
 }
 
 function camelliaCrypt(text, p, decrypt) {
-  const keyHex = String((p && p.key) || "");
+  const keyHex = strictHex((p && p.key) || "", "Camellia 密钥");
   const sk = camelliaKeySchedule(keyHex);
-  const rounds = keyHex.replace(/[^0-9a-fA-F]/g, "").length === 32 ? 18 : 24;
-  const inHex = String(text || "").replace(/[^0-9a-fA-F]/g, "");
+  const rounds = keyHex.length === 32 ? 18 : 24;
+  const inHex = strictHex(text, "Camellia 输入");
   if (inHex.length === 0 || inHex.length % 32 !== 0) throw new Error("输入须为 16 字节（32 hex）的整数倍，ECB 不自动填充");
   let out = "";
   for (let off = 0; off < inHex.length; off += 32) {

@@ -10,6 +10,11 @@ const SAVED_KEY = "ebctf.recipe.saved.v1";
 const DRAFT_KEY = "ebctf.recipe.draft.v1";
 export const SHARE_MAX_CODE = 12000;
 export const SHARE_INPUT_LIMIT = 1500;
+// 分享链接解压预算：生成端上限 12000 字符（≈9KB 压缩数据），解码端留足余量后设硬上限。
+export const SHARE_MAX_COMPRESSED_BYTES = 32 * 1024;
+export const SHARE_MAX_DECOMPRESSED_BYTES = 4 * 1024 * 1024;
+export const SHARE_MAX_NODES = 500;
+const SHARE_MAX_CODE_CHARS = 64 * 1024;
 
 function readJson(key, dflt) {
   try {
@@ -145,11 +150,64 @@ export async function encodeShare(data, options = {}) {
   return { code, degraded, fileOmitted, inputOmitted };
 }
 
+function isPlainObject(v) {
+  return !!v && typeof v === "object" && !Array.isArray(v);
+}
+
+/** 分享节点类型校验：只放行控制节点与普通 op 节点的最小结构，其余字段由 applyRecipeData 过滤。 */
+function validateShareNodes(nodes) {
+  if (!Array.isArray(nodes)) throw new Error("分享链接格式非法：缺少配方节点数组");
+  if (nodes.length > SHARE_MAX_NODES) {
+    throw new Error(`分享链接节点数 ${nodes.length} 超过上限 ${SHARE_MAX_NODES}，已拒绝加载`);
+  }
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    if (!isPlainObject(n)) throw new Error(`分享链接第 ${i + 1} 个节点类型非法`);
+    if (n.kind === "control") {
+      if (typeof n.control !== "string" || !n.control) {
+        throw new Error(`分享链接第 ${i + 1} 个控制节点缺少合法 control`);
+      }
+    } else {
+      if (typeof n.opId !== "string" || !n.opId) {
+        throw new Error(`分享链接第 ${i + 1} 个节点缺少合法 opId`);
+      }
+    }
+    if (n.dir != null && typeof n.dir !== "string") throw new Error(`分享链接第 ${i + 1} 个节点 dir 类型非法`);
+    if (n.params != null && !isPlainObject(n.params)) throw new Error(`分享链接第 ${i + 1} 个节点 params 类型非法`);
+    if (n.disabled != null && typeof n.disabled !== "boolean") throw new Error(`分享链接第 ${i + 1} 个节点 disabled 类型非法`);
+    if (n.breakpoint != null && typeof n.breakpoint !== "boolean") throw new Error(`分享链接第 ${i + 1} 个节点 breakpoint 类型非法`);
+  }
+}
+
 export async function decodeShare(code) {
-  const bytes = b64urlDecode(code);
-  const json = new TextDecoder().decode(await streamDecompress("deflate-raw", bytes));
-  const data = JSON.parse(json);
-  if (!data || data.format !== "EBCTFCodeBox-recipe" || !Array.isArray(data.nodes)) throw new Error("分享链接格式非法");
+  const s = String(code == null ? "" : code).trim();
+  if (!s) throw new Error("分享链接缺少配方数据");
+  if (s.length > SHARE_MAX_CODE_CHARS) {
+    throw new Error(`分享链接过长（${s.length} 字符，上限 ${SHARE_MAX_CODE_CHARS}），已拒绝解压`);
+  }
+  if (!/^[A-Za-z0-9_-]+$/.test(s)) throw new Error("分享链接编码非法（仅支持 base64url）");
+  let bytes;
+  try { bytes = b64urlDecode(s); }
+  catch { throw new Error("分享链接 base64url 解码失败"); }
+  if (bytes.length > SHARE_MAX_COMPRESSED_BYTES) {
+    throw new Error(`分享链接压缩数据 ${bytes.length} 字节，超过上限 ${SHARE_MAX_COMPRESSED_BYTES} 字节，已拒绝解压`);
+  }
+  let out;
+  try { out = await streamDecompress("deflate-raw", bytes); }
+  catch (e) { throw new Error("分享链接解压失败：" + (e && e.message ? e.message : String(e))); }
+  if (out.length > SHARE_MAX_DECOMPRESSED_BYTES) {
+    throw new Error(`分享链接解压结果 ${out.length} 字节，超过上限 ${SHARE_MAX_DECOMPRESSED_BYTES} 字节，已拒绝加载`);
+  }
+  let json;
+  try { json = new TextDecoder("utf-8", { fatal: true }).decode(out); }
+  catch { throw new Error("分享链接解压内容不是合法 UTF-8 文本"); }
+  let data;
+  try { data = JSON.parse(json); }
+  catch { throw new Error("分享链接内容不是合法 JSON"); }
+  if (!data || typeof data !== "object" || Array.isArray(data) || data.format !== "EBCTFCodeBox-recipe") {
+    throw new Error("分享链接格式非法");
+  }
+  validateShareNodes(data.nodes);
   return data;
 }
 

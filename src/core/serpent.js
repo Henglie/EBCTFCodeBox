@@ -71,8 +71,14 @@ function invLinearTransform(x0, x1, x2, x3) {
 // ============================================================
 // 密钥调度
 // ============================================================
+function strictHex(input, label) {
+  const s = String(input == null ? "" : input).replace(/0x/gi, "").replace(/[\s:,]+/g, "");
+  if (!/^[0-9a-fA-F]*$/.test(s)) throw new Error(`${label}含非法 hex 字符（仅允许 0-9/A-F、空白、0x、冒号等分隔）`);
+  if (s.length % 2) throw new Error(`${label} hex 长度必须为偶数（当前 ${s.length} 位）`);
+  return s;
+}
 function serpentKeySchedule(keyHex) {
-  const c = keyHex.replace(/[^0-9a-fA-F]/g, "");
+  const c = strictHex(keyHex, "Serpent 密钥");
   if (![32, 48, 64].includes(c.length)) throw new Error("Serpent 密钥须为 128/192/256 位（32/48/64 hex）");
   const key = new Uint8Array(c.length / 2);
   for (let i = 0; i < key.length; i++) key[i] = parseInt(c.substr(i * 2, 2), 16);
@@ -129,7 +135,7 @@ function u32le(v) {
 function serpentCrypt(text, p, decrypt) {
   const keyHex = String((p && p.key) || "");
   const rk = serpentKeySchedule(keyHex);
-  const inHex = String(text || "").replace(/[^0-9a-fA-F]/g, "");
+  const inHex = strictHex(text, "Serpent 输入");
   if (inHex.length === 0 || inHex.length % 32 !== 0) throw new Error("输入须为 16 字节（32 hex）的整数倍，ECB 不自动填充");
   let out = "";
   for (let off = 0; off < inHex.length; off += 32) {

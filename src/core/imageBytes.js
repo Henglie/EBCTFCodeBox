@@ -5,6 +5,7 @@
  * （JPEG/GIF/BMP/WebP 等）。纯逻辑、零第三方依赖；canvas 路径只在浏览器可用。
  */
 import { decodePNG, dataURLToBytes } from "./stegoPixels.js";
+import { isLimitError } from "./limitGuard.js";
 
 /** 取输入字节：优先 rawBytes（拖入文件），否则按 dataURL / 裸 base64 解析。 */
 export function imageInputBytes(text, params, opName = "图片") {
@@ -45,6 +46,8 @@ export async function decodeImageToRgba(bytes, opName = "图片") {
   try {
     return decodePNG(b);
   } catch (pngErr) {
+    // 限额取消/硬上限不能被 canvas 兜底吞掉，否则取消无效且可绕过硬上限。
+    if (isLimitError(pngErr)) throw pngErr;
     try {
       return await canvasDecode(b);
     } catch (e) {

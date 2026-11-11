@@ -61,6 +61,43 @@ export const CATEGORIES = [
 export const OPS = [];
 const _byId = new Map();
 
+// 参数 label 的 i18n：core 不 import i18n，运行期通过 main 暴露的 window.__ebctfT 取值。
+// 参数声明写 labelKey（如 "op.xorBrute.param.keyLength"），label 保留中文作兜底；
+// 语言切换后 renderParam 重新读 d.label 时自动取当前语言，无需重建 op。
+function resolveParamLabel(def) {
+  const key = def && def.labelKey;
+  if (typeof key !== "string" || !key) return def && def.label;
+  try {
+    const tt = typeof window !== "undefined" ? window.__ebctfT : null;
+    if (typeof tt === "function") {
+      const s = tt(key);
+      if (s != null && s !== key) return s;
+    }
+  } catch { /* 非 UI 环境（node/worker）忽略 */ }
+  return def.label;
+}
+
+/** 把参数/选项的 label 变成随当前语言读取的 accessor；label 原值作为兜底。 */
+function bindParamLabel(def) {
+  if (!def || typeof def !== "object" || typeof def.labelKey !== "string" || !def.labelKey) return;
+  let fallback = def.label;
+  try {
+    Object.defineProperty(def, "label", {
+      configurable: true,
+      enumerable: true,
+      get() { return resolveParamLabel({ labelKey: def.labelKey, label: fallback }); },
+      set(v) { fallback = v; },
+    });
+  } catch { /* 冻结对象等场景保持静态 label */ }
+}
+
+function bindParamLabels(params) {
+  for (const d of params || []) {
+    bindParamLabel(d);
+    for (const o of d && d.options || []) bindParamLabel(o);
+  }
+}
+
 // 合法分类 id 集合（cat 校验用）。CATEGORIES 是单一真相源。
 const _catIds = new Set(CATEGORIES.map((c) => c.id));
 
@@ -112,6 +149,7 @@ export function register(op) {
       throw new Error(`op ${op.id} 的 cat "${op.cat}" 不在 CATEGORIES 中`);
     }
     op.params = op.params || [];
+    bindParamLabels(op.params);
     if (stub.detect && op.detect === undefined) op.detect = stub.detect;
    // 权威源码 URL 注入必须与完整 register 路径一致——懒载升级分支此前漏了这一步，
    // 导致全部懒载 op 无 sourceFile、「权威源码」面板静默空白（2026-10-12 恒烈真机发现）。
@@ -154,6 +192,7 @@ export function register(op) {
       throw new Error(`op ${op.id} 的参数 ${d.key} 误写了 def，应为 default`);
     }
   }
+  bindParamLabels(op.params);
   _byId.set(op.id, op);
   OPS.push(op);
   return op;

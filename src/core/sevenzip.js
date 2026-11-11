@@ -25,6 +25,7 @@
  */
 import { register } from "./registry.js";
 import { decodeUtf8Lossless } from "./bytesIo.js";
+import { checkLimit, withLimit, isLimitError } from "./limitGuard.js";
 
 // BOM 保真的严格 UTF-8 解码（bytesIo 单一源）：非法序列抛 TypeError（同旧 fatal TextDecoder 语义），
 // 唯一行为差异是合法 BOM（U+FEFF 开头）不再被静默吞掉。
@@ -179,6 +180,78 @@ let _available = null;    // null=未试 / true=就绪 / false=缺失降级
  // 装一个「读模块级 _stdoutSink」的转发闭包，每次 callMain 前后切换 sink。
 let _stdoutSink = null;
 
+/**
+ * 从 `7z l -slt` 输出解析声明的条目大小合计（只读头元数据，不解压/不分配条目缓冲）。
+ * 解析不到可信数值时返回 null，调用方保留读取阶段的软/硬阈值兜底。
+ */
+function parseDeclaredUnpackSizes(text) {
+  let total = 0;
+  let count = 0;
+  for (const line of String(text || "").split(/\r?\n/)) {
+    const m = /^Size = (\d+)\s*$/.exec(line);
+    if (!m) continue;
+    const n = Number(m[1]);
+    if (!Number.isSafeInteger(n) || n < 0) return null;
+    total += n;
+    if (!Number.isSafeInteger(total)) return null;
+    count++;
+  }
+  return count ? total : null;
+}
+
+// `l -slt` 的 Path/Size 对：解压前按声明大小预分配 MEMFS 产物，避免写盘时反复扩容复制。
+function parseDeclaredFileSizes(text) {
+  const map = new Map();
+  let cur = null;
+  for (const line of String(text || "").split(/\r?\n/)) {
+    let m = /^Path = (.*)$/.exec(line);
+    if (m) { cur = m[1]; continue; }
+    m = /^Size = (\d+)\s*$/.exec(line);
+    if (!m || cur == null) continue;
+    const n = Number(m[1]);
+    if (!Number.isSafeInteger(n) || n < 0) continue;
+    const key = cur.replace(/\\/g, "/").replace(/^\.?\//, "");
+    if (key) map.set(key, n);
+  }
+  return map;
+}
+
+function fsNodePath(node) {
+  const parts = [];
+  let n = node;
+  for (let i = 0; n && i < 256; i++) {
+    if (n.name && n.name !== "/") parts.push(n.name);
+    if (!n.parent || n.parent === n) break;
+    n = n.parent;
+  }
+  return parts.reverse().join("/");
+}
+
+// 临时挂 MEMFS 写入钩子：首次写产物且声明大小大于本次写入量时，直接把容量定到声明值。
+// 7z 顺序写满则不再触发 1.125x 扩容/整文件复制；声明失真时仍走原扩容逻辑，内容不受影响。
+function installPresizeHook(FS, outDir, sizes) {
+  const MEMFS = FS && FS.filesystems && FS.filesystems.MEMFS;
+  const table = MEMFS && MEMFS.ops_table && MEMFS.ops_table.file && MEMFS.ops_table.file.stream;
+  if (!table || typeof table.write !== "function" || typeof MEMFS.resizeFileStorage !== "function") return null;
+  const orig = table.write;
+  const prefix = outDir + "/";
+  const hook = function (stream, buffer, offset, length, position, canOwn) {
+    try {
+      const node = stream && stream.node;
+      if (node && position === 0 && node.usedBytes === 0 && length > 0) {
+        const full = fsNodePath(node);
+        if (full && full.startsWith(prefix)) {
+          const declared = sizes.get(full.slice(prefix.length));
+          if (declared != null && declared > length) MEMFS.resizeFileStorage(node, declared);
+        }
+      }
+    } catch { /* 预分配失败不影响正常写入 */ }
+    return orig.apply(this, arguments);
+  };
+  table.write = hook;
+  return () => { if (table.write === hook) table.write = orig; };
+}
+
 /** 懒加载 7z-wasm，返回 module 或 null（缺失/失败降级，不抛）。 */
 async function load7zWasm() {
   if (_modPromise) return _modPromise;
@@ -237,6 +310,45 @@ function fsRmRf(FS, dir) {
   try { FS.rmdir(dir); } catch { /* ignore */ }
 }
 
+// 读出单个产物后立即 unlink：MEMFS 下的 node.contents 直接给视图（零拷贝），
+// unlink 后由 JS 视图继续持有底层 buffer；避免 readFile 再复制一份整文件。
+// 非 MEMFS / 结构不符时退回 FS.readFile。
+function takeFileBytes(FS, full) {
+  let data = null;
+  try {
+    const node = FS.lookupPath ? FS.lookupPath(full, { follow: true }).node : null;
+    const contents = node && node.contents;
+    const used = node ? Number(node.usedBytes) : NaN;
+    // MEMFS 首写可能直接 slice 出 Int8Array（来自 HEAP8），统一成无符号字节视图。
+    const bytesView = contents instanceof Uint8Array
+      ? contents
+      : (contents && ArrayBuffer.isView(contents) && contents.BYTES_PER_ELEMENT === 1
+        ? new Uint8Array(contents.buffer, contents.byteOffset, contents.byteLength) : null);
+    if (bytesView && Number.isSafeInteger(used) && used >= 0 && used <= bytesView.length) {
+      data = bytesView.subarray(0, used);
+    }
+  } catch { data = null; }
+  if (data === null) {
+    try { data = FS.readFile(full); } catch { data = new Uint8Array(0); }
+  }
+  try { FS.unlink(full); } catch { /* ignore */ }
+  return data;
+}
+
+// 归档输入尽量零拷贝挂进 MEMFS（canOwn 采纳原 Uint8Array 视图），
+// 失败则退回 writeFile 复制。输入文件已存在时先 unlink，避免 EEXIST/截断歧义。
+function fsWriteArchive(FS, path, bytes) {
+  try { FS.unlink(path); } catch { /* ignore */ }
+  if (typeof FS.createDataFile === "function") {
+    try {
+      FS.createDataFile("/", path, bytes, true, false, true);
+      return;
+    } catch { /* 退回 writeFile */ }
+    try { FS.unlink(path); } catch { /* ignore */ }
+  }
+  FS.writeFile(path, bytes);
+}
+
 /**
  * 用 7z-wasm 执行命令行（列表 'l' / 解压 'x'），捕获 stdout。
  * 7z-wasm 接口：mod.FS.writeFile / mod.callMain(argv) / mod.FS.readdir。
@@ -246,7 +358,7 @@ function fsRmRf(FS, dir) {
  * 则退出码非 0 且可能已落垃圾文件 ⇒ 失败时 files 置空，绝不把半解产物当结果）。
  * wasm 不可用仍返回 null（调用方降级）。
  */
-async function run7zWasm(archiveBytes, { extract = false, password = "", name = "" } = {}) {
+async function run7zWasm(archiveBytes, { extract = false, password = "", name = "", params = null } = {}) {
   const mod = await load7zWasm();
   if (!mod) return null;
   const FS = mod.FS;
@@ -259,45 +371,192 @@ async function run7zWasm(archiveBytes, { extract = false, password = "", name = 
   try {
     try { fsRmRf(FS, OUT); } catch { /* ignore */ }
     try { FS.mkdir(OUT); } catch { /* 已存在 */ }
-    FS.writeFile(IN, archiveBytes);
+    fsWriteArchive(FS, IN, archiveBytes);
+    let limitParams = params;
+    let declaredSizes = null;
+    // 7z 预检：只跑 `l -slt` 读声明 Size，不分配解压缓冲。可预检且超阈值时在 x 之前拦截；
+    // 预检失败（编码头/输出不可解析）则退回 collectFiles 的读取阶段软硬阈值。
+    if (extract && ext === "7z") {
+      const preLines = [];
+      const prevSink = _stdoutSink;
+      _stdoutSink = preLines;
+      let preCode = 0;
+      try {
+        mod.callMain(["l", "-slt", IN, ...(password ? ["-p" + password] : [])]);
+      } catch (e) {
+        preCode = typeof e === "number" ? e : ((e && (e.status ?? e.code)) ?? -1);
+      } finally {
+        _stdoutSink = prevSink;
+      }
+      const declaredText = preLines.join("\n");
+      const declared = preCode === 0 ? parseDeclaredUnpackSizes(declaredText) : null;
+      if (declared != null) {
+        const declaredMap = parseDeclaredFileSizes(declaredText);
+        if (declared > PRESIZE_MIN_TOTAL) declaredSizes = declaredMap;
+        // 条目数 / 单成员 / 总量都在 x 之前按声明值预检，超软阈值可确认，超硬上限直接失败。
+        if (declaredMap.size > MAX_FILES) {
+          checkLimit({
+            scope: "sevenzip.entries.declared",
+            actual: declaredMap.size,
+            soft: MAX_FILES,
+            hard: MAX_FILES_HARD,
+            params: limitParams,
+            label: "7z 声明条目数",
+            unit: " 个",
+          });
+          limitParams = withLimit(limitParams, { _allowLimitOverride: true });
+        }
+        let maxEntry = 0;
+        for (const n of declaredMap.values()) if (n > maxEntry) maxEntry = n;
+        if (maxEntry > MAX_ENTRY_UNPACK) {
+          checkLimit({
+            scope: "sevenzip.unpack.declaredEntrySize",
+            actual: maxEntry,
+            soft: MAX_ENTRY_UNPACK,
+            hard: MAX_ENTRY_UNPACK_HARD,
+            params: limitParams,
+            label: "7z 声明单成员大小",
+            unit: " 字节",
+          });
+          limitParams = withLimit(limitParams, { _allowLimitOverride: true });
+        }
+        if (declared > MAX_TOTAL_UNPACK) {
+          checkLimit({
+            scope: "sevenzip.unpack.declaredOutput",
+            actual: declared,
+            soft: MAX_TOTAL_UNPACK,
+            hard: MAX_TOTAL_UNPACK_HARD,
+            params: limitParams,
+            label: "7z 声明解压总大小",
+            unit: " 字节",
+          });
+          limitParams = withLimit(limitParams, { _allowLimitOverride: true });
+        }
+      }
+    }
     const argv = extract
       ? ["x", IN, "-o" + OUT, "-y", ...(password ? ["-p" + password] : [])]
       : ["l", IN, ...(password ? ["-p" + password] : [])];
  // callMain 失败时 emscripten 抛裸数字（退出码）或 ExitStatus；统一取数值
+    const restorePresize = extract && declaredSizes && declaredSizes.size
+      ? installPresizeHook(FS, OUT, declaredSizes) : null;
     try { mod.callMain(argv); } catch (e) {
       code = typeof e === "number" ? e : ((e && (e.status ?? e.code)) ?? -1);
+    } finally {
+      if (restorePresize) restorePresize();
     }
     const ok = code === 0 && !/ERROR/i.test(lines.join("\n"));
+    // x 完成后先释放归档输入，再逐文件读取；读完立即 unlink，避免整包产物常驻 MEMFS。
+    try { FS.unlink(IN); } catch { /* ignore */ }
     const files = [];
-    if (extract && ok) collectFiles(FS, OUT, "", files);
-    return { stdout: lines.join("\n"), files, code, ok };
+    const budget = { n: 0, bytes: 0, params: limitParams };
+    if (extract && ok) collectFiles(FS, OUT, "", files, budget);
+    return { stdout: lines.join("\n"), files, code, ok, bytesRead: budget.bytes };
   } catch (e) {
+    if (isLimitError(e)) throw e;
     return { stdout: "(7z-wasm FS 操作失败: " + (e && e.message ? e.message : String(e)) + ")", files: [], code: -1, ok: false };
   } finally {
     _stdoutSink = null;
     try { FS.unlink(IN); } catch { /* ignore */ }
+    fsRmRf(FS, OUT);
   }
 }
 
-/** 递归收集虚拟 FS 目录下所有文件字节（防爆：最多 200 项）。 */
-function collectFiles(FS, dir, prefix, out, budget = { n: 0 }) {
+// 7z 解压前尽量用 `l -slt` 读声明 unpack size 预检（见 run7zWasm）；预检不可用时
+// 仍在收集/读取阶段用同一组软硬阈值兜底，避免把解压产物一次性读进 JS 堆
+// （虚拟 FS 已写出的部分仍由 7z-wasm 受浏览器内存约束）。
+// 统一资源口径（与 ZIP / TAR 一致）：软阈值可确认放宽到硬上限，超过硬上限明确失败。
+const MIB = 1024 * 1024;
+const MAX_FILES = 1000;                    // 解出文件数软阈值
+const MAX_FILES_HARD = 5000;               // 解出文件数硬上限
+const MAX_ENTRY_UNPACK = 256 * MIB;        // 单成员解压软阈值
+const MAX_ENTRY_UNPACK_HARD = 1024 * MIB;  // 单成员解压硬上限
+const MAX_TOTAL_UNPACK = 256 * MIB;        // 解压总输出软阈值
+const MAX_TOTAL_UNPACK_HARD = 1024 * MIB;  // 解压总输出硬上限
+const PRESIZE_MIN_TOTAL = 8 * MIB;         // 超过此声明总量才启用 MEMFS 预分配（小档案走原生路径）
+
+/** 流式收集虚拟 FS 产物：读一个 unlink 一个；超限立刻抛错，剩余产物由 finally 清理。 */
+function collectFiles(FS, dir, prefix, out, budget = { n: 0, bytes: 0, params: null }) {
   let entries;
   try { entries = FS.readdir(dir); } catch { return; }
   for (const name of entries) {
     if (name === "." || name === "..") continue;
-    if (budget.n >= 200) return;
     const full = dir + "/" + name;
     const rel = prefix ? prefix + "/" + name : name;
     let stat;
     try { stat = FS.stat(full); } catch { continue; }
     if (FS.isDir(stat.mode)) {
       collectFiles(FS, full, rel, out, budget);
-    } else {
-      budget.n++;
-      let bytes = null;
-      try { bytes = FS.readFile(full); } catch { /* ignore */ }
-      out.push({ name: rel, bytes: bytes || new Uint8Array(0) });
+      try { FS.rmdir(full); } catch { /* ignore */ }
+      continue;
     }
+    const declared = Number(stat.size) || 0;
+    // 条目数：软 1000 / 硬 5000。达到硬上限由 checkLimit 抛 LIMIT_HARD，绝不静默截断。
+    if (budget.n + 1 > MAX_FILES) {
+      checkLimit({
+        scope: "sevenzip.entries",
+        actual: budget.n + 1,
+        soft: MAX_FILES,
+        hard: MAX_FILES_HARD,
+        params: budget.params,
+        label: "7z 文件数",
+        unit: " 个",
+      });
+      budget.params = withLimit(budget.params, { _allowLimitOverride: true });
+    }
+    // 单成员：软 256 MiB / 硬 1 GiB。
+    if (declared > MAX_ENTRY_UNPACK) {
+      checkLimit({
+        scope: "sevenzip.unpack.entrySize",
+        actual: declared,
+        soft: MAX_ENTRY_UNPACK,
+        hard: MAX_ENTRY_UNPACK_HARD,
+        params: budget.params,
+        label: "7z 单成员解压大小",
+        unit: " 字节",
+      });
+      budget.params = withLimit(budget.params, { _allowLimitOverride: true });
+    }
+    if (budget.bytes + declared > MAX_TOTAL_UNPACK) {
+      checkLimit({
+        scope: "sevenzip.unpack.totalOutput",
+        actual: budget.bytes + declared,
+        soft: MAX_TOTAL_UNPACK,
+        hard: MAX_TOTAL_UNPACK_HARD,
+        params: budget.params,
+        label: "7z 解压总输出",
+        unit: " 字节",
+      });
+      budget.params = withLimit(budget.params, { _allowLimitOverride: true });
+    }
+    budget.n++;
+    const data = takeFileBytes(FS, full);
+    if (data.length > MAX_ENTRY_UNPACK) {
+      checkLimit({
+        scope: "sevenzip.unpack.entrySize",
+        actual: data.length,
+        soft: MAX_ENTRY_UNPACK,
+        hard: MAX_ENTRY_UNPACK_HARD,
+        params: budget.params,
+        label: "7z 单成员解压大小",
+        unit: " 字节",
+      });
+      budget.params = withLimit(budget.params, { _allowLimitOverride: true });
+    }
+    if (budget.bytes + data.length > MAX_TOTAL_UNPACK) {
+      checkLimit({
+        scope: "sevenzip.unpack.totalOutput",
+        actual: budget.bytes + data.length,
+        soft: MAX_TOTAL_UNPACK,
+        hard: MAX_TOTAL_UNPACK_HARD,
+        params: budget.params,
+        label: "7z 解压总输出",
+        unit: " 字节",
+      });
+      budget.params = withLimit(budget.params, { _allowLimitOverride: true });
+    }
+    budget.bytes += data.length;
+    out.push({ name: rel, bytes: data });
   }
 }
 
@@ -366,7 +625,7 @@ async function sevenZipRun(text, p) {
   const password = (p && p.password) || "";
 
  // 尝试 wasm 真跑
-  const res = await run7zWasm(bytes, { extract: mode === "extract", password });
+  const res = await run7zWasm(bytes, { extract: mode === "extract", password, params: p });
   if (res === null) {
  // ---- wasm 缺失降级（不报错不白屏）----
     lines.push("--- 解压 / 列表能力 ---");
@@ -389,7 +648,11 @@ async function sevenZipRun(text, p) {
   }
   if (mode === "extract") {
     lines.push("");
-    lines.push("解出文件: " + res.files.length + " 个" + (res.files.length >= 200 ? "（达 200 上限，截断）" : ""));
+    lines.push("解出文件: " + res.files.length + " 个");
+    lines.push("资源上限: 条目软 " + MAX_FILES + " / 硬 " + MAX_FILES_HARD +
+      "；单成员软 " + (MAX_ENTRY_UNPACK / MIB) + " MiB / 硬 " + (MAX_ENTRY_UNPACK_HARD / MIB) +
+      " MiB；总输出软 " + (MAX_TOTAL_UNPACK / MIB) + " MiB / 硬 " + (MAX_TOTAL_UNPACK_HARD / MIB) +
+      " MiB。超软阈值会先确认，超硬上限直接失败。");
     const MIME = { txt: "text/plain", log: "text/plain", json: "application/json", png: "image/png", gif: "image/gif", jpg: "image/jpeg", jpeg: "image/jpeg", zip: "application/zip", pdf: "application/pdf" };
     const outFiles = [];
     res.files.forEach((f, i) => {
@@ -476,7 +739,10 @@ async function analyze7zFile(bytes) {
 
  // wasm 真列表（不自动解压，避免大档案卡顿；解压走 op 或双击）
   let res = null;
-  try { res = await run7zWasm(u8a, { extract: false }); } catch { res = null; }
+  try { res = await run7zWasm(u8a, { extract: false }); } catch (e) {
+    if (isLimitError(e)) throw e;
+    res = null;
+  }
   if (res === null) {
     sections.push({
       id: "sevenzip-wasm",

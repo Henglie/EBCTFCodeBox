@@ -19,6 +19,7 @@ import { OPS, getOp, defaultParams, CATEGORIES, opsByCat } from "../core/registr
 import { magicDecode } from "../core/magic/magic.js";
 import { APP_VERSION } from "../core/version.js";
 import { productFileEntries } from "../core/productResult.js";
+import { LIMIT_CONFIRM_CODE, LIMIT_HARD_CODE, LIMIT_CANCEL_CODE, withLimitContext } from "../core/limitGuard.js";
 
 // MCP server 版本与项目主版本统一（全局变量，避免割裂）。
 const SERVER_VERSION = APP_VERSION;
@@ -26,11 +27,15 @@ const SERVER_VERSION = APP_VERSION;
 // 虚拟/不宜对外单独暴露的 op（cryptoTryAll 是 UI 聚合入口，非独立算法）。统一口径，各处复用。
 const HIDDEN_OP_IDS = new Set(["cryptoTryAll"]);
 // jsfuck/jjencode 的 decode 会用 new Function 执行输入里的 JS：MCP 主进程无沙箱，
-// AI 提示注入可借此执行任意 Node 代码。默认不暴露；调用方显式传 allowUnsafe:true
-// （或设置 EBCTF_MCP_UNSAFE=1）才放开，并在结果里明确标注风险。
+// AI 提示注入可借此执行任意 Node 代码。默认不暴露。
+// 只能由宿主环境（EBCTF_MCP_UNSAFE=1）放开；请求参数 allowUnsafe/includeUnsafe 一律忽略，
+// 防止客户端/提示注入自行提权。
 const UNSAFE_OP_IDS = new Set(["jsfuck", "jjencode"]);
-function includeUnsafe(args) {
-  return !!(args && (args.allowUnsafe === true || args.includeUnsafe === true)) || (typeof process !== "undefined" && process.env && process.env.EBCTF_MCP_UNSAFE === "1");
+function hostAllowUnsafe() {
+  return !!(typeof process !== "undefined" && process.env && process.env.EBCTF_MCP_UNSAFE === "1");
+}
+function includeUnsafe() {
+  return hostAllowUnsafe();
 }
 function opVisible(op, unsafe = false) {
   if (!op || HIDDEN_OP_IDS.has(op.id)) return false;
@@ -97,13 +102,13 @@ export const MCP_TOOLS = [
   },
   {
     name: "ebctf_list_ops",
-    description: "列出工具箱里所有编解码/加解密操作（op），可按关键词或分类过滤。每条含 id、分类、名称、支持方向(encode/decode/run)、是否带参。默认隐藏 JS 执行类；需要时传 includeUnsafe:true。",
+    description: "列出工具箱里所有编解码/加解密操作（op），可按关键词或分类过滤。每条含 id、分类、名称、支持方向(encode/decode/run)、是否带参。默认隐藏 JS 执行类；是否放开由宿主环境 EBCTF_MCP_UNSAFE 控制（请求参数已忽略）。",
     inputSchema: {
       type: "object",
       properties: {
         keyword: { type: "string", description: "名称/id/分类过滤词（可选）" },
         cat: { type: "string", description: "分类 id 精确过滤（可选，见 ebctf_list_categories）" },
-        includeUnsafe: { type: "boolean", description: "是否列出 jsfuck/jjencode 等会执行输入代码的高风险 op（默认 false）" },
+        includeUnsafe: { type: "boolean", description: "已忽略；高风险 op 是否可见只由宿主环境 EBCTF_MCP_UNSAFE 决定（默认 false）" },
       },
     },
   },
@@ -114,7 +119,7 @@ export const MCP_TOOLS = [
       type: "object",
       properties: {
         opId: { type: "string", description: "op 的 id" },
-        includeUnsafe: { type: "boolean", description: "允许查询 jsfuck/jjencode 等高风险 op（默认 false）" },
+        includeUnsafe: { type: "boolean", description: "已忽略；高风险 op 是否可见只由宿主环境 EBCTF_MCP_UNSAFE 决定（默认 false）" },
       },
       required: ["opId"],
     },
@@ -135,14 +140,16 @@ export const MCP_TOOLS = [
     name: "ebctf_run_op",
     description:
       "对输入执行指定 op。统一文件通道：文本走 input，图片/pcap/zip/pyc/exe 等二进制走 fileBase64 或 filePath；" +
-      "产物文件会以 base64 返回，也可用 outputDir 直接落盘并返回路径。支持传自定义参数（params，形状见 ebctf_op_schema）。",
+      "产物 ≤128KB 时可按需内联 base64，>128KB 不内联，必须用 outputDir 落盘并返回绝对路径（未给 outputDir 会显式报错，不静默丢内容）。" +
+      "超限错误返回结构化 {code, meta, retryable}：软阈值可带 allowOverLimit:true 重试（仍不能越过硬上限）。" +
+      "支持传自定义参数（params，形状见 ebctf_op_schema）。",
     inputSchema: {
       type: "object",
       properties: {
         opId: { type: "string", description: "op 的 id（先用 ebctf_list_ops / ebctf_op_schema 查）" },
         input: { type: "string", description: "输入文本（文本类 op 用；与 fileBase64/filePath 二选一或同时给）" },
         fileBase64: { type: "string", description: "二进制输入：文件内容的 base64（图片/pcap/zip/pyc/exe 等）" },
-        filePath: { type: "string", description: "二进制输入：本机文件路径（仅 stdio MCP server / Node 环境可读）" },
+        filePath: { type: "string", description: "二进制输入：本机文件路径（仅 stdio MCP server / Node 环境；默认不限制目录，设置 EBCTF_MCP_WORKSPACE 或 EBCTF_MCP_RESTRICT=1 后须在工作区内）" },
         inputEncoding: {
           type: "string", enum: ["auto", "utf8", "hex", "base64"],
           description: "文件转文本的编码（非 acceptsBytes op 使用；默认 auto：优先 UTF-8，失败则报错）",
@@ -150,9 +157,10 @@ export const MCP_TOOLS = [
         fileName: { type: "string", description: "可选文件名（用于产物命名/报告）" },
         direction: { type: "string", enum: ["encode", "decode", "run"], description: "方向，缺省自动" },
         params: { type: "object", description: "自定义参数对象（可选，key 见 ebctf_op_schema；未给的用默认值）" },
-        outputDir: { type: "string", description: "可选：把产物文件写入该本地目录，返回绝对路径（MCP 文件类 op 推荐）" },
-        includeBase64: { type: "boolean", description: "产物是否同时返回 base64（默认：小文件 true，超过 256KB false）" },
-        allowUnsafe: { type: "boolean", description: "允许执行 jsfuck/jjencode 等会 new Function 输入的高风险 op（默认 false）" },
+        outputDir: { type: "string", description: "可选：把产物文件写入该本地目录，返回绝对路径（默认不限制；设置 EBCTF_MCP_WORKSPACE / EBCTF_MCP_RESTRICT=1 后须在工作区内）。产物总大小 >128KB 时必填，否则显式报错" },
+        includeBase64: { type: "boolean", description: "产物是否返回 base64（默认：≤128KB 且未给 outputDir 时为 true，否则 false）。>128KB 即使传 true 也不内联，只返回 omitted:true / inline:false 与 outputDir 路径" },
+        allowOverLimit: { type: "boolean", description: "显式允许超过软阈值（默认 false）。只放宽 soft→hard，不能越过硬上限；LIMIT_CONFIRM 错误可带此参数重试。嵌套解码器会收到同一确认状态" },
+        allowUnsafe: { type: "boolean", description: "已忽略；高风险 op 是否可执行只由宿主环境 EBCTF_MCP_UNSAFE 决定（默认 false）" },
       },
       required: ["opId"],
     },
@@ -163,7 +171,7 @@ export const MCP_TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        path: { type: "string", description: "本机文件绝对路径（或相对当前工作目录）" },
+        path: { type: "string", description: "本机文件路径（或相对当前工作目录；默认不限制，设置 EBCTF_MCP_WORKSPACE / EBCTF_MCP_RESTRICT=1 后须在工作区内）" },
         maxBytes: { type: "number", description: "最多读取字节数（默认 1 MiB，上限 8 MiB）" },
         encoding: { type: "string", enum: ["auto", "utf8", "hex", "base64"], description: "内容编码（默认 auto）" },
       },
@@ -191,7 +199,12 @@ export const MCP_TOOLS = [
 // 浏览器 in-process 形态没有 fs，filePath/outputDir 会返回明确错误，不静默。
 // ---------------------------------------------------------------------------
 const MAX_FILE_BYTES = 64 * 1024 * 1024;
-const INLINE_BASE64_LIMIT = 256 * 1024;
+// 产物内联硬边界：≤128KB 才允许 base64 内联；>128KB 只能落盘。
+const INLINE_BASE64_LIMIT = 128 * 1024; // 131072
+// 单个 text/content 字段上限，避免 40 万字符单行。
+const MAX_TEXT_CHARS = 200 * 1024;
+// 结构化结果 JSON 上限（MCP content.text），超过则显式截断/省略并标记。
+const MAX_RESULT_JSON_CHARS = 256 * 1024;
 
 function b64ToBytes(b64) {
   const clean = String(b64 || "").replace(/\s+/g, "");
@@ -223,22 +236,103 @@ function isNodeEnv() {
 }
 
 async function nodeFs() {
-  if (!isNodeEnv()) throw new Error("filePath/outputDir 只在本地 Node（stdio MCP server）可用；浏览器内请改用 fileBase64");
+  if (!isNodeEnv()) {
+    const err = new Error("filePath/outputDir 只在本地 Node（stdio MCP server）可用；浏览器内请改用 fileBase64");
+    err.code = "EBCTF_MCP_NO_FS";
+    throw err;
+  }
   return import("node:fs/promises");
+}
+
+function hostEnv(name) {
+  try { return typeof process !== "undefined" && process.env ? process.env[name] : undefined; } catch { return undefined; }
+}
+// 工作区限制默认关闭（与旧行为一致，允许工作区外路径）。
+// 仅当显式设置 EBCTF_MCP_WORKSPACE 或 EBCTF_MCP_RESTRICT=1 时才强制限制在工作区内；
+// EBCTF_MCP_ALLOW_OUTSIDE=1 仍可单独关闭该限制。
+function workspaceRestrictEnabled() {
+  return !!(hostEnv("EBCTF_MCP_WORKSPACE") || hostEnv("EBCTF_MCP_RESTRICT") === "1");
+}
+function allowOutsideWorkspace() {
+  return hostEnv("EBCTF_MCP_ALLOW_OUTSIDE") === "1";
+}
+
+async function workspaceRoot() {
+  const raw = hostEnv("EBCTF_MCP_WORKSPACE") || (isNodeEnv() ? process.cwd() : "");
+  if (!raw) throw new Error("无法确定 MCP 工作区根：请设置 EBCTF_MCP_WORKSPACE");
+  const fs = await nodeFs();
+  const path = await import("node:path");
+  try { return await fs.realpath(raw); } catch { return path.resolve(raw); }
+}
+
+/**
+ * 解析用户路径；仅在显式启用工作区限制时校验其落在工作区根内，
+ * 并拒绝路径上的符号链接 / Windows junction。
+ * @param {string} input 用户传入路径（限制启用时相对路径按工作区根解析）
+ * @param {string} label 错误信息里的字段名
+ * @returns {Promise<string>} 绝对路径
+ */
+async function assertInsideWorkspace(input, label = "路径") {
+  const path = await import("node:path");
+  const inputStr = String(input == null ? "" : input);
+  const abs = path.resolve(inputStr);
+  if (!workspaceRestrictEnabled() || allowOutsideWorkspace()) return abs;
+  const root = await workspaceRoot();
+  const target = path.isAbsolute(inputStr) ? abs : path.resolve(root, inputStr);
+  const fs = await nodeFs();
+  const within = (candidate) => {
+    const rel = path.relative(root, candidate);
+    return rel === "" || (rel !== ".." && !rel.startsWith(".." + path.sep) && !path.isAbsolute(rel));
+  };
+  if (!within(target)) {
+    throw new Error(`${label}越界：${input}（工作区根 ${root}；如需放开请设 EBCTF_MCP_ALLOW_OUTSIDE=1）`);
+  }
+  // 逐段 lstat：路径中间出现符号链接/junction 一律拒绝（即使最终 realpath 仍在根内）。
+  const rel = path.relative(root, target);
+  let cur = root;
+  let existing = target;
+  for (const part of rel.split(path.sep).filter(Boolean)) {
+    cur = path.join(cur, part);
+    let st = null;
+    try { st = await fs.lstat(cur); }
+    catch (e) {
+      if (e && e.code === "ENOENT") { existing = path.dirname(cur); break; }
+      throw e;
+    }
+    if (st.isSymbolicLink()) throw new Error(`${label}拒绝符号链接/junction：${cur}`);
+    existing = cur;
+  }
+  let real = existing;
+  try { real = await fs.realpath(existing); } catch { /* 不存在则保持原路径 */ }
+  if (!within(real)) {
+    throw new Error(`${label}越界：${input}（realpath ${real} 不在工作区根 ${root} 内）`);
+  }
+  return target;
 }
 
 async function readInputBytes(args) {
   if (args.fileBase64 != null && String(args.fileBase64).length) {
     const bytes = b64ToBytes(args.fileBase64);
-    if (bytes.length > MAX_FILE_BYTES) throw new Error(`fileBase64 超过 ${MAX_FILE_BYTES} 字节上限`);
+    if (bytes.length > MAX_FILE_BYTES) {
+      const err = new Error(`fileBase64 超过 ${MAX_FILE_BYTES} 字节上限`);
+      err.code = "EBCTF_MCP_INPUT_TOO_LARGE";
+      err.meta = { source: "fileBase64", actualBytes: bytes.length, limitBytes: MAX_FILE_BYTES };
+      throw err;
+    }
     return bytes;
   }
   if (args.filePath) {
     const fs = await nodeFs();
-    const st = await fs.stat(args.filePath);
+    const safePath = await assertInsideWorkspace(args.filePath, "filePath");
+    const st = await fs.stat(safePath);
     if (!st.isFile()) throw new Error(`不是文件：${args.filePath}`);
-    if (st.size > MAX_FILE_BYTES) throw new Error(`文件超过 ${MAX_FILE_BYTES} 字节上限：${st.size}`);
-    return new Uint8Array(await fs.readFile(args.filePath));
+    if (st.size > MAX_FILE_BYTES) {
+      const err = new Error(`文件超过 ${MAX_FILE_BYTES} 字节上限：${st.size}`);
+      err.code = "EBCTF_MCP_INPUT_TOO_LARGE";
+      err.meta = { source: "filePath", path: safePath, actualBytes: st.size, limitBytes: MAX_FILE_BYTES };
+      throw err;
+    }
+    return new Uint8Array(await fs.readFile(safePath));
   }
   return null;
 }
@@ -279,17 +373,145 @@ async function sha256Hex(bytes) {
 async function saveProductFiles(files, outputDir) {
   const fs = await nodeFs();
   const path = await import("node:path");
-  await fs.mkdir(outputDir, { recursive: true });
-  const base = path.resolve(outputDir);
+  const base = await assertInsideWorkspace(outputDir, "outputDir");
+  await fs.mkdir(base, { recursive: true });
+  // 启用工作区限制时，mkdir 后再 realpath 复核一次，防止父目录在此期间被替换成链接。
+  const realBase = workspaceRestrictEnabled() && !allowOutsideWorkspace()
+    ? await assertInsideWorkspace(await fs.realpath(base), "outputDir")
+    : base;
   const saved = [];
   for (const f of files) {
     const safe = path.basename(String(f.name || "download.bin")).replace(/[<>:"/\\|?*\x00-\x1f]/g, "_") || "download.bin";
-    const full = path.resolve(base, safe);
-    if (!full.startsWith(base + path.sep) && full !== base) throw new Error(`产物文件名越界：${f.name}`);
+    const full = path.resolve(realBase, safe);
+    if (!full.startsWith(realBase + path.sep) && full !== realBase) throw new Error(`产物文件名越界：${f.name}`);
     await fs.writeFile(full, f.bytes);
     saved.push({ ...f, name: safe, path: full });
   }
-  return saved;
+  return { files: saved, dir: realBase };
+}
+
+// ---------------------------------------------------------------------------
+// 输出护栏：所有 text 走统一截断；结构化 JSON 超限时优先截 text/content，
+// 仍超限才省略 base64 并显式标记，绝不发 40 万字符单行。
+// ---------------------------------------------------------------------------
+function clampText(text, max = MAX_TEXT_CHARS) {
+  const s = String(text);
+  if (s.length <= max) return s;
+  const notice = `\n…[已截断：原 ${s.length} 字符，输出上限 ${max} 字符]`;
+  return s.slice(0, Math.max(0, max - notice.length)) + notice;
+}
+
+function clampJsonResult(obj) {
+  const copy = { ...obj };
+  // 先按字段上限预截断，避免对超大报告（例如 40MB base64 文本）做一次完整 stringify。
+  for (const field of ["text", "content"]) {
+    if (typeof copy[field] !== "string" || copy[field].length <= MAX_TEXT_CHARS) continue;
+    const originalLen = copy[field].length;
+    copy[field] = copy[field].slice(0, MAX_TEXT_CHARS);
+    copy[`${field}Truncated`] = true;
+    copy[`${field}Length`] = originalLen;
+  }
+
+  let text;
+  try {
+    text = JSON.stringify(copy, null, 2);
+  } catch (e) {
+    return {
+      text: JSON.stringify({
+        code: "EBCTF_MCP_SERIALIZE",
+        message: `结果序列化失败：${e && e.message ? e.message : e}`,
+        retryable: false,
+      }, null, 2),
+      isError: true,
+    };
+  }
+  if (text.length <= MAX_RESULT_JSON_CHARS) return { text, isError: false };
+
+  for (const field of ["text", "content"]) {
+    if (typeof copy[field] !== "string") continue;
+    const originalLen = copy[`${field}Length`] ?? copy[field].length;
+    const excess = text.length - MAX_RESULT_JSON_CHARS;
+    if (excess <= 0) break;
+    const keep = Math.min(MAX_TEXT_CHARS, Math.max(0, copy[field].length - excess - 1024));
+    if (keep >= copy[field].length) continue;
+    copy[field] = copy[field].slice(0, keep);
+    copy[`${field}Truncated`] = true;
+    copy[`${field}Length`] = originalLen;
+    text = JSON.stringify(copy, null, 2);
+    if (text.length <= MAX_RESULT_JSON_CHARS) return { text, isError: false };
+  }
+
+  // 极端情况：文件元数据本身过大。base64 是本可重取的派生内容，优先省略并标记。
+  if (Array.isArray(copy.files) && copy.files.some((f) => f && typeof f.base64 === "string")) {
+    copy.files = copy.files.map((f) => {
+      if (!f || typeof f.base64 !== "string") return f;
+      const { base64, ...rest } = f;
+      return { ...rest, inline: false, omitted: true, base64Omitted: true };
+    });
+    copy.inline = false;
+    copy.omitted = true;
+    copy.inlineOmittedReason =
+      `结果 JSON 超过 ${MAX_RESULT_JSON_CHARS} 字符上限，已省略 base64；请使用 outputDir 落盘后读取路径。`;
+    text = JSON.stringify(copy, null, 2);
+    if (text.length <= MAX_RESULT_JSON_CHARS) return { text, isError: false };
+  }
+
+  return {
+    text: JSON.stringify({
+      code: "EBCTF_MCP_RESULT_TOO_LARGE",
+      message: `结果 JSON 超过 ${MAX_RESULT_JSON_CHARS} 字符上限，已拒绝内联；请使用 outputDir 落盘或缩小输入。`,
+      retryable: true,
+      meta: { limitChars: MAX_RESULT_JSON_CHARS, actualChars: text.length, outputDirRequired: true },
+    }, null, 2),
+    isError: true,
+  };
+}
+
+/** 把 op 抛出的异常转成可程序化处理的错误对象（保留 code/meta，标注 retryable）。 */
+function structuredErrorPayload(e, { allowOverLimit = false } = {}) {
+  const code = e && typeof e.code === "string" && e.code ? e.code : "EBCTF_MCP_ERROR";
+  const message = String(e && e.message ? e.message : e);
+  const meta = e && e.meta !== undefined ? e.meta : null;
+  const cancelled = !!(e && (e.cancelled === true || code === LIMIT_CANCEL_CODE));
+  let retryable = false;
+  let hint = "";
+  let retryWith = null;
+
+  if (code === LIMIT_CONFIRM_CODE) {
+    retryable = true;
+    if (allowOverLimit) {
+      hint = "已带 allowOverLimit:true，但嵌套解码器仍未收到确认参数；请把 code/meta/opId 提交给工具箱维护者。";
+    } else {
+      hint = "软阈值可放宽：用同一参数并传 allowOverLimit:true 重试（只放宽到硬上限，超过硬上限仍拒绝）。";
+      retryWith = { allowOverLimit: true };
+    }
+  } else if (code === LIMIT_HARD_CODE) {
+    retryable = false;
+    hint = "已超过硬上限，allowOverLimit 不能越过硬上限；请缩小输入或调整参数。";
+  } else if (code === LIMIT_CANCEL_CODE || cancelled) {
+    retryable = false;
+    hint = "调用已取消，需重新发起。";
+  } else if (code === "EBCTF_TIMEOUT" || code === "ETIMEDOUT" || code === "EAGAIN" || code === "EBUSY") {
+    retryable = true;
+    hint = "操作超时或资源暂时繁忙，可在缩小输入后重试。";
+  } else if (code === "EBCTF_CANCELLED") {
+    retryable = false;
+    hint = "调用已取消，需重新发起。";
+  } else {
+    retryable = false;
+    hint = "非资源阈值错误；请检查 opId / direction / params / 文件路径。";
+  }
+
+  return {
+    code,
+    message,
+    meta,
+    retryable,
+    ...(cancelled ? { cancelled: true } : {}),
+    ...(retryWith ? { retryWith } : {}),
+    allowOverLimit,
+    ...(hint ? { hint } : {}),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -297,17 +519,20 @@ async function saveProductFiles(files, outputDir) {
 // @returns {Promise<{content:{type:string,text:string}[], isError?:boolean}>}
 // ---------------------------------------------------------------------------
 export async function callMcpTool(name, args = {}) {
-  const wrap = (text, isError = false) => ({ content: [{ type: "text", text: String(text) }], isError });
-  const json = (obj) => wrap(JSON.stringify(obj, null, 2));
+  const wrap = (text, isError = false) => ({ content: [{ type: "text", text: clampText(text) }], isError });
+  const json = (obj, isError = false) => {
+    const capped = clampJsonResult(obj);
+    return { content: [{ type: "text", text: capped.text }], isError: isError || capped.isError };
+  };
   try {
     if (name === "ebctf_list_categories") {
-      return json(visibleCategories(includeUnsafe(args)));
+      return json(visibleCategories(includeUnsafe()));
     }
 
     if (name === "ebctf_list_ops") {
       const kw = (args.keyword || "").toLowerCase();
       const cat = (args.cat || "").trim();
-      const list = visibleOps(includeUnsafe(args))
+      const list = visibleOps(includeUnsafe())
         .filter((o) => !cat || o.cat === cat)
         .filter((o) => !kw
           || o.id.toLowerCase().includes(kw)
@@ -319,7 +544,7 @@ export async function callMcpTool(name, args = {}) {
 
     if (name === "ebctf_op_schema") {
       const op = getOp(args.opId);
-      if (!op || !opVisible(op, includeUnsafe(args))) return wrap(`无此 op: ${args.opId}`, true);
+      if (!op || !opVisible(op, includeUnsafe())) return wrap(`无此 op: ${args.opId}`, true);
       return json(opSchema(op));
     }
 
@@ -339,59 +564,129 @@ export async function callMcpTool(name, args = {}) {
     }
 
     if (name === "ebctf_run_op") {
-      const op = getOp(args.opId);
-      if (!op || !opVisible(op, includeUnsafe(args))) return wrap(`无此 op: ${args.opId}`, true);
-      const dir = args.direction || (op.run ? "run" : op.decode ? "decode" : "encode");
-      if (typeof op[dir] !== "function") return wrap(`op ${args.opId} 不支持方向 ${dir}`, true);
-      const bytes = await readInputBytes(args);
-      let input = args.input == null ? "" : String(args.input);
-      if (bytes) {
-        if (op.acceptsBytes) {
-          if (!input) input = bytesToText(bytes, "auto") || "";
-        } else if (!input) {
-          const enc = args.inputEncoding || "auto";
-          const t = bytesToText(bytes, enc);
-          if (t == null) {
-            return wrap(
-              `op ${args.opId} 不吃原始字节，且文件不是合法 UTF-8。请传 inputEncoding:"hex" 或 "base64"，` +
-              `或改用 acceptsBytes 的文件类 op（先在 ebctf_op_schema 看该 op 是否有 acceptsBytes/file 通道）。`, true);
+      const allowOverLimit = args.allowOverLimit === true;
+      const fail = (code, message, meta = null, retryable = false) =>
+        json({ code, message, meta, retryable, allowOverLimit }, true);
+      try {
+        const op = getOp(args.opId);
+        if (!op || !opVisible(op, includeUnsafe())) {
+          return fail("EBCTF_MCP_OP_NOT_FOUND", `无此 op: ${args.opId}`, { opId: args.opId }, false);
+        }
+        const dir = args.direction || (op.run ? "run" : op.decode ? "decode" : "encode");
+        if (typeof op[dir] !== "function") {
+          return fail("EBCTF_MCP_DIRECTION_UNSUPPORTED", `op ${args.opId} 不支持方向 ${dir}`,
+            { opId: args.opId, direction: dir }, false);
+        }
+        const bytes = await readInputBytes(args);
+        let input = args.input == null ? "" : String(args.input);
+        if (bytes) {
+          if (op.acceptsBytes) {
+            if (!input) input = bytesToText(bytes, "auto") || "";
+          } else if (!input) {
+            const enc = args.inputEncoding || "auto";
+            const t = bytesToText(bytes, enc);
+            if (t == null) {
+              return fail(
+                "EBCTF_MCP_INPUT_ENCODING",
+                `op ${args.opId} 不吃原始字节，且文件不是合法 UTF-8。请传 inputEncoding:"hex" 或 "base64"，` +
+                `或改用 acceptsBytes 的文件类 op（先在 ebctf_op_schema 看该 op 是否有 acceptsBytes/file 通道）。`,
+                { opId: args.opId, inputEncoding: enc }, true);
+            }
+            input = t;
           }
-          input = t;
         }
-      }
-      // 默认参数打底，AI 传的 params 覆盖对应 key（未给的保持默认）。
-      const p = { ...defaultParams(op), ...(args.params && typeof args.params === "object" ? args.params : {}) };
-      if (bytes && op.acceptsBytes) p.rawBytes = bytes;
-      const out = await op[dir](input, p);
-      if (out && typeof out === "object" && ("text" in out || "files" in out)) {
-        const text = String(out.text ?? "");
-        const files = productFileEntries(out);
-        if (!files.length) return wrap(text);
-        const total = files.reduce((n, f) => n + f.bytes.length, 0);
-        let saved = files;
-        if (args.outputDir) saved = await saveProductFiles(files, args.outputDir);
-        const inline = args.includeBase64 === true || (args.includeBase64 !== false && total <= INLINE_BASE64_LIMIT && !args.outputDir);
-        const payload = [];
-        for (const f of saved) {
-          const item = {
-            name: f.name, mime: f.mime, size: f.bytes.length,
-            sha256: await sha256Hex(f.bytes),
-          };
-          if (f.path) item.path = f.path;
-          if (inline) item.base64 = bytesToB64(f.bytes);
-          payload.push(item);
+        // 默认参数打底，AI 传的 params 覆盖对应 key（未给的保持默认）。
+        const p = { ...defaultParams(op), ...(args.params && typeof args.params === "object" ? args.params : {}) };
+        // allowOverLimit 是唯一的显式放宽入口：只跳过软阈值，硬上限仍由 limitGuard 先行拒绝。
+        // params 里夹带的 _allowLimitOverride 一律忽略，避免绕过 schema 的隐性提权入口。
+        if (allowOverLimit) p._allowLimitOverride = true;
+        else delete p._allowLimitOverride;
+        if (bytes && op.acceptsBytes) p.rawBytes = bytes;
+        // 运行上下文同步确认状态：嵌套解码器/解压器即使重建 params 也能收到，不会再次弹软阈值。
+        const out = await withLimitContext(p, () => op[dir](input, p));
+        if (out && typeof out === "object" && ("text" in out || "files" in out)) {
+          const text = String(out.text ?? "");
+          const files = productFileEntries(out);
+          if (!files.length) return wrap(text);
+          const total = files.reduce((n, f) => n + f.bytes.length, 0);
+          const fileMeta = files.map((f) => ({ name: f.name, mime: f.mime, size: f.bytes.length }));
+          // >128KB 不内联。没有 outputDir 就显式报错，绝不静默省略内容。
+          if (total > INLINE_BASE64_LIMIT && !args.outputDir) {
+            return json({
+              code: "EBCTF_MCP_OUTPUT_TOO_LARGE",
+              message:
+                `产物共 ${total} 字节（${files.length} 个文件），超过内联上限 ${INLINE_BASE64_LIMIT} 字节（128KB）。` +
+                `未提供 outputDir，拒绝静默省略内容。请传 outputDir 落盘后重试（stdio/Node 环境），` +
+                `或改用 mcp/cli.mjs run --out <目录>。`,
+              meta: {
+                totalBytes: total,
+                inlineLimitBytes: INLINE_BASE64_LIMIT,
+                fileCount: files.length,
+                files: fileMeta,
+                requestedIncludeBase64: args.includeBase64 === true,
+              },
+              files: fileMeta,
+              omitted: true,
+              inline: false,
+              requiresOutputDir: true,
+              retryable: true,
+              allowOverLimit,
+            }, true);
+          }
+          let saved = files;
+          let savedDir = null;
+          if (args.outputDir) {
+            const stored = await saveProductFiles(files, args.outputDir);
+            saved = stored.files;
+            savedDir = stored.dir;
+          }
+          const overInline = total > INLINE_BASE64_LIMIT;
+          // >128KB 即便显式 includeBase64:true 也不内联；≤128KB 才按请求/默认决定。
+          const inline = !overInline &&
+            (args.includeBase64 === true || (args.includeBase64 !== false && !args.outputDir));
+          const payload = [];
+          for (const f of saved) {
+            const item = {
+              name: f.name, mime: f.mime, size: f.bytes.length,
+              sha256: await sha256Hex(f.bytes),
+              inline,
+              omitted: !inline,
+            };
+            if (f.path) item.path = f.path;
+            if (inline) item.base64 = bytesToB64(f.bytes);
+            payload.push(item);
+          }
+          return json({
+            text,
+            files: payload,
+            inline,
+            omitted: !inline,
+            inlineLimitBytes: INLINE_BASE64_LIMIT,
+            ...(savedDir ? { outputDir: savedDir } : {}),
+            ...(overInline
+              ? { inlineOmittedReason: `产物总大小 ${total} 字节超过内联上限 ${INLINE_BASE64_LIMIT} 字节（128KB），已只落盘不内联。` }
+              : {}),
+            ...(args.includeBase64 === true && !inline
+              ? {
+                  requestedIncludeBase64: true,
+                  includeBase64DeniedReason: overInline ? "超过 128KB 内联上限" : "未满足内联条件",
+                }
+              : {}),
+          });
         }
-        return json({ text, files: payload, ...(args.outputDir ? { outputDir: args.outputDir } : {}) });
+        return wrap(out == null ? "" : String(out));
+      } catch (e) {
+        return json(structuredErrorPayload(e, { allowOverLimit }), true);
       }
-      return wrap(out == null ? "" : String(out));
     }
 
     if (name === "ebctf_read_file") {
       const fs = await nodeFs();
-      const st = await fs.stat(args.path);
+      const safePath = await assertInsideWorkspace(args.path, "path");
+      const st = await fs.stat(safePath);
       if (!st.isFile()) return wrap(`不是文件：${args.path}`, true);
       const limit = Math.max(1, Math.min(Number(args.maxBytes) || 1024 * 1024, 8 * 1024 * 1024));
-      const bytes = new Uint8Array(await fs.readFile(args.path));
+      const bytes = new Uint8Array(await fs.readFile(safePath));
       const slice = bytes.subarray(0, limit);
       const enc = args.encoding || "auto";
       let content = bytesToText(slice, enc);
@@ -417,7 +712,7 @@ export async function callMcpTool(name, args = {}) {
 
     return wrap(`未知工具：${name}`, true);
   } catch (e) {
-    return wrap(`执行出错：${e && e.message ? e.message : e}`, true);
+    return json(structuredErrorPayload(e), true);
   }
 }
 
@@ -578,6 +873,3 @@ export function exportManifest() {
     },
   };
 }
-
-
-

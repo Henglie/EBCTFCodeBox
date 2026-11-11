@@ -213,7 +213,11 @@ export function installRandConfig() {
     _installed = true;
     // 回写必须合并——core 事件只携带 mode/seed/endpoint/auth，
     // 直接整体覆盖会把 UI 专有字段（count/customField/serverOn/mouse）抹掉。
-    onRandConfigChange((next) => { saveRandConfig({ ...loadRandConfig(), ...next }); });
+    // meta.persist=false：op 执行期间的配置切换只改内存，不落盘（UI 手动保存仍走 applyRandConfig）。
+    onRandConfigChange((next, meta) => {
+      if (meta && meta.persist === false) return;
+      saveRandConfig({ ...loadRandConfig(), ...next });
+    });
   }
   return cfg;
 }

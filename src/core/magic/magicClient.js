@@ -4,11 +4,12 @@
  * 职责（产品裁决：真多线程看门狗 + 中断接管）：
  * - 复用**单个** magicWorker，在独立线程跑 magicDecode，主线程零阻塞（倒计时流畅/UI 不冻）。
  * - **中断接管**：新输入 → cancel() 硬杀旧 Worker + 重建 → 旧任务立即消失，历史不堆积不崩。
- * - **流式部分结果**：解码过程中约 150ms 节流回传 partial，onPartial 先渲染，final 到再补全。
+ * - **流式部分结果**：解码过程中按新增候选数节流回传 partial，onPartial 先渲染，final 到再补全。
  * - **进度 / 暂停**：onProgress 五阶段（detect/param/plain/keyed/bfs）；pauseMagic/resumeMagic
  *   在 Worker 走 pause/resume 消息、主线程降级走共享 control 对象，yield 点协作挂起。
  * - **优雅降级**：环境无 Worker / 模块 Worker（老浏览器、file:// 限制）→ 回落主线程
- *   magicDecode（已内建 yield + softDeadline + AbortSignal），功能不减只是不占独立线程。
+ *   magicDecode（已内建确定性 guard/候选预算 + yield + AbortSignal），功能不减只是不占独立线程。
+ *   magic 不按墙钟截止：后台标签页定时器节流不会提前结束或漏候选。
  *
  * 单一实例：模块级单例 Worker，避免每次解码新建（Worker 启动 + 注册表加载有成本）。
  * terminate 后置空，下次 runMagic 惰性重建。
@@ -47,7 +48,9 @@ function spawnWorker() {
 export function cancelMagic() {
   _runSeq++;                              // 作废当前 runId，漏网的旧结果被丢弃
   _pauseRequested = false;
-  if (_worker) {
+  const hadActive = _activeReject !== null;
+  // 无在途任务时保留常驻 Worker：避免重复取消（含 pagehide / 路由清理）反复 terminate+重建。
+  if (hadActive && _worker) {
     try { _worker.terminate(); } catch { /* ignore */ }
     _worker = null;                       // 下次惰性重建（干净线程，无残留任务）
   }

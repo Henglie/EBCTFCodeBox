@@ -30,6 +30,7 @@
  * RAR/非 ZIP/截断边界、base64 文本输入路径）。
  */
 import { register } from "./registry.js";
+import { PRODUCT_INLINE_MAX_BYTES } from "./productResult.js";
 
 // ============ 通用工具（自包含） ============
 
@@ -208,10 +209,14 @@ function zipRepairRun(text, p) {
   lines.push("注意：若清位后解压仍报密码错或数据乱码，说明是真加密（ZipCrypto/AES）而非伪加密——需口令爆破（ZIP 弱口令爆破）而非清位。");
   lines.push("");
   // 产物协议（2026-09-02）：修复后 ZIP 字节走 files 下载按钮（真文件交付），
-  // text 保留原报告与 base64（链式兼容）；未改动路径仍返回 string。
+  // 小档（≤128KB）text 保留 base64 兼容链式；大档只给摘要 + 下载，避免整档塞进报告。
   lines.push("修复后 ZIP 已生成，点击下方按钮直接下载。");
-  lines.push("修复后 base64：");
-  lines.push(bytesToB64(bytes));
+  if (bytes.length <= PRODUCT_INLINE_MAX_BYTES) {
+    lines.push("修复后 base64：");
+    lines.push(bytesToB64(bytes));
+  } else {
+    lines.push(`修复后 base64 已省略（${bytes.length} 字节 > ${PRODUCT_INLINE_MAX_BYTES} 字节内联阈值），请用下方下载按钮获取 out_fixed.zip。`);
+  }
   return {
     text: lines.join("\n"),
     files: [{ name: "out_fixed.zip", mime: "application/zip", bytes }],
@@ -247,10 +252,14 @@ function zipPseudoEncryptRun(text, p) {
   lines.push("说明：伪加密只改标志位、不动数据——解压软件会误报「需要密码」。逆操作用「ZIP 伪加密修复」。");
   lines.push("");
   // 产物协议（2026-09-02）：置位后 ZIP 字节走 files 下载按钮（真文件交付），
-  // text 保留原报告与 base64（链式兼容）；未改动路径仍返回 string。
+  // 小档（≤128KB）text 保留 base64 兼容链式；大档只给摘要 + 下载，避免整档塞进报告。
   lines.push("置位后 ZIP 已生成，点击下方按钮直接下载。");
-  lines.push("置位后 base64：");
-  lines.push(bytesToB64(bytes));
+  if (bytes.length <= PRODUCT_INLINE_MAX_BYTES) {
+    lines.push("置位后 base64：");
+    lines.push(bytesToB64(bytes));
+  } else {
+    lines.push(`置位后 base64 已省略（${bytes.length} 字节 > ${PRODUCT_INLINE_MAX_BYTES} 字节内联阈值），请用下方下载按钮获取 out_pseudo.zip。`);
+  }
   return {
     text: lines.join("\n"),
     files: [{ name: "out_pseudo.zip", mime: "application/zip", bytes }],

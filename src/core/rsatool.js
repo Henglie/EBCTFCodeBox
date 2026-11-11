@@ -26,6 +26,12 @@
 import { register } from "./registry.js";
 import { modInverse, rsaPow } from "./modern.js";
 import { assertUsableRsaExponent } from "./rsaKeyCheck.js";
+import { isProbablePrime, modPow as fastModPow } from "./primeGen.js";
+
+/** 非负底数走共享 Montgomery+窗口快路径；负底数保留 modern.js rsaPow 原语义。 */
+function powFast(base, exp, mod) {
+  return base >= 0n ? fastModPow(base, exp, mod) : rsaPow(base, exp, mod);
+}
 
 // ============================================================
 // 通用数论工具
@@ -106,6 +112,9 @@ function rsaParamsReport(text, p) {
   const qStr = String((p && p.q) || "").trim();
   if (!pStr || !qStr) throw new Error("需在参数框填入 p 和 q（十进制，主输入框不再使用）");
   const pp = BigInt(pStr), qq = BigInt(qStr);
+  if (pp === qq) throw new Error("参数 p 与 q 不能相等（RSA 要求 p≠q，否则 n 为完全平方数）");
+  if (!isProbablePrime(pp)) throw new Error(`参数 p = ${pp} 不是素数（Miller-Rabin 素性检验未通过），拒绝计算 RSA 参数`);
+  if (!isProbablePrime(qq)) throw new Error(`参数 q = ${qq} 不是素数（Miller-Rabin 素性检验未通过），拒绝计算 RSA 参数`);
   const e = assertUsableRsaExponent(BigInt(String((p && p.e) || "65537").trim()));
   const n = pp * qq;
   const phi = (pp - 1n) * (qq - 1n);
@@ -163,7 +172,7 @@ function rsaSmallEReport(text, p) {
   lines.push("");
   if (m !== null) {
     lines.push(`✓ 开根成功: m = ${m}`);
-    lines.push(`校验: m^e = ${m ** e}${n ? " mod n = " + rsaPow(m, e, n) : ""} (应 = c${n ? " mod n" : ""})`);
+    lines.push(`校验: m^e = ${m ** e}${n ? " mod n = " + powFast(m, e, n) : ""} (应 = c${n ? " mod n" : ""})`);
   } else {
     lines.push("✗ 开根失败：c 不是完全 e 次幂（可能 e 不够小，或 m^e 被模 n 截断且超出试探范围）");
   }
@@ -182,9 +191,9 @@ function commonModulusAttack(n, e1, e2, c1, c2) {
  // exp 可正可负；负 → 先求模逆再正幂
     if (exp < 0n) {
       const inv = modInverse(((base % n) + n) % n, n);
-      return rsaPow(inv, -exp, n);
+      return powFast(inv, -exp, n);
     }
-    return rsaPow(((base % n) + n) % n, exp, n);
+    return powFast(((base % n) + n) % n, exp, n);
   };
   const m = (powMod(c1, a) * powMod(c2, b)) % n;
   return { ok: true, m: ((m % n) + n) % n, a, b };
@@ -465,7 +474,7 @@ function rsaModpowReport(text, p) {
   const modStr = String((p && p.mod) || "").trim();
   if (!baseStr || !expStr || !modStr) throw new Error("需在参数框填入 base、exp、mod（十进制，主输入框不再使用）");
   const base = BigInt(baseStr), exp = BigInt(expStr), mod = BigInt(modStr);
-  const r = rsaPow(base, exp, mod);
+  const r = powFast(base, exp, mod);
   const lines = [];
   lines.push("=== 大数快速幂 ===");
   lines.push(`base = ${base}`);

@@ -378,12 +378,10 @@ function resolveSalt(saltStr, saltEnc) {
   const enc = saltEnc || "auto";
   if (enc === "hex") return hexToBytes(saltStr).subarray(0, 16);
   if (enc === "base64bcrypt") return b64decode(saltStr, 16);
- // auto：22 位纯 bcrypt 字母表 → base64bcrypt；32 位 hex → hex
   const t = saltStr.trim();
-  if (/^[.\/A-Za-z0-9]{22,}$/.test(t)) return b64decode(t, 16);
-  if (/^[0-9a-fA-F]{32}$/.test(t.replace(/[^0-9a-fA-F]/g, ""))) return hexToBytes(t).subarray(0, 16);
- // 兜底：当作 base64bcrypt
-  return b64decode(t, 16);
+  if (/^[0-9a-fA-F]{32}$/.test(t)) return hexToBytes(t);
+  if (/^[.\/A-Za-z0-9]{22}$/.test(t)) return b64decode(t, 16);
+  throw new Error("自动识别盐失败：需 32 位 hex（仅 0-9/A-F）或 22 位 bcrypt Base64（./A-Za-z0-9）");
 }
 
 // 解析完整 hash 串 $2[abxy]$cc$<salt22><hash31>

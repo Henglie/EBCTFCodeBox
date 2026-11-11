@@ -234,9 +234,27 @@ function caesarBoxEncode(text, p) {
   return caesarBoxTranspose(text, (p && Number(p.height)) || 3);
 }
 function caesarBoxDecode(text, p) {
-  const h = (p && Number(p.height)) || 3;
+  const h = Math.max(1, Math.floor((p && Number(p.height)) || 3));
   const s = String(text).replace(/ /g, "");
-  return caesarBoxTranspose(s, Math.ceil(s.length / Math.max(1, h)));
+  if (!s) return "";
+  // 逆运算必须用编码时的列宽 h 重建网格：逐列按“跳过尾部空位”的同一顺序回填，
+  // 再逐行读出。len % h != 0 时转置再转置不是逆运算，旧实现会丢/错字符。
+  const rows = Math.ceil(s.length / h);
+  const grid = Array.from({ length: rows }, () => new Array(h).fill(""));
+  let pos = 0;
+  for (let c = 0; c < h; c++) {
+    for (let r = 0; r < rows; r++) {
+      const idx = r * h + c;
+      if (idx < s.length) grid[r][c] = s[pos++];
+    }
+  }
+  let out = "";
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < h; c++) {
+      if (r * h + c < s.length) out += grid[r][c];
+    }
+  }
+  return out;
 }
 
 // ============ ⑤ 曲路（蛇形）换位 ============

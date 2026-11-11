@@ -42,6 +42,7 @@
  */
 import { OPS, register } from "./registry.js";
 import { bytesToB64 } from "./bytesIo.js";
+import { checkLimit, withLimit, isLimitError } from "./limitGuard.js";
 
 // ============ ITU-R M.1677-1 码表（与 fancy.js id:"morse" 同源，保持一致） ============
 const MORSE = {
@@ -69,8 +70,22 @@ const GLITCH_MS = 2;       // 短于此的游程判为毛刺
 const UNIT_MIN_MS = 3;     // 单位时长合理下界（≈400 WPM）
 const UNIT_MAX_MS = 3000;  // 单位时长合理上界（≈0.4 WPM）
 const SEP_MIN = 0.2;       // 通断分离度下界（低于此判为非通断调制）
+const MAX_WAV_INPUT = 128 * 1024 * 1024;       // WAV 输入字节软阈值
+const MAX_WAV_INPUT_HARD = 512 * 1024 * 1024;  // 确认后的硬上限
+const MAX_WAV_FRAMES = 8 * 1024 * 1024;        // 采样帧软阈值
+const MAX_WAV_FRAMES_HARD = 32 * 1024 * 1024;  // 确认后的硬上限
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function readPreviewMinutes(p) {
+  const v = Number(p && p.previewMinutes);
+  return Number.isFinite(v) && v > 0 ? v : 0;
+}
+
+function fmtMinutes(v) {
+  if (!Number.isFinite(v)) return "?";
+  return String(+v.toFixed(3));
+}
 
 function toU8(x) {
   if (x instanceof Uint8Array) return x;
@@ -85,8 +100,21 @@ function toU8(x) {
 //      单声道到 8 声道（多声道取各声道算术平均，兼容「只在一侧声道」的素材）；
 //      任意采样率；WAVE_FORMAT_EXTENSIBLE(0xFFFE) 取 SubFormat 真实编码。
 // 输出统一归一化 Float64 单声道波形 + 去直流。
-function parseWavPcm(input) {
+function parseWavPcm(input, params) {
   const bytes = toU8(input);
+  let limitParams = params;
+  if (bytes.length > MAX_WAV_INPUT) {
+    checkLimit({
+      scope: "morseWav.inputBytes",
+      actual: bytes.length,
+      soft: MAX_WAV_INPUT,
+      hard: MAX_WAV_INPUT_HARD,
+      params: limitParams,
+      label: "WAV 输入",
+      unit: " 字节",
+    });
+    limitParams = withLimit(limitParams, { _allowLimitOverride: true });
+  }
   const ascii = (i, n) => { let s = ""; for (let k = 0; k < n; k++) s += String.fromCharCode(bytes[i + k]); return s; };
   const u16 = (i) => (bytes[i] | (bytes[i + 1] << 8)) >>> 0;
   const u32 = (i) => (bytes[i] | (bytes[i + 1] << 8) | (bytes[i + 2] << 16) | (bytes[i + 3] * 0x1000000)) >>> 0;
@@ -103,7 +131,7 @@ function parseWavPcm(input) {
       if (tag === 0xFFFE && size >= 40 && d + 26 <= bytes.length) tag = u16(d + 24);
       fmt = { formatTag: tag, channels, sampleRate, bits };
     } else if (id === "data") {
-      data = { offset: d, size: Math.min(size, bytes.length - d) };
+      data = { offset: d, size: Math.min(size, Math.max(0, bytes.length - d)) };
     }
     const adv = size + (size & 1); // RIFF 块按偶数字节对齐
     if (adv <= 0) break;
@@ -124,7 +152,30 @@ function parseWavPcm(input) {
 
   const bps = fmt.bits >> 3;
   const frameBytes = bps * fmt.channels;
-  const frames = Math.floor(data.size / frameBytes);
+  if (!Number.isFinite(frameBytes) || frameBytes <= 0) throw new Error("WAV 帧字节数非法");
+  const totalFrames = Math.floor(data.size / frameBytes);
+  if (!Number.isSafeInteger(totalFrames) || totalFrames < 0) throw new Error("WAV 帧数非法");
+  const previewMinutes = readPreviewMinutes(params);
+  let frames = totalFrames;
+  let previewTruncated = false;
+  if (previewMinutes > 0 && fmt.sampleRate > 0) {
+    const cap = Math.ceil(previewMinutes * 60 * fmt.sampleRate);
+    if (Number.isFinite(cap) && cap < frames) {
+      frames = Math.max(1, cap);
+      previewTruncated = true;
+    }
+  }
+  if (frames > MAX_WAV_FRAMES) {
+    checkLimit({
+      scope: "morseWav.frames",
+      actual: frames,
+      soft: MAX_WAV_FRAMES,
+      hard: MAX_WAV_FRAMES_HARD,
+      params: limitParams,
+      label: "WAV 采样帧",
+      unit: " 帧",
+    });
+  }
   const scale = Math.pow(2, fmt.bits - 1) || 1;
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const ulaw2lin = (u) => {
@@ -159,7 +210,10 @@ function parseWavPcm(input) {
   return {
     sig, sampleRate: fmt.sampleRate, channels: fmt.channels, bits: fmt.bits,
     formatTag: fmt.formatTag, formatName: TAG_NAMES[fmt.formatTag],
-    frames, durationSec: frames / fmt.sampleRate,
+    frames, totalFrames,
+    durationSec: frames / fmt.sampleRate,
+    totalDurationSec: totalFrames / fmt.sampleRate,
+    previewMinutes, previewTruncated,
   };
 }
 
@@ -396,13 +450,16 @@ function morseWavDecode(input, params) {
   try {
     let wav;
     try {
-      wav = parseWavPcm(input);
+      wav = parseWavPcm(input, p);
     } catch (e) {
+      if (isLimitError(e)) throw e;
       return { ok: false, text: "", morse: "", reason: e.message, diag };
     }
     diag.wav = {
       sampleRate: wav.sampleRate, channels: wav.channels, bits: wav.bits,
       formatName: wav.formatName, frames: wav.frames, durationSec: wav.durationSec,
+      totalFrames: wav.totalFrames, totalDurationSec: wav.totalDurationSec,
+      previewMinutes: wav.previewMinutes, previewTruncated: wav.previewTruncated,
     };
     const { sig, sampleRate: sr } = wav;
     if (!sig.length) return { ok: false, text: "", morse: "", reason: "音频无采样数据", diag };
@@ -530,6 +587,7 @@ function morseWavDecode(input, params) {
 
     return { ok: true, text: dec.text, morse, reason: "", diag };
   } catch (e) {
+    if (isLimitError(e)) throw e;
     return { ok: false, text: "", morse: "", reason: "解析异常: " + (e && e.message ? e.message : String(e)), diag };
   }
 }
@@ -542,8 +600,14 @@ function formatMorseWavDiag(res) {
     L.push("摩斯音频解析失败: " + (res.reason || "未知原因"));
   }
   if (d.wav) {
+    const totalDur = Number.isFinite(d.wav.totalDurationSec) ? d.wav.totalDurationSec : d.wav.durationSec;
     L.push("音频: " + d.wav.sampleRate + " Hz / " + d.wav.bits + " bit / " + d.wav.channels + " ch / "
-      + d.wav.formatName + " / " + d.wav.durationSec.toFixed(3) + " s");
+      + d.wav.formatName + " / " + d.wav.durationSec.toFixed(3) + " s"
+      + (totalDur > d.wav.durationSec ? "（原始 " + totalDur.toFixed(3) + " s）" : ""));
+    if (d.wav.previewMinutes > 0) {
+      L.push("预览: 仅分析前 " + fmtMinutes(d.wav.previewMinutes) + " 分钟（原始 " + fmtMinutes(totalDur / 60) + " 分钟）"
+        + (d.wav.previewTruncated ? "，分析帧 " + d.wav.frames + " / " + d.wav.totalFrames : "，未超过总时长"));
+    }
   }
   if (d.timing) L.push("单位时长: " + d.timing.unitMs.toFixed(1) + " ms（≈ " + d.timing.wpm.toFixed(1) + " WPM，来源: " + d.timing.source + "）");
   if (d.counts) {
@@ -838,6 +902,7 @@ register({
     { key: "amp", label: "幅度", type: "number", default: 0.35, placeholder: "0.02-0.95（仅 encode）" },
     { key: "rampMs", label: "升降沿(ms)", type: "number", default: 5, placeholder: "0-50（仅 encode，削「咔哒」声；实际不超过单位时长的 1/4）" },
     { key: "threshold", label: "自适应灵敏度", type: "number", default: 1, placeholder: "0.2-3.0（仅 decode，越小越灵敏）" },
+    { key: "previewMinutes", label: "仅分析前 N 分钟", labelKey: "op.morseWav.param.previewMinutes", type: "number", default: 0, placeholder: "0 = 全量；建议 1-60（长音频只分析前 N 分钟，最小 0）" },
     { key: "followup", label: "附「再解一层」参考", type: "bool", default: true, placeholder: "仅 decode；属展示层，关掉「附加诊断信息」即一并关闭" },
     { key: "diag", label: "附加诊断信息", type: "bool", default: true, placeholder: "仅 decode" },
   ],

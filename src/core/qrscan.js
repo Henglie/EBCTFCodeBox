@@ -50,6 +50,44 @@ import { detectAndSample } from "./symboldetect.js";
 import { decodeFindlessFromGray, decodeFindless, estimateInk, moduleInkConfidence } from "./qrFindless.js";
 import { zxingReadRgba, qrZxingFormatsOf } from "./qrZxing.js";
 import { fixQrText, qrPayloadKind } from "./qrText.js";
+import { checkLimit, withLimit } from "./limitGuard.js";
+
+const IMAGE_PIXELS_SOFT = 16 * 1024 * 1024;
+const IMAGE_PIXELS_HARD = 64 * 1024 * 1024;
+const JPEG_PIXELS_SOFT = 36 * 1024 * 1024;
+const JPEG_PIXELS_HARD = 144 * 1024 * 1024;
+
+function _isJpeg(bytes) {
+  return !!bytes && bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+}
+
+function _budgetOf(jpeg) {
+  return jpeg
+    ? { soft: JPEG_PIXELS_SOFT, hard: JPEG_PIXELS_HARD }
+    : { soft: IMAGE_PIXELS_SOFT, hard: IMAGE_PIXELS_HARD };
+}
+
+function _limitParams(params) {
+  if (params && params.params && typeof params.params === "object") return params.params;
+  if (params && typeof params === "object") return params;
+  const g = globalThis.__ebctfLimitParams;
+  return g && typeof g === "object" ? g : null;
+}
+
+function _checkPixels(pixels, label, params, jpeg = false) {
+  const n = Number(pixels);
+  const b = _budgetOf(jpeg);
+  if (!Number.isFinite(n) || n <= b.soft) return;
+  checkLimit({
+    scope: "qrscan.pixels",
+    actual: n,
+    soft: b.soft,
+    hard: b.hard,
+    params: _limitParams(params),
+    label,
+    unit: " 像素",
+  });
+}
 
 // ============================================================
 // 输入解析：dataURL / base64 / hex / 原始字节 → Uint8Array
@@ -88,10 +126,10 @@ function toBytes(input) {
 // ============================================================
 // 图片 → RGBA
 // ============================================================
-async function bytesToRgba(bytes) {
+async function bytesToRgba(bytes, params = null) {
   // PNG：走项目自带的纯 JS 解码器（Node 与浏览器都能跑）
   if (bytes.length > 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
-    const png = decodePNG(bytes);
+    const png = decodePNG(bytes, { params });
     return { width: png.width, height: png.height, data: png.data };
   }
   // 其他格式：浏览器能力（JPEG / GIF / BMP / WebP 等交给浏览器原生解码）
@@ -99,7 +137,14 @@ async function bytesToRgba(bytes) {
     throw new Error("非 PNG 图片需要浏览器环境解码（当前环境无 createImageBitmap）；请改传 PNG，或转成 PNG 后再试");
   }
   const bmp = await createImageBitmap(new Blob([bytes]));
+  try {
+    _checkPixels(bmp.width * bmp.height, `二维码 canvas ${bmp.width}×${bmp.height}`, params, _isJpeg(bytes));
+  } catch (e) {
+    bmp.close && bmp.close();
+    throw e;
+  }
   if (typeof OffscreenCanvas !== "function") {
+    bmp.close && bmp.close();
     throw new Error("当前环境缺少 OffscreenCanvas，无法取像素");
   }
   const cv = new OffscreenCanvas(bmp.width, bmp.height);
@@ -112,7 +157,8 @@ async function bytesToRgba(bytes) {
 // ============================================================
 // RGBA → 灰度（Rec.601；透明按白底合成，避免透明区被判成暗模块）
 // ============================================================
-function rgbaToGray(data, w, h) {
+function rgbaToGray(data, w, h, params = null, jpeg = false) {
+  _checkPixels(w * h, `二维码灰度 ${w}×${h}`, params, jpeg);
   const gray = new Array(w * h);
   for (let i = 0, j = 0; j < w * h; i += 4, j++) {
     const a = data[i + 3] / 255;
@@ -390,9 +436,14 @@ function scanGrayDiag(gray, w, h, opt = {}) {
 
   // 同一张图的多套二值化结果（用于互证 / 分歧检测 / 兜底）
   const bins = [];
+  const binLimit = {
+    params: opt.params || opt,
+    soft: opt.softPixels,
+    hard: opt.hardPixels,
+  };
   for (const [m, mopt] of METHODS) {
     try {
-      const b = binarize(gray, w, h, m, mopt);
+      const b = binarize(gray, w, h, m, mopt, binLimit);
       bins.push({ m, mopt, bin: b });
       diag.image.bins.push({ method: m + (mopt.window ? `(w${mopt.window})` : mopt.threshold != null ? `(t${mopt.threshold})` : ""), ok: true, threshold: b.threshold });
     } catch (e) {
@@ -850,6 +901,8 @@ function zxingHitToResult(h, n) {
  */
 export async function scanRgba(rgba, w, h, opt = {}) {
   const t0 = Date.now();
+  const jpeg = !!(opt && opt.jpeg);
+  _checkPixels(w * h, `二维码扫描 ${w}×${h}`, opt, jpeg);
   const zxHits = await tryZxing(rgba, w, h, opt);
   if (zxHits) {
     const diag = newDiag(w, h);
@@ -866,17 +919,26 @@ export async function scanRgba(rgba, w, h, opt = {}) {
     diag.legacySkipped = "large-image";
     return { ok: false, result: null, error: "大图跳过 legacy 回退（防卡死）", diag };
   }
-  return scanGrayDiag(rgbaToGray(rgba, w, h), w, h, opt);
+  return scanGrayDiag(rgbaToGray(rgba, w, h, opt, jpeg), w, h, opt);
 }
 
 async function qrScanImage(input, p = {}) {
   const bytes = toBytes(input);
   if (!bytes.length) throw new Error("输入为空");
 
-  const img = await bytesToRgba(bytes);
+  const img = await bytesToRgba(bytes, p);
   if (!img.width || !img.height) throw new Error("图片尺寸无效");
 
-  const r = await scanRgba(img.data, img.width, img.height, { budgetMs: p.budgetMs, formats: p.formats });
+  const jpeg = _isJpeg(bytes);
+  const budget = _budgetOf(jpeg);
+  const r = await scanRgba(img.data, img.width, img.height, {
+    budgetMs: p.budgetMs,
+    formats: p.formats,
+    jpeg,
+    params: withLimit(p, { _allowLimitOverride: true }),
+    softPixels: budget.soft,
+    hardPixels: budget.hard,
+  });
 
   if (p.report) {
     // 报告口径：成/败都返回完整诊断汇总（失败原因不再只留最后一条）

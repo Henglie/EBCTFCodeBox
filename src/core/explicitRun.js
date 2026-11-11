@@ -66,6 +66,8 @@ export const EXPLICIT_RUN_OPS = [
   "argon2", "scrypt", "yescrypt", "lyra2", "balloon", "bcrypt",
   // asym：大结构密钥生成（XMSS 建树默认 >8s 超时；SLH-DSA 超树默认 ~1s）
   "xmssKeyGen", "slhdsaKeyGen",
+  // asym：签名与批量 GCD 亦为重运算（只改执行线程，结果格式不变）
+  "xmssSign", "slhdsaSign", "rsaBatchGcd",
   // crypto：格基 / 预言机 / 分解类重分析（参数给足后秒级到分钟级；LLL / Boneh-Durfee 尤重）
   "lllAttack", "rsaBonehDurfee", "rsaCoppersmith", "rsaLsbOracle",
   "rsaBleichenbacher", "rsaPollard", "rsaPollardPm1",

@@ -135,8 +135,9 @@ async function pbkdf2Sha256(pass, salt, iterations, dkLen) {
 // ============================================================
 async function scrypt(pass, salt, N, r, p, dkLen) {
   // 参数校验（RFC 7914 §2）
-  if (N < 2 || (N & (N - 1)) !== 0) throw new Error("N 须为 >1 的 2 的幂");
-  if (r <= 0 || p <= 0) throw new Error("r, p 须为正整数");
+  if (!Number.isInteger(N) || N < 2 || (N & (N - 1)) !== 0) throw new Error("N 须为 >1 的 2 的幂");
+  if (!Number.isInteger(r) || !Number.isInteger(p) || r <= 0 || p <= 0) throw new Error("r, p 须为正整数");
+  if (!Number.isInteger(dkLen) || dkLen < 1) throw new Error("dkLen 须为正整数");
   if (r * p >= (1 << 30)) throw new Error("r*p 过大（须 < 2^30）");
   const B = await pbkdf2Sha256(pass, salt, 1, p * 128 * r);
   for (let i = 0; i < p; i++) {
@@ -162,6 +163,13 @@ function decodeInput(s, enc) {
   return new TextEncoder().encode(t);
 }
 
+function intParam(value, fallback, name, min) {
+  if (value == null || String(value).trim() === "") return fallback;
+  const n = Number(String(value).trim());
+  if (!Number.isInteger(n) || n < min) throw new Error(`scrypt：${name} 必须为 ≥${min} 的整数（当前 ${value}）`);
+  return n;
+}
+
 async function scryptRun(text, p = {}) {
   const lines = [];
   lines.push("=== scrypt 口令密钥派生（RFC 7914，内存硬化 KDF）===");
@@ -170,14 +178,11 @@ async function scryptRun(text, p = {}) {
   const saltEnc = p.saltEnc || "utf8";
   const pass = decodeInput(text, passEnc);
   const salt = decodeInput(p.salt != null ? p.salt : "", saltEnc);
-  const N = parseInt(p.N, 10) || 16384;
-  const rRaw = p.r != null && String(p.r).trim() !== "" ? String(p.r).trim() : null;
-  const r = rRaw !== null ? parseInt(rRaw, 10) : 8;
-  if (rRaw !== null && (!Number.isInteger(r) || r <= 0)) throw new Error("scrypt：r 必须为正整数");
-  const pp = parseInt(p.p, 10) || 1;
-  const dkLenRaw = p.dkLen != null && String(p.dkLen).trim() !== "" ? String(p.dkLen).trim() : null;
-  const dkLen = dkLenRaw !== null ? parseInt(dkLenRaw, 10) : 32;
-  if (dkLenRaw !== null && (!Number.isInteger(dkLen) || dkLen <= 0)) throw new Error("scrypt：dkLen 必须为正整数");
+  const N = intParam(p.N, 16384, "N", 2);
+  if ((N & (N - 1)) !== 0) throw new Error(`scrypt：N 必须为 >1 的 2 的幂（当前 ${N}）`);
+  const r = intParam(p.r, 8, "r", 1);
+  const pp = intParam(p.p, 1, "p", 1);
+  const dkLen = intParam(p.dkLen, 32, "dkLen", 1);
   lines.push(`口令: ${pass.length} 字节（${passEnc}）`);
   lines.push(`盐:   ${salt.length} 字节（${saltEnc}）`);
   lines.push(`参数: N=${N}, r=${r}, p=${pp}, dkLen=${dkLen}`);
@@ -185,14 +190,10 @@ async function scryptRun(text, p = {}) {
   const memMB = (128 * r * N) / (1024 * 1024);
   lines.push(`预计内存: ~${memMB.toFixed(1)} MB（128·r·N）`);
   lines.push("");
-  try {
-    const dk = await scrypt(pass, salt, N, r, pp, dkLen);
-    lines.push("--- 派生密钥 (Derived Key) ---");
-    lines.push("hex:    " + bytesToHex(dk));
-    lines.push("base64: " + bytesToB64(dk));
-  } catch (e) {
-    lines.push("✗ " + (e.message || String(e)));
-  }
+  const dk = await scrypt(pass, salt, N, r, pp, dkLen);
+  lines.push("--- 派生密钥 (Derived Key) ---");
+  lines.push("hex:    " + bytesToHex(dk));
+  lines.push("base64: " + bytesToB64(dk));
   return lines.join("\n");
 }
 

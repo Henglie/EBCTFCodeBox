@@ -13,6 +13,7 @@
  * 字形→字母映射仍以对照表人工确认为准，不伪造完整解码结果。
  */
 import { decodePNG } from "./stegoPixels.js";
+import { isLimitError } from "./limitGuard.js";
 import { zxingReadRgba } from "./qrZxing.js";
 import { buildModel, classifyGlyph, loadExternalWeights, DEFAULT_TOPK, DESCRIPTOR_VERSION } from "./codeImageModel.js";
 
@@ -57,7 +58,9 @@ export async function bytesToRgba(bytes) {
     try {
       const png = decodePNG(b);
       return { width: png.width, height: png.height, data: png.data };
-    } catch { /* 隔行/异常 PNG 交给浏览器 */ }
+    } catch (e) {
+      if (isLimitError(e)) throw e; /* 隔行/异常 PNG 交给浏览器 */
+    }
   }
   if (typeof createImageBitmap !== "function" && typeof Image === "undefined") {
     throw new Error("非 PNG 图片需要浏览器环境解码；请先转成 PNG");

@@ -77,7 +77,7 @@ export default {
   // ==================== 光栅隐写拆图 ====================
   rasterStego: {
     what:
-      "光栅隐写拆图（rasterStego）——复刻 zbRasterTerminator：把一张图按宽/高的因数 d 和相位 phase " +
+      "光栅隐写拆图（rasterStego）：把一张图按宽/高的因数 d 和相位 phase " +
       "拆成多张「只保留 x % d == phase（或 y % d == phase）」的相位图。隐藏的文字/图案往往只在某一个" +
       "相位上才完整，肉眼直接看原图看不出来。",
     principle:
@@ -134,10 +134,10 @@ export default {
       "源图带 alpha 时默认透明填充；如果拆出来一片黑，试 fillMode=black 或 transparent 对比。",
       "产物多时先看 d 小的（2、3、5、10）；d 越大图越稀疏，文字可能只剩几列。",
       "资源上限是硬限制：`maxImages` 默认 128，`maxTotalPixels` 默认 64M；超限会报 RASTER_LIMIT_*，不会卡死浏览器。",
-      "来源与限制：本项目对拍 49/0；参考实现 `zbCrypto.zbRasterTerminator.py`；本 op 纯 JS、零 DOM。",
+      "来源与限制：本项目对拍 49/0；本 op 纯 JS、零 DOM。",
     ],
     aka: [
-      "光栅隐写", "光栅图拆图", "zbRasterTerminator", "光栅终止器", "相位拆图",
+      "光栅隐写", "光栅图拆图", "光栅终止器", "相位拆图",
       "x/y 相位图", "光栅扫描隐写", "栅格隐写", "raster stego", "raster terminator",
       "phase decomposition", "divisor phase images", "光栅图分离", "列/行相位拆图", "栅格拆图",
     ],

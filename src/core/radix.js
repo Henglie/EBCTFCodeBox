@@ -22,28 +22,51 @@ function parseBigIntRadix(str, base) {
   let body = s;
   if (body[0] === "-") { neg = true; body = body.slice(1); }
   else if (body[0] === "+") body = body.slice(1);
-  let num = 0n;
-  const b = BigInt(base);
-  for (const ch of body) {
-    const v = RADIX_CHARS.indexOf(ch);
-    if (v < 0 || v >= base) throw new Error("字符 '" + ch + "' 不在基数 " + base + " 的字符集中");
-    num = num * b + BigInt(v);
+  if (!body) return 0n;
+  // 逐位校验 + 分块累加：每 K 位用 Number 攒成安全整数块（base^K <= 2^53），
+  // 再以分治合并 BigInt（value = left * base^(K*lenRight) + right），避免逐位乘 BigInt 的 O(n²)。
+  let K = 1, safe = base;
+  while (safe * base <= Number.MAX_SAFE_INTEGER) { safe *= base; K++; }
+  const n = body.length;
+  const vals = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const v = RADIX_CHARS.indexOf(body[i]);
+    if (v < 0 || v >= base) throw new Error("字符 '" + body[i] + "' 不在基数 " + base + " 的字符集中");
+    vals[i] = v;
   }
-  return neg ? -num : num;
+  const pad = (K - (n % K)) % K;
+  const numChunks = (n + pad) / K;
+  let level = [];
+  for (let c = 0; c < numChunks; c++) {
+    let acc = 0;
+    for (let k = 0; k < K; k++) {
+      const pos = c * K + k - pad;
+      const v = pos < 0 ? 0 : vals[pos];
+      acc = acc * base + v;
+    }
+    level.push(BigInt(acc));
+  }
+  const b = BigInt(base);
+  let p = 1n;
+  for (let i = 0; i < K; i++) p *= b;
+  let width = 1;
+  while (width < level.length) width <<= 1;
+  // 用高位零块（左侧）补齐到 2 的幂；补在右侧会当低位块，改变数值。
+  if (level.length < width) level = new Array(width - level.length).fill(0n).concat(level);
+  for (let w = 1; w < width; w <<= 1) {
+    const next = [];
+    for (let i = 0; i < level.length; i += 2) next.push(level[i] * p + level[i + 1]);
+    level = next;
+    p *= p;
+  }
+  return neg ? -level[0] : level[0];
 }
 
+// BigInt.prototype.toString(2..36) 用与 RADIX_CHARS 完全相同的 0-9a-z 数字表，
+// 且由引擎用分治基数转换实现（近线性）；旧实现逐位前插字符串是 O(n²)。
 function bigIntToRadix(num, base) {
-  if (num === 0n) return "0";
-  let neg = false;
-  let n = num;
-  if (n < 0n) { neg = true; n = -n; }
-  const b = BigInt(base);
-  let out = "";
-  while (n > 0n) {
-    out = RADIX_CHARS[Number(n % b)] + out;
-    n /= b;
-  }
-  return (neg ? "-" : "") + out;
+  if (base < 2 || base > 36) throw new Error("进制须在 2-36");
+  return num.toString(base);
 }
 
 function radixConvert(text, fromBase, toBase) {
@@ -373,6 +396,9 @@ function fromCharcodeCc(text, p) {
   return tokens.map((tok) => {
     const n = parseInt(String(tok).trim(), base);
     if (Number.isNaN(n)) throw new Error("无效 charcode: " + tok);
+    if (n < 0 || n > 0x10ffff) {
+      throw new Error("无效 charcode: " + tok + "（" + n + " 超出 Unicode 码位范围 0-0x10FFFF）");
+    }
     return String.fromCodePoint(n);
   }).join("");
 }
@@ -523,7 +549,9 @@ function bcdCcDecode(text, p) {
     const bytes = new TextEncoder().encode(raw);
     for (const b of bytes) { nibbles.push(b >>> 4); nibbles.push(b & 15); }
   }
-  if (!packed) nibbles = nibbles.filter((_, i) => i % 2 === 1);
+  // Nibbles 输入每 4 位就是一个完整数字，不能按 packed=false 的「每字节低半字节」
+  // 口径过滤奇偶位（否则 "0000 0001 0010" 只剩 1，数字丢失）。仅 Bytes/Raw 需要过滤。
+  if (!packed && inFmt !== "Nibbles") nibbles = nibbles.filter((_, i) => i % 2 === 1);
   let sign = "";
   if (signed) {
     const last = nibbles.pop();
@@ -547,12 +575,16 @@ register({
       { value: "legacy", label: "项目旧口径（hex 半字节）" },
       { value: "cc", label: "CyberChef BCD（Scheme/Packed/Signed/格式）" },
     ] },
-    { key: "scheme", label: "Scheme", type: "select", default: "8 4 2 1",
+    { key: "scheme", label: "编码方案", labelKey: "op.bcd.param.scheme", type: "select", default: "8 4 2 1",
       options: Object.keys(BCD_SCHEMES).map((v) => ({ value: v, label: v })) },
-    { key: "packed", label: "Packed", type: "bool", default: true },
-    { key: "signed", label: "Signed", type: "bool", default: false },
-    { key: "ioFormat", label: "Input/Output format", type: "select", default: "Nibbles",
-      options: [{ value: "Nibbles", label: "Nibbles" }, { value: "Bytes", label: "Bytes" }, { value: "Raw", label: "Raw" }] },
+    { key: "packed", label: "压缩存储", labelKey: "op.bcd.param.packed", type: "bool", default: true },
+    { key: "signed", label: "有符号", labelKey: "op.bcd.param.signed", type: "bool", default: false },
+    { key: "ioFormat", label: "输入/输出格式", labelKey: "op.bcd.param.ioFormat", type: "select", default: "Nibbles",
+      options: [
+        { value: "Nibbles", label: "半字节", labelKey: "op.bcd.param.ioFormat.nibbles" },
+        { value: "Bytes", label: "字节", labelKey: "op.bcd.param.ioFormat.bytes" },
+        { value: "Raw", label: "原始字节", labelKey: "op.bcd.param.ioFormat.raw" },
+      ] },
   ],
   encode: (t, p) => (p && p.mode === "cc" ? bcdCcEncode(t, p) : bcdEncode(t, p)),
   decode: (t, p) => (p && p.mode === "cc" ? bcdCcDecode(t, p) : bcdDecode(t, p)),

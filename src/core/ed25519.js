@@ -9,7 +9,8 @@
  *   r = H(prefix || M) mod L；R = r·B。
  *   k = H(R || A || M) mod L；S = (r + k·a) mod L。
  *   签名 = R(32B) || S(32B)。
- * 验签：检查 8·S·B == 8·R + 8·k·A（这里用非批量：S·B == R + k·A）。
+ * 验签：检查 8·S·B == 8·R + 8·k·A（这里用非批量：S·B == R + k·A）；
+ *       并拒绝身份元/小阶公钥与 R（A、R 必须为非中性元且 [L]A=[L]R=O，即落在素数阶子群）。
  *
  * 红线：算法照 RFC 8032，纯 BigInt + 内置纯 JS SHA-512，零外发。core 仅 import registry。
  *       随机私钥用 crypto.getRandomValues。用 RFC 8032 §7.1 官方测试向量验证。
@@ -161,8 +162,25 @@ function decodePoint(bytes) {
   b[31] &= 0x7f;
   const y = decodeLE(b);
   if (y >= P) throw new Error("point y ≥ p");
+  const y2 = mod(y * y);
+  const u = mod(y2 - 1n);
+  const v = mod(D * y2 + 1n);
   const x = recoverX(y, sign);
+  // RFC 8032 §5.1.3：必须满足 x²·v ≡ u (mod p)，且 x=0 时符号位必须为 0
+  if (mod(v * x * x) !== u) throw new Error("点编码非法：x²v ≠ u（不是曲线点）");
+  if (x === 0n && sign === 1n) throw new Error("点编码非法：x=0 且符号位为 1");
   return [x, y, 1n, mod(x * y)];
+}
+
+function isNeutral(Pt) {
+  return mod(Pt[0]) === 0n && mod(Pt[1]) === mod(Pt[2]);
+}
+
+/** 素数阶子群校验：P 非中性元、非小阶点，且 [L]P = O。 */
+function inPrimeSubgroup(Pt) {
+  if (isNeutral(Pt)) return false;
+  if (isNeutral(scalarMul(Pt, 8n))) return false;
+  return isNeutral(scalarMul(Pt, L));
 }
 
 // LE ↔ BigInt
@@ -214,6 +232,8 @@ function verify(pk, msg, sig) {
   if (S >= L) return false;
   let A, R;
   try { A = decodePoint(pk); R = decodePoint(Rbytes); } catch { return false; }
+  // 拒绝身份元/小阶 A 与 R（防止身份元公钥伪造与小子群攻击）
+  if (!inPrimeSubgroup(A) || !inPrimeSubgroup(R)) return false;
   const k = modL(decodeLE(sha512(concat(Rbytes, pk, msg))));
   const sB = scalarMul(B, S);
   const kA = scalarMul(A, k);

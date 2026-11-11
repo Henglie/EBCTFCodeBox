@@ -161,9 +161,9 @@ register({
   desc: "SHA-2 全六档（SHA-512/384/256/224/512-256/512-224）+ Rounds，输出小写 hex；参数与 CyberChef SHA2 对齐。",
   acceptsBytes: true,
   params: [
-    { key: "size", label: "Size", type: "select", default: "512", options: ["512", "384", "256", "224", "512/256", "512/224"] },
-    { key: "rounds256", label: "Rounds（SHA-256 档）", type: "number", default: 64 },
-    { key: "rounds512", label: "Rounds（SHA-512 档）", type: "number", default: 160 },
+    { key: "size", label: "摘要长度", labelKey: "op.sha2.param.size", type: "select", default: "512", options: ["512", "384", "256", "224", "512/256", "512/224"] },
+    { key: "rounds256", label: "轮数（SHA-256 档）", labelKey: "op.sha2.param.rounds256", type: "number", default: 64 },
+    { key: "rounds512", label: "轮数（SHA-512 档）", labelKey: "op.sha2.param.rounds512", type: "number", default: 160 },
   ],
   run: sha2Run,
 });
@@ -317,8 +317,8 @@ register({
   desc: "CyberChef Generate all hashes 对齐：按 CC 同顺序输出 44 个摘要（含 Whirlpool 三变体、GOST、SSDEEP、CTPH），支持 Length (bits) 过滤与 Include names。",
   acceptsBytes: true,
   params: [
-    { key: "length", label: "Length (bits)", type: "select", default: "All", options: ALL_LENGTHS },
-    { key: "includeNames", label: "Include names", type: "bool", default: true },
+    { key: "length", label: "长度（位）", labelKey: "op.generateAllHashes.param.length", type: "select", default: "All", options: ALL_LENGTHS },
+    { key: "includeNames", label: "包含名称", labelKey: "op.generateAllHashes.param.includeNames", type: "bool", default: true },
   ],
   run: generateAllHashesRun,
 });

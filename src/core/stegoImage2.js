@@ -18,7 +18,6 @@
  */
 import { register } from "./registry.js";
 import { encodePNG } from "./mcMap.js";
-import { streamCompress } from "./compress.js";
 import { inflateRaw } from "./pcapDeep.js";
 import { pngChunkRawExport } from "./pngChunks.js";
 
@@ -179,15 +178,28 @@ function inflateZlibLocal(zb) {
 }
 
 // 可打印 ASCII 串（≥min 个连续字符）：暴露伪造块 / 尾部附加数据里的明文片段。
-function pngAsciiRuns(bytes, min = 4) {
+// 报告用途，总输出上限 maxTotal，避免大 base64/尾部数据整段灌进文本区。
+function pngAsciiRuns(bytes, min = 4, maxTotal = 2048) {
   const out = [];
-  let cur = "";
+  let cur = "", total = 0;
+  const flush = () => {
+    if (cur.length >= min && total < maxTotal) {
+      const room = maxTotal - total;
+      const s = cur.length > room ? cur.slice(0, room) : cur;
+      out.push(s);
+      total += s.length;
+    }
+    cur = "";
+  };
   for (let i = 0; i < bytes.length; i++) {
     const c = bytes[i];
-    if (c >= 0x20 && c < 0x7F) cur += String.fromCharCode(c);
-    else { if (cur.length >= min) out.push(cur); cur = ""; }
+    if (c >= 0x20 && c < 0x7F) {
+      if (total + cur.length >= maxTotal) { flush(); break; }
+      cur += String.fromCharCode(c);
+    } else flush();
+    if (total >= maxTotal) break;
   }
-  if (cur.length >= min) out.push(cur);
+  flush();
   return out;
 }
 function pngFindSeq(bytes, str) {
@@ -371,30 +383,29 @@ function pngChunkListRun(text, p) {
   const hasIccp = chunks.some((c) => c.type === "iCCP");
   if (hasIccp) lines.push("", "⚠ 检测到 iCCP chunk（ICC profile），可用 iccStrip op 剥离");
 
- // 原块/PLTE/索引流导出（p.exportRaw）：raw = 长度+类型+数据+CRC 整块原字节
-  if (p && p.exportRaw) {
-    const files = [];
-    chunks.forEach((c, i) => {
-      const totalLen = Math.min(c.len + 12, bytes.length - c.totalOff);
-      if (totalLen > 0) files.push({ name: `chunk_${String(i).padStart(2, "0")}_${c.type}.bin`, mime: "application/octet-stream", bytes: bytes.slice(c.totalOff, c.totalOff + totalLen) });
-    });
-    const plteC = chunks.find((c) => c.type === "PLTE");
-    if (plteC) {
-      lines.push("", `导出: PLTE ${Math.floor(plteC.len / 3)} 项（${plteC.len} 字节）`);
-      files.push({ name: "PLTE.bin", mime: "application/octet-stream", bytes: bytes.slice(plteC.dataOff, plteC.dataOff + plteC.len) });
+  // 原块/PLTE/索引流导出（p.exportRaw）：raw = 长度+类型+数据+CRC 整块原字节。
+  // 报告与导出分离：默认只输出文本报告；只有用户显式勾选 exportRaw 才走原块导出，
+  // 且预算在 pngChunkRawExport 内先于任何 slice 完成，报告文本不携带 base64。
+  if (p && (p.exportRaw === true || p.exportRaw === 1 || p.exportRaw === "1" || p.exportRaw === "true")) {
+    const rx = pngChunkRawExport(bytes, p);
+    const files = (rx.chunks || []).map((c, i) => ({
+      name: `chunk_${String(i).padStart(2, "0")}_${c.type}.bin`,
+      mime: "application/octet-stream",
+      bytes: c.raw,
+    }));
+    const rawTotal = (rx.chunks || []).reduce((n, c) => n + c.raw.length, 0);
+    lines.push("", `导出: 原块 ${files.length} 个，共 ${rawTotal} 字节（逐块文件见下载）`);
+    if (rx.plte) {
+      lines.push("", `导出: PLTE ${rx.plte.count} 项（${rx.plte.bytes.length} 字节）`);
+      files.push({ name: "PLTE.bin", mime: "application/octet-stream", bytes: rx.plte.bytes });
     }
-   // 调色板图附加索引位流（unfilter 后逐行打包索引；色彩类型 3 专有）
-    try {
-      const rx = pngChunkRawExport(bytes);
-      if (rx && rx.indexStream) {
-        lines.push(`导出: 索引位流 ${rx.indexStream.length} 字节（${rx.ihdr.width}×${rx.ihdr.height}，bitDepth=${rx.ihdr.bitDepth}）`);
-        files.push({ name: "index_stream.bin", mime: "application/octet-stream", bytes: rx.indexStream });
-      } else if (rx && rx.indexError) {
-        lines.push(`⚠ 索引位流导出失败: ${rx.indexError}`);
-      }
-    } catch (e) {
-      lines.push(`⚠ 索引位流导出失败: ${(e && e.message) || e}`);
+    if (rx.indexStream) {
+      lines.push(`导出: 索引位流 ${rx.indexStream.length} 字节（${rx.ihdr.width}×${rx.ihdr.height}，bitDepth=${rx.ihdr.bitDepth}）`);
+      files.push({ name: "index_stream.bin", mime: "application/octet-stream", bytes: rx.indexStream });
+    } else if (rx.indexError) {
+      lines.push(`⚠ 索引位流导出失败: ${rx.indexError}`);
     }
+    if (rx.exportTruncated) lines.push("⚠ 导出块数达到硬上限，已截断");
     return { text: lines.join("\n"), files };
   }
 
@@ -758,6 +769,68 @@ function gifLzwDecode(data, minCodeSize, expectedPixels) {
   return out;
 }
 
+function frameImageData(rgba, width, height) {
+  const data = rgba instanceof Uint8ClampedArray
+    ? rgba
+    : new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, rgba.byteLength);
+  return new ImageData(data, width, height);
+}
+
+async function blobToBytes(blob) {
+  if (blob && typeof blob.arrayBuffer === "function") return new Uint8Array(await blob.arrayBuffer());
+  if (typeof FileReader === "function") {
+    return await new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(new Uint8Array(fr.result));
+      fr.onerror = () => reject(fr.error || new Error("Blob 读取失败"));
+      fr.readAsArrayBuffer(blob);
+    });
+  }
+  throw new Error("Blob 读取不可用");
+}
+
+/**
+ * 逐帧 PNG 编码：浏览器优先 OffscreenCanvas（可 Worker），其次 DOM canvas.toBlob；
+ * Node 或无 canvas 环境回退 encodePNG 的 stored deflate，保证功能可用。
+ */
+async function encodeFramePNG(rgba, width, height) {
+  if (typeof OffscreenCanvas === "function") {
+    try {
+      const off = new OffscreenCanvas(width, height);
+      const ctx = off.getContext("2d");
+      if (ctx && typeof ImageData === "function") {
+        ctx.putImageData(frameImageData(rgba, width, height), 0, 0);
+        let blob = null;
+        if (typeof off.convertToBlob === "function") {
+          blob = await off.convertToBlob({ type: "image/png" });
+        } else if (typeof off.toBlob === "function") {
+          blob = await new Promise((resolve, reject) => {
+            off.toBlob((b) => (b ? resolve(b) : reject(new Error("OffscreenCanvas.toBlob 返回空"))), "image/png");
+          });
+        }
+        if (blob && blob.size) return await blobToBytes(blob);
+      }
+    } catch { /* 浏览器编码失败：继续尝试 DOM canvas / stored PNG */ }
+  }
+  if (typeof document !== "undefined" && typeof document.createElement === "function") {
+    try {
+      const cv = document.createElement("canvas");
+      cv.width = width;
+      cv.height = height;
+      const ctx = cv.getContext("2d");
+      if (ctx && typeof ImageData === "function" && typeof cv.toBlob === "function") {
+        ctx.putImageData(frameImageData(rgba, width, height), 0, 0);
+        const blob = await new Promise((resolve, reject) => {
+          cv.toBlob((b) => (b ? resolve(b) : reject(new Error("canvas.toBlob 返回空"))), "image/png");
+        });
+        if (blob && blob.size) return await blobToBytes(blob);
+      }
+    } catch { /* 回退 stored PNG */ }
+  }
+  const png = await encodePNG(rgba, width, height);
+  return png instanceof Uint8Array ? png : new Uint8Array(png);
+}
+
 /** GIF 交错扫描（4 pass）的物理行号序列，与图像数据里的行顺序一一对应。 */
 function interlaceRowOrder(h) {
   const rows = [];
@@ -827,7 +900,6 @@ async function extractGifFrames(text, p, checkCurrent) {
   const frames = [];
   const frameEntries = [];
   let packBytes = 0, totalPixels = 0, reachedTrailer = false, userLimited = false;
-  const deadline = Date.now() + 30000;
   let pendingDelay = 0;
   let pendingDispose = 0;
   let pendingTransIdx = -1;
@@ -845,7 +917,7 @@ async function extractGifFrames(text, p, checkCurrent) {
       const w = readU16le(bytes, pos + 5);
       const h = readU16le(bytes, pos + 7);
       totalPixels += Math.max(w * h, screenW * screenH);
-      if (!w || !h || w * h > 4194304 || totalPixels > 536870912 || Date.now() > deadline) throw new Error("GIF帧尺寸、累计536870912像素或30秒处理预算超限，未生成ZIP");
+      if (!w || !h || w * h > 4194304 || totalPixels > 536870912) throw new Error("GIF帧尺寸或累计536870912像素预算超限，未生成ZIP");
       const lctPacked = bytes[pos + 9];
       const lctFlag = (lctPacked & 0x80) !== 0;
       const interlace = (lctPacked & 0x40) !== 0;
@@ -891,13 +963,13 @@ async function extractGifFrames(text, p, checkCurrent) {
               canvas[co + 3] = 255;
             }
           }
-          const png = await encodePNG(canvas, screenW, screenH, raw => streamCompress("deflate", raw));
+          const png = await encodeFramePNG(canvas, screenW, screenH);
           checkCurrent();
           if (packBytes + png.length > GIF_PACK_BYTES_MAX) throw new Error("GIF ZIP预算超过128MiB，未生成不完整包");
           packBytes += png.length;
           frameEntries.push({ name: `frame_${String(frames.length + 1).padStart(3, "0")}.png`, bytes: png });
           rendered = true;
-          await new Promise(resolve => setTimeout(resolve, 0));
+          await new Promise(resolve => queueMicrotask(resolve));
         } catch (e) {
           throw new Error(`GIF第${frames.length + 1}帧失败，未生成ZIP：${e.message}`);
         }
@@ -1132,7 +1204,7 @@ register({
 
 register({
   id: "gifFrames", family: "gif", familyLabel: "frames", cat: "image", name: "GIF 多帧提取",
-  desc: "逐帧解码合成并压缩为 PNG，单 ZIP 下载；默认全部帧，受4096帧/128MiB ZIP及像素、时间预算约束，失败不交付不完整包",
+  desc: "逐帧解码合成并编码为 PNG，单 ZIP 下载；默认全部帧，受4096帧/128MiB ZIP及像素上限约束，失败不交付不完整包",
   params: [{ key: "maxFrames", label: "仅导出前N帧（0=全部，最大4096）", type: "number", default: 0 }],
   run: gifFramesRun,
   acceptsBytes: true,

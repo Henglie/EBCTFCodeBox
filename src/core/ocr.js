@@ -312,8 +312,8 @@ export const OCR_OP = {
   params: [
     { key: "lang", label: "识别语言", type: "select", default: "eng", options: OCR_LANG_LABELS },
     { key: "showConfidence", label: "显示置信度", type: "bool", default: true },
-    { key: "oem", label: "OCR Engine Mode", type: "select", default: "LSTM only", options: [
-      { value: "LSTM only", label: "LSTM only" },
+    { key: "oem", label: "OCR 引擎模式", labelKey: "op.ocr.param.oem", type: "select", default: "LSTM only", options: [
+      { value: "LSTM only", label: "仅 LSTM", labelKey: "op.ocr.param.oem.lstmOnly" },
     ] },
   ],
   run,

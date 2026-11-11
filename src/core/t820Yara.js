@@ -41,13 +41,13 @@ register({
   acceptsBytes: true,
   desc: "用 YARA 规则匹配字节：支持文本/十六进制/正则模式、meta 与 console 模块；报告格式与 CyberChef「YARA Rules」一致",
   params: [
-    { key: "rules", label: "Rules", type: "textarea", default: "", rows: 5, placeholder: "rule demo { strings: $a = \"flag\" condition: $a }" },
-    { key: "showStrings", label: "Show strings", type: "bool", default: false },
-    { key: "showLengths", label: "Show string lengths", type: "bool", default: false },
-    { key: "showMeta", label: "Show metadata", type: "bool", default: false },
-    { key: "showCounts", label: "Show counts", type: "bool", default: true },
-    { key: "showRuleWarns", label: "Show rule warnings", type: "bool", default: true },
-    { key: "showConsole", label: "Show console module messages", type: "bool", default: true },
+    { key: "rules", label: "规则", labelKey: "op.yaraScan.param.rules", type: "textarea", default: "", rows: 5, placeholder: "rule demo { strings: $a = \"flag\" condition: $a }" },
+    { key: "showStrings", label: "显示匹配串", labelKey: "op.yaraScan.param.showStrings", type: "bool", default: false },
+    { key: "showLengths", label: "显示匹配串长度", labelKey: "op.yaraScan.param.showLengths", type: "bool", default: false },
+    { key: "showMeta", label: "显示元数据", labelKey: "op.yaraScan.param.showMeta", type: "bool", default: false },
+    { key: "showCounts", label: "显示匹配次数", labelKey: "op.yaraScan.param.showCounts", type: "bool", default: true },
+    { key: "showRuleWarns", label: "显示规则告警", labelKey: "op.yaraScan.param.showRuleWarns", type: "bool", default: true },
+    { key: "showConsole", label: "显示 console 模块消息", labelKey: "op.yaraScan.param.showConsole", type: "bool", default: true },
   ],
   async run(text, p) {
     const rules = String(p.rules == null ? "" : p.rules);

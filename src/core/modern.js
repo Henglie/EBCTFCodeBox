@@ -338,7 +338,7 @@ function concatBytes(...arrs) {
 const AES_SBOX = new Uint8Array(256);
 const AES_INV_SBOX = new Uint8Array(256);
 const AES_RCON = new Uint8Array([0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d]);
-// GF(2^8) 乘法
+// GF(2^8) 乘法（仅用于建表/密钥扩展）
 function gmul(a, b) {
   let p = 0;
   for (let i = 0; i < 8 && a && b; i++) {
@@ -350,7 +350,12 @@ function gmul(a, b) {
   }
   return p;
 }
-// 运行时生成 S-box（避免手抄 256 项出错，算法源自 FIPS-197 §5.1.1）
+// 运行时生成 S-box + 32 位 T 表（FIPS-197 §5）
+const AES_TE0 = new Uint32Array(256), AES_TE1 = new Uint32Array(256);
+const AES_TE2 = new Uint32Array(256), AES_TE3 = new Uint32Array(256);
+const AES_TD0 = new Uint32Array(256), AES_TD1 = new Uint32Array(256);
+const AES_TD2 = new Uint32Array(256), AES_TD3 = new Uint32Array(256);
+const rotr32 = (x, n) => ((x >>> n) | (x << (32 - n))) >>> 0;
 (function initSbox() {
  // 乘法逆元表
   const inv = new Uint8Array(256);
@@ -365,95 +370,208 @@ function gmul(a, b) {
     AES_SBOX[i] = s;
     AES_INV_SBOX[s] = i;
   }
+  for (let i = 0; i < 256; i++) {
+    const s = AES_SBOX[i];
+    const s2 = gmul(s, 2), s3 = s2 ^ s;
+    AES_TE0[i] = ((s2 << 24) | (s << 16) | (s << 8) | s3) >>> 0;
+    AES_TE1[i] = rotr32(AES_TE0[i], 8);
+    AES_TE2[i] = rotr32(AES_TE1[i], 8);
+    AES_TE3[i] = rotr32(AES_TE2[i], 8);
+    const si = AES_INV_SBOX[i];
+    const m9 = gmul(si, 9), m11 = gmul(si, 11), m13 = gmul(si, 13), m14 = gmul(si, 14);
+    AES_TD0[i] = ((m14 << 24) | (m9 << 16) | (m13 << 8) | m11) >>> 0;
+    AES_TD1[i] = rotr32(AES_TD0[i], 8);
+    AES_TD2[i] = rotr32(AES_TD1[i], 8);
+    AES_TD3[i] = rotr32(AES_TD2[i], 8);
+  }
 })();
+
+const loadBE32 = (b, o) => ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
 
 function aesKeyExpansion(key) {
   const Nk = key.length / 4;
   if (![4, 6, 8].includes(Nk)) throw new Error("AES 密钥须为 16/24/32 字节");
   const Nr = Nk + 6;
-  const w = new Uint8Array(16 * (Nr + 1));
-  w.set(key);
+  const words = 4 * (Nr + 1);
+  const rk = new Uint32Array(words);
+  for (let i = 0; i < Nk; i++) rk[i] = loadBE32(key, i * 4);
   let rcon = 0;
-  for (let i = Nk; i < 4 * (Nr + 1); i++) {
-    const t = [w[(i - 1) * 4], w[(i - 1) * 4 + 1], w[(i - 1) * 4 + 2], w[(i - 1) * 4 + 3]];
+  for (let i = Nk; i < words; i++) {
+    let t = rk[i - 1];
     if (i % Nk === 0) {
  // RotWord + SubWord + Rcon
-      const tmp = t[0]; t[0] = t[1]; t[1] = t[2]; t[2] = t[3]; t[3] = tmp;
-      for (let k = 0; k < 4; k++) t[k] = AES_SBOX[t[k]];
-      t[0] ^= AES_RCON[rcon++];
+      t = ((AES_SBOX[(t >>> 16) & 0xff] << 24) | (AES_SBOX[(t >>> 8) & 0xff] << 16) |
+        (AES_SBOX[t & 0xff] << 8) | AES_SBOX[(t >>> 24) & 0xff]) ^ (AES_RCON[rcon++] << 24);
     } else if (Nk > 6 && i % Nk === 4) {
-      for (let k = 0; k < 4; k++) t[k] = AES_SBOX[t[k]];
+      t = (AES_SBOX[(t >>> 24) & 0xff] << 24) | (AES_SBOX[(t >>> 16) & 0xff] << 16) |
+        (AES_SBOX[(t >>> 8) & 0xff] << 8) | AES_SBOX[t & 0xff];
     }
-    for (let k = 0; k < 4; k++) w[i * 4 + k] = w[(i - Nk) * 4 + k] ^ t[k];
+    rk[i] = (rk[i - Nk] ^ t) >>> 0;
   }
-  return { w, Nr };
+  return { rk, Nr };
 }
 
-function aesEncryptBlock(input, w, Nr) {
-  const s = new Uint8Array(input.subarray(0, 16));
-  addRoundKey(s, w, 0);
-  for (let round = 1; round < Nr; round++) {
-    subBytes(s, AES_SBOX);
-    shiftRows(s);
-    mixColumns(s);
-    addRoundKey(s, w, round);
+// 单块加密/解密：直接写入 out，无中间数组。state 按列 4×32 位大端字。
+function aesEncInto(inp, inOff, out, outOff, rk, Nr) {
+  let s0 = (loadBE32(inp, inOff) ^ rk[0]) >>> 0;
+  let s1 = (loadBE32(inp, inOff + 4) ^ rk[1]) >>> 0;
+  let s2 = (loadBE32(inp, inOff + 8) ^ rk[2]) >>> 0;
+  let s3 = (loadBE32(inp, inOff + 12) ^ rk[3]) >>> 0;
+  for (let r = 1; r < Nr; r++) {
+    const k = r << 2;
+    const t0 = (AES_TE0[s0 >>> 24] ^ AES_TE1[(s1 >>> 16) & 0xff] ^ AES_TE2[(s2 >>> 8) & 0xff] ^ AES_TE3[s3 & 0xff] ^ rk[k]) >>> 0;
+    const t1 = (AES_TE0[s1 >>> 24] ^ AES_TE1[(s2 >>> 16) & 0xff] ^ AES_TE2[(s3 >>> 8) & 0xff] ^ AES_TE3[s0 & 0xff] ^ rk[k + 1]) >>> 0;
+    const t2 = (AES_TE0[s2 >>> 24] ^ AES_TE1[(s3 >>> 16) & 0xff] ^ AES_TE2[(s0 >>> 8) & 0xff] ^ AES_TE3[s1 & 0xff] ^ rk[k + 2]) >>> 0;
+    const t3 = (AES_TE0[s3 >>> 24] ^ AES_TE1[(s0 >>> 16) & 0xff] ^ AES_TE2[(s1 >>> 8) & 0xff] ^ AES_TE3[s2 & 0xff] ^ rk[k + 3]) >>> 0;
+    s0 = t0; s1 = t1; s2 = t2; s3 = t3;
   }
-  subBytes(s, AES_SBOX);
-  shiftRows(s);
-  addRoundKey(s, w, Nr);
-  return s;
+  const kf = Nr << 2;
+  const t0 = (((AES_SBOX[s0 >>> 24] << 24) | (AES_SBOX[(s1 >>> 16) & 0xff] << 16) | (AES_SBOX[(s2 >>> 8) & 0xff] << 8) | AES_SBOX[s3 & 0xff]) ^ rk[kf]) >>> 0;
+  const t1 = (((AES_SBOX[s1 >>> 24] << 24) | (AES_SBOX[(s2 >>> 16) & 0xff] << 16) | (AES_SBOX[(s3 >>> 8) & 0xff] << 8) | AES_SBOX[s0 & 0xff]) ^ rk[kf + 1]) >>> 0;
+  const t2 = (((AES_SBOX[s2 >>> 24] << 24) | (AES_SBOX[(s3 >>> 16) & 0xff] << 16) | (AES_SBOX[(s0 >>> 8) & 0xff] << 8) | AES_SBOX[s1 & 0xff]) ^ rk[kf + 2]) >>> 0;
+  const t3 = (((AES_SBOX[s3 >>> 24] << 24) | (AES_SBOX[(s0 >>> 16) & 0xff] << 16) | (AES_SBOX[(s1 >>> 8) & 0xff] << 8) | AES_SBOX[s2 & 0xff]) ^ rk[kf + 3]) >>> 0;
+  out[outOff] = t0 >>> 24; out[outOff + 1] = (t0 >>> 16) & 0xff; out[outOff + 2] = (t0 >>> 8) & 0xff; out[outOff + 3] = t0 & 0xff;
+  out[outOff + 4] = t1 >>> 24; out[outOff + 5] = (t1 >>> 16) & 0xff; out[outOff + 6] = (t1 >>> 8) & 0xff; out[outOff + 7] = t1 & 0xff;
+  out[outOff + 8] = t2 >>> 24; out[outOff + 9] = (t2 >>> 16) & 0xff; out[outOff + 10] = (t2 >>> 8) & 0xff; out[outOff + 11] = t2 & 0xff;
+  out[outOff + 12] = t3 >>> 24; out[outOff + 13] = (t3 >>> 16) & 0xff; out[outOff + 14] = (t3 >>> 8) & 0xff; out[outOff + 15] = t3 & 0xff;
 }
-function aesDecryptBlock(input, w, Nr) {
-  const s = new Uint8Array(input.subarray(0, 16));
-  addRoundKey(s, w, Nr);
-  for (let round = Nr - 1; round > 0; round--) {
-    invShiftRows(s);
-    subBytes(s, AES_INV_SBOX);
-    addRoundKey(s, w, round);
-    invMixColumns(s);
+
+function aesDecInto(inp, inOff, out, outOff, rk, Nr) {
+  const kf = Nr << 2;
+  let s0 = (loadBE32(inp, inOff) ^ rk[kf]) >>> 0;
+  let s1 = (loadBE32(inp, inOff + 4) ^ rk[kf + 1]) >>> 0;
+  let s2 = (loadBE32(inp, inOff + 8) ^ rk[kf + 2]) >>> 0;
+  let s3 = (loadBE32(inp, inOff + 12) ^ rk[kf + 3]) >>> 0;
+  for (let r = Nr - 1; r > 0; r--) {
+    const k = r << 2;
+    const t0 = (AES_TD0[s0 >>> 24] ^ AES_TD1[(s3 >>> 16) & 0xff] ^ AES_TD2[(s2 >>> 8) & 0xff] ^ AES_TD3[s1 & 0xff] ^ rk[k]) >>> 0;
+    const t1 = (AES_TD0[s1 >>> 24] ^ AES_TD1[(s0 >>> 16) & 0xff] ^ AES_TD2[(s3 >>> 8) & 0xff] ^ AES_TD3[s2 & 0xff] ^ rk[k + 1]) >>> 0;
+    const t2 = (AES_TD0[s2 >>> 24] ^ AES_TD1[(s1 >>> 16) & 0xff] ^ AES_TD2[(s0 >>> 8) & 0xff] ^ AES_TD3[s3 & 0xff] ^ rk[k + 2]) >>> 0;
+    const t3 = (AES_TD0[s3 >>> 24] ^ AES_TD1[(s2 >>> 16) & 0xff] ^ AES_TD2[(s1 >>> 8) & 0xff] ^ AES_TD3[s0 & 0xff] ^ rk[k + 3]) >>> 0;
+    s0 = t0; s1 = t1; s2 = t2; s3 = t3;
   }
-  invShiftRows(s);
-  subBytes(s, AES_INV_SBOX);
-  addRoundKey(s, w, 0);
-  return s;
+  const t0 = (((AES_INV_SBOX[s0 >>> 24] << 24) | (AES_INV_SBOX[(s3 >>> 16) & 0xff] << 16) | (AES_INV_SBOX[(s2 >>> 8) & 0xff] << 8) | AES_INV_SBOX[s1 & 0xff]) ^ rk[0]) >>> 0;
+  const t1 = (((AES_INV_SBOX[s1 >>> 24] << 24) | (AES_INV_SBOX[(s0 >>> 16) & 0xff] << 16) | (AES_INV_SBOX[(s3 >>> 8) & 0xff] << 8) | AES_INV_SBOX[s2 & 0xff]) ^ rk[1]) >>> 0;
+  const t2 = (((AES_INV_SBOX[s2 >>> 24] << 24) | (AES_INV_SBOX[(s1 >>> 16) & 0xff] << 16) | (AES_INV_SBOX[(s0 >>> 8) & 0xff] << 8) | AES_INV_SBOX[s3 & 0xff]) ^ rk[2]) >>> 0;
+  const t3 = (((AES_INV_SBOX[s3 >>> 24] << 24) | (AES_INV_SBOX[(s2 >>> 16) & 0xff] << 16) | (AES_INV_SBOX[(s1 >>> 8) & 0xff] << 8) | AES_INV_SBOX[s0 & 0xff]) ^ rk[3]) >>> 0;
+  out[outOff] = t0 >>> 24; out[outOff + 1] = (t0 >>> 16) & 0xff; out[outOff + 2] = (t0 >>> 8) & 0xff; out[outOff + 3] = t0 & 0xff;
+  out[outOff + 4] = t1 >>> 24; out[outOff + 5] = (t1 >>> 16) & 0xff; out[outOff + 6] = (t1 >>> 8) & 0xff; out[outOff + 7] = t1 & 0xff;
+  out[outOff + 8] = t2 >>> 24; out[outOff + 9] = (t2 >>> 16) & 0xff; out[outOff + 10] = (t2 >>> 8) & 0xff; out[outOff + 11] = t2 & 0xff;
+  out[outOff + 12] = t3 >>> 24; out[outOff + 13] = (t3 >>> 16) & 0xff; out[outOff + 14] = (t3 >>> 8) & 0xff; out[outOff + 15] = t3 & 0xff;
 }
-function addRoundKey(s, w, round) {
-  const o = round * 16;
-  for (let i = 0; i < 16; i++) s[i] ^= w[o + i];
-}
-function subBytes(s, box) { for (let i = 0; i < 16; i++) s[i] = box[s[i]]; }
-// state 按列主序存（s[col*4+row]）
-function shiftRows(s) {
-  const t = s.slice();
-  for (let r = 1; r < 4; r++) {
-    for (let c = 0; c < 4; c++) s[c * 4 + r] = t[((c + r) % 4) * 4 + r];
+
+// 等价逆密码需要 InvMixColumns(轮密钥)，仅中间轮
+function buildDecRk(rk, Nr) {
+  const dk = new Uint32Array(rk.length);
+  dk.set(rk);
+  for (let r = 1; r < Nr; r++) {
+    const o = r << 2;
+    for (let i = 0; i < 4; i++) {
+      const w = rk[o + i];
+      const a0 = (w >>> 24) & 0xff, a1 = (w >>> 16) & 0xff, a2 = (w >>> 8) & 0xff, a3 = w & 0xff;
+      dk[o + i] = (((gmul(a0, 14) ^ gmul(a1, 11) ^ gmul(a2, 13) ^ gmul(a3, 9)) << 24) |
+        ((gmul(a0, 9) ^ gmul(a1, 14) ^ gmul(a2, 11) ^ gmul(a3, 13)) << 16) |
+        ((gmul(a0, 13) ^ gmul(a1, 9) ^ gmul(a2, 14) ^ gmul(a3, 11)) << 8) |
+        (gmul(a0, 11) ^ gmul(a1, 13) ^ gmul(a2, 9) ^ gmul(a3, 14))) >>> 0;
+    }
   }
+  return dk;
 }
-function invShiftRows(s) {
-  const t = s.slice();
-  for (let r = 1; r < 4; r++) {
-    for (let c = 0; c < 4; c++) s[c * 4 + r] = t[((c - r + 4) % 4) * 4 + r];
-  }
+
+function aesEncryptBlock(input, rk, Nr) {
+  const out = new Uint8Array(16);
+  aesEncInto(input, 0, out, 0, rk, Nr);
+  return out;
 }
-function mixColumns(s) {
-  for (let c = 0; c < 4; c++) {
-    const o = c * 4;
-    const a0 = s[o], a1 = s[o + 1], a2 = s[o + 2], a3 = s[o + 3];
-    s[o] = gmul(a0, 2) ^ gmul(a1, 3) ^ a2 ^ a3;
-    s[o + 1] = a0 ^ gmul(a1, 2) ^ gmul(a2, 3) ^ a3;
-    s[o + 2] = a0 ^ a1 ^ gmul(a2, 2) ^ gmul(a3, 3);
-    s[o + 3] = gmul(a0, 3) ^ a1 ^ a2 ^ gmul(a3, 2);
-  }
+function aesDecryptBlock(input, dk, Nr) {
+  const out = new Uint8Array(16);
+  aesDecInto(input, 0, out, 0, dk, Nr);
+  return out;
 }
-function invMixColumns(s) {
-  for (let c = 0; c < 4; c++) {
-    const o = c * 4;
-    const a0 = s[o], a1 = s[o + 1], a2 = s[o + 2], a3 = s[o + 3];
-    s[o] = gmul(a0, 14) ^ gmul(a1, 11) ^ gmul(a2, 13) ^ gmul(a3, 9);
-    s[o + 1] = gmul(a0, 9) ^ gmul(a1, 14) ^ gmul(a2, 11) ^ gmul(a3, 13);
-    s[o + 2] = gmul(a0, 13) ^ gmul(a1, 9) ^ gmul(a2, 14) ^ gmul(a3, 11);
-    s[o + 3] = gmul(a0, 11) ^ gmul(a1, 13) ^ gmul(a2, 9) ^ gmul(a3, 14);
+
+// AES 专用模式循环：直接按块写入输出，避免每块新数组/subarray。
+function aesEcbEnc(data, rk, Nr, pad) {
+  const d = padBytes(data, 16, pad);
+  const out = new Uint8Array(d.length);
+  for (let i = 0; i < d.length; i += 16) aesEncInto(d, i, out, i, rk, Nr);
+  return out;
+}
+function aesEcbDec(data, rk, Nr, pad) {
+  if (data.length % 16) throw new Error("密文需为 16 字节整数倍");
+  const out = new Uint8Array(data.length);
+  for (let i = 0; i < data.length; i += 16) aesDecInto(data, i, out, i, rk, Nr);
+  return unpadBytes(out, 16, pad);
+}
+function aesCbcEnc(data, rk, Nr, iv, pad) {
+  const d = padBytes(data, 16, pad);
+  const out = new Uint8Array(d.length);
+  const x = new Uint8Array(16);
+  for (let i = 0; i < d.length; i += 16) {
+    const po = i === 0 ? 0 : i - 16;
+    const prev = i === 0 ? iv : out;
+    for (let j = 0; j < 16; j++) x[j] = d[i + j] ^ prev[po + j];
+    aesEncInto(x, 0, out, i, rk, Nr);
   }
+  return out;
+}
+function aesCbcDec(data, rk, Nr, iv, pad) {
+  if (data.length % 16) throw new Error("密文需为 16 字节整数倍");
+  const out = new Uint8Array(data.length);
+  const tmp = new Uint8Array(16);
+  for (let i = 0; i < data.length; i += 16) {
+    aesDecInto(data, i, tmp, 0, rk, Nr);
+    const po = i === 0 ? 0 : i - 16;
+    const prev = i === 0 ? iv : data;
+    for (let j = 0; j < 16; j++) out[i + j] = tmp[j] ^ prev[po + j];
+  }
+  return unpadBytes(out, 16, pad);
+}
+function aesCfbEnc(data, rk, Nr, iv) {
+  const out = new Uint8Array(data.length);
+  const ks = new Uint8Array(16);
+  for (let i = 0; i < data.length; i += 16) {
+    const src = i === 0 ? iv : out;
+    const so = i === 0 ? 0 : i - 16;
+    aesEncInto(src, so, ks, 0, rk, Nr);
+    const n = Math.min(16, data.length - i);
+    for (let j = 0; j < n; j++) out[i + j] = data[i + j] ^ ks[j];
+  }
+  return out;
+}
+function aesCfbDec(data, rk, Nr, iv) {
+  const out = new Uint8Array(data.length);
+  const ks = new Uint8Array(16);
+  for (let i = 0; i < data.length; i += 16) {
+    const src = i === 0 ? iv : data;
+    const so = i === 0 ? 0 : i - 16;
+    aesEncInto(src, so, ks, 0, rk, Nr);
+    const n = Math.min(16, data.length - i);
+    for (let j = 0; j < n; j++) out[i + j] = data[i + j] ^ ks[j];
+  }
+  return out;
+}
+function aesOfbCrypt(data, rk, Nr, iv) {
+  const out = new Uint8Array(data.length);
+  const fb = new Uint8Array(16);
+  fb.set(iv.subarray(0, 16));
+  for (let i = 0; i < data.length; i += 16) {
+    aesEncInto(fb, 0, fb, 0, rk, Nr);
+    const n = Math.min(16, data.length - i);
+    for (let j = 0; j < n; j++) out[i + j] = data[i + j] ^ fb[j];
+  }
+  return out;
+}
+function aesCtrCrypt(data, rk, Nr, iv) {
+  const out = new Uint8Array(data.length);
+  const ctr = iv.slice(0, 16);
+  const ks = new Uint8Array(16);
+  for (let i = 0; i < data.length; i += 16) {
+    aesEncInto(ctr, 0, ks, 0, rk, Nr);
+    const n = Math.min(16, data.length - i);
+    for (let j = 0; j < n; j++) out[i + j] = data[i + j] ^ ks[j];
+    incCounter(ctr);
+  }
+  return out;
 }
 
 // ============================================================
@@ -461,10 +579,11 @@ function invMixColumns(s) {
 // ============================================================
 /** 由密钥构造 AES 块加/解密闭包。keyBytes 长 16/24/32。 */
 export function makeAes(keyBytes) {
-  const { w, Nr } = aesKeyExpansion(keyBytes);
+  const { rk, Nr } = aesKeyExpansion(keyBytes);
+  const dk = buildDecRk(rk, Nr);
   return {
-    encBlock: (b) => aesEncryptBlock(b, w, Nr),
-    decBlock: (b) => aesDecryptBlock(b, w, Nr),
+    encBlock: (b) => aesEncryptBlock(b, rk, Nr),
+    decBlock: (b) => aesDecryptBlock(b, dk, Nr),
   };
 }
 
@@ -481,15 +600,15 @@ export function aesEncrypt(data, key, { mode = "CBC", iv, pad = true, padding } 
   mode = mode.toUpperCase();
   if (!AES_MODES.has(mode)) throw new Error(`不支持的 AES 模式: ${mode}（GCM 用 aesGcm*）`);
   const padOpt = padding === undefined ? pad : padding;
-  const { encBlock } = makeAes(key);
+  const { rk, Nr } = aesKeyExpansion(key);
   if (mode !== "ECB" && iv && iv.length !== 16) throw new Error(`AES-${mode} IV 必须为 16 字节，当前 ${iv.length} 字节`);
   const ivv = iv || new Uint8Array(16);
   switch (mode) {
-    case "ECB": return ecbEncrypt(data, encBlock, 16, padOpt);
-    case "CBC": return cbcEncrypt(data, encBlock, 16, ivv, padOpt);
-    case "CFB": return cfbEncrypt(data, encBlock, 16, ivv);
-    case "OFB": return ofbCrypt(data, encBlock, 16, ivv);
-    case "CTR": return ctrCrypt(data, encBlock, 16, ivv);
+    case "ECB": return aesEcbEnc(data, rk, Nr, padOpt);
+    case "CBC": return aesCbcEnc(data, rk, Nr, ivv, padOpt);
+    case "CFB": return aesCfbEnc(data, rk, Nr, ivv);
+    case "OFB": return aesOfbCrypt(data, rk, Nr, ivv);
+    case "CTR": return aesCtrCrypt(data, rk, Nr, ivv);
   }
 }
 /** AES 解密（非 GCM）。 */
@@ -497,15 +616,16 @@ export function aesDecrypt(data, key, { mode = "CBC", iv, pad = true, padding } 
   mode = mode.toUpperCase();
   if (!AES_MODES.has(mode)) throw new Error(`不支持的 AES 模式: ${mode}`);
   const padOpt = padding === undefined ? pad : padding;
-  const { encBlock, decBlock } = makeAes(key);
+  const { rk, Nr } = aesKeyExpansion(key);
+  const dk = buildDecRk(rk, Nr);
   if (mode !== "ECB" && iv && iv.length !== 16) throw new Error(`AES-${mode} IV 必须为 16 字节，当前 ${iv.length} 字节`);
   const ivv = iv || new Uint8Array(16);
   switch (mode) {
-    case "ECB": return ecbDecrypt(data, decBlock, 16, padOpt);
-    case "CBC": return cbcDecrypt(data, decBlock, 16, ivv, padOpt);
-    case "CFB": return cfbDecrypt(data, encBlock, 16, ivv); // 流模式解密用 encBlock
-    case "OFB": return ofbCrypt(data, encBlock, 16, ivv);
-    case "CTR": return ctrCrypt(data, encBlock, 16, ivv);
+    case "ECB": return aesEcbDec(data, dk, Nr, padOpt);
+    case "CBC": return aesCbcDec(data, dk, Nr, ivv, padOpt);
+    case "CFB": return aesCfbDec(data, rk, Nr, ivv); // 流模式解密用 encBlock
+    case "OFB": return aesOfbCrypt(data, rk, Nr, ivv);
+    case "CTR": return aesCtrCrypt(data, rk, Nr, ivv);
   }
 }
 

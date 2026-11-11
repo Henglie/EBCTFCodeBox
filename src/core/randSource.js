@@ -43,6 +43,12 @@ const _CONFIG = { mode: RAND_MODES.SYSTEM, seed: "", endpoint: "", auth: "", mou
 // 配置变更订阅：UI 层注册以「持久化 + 刷新档位标识」；core 只回调、不碰存储。
 // 纯回调集合，零 DOM / 零 i18n；订阅函数返回退订句柄。
 const _onChange = new Set();
+// op 执行上下文：执行期间 setRandConfig 只改内存、不触发持久化。
+// UI 面板的手动保存（applyRandConfig）在上下文之外，仍照常落盘。
+let _opExecDepth = 0;
+export function beginRandExecutionContext() { _opExecDepth++; }
+export function endRandExecutionContext() { _opExecDepth = Math.max(0, _opExecDepth - 1); }
+export function isRandExecutionContext() { return _opExecDepth > 0; }
 // server 档预取池（此处只做接口与状态；真实预热由联网 server 档提供）。
 let _serverPool = null;
 let _serverReady = false;
@@ -178,7 +184,7 @@ function _checkLen(n) {
  * 注入当前配置（UI/main 层在启动与设置变更时调用）。
  * @param {{mode?:string, seed?:string, endpoint?:string, auth?:string}} cfg
  */
-export function setRandConfig(cfg) {
+export function setRandConfig(cfg, meta = {}) {
   const c = cfg || {};
   const mode = c.mode == null || String(c.mode) === "" ? RAND_MODES.SYSTEM : String(c.mode);
   if (!_VALID_MODES.has(mode)) {
@@ -196,14 +202,17 @@ export function setRandConfig(cfg) {
   _serverPool = null;
   _serverReady = false;
   // 通知订阅者（UI 持久化 + 刷新档位标识）。回调异常不得影响配置生效。
-  for (const cb of _onChange) { try { cb(getRandConfig()); } catch { /* 订阅方异常忽略 */ } }
+  // persist=false：op 执行上下文或调用方显式声明，仅内存生效、不落盘。
+  const notifyMeta = { persist: !isRandExecutionContext() && meta.persist !== false };
+  for (const cb of _onChange) { try { cb(getRandConfig(), notifyMeta); } catch { /* 订阅方异常忽略 */ } }
 }
 
 /**
  * 订阅随机源配置变更。返回退订函数。回调收到当前配置深拷贝。
- * 供 UI 层在 op 内切换档位（randomSecure.run 调 setRandConfig）后持久化 + 刷新标识；
+ * 供 UI 层刷新档位标识；持久化只在 meta.persist !== false 时进行
+ * （op 执行期间的配置切换只改内存，不落盘）。
  * core 自身不持久化、不读 localStorage。
- * @param {(cfg:{mode:string,seed:string,endpoint:string,auth:string})=>void} cb
+ * @param {(cfg:{mode:string,seed:string,endpoint:string,auth:string}, meta:{persist:boolean})=>void} cb
  * @returns {()=>void} 退订句柄
  */
 export function onRandConfigChange(cb) {

@@ -1,10 +1,17 @@
+import { checkLimit, withLimit } from "./limitGuard.js";
+
 const BLOCK = 512;
 const ENC = new TextEncoder();
 const DEC = new TextDecoder("utf-8", { fatal: false });
 const MAX_OCTAL_11 = 0o77777777777;
-const DEFAULT_MAX_ENTRIES = 10000;
-const DEFAULT_MAX_TOTAL_SIZE = 256 * 1024 * 1024;
-const DEFAULT_MAX_ENTRY_SIZE = 64 * 1024 * 1024;
+const MIB = 1024 * 1024;
+// 统一资源口径（与 ZIP / 7z 一致）：软阈值可确认放宽到硬上限，超过硬上限明确失败。
+const DEFAULT_MAX_ENTRIES = 1000;                  // 条目数软阈值
+const DEFAULT_MAX_ENTRIES_HARD = 5000;             // 条目数硬上限
+const DEFAULT_MAX_TOTAL_SIZE = 256 * MIB;          // 提取/创建总输出软阈值
+const DEFAULT_MAX_TOTAL_SIZE_HARD = 1024 * MIB;    // 总输出硬上限
+const DEFAULT_MAX_ENTRY_SIZE = 256 * MIB;          // 单成员软阈值
+const DEFAULT_MAX_ENTRY_SIZE_HARD = 1024 * MIB;    // 单成员硬上限
 const DEFAULT_MAX_NAME_LENGTH = 4096;
 
 export class TarError extends Error {
@@ -313,8 +320,8 @@ function typeOf(typeflag) {
   return "other";
 }
 
-function readBody(bytes, off, size, maxEntrySize, what) {
-  if (size > maxEntrySize) throw new TarError("LIMIT_ENTRY_SIZE", what + " exceeds maxEntrySize");
+function readBody(bytes, off, size, limits, ctx, what, scope) {
+  enforceLimit(ctx, scope, size, limits.entrySize, what + "大小", " 字节");
   if (off + size > bytes.length) throw new TarError("TRUNCATED_DATA", what + " is truncated");
   return bytes.subarray(off, off + size);
 }
@@ -326,14 +333,44 @@ function optionInt(value, fallback, name) {
   return n;
 }
 
+/**
+ * 统一软/硬阈值。options.max* 只收紧软阈值（旧参数继续有效），
+ * 硬上限固定为策略值，确认后最多放宽到硬上限。
+ */
+function limitPair(value, soft, hard, name) {
+  const requested = optionInt(value, null, name);
+  return {
+    soft: requested == null ? soft : Math.min(requested, soft),
+    hard,
+  };
+}
+
+/** 超软阈值走 checkLimit（可确认）；确认后把 override 写回本次调用的 ctx.params 复用。 */
+function enforceLimit(ctx, scope, actual, pair, label, unit) {
+  if (actual <= pair.soft) return;
+  checkLimit({
+    scope,
+    actual,
+    soft: pair.soft,
+    hard: pair.hard,
+    params: ctx.params,
+    label,
+    unit,
+  });
+  ctx.params = withLimit(ctx.params, { _allowLimitOverride: true });
+}
+
 export function tarCreate(entries, options = {}) {
   if (!Array.isArray(entries)) throw new TarError("BAD_INPUT", "entries must be an array");
-  const maxEntries = optionInt(options.maxEntries, DEFAULT_MAX_ENTRIES, "maxEntries");
-  const maxTotalSize = optionInt(options.maxTotalSize, DEFAULT_MAX_TOTAL_SIZE, "maxTotalSize");
-  const maxEntrySize = optionInt(options.maxEntrySize, DEFAULT_MAX_ENTRY_SIZE, "maxEntrySize");
+  const limits = {
+    entries: limitPair(options.maxEntries, DEFAULT_MAX_ENTRIES, DEFAULT_MAX_ENTRIES_HARD, "maxEntries"),
+    totalSize: limitPair(options.maxTotalSize, DEFAULT_MAX_TOTAL_SIZE, DEFAULT_MAX_TOTAL_SIZE_HARD, "maxTotalSize"),
+    entrySize: limitPair(options.maxEntrySize, DEFAULT_MAX_ENTRY_SIZE, DEFAULT_MAX_ENTRY_SIZE_HARD, "maxEntrySize"),
+  };
   const maxNameLength = optionInt(options.maxNameLength, DEFAULT_MAX_NAME_LENGTH, "maxNameLength");
   const allowPax = options.pax !== false;
-  if (entries.length > maxEntries) throw new TarError("LIMIT_ENTRIES", "entry count exceeds maxEntries");
+  const ctx = { params: options.params || null };
+  enforceLimit(ctx, "tar.create.entries", entries.length, limits.entries, "TAR 创建条目数", " 个");
 
   const chunks = [];
   let archiveSize = 0;
@@ -357,9 +394,9 @@ export function tarCreate(entries, options = {}) {
     if (!isDir && type !== "symlink" && type !== "hardlink") {
       data = toBytes(entry.data !== undefined ? entry.data : entry.bytes, "entry data");
     }
-    if (data.length > maxEntrySize) throw new TarError("LIMIT_ENTRY_SIZE", "entry exceeds maxEntrySize: " + name);
+    enforceLimit(ctx, "tar.create.entrySize", data.length, limits.entrySize, "TAR 创建单成员", " 字节");
     totalData += data.length;
-    if (totalData > maxTotalSize) throw new TarError("LIMIT_SIZE", "total data exceeds maxTotalSize");
+    enforceLimit(ctx, "tar.create.totalOutput", totalData, limits.totalSize, "TAR 创建总输出", " 字节");
 
     const mode = entry.mode != null ? Number(entry.mode) : (isDir ? 0o755 : 0o644);
     const uid = entry.uid != null ? Number(entry.uid) : 0;
@@ -431,11 +468,14 @@ export function tarCreate(entries, options = {}) {
 
 export function tarExtract(input, options = {}) {
   const bytes = toBytes(input);
-  const maxEntries = optionInt(options.maxEntries, DEFAULT_MAX_ENTRIES, "maxEntries");
-  const maxTotalSize = optionInt(options.maxTotalSize, DEFAULT_MAX_TOTAL_SIZE, "maxTotalSize");
-  const maxEntrySize = optionInt(options.maxEntrySize, DEFAULT_MAX_ENTRY_SIZE, "maxEntrySize");
+  const limits = {
+    entries: limitPair(options.maxEntries, DEFAULT_MAX_ENTRIES, DEFAULT_MAX_ENTRIES_HARD, "maxEntries"),
+    totalSize: limitPair(options.maxTotalSize, DEFAULT_MAX_TOTAL_SIZE, DEFAULT_MAX_TOTAL_SIZE_HARD, "maxTotalSize"),
+    entrySize: limitPair(options.maxEntrySize, DEFAULT_MAX_ENTRY_SIZE, DEFAULT_MAX_ENTRY_SIZE_HARD, "maxEntrySize"),
+  };
   const maxNameLength = optionInt(options.maxNameLength, DEFAULT_MAX_NAME_LENGTH, "maxNameLength");
   const includeData = options.includeData !== false;
+  const ctx = { params: options.params || null };
 
   const entries = [];
   let off = 0;
@@ -460,7 +500,7 @@ export function tarExtract(input, options = {}) {
     off += BLOCK;
 
     if (h.typeflag === "x" || h.typeflag === "g" || h.typeflag === "X") {
-      const body = readBody(bytes, off, h.size, maxEntrySize, "pax header");
+      const body = readBody(bytes, off, h.size, limits, ctx, "TAR pax 元数据", "tar.extract.paxHeader");
       off += paddedSize(h.size);
       if (off > bytes.length) throw new TarError("TRUNCATED_DATA", "pax header is truncated");
       const map = parsePax(body);
@@ -472,14 +512,14 @@ export function tarExtract(input, options = {}) {
       continue;
     }
     if (h.typeflag === "L") {
-      const body = readBody(bytes, off, h.size, maxEntrySize, "GNU longname");
+      const body = readBody(bytes, off, h.size, limits, ctx, "TAR GNU 长名", "tar.extract.longName");
       off += paddedSize(h.size);
       if (off > bytes.length) throw new TarError("TRUNCATED_DATA", "GNU longname is truncated");
       longName = DEC.decode(body).replace(/\0.*$/, "");
       continue;
     }
     if (h.typeflag === "K") {
-      const body = readBody(bytes, off, h.size, maxEntrySize, "GNU longlink");
+      const body = readBody(bytes, off, h.size, limits, ctx, "TAR GNU 长链接", "tar.extract.longLink");
       off += paddedSize(h.size);
       if (off > bytes.length) throw new TarError("TRUNCATED_DATA", "GNU longlink is truncated");
       longLink = DEC.decode(body).replace(/\0.*$/, "");
@@ -500,7 +540,8 @@ export function tarExtract(input, options = {}) {
     let name = overrides.path != null ? overrides.path : h.name;
     let linkname = overrides.linkpath != null ? overrides.linkpath : h.linkname;
     const bodySize = overrides.size != null ? overrides.size : h.size;
-    if (bodySize > maxEntrySize) throw new TarError("LIMIT_ENTRY_SIZE", "entry exceeds maxEntrySize: " + name);
+    // 列表模式只读元数据，不复制/限制成员内容；提取模式才占用单成员与总输出预算。
+    if (includeData) enforceLimit(ctx, "tar.extract.entrySize", bodySize, limits.entrySize, "TAR 单成员", " 字节");
     if (bodySize > bytes.length - off) throw new TarError("TRUNCATED_DATA", "entry data is truncated: " + name);
 
     const body = bytes.subarray(off, off + bodySize);
@@ -514,10 +555,10 @@ export function tarExtract(input, options = {}) {
     }
     const safeName = normalizePath(name, { directory: type === "dir", maxNameLength });
 
-    if (entries.length + 1 > maxEntries) throw new TarError("LIMIT_ENTRIES", "entry count exceeds maxEntries");
-    if (type === "file") {
+    enforceLimit(ctx, "tar.extract.entries", entries.length + 1, limits.entries, "TAR 条目数", " 个");
+    if (type === "file" && includeData) {
       totalData += bodySize;
-      if (totalData > maxTotalSize) throw new TarError("LIMIT_SIZE", "total data exceeds maxTotalSize");
+      enforceLimit(ctx, "tar.extract.totalOutput", totalData, limits.totalSize, "TAR 提取总输出", " 字节");
     }
     entries.push({
       name: safeName,
@@ -558,7 +599,10 @@ export function tarList(input, options = {}) {
 
 export {
   DEFAULT_MAX_ENTRIES,
+  DEFAULT_MAX_ENTRIES_HARD,
   DEFAULT_MAX_TOTAL_SIZE,
+  DEFAULT_MAX_TOTAL_SIZE_HARD,
   DEFAULT_MAX_ENTRY_SIZE,
+  DEFAULT_MAX_ENTRY_SIZE_HARD,
   DEFAULT_MAX_NAME_LENGTH,
 };

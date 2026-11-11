@@ -20,101 +20,596 @@
 import { register } from "./registry.js";
 
 // SHA-256 IV
-const IV = [
+const IV = new Uint32Array([
   0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
   0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
-];
+]);
 
 const CHUNK_START = 1;
 const CHUNK_END = 2;
 const PARENT = 4;
 const ROOT = 8;
 
-const MSG_PERMUTATION = [2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8];
+// 复用 scratch：消息块、压缩输出、chunk CV、父块
+const MBUF = new Uint32Array(16);
+const OUT16 = new Uint32Array(16);
+const CVBUF = new Uint32Array(8);
+const PARENT_BUF = new Uint32Array(16);
+const CV_POOL = [];
 
-function rotr(x, n) { return ((x >>> n) | (x << (32 - n))) >>> 0; }
-
-function g(s, a, b, c, d, mx, my) {
-  s[a] = (s[a] + s[b] + mx) >>> 0;
-  s[d] = rotr(s[d] ^ s[a], 16);
-  s[c] = (s[c] + s[d]) >>> 0;
-  s[b] = rotr(s[b] ^ s[c], 12);
-  s[a] = (s[a] + s[b] + my) >>> 0;
-  s[d] = rotr(s[d] ^ s[a], 8);
-  s[c] = (s[c] + s[d]) >>> 0;
-  s[b] = rotr(s[b] ^ s[c], 7);
+// 压缩写入 out[0..15]（out 不可与 cv 别名）。7 轮全展开 + 局部变量，
+// 避免每次压缩的数组分配和 TypedArray 下标访问。cv=8 字，block=16 字。
+function compressInto(cv, block, counter, blockLen, flags, out) {
+  let s0 = cv[0] >>> 0;
+  let s1 = cv[1] >>> 0;
+  let s2 = cv[2] >>> 0;
+  let s3 = cv[3] >>> 0;
+  let s4 = cv[4] >>> 0;
+  let s5 = cv[5] >>> 0;
+  let s6 = cv[6] >>> 0;
+  let s7 = cv[7] >>> 0;
+  let s8 = 1779033703;
+  let s9 = 3144134277;
+  let s10 = 1013904242;
+  let s11 = 2773480762;
+  let s12 = counter >>> 0;
+  let s13 = Math.floor(counter / 4294967296) >>> 0;
+  let s14 = blockLen >>> 0;
+  let s15 = flags >>> 0;
+  let m0 = 0, m1 = 0, m2 = 0, m3 = 0, m4 = 0, m5 = 0, m6 = 0, m7 = 0, m8 = 0, m9 = 0, m10 = 0, m11 = 0, m12 = 0, m13 = 0, m14 = 0, m15 = 0;
+  // round 0
+  m0 = block[0];
+  m1 = block[1];
+  m2 = block[2];
+  m3 = block[3];
+  m4 = block[4];
+  m5 = block[5];
+  m6 = block[6];
+  m7 = block[7];
+  m8 = block[8];
+  m9 = block[9];
+  m10 = block[10];
+  m11 = block[11];
+  m12 = block[12];
+  m13 = block[13];
+  m14 = block[14];
+  m15 = block[15];
+  {
+    let t;
+    s0 = (s0 + s4 + m0) >>> 0; t = s12 ^ s0; s12 = ((t >>> 16) | (t << 16)) >>> 0;
+    s8 = (s8 + s12) >>> 0; t = s4 ^ s8; s4 = ((t >>> 12) | (t << 20)) >>> 0;
+    s0 = (s0 + s4 + m1) >>> 0; t = s12 ^ s0; s12 = ((t >>> 8) | (t << 24)) >>> 0;
+    s8 = (s8 + s12) >>> 0; t = s4 ^ s8; s4 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s1 = (s1 + s5 + m2) >>> 0; t = s13 ^ s1; s13 = ((t >>> 16) | (t << 16)) >>> 0;
+    s9 = (s9 + s13) >>> 0; t = s5 ^ s9; s5 = ((t >>> 12) | (t << 20)) >>> 0;
+    s1 = (s1 + s5 + m3) >>> 0; t = s13 ^ s1; s13 = ((t >>> 8) | (t << 24)) >>> 0;
+    s9 = (s9 + s13) >>> 0; t = s5 ^ s9; s5 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s2 = (s2 + s6 + m4) >>> 0; t = s14 ^ s2; s14 = ((t >>> 16) | (t << 16)) >>> 0;
+    s10 = (s10 + s14) >>> 0; t = s6 ^ s10; s6 = ((t >>> 12) | (t << 20)) >>> 0;
+    s2 = (s2 + s6 + m5) >>> 0; t = s14 ^ s2; s14 = ((t >>> 8) | (t << 24)) >>> 0;
+    s10 = (s10 + s14) >>> 0; t = s6 ^ s10; s6 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s3 = (s3 + s7 + m6) >>> 0; t = s15 ^ s3; s15 = ((t >>> 16) | (t << 16)) >>> 0;
+    s11 = (s11 + s15) >>> 0; t = s7 ^ s11; s7 = ((t >>> 12) | (t << 20)) >>> 0;
+    s3 = (s3 + s7 + m7) >>> 0; t = s15 ^ s3; s15 = ((t >>> 8) | (t << 24)) >>> 0;
+    s11 = (s11 + s15) >>> 0; t = s7 ^ s11; s7 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s0 = (s0 + s5 + m8) >>> 0; t = s15 ^ s0; s15 = ((t >>> 16) | (t << 16)) >>> 0;
+    s10 = (s10 + s15) >>> 0; t = s5 ^ s10; s5 = ((t >>> 12) | (t << 20)) >>> 0;
+    s0 = (s0 + s5 + m9) >>> 0; t = s15 ^ s0; s15 = ((t >>> 8) | (t << 24)) >>> 0;
+    s10 = (s10 + s15) >>> 0; t = s5 ^ s10; s5 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s1 = (s1 + s6 + m10) >>> 0; t = s12 ^ s1; s12 = ((t >>> 16) | (t << 16)) >>> 0;
+    s11 = (s11 + s12) >>> 0; t = s6 ^ s11; s6 = ((t >>> 12) | (t << 20)) >>> 0;
+    s1 = (s1 + s6 + m11) >>> 0; t = s12 ^ s1; s12 = ((t >>> 8) | (t << 24)) >>> 0;
+    s11 = (s11 + s12) >>> 0; t = s6 ^ s11; s6 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s2 = (s2 + s7 + m12) >>> 0; t = s13 ^ s2; s13 = ((t >>> 16) | (t << 16)) >>> 0;
+    s8 = (s8 + s13) >>> 0; t = s7 ^ s8; s7 = ((t >>> 12) | (t << 20)) >>> 0;
+    s2 = (s2 + s7 + m13) >>> 0; t = s13 ^ s2; s13 = ((t >>> 8) | (t << 24)) >>> 0;
+    s8 = (s8 + s13) >>> 0; t = s7 ^ s8; s7 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s3 = (s3 + s4 + m14) >>> 0; t = s14 ^ s3; s14 = ((t >>> 16) | (t << 16)) >>> 0;
+    s9 = (s9 + s14) >>> 0; t = s4 ^ s9; s4 = ((t >>> 12) | (t << 20)) >>> 0;
+    s3 = (s3 + s4 + m15) >>> 0; t = s14 ^ s3; s14 = ((t >>> 8) | (t << 24)) >>> 0;
+    s9 = (s9 + s14) >>> 0; t = s4 ^ s9; s4 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  // round 1
+  m0 = block[2];
+  m1 = block[6];
+  m2 = block[3];
+  m3 = block[10];
+  m4 = block[7];
+  m5 = block[0];
+  m6 = block[4];
+  m7 = block[13];
+  m8 = block[1];
+  m9 = block[11];
+  m10 = block[12];
+  m11 = block[5];
+  m12 = block[9];
+  m13 = block[14];
+  m14 = block[15];
+  m15 = block[8];
+  {
+    let t;
+    s0 = (s0 + s4 + m0) >>> 0; t = s12 ^ s0; s12 = ((t >>> 16) | (t << 16)) >>> 0;
+    s8 = (s8 + s12) >>> 0; t = s4 ^ s8; s4 = ((t >>> 12) | (t << 20)) >>> 0;
+    s0 = (s0 + s4 + m1) >>> 0; t = s12 ^ s0; s12 = ((t >>> 8) | (t << 24)) >>> 0;
+    s8 = (s8 + s12) >>> 0; t = s4 ^ s8; s4 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s1 = (s1 + s5 + m2) >>> 0; t = s13 ^ s1; s13 = ((t >>> 16) | (t << 16)) >>> 0;
+    s9 = (s9 + s13) >>> 0; t = s5 ^ s9; s5 = ((t >>> 12) | (t << 20)) >>> 0;
+    s1 = (s1 + s5 + m3) >>> 0; t = s13 ^ s1; s13 = ((t >>> 8) | (t << 24)) >>> 0;
+    s9 = (s9 + s13) >>> 0; t = s5 ^ s9; s5 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s2 = (s2 + s6 + m4) >>> 0; t = s14 ^ s2; s14 = ((t >>> 16) | (t << 16)) >>> 0;
+    s10 = (s10 + s14) >>> 0; t = s6 ^ s10; s6 = ((t >>> 12) | (t << 20)) >>> 0;
+    s2 = (s2 + s6 + m5) >>> 0; t = s14 ^ s2; s14 = ((t >>> 8) | (t << 24)) >>> 0;
+    s10 = (s10 + s14) >>> 0; t = s6 ^ s10; s6 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s3 = (s3 + s7 + m6) >>> 0; t = s15 ^ s3; s15 = ((t >>> 16) | (t << 16)) >>> 0;
+    s11 = (s11 + s15) >>> 0; t = s7 ^ s11; s7 = ((t >>> 12) | (t << 20)) >>> 0;
+    s3 = (s3 + s7 + m7) >>> 0; t = s15 ^ s3; s15 = ((t >>> 8) | (t << 24)) >>> 0;
+    s11 = (s11 + s15) >>> 0; t = s7 ^ s11; s7 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s0 = (s0 + s5 + m8) >>> 0; t = s15 ^ s0; s15 = ((t >>> 16) | (t << 16)) >>> 0;
+    s10 = (s10 + s15) >>> 0; t = s5 ^ s10; s5 = ((t >>> 12) | (t << 20)) >>> 0;
+    s0 = (s0 + s5 + m9) >>> 0; t = s15 ^ s0; s15 = ((t >>> 8) | (t << 24)) >>> 0;
+    s10 = (s10 + s15) >>> 0; t = s5 ^ s10; s5 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s1 = (s1 + s6 + m10) >>> 0; t = s12 ^ s1; s12 = ((t >>> 16) | (t << 16)) >>> 0;
+    s11 = (s11 + s12) >>> 0; t = s6 ^ s11; s6 = ((t >>> 12) | (t << 20)) >>> 0;
+    s1 = (s1 + s6 + m11) >>> 0; t = s12 ^ s1; s12 = ((t >>> 8) | (t << 24)) >>> 0;
+    s11 = (s11 + s12) >>> 0; t = s6 ^ s11; s6 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s2 = (s2 + s7 + m12) >>> 0; t = s13 ^ s2; s13 = ((t >>> 16) | (t << 16)) >>> 0;
+    s8 = (s8 + s13) >>> 0; t = s7 ^ s8; s7 = ((t >>> 12) | (t << 20)) >>> 0;
+    s2 = (s2 + s7 + m13) >>> 0; t = s13 ^ s2; s13 = ((t >>> 8) | (t << 24)) >>> 0;
+    s8 = (s8 + s13) >>> 0; t = s7 ^ s8; s7 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s3 = (s3 + s4 + m14) >>> 0; t = s14 ^ s3; s14 = ((t >>> 16) | (t << 16)) >>> 0;
+    s9 = (s9 + s14) >>> 0; t = s4 ^ s9; s4 = ((t >>> 12) | (t << 20)) >>> 0;
+    s3 = (s3 + s4 + m15) >>> 0; t = s14 ^ s3; s14 = ((t >>> 8) | (t << 24)) >>> 0;
+    s9 = (s9 + s14) >>> 0; t = s4 ^ s9; s4 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  // round 2
+  m0 = block[3];
+  m1 = block[4];
+  m2 = block[10];
+  m3 = block[12];
+  m4 = block[13];
+  m5 = block[2];
+  m6 = block[7];
+  m7 = block[14];
+  m8 = block[6];
+  m9 = block[5];
+  m10 = block[9];
+  m11 = block[0];
+  m12 = block[11];
+  m13 = block[15];
+  m14 = block[8];
+  m15 = block[1];
+  {
+    let t;
+    s0 = (s0 + s4 + m0) >>> 0; t = s12 ^ s0; s12 = ((t >>> 16) | (t << 16)) >>> 0;
+    s8 = (s8 + s12) >>> 0; t = s4 ^ s8; s4 = ((t >>> 12) | (t << 20)) >>> 0;
+    s0 = (s0 + s4 + m1) >>> 0; t = s12 ^ s0; s12 = ((t >>> 8) | (t << 24)) >>> 0;
+    s8 = (s8 + s12) >>> 0; t = s4 ^ s8; s4 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s1 = (s1 + s5 + m2) >>> 0; t = s13 ^ s1; s13 = ((t >>> 16) | (t << 16)) >>> 0;
+    s9 = (s9 + s13) >>> 0; t = s5 ^ s9; s5 = ((t >>> 12) | (t << 20)) >>> 0;
+    s1 = (s1 + s5 + m3) >>> 0; t = s13 ^ s1; s13 = ((t >>> 8) | (t << 24)) >>> 0;
+    s9 = (s9 + s13) >>> 0; t = s5 ^ s9; s5 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s2 = (s2 + s6 + m4) >>> 0; t = s14 ^ s2; s14 = ((t >>> 16) | (t << 16)) >>> 0;
+    s10 = (s10 + s14) >>> 0; t = s6 ^ s10; s6 = ((t >>> 12) | (t << 20)) >>> 0;
+    s2 = (s2 + s6 + m5) >>> 0; t = s14 ^ s2; s14 = ((t >>> 8) | (t << 24)) >>> 0;
+    s10 = (s10 + s14) >>> 0; t = s6 ^ s10; s6 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s3 = (s3 + s7 + m6) >>> 0; t = s15 ^ s3; s15 = ((t >>> 16) | (t << 16)) >>> 0;
+    s11 = (s11 + s15) >>> 0; t = s7 ^ s11; s7 = ((t >>> 12) | (t << 20)) >>> 0;
+    s3 = (s3 + s7 + m7) >>> 0; t = s15 ^ s3; s15 = ((t >>> 8) | (t << 24)) >>> 0;
+    s11 = (s11 + s15) >>> 0; t = s7 ^ s11; s7 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s0 = (s0 + s5 + m8) >>> 0; t = s15 ^ s0; s15 = ((t >>> 16) | (t << 16)) >>> 0;
+    s10 = (s10 + s15) >>> 0; t = s5 ^ s10; s5 = ((t >>> 12) | (t << 20)) >>> 0;
+    s0 = (s0 + s5 + m9) >>> 0; t = s15 ^ s0; s15 = ((t >>> 8) | (t << 24)) >>> 0;
+    s10 = (s10 + s15) >>> 0; t = s5 ^ s10; s5 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s1 = (s1 + s6 + m10) >>> 0; t = s12 ^ s1; s12 = ((t >>> 16) | (t << 16)) >>> 0;
+    s11 = (s11 + s12) >>> 0; t = s6 ^ s11; s6 = ((t >>> 12) | (t << 20)) >>> 0;
+    s1 = (s1 + s6 + m11) >>> 0; t = s12 ^ s1; s12 = ((t >>> 8) | (t << 24)) >>> 0;
+    s11 = (s11 + s12) >>> 0; t = s6 ^ s11; s6 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s2 = (s2 + s7 + m12) >>> 0; t = s13 ^ s2; s13 = ((t >>> 16) | (t << 16)) >>> 0;
+    s8 = (s8 + s13) >>> 0; t = s7 ^ s8; s7 = ((t >>> 12) | (t << 20)) >>> 0;
+    s2 = (s2 + s7 + m13) >>> 0; t = s13 ^ s2; s13 = ((t >>> 8) | (t << 24)) >>> 0;
+    s8 = (s8 + s13) >>> 0; t = s7 ^ s8; s7 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s3 = (s3 + s4 + m14) >>> 0; t = s14 ^ s3; s14 = ((t >>> 16) | (t << 16)) >>> 0;
+    s9 = (s9 + s14) >>> 0; t = s4 ^ s9; s4 = ((t >>> 12) | (t << 20)) >>> 0;
+    s3 = (s3 + s4 + m15) >>> 0; t = s14 ^ s3; s14 = ((t >>> 8) | (t << 24)) >>> 0;
+    s9 = (s9 + s14) >>> 0; t = s4 ^ s9; s4 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  // round 3
+  m0 = block[10];
+  m1 = block[7];
+  m2 = block[12];
+  m3 = block[9];
+  m4 = block[14];
+  m5 = block[3];
+  m6 = block[13];
+  m7 = block[15];
+  m8 = block[4];
+  m9 = block[0];
+  m10 = block[11];
+  m11 = block[2];
+  m12 = block[5];
+  m13 = block[8];
+  m14 = block[1];
+  m15 = block[6];
+  {
+    let t;
+    s0 = (s0 + s4 + m0) >>> 0; t = s12 ^ s0; s12 = ((t >>> 16) | (t << 16)) >>> 0;
+    s8 = (s8 + s12) >>> 0; t = s4 ^ s8; s4 = ((t >>> 12) | (t << 20)) >>> 0;
+    s0 = (s0 + s4 + m1) >>> 0; t = s12 ^ s0; s12 = ((t >>> 8) | (t << 24)) >>> 0;
+    s8 = (s8 + s12) >>> 0; t = s4 ^ s8; s4 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s1 = (s1 + s5 + m2) >>> 0; t = s13 ^ s1; s13 = ((t >>> 16) | (t << 16)) >>> 0;
+    s9 = (s9 + s13) >>> 0; t = s5 ^ s9; s5 = ((t >>> 12) | (t << 20)) >>> 0;
+    s1 = (s1 + s5 + m3) >>> 0; t = s13 ^ s1; s13 = ((t >>> 8) | (t << 24)) >>> 0;
+    s9 = (s9 + s13) >>> 0; t = s5 ^ s9; s5 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s2 = (s2 + s6 + m4) >>> 0; t = s14 ^ s2; s14 = ((t >>> 16) | (t << 16)) >>> 0;
+    s10 = (s10 + s14) >>> 0; t = s6 ^ s10; s6 = ((t >>> 12) | (t << 20)) >>> 0;
+    s2 = (s2 + s6 + m5) >>> 0; t = s14 ^ s2; s14 = ((t >>> 8) | (t << 24)) >>> 0;
+    s10 = (s10 + s14) >>> 0; t = s6 ^ s10; s6 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s3 = (s3 + s7 + m6) >>> 0; t = s15 ^ s3; s15 = ((t >>> 16) | (t << 16)) >>> 0;
+    s11 = (s11 + s15) >>> 0; t = s7 ^ s11; s7 = ((t >>> 12) | (t << 20)) >>> 0;
+    s3 = (s3 + s7 + m7) >>> 0; t = s15 ^ s3; s15 = ((t >>> 8) | (t << 24)) >>> 0;
+    s11 = (s11 + s15) >>> 0; t = s7 ^ s11; s7 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s0 = (s0 + s5 + m8) >>> 0; t = s15 ^ s0; s15 = ((t >>> 16) | (t << 16)) >>> 0;
+    s10 = (s10 + s15) >>> 0; t = s5 ^ s10; s5 = ((t >>> 12) | (t << 20)) >>> 0;
+    s0 = (s0 + s5 + m9) >>> 0; t = s15 ^ s0; s15 = ((t >>> 8) | (t << 24)) >>> 0;
+    s10 = (s10 + s15) >>> 0; t = s5 ^ s10; s5 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s1 = (s1 + s6 + m10) >>> 0; t = s12 ^ s1; s12 = ((t >>> 16) | (t << 16)) >>> 0;
+    s11 = (s11 + s12) >>> 0; t = s6 ^ s11; s6 = ((t >>> 12) | (t << 20)) >>> 0;
+    s1 = (s1 + s6 + m11) >>> 0; t = s12 ^ s1; s12 = ((t >>> 8) | (t << 24)) >>> 0;
+    s11 = (s11 + s12) >>> 0; t = s6 ^ s11; s6 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s2 = (s2 + s7 + m12) >>> 0; t = s13 ^ s2; s13 = ((t >>> 16) | (t << 16)) >>> 0;
+    s8 = (s8 + s13) >>> 0; t = s7 ^ s8; s7 = ((t >>> 12) | (t << 20)) >>> 0;
+    s2 = (s2 + s7 + m13) >>> 0; t = s13 ^ s2; s13 = ((t >>> 8) | (t << 24)) >>> 0;
+    s8 = (s8 + s13) >>> 0; t = s7 ^ s8; s7 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s3 = (s3 + s4 + m14) >>> 0; t = s14 ^ s3; s14 = ((t >>> 16) | (t << 16)) >>> 0;
+    s9 = (s9 + s14) >>> 0; t = s4 ^ s9; s4 = ((t >>> 12) | (t << 20)) >>> 0;
+    s3 = (s3 + s4 + m15) >>> 0; t = s14 ^ s3; s14 = ((t >>> 8) | (t << 24)) >>> 0;
+    s9 = (s9 + s14) >>> 0; t = s4 ^ s9; s4 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  // round 4
+  m0 = block[12];
+  m1 = block[13];
+  m2 = block[9];
+  m3 = block[11];
+  m4 = block[15];
+  m5 = block[10];
+  m6 = block[14];
+  m7 = block[8];
+  m8 = block[7];
+  m9 = block[2];
+  m10 = block[5];
+  m11 = block[3];
+  m12 = block[0];
+  m13 = block[1];
+  m14 = block[6];
+  m15 = block[4];
+  {
+    let t;
+    s0 = (s0 + s4 + m0) >>> 0; t = s12 ^ s0; s12 = ((t >>> 16) | (t << 16)) >>> 0;
+    s8 = (s8 + s12) >>> 0; t = s4 ^ s8; s4 = ((t >>> 12) | (t << 20)) >>> 0;
+    s0 = (s0 + s4 + m1) >>> 0; t = s12 ^ s0; s12 = ((t >>> 8) | (t << 24)) >>> 0;
+    s8 = (s8 + s12) >>> 0; t = s4 ^ s8; s4 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s1 = (s1 + s5 + m2) >>> 0; t = s13 ^ s1; s13 = ((t >>> 16) | (t << 16)) >>> 0;
+    s9 = (s9 + s13) >>> 0; t = s5 ^ s9; s5 = ((t >>> 12) | (t << 20)) >>> 0;
+    s1 = (s1 + s5 + m3) >>> 0; t = s13 ^ s1; s13 = ((t >>> 8) | (t << 24)) >>> 0;
+    s9 = (s9 + s13) >>> 0; t = s5 ^ s9; s5 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s2 = (s2 + s6 + m4) >>> 0; t = s14 ^ s2; s14 = ((t >>> 16) | (t << 16)) >>> 0;
+    s10 = (s10 + s14) >>> 0; t = s6 ^ s10; s6 = ((t >>> 12) | (t << 20)) >>> 0;
+    s2 = (s2 + s6 + m5) >>> 0; t = s14 ^ s2; s14 = ((t >>> 8) | (t << 24)) >>> 0;
+    s10 = (s10 + s14) >>> 0; t = s6 ^ s10; s6 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s3 = (s3 + s7 + m6) >>> 0; t = s15 ^ s3; s15 = ((t >>> 16) | (t << 16)) >>> 0;
+    s11 = (s11 + s15) >>> 0; t = s7 ^ s11; s7 = ((t >>> 12) | (t << 20)) >>> 0;
+    s3 = (s3 + s7 + m7) >>> 0; t = s15 ^ s3; s15 = ((t >>> 8) | (t << 24)) >>> 0;
+    s11 = (s11 + s15) >>> 0; t = s7 ^ s11; s7 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s0 = (s0 + s5 + m8) >>> 0; t = s15 ^ s0; s15 = ((t >>> 16) | (t << 16)) >>> 0;
+    s10 = (s10 + s15) >>> 0; t = s5 ^ s10; s5 = ((t >>> 12) | (t << 20)) >>> 0;
+    s0 = (s0 + s5 + m9) >>> 0; t = s15 ^ s0; s15 = ((t >>> 8) | (t << 24)) >>> 0;
+    s10 = (s10 + s15) >>> 0; t = s5 ^ s10; s5 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s1 = (s1 + s6 + m10) >>> 0; t = s12 ^ s1; s12 = ((t >>> 16) | (t << 16)) >>> 0;
+    s11 = (s11 + s12) >>> 0; t = s6 ^ s11; s6 = ((t >>> 12) | (t << 20)) >>> 0;
+    s1 = (s1 + s6 + m11) >>> 0; t = s12 ^ s1; s12 = ((t >>> 8) | (t << 24)) >>> 0;
+    s11 = (s11 + s12) >>> 0; t = s6 ^ s11; s6 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s2 = (s2 + s7 + m12) >>> 0; t = s13 ^ s2; s13 = ((t >>> 16) | (t << 16)) >>> 0;
+    s8 = (s8 + s13) >>> 0; t = s7 ^ s8; s7 = ((t >>> 12) | (t << 20)) >>> 0;
+    s2 = (s2 + s7 + m13) >>> 0; t = s13 ^ s2; s13 = ((t >>> 8) | (t << 24)) >>> 0;
+    s8 = (s8 + s13) >>> 0; t = s7 ^ s8; s7 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s3 = (s3 + s4 + m14) >>> 0; t = s14 ^ s3; s14 = ((t >>> 16) | (t << 16)) >>> 0;
+    s9 = (s9 + s14) >>> 0; t = s4 ^ s9; s4 = ((t >>> 12) | (t << 20)) >>> 0;
+    s3 = (s3 + s4 + m15) >>> 0; t = s14 ^ s3; s14 = ((t >>> 8) | (t << 24)) >>> 0;
+    s9 = (s9 + s14) >>> 0; t = s4 ^ s9; s4 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  // round 5
+  m0 = block[9];
+  m1 = block[14];
+  m2 = block[11];
+  m3 = block[5];
+  m4 = block[8];
+  m5 = block[12];
+  m6 = block[15];
+  m7 = block[1];
+  m8 = block[13];
+  m9 = block[3];
+  m10 = block[0];
+  m11 = block[10];
+  m12 = block[2];
+  m13 = block[6];
+  m14 = block[4];
+  m15 = block[7];
+  {
+    let t;
+    s0 = (s0 + s4 + m0) >>> 0; t = s12 ^ s0; s12 = ((t >>> 16) | (t << 16)) >>> 0;
+    s8 = (s8 + s12) >>> 0; t = s4 ^ s8; s4 = ((t >>> 12) | (t << 20)) >>> 0;
+    s0 = (s0 + s4 + m1) >>> 0; t = s12 ^ s0; s12 = ((t >>> 8) | (t << 24)) >>> 0;
+    s8 = (s8 + s12) >>> 0; t = s4 ^ s8; s4 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s1 = (s1 + s5 + m2) >>> 0; t = s13 ^ s1; s13 = ((t >>> 16) | (t << 16)) >>> 0;
+    s9 = (s9 + s13) >>> 0; t = s5 ^ s9; s5 = ((t >>> 12) | (t << 20)) >>> 0;
+    s1 = (s1 + s5 + m3) >>> 0; t = s13 ^ s1; s13 = ((t >>> 8) | (t << 24)) >>> 0;
+    s9 = (s9 + s13) >>> 0; t = s5 ^ s9; s5 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s2 = (s2 + s6 + m4) >>> 0; t = s14 ^ s2; s14 = ((t >>> 16) | (t << 16)) >>> 0;
+    s10 = (s10 + s14) >>> 0; t = s6 ^ s10; s6 = ((t >>> 12) | (t << 20)) >>> 0;
+    s2 = (s2 + s6 + m5) >>> 0; t = s14 ^ s2; s14 = ((t >>> 8) | (t << 24)) >>> 0;
+    s10 = (s10 + s14) >>> 0; t = s6 ^ s10; s6 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s3 = (s3 + s7 + m6) >>> 0; t = s15 ^ s3; s15 = ((t >>> 16) | (t << 16)) >>> 0;
+    s11 = (s11 + s15) >>> 0; t = s7 ^ s11; s7 = ((t >>> 12) | (t << 20)) >>> 0;
+    s3 = (s3 + s7 + m7) >>> 0; t = s15 ^ s3; s15 = ((t >>> 8) | (t << 24)) >>> 0;
+    s11 = (s11 + s15) >>> 0; t = s7 ^ s11; s7 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s0 = (s0 + s5 + m8) >>> 0; t = s15 ^ s0; s15 = ((t >>> 16) | (t << 16)) >>> 0;
+    s10 = (s10 + s15) >>> 0; t = s5 ^ s10; s5 = ((t >>> 12) | (t << 20)) >>> 0;
+    s0 = (s0 + s5 + m9) >>> 0; t = s15 ^ s0; s15 = ((t >>> 8) | (t << 24)) >>> 0;
+    s10 = (s10 + s15) >>> 0; t = s5 ^ s10; s5 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s1 = (s1 + s6 + m10) >>> 0; t = s12 ^ s1; s12 = ((t >>> 16) | (t << 16)) >>> 0;
+    s11 = (s11 + s12) >>> 0; t = s6 ^ s11; s6 = ((t >>> 12) | (t << 20)) >>> 0;
+    s1 = (s1 + s6 + m11) >>> 0; t = s12 ^ s1; s12 = ((t >>> 8) | (t << 24)) >>> 0;
+    s11 = (s11 + s12) >>> 0; t = s6 ^ s11; s6 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s2 = (s2 + s7 + m12) >>> 0; t = s13 ^ s2; s13 = ((t >>> 16) | (t << 16)) >>> 0;
+    s8 = (s8 + s13) >>> 0; t = s7 ^ s8; s7 = ((t >>> 12) | (t << 20)) >>> 0;
+    s2 = (s2 + s7 + m13) >>> 0; t = s13 ^ s2; s13 = ((t >>> 8) | (t << 24)) >>> 0;
+    s8 = (s8 + s13) >>> 0; t = s7 ^ s8; s7 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s3 = (s3 + s4 + m14) >>> 0; t = s14 ^ s3; s14 = ((t >>> 16) | (t << 16)) >>> 0;
+    s9 = (s9 + s14) >>> 0; t = s4 ^ s9; s4 = ((t >>> 12) | (t << 20)) >>> 0;
+    s3 = (s3 + s4 + m15) >>> 0; t = s14 ^ s3; s14 = ((t >>> 8) | (t << 24)) >>> 0;
+    s9 = (s9 + s14) >>> 0; t = s4 ^ s9; s4 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  // round 6
+  m0 = block[11];
+  m1 = block[15];
+  m2 = block[5];
+  m3 = block[0];
+  m4 = block[1];
+  m5 = block[9];
+  m6 = block[8];
+  m7 = block[6];
+  m8 = block[14];
+  m9 = block[10];
+  m10 = block[2];
+  m11 = block[12];
+  m12 = block[3];
+  m13 = block[4];
+  m14 = block[7];
+  m15 = block[13];
+  {
+    let t;
+    s0 = (s0 + s4 + m0) >>> 0; t = s12 ^ s0; s12 = ((t >>> 16) | (t << 16)) >>> 0;
+    s8 = (s8 + s12) >>> 0; t = s4 ^ s8; s4 = ((t >>> 12) | (t << 20)) >>> 0;
+    s0 = (s0 + s4 + m1) >>> 0; t = s12 ^ s0; s12 = ((t >>> 8) | (t << 24)) >>> 0;
+    s8 = (s8 + s12) >>> 0; t = s4 ^ s8; s4 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s1 = (s1 + s5 + m2) >>> 0; t = s13 ^ s1; s13 = ((t >>> 16) | (t << 16)) >>> 0;
+    s9 = (s9 + s13) >>> 0; t = s5 ^ s9; s5 = ((t >>> 12) | (t << 20)) >>> 0;
+    s1 = (s1 + s5 + m3) >>> 0; t = s13 ^ s1; s13 = ((t >>> 8) | (t << 24)) >>> 0;
+    s9 = (s9 + s13) >>> 0; t = s5 ^ s9; s5 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s2 = (s2 + s6 + m4) >>> 0; t = s14 ^ s2; s14 = ((t >>> 16) | (t << 16)) >>> 0;
+    s10 = (s10 + s14) >>> 0; t = s6 ^ s10; s6 = ((t >>> 12) | (t << 20)) >>> 0;
+    s2 = (s2 + s6 + m5) >>> 0; t = s14 ^ s2; s14 = ((t >>> 8) | (t << 24)) >>> 0;
+    s10 = (s10 + s14) >>> 0; t = s6 ^ s10; s6 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s3 = (s3 + s7 + m6) >>> 0; t = s15 ^ s3; s15 = ((t >>> 16) | (t << 16)) >>> 0;
+    s11 = (s11 + s15) >>> 0; t = s7 ^ s11; s7 = ((t >>> 12) | (t << 20)) >>> 0;
+    s3 = (s3 + s7 + m7) >>> 0; t = s15 ^ s3; s15 = ((t >>> 8) | (t << 24)) >>> 0;
+    s11 = (s11 + s15) >>> 0; t = s7 ^ s11; s7 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s0 = (s0 + s5 + m8) >>> 0; t = s15 ^ s0; s15 = ((t >>> 16) | (t << 16)) >>> 0;
+    s10 = (s10 + s15) >>> 0; t = s5 ^ s10; s5 = ((t >>> 12) | (t << 20)) >>> 0;
+    s0 = (s0 + s5 + m9) >>> 0; t = s15 ^ s0; s15 = ((t >>> 8) | (t << 24)) >>> 0;
+    s10 = (s10 + s15) >>> 0; t = s5 ^ s10; s5 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s1 = (s1 + s6 + m10) >>> 0; t = s12 ^ s1; s12 = ((t >>> 16) | (t << 16)) >>> 0;
+    s11 = (s11 + s12) >>> 0; t = s6 ^ s11; s6 = ((t >>> 12) | (t << 20)) >>> 0;
+    s1 = (s1 + s6 + m11) >>> 0; t = s12 ^ s1; s12 = ((t >>> 8) | (t << 24)) >>> 0;
+    s11 = (s11 + s12) >>> 0; t = s6 ^ s11; s6 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s2 = (s2 + s7 + m12) >>> 0; t = s13 ^ s2; s13 = ((t >>> 16) | (t << 16)) >>> 0;
+    s8 = (s8 + s13) >>> 0; t = s7 ^ s8; s7 = ((t >>> 12) | (t << 20)) >>> 0;
+    s2 = (s2 + s7 + m13) >>> 0; t = s13 ^ s2; s13 = ((t >>> 8) | (t << 24)) >>> 0;
+    s8 = (s8 + s13) >>> 0; t = s7 ^ s8; s7 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  {
+    let t;
+    s3 = (s3 + s4 + m14) >>> 0; t = s14 ^ s3; s14 = ((t >>> 16) | (t << 16)) >>> 0;
+    s9 = (s9 + s14) >>> 0; t = s4 ^ s9; s4 = ((t >>> 12) | (t << 20)) >>> 0;
+    s3 = (s3 + s4 + m15) >>> 0; t = s14 ^ s3; s14 = ((t >>> 8) | (t << 24)) >>> 0;
+    s9 = (s9 + s14) >>> 0; t = s4 ^ s9; s4 = ((t >>> 7) | (t << 25)) >>> 0;
+  }
+  out[0] = (s0 ^ s8) >>> 0;
+  out[1] = (s1 ^ s9) >>> 0;
+  out[2] = (s2 ^ s10) >>> 0;
+  out[3] = (s3 ^ s11) >>> 0;
+  out[4] = (s4 ^ s12) >>> 0;
+  out[5] = (s5 ^ s13) >>> 0;
+  out[6] = (s6 ^ s14) >>> 0;
+  out[7] = (s7 ^ s15) >>> 0;
+  out[8] = (s8 ^ cv[0]) >>> 0;
+  out[9] = (s9 ^ cv[1]) >>> 0;
+  out[10] = (s10 ^ cv[2]) >>> 0;
+  out[11] = (s11 ^ cv[3]) >>> 0;
+  out[12] = (s12 ^ cv[4]) >>> 0;
+  out[13] = (s13 ^ cv[5]) >>> 0;
+  out[14] = (s14 ^ cv[6]) >>> 0;
+  out[15] = (s15 ^ cv[7]) >>> 0;
 }
 
-/**
- * 压缩函数。cv=8 字，block=16 字，counter=块计数，blockLen=本块字节数，flags=标志。
- * 返回 16 字（前 8 为链接值，全 16 用于 XOF 输出）。
- */
+/** 兼容导出的压缩函数：返回长度 16 的普通数组（前 8 为链接值）。 */
 function compress(cv, block, counter, blockLen, flags) {
-  const counterLow = counter >>> 0;
-  const counterHigh = Math.floor(counter / 0x100000000) >>> 0;
-  const s = [
-    cv[0], cv[1], cv[2], cv[3], cv[4], cv[5], cv[6], cv[7],
-    IV[0], IV[1], IV[2], IV[3],
-    counterLow, counterHigh, blockLen >>> 0, flags >>> 0,
-  ];
-  let m = block.slice();
-  for (let r = 0; r < 7; r++) {
-    g(s, 0, 4, 8, 12, m[0], m[1]);
-    g(s, 1, 5, 9, 13, m[2], m[3]);
-    g(s, 2, 6, 10, 14, m[4], m[5]);
-    g(s, 3, 7, 11, 15, m[6], m[7]);
-    g(s, 0, 5, 10, 15, m[8], m[9]);
-    g(s, 1, 6, 11, 12, m[10], m[11]);
-    g(s, 2, 7, 8, 13, m[12], m[13]);
-    g(s, 3, 4, 9, 14, m[14], m[15]);
-    if (r < 6) {
-      const p = new Array(16);
-      for (let i = 0; i < 16; i++) p[i] = m[MSG_PERMUTATION[i]];
-      m = p;
-    }
-  }
-  for (let i = 0; i < 8; i++) {
-    s[i] = (s[i] ^ s[i + 8]) >>> 0;
-    s[i + 8] = (s[i + 8] ^ cv[i]) >>> 0;
-  }
-  return s;
+  const bb = block instanceof Uint32Array ? block : Uint32Array.from(block);
+  const out = new Uint32Array(16);
+  compressInto(cv, bb, counter, blockLen, flags, out);
+  return Array.from(out);
 }
 
-// 从字节数组按小端读 16 个 32 位字（不足补零）
-function wordsFromBytes(bytes, start, len) {
-  const bb = new Uint8Array(64);
-  for (let i = 0; i < len; i++) bb[i] = bytes[start + i];
-  const w = new Array(16);
-  for (let i = 0; i < 16; i++) {
-    w[i] = (bb[i * 4] | (bb[i * 4 + 1] << 8) | (bb[i * 4 + 2] << 16) | (bb[i * 4 + 3] << 24)) >>> 0;
+// 按小端读入 len 字节到 16 字缓冲（不足补零）
+function wordsInto(buf, bytes, start, len) {
+  buf.fill(0);
+  const nw = len >> 2;
+  let i = 0;
+  for (; i < nw; i++) {
+    const p = start + i * 4;
+    buf[i] = (bytes[p] | (bytes[p + 1] << 8) | (bytes[p + 2] << 16) | (bytes[p + 3] << 24)) >>> 0;
   }
-  return w;
-}
-
-// chunk → output 对象（最后一块作为可 root 化的输出，前面的块压进 cv）
-function chunkOutput(input, start, len, chunkIndex, flags, initCV = IV) {
-  let cv = initCV.slice();
-  const nBlocks = Math.max(1, Math.ceil(len / 64));
-  for (let i = 0; i < nBlocks; i++) {
-    const blockStart = i * 64;
-    const blockLen = Math.min(64, len - blockStart);
-    const block = wordsFromBytes(input, start + blockStart, blockLen);
-    let bf = flags;
-    if (i === 0) bf |= CHUNK_START;
-    if (i === nBlocks - 1) bf |= CHUNK_END;
-    if (i === nBlocks - 1) {
-      return { inputCV: cv, block, counter: chunkIndex, blockLen, flags: bf };
-    }
-    cv = compress(cv, block, chunkIndex, blockLen, bf).slice(0, 8);
+  const rem = len & 3;
+  if (rem) {
+    const p = start + i * 4;
+    let v = 0;
+    for (let j = 0; j < rem; j++) v |= bytes[p + j] << (8 * j);
+    buf[i] = v >>> 0;
   }
-}
-
-function parentOutput(leftCV, rightCV, flags) {
-  return { inputCV: IV.slice(), block: leftCV.concat(rightCV), counter: 0, blockLen: 64, flags: flags | PARENT };
-}
-
-function outputCV(o) {
-  return compress(o.inputCV, o.block, o.counter, o.blockLen, o.flags).slice(0, 8);
 }
 
 // 最大的严格小于 n 的 2 的幂（n>1）
@@ -124,18 +619,94 @@ function largestPow2Below(n) {
   return p;
 }
 
-// 递归树：返回根 output 对象
-function hashTree(input, start, len, chunkIndexStart, flags, initCV = IV) {
+function getCV(row, idx) {
+  const k = row * 2 + idx;
+  let b = CV_POOL[k];
+  if (!b) { b = new Uint32Array(8); CV_POOL[k] = b; }
+  return b;
+}
+
+// chunk 的最终 CV（子树用）
+function chunkCVInto(input, start, len, chunkIndex, flags, initCV, out8) {
+  CVBUF.set(initCV);
+  const nBlocks = Math.max(1, Math.ceil(len / 64));
+  for (let i = 0; i < nBlocks; i++) {
+    const blockLen = Math.min(64, len - i * 64);
+    wordsInto(MBUF, input, start + i * 64, blockLen);
+    let bf = flags;
+    if (i === 0) bf |= CHUNK_START;
+    if (i === nBlocks - 1) bf |= CHUNK_END;
+    compressInto(CVBUF, MBUF, chunkIndex, blockLen, bf, OUT16);
+    CVBUF.set(OUT16.subarray(0, 8));
+  }
+  out8.set(CVBUF.subarray(0, 8));
+}
+
+// chunk 的可 root 化输出描述（根为单 chunk 时用）
+function chunkOutputInto(input, start, len, chunkIndex, flags, initCV, o) {
+  CVBUF.set(initCV);
+  const nBlocks = Math.max(1, Math.ceil(len / 64));
+  for (let i = 0; i < nBlocks - 1; i++) {
+    wordsInto(MBUF, input, start + i * 64, 64);
+    let bf = flags;
+    if (i === 0) bf |= CHUNK_START;
+    compressInto(CVBUF, MBUF, chunkIndex, 64, bf, OUT16);
+    CVBUF.set(OUT16.subarray(0, 8));
+  }
+  const lastLen = Math.min(64, len - (nBlocks - 1) * 64);
+  wordsInto(MBUF, input, start + (nBlocks - 1) * 64, lastLen);
+  o.cv.set(CVBUF.subarray(0, 8));
+  o.block.set(MBUF);
+  o.counter = chunkIndex;
+  o.blockLen = lastLen;
+  o.flags = flags | CHUNK_END | (nBlocks === 1 ? CHUNK_START : 0);
+}
+
+// 子树根 CV（全部压缩为 CV）
+function subtreeCV(input, start, len, chunkIndexStart, flags, initCV, out8, row) {
   if (len <= 1024) {
-    return chunkOutput(input, start, len, chunkIndexStart, flags, initCV);
+    chunkCVInto(input, start, len, chunkIndexStart, flags, initCV, out8);
+    return;
   }
   const nChunks = Math.ceil(len / 1024);
   const leftChunks = largestPow2Below(nChunks);
   const leftLen = leftChunks * 1024;
-  const leftCV = outputCV(hashTree(input, start, leftLen, chunkIndexStart, flags, initCV));
-  const rightCV = outputCV(hashTree(input, start + leftLen, len - leftLen, chunkIndexStart + leftChunks, flags, initCV));
-  return parentOutput(leftCV, rightCV, flags);
+  const l = getCV(row + 1, 0), r = getCV(row + 1, 1);
+  subtreeCV(input, start, leftLen, chunkIndexStart, flags, initCV, l, row + 1);
+  subtreeCV(input, start + leftLen, len - leftLen, chunkIndexStart + leftChunks, flags, initCV, r, row + 1);
+  PARENT_BUF.set(l, 0);
+  PARENT_BUF.set(r, 8);
+  compressInto(initCV, PARENT_BUF, 0, 64, flags | PARENT, OUT16);
+  out8.set(OUT16.subarray(0, 8));
 }
+
+// 递归树：根 output 描述写入 o
+function hashTreeRoot(input, start, len, chunkIndexStart, flags, initCV, o) {
+  if (len <= 1024) {
+    chunkOutputInto(input, start, len, chunkIndexStart, flags, initCV, o);
+    return;
+  }
+  const nChunks = Math.ceil(len / 1024);
+  const leftChunks = largestPow2Below(nChunks);
+  const leftLen = leftChunks * 1024;
+  const l = getCV(0, 0), r = getCV(0, 1);
+  subtreeCV(input, start, leftLen, chunkIndexStart, flags, initCV, l, 0);
+  subtreeCV(input, start + leftLen, len - leftLen, chunkIndexStart + leftChunks, flags, initCV, r, 0);
+  o.cv.set(initCV);
+  o.block.set(l, 0);
+  o.block.set(r, 8);
+  o.counter = 0;
+  o.blockLen = 64;
+  o.flags = flags | PARENT;
+}
+
+const ROOT_DESC = {
+  cv: new Uint32Array(8),
+  block: new Uint32Array(16),
+  counter: 0,
+  blockLen: 0,
+  flags: 0,
+};
 
 // 根输出扩展到 outLen 字节（XOF）
 function rootBytes(o, outLen) {
@@ -143,9 +714,9 @@ function rootBytes(o, outLen) {
   let pos = 0;
   let ctr = 0;
   while (pos < outLen) {
-    const words = compress(o.inputCV, o.block, ctr, o.blockLen, o.flags | ROOT);
+    compressInto(o.cv, o.block, ctr, o.blockLen, o.flags | ROOT, OUT16);
     for (let w = 0; w < 16 && pos < outLen; w++) {
-      const word = words[w] >>> 0;
+      const word = OUT16[w];
       for (let b = 0; b < 4 && pos < outLen; b++) out[pos++] = (word >>> (8 * b)) & 0xff;
     }
     ctr++;
@@ -157,7 +728,7 @@ const KEYED_HASH = 16;
 
 /** 32 字节密钥 → 8 个 32 位初始链接值（BLAKE3 keyed 模式以密钥字替代 IV）。 */
 function keyWords(keyBytes) {
-  const w = new Array(8);
+  const w = new Uint32Array(8);
   for (let i = 0; i < 8; i++) {
     w[i] = (keyBytes[i * 4] | (keyBytes[i * 4 + 1] << 8) | (keyBytes[i * 4 + 2] << 16) | (keyBytes[i * 4 + 3] << 24)) >>> 0;
   }
@@ -168,8 +739,8 @@ function blake3(inputBytes, outLen = 32, keyBytes = null) {
   if (keyBytes != null && keyBytes.length !== 32) throw new Error("BLAKE3 keyed 模式密钥须为 32 字节");
   const flags = keyBytes ? KEYED_HASH : 0;
   const initCV = keyBytes ? keyWords(keyBytes) : IV;
-  const o = hashTree(inputBytes, 0, inputBytes.length, 0, flags, initCV);
-  return rootBytes(o, outLen);
+  hashTreeRoot(inputBytes, 0, inputBytes.length, 0, flags, initCV, ROOT_DESC);
+  return rootBytes(ROOT_DESC, outLen);
 }
 
 // ============ 编解码工具 ============

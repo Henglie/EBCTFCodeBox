@@ -63,6 +63,7 @@ const INCLUDE_FILES = [
   "LICENSE",
   "通用点我启动.py",
   "bridge.py",
+  "bridge_cli.py",
   "HenglieICO.png",
   // 2026-09-27 恒烈指缺补录：各平台双击启动器（v0.1.8-beta 首包漏收）
   // 2026-10-11 恒烈裁定：Windows 只发 32 位一个（x86 兼容 x64/ARM64），三合一改名
@@ -91,9 +92,7 @@ const DIR_EXCLUDE = (rel) =>
   // pack_release.mjs 本体）只留 git 仓库供复现构建，
   // 不进成品包（2026-08-26 恒烈指出：字体切分等构建脚本不该混进发行包）。
   // 注意 rel !== "tools" —— 目录本身必须放行，否则 exe/ 整个被丢掉。
-  (rel.startsWith("tools/") && rel !== "tools" && !rel.startsWith("tools/exe")) ||
-  // mcp 扩展桥/本地 worker 是 .gitignore 保留的本机文件，不随发行包（避免内部卡号/本机路径泄漏）
-  rel === "mcp/extension_bridge.py" || rel === "mcp/extension_worker.mjs" || rel.startsWith("mcp/worker/");
+  (rel.startsWith("tools/") && rel !== "tools" && !rel.startsWith("tools/exe"));
 
 // ==================== 渠道表（PROGRESS「🔑 分渠道打包」段） ====================
 // 渠道泛化（2026-09-13 恒烈「我要制作更多授权文件了，可能后续不是5个了」）：
@@ -132,6 +131,19 @@ const FORBIDDEN_PREFIXES = [
 ];
 // 授权工程文件名（出现在白名单里任何位置都不行，双保险）
 const FORBIDDEN_NAMES = ["private_key.enc", "keygen.mjs", "sign.mjs", "encrypt_key.mjs"];
+
+// bridge.py 运行必需的扩展桥/CLI 文件。缺任何一个，发行包里的桥要么起不来要么降级，
+// stage/verify 都必须直接报错（2026-11 修复：旧清单把 mcp/extension_* 排除了）。
+const REQUIRED_RUNTIME_FILES = [
+  "bridge.py",
+  "bridge_cli.py",
+  "mcp/extension_bridge.py",
+  "mcp/extension_worker.mjs",
+  "mcp/worker/csp_safe_ops.json",
+  "mcp/worker/cspClosure.mjs",
+  "mcp/worker/extensionSafeCatalog.mjs",
+  "mcp/worker/magicProfile.mjs",
+];
 
 // 打包器自身产物，verify 比对时豁免（stage 目录/发行包里合法存在，不算多余）
 const SELF_ARTIFACT = "_manifest.txt";
@@ -186,6 +198,14 @@ function readVersion(root) {
   return { rows, allSame, value: allSame ? vers[0] : null };
 }
 
+function assertRuntimeFiles(files, label) {
+  const set = new Set(files);
+  const missing = REQUIRED_RUNTIME_FILES.filter((f) => !set.has(f));
+  if (missing.length) {
+    throw new Error(`${label}缺少 bridge.py 运行必需文件：${missing.join(", ")}`);
+  }
+}
+
 function assertIncludeClean(files) {
   // 复制前二次断言：白名单展开结果里不得出现任何禁止项
   for (const f of files) {
@@ -211,6 +231,7 @@ function listIncludeFiles(channel) {
   }
   if (channel) files.push("license.bin");
   assertIncludeClean(files);
+  assertRuntimeFiles(files, "白名单");
   return files.sort();
 }
 
@@ -315,6 +336,13 @@ function cmdStage(channel) {
     });
   }
 
+  // 打包后复核：bridge.py 运行必需的扩展桥/CLI 文件必须真实落盘，缺则直接失败。
+  const missingRuntime = REQUIRED_RUNTIME_FILES.filter((f) => !existsSync(join(stageDir, f)));
+  if (missingRuntime.length) {
+    console.error(`× stage 缺少 bridge.py 运行必需文件：${missingRuntime.join(", ")}`);
+    return 2;
+  }
+
   // license.bin：按渠道取已签产物（唯一允许从 授权/ 出来的路径）
   if (channel) {
     const src = join(LICENSE_DIR, `license.bin ${channel}`);
@@ -376,6 +404,10 @@ async function cmdVerify(target, channel) {
   const include = new Set(listIncludeFiles(channel));
   const actual = walkFiles(dir);
   const missing = [...include].filter((f) => !actual.has(f));
+  const missingRuntime = REQUIRED_RUNTIME_FILES.filter((f) => !actual.has(f));
+  if (missingRuntime.length) {
+    console.log(`× 发行包缺少 bridge.py 运行必需文件：${missingRuntime.join(", ")}`);
+  }
   const extra = [...actual].filter((f) => !include.has(f) && f !== SELF_ARTIFACT && !isGzCompanion(f, include));
 
   console.log(`verify ${dir}`);

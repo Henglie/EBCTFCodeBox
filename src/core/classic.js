@@ -457,11 +457,16 @@ function trifidSquareIndex(squares, ch) {
 function trifidSquare(squares, sq, row, col) {
   return squares[sq - 1][col - 1 + 3 * (row - 1)];
 }
+function trifidKey(key) {
+  const k = String(key || "").toUpperCase();
+  if (k.length !== 27) throw new Error("Trifid 密钥须为 27 字符");
+  return k;
+}
 function trifidEncode(text, key, period = 5) {
-  if (!key || key.length !== 27) throw new Error("Trifid 密钥须为 27 字符");
-  const squares = [key.slice(0, 9), key.slice(9, 18), key.slice(18, 27)];
+  const k = trifidKey(key);
+  const squares = [k.slice(0, 9), k.slice(9, 18), k.slice(18, 27)];
  // 只保留在密钥表中的字符（不在表内的字符无坐标，跳过防止非法索引崩溃）。
-  const keySet = new Set(key.toUpperCase());
+  const keySet = new Set(k);
   const clean = [...text.toUpperCase()].filter((c) => keySet.has(c));
   const digits = clean.map((c) => trifidSquareIndex(squares, c)).join("");
   let mixed = "";
@@ -481,9 +486,9 @@ function trifidEncode(text, key, period = 5) {
   return out;
 }
 function trifidDecode(text, key, period = 5) {
-  if (!key || key.length !== 27) throw new Error("Trifid 密钥须为 27 字符");
-  const squares = [key.slice(0, 9), key.slice(9, 18), key.slice(18, 27)];
-  const keySet = new Set(key.toUpperCase());
+  const k = trifidKey(key);
+  const squares = [k.slice(0, 9), k.slice(9, 18), k.slice(18, 27)];
+  const keySet = new Set(k);
   const clean = [...text.toUpperCase()].filter((c) => keySet.has(c));
   const digits = clean.map((c) => trifidSquareIndex(squares, c)).join("");
   let mixed = "";
@@ -666,12 +671,21 @@ function grayEncode(text) {
 }
 function grayDecode(text) {
   const bin = text.replace(/[^01]/g, "");
-  let out = "";
-  for (let i = 0; i < bin.length; i++) {
-    out += i === 0 ? bin[0] : String((+bin[i]) ^ (+out[i - 1]));
+  const n = bin.length;
+  const bits = new Uint8Array(n);
+  let prev = 0;
+  for (let i = 0; i < n; i++) {
+    const b = bin.charCodeAt(i) === 49 ? 1 : 0;
+    prev = i === 0 ? b : (b ^ prev);
+    bits[i] = prev;
   }
-  const bytes = [];
-  for (let i = 0; i + 8 <= out.length; i += 8) bytes.push(parseInt(out.slice(i, i + 8), 2));
+  const bytes = new Uint8Array(n >> 3);
+  for (let i = 0; i < bytes.length; i++) {
+    let v = 0;
+    const off = i << 3;
+    for (let k = 0; k < 8; k++) v = (v << 1) | bits[off + k];
+    bytes[i] = v;
+  }
   return tdGray(bytes);
 }
 // ---- num 模式：十进制数值 ↔ 格雷二进制串（迁移自 radix.js grayNum，算法字节级一致） ----
@@ -777,7 +791,7 @@ register({
   id: "bifid", cat: "classic", name: "Bifid 双分", desc: "按 period 分组的 Polybius 转置",
   params: [
     { key: "key", label: "25 字母表", type: "text", default: AZ_NO_J },
-    { key: "period", label: "period", type: "number", default: 5 },
+    { key: "period", label: "周期", labelKey: "op.bifid.param.period", type: "number", default: 5 },
   ],
   encode: (t, p) => bifidEncode(t, (p && p.key) || AZ_NO_J, Number((p && p.period) || 5)),
   decode: (t, p) => bifidDecode(t, (p && p.key) || AZ_NO_J, Number((p && p.period) || 5)),
@@ -787,7 +801,7 @@ register({
   id: "trifid", cat: "classic", name: "Trifid 三分", desc: "3×3×3 方阵（key 须 27 字符）",
   params: [
     { key: "key", label: "27 字符密钥表", type: "text", default: "ABCDEFGHIJKLMNOPQRSTUVWXYZ." },
-    { key: "period", label: "period", type: "number", default: 5 },
+    { key: "period", label: "周期", labelKey: "op.trifid.param.period", type: "number", default: 5 },
   ],
   encode: (t, p) => trifidEncode(t, (p && p.key) || "ABCDEFGHIJKLMNOPQRSTUVWXYZ.", Number((p && p.period) || 5)),
   decode: (t, p) => trifidDecode(t, (p && p.key) || "ABCDEFGHIJKLMNOPQRSTUVWXYZ.", Number((p && p.period) || 5)),

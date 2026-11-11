@@ -37,6 +37,7 @@ import {
   is7z, parse7zHeader, run7zWasm, sevenZipWasmAvailable,
 } from "./sevenzip.js";
 import { bz2Decompress } from "./compressExt2.js";
+import { isLimitError } from "./limitGuard.js";
 
 // ============================================================
 // 字节小工具（仅 façade 层渲染用，算法复用 compress/sevenzip）
@@ -264,7 +265,7 @@ async function tryStreamDecompress(bytes, magicName) {
 async function render7zWasmTry(bytes, p, lines, fmtLabel) {
   const mode = (p && p.sevenZipMode) || "list";
   const password = (p && p.password) || "";
-  const res = await run7zWasm(bytes, { extract: mode === "extract", password });
+  const res = await run7zWasm(bytes, { extract: mode === "extract", password, params: p });
   if (res === null) {
     lines.push("");
     lines.push("--- " + fmtLabel + " 列表 / 解压能力 ---");
@@ -386,7 +387,7 @@ async function archiveUnifiedReport(text, p) {
     lines.push("");
     lines.push("--- 解压 (bzip2 纯 JS) ---");
     let out = null, berr = "";
-    try { out = new Uint8Array(bz2Decompress(bytes)); } catch (e) { berr = (e && e.message) ? e.message : String(e); }
+    try { out = new Uint8Array(bz2Decompress(bytes, p)); } catch (e) { if (isLimitError(e)) throw e; berr = (e && e.message) ? e.message : String(e); }
     if (out && out.length > 0) {
       lines.push("✓ 解压成功: " + out.length + " 字节");
       const rr = bytesToOutput(out);
@@ -395,7 +396,7 @@ async function archiveUnifiedReport(text, p) {
     } else {
       lines.push("✗ 纯 JS 解压失败: " + (berr || "输出为空"));
      // 纯 JS 失败（如非标准流）再试 7z-wasm
-      const res = await run7zWasm(bytes, { extract: true, name: "in.bz2" });
+      const res = await run7zWasm(bytes, { extract: true, name: "in.bz2", params: p });
       if (res && res.ok && res.files.length) {
         const files = toProductFiles(res.files);
         lines.push("");
@@ -476,7 +477,7 @@ async function archiveUnifiedReport(text, p) {
     lines.push("--- 7z 列表 / 解压能力 ---");
     const mode = (p && p.sevenZipMode) || "list";
     const password = (p && p.password) || "";
-    const res = await run7zWasm(bytes, { extract: mode === "extract", password });
+    const res = await run7zWasm(bytes, { extract: mode === "extract", password, params: p });
     let files = [];
     if (res === null) {
  // wasm 缺失降级

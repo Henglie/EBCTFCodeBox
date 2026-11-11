@@ -325,7 +325,11 @@ function yescrypt(passwd, salt, flags, N, r, p, t, buflen) {
     if ((flags & ~(YESCRYPT_RW | 0x004 | 0x010 | 0x020 | 0x080 | YESCRYPT_PREHASH)) !== 0)
       throw new Error("RW 模式 flags 含未知位");
   } else throw new Error("flags 模式无效");
-  if ((N & (N - 1n)) !== 0n || N <= 1n || r < 1 || p < 1) throw new Error("N 须为 >1 的 2 的幂，r/p ≥ 1");
+  if (typeof N !== "bigint") throw new Error("N 须为 BigInt");
+  if ((N & (N - 1n)) !== 0n || N <= 1n) throw new Error("N 须为 >1 的 2 的幂");
+  if (!Number.isInteger(r) || !Number.isInteger(p) || r < 1 || p < 1) throw new Error("r/p 须为正整数");
+  if (!Number.isInteger(t) || t < 0) throw new Error("t 须为 ≥0 的整数");
+  if (!Number.isInteger(buflen) || buflen < 1) throw new Error("buflen 须为正整数");
   if (r * p >= (1 << 30)) throw new Error("r*p 过大");
   if (flags & YESCRYPT_RW) {
     if (N / BigInt(p) <= 1n || r < rmin) throw new Error("RW 模式需 N/p>1 且 r ≥ 1");
@@ -410,6 +414,13 @@ function decodeInput(s, enc) {
   return new TextEncoder().encode(t);
 }
 
+function intParam(value, fallback, name, min) {
+  if (value == null || String(value).trim() === "") return fallback;
+  const n = Number(String(value).trim());
+  if (!Number.isSafeInteger(n) || n < min) throw new Error(`yescrypt：${name} 必须为 ≥${min} 的整数（当前 ${value}）`);
+  return n;
+}
+
 function yescryptRun(text, p = {}) {
   const lines = [];
   lines.push("=== yescrypt 内存硬 KDF（openwall 官方 ref 实现）===");
@@ -420,26 +431,22 @@ function yescryptRun(text, p = {}) {
   const salt = decodeInput(p.salt != null ? p.salt : "", saltEnc);
   const mode = p.mode || "rw";
   const flags = mode === "scrypt" ? 0 : mode === "worm" ? YESCRYPT_WORM : YESCRYPT_RW_DEFAULTS;
-  const N = BigInt(parseInt(p.N, 10) || 2048);
-  const r = parseInt(p.r, 10) || 8;
-  const ppRaw = p.p != null && String(p.p).trim() !== "" ? String(p.p).trim() : null;
-  const pp = ppRaw !== null ? parseInt(ppRaw, 10) : 1;
-  if (ppRaw !== null && (!Number.isInteger(pp) || pp <= 0)) throw new Error("yescrypt：p 必须为正整数");
-  const t = parseInt(p.t, 10) || 0;
-  const dkLen = parseInt(p.dkLen, 10) || 32;
+  const Nnum = intParam(p.N, 2048, "N", 2);
+  if ((BigInt(Nnum) & (BigInt(Nnum) - 1n)) !== 0n) throw new Error(`yescrypt：N 必须为 >1 的 2 的幂（当前 ${Nnum}）`);
+  const N = BigInt(Nnum);
+  const r = intParam(p.r, 8, "r", 1);
+  const pp = intParam(p.p, 1, "p", 1);
+  const t = intParam(p.t, 0, "t", 0);
+  const dkLen = intParam(p.dkLen, 32, "dkLen", 1);
   lines.push(`口令: ${pass.length} 字节（${passEnc}）`);
   lines.push(`盐:   ${salt.length} 字节（${saltEnc}）`);
   lines.push(`模式: ${mode}（flags=0x${flags.toString(16)}）, N=${N}, r=${r}, p=${pp}, t=${t}, dkLen=${dkLen}`);
   const memMB = (128 * Number(N) * r) / (1024 * 1024);
   lines.push(`预计内存: ~${memMB.toFixed(1)} MB（128·N·r）`);
   lines.push("");
-  try {
-    const dk = yescrypt(pass, salt, flags, N, r, pp, t, dkLen);
-    lines.push("--- 派生密钥 (Derived Key) ---");
-    lines.push("hex: " + bytesToHex(dk));
-  } catch (e) {
-    lines.push("✗ " + (e.message || String(e)));
-  }
+  const dk = yescrypt(pass, salt, flags, N, r, pp, t, dkLen);
+  lines.push("--- 派生密钥 (Derived Key) ---");
+  lines.push("hex: " + bytesToHex(dk));
   return lines.join("\n");
 }
 

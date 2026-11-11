@@ -125,7 +125,15 @@ function ladder(k, u) {
 function x448(kBytes, uBytes) {
   const k = clampScalar448(kBytes);
   const u = mod(decodeLE(uBytes.slice(0, 56)));
-  return encodeLE(ladder(k, u), 56);
+  // Curve448 低阶 u 坐标（0 为 2 阶点，p-1 为 4 阶点）
+  if (u === 0n || u === P - 1n) {
+    throw new Error("X448 公钥为低阶点（u=0 或 u=p-1），已拒绝：低阶公钥会导致共享密钥落入小群");
+  }
+  const res = ladder(k, u);
+  if (res === 0n) {
+    throw new Error("X448 共享密钥为全零（对方公钥低阶或无效），已拒绝返回全零结果");
+  }
+  return encodeLE(res, 56);
 }
 
 const X448_BASE = (() => { const b = new Uint8Array(56); b[0] = 5; return b; })();
@@ -200,10 +208,13 @@ function pointDecompress(b57) {
   if (y >= P) return null;
   const u = mod(y * y - 1n);
   const v = mod(D * y * y - 1n);
+  if (v === 0n) return null; // 分母为 0 且 u≠0，不是曲线点
   // p = 3 (mod 4)：候选根 x = (u/v)^((p+1)/4)
   const x2 = mod(u * inv(v));
   let x = powMod(x2, (P + 1n) / 4n);
   if (mod(x * x) !== x2) return null;
+  // RFC 8032 §5.2.3：必须满足 x²·v ≡ u (mod p)，且 x=0 时符号位必须为 0
+  if (mod(x * x * v) !== u) return null;
   if (x === 0n && sign) return null;
   if (Number(x & 1n) !== sign) x = P - x;
   return { X: x, Y: y, Z: 1n };
@@ -211,6 +222,13 @@ function pointDecompress(b57) {
 
 function pointEqual(p, q) { // 交叉相乘比较，免除法
   return mod(p.X * q.Z - q.X * p.Z) === 0n && mod(p.Y * q.Z - q.Y * p.Z) === 0n;
+}
+
+/** 素数阶子群校验：P 非中性元、非小阶点，且 [L]P = O。 */
+function pointInPrimeSubgroup(Pt) {
+  if (!Pt || pointEqual(Pt, NEUTRAL)) return false;
+  if (pointEqual(scalarMul(4n, Pt), NEUTRAL)) return false;
+  return pointEqual(scalarMul(L, Pt), NEUTRAL);
 }
 
 // ==================== Ed448 签名 / 验签（RFC 8032 §5.2.5–§5.2.7） ====================
@@ -253,6 +271,8 @@ function ed448Verify(pk, msg, sig, ctx = new Uint8Array(0)) {
   const A = pointDecompress(pk);
   const R = pointDecompress(sig.slice(0, 57));
   if (!A || !R) return false;
+  // 拒绝身份元/小阶 A 与 R（防止身份元公钥伪造与小子群攻击）
+  if (!pointInPrimeSubgroup(A) || !pointInPrimeSubgroup(R)) return false;
   const S = decodeLE(sig.slice(57));
   if (S >= L) return false; // RFC 8032 §8.4：防 malleability 必须 S < L
   const dom = dom4(0, ctx);

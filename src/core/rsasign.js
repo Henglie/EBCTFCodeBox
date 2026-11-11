@@ -18,7 +18,7 @@
  */
 
 import { register } from "./registry.js";
-import { modPow } from "./primeGen.js";
+import { modPow, modPowCrt } from "./primeGen.js";
 import { derDecode, derBytesToBigint } from "./rsagen.js";
 import { md5Bytes } from "./hash.js";
 import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
@@ -283,14 +283,31 @@ function childInt(seq, i, what, ctx) {
  * 私钥 PEM → { n, e, d }。
  * 支持三种标签：RSA PRIVATE KEY（PKCS#1，RFC 8017 §A.1.2）、PRIVATE KEY（PKCS#8，RFC 5208）
  */
+/** RSAPrivateKey SEQUENCE → { n,e,d }（有 CRT 字段时一并返回 p,q,dp,dq,qinv） */
+function privFromSeq(seq, ctx) {
+  if (seq.children.length < 4) throw new Error(`${ctx}字段不足（需 version/n/e/d）`);
+  const out = {
+    n: childInt(seq, 1, "n", ctx),
+    e: childInt(seq, 2, "e", ctx),
+    d: childInt(seq, 3, "d", ctx),
+  };
+  if (seq.children.length >= 9) {
+    out.p = childInt(seq, 4, "p", ctx);
+    out.q = childInt(seq, 5, "q", ctx);
+    out.dp = childInt(seq, 6, "dp", ctx);
+    out.dq = childInt(seq, 7, "dq", ctx);
+    out.qinv = childInt(seq, 8, "qinv", ctx);
+  }
+  return out;
+}
+
 function parsePrivatePem(pem) {
   const { label, der } = pemToDer(pem);
   const root = derDecode(der);
   if (root.tag !== 0x30) throw new Error("PEM 根节点不是 SEQUENCE");
   if (label === "RSA PRIVATE KEY") {
     // RSAPrivateKey ::= SEQUENCE { version, n, e, d, p, q, dp, dq, qinv }
-    if (root.children.length < 4) throw new Error("PKCS#1 私钥字段不足（需 version/n/e/d）");
-    return { n: childInt(root, 1, "n", "PKCS#1 私钥"), e: childInt(root, 2, "e", "PKCS#1 私钥"), d: childInt(root, 3, "d", "PKCS#1 私钥") };
+    return privFromSeq(root, "PKCS#1 私钥");
   }
   if (label === "PRIVATE KEY") {
     // PrivateKeyInfo ::= SEQUENCE { version, AlgorithmIdentifier, privateKey OCTET STRING }
@@ -298,7 +315,7 @@ function parsePrivatePem(pem) {
     if (!octet || octet.tag !== 0x04) throw new Error("PKCS#8 私钥第 3 字段不是 OCTET STRING");
     const inner = derDecode(octet.value); // privateKey 字段内嵌完整 PKCS#1 RSAPrivateKey（RFC 5208 §5）
     if (inner.tag !== 0x30 || inner.children.length < 4) throw new Error("PKCS#8 内嵌 PKCS#1 私钥结构不完整");
-    return { n: childInt(inner, 1, "n", "PKCS#8 内嵌私钥"), e: childInt(inner, 2, "e", "PKCS#8 内嵌私钥"), d: childInt(inner, 3, "d", "PKCS#8 内嵌私钥") };
+    return privFromSeq(inner, "PKCS#8 内嵌私钥");
   }
   throw new Error(`私钥 PEM 标签「${label}」不受支持（支持 RSA PRIVATE KEY / PRIVATE KEY）`);
 }
@@ -359,10 +376,10 @@ function resolveSaltLen(raw, hashKey, emLen, what) {
   return v;
 }
 
-/** EM → 签名 s = EM^d mod n → k 字节大端 hex */
-function rsaSignEm(em, d, n) {
-  const k = Math.ceil(bigintBitLen(n) / 8);
-  const s = modPow(bytesToBigint(em), d, n); // RSASP1（RFC 8017 §5.2.1）：s = m^d mod n
+/** EM → 签名 s = EM^d mod n → k 字节大端 hex（有 p/q 时走 CRT 快路径） */
+function rsaSignEm(em, key) {
+  const k = Math.ceil(bigintBitLen(key.n) / 8);
+  const s = modPowCrt(bytesToBigint(em), key.d, key.n, key.p, key.q, key.dp, key.dq, key.qinv); // RSASP1（RFC 8017 §5.2.1）
   return { sigBytes: bigintToBytes(s, k, "签名值"), s };
 }
 
@@ -370,19 +387,19 @@ function rsaSignEm(em, d, n) {
  * 签名。mode = "pkcs1v15" | "pss"。
  * @returns {{sig: Uint8Array, mHash: Uint8Array, em?: Uint8Array, salt?: Uint8Array, emBits, emLen, sLen}}
  */
-async function rsaSignRaw(msgBytes, hashKey, mode, d, n, sLenRaw) {
-  const k = Math.ceil(bigintBitLen(n) / 8);
+async function rsaSignRaw(msgBytes, hashKey, mode, key, sLenRaw) {
+  const k = Math.ceil(bigintBitLen(key.n) / 8);
   const mHash = await hashBytes(hashKey, msgBytes);
   if (mode === "pkcs1v15") {
     const em = buildV15Em(mHash, hashKey, k); // v1.5 的 emBits 即 8k（n 首位为 1 时等价 modBits）
-    const { sigBytes } = rsaSignEm(em, d, n);
+    const { sigBytes } = rsaSignEm(em, key);
     return { sig: sigBytes, mHash, em, emBits: 8 * k, emLen: k, sLen: null };
   }
-  const emBits = bigintBitLen(n) - 1; // PSS：emBits = modBits(n) - 1（RFC 8017 §9.1.1 步骤 1-2）
+  const emBits = bigintBitLen(key.n) - 1; // PSS：emBits = modBits(n) - 1（RFC 8017 §9.1.1 步骤 1-2）
   const emLen = Math.ceil(emBits / 8);
   const sLen = resolveSaltLen(sLenRaw, hashKey, emLen, "sign");
   const { em, salt } = await buildPssEm(mHash, hashKey, emBits, sLen);
-  const { sigBytes } = rsaSignEm(em, d, n);
+  const { sigBytes } = rsaSignEm(em, key);
   return { sig: sigBytes, mHash, em, salt, emBits, emLen, sLen };
 }
 
@@ -491,19 +508,19 @@ register({
     const mode = p.mode || "pkcs1v15";
     const hashKey = p.hash || "sha256";
     if (!HASHES[hashKey]) throw new Error(`不支持的哈希 ${hashKey}`);
-    let n, d;
+    let key;
     if ((p.keyEnc || "dec") === "pem") {
-      ({ n, d } = parsePrivatePem(p.privPem));
+      key = parsePrivatePem(p.privPem);
     } else {
-      n = decToBigint(p.n, "模数 n");
-      d = decToBigint(p.d, "私钥指数 d");
+      key = { n: decToBigint(p.n, "模数 n"), d: decToBigint(p.d, "私钥指数 d") };
     }
+    const { n, d } = key;
     if (n < 3n || d <= 0n || d >= n) throw new Error("n/d 参数不合法（需 n ≥ 3 且 0 < d < n）");
     const raw = rawBytesOf(p);
     const msg = raw != null ? raw : messageBytes(text, "text");
 
     const saltLen = p.saltLenCustom != null && String(p.saltLenCustom).trim() !== "" ? p.saltLenCustom : p.saltLen;
-    const r = await rsaSignRaw(msg, hashKey, mode, d, n, saltLen);
+    const r = await rsaSignRaw(msg, hashKey, mode, key, saltLen);
     const k = Math.ceil(bigintBitLen(n) / 8);
     const lines = [
       `RSASSA-${mode === "pss" ? "PSS" : "PKCS1-v1_5"} 签名 · ${HASHES[hashKey].label} · ${bigintBitLen(n)} 位模数`,

@@ -25,6 +25,7 @@
 
 import { register } from "./registry.js";
 import { decodePNG, dataURLToBytes } from "./stegoPixels.js";
+import { isLimitError } from "./limitGuard.js";
 import { rgbaToDataURL } from "./mcMap.js";
 
 const WM_GRAY_THR = 200;
@@ -262,7 +263,10 @@ async function bytesToImageData(bytes) {
   const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   if (!u8.length) throw new Error("空图片数据");
   if (u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4e && u8[3] === 0x47) {
-    try { return decodePNG(u8); } catch (e) { /* 隔行等再试 canvas */ }
+    try { return decodePNG(u8); } catch (e) {
+      if (isLimitError(e)) throw e;
+      /* 隔行等再试 canvas */
+    }
   }
   if (typeof document !== "undefined" && typeof createImageBitmap === "function") {
     try {

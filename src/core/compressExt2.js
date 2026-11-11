@@ -40,6 +40,7 @@
  */
 import { register } from "./registry.js";
 import { inputToBytes, bytesToOutput } from "./compress.js";
+import { checkLimit, withLimit } from "./limitGuard.js";
 
 const te = (s) => new TextEncoder().encode(s);
 const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(b));
@@ -796,12 +797,32 @@ function xxh32(bytes, seed = 0) {
   return h >>> 0;
 }
 
+const LZ4_OUTPUT_SOFT = 64 * 1024 * 1024;      // LZ4 解压总输出软阈值
+const LZ4_OUTPUT_HARD = 256 * 1024 * 1024;     // 确认后的硬上限
+
+/** 写入前按累计输出检查预算；ctx.params 在用户确认后置为放行，避免逐序列重复弹窗。 */
+function lz4CheckOutputBudget(ctx, nextTotal) {
+  if (!ctx || nextTotal <= LZ4_OUTPUT_SOFT) return;
+  checkLimit({
+    scope: "compressExt2.lz4.totalOutput",
+    actual: nextTotal,
+    soft: LZ4_OUTPUT_SOFT,
+    hard: LZ4_OUTPUT_HARD,
+    params: ctx.params,
+    label: "LZ4 解压总输出",
+    unit: " 字节",
+  });
+  ctx.params = withLimit(ctx.params, { _allowLimitOverride: true });
+}
+
 /**
  * LZ4 块格式解压。outBase：已累积的历史输出（链接块字典）；out：本块输出数组。
  * 返回 out。末序列允许只含字面量（宽松口径，规范允许解码器容忍）。
+ * ctx.params 透传资源确认参数；ctx 可省略。
  */
-function lz4DecompressBlockInto(src, outBase, out, label) {
+function lz4DecompressBlockInto(src, outBase, out, label, ctx) {
   let i = 0;
+  const budget = ctx && typeof ctx === "object" ? ctx : {};
   const totalLen = () => outBase.length + out.length;
   const readAt = (idx) => (idx < outBase.length ? outBase[idx] : out[idx - outBase.length]);
   while (i < src.length) {
@@ -811,10 +832,9 @@ function lz4DecompressBlockInto(src, outBase, out, label) {
       let b;
       do { if (i >= src.length) throw new Error(`${label}：字面量长度续位越界（流被截断）。`); b = src[i++]; litLen += b; } while (b === 255);
     }
-    for (let k = 0; k < litLen; k++) {
-      if (i >= src.length) throw new Error(`${label}：字面量数据不足（声明 ${litLen} 字节，流被截断）。`);
-      out.push(src[i++]);
-    }
+    if (i + litLen > src.length) throw new Error(`${label}：字面量数据不足（声明 ${litLen} 字节，流被截断）。`);
+    lz4CheckOutputBudget(budget, out.length + litLen);
+    for (let k = 0; k < litLen; k++) out.push(src[i++]);
     if (i >= src.length) break; // 末序列：只有字面量
     if (i + 2 > src.length) throw new Error(`${label}：偏移字段不足 2 字节（流被截断）。`);
     const offset = src[i] | (src[i + 1] << 8);
@@ -827,6 +847,7 @@ function lz4DecompressBlockInto(src, outBase, out, label) {
     }
     matchLen += 4;
     if (offset > totalLen()) throw new Error(`${label}：偏移 ${offset} 超出已有数据 ${totalLen()} 字节（独立块档请改自动/帧格式，或数据损坏）。`);
+    lz4CheckOutputBudget(budget, out.length + matchLen);
     const start = totalLen() - offset;
     for (let k = 0; k < matchLen; k++) out.push(readAt(start + k));
   }
@@ -853,7 +874,7 @@ function lz4History(dict, out, cap) {
  * dict：外部字典字节（Uint8Array|null）；info：可选出参，回填 { dictId }（帧描述符声明值，-1 表示无）。
  * 帧描述符带 Dict-ID 标志时，字典须与压缩时完全一致才可解（LZ4 Frame Format 1.6.4「Dictionary ID」节）。
  */
-function lz4DecompressFrame(bytes, dict, info) {
+function lz4DecompressFrame(bytes, dict, info, params) {
   if (bytes.length < 7) throw new Error("LZ4 帧：数据过短。");
   if (!((bytes[0] === 0x04) && (bytes[1] === 0x22) && (bytes[2] === 0x4D) && (bytes[3] === 0x18)))
     throw new Error("LZ4 帧：magic 不符（应为 04 22 4D 18 = 0x184D2204）。");
@@ -888,6 +909,20 @@ function lz4DecompressFrame(bytes, dict, info) {
   const hc = bytes[i++];
   const wantHc = (xxh32(bytes.subarray(4, i - 1)) >>> 8) & 0xff;
   if (hc !== wantHc) throw new Error(`LZ4 帧：头校验 HC 不符（读到 ${hc.toString(16).padStart(2, "0")}，应为 ${wantHc.toString(16).padStart(2, "0")}）——帧头损坏。`);
+  let limitParams = params;
+  if (contentSize > LZ4_OUTPUT_SOFT) {
+    checkLimit({
+      scope: "compressExt2.lz4.frameContentSize",
+      actual: contentSize,
+      soft: LZ4_OUTPUT_SOFT,
+      hard: LZ4_OUTPUT_HARD,
+      params: limitParams,
+      label: "LZ4 帧声明内容长度",
+      unit: " 字节",
+    });
+    limitParams = withLimit(limitParams, { _allowLimitOverride: true });
+  }
+  const budgetCtx = { params: limitParams };
   const out = [];
   const windowCap = 65536 + 4 * 1024 * 1024; // 链接块窗口上限（64KB 偏移 + 4MB 块）
   // 外部字典：LZ4 偏移上限 65535，故只需字典末 64KB 参与历史（更早的字节任何偏移都够不到）
@@ -910,14 +945,15 @@ function lz4DecompressFrame(bytes, dict, info) {
       if (got !== want) throw new Error(`LZ4 帧：块校验 xxh32 不符（读到 0x${want.toString(16)}，实算 0x${got.toString(16)}）——块损坏。`);
     }
     if (uncompressed) {
+      lz4CheckOutputBudget(budgetCtx, out.length + data.length);
       for (const b of data) out.push(b);
     } else if (bIndep) {
       // 独立块：每块都以同一外部字典起始（无字典即空历史）
-      lz4DecompressBlockInto(data, dictHist || [], out, "LZ4 帧");
+      lz4DecompressBlockInto(data, dictHist || [], out, "LZ4 帧", budgetCtx);
     } else {
       // 链接块：历史 = 外部字典（仅帧首一次）+ 已解数据，滚动保留 64KB+ 窗口
       const base = lz4History(dictHist, out, windowCap);
-      lz4DecompressBlockInto(data, base, out, "LZ4 帧");
+      lz4DecompressBlockInto(data, base, out, "LZ4 帧", budgetCtx);
     }
   }
   if (cCheck) {
@@ -1037,7 +1073,7 @@ function lz4DecRun(text, p) {
   let out;
   if (fmt === "block" || (fmt === "auto" && !(bytes[0] === 0x04 && bytes[1] === 0x22 && bytes[2] === 0x4D && bytes[3] === 0x18))) {
     if (bytes.length === 0) throw new Error("LZ4：输入为空。");
-    out = lz4DecompressBlockInto(bytes, [], [], "LZ4 块");
+    out = lz4DecompressBlockInto(bytes, [], [], "LZ4 块", { params: p });
   } else {
     const info = {};
     let dictBytes = null;
@@ -1049,7 +1085,7 @@ function lz4DecRun(text, p) {
       }
     }
     try {
-      out = lz4DecompressFrame(bytes, dictBytes, info);
+      out = lz4DecompressFrame(bytes, dictBytes, info, p);
     } catch (e) {
       if (info.dictId >= 0 && !(dictBytes && dictBytes.length))
         throw new Error(`${e.message}（该帧声明外部字典 Dict-ID=0x${info.dictId.toString(16).padStart(8, "0")}：请在「外部字典」参数里提供与压缩时同一份字典）`);
@@ -1067,15 +1103,29 @@ function lz4DecRun(text, p) {
   return r.mode === "text" ? r.text : "(解压成功，结果为二进制 " + outU8.length + " 字节，输出 hex)\n" + r.text;
 }
 
-const LZ4_MAX_COMPRESS_BYTES = 4 * 1024 * 1024;
+const LZ4_COMPRESS_SOFT = 64 * 1024 * 1024;    // LZ4 压缩输入软阈值
+const LZ4_COMPRESS_HARD = 256 * 1024 * 1024;   // 确认后的输入硬上限
+
+/** 压缩输入超软阈值时走统一确认；返回带 override 的参数供本 op 后续检查复用。 */
+function lz4CheckCompressBudget(actual, params) {
+  if (actual <= LZ4_COMPRESS_SOFT) return params;
+  checkLimit({
+    scope: "compressExt2.lz4.compressInput",
+    actual,
+    soft: LZ4_COMPRESS_SOFT,
+    hard: LZ4_COMPRESS_HARD,
+    params,
+    label: "LZ4 压缩输入",
+    unit: " 字节",
+  });
+  return withLimit(params, { _allowLimitOverride: true });
+}
 
 /** LZ4 Frame 压缩（与 CC lz4js compress 同输出）：FLG=0x40、BD=0x70、HC=xxh32(FLG||BD)>>8，
  * 压缩后不小于原文时按 uncompressed block（size | 0x80000000）存原文，末尾 0 结束标记。 */
-export function lz4CompressFrame(bytes) {
+export function lz4CompressFrame(bytes, params = null) {
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
-  if (b.length > LZ4_MAX_COMPRESS_BYTES) {
-    throw new Error(`LZ4 Frame：输入 ${b.length} 字节超过上限 ${LZ4_MAX_COMPRESS_BYTES} 字节（4 MiB）`);
-  }
+  lz4CheckCompressBudget(b.length, params);
   const header = new Uint8Array([0x04, 0x22, 0x4d, 0x18, 0x40, 0x70, 0]);
   header[6] = (xxh32(header.subarray(4, 6)) >>> 8) & 0xff;
   const parts = [header];
@@ -1111,10 +1161,8 @@ function lz4CompressRun(text, p) {
     throw new Error("LZ4 压缩：输入不是合法 hex/base64（文本请使用输入视图的文本模式）");
   }
   if (bytes.length === 0) throw new Error("LZ4 压缩：输入为空。");
-  if (bytes.length > LZ4_MAX_COMPRESS_BYTES) {
-    throw new Error(`LZ4 压缩：输入 ${bytes.length} 字节超过上限 ${LZ4_MAX_COMPRESS_BYTES} 字节（4 MiB）`);
-  }
-  const block = fmt === "frame" ? lz4CompressFrame(bytes) : Uint8Array.from(lz4CompressBlock(bytes));
+  const limitParams = lz4CheckCompressBudget(bytes.length, p);
+  const block = fmt === "frame" ? lz4CompressFrame(bytes, limitParams) : Uint8Array.from(lz4CompressBlock(bytes));
   const outEnc = (p && p.outEnc) || "hex";
   if (outEnc === "base64") return bytesToB64Str(block);
   if (outEnc === "hex") return bytesToHexStr(block);
@@ -1200,7 +1248,7 @@ register({
         for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       } else bytes = new TextEncoder().encode(s);
     }
-    const out = lz4CompressFrame(bytes);
+    const out = lz4CompressFrame(bytes, p);
     const text = p.outEnc === "base64" ? bytesToB64Str(out) : bytesToHexStr(out);
     if (p.toFile) return { text: "(LZ4 Frame 压缩成功，" + out.length + " 字节，已提供 .lz4 文件)\n" + text,
       files: [{ name: "compressed.lz4", mime: "application/octet-stream", bytes: out }] };
@@ -1358,6 +1406,9 @@ class Bz2Huffman {
   }
 }
 
+const MAX_BZ2_OUTPUT = 64 * 1024 * 1024;      // bzip2 解压总输出软阈值
+const MAX_BZ2_OUTPUT_HARD = 256 * 1024 * 1024; // 确认后的硬上限
+
 function bz2ReadBlock(r, blockSize) {
   const wantCrc = r.readBits(32) >>> 0;
   const randomised = r.readBit() === 1; // 0.9.0 时代的 randomized 档；0.9.5+ 不再产出但参考实现仍可解码
@@ -1460,7 +1511,22 @@ function bz2ReadBlock(r, blockSize) {
   }
   // 走链 + RLE1 尾游程解码（4 连同字节后跟一个计数字节）
   // 随机化档：BWT 输出流每个字节读入即异或掩码位（与参考实现同序、同位置）
-  const out = [];
+  // RLE1 解码输出用可增长 Uint8Array（不用 JS 数字数组：大块输出会放大约 8 倍）。
+  let out = new Uint8Array(Math.min(MAX_BZ2_OUTPUT_HARD, 64 * 1024));
+  let outLen = 0;
+  const pushOut = (b) => {
+    if (outLen >= MAX_BZ2_OUTPUT_HARD) {
+      throw new Error(`bzip2：单块解压输出超过 ${MAX_BZ2_OUTPUT_HARD / (1024 * 1024)} MiB 硬上限（疑似压缩炸弹），已拒绝。`);
+    }
+    if (outLen === out.length) {
+      const cap = Math.min(MAX_BZ2_OUTPUT_HARD, out.length * 2);
+      if (cap <= out.length) throw new Error(`bzip2：单块解压输出超过 ${MAX_BZ2_OUTPUT_HARD / (1024 * 1024)} MiB 硬上限（疑似压缩炸弹），已拒绝。`);
+      const next = new Uint8Array(cap);
+      next.set(out);
+      out = next;
+    }
+    out[outLen++] = b;
+  };
   let tPos = tt[origPtr] >>> 8;
   let lastByte = -1, byteRepeats = 0, repeats = 0;
   for (let used = 0; used < bufIndex; used++) {
@@ -1471,22 +1537,24 @@ function bz2ReadBlock(r, blockSize) {
     if (byteRepeats === 3) {
       repeats = b;
       byteRepeats = 0;
-      for (let k = 0; k < repeats; k++) out.push(lastByte);
+      for (let k = 0; k < repeats; k++) pushOut(lastByte);
       lastByte = -1;
       continue;
     }
     if (lastByte === b) byteRepeats++;
     else byteRepeats = 0;
     lastByte = b;
-    out.push(b);
+    pushOut(b);
   }
-  const gotCrc = bz2Crc(out);
+  const outBytes = out.slice(0, outLen);
+  const gotCrc = bz2Crc(outBytes);
   if (gotCrc !== wantCrc)
     throw new Error(`bzip2：块 CRC 不符（读到 0x${wantCrc.toString(16).padStart(8, "0")}，实算 0x${gotCrc.toString(16).padStart(8, "0")}）——数据损坏。`);
-  return { out, wantCrc };
+  return { out: outBytes, wantCrc };
 }
 
-function bz2Decompress(bytes) {
+function bz2Decompress(bytes, params) {
+  let limitParams = params;
   const r = new MsbBitReader(bytes);
   const readSetup = (needMagic) => {
     if (needMagic) {
@@ -1498,14 +1566,35 @@ function bz2Decompress(bytes) {
     return 100000 * (level - 0x30);
   };
   let blockSize = readSetup(true);
-  const outAll = [];
+  const chunks = [];
+  let total = 0;
   let fileCrc = 0;
+  const joinChunks = () => {
+    const all = new Uint8Array(total);
+    let p = 0;
+    for (const c of chunks) { all.set(c, p); p += c.length; }
+    return all;
+  };
   while (true) {
     if (r.atEnd) throw new Error("bzip2：流在块 magic 前结束（缺尾 magic，数据被截断）。");
     const magic = r.readBits(48);
     if (magic === 0x314159265359) {
       const { out, wantCrc } = bz2ReadBlock(r, blockSize);
-      for (const b of out) outAll.push(b);
+      if (total + out.length > MAX_BZ2_OUTPUT) {
+        checkLimit({
+          scope: "compressExt2.bzip2.totalOutput",
+          actual: total + out.length,
+          soft: MAX_BZ2_OUTPUT,
+          hard: MAX_BZ2_OUTPUT_HARD,
+          params: limitParams,
+          label: "bzip2 解压总输出",
+          unit: " 字节",
+        });
+        limitParams = withLimit(limitParams, { _allowLimitOverride: true });
+      }
+      const part = out;
+      chunks.push(part);
+      total += part.length;
       fileCrc = (((fileCrc << 1) | (fileCrc >>> 31)) ^ wantCrc) >>> 0;
     } else if (magic === 0x177245385090) {
       const want = r.readBits(32) >>> 0;
@@ -1519,7 +1608,7 @@ function bz2Decompress(bytes) {
         fileCrc = 0;
         continue;
       }
-      return outAll;
+      return joinChunks();
     } else {
       throw new Error(`bzip2：块 magic 非法（0x${magic.toString(16)}，应为 314159265359 或尾 177245385090）。`);
     }
@@ -1534,7 +1623,7 @@ function bzip2DecRun(text, p) {
     throw new Error("bzip2：输入不是合法 hex/base64（应以 425a68… 即 BZh 开头）。");
   }
   if (bytes.length === 0) throw new Error("bzip2：输入为空。");
-  const out = new Uint8Array(bz2Decompress(bytes));
+  const out = new Uint8Array(bz2Decompress(bytes, p));
   const r = bytesToOutput(out);
   if (p && p.toFile && r.mode !== "text") {
     return {

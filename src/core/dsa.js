@@ -246,6 +246,14 @@ function dsaSign(z, p, q, g, x, kFixed) {
  * @returns {{ok:boolean, v:bigint}}
  */
 function dsaVerify(z, r, s, p, q, g, y) {
+  if (!(p > 2n && q > 1n)) return { ok: false, v: -1n, reason: `参数 p/q 不合法（需 p>2、q>1）` };
+  if (!isProbablePrime(q)) return { ok: false, v: -1n, reason: `q 不是素数（q 阶子群校验不成立）` };
+  if (mod(p - 1n, q) !== 0n) return { ok: false, v: -1n, reason: `q 不整除 p-1（当前 q=${q}）` };
+  if (!(g > 1n && g < p)) return { ok: false, v: -1n, reason: `g 不在 (1, p) 内` };
+  if (powMod(g, q, p) !== 1n) return { ok: false, v: -1n, reason: `g 的阶不是 q（g^q mod p ≠ 1）` };
+  // 公钥必须落在 q 阶子群：1<y<p 且 y^q≡1；y=1 会让任意伪造签名通过，必须拒绝
+  if (!(y > 1n && y < p)) return { ok: false, v: -1n, reason: `公钥 y 不在 (1, p) 内` };
+  if (powMod(y, q, p) !== 1n) return { ok: false, v: -1n, reason: `y^q mod p ≠ 1（公钥不在 q 阶子群）` };
   if (!(r > 0n && r < q)) return { ok: false, v: -1n, reason: `r 不在 (0, q) 内` };
   if (!(s > 0n && s < q)) return { ok: false, v: -1n, reason: `s 不在 (0, q) 内` };
   const w = modInverse(s, q);

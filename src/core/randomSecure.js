@@ -24,7 +24,10 @@
  *       endpoint/auth/length/format，输出「状态报告 + 随机数」文本。
  */
 import { register } from "./registry.js";
-import { randomBytes, setRandConfig, getRandConfig, isServerReady, warmupServer } from "./randSource.js";
+import {
+  randomBytes, setRandConfig, getRandConfig, isServerReady, warmupServer,
+  beginRandExecutionContext, endRandExecutionContext,
+} from "./randSource.js";
 import { RAND_SERVER_MAX_BYTES, RAND_SERVER_DEFAULT_BYTES } from "./randServer.js";
 
 /** 档位中文标签（op 输出报告用；op 名称/描述的 i18n 由 i18n 侧落 op.randomSecure.* 键）。 */
@@ -111,6 +114,42 @@ function randomIntegers(p) {
   return vals.join(delim);
 }
 
+async function randomSecureRun(_text, p) {
+  const req = (p && p.mode) || "inherit";
+  // 显式档位 → 切换全局配置（inherit = 不改动，仅查看）。
+  if (req !== "inherit") {
+    setRandConfig({ mode: req, seed: p && p.seed, endpoint: p && p.endpoint, auth: p && p.auth });
+  }
+  if (p && p.genMode === "integers") return randomIntegers(p);
+  const cfg = getRandConfig();
+  const len = clampLen(p && p.length);
+  const fmt = (p && p.format) === "base64" ? "base64" : "hex";
+
+  const lines = [
+    "当前档位：" + cfg.mode + " —— " + (MODE_LABEL[cfg.mode] || "未知档位"),
+    "随机源状态：" + sourceStatus(cfg),
+    "请求：" + len + " 字节 · 输出格式 " + fmt,
+    req === "inherit" ? "本次未修改档位（mode=inherit，仅查看）" : "已切换档位 → " + cfg.mode,
+  ];
+
+  let out;
+  try {
+    if (req !== "inherit" && cfg.mode === "server") {
+      // op 参数显式选了 server 档——本 op 的 setRandConfig 已使预取池失效，
+      // 先取数一次填池（用户在本 op 参数中自填 endpoint 即为主动配置的联网），
+      // 再同步消费；失败显式抛错（底层原因如实呈现），绝不回落。
+      // mode=inherit 时不在此取数：UI 运行前钩子（main.js convert）已取一次，避免重复请求。
+      await warmupServer({ count: Math.max(1, Math.min(RAND_SERVER_MAX_BYTES, len || RAND_SERVER_DEFAULT_BYTES)) });
+    }
+    out = randomBytes(len);
+  } catch (e) {
+    // 禁静默降级：取不到随机数 → 明确呈现底层原因（不回落、不返回弱随机）。
+    return lines.join("\n") + "\n\n✗ 取随机数失败：" + ((e && e.message) || String(e));
+  }
+  const body = fmt === "base64" ? bytesToB64(out) : bytesToHex(out);
+  return lines.join("\n") + "\n\n" + body;
+}
+
 register({
   id: "randomSecure", cat: "radix", name: "增强随机安全",
   desc: "查看 / 切换随机源档位、查看随机源状态、按指定长度取随机数（hex/base64）",
@@ -154,39 +193,13 @@ register({
         { value: "base64", label: "Base64" },
       ] },
   ],
-  run: async (_text, p) => {
-    const req = (p && p.mode) || "inherit";
-    // 显式档位 → 切换全局配置（inherit = 不改动，仅查看）。
-    if (req !== "inherit") {
-      setRandConfig({ mode: req, seed: p && p.seed, endpoint: p && p.endpoint, auth: p && p.auth });
-    }
-    if (p && p.genMode === "integers") return randomIntegers(p);
-    const cfg = getRandConfig();
-    const len = clampLen(p && p.length);
-    const fmt = (p && p.format) === "base64" ? "base64" : "hex";
-
-    const lines = [
-      "当前档位：" + cfg.mode + " —— " + (MODE_LABEL[cfg.mode] || "未知档位"),
-      "随机源状态：" + sourceStatus(cfg),
-      "请求：" + len + " 字节 · 输出格式 " + fmt,
-      req === "inherit" ? "本次未修改档位（mode=inherit，仅查看）" : "已切换档位 → " + cfg.mode,
-    ];
-
-    let out;
+  run: async (text, p) => {
+    // op 执行上下文：期间 setRandConfig 只改内存，绝不触发 UI 持久化。
+    beginRandExecutionContext();
     try {
-      if (req !== "inherit" && cfg.mode === "server") {
-        // op 参数显式选了 server 档——本 op 的 setRandConfig 已使预取池失效，
-        // 先取数一次填池（用户在本 op 参数中自填 endpoint 即为主动配置的联网），
-        // 再同步消费；失败显式抛错（底层原因如实呈现），绝不回落。
-        // mode=inherit 时不在此取数：UI 运行前钩子（main.js convert）已取一次，避免重复请求。
-        await warmupServer({ count: Math.max(1, Math.min(RAND_SERVER_MAX_BYTES, len || RAND_SERVER_DEFAULT_BYTES)) });
-      }
-      out = randomBytes(len);
-    } catch (e) {
-      // 禁静默降级：取不到随机数 → 明确呈现底层原因（不回落、不返回弱随机）。
-      return lines.join("\n") + "\n\n✗ 取随机数失败：" + ((e && e.message) || String(e));
+      return await randomSecureRun(text, p);
+    } finally {
+      endRandExecutionContext();
     }
-    const body = fmt === "base64" ? bytesToB64(out) : bytesToHex(out);
-    return lines.join("\n") + "\n\n" + body;
   },
 });

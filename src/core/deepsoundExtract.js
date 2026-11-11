@@ -23,10 +23,15 @@
 import { register } from "./registry.js";
 import { inputToBytes } from "./compress.js";
 import { aesEncrypt, aesDecrypt } from "./modern.js";
+import { checkLimit, withLimit } from "./limitGuard.js";
 
 const HEAD_SCAN_LIMIT = 352800;
 const HEAD_CARRIER = 104;      // 头部载体字节数（26 秘密字节 × mode4）
 const PLAIN_HEAD_CARRIER = 24; // 明文头有效载体（6 秘密字节 × mode4）
+const MAX_WAV_CHUNKS = 4096;   // RIFF 块遍历上限（防伪造块链死循环）
+const MAX_RECORDS = 4096;      // DeepSound 记录链上限（防伪造记录耗尽内存）
+const OUTPUT_SOFT = 64 * 1024 * 1024;   // 隐藏文件总输出软阈值
+const OUTPUT_HARD = 256 * 1024 * 1024;  // 确认后的总输出硬上限
 
 // ============ WAV data 块定位 ============
 /**
@@ -38,15 +43,19 @@ export function findDataChunk(wav) {
   if (String.fromCharCode(wav[0], wav[1], wav[2], wav[3]) !== "RIFF") return null;
   if (String.fromCharCode(wav[8], wav[9], wav[10], wav[11]) !== "WAVE") return null;
   let o = 12;
+  let blocks = 0;
   while (o + 8 <= wav.length) {
+    if (++blocks > MAX_WAV_CHUNKS) break;
     const id = String.fromCharCode(wav[o], wav[o + 1], wav[o + 2], wav[o + 3]);
-    const sz = wav[o + 4] | (wav[o + 5] << 8) | (wav[o + 6] << 16) | (wav[o + 7] << 24);
+    const sz = (wav[o + 4] | (wav[o + 5] << 8) | (wav[o + 6] << 16) | (wav[o + 7] << 24)) >>> 0;
     if (id.toLowerCase() === "data") {
       const start = o + 8;
-      const len = Math.min(sz >>> 0, wav.length - start);
+      const len = Math.min(sz, wav.length - start);
       return [start, len];
     }
-    o = o + 8 + sz + (sz & 1);
+    const next = o + 8 + sz + (sz & 1);
+    if (next <= o || next > wav.length) break; // 无符号 size 仍越界/回退 → 非法块链
+    o = next;
   }
   return null;
 }
@@ -138,11 +147,12 @@ export function keyDscf(pw) {
  * 从 WAV 载体提取 DeepSound 隐藏文件。
  * @param {Uint8Array} wav 整个 WAV 字节
  * @param {string} password 密码（加密文件必填）
+ * @param {object} [params] 资源确认参数（_allowLimitOverride 透传）
  * @returns {Promise<{version:string, mode:number, encrypted:boolean,
  *   files:Array<{name:string, data:Uint8Array}>}>}
  * @throws 非 WAV / 无 DeepSound 头 / 加密缺密码 / 密码错误
  */
-export async function extractDeepSound(wav, password) {
+export async function extractDeepSound(wav, password, params = null) {
   const chunk = findDataChunk(wav);
   if (!chunk) throw new Error("不是有效的 WAV（缺少 data 块）。DeepSound 只支持 PCM WAV。");
   const [base, len] = chunk;
@@ -164,8 +174,13 @@ export async function extractDeepSound(wav, password) {
 
   // 加密头占满 104 载体字节；明文头只有前 24 有效
   let pos = encrypted ? h + HEAD_CARRIER : h + PLAIN_HEAD_CARRIER;
+  let limitParams = params;
+  let totalOut = 0;
   const files = [];
   for (;;) {
+    if (files.length >= MAX_RECORDS) {
+      throw new Error(`DeepSound 记录数超过安全上限 ${MAX_RECORDS}，已拒绝继续解析（疑似伪造记录链）。`);
+    }
     const hdrCarrier = 32 * mode;
     if (pos + hdrCarrier > len) break;
     let hdr = decodeLowBits(wav, base + pos, hdrCarrier, mode);
@@ -178,13 +193,27 @@ export async function extractDeepSound(wav, password) {
     }
     const td = new TextDecoder("utf-8", { fatal: false });
     const name = td.decode(hdr.slice(4, 24)).replace(/\0+$/g, "").replace(/\?/g, "X");
-    const size = (hdr[24] << 24) | (hdr[25] << 16) | (hdr[26] << 8) | hdr[27]; // 大端
+    const size = ((hdr[24] << 24) | (hdr[25] << 16) | (hdr[26] << 8) | hdr[27]) >>> 0; // 大端，按无符号处理
 
     const cstart = pos + hdrCarrier;
     const padLen = 16 - ((size + 4) % 16);        // 整除时也补 16（与原工具一致）
     const padded = size + padLen + 4;             // 内容 + 零填充 + "DSSF" 结束标记
     const contentCarrier = padded * mode;
     if (cstart + contentCarrier > len) break;     // 截断 / 长度非法
+    // 分配/解密内容前按累计输出字节确认；确认后复用 limitParams，避免每条记录重复弹窗。
+    if (totalOut + size > OUTPUT_SOFT) {
+      checkLimit({
+        scope: "deepsoundExtract.totalOutput",
+        actual: totalOut + size,
+        soft: OUTPUT_SOFT,
+        hard: OUTPUT_HARD,
+        params: limitParams,
+        label: "DeepSound 解压总输出",
+        unit: " 字节",
+      });
+      limitParams = withLimit(limitParams, { _allowLimitOverride: true });
+    }
+    totalOut += size;
     let content = decodeLowBits(wav, base + cstart, contentCarrier, mode);
     if (key) content = aesDecrypt(content, key, { mode: "ECB", pad: false });
     files.push({ name, data: content.slice(0, size) });
@@ -309,7 +338,7 @@ async function deepsoundRun(text, p) {
     ? (p.rawBytes instanceof Uint8Array ? p.rawBytes : new Uint8Array(p.rawBytes))
     : inputToBytes(text, p);
   const password = String((p && p.password) || "");
-  const a = await extractDeepSound(bytes, password);
+  const a = await extractDeepSound(bytes, password, p);
 
   const lines = [
     `DeepSound ${a.version} · 质量模式 ${a.mode} · ${a.encrypted ? "AES-256 加密" : "未加密"}`,

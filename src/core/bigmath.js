@@ -29,6 +29,7 @@
  */
 import { register } from "./registry.js";
 import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
+import { modPow as fastModPow } from "./primeGen.js"; // 共享 Montgomery+窗口模幂快路径
 
 // ============================================================
 // 输入解析（宽松：千分位逗号 / 下划线 / 各种空白一律剥掉）
@@ -96,15 +97,7 @@ function modPowBig(a, b, m) {
   if (m < 1n) throw new Error("模数 m 需为 >= 1 的整数");
   if (b < 0n) throw new Error("指数 b 需为非负整数（负指数请先求模逆再 modpow）");
   if (m === 1n) return 0n;
-  let base = ((a % m) + m) % m;
-  let exp = b;
-  let result = 1n;
-  while (exp > 0n) {
-    if (exp & 1n) result = (result * base) % m;
-    exp >>= 1n;
-    base = (base * base) % m;
-  }
-  return result;
+  return fastModPow(a, b, m); // 快路径：奇数模 Montgomery+窗口，偶数模二进制；语义同上
 }
 
 /**

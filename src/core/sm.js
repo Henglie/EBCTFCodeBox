@@ -18,6 +18,7 @@
  * - 机制四合规：仅新建本文件 + 件内自注册，不碰 main.js import 清单和 i18n 主表。
  */
 import { register } from "./registry.js";
+import { finishBytesDecode } from "./bytesIo.js";
 
 const te = (s) => new TextEncoder().encode(s);
 const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(b));
@@ -329,7 +330,9 @@ register({
     const key = hexToBytes(p.key || "00".repeat(16));
     const iv = hexToBytes(p.iv || "00".repeat(16));
     const data = rawBytesOrNull(p, text) || decodeInput(text, "hex");
-    return encodeOutput(zucCrypt(data, key, iv), p.outEnc || "utf8");
+    const out = zucCrypt(data, key, iv);
+    const outEnc = p.outEnc || "utf8";
+    return outEnc === "utf8" ? finishBytesDecode(out) : encodeOutput(out, outEnc);
   },
   detect: (text) => {
  // ZUC 密文无固定格式特征，不识别

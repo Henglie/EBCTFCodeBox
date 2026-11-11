@@ -20,6 +20,7 @@
  */
 import { register } from "./registry.js";
 import { padBytes, unpadBytes, PADDING_OPTIONS } from "./modern.js";
+import { finishBytesDecode } from "./bytesIo.js";
 
 const te = (s) => new TextEncoder().encode(s);
 const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(b));
@@ -1784,7 +1785,7 @@ function makeBlockDecode(decFn) {
     const padding = p.padding || "pkcs7";
     const rounds = p.rounds != null && p.rounds !== "" ? Number(p.rounds) : undefined;
     const wordSize = p.wordSize != null && p.wordSize !== "" ? Number(p.wordSize) : undefined;
-    return encodeOutput(decFn(data, key, { mode, iv, padding, rounds, wordSize }), "utf8");
+    return finishBytesDecode(decFn(data, key, { mode, iv, padding, rounds, wordSize }));
   };
 }
 

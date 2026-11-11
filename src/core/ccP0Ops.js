@@ -99,10 +99,10 @@ async function lzmaRun(text, p = {}) {
     const preset = p.preset == null || p.preset === "" ? 6 : Number(p.preset);
     if (!Number.isInteger(preset) || preset < 0 || preset > 9) throw new Error("LZMA：preset 必须是 0..9");
     if (format === "raw") {
-      const r = await lzmaEncodeRaw(input, { preset });
+      const r = await lzmaEncodeRaw(input, { preset, params: p });
       return `props=${bytesToHex(propsToBytes(r.props))}\nsize=${r.size}\n${fromBytes(r.bytes, p.outEnc || "base64", true)}`;
     }
-    return fromBytes(await lzmaEncode(input, { preset }), p.outEnc || "auto", true);
+    return fromBytes(await lzmaEncode(input, { preset, params: p }), p.outEnc || "auto", true);
   }
   if (dir !== "decode") throw new Error("LZMA：dir 只能是 encode / decode");
   let bytes = input;
@@ -117,9 +117,9 @@ async function lzmaRun(text, p = {}) {
   }
   if (format === "raw" || (format === "auto" && !isLzmaAlone(bytes))) {
     if (!props) throw new Error("LZMA raw 解码需要 props（5 字节属性）");
-    return fromBytes(await lzmaDecode(bytes, { format: "raw", props, size }), p.outEnc || "auto", false);
+    return fromBytes(await lzmaDecode(bytes, { format: "raw", props, size, params: p }), p.outEnc || "auto", false);
   }
-  return fromBytes(await lzmaDecode(bytes, { format: "lzma" }), p.outEnc || "auto", false);
+  return fromBytes(await lzmaDecode(bytes, { format: "lzma", params: p }), p.outEnc || "auto", false);
 }
 
 function parseEntries(text) {

@@ -29,6 +29,22 @@
 import { register } from "./registry.js";
 import { parseWav, readPcmSamples, inputToBytes } from "./audiostego.js";
 import { rgbaToDataURL } from "./mcMap.js";
+import { checkLimit, withLimit } from "./limitGuard.js";
+
+const AUDIO_BYTES_SOFT = 128 * 1024 * 1024;
+const AUDIO_BYTES_HARD = 512 * 1024 * 1024;
+const AUDIO_FRAMES_SOFT = 8 * 1024 * 1024;
+const AUDIO_FRAMES_HARD = 32 * 1024 * 1024;
+
+function readPreviewMinutes(p) {
+  const v = Number(p && p.previewMinutes);
+  return Number.isFinite(v) && v > 0 ? v : 0;
+}
+
+function fmtMinutes(v) {
+  if (!Number.isFinite(v)) return "?";
+  return String(+v.toFixed(3));
+}
 
 // ============================================================
 // radix-2 Cooley-Tukey FFT（原地，re/im 为 Float64Array，长度须 2 的幂）
@@ -150,6 +166,7 @@ function spectrogramRun(text, p) {
   const fftSize = [256, 512, 1024, 2048].includes(Number(p && p.fftSize)) ? Number(p.fftSize) : 1024;
   const chSel = Math.max(0, parseInt((p && p.channel) || "0", 10) || 0);
   const dbFloor = Math.max(20, Math.min(120, parseInt((p && p.dbFloor) || "80", 10) || 80));
+  const previewMinutes = readPreviewMinutes(p);
   const MAX_FRAMES = 2000;
 
   const L = [];
@@ -165,18 +182,60 @@ function spectrogramRun(text, p) {
   catch (e) { return "✗ 输入解析失败: " + (e.message || String(e)); }
   if (!bytes || bytes.length < 44) return "✗ 数据太短，非有效 WAV（需含 44 字节以上 RIFF 头）。";
 
+  let limitParams = (p && typeof p === "object") ? p : null;
+  if (bytes.length > AUDIO_BYTES_SOFT) {
+    checkLimit({
+      scope: "spectrogram.inputBytes",
+      actual: bytes.length,
+      soft: AUDIO_BYTES_SOFT,
+      hard: AUDIO_BYTES_HARD,
+      params: limitParams,
+      label: "WAV 输入",
+      unit: " 字节",
+    });
+    limitParams = withLimit(limitParams, { _allowLimitOverride: true });
+  }
+
   const wav = parseWav(bytes);
   if (!wav.ok) return "✗ WAV 解析失败: " + (wav.error || "未知") + "\n（本 op 仅支持 PCM WAV；MP3/OGG 等压缩格式请先转 WAV）";
   if (!wav.data) return "✗ WAV 缺 data 块。";
 
   const fmt = wav.fmt;
+  const sr = fmt.sampleRate || 0;
+  const frameBytes = (fmt.bitsPerSample >> 3) * fmt.channels;
+  let totalFrames = 0;
+  let frames = 0;
+  let previewTruncated = false;
+  if (Number.isFinite(frameBytes) && frameBytes > 0) {
+    totalFrames = Math.floor(wav.data.actual / frameBytes);
+    frames = totalFrames;
+    if (previewMinutes > 0 && sr > 0) {
+      const cap = Math.ceil(previewMinutes * 60 * sr);
+      if (Number.isFinite(cap) && cap < frames) {
+        frames = Math.max(1, cap);
+        previewTruncated = true;
+      }
+    }
+    if (frames > AUDIO_FRAMES_SOFT) {
+      checkLimit({
+        scope: "spectrogram.frames",
+        actual: frames,
+        soft: AUDIO_FRAMES_SOFT,
+        hard: AUDIO_FRAMES_HARD,
+        params: limitParams,
+        label: "WAV 采样帧",
+        unit: " 帧",
+      });
+    }
+  }
   const tag = fmt.formatTag === 0xFFFE ? (fmt.subFormat || 0) : fmt.formatTag;
   if (tag !== 1 && tag !== 3) {
     L.push("⚠ formatTag=" + fmt.formatTag + "（非 PCM/IEEE-float，解码可能不准）");
   }
 
+  const previewDataBytes = frames > 0 ? frames * frameBytes : wav.data.actual;
   let pcm;
-  try { pcm = readPcmSamples(bytes, fmt, wav.data.offset, wav.data.actual); }
+  try { pcm = readPcmSamples(bytes, fmt, wav.data.offset, previewDataBytes); }
   catch (e) { return "✗ PCM 读取失败: " + (e.message || String(e)); }
 
   const ch = Math.min(chSel, pcm.channels.length - 1);
@@ -200,10 +259,15 @@ function spectrogramRun(text, p) {
     L.push("● 帧数超上限，hop 放大到 " + hop + " 抽帧（原半重叠帧数过多）");
   }
 
-  const sr = fmt.sampleRate || 0;
   const durSec = sr ? (raw.length / sr) : 0;
+  const totalDurSec = sr ? (totalFrames / sr) : 0;
   L.push("● 采样率: " + sr + " Hz / 位深: " + fmt.bitsPerSample + " / 声道: " + pcm.channels.length + "（用第 " + ch + " 声道）");
-  L.push("● 时长: " + durSec.toFixed(3) + " s / 样本数: " + raw.length);
+  L.push("● 时长: " + durSec.toFixed(3) + " s / 样本数: " + raw.length
+    + (totalDurSec > durSec + 1e-9 ? "（原始 " + totalDurSec.toFixed(3) + " s）" : ""));
+  if (previewMinutes > 0) {
+    L.push("● 预览: 仅分析前 " + fmtMinutes(previewMinutes) + " 分钟（原始 " + fmtMinutes(totalDurSec / 60) + " 分钟）"
+      + (previewTruncated ? "，分析帧 " + frames + " / " + totalFrames : "，未超过总时长"));
+  }
   L.push("● FFT 帧长: " + fftSize + " / hop: " + hop + " / 频率分辨率: " + (sr ? (sr / fftSize).toFixed(1) : "?") + " Hz/bin");
 
   const sp = stft(samples, fftSize, hop);
@@ -244,6 +308,7 @@ register({
     },
     { key: "channel", label: "声道（0=左）", type: "number", default: 0, placeholder: "多声道时选，默认 0" },
     { key: "dbFloor", label: "动态范围底(dB)", type: "number", default: 80, placeholder: "20-120，默认 80" },
+    { key: "previewMinutes", label: "仅分析前 N 分钟", labelKey: "op.spectrogram.param.previewMinutes", type: "number", default: 0, placeholder: "0 = 全量；建议 1-60（长音频只分析前 N 分钟，最小 0）" },
   ],
   run: spectrogramRun,
   acceptsBytes: true,

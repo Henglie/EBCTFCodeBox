@@ -32,7 +32,7 @@
  */
 
 import { register } from "./registry.js";
-import { blake2b } from "./argon2id.js";
+import { argon2Kdf } from "./argon2id.js";
 
 const te = new TextEncoder();
 const toHex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
@@ -90,173 +90,9 @@ function hexBytes(s) {
 // ============================================================
 // Argon2（RFC 9106，Argon2d/i/id）
 // 内存矩阵 Uint32Array；每个 1024B 块 = 128 个 64-bit 字 = 256×uint32（lo/hi 对）。
-// BLAKE2b 复用 argon2id.js 的已验证实现；H'/G 本文件内置（argon2id.js 未导出）。
+// BLAKE2b/H'/G 复用 argon2id.js 的 Uint32 内核（RFC 9106 向量已对拍）。
 // ============================================================
-const A2_VERSION = 0x13;
 const A2_TYPES = { argon2d: 0, argon2i: 1, argon2id: 2 };
-const U32 = 0x100000000; // 2^32
-
-function le32(n) {
-  return new Uint8Array([n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff]);
-}
-function u8concat(...arrs) {
-  let len = 0;
-  for (const a of arrs) len += a.length;
-  const out = new Uint8Array(len);
-  let o = 0;
-  for (const a of arrs) { out.set(a, o); o += a.length; }
-  return out;
-}
-
-// H'^T(A)：RFC 9106 §3.2 变长哈希（输出 T 字节；≤64 一发，>64 按 32 字节链）
-function hprime(outLen, A) {
-  const input = u8concat(le32(outLen), A);
-  if (outLen <= 64) return blake2b(input, outLen);
-  const r = Math.ceil(outLen / 32) - 2;
-  const out = new Uint8Array(outLen);
-  let V = blake2b(input, 64);
-  out.set(V.subarray(0, 32), 0);
-  for (let i = 1; i < r; i++) {
-    V = blake2b(V, 64);
-    out.set(V.subarray(0, 32), i * 32);
-  }
-  const lastLen = outLen - 32 * r;
-  V = blake2b(V, lastLen);
-  out.set(V.subarray(0, lastLen), 32 * r);
-  return out;
-}
-
-// ---- 64-bit 字运算（lo/hi uint32 对），全程 Number 精确（无 53 位溢出路径）----
-let _rlo = 0, _rhi = 0; // 乘/旋结果的模块级出口（避免热点路径建数组）
-
-// (x*y*2) mod 2^64 → _rlo/_rhi。x,y 为 uint32；16 位拆分乘法，全 Number 精确。
-function mulDbl(x, y) {
-  const xh = x >>> 16, xl = x & 0xffff, yh = y >>> 16, yl = y & 0xffff;
-  const p0 = xl * yl;               // < 2^32
-  const p1 = xh * yl + xl * yh;     // < 2^33
-  const p2 = xh * yh;               // < 2^32
-  const t0 = p0 + p1 * 0x10000;     // < 2^33 + 2^32（double 精确）
-  const lo = t0 % U32;
-  // 高位 = p2 + t0 的进位（floor(t0/2^32) 已涵盖 floor(p1/2^16)，勿重复计入）
-  const hi = (p2 + Math.floor(t0 / U32)) % U32;
-  _rlo = (lo * 2) % U32;
-  _rhi = (hi * 2 + (lo >= 0x80000000 ? 1 : 0)) % U32;
-}
-
-// 64-bit 循环右移 n 位 → _rlo/_rhi
-function rotr64(lo, hi, n) {
-  if (n === 32) { _rlo = hi; _rhi = lo; return; }
-  if (n < 32) {
-    _rlo = ((lo >>> n) | (hi << (32 - n))) >>> 0;
-    _rhi = ((hi >>> n) | (lo << (32 - n))) >>> 0;
-    return;
-  }
-  const m = n - 32;
-  _rlo = ((hi >>> m) | (lo << (32 - m))) >>> 0;
-  _rhi = ((lo >>> m) | (hi << (32 - m))) >>> 0;
-}
-
-// Argon2 GB（RFC 9106 §3.5，含 2*lo*lo 乘法项）。v: Uint32Array，a..d 为字下标。
-function gb(v, a, b, c, d) {
-  const ai = 2 * a, bi = 2 * b, ci = 2 * c, di = 2 * d;
-  let alo = v[ai], ahi = v[ai + 1];
-  let blo = v[bi], bhi = v[bi + 1];
-  let clo = v[ci], chi = v[ci + 1];
-  let dlo = v[di], dhi = v[di + 1];
-  let s;
-  // a += b + 2*lo(a)*lo(b)
-  mulDbl(alo, blo);
-  s = alo + blo + _rlo;
-  alo = s % U32; ahi = (ahi + bhi + _rhi + Math.floor(s / U32)) % U32;
-  // d = rotr(d ^ a, 32)
-  rotr64((dlo ^ alo) >>> 0, (dhi ^ ahi) >>> 0, 32);
-  dlo = _rlo; dhi = _rhi;
-  // c += d + 2*lo(c)*lo(d)
-  mulDbl(clo, dlo);
-  s = clo + dlo + _rlo;
-  clo = s % U32; chi = (chi + dhi + _rhi + Math.floor(s / U32)) % U32;
-  // b = rotr(b ^ c, 24)
-  rotr64((blo ^ clo) >>> 0, (bhi ^ chi) >>> 0, 24);
-  blo = _rlo; bhi = _rhi;
-  // a += b + 2*lo(a)*lo(b)
-  mulDbl(alo, blo);
-  s = alo + blo + _rlo;
-  alo = s % U32; ahi = (ahi + bhi + _rhi + Math.floor(s / U32)) % U32;
-  // d = rotr(d ^ a, 16)
-  rotr64((dlo ^ alo) >>> 0, (dhi ^ ahi) >>> 0, 16);
-  dlo = _rlo; dhi = _rhi;
-  // c += d + 2*lo(c)*lo(d)
-  mulDbl(clo, dlo);
-  s = clo + dlo + _rlo;
-  clo = s % U32; chi = (chi + dhi + _rhi + Math.floor(s / U32)) % U32;
-  // b = rotr(b ^ c, 63)
-  rotr64((blo ^ clo) >>> 0, (bhi ^ chi) >>> 0, 63);
-  blo = _rlo; bhi = _rhi;
-  v[ai] = alo; v[ai + 1] = ahi;
-  v[bi] = blo; v[bi + 1] = bhi;
-  v[ci] = clo; v[ci + 1] = chi;
-  v[di] = dlo; v[di + 1] = dhi;
-}
-
-// BLAKE2 轮排列 P（对 16 个 64-bit 字 = 32×uint32）
-function p16(t) {
-  gb(t, 0, 4, 8, 12); gb(t, 1, 5, 9, 13); gb(t, 2, 6, 10, 14); gb(t, 3, 7, 11, 15);
-  gb(t, 0, 5, 10, 15); gb(t, 1, 6, 11, 12); gb(t, 2, 7, 8, 13); gb(t, 3, 4, 9, 14);
-}
-
-// Argon2 压缩函数 G(X,Y)（RFC 9106 §3.6）：行 8 次 P + 列 8 次 P，Z = Q ^ R。
-// x/y/out 为 Uint32Array + uint32 偏移（块粒度 256）。out 可与 x/y 同域（先读后写，无别名风险）。
-const _R = new Uint32Array(256), _Q = new Uint32Array(256), _T = new Uint32Array(32);
-function blockG(x, xo, y, yo, out, oo) {
-  for (let i = 0; i < 256; i++) {
-    const r = (x[xo + i] ^ y[yo + i]) >>> 0;
-    _R[i] = r; _Q[i] = r;
-  }
-  for (let row = 0; row < 8; row++) {
-    const base = row * 16;
-    for (let i = 0; i < 16; i++) { _T[2 * i] = _Q[2 * (base + i)]; _T[2 * i + 1] = _Q[2 * (base + i) + 1]; }
-    p16(_T);
-    for (let i = 0; i < 16; i++) { _Q[2 * (base + i)] = _T[2 * i]; _Q[2 * (base + i) + 1] = _T[2 * i + 1]; }
-  }
-  for (let c = 0; c < 8; c++) {
-    // 列 c 取每行「寄存器对」：字 (k*16+2c) 与 (k*16+2c+1) 两个相邻 64-bit 字
-    for (let k = 0; k < 8; k++) {
-      const w = (k * 16 + 2 * c) * 2; // uint32 偏移（字 w 的 lo/hi + 字 w+1 的 lo/hi）
-      _T[4 * k] = _Q[w]; _T[4 * k + 1] = _Q[w + 1];
-      _T[4 * k + 2] = _Q[w + 2]; _T[4 * k + 3] = _Q[w + 3];
-    }
-    p16(_T);
-    for (let k = 0; k < 8; k++) {
-      const w = (k * 16 + 2 * c) * 2;
-      _Q[w] = _T[4 * k]; _Q[w + 1] = _T[4 * k + 1];
-      _Q[w + 2] = _T[4 * k + 2]; _Q[w + 3] = _T[4 * k + 3];
-    }
-  }
-  for (let i = 0; i < 256; i++) out[oo + i] = (_Q[i] ^ _R[i]) >>> 0;
-}
-
-// 1024 字节 → 内存块（128 字小端装载）
-function bytesToBlock(b, mem, off) {
-  for (let j = 0; j < 128; j++) {
-    const o = j * 8;
-    const lo = (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
-    const hi = (b[o + 4] | (b[o + 5] << 8) | (b[o + 6] << 16) | (b[o + 7] << 24)) >>> 0;
-    mem[off + 2 * j] = lo; mem[off + 2 * j + 1] = hi;
-  }
-}
-// 内存块 → 1024 字节（小端）
-function blockToBytes(mem, off) {
-  const out = new Uint8Array(1024);
-  for (let j = 0; j < 128; j++) {
-    let lo = mem[off + 2 * j], hi = mem[off + 2 * j + 1];
-    const o = j * 8;
-    out[o] = lo & 0xff; out[o + 1] = (lo >>> 8) & 0xff;
-    out[o + 2] = (lo >>> 16) & 0xff; out[o + 3] = (lo >>> 24) & 0xff;
-    out[o + 4] = hi & 0xff; out[o + 5] = (hi >>> 8) & 0xff;
-    out[o + 6] = (hi >>> 16) & 0xff; out[o + 7] = (hi >>> 24) & 0xff;
-  }
-  return out;
-}
 
 /**
  * Argon2 派生（RFC 9106，v=0x13）。
@@ -269,108 +105,14 @@ function blockToBytes(mem, off) {
  */
 function argon2Hash(pwd, salt, secret, ad, o) {
   const type = o.type, t = o.t, m = o.m, p = o.p, tagLen = o.tagLen;
-  const mPrime = 4 * p * Math.floor(m / (4 * p)); // RFC：4p 向下取整
-  const laneLength = mPrime / p;                  // q：每 lane 列数
-  const segmentLength = laneLength / 4;           // 每 slice 列数
-
-  const H0 = blake2b(u8concat(
-    le32(p), le32(tagLen), le32(m), le32(t), le32(A2_VERSION), le32(type),
-    le32(pwd.length), pwd,
-    le32(salt.length), salt,
-    le32(secret.length), secret,
-    le32(ad.length), ad
-  ), 64);
-
-  // 内存矩阵：mPrime 块 × 256 uint32
-  const mem = new Uint32Array(mPrime * 256);
-  for (let lane = 0; lane < p; lane++) {
-    bytesToBlock(hprime(1024, u8concat(H0, le32(0), le32(lane))), mem, lane * laneLength * 256);
-    bytesToBlock(hprime(1024, u8concat(H0, le32(1), le32(lane))), mem, (lane * laneLength + 1) * 256);
-  }
-
-  // 寻址/中间暂存块
-  const ZERO = new Uint32Array(256);
-  const INPUT = new Uint32Array(256), TMP = new Uint32Array(256), ADDR = new Uint32Array(256);
-
-  for (let pass = 0; pass < t; pass++) {
-    for (let slice = 0; slice < 4; slice++) {
-      // Argon2i：全程数据无关寻址；Argon2id：仅 pass0 的前两个 slice；Argon2d：全程数据相关
-      const dataIndep = (type === 1) || (type === 2 && pass === 0 && slice < 2);
-      for (let lane = 0; lane < p; lane++) {
-        let counter = 0;
-      const genAddr = () => {
-        counter++;
-        INPUT.fill(0);
-        // 地址块输入字段是 64-bit 字（RFC 9106 §3.3）：v[0..6] = pass/lane/slice/m'/t/type/counter，
-        // uint32 视图下每字占 lo/hi 两槽，故下标为 2*w
-        INPUT[0] = pass; INPUT[2] = lane; INPUT[4] = slice;
-        INPUT[6] = mPrime; INPUT[8] = t; INPUT[10] = type; INPUT[12] = counter;
-        blockG(ZERO, 0, INPUT, 0, TMP, 0);
-        blockG(ZERO, 0, TMP, 0, ADDR, 0);
-      };
-        if (dataIndep && pass === 0 && slice === 0) genAddr();
-
-        const startCol = (pass === 0 && slice === 0) ? 2 : slice * segmentLength;
-        const endCol = (slice + 1) * segmentLength;
-        const laneBase = lane * laneLength;
-
-        for (let col = startCol; col < endCol; col++) {
-          const idx = col - slice * segmentLength; // 段内 0 基
-
-          let J1, J2;
-          if (dataIndep) {
-            if (idx % 128 === 0) genAddr();
-            const w = idx % 128;
-            J1 = ADDR[2 * w]; J2 = ADDR[2 * w + 1];
-          } else {
-            const prevOff = (laneBase + ((col - 1 + laneLength) % laneLength)) * 256;
-            J1 = mem[prevOff]; J2 = mem[prevOff + 1];
-          }
-
-          let refLane;
-          if (pass === 0 && slice === 0) refLane = lane;
-          else refLane = J2 % p;
-
-          let refAreaSize;
-          if (pass === 0) {
-            if (slice === 0) refAreaSize = idx - 1;
-            else if (refLane === lane) refAreaSize = slice * segmentLength + idx - 1;
-            else refAreaSize = slice * segmentLength - (idx === 0 ? 1 : 0);
-          } else {
-            if (refLane === lane) refAreaSize = laneLength - segmentLength + idx - 1;
-            else refAreaSize = laneLength - segmentLength - (idx === 0 ? 1 : 0);
-          }
-          if (refAreaSize < 1) refAreaSize = 1; // 防御（合法路径不会触到 0）
-
-          // 平方映射（RFC §3.4.2）：J1*J1 与 refAreaSize*x 超 53 位，此两步用 BigInt 保精确
-          const x = (BigInt(J1) * BigInt(J1)) >> 32n;
-          const relPos = BigInt(refAreaSize) - 1n - ((BigInt(refAreaSize) * x) >> 32n);
-          const startPos = (pass === 0) ? 0n : ((slice === 3) ? 0n : BigInt((slice + 1) * segmentLength));
-          const absPos = Number((startPos + relPos) % BigInt(laneLength));
-
-          const prevOff = (laneBase + ((col - 1 + laneLength) % laneLength)) * 256;
-          const refOff = (refLane * laneLength + absPos) * 256;
-          const outOff = (laneBase + col) * 256;
-
-          blockG(mem, prevOff, mem, refOff, TMP, 0);
-          if (pass === 0) {
-            mem.set(TMP, outOff);
-          } else {
-            // version 0x13：与旧块异或
-            for (let i = 0; i < 256; i++) mem[outOff + i] = (mem[outOff + i] ^ TMP[i]) >>> 0;
-          }
-        }
-      }
-    }
-  }
-
-  // C = 所有 lane 最后一列的异或；tag = H'^tagLen(C)
-  const C = new Uint32Array(256);
-  for (let lane = 0; lane < p; lane++) {
-    const off = (lane * laneLength + laneLength - 1) * 256;
-    for (let i = 0; i < 256; i++) C[i] = (C[i] ^ mem[off + i]) >>> 0;
-  }
-  return hprime(tagLen, blockToBytes(C, 0));
+  if (!Number.isInteger(type) || type < 0 || type > 2) throw new Error("Argon2：type 须为 0/1/2");
+  if (!Number.isInteger(p) || p < 1) throw new Error(`Argon2：并行度 p 须为 ≥1 的整数（当前 ${p}）`);
+  if (!Number.isInteger(t) || t < 1) throw new Error(`Argon2：迭代次数 t 须为 ≥1 的整数（当前 ${t}）`);
+  if (!Number.isInteger(m) || m < 1) throw new Error(`Argon2：内存 m 须为 ≥1 的整数（当前 ${m}）`);
+  if (m < 8 * p) throw new Error(`Argon2：内存 m 须 ≥ 8×p（当前 m=${m}, p=${p}）`);
+  if (!(salt instanceof Uint8Array)) salt = new Uint8Array(salt || []);
+  if (!Number.isInteger(tagLen) || tagLen < 4) throw new Error(`Argon2：输出长度 tagLen 须为 ≥4 的整数（当前 ${tagLen}）`);
+  return argon2Kdf(pwd, salt, secret, ad, { type, t, m, p, tagLen });
 }
 
 // ============================================================
@@ -1410,6 +1152,12 @@ function phcB64ToBytes(b64) {
 }
 
 /** RFC 9106 PHC 串比对（同 CyberChef Argon2Compare：命中 Match，否则 No match）。 */
+function argon2IntParam(value, fallback, name) {
+  if (value == null || String(value).trim() === "") return fallback;
+  const n = Number(String(value).trim());
+  if (!Number.isInteger(n)) throw new Error(`Argon2：${name} 须为整数（当前 ${value}）`);
+  return n;
+}
 function argon2Compare(text, p) {
   try {
     const encoded = String((p && p.encodedHash) || "").trim();
@@ -1478,13 +1226,14 @@ register({
     if ((p && p.mode) === "compare") return argon2Compare(text, p);
     const type = A2_TYPES[p.type || "argon2id"];
     if (type === undefined) throw new Error("未知 Argon2 类型");
-    const t = Math.floor(Number(p.t) || 2);
-    const m = Math.floor(Number(p.m) || 16384);
-    const pp = Math.floor(Number(p.p) || 1);
-    const tagLen = Math.floor(Number(p.tagLen) || 32);
+    const t = argon2IntParam(p.t, 2, "t");
+    const m = argon2IntParam(p.m, 16384, "m");
+    const pp = argon2IntParam(p.p, 1, "p");
+    const tagLen = argon2IntParam(p.tagLen, 32, "tagLen");
     if (t < 1 || t > 1024) throw new Error("t 需在 1..1024（护栏防页面卡死）");
     if (m < 8 || m > 65536) throw new Error("m 需在 8..65536 KiB（护栏 ≤64MiB 防页面崩）");
     if (pp < 1 || pp > 254) throw new Error("p 需在 1..254");
+    if (m < 8 * pp) throw new Error(`m 需 ≥ 8×p（当前 m=${m}, p=${pp}）`);
     if (tagLen < 4 || tagLen > 1024) throw new Error("tagLen 需在 4..1024");
     const pwd = inputBytes(text, p);
     const salt = p.saltType === "hex" ? hexBytes(p.salt) : te.encode(p.salt || "");

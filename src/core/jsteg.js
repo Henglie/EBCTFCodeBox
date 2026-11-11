@@ -38,6 +38,7 @@
 import { register } from "./registry.js";
 import { parseJpeg, parseInput, findFlags } from "./f5stego.js";
 import { reencodeJpeg, analyzeScans } from "./jpegRewrite.js";
+import { isLimitError } from "./limitGuard.js";
 
 // ============================================================
 // 常量与小工具
@@ -90,8 +91,8 @@ function bytesToAsciiPreview(b, max) {
  * 统一校验：解析 JPEG 并确认可用（基线/扩展顺序、单 SOS 全谱扫描）。
  * 返回 parsed + 目标分量 idx + 是否交错扫描；不可用直接抛错（消息面向使用者）。
  */
-function parseStegoCapable(bytes) {
-  const parsed = parseJpeg(bytes);
+function parseStegoCapable(bytes, params) {
+  const parsed = parseJpeg(bytes, undefined, params);
   if (parsed.frame.progressive) {
     throw new Error("渐进式 JPEG（Progressive）不支持 jsteg——顺序系数模型不成立，请换基线 Baseline 图");
   }
@@ -157,8 +158,8 @@ function capacityBits(comp, frame, interleaved) {
  * @param payloadBytes 消息字节（自动加 "jsteg"+LE32 长度封装）
  * @returns { bytes, usedBits, capacityBits, compIdx, width, height }
  */
-export function jstegEmbedBytes(jpegBytes, payloadBytes) {
-  const { parsed, compIdx, interleaved } = parseStegoCapable(jpegBytes);
+export function jstegEmbedBytes(jpegBytes, payloadBytes, params) {
+  const { parsed, compIdx, interleaved } = parseStegoCapable(jpegBytes, params);
   const frame = parsed.frame;
   const comp = frame.components[compIdx];
 
@@ -215,8 +216,8 @@ export function jstegEmbedBytes(jpegBytes, payloadBytes) {
  * @returns { payload, declaredLen, truncated, wrapper, rawBits, compIdx, rawStream }
  *   wrapper: 'jsteg'（魔数+LE32 长度）| 'len32'（裸 LE32 长度）| 'raw'（无封装）
  */
-export function jstegExtractBytes(jpegBytes) {
-  const { parsed, compIdx, interleaved } = parseStegoCapable(jpegBytes);
+export function jstegExtractBytes(jpegBytes, params) {
+  const { parsed, compIdx, interleaved } = parseStegoCapable(jpegBytes, params);
   const comp = parsed.frame.components[compIdx];
 
   // 顺序读 LSB（与嵌入完全同口径：熵解码序 + LSB-first 装载）
@@ -309,7 +310,10 @@ function jstegEncodeOp(text, p) {
   L.push(`● 载体来源: ${carrier.from === "rawBytes" ? "拖入文件" : "输入框 base64/dataURL"}（${carrierBytes.length} 字节）`);
 
   let parsed;
-  try { parsed = parseJpeg(carrierBytes); } catch (e) { parsed = null; }
+  try { parsed = parseJpeg(carrierBytes, undefined, p); } catch (e) {
+    if (isLimitError(e)) throw e;
+    parsed = null;
+  }
   if (parsed) {
     const fr = parsed.frame;
     L.push(`● 载体图: ${fr.samplesPerLine}×${fr.scanLines}  ${fr.progressive ? "渐进式(不支持)" : fr.extended ? "扩展顺序" : "基线 Baseline"}  分量数 ${fr.components.length}`);
@@ -317,8 +321,9 @@ function jstegEncodeOp(text, p) {
 
   let res;
   try {
-    res = jstegEmbedBytes(carrierBytes, utf8Encode(msg));
+    res = jstegEmbedBytes(carrierBytes, utf8Encode(msg), p);
   } catch (e) {
+    if (isLimitError(e)) throw e;
     L.push(`✗ 嵌入失败: ${e.message || String(e)}`);
     return L.join("\n");
   }
@@ -359,17 +364,21 @@ function jstegDecodeOp(text, p) {
 
   let res;
   try {
-    res = jstegExtractBytes(bytes);
+    res = jstegExtractBytes(bytes, p);
   } catch (e) {
+    if (isLimitError(e)) throw e;
     L.push(`✗ 提取失败: ${e.message || String(e)}`);
     return L.join("\n");
   }
 
   const frameInfo = (() => {
     try {
-      const fr = parseJpeg(bytes).frame;
+      const fr = parseJpeg(bytes, undefined, p).frame;
       return `${fr.samplesPerLine}×${fr.scanLines}`;
-    } catch { return "?"; }
+    } catch (e) {
+      if (isLimitError(e)) throw e;
+      return "?";
+    }
   })();
   L.push(`● 图像: ${frameInfo}  目标分量: SOS 第 1 扫描分量 #${res.compIdx}`);
   L.push(`● 载体位容量: ${res.capacityBits} 位  原始 LSB 流: ${res.rawStream.length} 字节`);

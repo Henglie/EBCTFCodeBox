@@ -22,6 +22,26 @@ import { candidateSignals, literalMatcher } from "./magic/smartCandidates.js";
 import { OPS, defaultParams, CATEGORIES } from "./registry.js";
 import { domainAdmit, isAutoCandidateExcluded } from "./magic/domain.js";
 import { runOpOffThread } from "./opRunClient.js"; // op 执行走常驻 Worker（见 exhaustiveDecode 内说明）
+import { isExplicitRunOp } from "./explicitRun.js";
+import { isLimitError, withLimitContext } from "./limitGuard.js";
+
+// 纯生成器：输出依赖随机源 / 大参数搜索，不是“解码”，穷举跑它们既无意义又易卡死。
+// EXPLICIT_RUN_OPS 已覆盖大部分重型 op；这里补齐未列入显式触发的密钥/参数生成器。
+const PURE_GENERATOR_OPS = new Set([
+  "dsaParamGen", "rsaGenKeyPair", "pgpGenKeyPair", "elgamalKeyGen", "paillierKeyGen",
+  "falconKeyGen", "xmssKeyGen", "slhdsaKeyGen", "mldsaKeyGen", "hqcKeyGen",
+  "ntruKeyGen", "xwingKeyGen", "sm2KeyGen", "schnorrKeyGen", "ecdsaKeyGen",
+  "ed25519KeyGen", "x448KeyGen", "blsKeyGen", "sm9KeyGen",
+  "mlkemKeyGen", "x25519KeyGen",
+]);
+
+/** 穷举时默认跳过的重活/纯生成器（llm 类按 id 兜底，未来新增无需再改表）。 */
+function isHeavyExhaustiveOp(op) {
+  if (!op || !op.id) return false;
+  if (isExplicitRunOp(op.id)) return true;
+  if (PURE_GENERATOR_OPS.has(op.id)) return true;
+  return /llm/i.test(op.id);
+}
 
 // 可打印占比阈值：>= 此值视为「像明文」，UI 默认展开高亮，否则折叠为乱码。
 const PRINTABLE_THRESHOLD = 0.85;
@@ -279,6 +299,9 @@ export function sweepApplies(opId, f) {
  * - crib 目标特征字面片段（命中标记 matchesCrib，UI 高亮置顶），可空
  * - onlyChanged true 时过滤掉「输出==输入」的无变化项（默认 false，全列）
  * - onlyPrintable true 时只保留可打印结果（默认 false）
+ * - excludeOps 额外排除的 op id 集合（保持原语义；自定义实现启用项用）
+ * - excludeHeavy 是否排除重活/纯生成器（EXPLICIT_RUN_OPS + keygen 类），**默认 true**；
+ *   传 false 可恢复旧行为（含重算法，可能 30s 级卡顿）
  * @returns {Promise<{groups: Array<{cat, catName, items, algos}>, total, hits}>}
  * groups 按分类分组。每组：
  * - items：该分类全部候选的扁平数组（命中优先排序，兼容旧消费端/测试）。
@@ -305,7 +328,13 @@ export async function exhaustiveDecode(input, opts = {}) {
  // excludeOps：用户启用自定义实现的 op 也不进穷举（同 magic.js 口径）。
   const _excludeSet = opts.excludeOps == null ? null : (opts.excludeOps instanceof Set ? opts.excludeOps : new Set(opts.excludeOps));
   const excluded = (opId) => _excludeSet !== null && _excludeSet.has(opId);
-  const targets = OPS.filter((op) => (typeof op.decode === "function" || typeof op.run === "function") && !isAutoCandidateExcluded(op) && !excluded(op.id));
+  // 默认排除重活：显式触发白名单里的 30s 级 op + 纯密钥/参数生成器，避免穷举整页卡死。
+  // 传 excludeHeavy:false 可恢复旧的全量行为（结果集合会变大，耗时也会显著增加）。
+  const excludeHeavy = opts.excludeHeavy !== false;
+  const targets = OPS.filter((op) => (typeof op.decode === "function" || typeof op.run === "function")
+    && !isAutoCandidateExcluded(op)
+    && !excluded(op.id)
+    && !(excludeHeavy && isHeavyExhaustiveOp(op)));
 
  // 预筛选（按输入特征选候选，不再全集穷举）：
  // - 有 detect 的 op：复用 detect(text) 作准入门槛，<=0 排除（对齐 magic.js）。
@@ -343,10 +372,10 @@ export async function exhaustiveDecode(input, opts = {}) {
 
  // 失败降级为 error 项（不 throw、不阻塞其他）。
  // 参数扫描 op 每组参数产生一条独立候选（opId 形如 caesar(shift=3)）。
- // 执行端改走 opRunClient 常驻 Worker——此前同步 CPU 型 op 直接在主线程跑
- // （即便批间已让出，单个病理级 op 仍可把主线程整块卡死十几秒，进度条/输入/CDP 全失联）。
- // 串行执行：单 Worker 天然串行，且超时 terminate 会连坐取消全部在途任务（cancelOpRun
- // 清空 _pending 表）——并发批次会被一个超时 op 整批报废，串行让超时只波及该 op 本身。
+  // 执行端改走 opRunClient 常驻 Worker——此前同步 CPU 型 op 直接在主线程跑
+  // （即便批间已让出，单个病理级 op 仍可把主线程整块卡死十几秒，进度条/输入/CDP 全失联）。
+  // 串行执行：单 Worker 天然串行；超时只 reject 当前 job，不再 terminate 共享 Worker
+  // （仅当无其他 pending 时才回收），避免一个超时 op 连坐其他调用方的在途任务。
  // 非 timeout 异常回主线程同步重跑一次兜底（Worker 无 DOM 等环境差异时保持旧版结果口径）；
  // run+decode 双向 op 在 Worker 内按 run 优先（与旧版 decode 优先不同）→ 此类 op 仍走直跑。
  // Worker 不可用环境由 opRunClient 原样回落主线程同步执行（与旧行为一致，如实降级）。
@@ -358,8 +387,12 @@ export async function exhaustiveDecode(input, opts = {}) {
     const p = params ?? defaultParams(op);
     const direct = async () => {
       const fn = op.decode || op.run;
-      const out = await fn.call(op, text, p);
-      return { op, params: params ?? null, out: outTextOf(out), error: null };
+      try {
+        const out = await withLimitContext(p, () => fn.call(op, text, p));
+        return { op, params: params ?? null, out: outTextOf(out), error: null };
+      } catch (e) {
+        return { op, params: params ?? null, out: "", error: (e && e.message) || String(e), limit: isLimitError(e) };
+      }
     };
     if (isDual(op)) return direct();
     try {
@@ -367,8 +400,13 @@ export async function exhaustiveDecode(input, opts = {}) {
       return { op, params: params ?? null, out: outTextOf(out), error: null };
     } catch (e) {
       const raw = (e && e.message) || String(e);
-      if (raw === "timeout") return { op, params: params ?? null, out: "", error: "op 超时中止（> " + opTimeoutMs + "ms）" };
-      if (raw === "cancelled") return { op, params: params ?? null, out: "", error: "cancelled" };
+      if (e && (e.code === "EBCTF_TIMEOUT" || raw === "timeout")) {
+        return { op, params: params ?? null, out: "", error: "op 超时中止（> " + opTimeoutMs + "ms）" };
+      }
+      // 限额取消/硬拒绝不是 Worker 环境差异，绝不能回主线程二次确认/二次执行。
+      if (isLimitError(e) || raw === "cancelled" || (e && e.code === "EBCTF_CANCELLED")) {
+        return { op, params: params ?? null, out: "", error: raw, limit: isLimitError(e) };
+      }
       try { return await direct(); } catch (e2) {   // Worker 环境差异兜底：主线程重跑一次
         return { op, params: params ?? null, out: "", error: (e2 && e2.message) || String(e2) };
       }

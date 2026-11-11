@@ -45,6 +45,7 @@
  * 契约：register({id, cat:"stream", name, desc, params, encode, decode})。
  */
 import { register } from "./registry.js";
+import { finishBytesDecode } from "./bytesIo.js";
 
 // ---- 编解码小工具（自足，无外部依赖） ----
 const te = (s) => new TextEncoder().encode(s);
@@ -264,9 +265,9 @@ register({
       if (blob.length < 10) throw new Error(`CipherSaber-2：密文不足 10 字节，读不到 IV（当前 ${blob.length}）。`);
       const iv = blob.subarray(0, 10);
       const body = blob.subarray(10);
-      return td(cipherSaber2Crypt(body, key, iv, Number((p && p.ksaRounds) || 20), true));
+      return finishBytesDecode(cipherSaber2Crypt(body, key, iv, Number((p && p.ksaRounds) || 20), true));
     }
-    return td(rc4DropCrypt(blob, key, Number((p && p.drop) || 0)));
+    return finishBytesDecode(rc4DropCrypt(blob, key, Number((p && p.drop) || 0)));
   },
 });
 

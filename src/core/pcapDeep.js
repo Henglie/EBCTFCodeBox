@@ -26,6 +26,7 @@
  */
 import { register } from "./registry.js";
 import { inputToBytes, parseContainer, dissectPacket } from "./pcapParse.js";
+import { checkLimit, withLimit, isLimitError } from "./limitGuard.js";
 
 // ============================================================
 // 小工具
@@ -86,7 +87,10 @@ function concatBytes(chunks) {
   return out;
 }
 
-const MAX_STREAM = 64 * 1024 * 1024; // 单流重组上限，防 OOM
+const MAX_STREAM = 64 * 1024 * 1024; // 单流重组软阈值，防 OOM
+const MAX_STREAM_HARD = 256 * 1024 * 1024; // 确认后的单流重组硬上限
+const MAX_INFLATE_SOFT = 64 * 1024 * 1024;  // inflate 输出软阈值
+const MAX_INFLATE_HARD = 256 * 1024 * 1024; // 确认后的 inflate 输出硬上限
 
 // 产物文件名净化（ascii 安全子集，限长）
 function sanitizeFileStem(s) {
@@ -166,8 +170,8 @@ export function reassembleFlows(dissected) {
 //  oooSegs       到达时起点早于已见流尾且带新字节 → 乱序补洞段
 //  conflictBytes 重叠区内容与已写入不一致的字节数（保留首写，后到冲突字节丢弃并计数）
 //  gaps          最终仍未覆盖的流偏移区间 [from,to)（字节以 0x00 占位），同时给绝对 seq
-//  truncated     超过 MAX_STREAM 截断，或段尾被上限截掉
-export function reassembleDir(dir) {
+//  truncated     超过软/硬阈值被拒绝或截断，或段尾被上限截掉
+export function reassembleDir(dir, params = null) {
   const segs = dir.segs;
   const diag = { segs: segs.length, retransSegs: 0, oooSegs: 0, conflictBytes: 0, gaps: [], truncated: false, discardedBeforeBase: 0 };
   if (segs.length === 0) return { bytes: new Uint8Array(0), diag };
@@ -186,7 +190,19 @@ export function reassembleDir(dir) {
     if (end > maxEnd) maxEnd = end;
   }
   if (maxEnd <= 0) return { bytes: new Uint8Array(0), diag };
-  if (maxEnd > MAX_STREAM) { maxEnd = MAX_STREAM; diag.truncated = true; }
+  if (maxEnd > MAX_STREAM) {
+    checkLimit({
+      scope: "pcap.stream.reassembly",
+      actual: maxEnd,
+      soft: MAX_STREAM,
+      hard: MAX_STREAM_HARD,
+      params,
+      label: "TCP 单流重组",
+      unit: " 字节",
+    });
+  }
+  // checkLimit 已保证超硬上限必拒；这里仅作防御性封顶，确认后允许到硬上限。
+  if (maxEnd > MAX_STREAM_HARD) { maxEnd = MAX_STREAM_HARD; diag.truncated = true; }
   const out = new Uint8Array(maxEnd);
   const filled = new Uint8Array(maxEnd);
  // 按到达顺序（index）写，首次写入优先
@@ -245,7 +261,7 @@ function pcapTcpReassembleRun(text, p = {}) {
   for (const [, flow] of flows) {
     const dirs = [];
     for (const [, dir] of flow.dirs) {
-      const { bytes, diag } = reassembleDir(dir);
+      const { bytes, diag } = reassembleDir(dir, p);
       dirs.push({ label: `${dir.from} → ${dir.to}`, bytes, segs: dir.segs.length, diag });
     }
     list.push({ a: flow.a, b: flow.b, dirs, firstIndex: flow.firstIndex });
@@ -334,9 +350,45 @@ function buildHuff(lengths, num) {
   return { counts, symbols };
 }
 
-export function inflateRaw(data) {
+export function inflateRaw(data, maxOutput, params) {
+  const want = Number(maxOutput);
+  const explicitLimit = Number.isFinite(want) && want > 0;
+  const limit = explicitLimit ? Math.min(Math.floor(want), MAX_INFLATE_HARD) : MAX_INFLATE_HARD;
+  const soft = Math.min(MAX_INFLATE_SOFT, limit);
+  const hard = Math.min(MAX_INFLATE_HARD, limit);
+  let limitParams = params;
+  let limitChecked = limit <= soft;
   let bitBuf = 0, bitCnt = 0, pos = 0;
-  const out = [];
+  let out = new Uint8Array(Math.min(limit, 1024 * 1024));
+  let outLen = 0;
+
+  // 统一写预算：literal / stored / match 三条写路径都先 ensure，绝不超过 limit。
+  function ensure(n) {
+    if (n < 0 || outLen + n > limit) {
+      throw new Error(`inflate: 输出超限（上限 ${limit} 字节，疑似压缩炸弹）`);
+    }
+    if (!limitChecked && outLen + n > soft) {
+      checkLimit({
+        scope: "pcapDeep.inflate",
+        actual: outLen + n,
+        soft,
+        hard,
+        params: limitParams,
+        label: "inflate 解压输出",
+        unit: " 字节",
+      });
+      limitParams = withLimit(limitParams, { _allowLimitOverride: true });
+      limitChecked = true;
+    }
+    const need = outLen + n;
+    if (need <= out.length) return;
+    let cap = out.length || 1;
+    while (cap < need) cap = Math.min(limit, cap * 2);
+    if (cap < need) throw new Error(`inflate: 输出超限（上限 ${limit} 字节，疑似压缩炸弹）`);
+    const next = new Uint8Array(cap);
+    next.set(out.subarray(0, outLen));
+    out = next;
+  }
 
   function getBit() {
     if (bitCnt === 0) {
@@ -374,17 +426,18 @@ export function inflateRaw(data) {
     for (;;) {
       const sym = decodeSym(lt);
       if (sym === 256) break;
-      if (sym < 256) { out.push(sym); continue; }
+      if (!Number.isInteger(sym)) throw new Error("inflate: 非法 Huffman 符号");
+      if (sym < 256) { ensure(1); out[outLen++] = sym; continue; }
       const s = sym - 257;
-      if (s < 0 || s >= LEN_BASE.length) throw new Error("inflate: 非法长度码");
+      if (!Number.isInteger(s) || s < 0 || s >= LEN_BASE.length) throw new Error("inflate: 非法长度码");
       const length = LEN_BASE[s] + getBits(LEN_EXTRA[s]);
       const dsym = decodeSym(dt);
-      if (dsym < 0 || dsym >= DIST_BASE.length) throw new Error("inflate: 非法距离码");
+      if (!Number.isInteger(dsym) || dsym < 0 || dsym >= DIST_BASE.length) throw new Error("inflate: 非法距离码");
       const dist = DIST_BASE[dsym] + getBits(DIST_EXTRA[dsym]);
-      let start = out.length - dist;
+      const start = outLen - dist;
       if (start < 0) throw new Error("inflate: 距离越界");
-      for (let i = 0; i < length; i++) out.push(out[start + i]);
-      if (out.length > MAX_STREAM) throw new Error("inflate: 输出超限");
+      ensure(length);
+      for (let i = 0; i < length; i++) { out[outLen] = out[start + i]; outLen++; }
     }
   }
 
@@ -398,7 +451,8 @@ export function inflateRaw(data) {
       const len = data[pos] | (data[pos + 1] << 8);
       pos += 4; // 跳过 LEN(2)+NLEN(2)
       if (pos + len > data.length) throw new Error("inflate: stored 块数据不足");
-      for (let i = 0; i < len; i++) out.push(data[pos++]);
+      ensure(len);
+      for (let i = 0; i < len; i++) out[outLen++] = data[pos++];
     } else if (type === 1) {
       inflateBlock(fixedLit, fixedDist);
     } else if (type === 2) {
@@ -426,11 +480,11 @@ export function inflateRaw(data) {
     }
   } while (!final);
 
-  return new Uint8Array(out);
+  return out.slice(0, outLen);
 }
 
 // 按 content-encoding 解压。返回 { data, note }；不支持则 note 说明、data 返回原始。
-function decompressBody(bytes, encoding) {
+function decompressBody(bytes, encoding, params) {
   const enc = (encoding || "").toLowerCase().trim();
   if (!enc || enc === "identity") return { data: bytes, note: null };
   try {
@@ -444,17 +498,18 @@ function decompressBody(bytes, encoding) {
       if (flg & 0x10) { while (off < bytes.length && bytes[off] !== 0) off++; off++; }        // FCOMMENT
       if (flg & 0x02) off += 2;                                                                // FHCRC
       const raw = bytes.subarray(off, bytes.length - 8);
-      return { data: inflateRaw(raw), note: "gzip 已解压" };
+      return { data: inflateRaw(raw, undefined, params), note: "gzip 已解压" };
     }
     if (enc === "deflate") {
  // 可能是 zlib 包装（RFC 1950）或裸 deflate
       if (bytes.length >= 2 && (bytes[0] & 0x0f) === 8 && ((bytes[0] << 8 | bytes[1]) % 31 === 0)) {
-        return { data: inflateRaw(bytes.subarray(2, bytes.length - 4)), note: "deflate(zlib) 已解压" };
+        return { data: inflateRaw(bytes.subarray(2, bytes.length - 4), undefined, params), note: "deflate(zlib) 已解压" };
       }
-      return { data: inflateRaw(bytes), note: "deflate(raw) 已解压" };
+      return { data: inflateRaw(bytes, undefined, params), note: "deflate(raw) 已解压" };
     }
     if (enc === "br") return { data: bytes, note: "brotli 未支持（纯 JS 未内置），按原始输出" };
   } catch (e) {
+    if (isLimitError(e)) throw e;
     return { data: bytes, note: "解压失败(" + (e && e.message ? e.message : e) + ")，按原始输出" };
   }
   return { data: bytes, note: `未知编码 ${enc}，按原始输出` };
@@ -488,7 +543,7 @@ function readChunked(b, start) {
   return { data: concatBytes(chunks), end: pos };
 }
 
-function parseHttpStream(stream) {
+function parseHttpStream(stream, params) {
   const msgs = [];
   let pos = 0;
   let guard = 0;
@@ -530,7 +585,7 @@ function parseHttpStream(stream) {
     } else {
       bodyRaw = new Uint8Array(0); pos = bodyStart;
     }
-    const dec = decompressBody(bodyRaw, headers["content-encoding"]);
+    const dec = decompressBody(bodyRaw, headers["content-encoding"], params);
     msgs.push({
       kind, startLine, headers,
       contentType: headers["content-type"] || "",
@@ -556,9 +611,9 @@ function pcapHttpExtractRun(text, p = {}) {
   flowList.sort((x, y) => x.firstIndex - y.firstIndex);
   for (const flow of flowList) {
     for (const [, dir] of flow.dirs) {
-      const { bytes } = reassembleDir(dir);
+      const { bytes } = reassembleDir(dir, p);
       if (bytes.length === 0) continue;
-      const msgs = parseHttpStream(bytes);
+      const msgs = parseHttpStream(bytes, p);
       for (const m of msgs) objects.push({ ...m, flowLabel: `${dir.from} → ${dir.to}` });
     }
   }

@@ -126,7 +126,7 @@ export default {
     tips: [
       "When a challenge hands you Malbolge source and asks for its output, use this op; for loading-form checks use \"Malbolge Detect\".",
       "Non-halting programs (like endless-echo cat variants) are stopped by the step guard with an explicit error — that is the guard, not a bug.",
-      "Implementation verified byte-for-byte against zb3/malbolge-vm (the VM embedded in the malbolge-tools reference page, MIT) on all seven official samples.",
+      "Implementation verified byte-for-byte against malbolge-vm (the VM embedded in the malbolge-tools reference page, MIT) on all seven official samples.",
     ],
     aka: ["Malbolge 执行", "malbolge 执行器", "malbolge interpreter", "malbolge run", "malbolge 解释器",
           "malbolge vm", "malbolge exec", "马尔博尔赫", "地狱语言执行", "深奥语言解释器", "esolang interpreter", "Olmstead"],

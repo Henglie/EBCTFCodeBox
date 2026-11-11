@@ -102,9 +102,13 @@ export function bigToBytes(x, len = 32) {
   return out;
 }
 export function hexToBytes(s) {
-  const clean = String(s == null ? "" : s).replace(/[^0-9a-fA-F]/g, "");
-  if (!clean.length) throw new Error("hex 输入为空");
-  if (clean.length % 2) throw new Error("hex 长度必须为偶数");
+  const raw = String(s == null ? "" : s).trim();
+  const clean = raw.replace(/[\s:]/g, "").replace(/^0x/i, "");
+  if (!clean.length) return new Uint8Array(0); // 空 hex = 零字节数据（如空消息），不误伤
+  if (!/^[0-9a-fA-F]+$/.test(clean)) {
+    throw new Error("hex 含非法字符（仅允许 0-9a-fA-F、空白、冒号、0x 前缀）");
+  }
+  if (clean.length % 2) throw new Error(`hex 长度必须为偶数（当前 ${clean.length} 个 hex 字符）`);
   const out = new Uint8Array(clean.length / 2);
   for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);
   return out;
@@ -409,16 +413,20 @@ export function g1Add(P1, P2) {
   const Z3 = mod((mod((Z1 + Z2) * (Z1 + Z2), P) - Z1Z1 - Z2Z2) * H, P);
   return [X3, Y3, Z3];
 }
-export function g1Mul(k, Pt) {
+/** 不做 mod N 归约的标量乘：子群校验 [N]P 必须用此函数（g1Mul 会先把 k 归约，[N]P 恒为 O）。 */
+export function g1MulRaw(k, Pt) {
   let R = [0n, 1n, 0n];
   let Q = [mod(Pt[0], P), mod(Pt[1], P), mod(Pt[2] === 0n ? 1n : Pt[2], P)];
-  let kk = mod(k, N);
+  let kk = k < 0n ? -k : k;
   while (kk > 0n) {
     if (kk & 1n) R = g1Add(R, Q);
     Q = g1Double(Q);
     kk >>= 1n;
   }
   return R;
+}
+export function g1Mul(k, Pt) {
+  return g1MulRaw(mod(k, N), Pt);
 }
 export function g1Affine(Pt) {
   if (Pt[2] === 0n) return null;
@@ -433,6 +441,13 @@ export function g1Marshal(pt) {
 export function g1MarshalUncompressed(pt) {
   return concatBytes(new Uint8Array([0x04]), g1Marshal(pt));
 }
+/** G1 子群校验：非无穷远（仿射非空）、在曲线上且 [N]P = O。 */
+export function g1AffineInSubgroup(x, y) {
+  if (typeof x !== "bigint" || typeof y !== "bigint") return false;
+  if (x < 0n || y < 0n || x >= P || y >= P) return false;
+  if (!g1OnCurve(x, y)) return false;
+  return g1Affine(g1MulRaw(N, [x, y, 1n])) === null;
+}
 export function g1Unmarshal(bytes) {
   let d = bytes;
   if (d.length === 65 && d[0] === 0x04) d = d.slice(1);
@@ -441,6 +456,7 @@ export function g1Unmarshal(bytes) {
   const y = bytesToBig(d.slice(32));
   if (x >= P || y >= P) throw new Error("SM9 G1 点坐标越界（≥p）");
   if (!g1OnCurve(x, y)) throw new Error("SM9 G1 点不在曲线 y^2=x^3+5 上");
+  if (!g1AffineInSubgroup(x, y)) throw new Error("SM9 G1 点不在 n 阶子群（[N]P ≠ O），已拒绝");
   return [x, y];
 }
 
@@ -488,16 +504,20 @@ export function g2Add(P1, P2) {
   const Z3 = f2Mul(f2Sub(f2Sub(f2Square(f2Add(Z1, Z2)), Z1Z1), Z2Z2), H);
   return [X3, Y3, Z3];
 }
-export function g2Mul(k, Pt) {
+/** 不做 mod N 归约的标量乘：子群校验 [N]P 必须用此函数（g2Mul 会先把 k 归约，[N]P 恒为 O）。 */
+export function g2MulRaw(k, Pt) {
   let R = [F2_ZERO(), F2_ONE(), F2_ZERO()];
   let Q = [Pt[0], Pt[1], Pt[2]];
-  let kk = mod(k, N);
+  let kk = k < 0n ? -k : k;
   while (kk > 0n) {
     if (kk & 1n) R = g2Add(R, Q);
     Q = g2Double(Q);
     kk >>= 1n;
   }
   return R;
+}
+export function g2Mul(k, Pt) {
+  return g2MulRaw(mod(k, N), Pt);
 }
 export function g2Affine(Pt) {
   if (f2IsZero(Pt[2])) return null;
@@ -515,6 +535,14 @@ export function g2Marshal(pt) {
 export function g2MarshalUncompressed(pt) {
   return concatBytes(new Uint8Array([0x04]), g2Marshal(pt));
 }
+/** G2 子群校验：非无穷远（仿射非空）、在扭曲线且 [N]P = O。 */
+export function g2AffineInSubgroup(x, y) {
+  if (!x || !y || typeof x.x !== "bigint" || typeof x.y !== "bigint" || typeof y.x !== "bigint" || typeof y.y !== "bigint") return false;
+  for (const c of [x.x, x.y, y.x, y.y]) if (c < 0n || c >= P) return false;
+  if (f2IsZero(x) && f2IsZero(y)) return false;
+  if (!g2OnCurve(x, y)) return false;
+  return g2Affine(g2MulRaw(N, [x, y, F2_ONE()])) === null;
+}
 export function g2Unmarshal(bytes) {
   let d = bytes;
   if (d.length === 129 && d[0] === 0x04) d = d.slice(1);
@@ -523,6 +551,7 @@ export function g2Unmarshal(bytes) {
   const y = { x: bytesToBig(d.slice(64, 96)), y: bytesToBig(d.slice(96, 128)) };
   for (const c of [x.x, x.y, y.x, y.y]) if (c >= P) throw new Error("SM9 G2 点坐标越界（≥p）");
   if (!g2OnCurve(x, y)) throw new Error("SM9 G2 点不在扭曲线 y^2=x^3+5u 上");
+  if (!g2AffineInSubgroup(x, y)) throw new Error("SM9 G2 点不在 n 阶子群（[N]P ≠ O），已拒绝");
   return [x, y];
 }
 
@@ -676,6 +705,12 @@ function finalExponentiation(input) {
 // ============================================================
 export function pairing(g1, g2) {
   if (!g1 || !g2) return F12_ONE();
+  if (!g1AffineInSubgroup(g1[0], g1[1])) {
+    throw new Error("SM9 配对：G1 输入非法（不在曲线或非 n 阶子群/无穷远点），已拒绝");
+  }
+  if (!g2AffineInSubgroup(g2[0], g2[1])) {
+    throw new Error("SM9 配对：G2 输入非法（不在扭曲线或非 n 阶子群/无穷远点），已拒绝");
+  }
   const e = miller(g2, g1);
   return finalExponentiation(e);
 }
@@ -738,9 +773,9 @@ export function sm9Kdf(z, klenBytes) {
   if (!g1OnCurve(G1_GEN[0], G1_GEN[1])) throw new Error("SM9 自检失败：G1 生成元不在曲线上");
   if (!g2OnCurve(G2_GEN[0], G2_GEN[1])) throw new Error("SM9 自检失败：G2 生成元不在扭曲线上");
   // [n]G = ∞
-  const g1n = g1Affine(g1Mul(N, [G1_GEN[0], G1_GEN[1], 1n]));
+  const g1n = g1Affine(g1MulRaw(N, [G1_GEN[0], G1_GEN[1], 1n]));
   if (g1n !== null) throw new Error("SM9 自检失败：[n]G1 ≠ ∞");
-  const g2n = g2Affine(g2Mul(N, [G2_GEN[0], G2_GEN[1], F2_ONE()]));
+  const g2n = g2Affine(g2MulRaw(N, [G2_GEN[0], G2_GEN[1], F2_ONE()]));
   if (g2n !== null) throw new Error("SM9 自检失败：[n]G2 ≠ ∞");
   // 塔内乘逆往返
   const a2 = { x: 0x1234567890abcdefn, y: 0xfedcba0987654321n };

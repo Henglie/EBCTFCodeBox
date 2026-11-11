@@ -143,8 +143,10 @@ function squeeze(state, out, len) {
 
 // ---- Lyra2 主函数（照 LYRA2.c） ----
 function lyra2(pwd, salt, timeCost, nRows, nCols, kLen) {
-  if (nRows < 2) throw new Error("mCost（行数）须 ≥ 2");
-  if (timeCost < 1) throw new Error("tCost 须 ≥ 1");
+  if (!Number.isInteger(nRows) || nRows < 2) throw new Error("mCost（行数）须为 ≥2 的整数");
+  if (!Number.isInteger(timeCost) || timeCost < 1) throw new Error("tCost 须为 ≥1 的整数");
+  if (!Number.isInteger(nCols) || nCols < 1) throw new Error("nCols 须为 ≥1 的整数");
+  if (!Number.isInteger(kLen) || kLen < 1) throw new Error("kLen 须为 ≥1 的整数");
 
   // ---- pad10*1：pwd || salt || basil(6×int32 LE)，96 字节块 ----
   const basil = new Uint8Array(24);
@@ -243,6 +245,13 @@ function decodeInput(s, enc) {
   return new TextEncoder().encode(t);
 }
 
+function intParam(value, fallback, name, min) {
+  if (value == null || String(value).trim() === "") return fallback;
+  const n = Number(String(value).trim());
+  if (!Number.isSafeInteger(n) || n < min) throw new Error(`lyra2：${name} 必须为 ≥${min} 的整数（当前 ${value}）`);
+  return n;
+}
+
 function lyra2Run(text, p = {}) {
   const lines = [];
   lines.push("=== Lyra2 内存硬 KDF（PHC 2014，Blake2b 海绵）===");
@@ -251,24 +260,18 @@ function lyra2Run(text, p = {}) {
   const saltEnc = p.saltEnc || "utf8";
   const pass = decodeInput(text, passEnc);
   const salt = decodeInput(p.salt != null ? p.salt : "", saltEnc);
-  const tCostRaw = p.tCost != null && String(p.tCost).trim() !== "" ? String(p.tCost).trim() : null;
-  const tCost = tCostRaw !== null ? parseInt(tCostRaw, 10) : 2;
-  if (tCostRaw !== null && (!Number.isInteger(tCost) || tCost <= 0)) throw new Error("lyra2：tCost 必须为正整数");
-  const mCost = parseInt(p.mCost, 10) || 4;
-  const nCols = parseInt(p.nCols, 10) || 256;
-  const kLen = parseInt(p.kLen, 10) || 32;
+  const tCost = intParam(p.tCost, 2, "tCost", 1);
+  const mCost = intParam(p.mCost, 4, "mCost", 2);
+  const nCols = intParam(p.nCols, 256, "nCols", 1);
+  const kLen = intParam(p.kLen, 32, "kLen", 1);
   lines.push(`口令: ${pass.length} 字节（${passEnc}）`);
   lines.push(`盐:   ${salt.length} 字节（${saltEnc}）`);
   lines.push(`参数: tCost=${tCost}, mCost=${mCost}, nCols=${nCols}, kLen=${kLen}`);
   lines.push(`预计内存: ~${((mCost * 64 * 96) / 1024 / 1024).toFixed(2)} MB（行×64列×96B）`);
   lines.push("");
-  try {
-    const dk = lyra2(pass, salt, tCost, mCost, nCols, kLen);
-    lines.push("--- 派生密钥 (Derived Key) ---");
-    lines.push("hex: " + bytesToHex(dk));
-  } catch (e) {
-    lines.push("✗ " + (e.message || String(e)));
-  }
+  const dk = lyra2(pass, salt, tCost, mCost, nCols, kLen);
+  lines.push("--- 派生密钥 (Derived Key) ---");
+  lines.push("hex: " + bytesToHex(dk));
   return lines.join("\n");
 }
 

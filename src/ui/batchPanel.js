@@ -29,6 +29,7 @@
  */
 
 import { connectSpecialDraft, newDraftIdentity } from './workspaceDrafts.js';
+import { withLimitContext } from '../core/limitGuard.js';
 
 const FALLBACK = {
   "ui.batch.title": "批量处理",
@@ -72,6 +73,7 @@ const FALLBACK = {
   "ui.batch.zipFail": "打包失败：{0}",
   "ui.batch.runFail": "批处理未完成：{0}",
   "ui.batch.cancelled": "已取消：{0}",
+  "ui.batch.allowAll": "本次全部允许超限读取",
 };
 
 const QUEUE_MAX = 500;
@@ -117,7 +119,9 @@ function ensureStyles() {
     ".batch-panel .bp-sub{color:var(--on-surface-var);font-size:var(--fs-xs,13px);line-height:1.6}",
     ".batch-panel .bp-drop{border:1px dashed var(--outline);border-radius:var(--r-lg,16px);padding:24px;text-align:center;background:var(--surface-1);color:var(--on-surface-var)}",
     ".batch-panel .bp-drop.bp-over{border-color:var(--primary);background:var(--primary-container);color:var(--on-primary-container)}",
-    ".batch-panel .bp-row{display:flex;gap:8px;flex-wrap:wrap}",
+    ".batch-panel .bp-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}",
+    ".batch-panel .bp-check{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs,13px);color:var(--on-surface-var);cursor:pointer;user-select:none}",
+    ".batch-panel .bp-check input{margin:0;accent-color:var(--primary)}",
     ".batch-panel button{font:inherit;min-height:40px;padding:8px 16px;border-radius:var(--r-full,999px);border:0;background:var(--surface-3);color:var(--on-surface);cursor:pointer;transition:background var(--dur-short) var(--ease),transform var(--dur-short) var(--ease)}",
     ".batch-panel button:hover:not(:disabled){background:var(--surface-hi)}",
     ".batch-panel button:active:not(:disabled){transform:scale(.97)}",
@@ -201,6 +205,7 @@ export function batchPanel(ctx) {
   let busy = false;
   const notes = [];
   let draft = null, generation = 0, disposed = false, binaryKey = newDraftIdentity();
+  let allowAllRun = false;
 
   function note(msg) {
     notes.push(msg);
@@ -221,6 +226,10 @@ export function batchPanel(ctx) {
   const btnCancel = el("button", { type: "button", text: t("ui.batch.cancel"), disabled: true });
   const btnZip = el("button", { type: "button", text: t("ui.batch.zip") });
   const btnClear = el("button", { type: "button", text: t("ui.batch.clear") });
+  const allowAllCb = el("input", { type: "checkbox", id: "batchAllowAll" });
+  allowAllCb.checked = false;
+  const allowAllLabel = el("label", { class: "bp-check", for: "batchAllowAll" },
+    allowAllCb, el("span", {}, t("ui.batch.allowAll")));
 
   const fileInput = el("input", { type: "file", multiple: true, style: "display:none" });
   const dirInput = el("input", { type: "file", multiple: true, webkitdirectory: true, style: "display:none" });
@@ -233,7 +242,7 @@ export function batchPanel(ctx) {
       el("div", { class: "bp-sub", text: t("ui.batch.sub") }),
     ),
     drop,
-    el("div", { class: "bp-row" }, btnPickFiles, btnPickDir, btnRun, btnCancel, btnZip, btnClear),
+    el("div", { class: "bp-row" }, btnPickFiles, btnPickDir, btnRun, btnCancel, btnZip, btnClear, allowAllLabel),
     notesBox,
     el("table", { class: "bp-table" },
       el("thead", {}, el("tr", {},
@@ -443,6 +452,7 @@ export function batchPanel(ctx) {
     btnPickDir.disabled = v;
     btnClear.disabled = v;
     btnCancel.disabled = !v;
+    allowAllCb.disabled = v;
   }
 
   // ---- 执行 ----
@@ -476,6 +486,7 @@ export function batchPanel(ctx) {
       return { bytes, text: "", note: t("ui.batch.noOp") };
     }
     const params = Object.assign({}, c.params || {});
+    if (allowAllRun) params._allowLimitOverride = true;
     const wantDecode = params.__dir === "decode";
     const fn = (typeof op.run === "function") ? op.run : (wantDecode ? op.decode : op.encode);
     if (typeof fn !== "function") return { bytes, text: "", note: t("ui.batch.noOp") };
@@ -487,10 +498,9 @@ export function batchPanel(ctx) {
       if (!dec.ok) return { bytes, text: "", note: t("ui.batch.st.binary") };
       input = dec.text;
     }
-    let res = fn(input, params);
-    // 部分 op（bzip2Enc / scrypt / bcrypt 等）是异步实现；不 await 会把 Promise
-    // 当未知返回，静默退化成「原样打包」，等于伪造成功。
-    if (res && typeof res.then === "function") res = await res;
+    // 部分 op（bzip2Enc / scrypt / bcrypt 等）是异步实现；withLimitContext
+    // 会 await，避免把 Promise 当未知返回静默退化成「原样打包」。
+    let res = await withLimitContext(params, () => fn(input, params));
     if (typeof res === "string") {
       const enc = new TextEncoder().encode(res);
       return { bytes: enc, text: res, note: "" };
@@ -551,6 +561,7 @@ export function batchPanel(ctx) {
     for (let i = 0; i < entries.length; i++) byId.set(entries[i].id, entries[i]);
 
     let run;
+    allowAllRun = !!allowAllCb.checked;
     try {
       run = await c.runBatch(plan, async (item) => {
         const owner = byId.get(item.id);
@@ -582,6 +593,9 @@ export function batchPanel(ctx) {
       setBusy(false);
       note(t("ui.batch.runFail", (e && e.message) ? e.message : String(e)));
       return;
+    } finally {
+      allowAllRun = false;
+      allowAllCb.checked = false;
     }
 
     if (epoch !== generation || disposed) return;
@@ -721,6 +735,6 @@ export function batchPanel(ctx) {
     clear: clearQueue,
   });
   root.ready = draft.ready;
-  root.dispose = () => { draft.dispose(); disposed = true; generation++; token?.cancel(t('ui.batch.cancelReason')); };
+  root.dispose = () => { allowAllRun = false; draft.dispose(); disposed = true; generation++; token?.cancel(t('ui.batch.cancelReason')); };
   return root;
 }

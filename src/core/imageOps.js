@@ -9,9 +9,33 @@
 //   src = (dst + 0.5) * scale。
 // - rotateArbitrary 默认扩展画布以容纳整图，越界填充背景色。
 //
-// 依赖：无。
+// 依赖：limitGuard.js（资源预算）。
+
+import { checkLimit } from "./limitGuard.js";
 
 const MAX_DIM = 16384;
+const IMAGE_PIXELS_SOFT = 16 * 1024 * 1024;
+const IMAGE_PIXELS_HARD = 64 * 1024 * 1024;
+
+function _limitParams(params) {
+  if (params && typeof params === "object") return params;
+  const g = globalThis.__ebctfLimitParams;
+  return g && typeof g === "object" ? g : null;
+}
+
+function _checkPixels(pixels, label, params) {
+  const n = Number(pixels);
+  if (!Number.isFinite(n) || n <= IMAGE_PIXELS_SOFT) return;
+  checkLimit({
+    scope: "imageOps.pixels",
+    actual: n,
+    soft: IMAGE_PIXELS_SOFT,
+    hard: IMAGE_PIXELS_HARD,
+    params: _limitParams(params),
+    label,
+    unit: " 像素",
+  });
+}
 const CHANNEL_ALIAS = {
   r: 0, red: 0,
   g: 1, green: 1,
@@ -83,13 +107,14 @@ export function channelIndex(channel, fallback = 0) {
 }
 
 /** 新建 RGBA 图像；rgba 为 4 分量颜色，默认全透明。 */
-export function createImage(width, height, rgba = [0, 0, 0, 0]) {
+export function createImage(width, height, rgba = [0, 0, 0, 0], params = null) {
   const w = intInRange("图像宽度", width, 1, MAX_DIM);
   const h = intInRange("图像高度", height, 1, MAX_DIM);
   const c = Array.isArray(rgba) && rgba.length === 4
     ? rgba.map((v) => Math.max(0, Math.min(255, Math.round(Number(v) || 0))))
     : null;
   if (!c) throw new Error("填充颜色必须是 4 个 0-255 分量");
+  _checkPixels(w * h, `新建图像 ${w}×${h}`, params);
   const data = new Uint8ClampedArray(w * h * 4);
   for (let i = 0; i < data.length; i += 4) {
     data[i] = c[0]; data[i + 1] = c[1]; data[i + 2] = c[2]; data[i + 3] = c[3];
@@ -98,8 +123,9 @@ export function createImage(width, height, rgba = [0, 0, 0, 0]) {
 }
 
 /** 深拷贝图像。 */
-export function cloneImage(image) {
+export function cloneImage(image, params = null) {
   assertImage(image);
+  _checkPixels(image.width * image.height, `复制图像 ${image.width}×${image.height}`, params);
   return {
     width: image.width,
     height: image.height,
@@ -123,10 +149,11 @@ export function imageEquals(a, b) {
 // ============================================================
 
 /** 顺时针 90°。 */
-export function rotate90(image) {
+export function rotate90(image, params = null) {
   assertImage(image);
   const { width: w, height: h, data: src } = image;
   const dw = h, dh = w;
+  _checkPixels(dw * dh, `旋转图像 ${dw}×${dh}`, params);
   const out = new Uint8ClampedArray(dw * dh * 4);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -144,9 +171,10 @@ export function rotate90(image) {
 }
 
 /** 顺时针 180°。 */
-export function rotate180(image) {
+export function rotate180(image, params = null) {
   assertImage(image);
   const { width: w, height: h, data: src } = image;
+  _checkPixels(w * h, `旋转图像 ${w}×${h}`, params);
   const out = new Uint8ClampedArray(src.length);
   const total = w * h;
   for (let i = 0; i < total; i++) {
@@ -161,10 +189,11 @@ export function rotate180(image) {
 }
 
 /** 顺时针 270°（即逆时针 90°）。 */
-export function rotate270(image) {
+export function rotate270(image, params = null) {
   assertImage(image);
   const { width: w, height: h, data: src } = image;
   const dw = h, dh = w;
+  _checkPixels(dw * dh, `旋转图像 ${dw}×${dh}`, params);
   const out = new Uint8ClampedArray(dw * dh * 4);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -182,21 +211,22 @@ export function rotate270(image) {
 }
 
 /** 按 90° 的整数倍旋转；turns 可为负，自动取模。 */
-export function rotateQuarter(image, turns = 1) {
+export function rotateQuarter(image, turns = 1, params = null) {
   assertImage(image);
   const n = Number(turns);
   if (!Number.isFinite(n)) throw new Error(`旋转倍数无效：${turns}`);
   const k = ((Math.trunc(n) % 4) + 4) % 4;
-  if (k === 0) return cloneImage(image);
-  if (k === 1) return rotate90(image);
-  if (k === 2) return rotate180(image);
-  return rotate270(image);
+  if (k === 0) return cloneImage(image, params);
+  if (k === 1) return rotate90(image, params);
+  if (k === 2) return rotate180(image, params);
+  return rotate270(image, params);
 }
 
 /** 水平翻转（左右镜像）。 */
-export function flipH(image) {
+export function flipH(image, params = null) {
   assertImage(image);
   const { width: w, height: h, data: src } = image;
+  _checkPixels(w * h, `翻转图像 ${w}×${h}`, params);
   const out = new Uint8ClampedArray(src.length);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -212,9 +242,10 @@ export function flipH(image) {
 }
 
 /** 垂直翻转（上下镜像）。 */
-export function flipV(image) {
+export function flipV(image, params = null) {
   assertImage(image);
   const { width: w, height: h, data: src } = image;
+  _checkPixels(w * h, `翻转图像 ${w}×${h}`, params);
   const out = new Uint8ClampedArray(src.length);
   for (let y = 0; y < h; y++) {
     const dy = h - 1 - y;
@@ -234,14 +265,18 @@ export function flipV(image) {
  * 裁剪。参数支持 crop(img, x, y, w, h) 或 crop(img, {x,y,width,height})。
  * 严格校验越界，避免静默产出错误尺寸。
  */
-export function crop(image, x, y, width, height) {
+export function crop(image, x, y, width, height, params = null) {
   assertImage(image);
   let rect = { x, y, width, height };
-  if (x && typeof x === "object") rect = x;
+  if (x && typeof x === "object") {
+    rect = x;
+    if (!params) params = x;
+  }
   const cx = intInRange("裁剪 x", rect.x ?? 0, 0, image.width - 1);
   const cy = intInRange("裁剪 y", rect.y ?? 0, 0, image.height - 1);
   const cw = intInRange("裁剪宽度", rect.width ?? rect.w, 1, image.width - cx);
   const ch = intInRange("裁剪高度", rect.height ?? rect.h, 1, image.height - cy);
+  _checkPixels(cw * ch, `裁剪图像 ${cw}×${ch}`, params);
   const { width: w, data: src } = image;
   const out = new Uint8ClampedArray(cw * ch * 4);
   for (let row = 0; row < ch; row++) {
@@ -257,13 +292,14 @@ export function crop(image, x, y, width, height) {
  * 最近邻使用像素中心采样：srcX = floor((dstX + 0.5) * srcW / dstW)。
  * 双线性同样使用中心对齐坐标，边界夹取，结果 Math.round。
  */
-export function resize(image, width, height, method = "nearest") {
+export function resize(image, width, height, method = "nearest", params = null) {
   assertImage(image);
   let w = width, h = height, mode = method;
   if (width && typeof width === "object") {
     w = width.width ?? width.w;
     h = width.height ?? width.h;
     mode = width.method ?? width.interpolation ?? method;
+    if (!params) params = width;
   }
   const dw = intInRange("缩放宽度", w, 1, MAX_DIM);
   const dh = intInRange("缩放高度", h, 1, MAX_DIM);
@@ -271,6 +307,7 @@ export function resize(image, width, height, method = "nearest") {
   if (m !== "nearest" && m !== "bilinear") {
     throw new Error(`缩放算法只能是 nearest 或 bilinear，当前 ${mode}`);
   }
+  _checkPixels(dw * dh, `缩放图像 ${dw}×${dh}`, params);
   const { width: sw, height: sh, data: src } = image;
   const out = new Uint8ClampedArray(dw * dh * 4);
   const scaleX = sw / dw;
@@ -379,6 +416,7 @@ export function rotateArbitrary(image, degrees, opts = {}) {
     ? Math.max(1, Math.ceil(Math.abs(w * sin) + Math.abs(h * cos) - 1e-9))
     : h;
   if (dw > MAX_DIM || dh > MAX_DIM) throw new Error(`旋转后尺寸超过上限 ${MAX_DIM}：${dw}×${dh}`);
+  _checkPixels(dw * dh, `旋转图像 ${dw}×${dh}`, opts);
 
   const cx0 = (w - 1) / 2;
   const cy0 = (h - 1) / 2;
@@ -422,8 +460,9 @@ export function rotateArbitrary(image, degrees, opts = {}) {
 // ============================================================
 
 /** 反色（RGB 取反，Alpha 不变）。 */
-export function invert(image) {
+export function invert(image, params = null) {
   assertImage(image);
+  _checkPixels(image.width * image.height, `反色图像 ${image.width}×${image.height}`, params);
   const out = new Uint8ClampedArray(image.data);
   for (let i = 0; i < out.length; i += 4) {
     out[i] = 255 - out[i];
@@ -446,7 +485,8 @@ export function adjustImage(image, options = {}) {
   const brightness = numInRange("亮度", options.brightness ?? 0, -255, 255);
   const contrast = numInRange("对比度", options.contrast ?? 0, -100, 100);
   const saturation = numInRange("饱和度", options.saturation ?? 0, -100, 100);
-  if (brightness === 0 && contrast === 0 && saturation === 0) return cloneImage(image);
+  if (brightness === 0 && contrast === 0 && saturation === 0) return cloneImage(image, options);
+  _checkPixels(image.width * image.height, `调色图像 ${image.width}×${image.height}`, options);
   const cf = (100 + contrast) / 100;
   const sf = (100 + saturation) / 100;
   const src = image.data;
@@ -473,9 +513,10 @@ export function adjustImage(image, options = {}) {
 }
 
 /** 提取单通道为灰度图（Alpha 置 255 便于查看）。alpha 通道按自身灰度显示。 */
-export function extractChannel(image, channel = 0) {
+export function extractChannel(image, channel = 0, params = null) {
   assertImage(image);
   const idx = channelIndex(channel);
+  _checkPixels(image.width * image.height, `通道提取 ${image.width}×${image.height}`, params);
   const src = image.data;
   const out = new Uint8ClampedArray(src.length);
   for (let i = 0; i < src.length; i += 4) {
@@ -486,13 +527,13 @@ export function extractChannel(image, channel = 0) {
 }
 
 /** 分离 RGBA 四通道，各返回灰度图。 */
-export function splitChannels(image) {
+export function splitChannels(image, params = null) {
   assertImage(image);
   return {
-    r: extractChannel(image, 0),
-    g: extractChannel(image, 1),
-    b: extractChannel(image, 2),
-    a: extractChannel(image, 3),
+    r: extractChannel(image, 0, params),
+    g: extractChannel(image, 1, params),
+    b: extractChannel(image, 2, params),
+    a: extractChannel(image, 3, params),
   };
 }
 
@@ -515,6 +556,7 @@ export function mapChannels(image, mapping = {}, options = {}) {
     b: channelIndex(map.b, 2),
     a: map.a == null ? null : channelIndex(map.a, 3),
   };
+  _checkPixels(image.width * image.height, `通道重组 ${image.width}×${image.height}`, options);
   const src = image.data;
   const out = new Uint8ClampedArray(src.length);
   const pick = (i, at) => (at < 0 ? luma601(src[i], src[i + 1], src[i + 2]) : src[i + at]);
@@ -562,6 +604,7 @@ export function mergeChannels(parts = {}, options = {}) {
   if (width == null) throw new Error("mergeChannels 至少需要一个通道图像");
   intInRange("合并宽度", width, 1, MAX_DIM);
   intInRange("合并高度", height, 1, MAX_DIM);
+  _checkPixels(width * height, `通道合并 ${width}×${height}`, options);
 
   const out = new Uint8ClampedArray(width * height * 4);
   for (let i = 0; i < out.length; i += 4) {
@@ -599,6 +642,7 @@ export function bitPlane(image, options = {}) {
   const tint = Array.isArray(options.tint) && options.tint.length === 3
     ? options.tint.map((v) => Math.max(0, Math.min(255, Math.round(Number(v) || 0))))
     : null;
+  _checkPixels(image.width * image.height, `位平面 ${image.width}×${image.height}`, options);
   const src = image.data;
   const out = new Uint8ClampedArray(src.length);
   for (let i = 0; i < src.length; i += 4) {
@@ -632,7 +676,7 @@ export function bitPlane(image, options = {}) {
 export function createHistory(initial, options = {}) {
   assertImage(initial);
   const limit = Math.max(2, Math.min(500, Math.trunc(Number(options.limit) || 50)));
-  const initialSnapshot = cloneImage(initial);
+  const initialSnapshot = cloneImage(initial, options);
   let entries = [{ image: initialSnapshot, label: options.label || "打开" }];
   let index = 0;
 
@@ -682,49 +726,49 @@ export function applyOp(image, op = {}) {
   assertImage(image);
   const type = String(op.type || op.op || "").trim();
   switch (type) {
-    case "rotate90": return rotate90(image);
-    case "rotate180": return rotate180(image);
-    case "rotate270": return rotate270(image);
-    case "rotateQuarter": return rotateQuarter(image, op.turns ?? 1);
+    case "rotate90": return rotate90(image, op);
+    case "rotate180": return rotate180(image, op);
+    case "rotate270": return rotate270(image, op);
+    case "rotateQuarter": return rotateQuarter(image, op.turns ?? 1, op);
     case "rotate":
     case "rotateArbitrary":
       return rotateArbitrary(image, op.angle ?? op.degrees ?? op.value ?? 0, op);
-    case "flipH": return flipH(image);
-    case "flipV": return flipV(image);
+    case "flipH": return flipH(image, op);
+    case "flipV": return flipV(image, op);
     case "flip":
-      return (String(op.axis || op.direction || "h").toLowerCase().startsWith("v")) ? flipV(image) : flipH(image);
+      return (String(op.axis || op.direction || "h").toLowerCase().startsWith("v")) ? flipV(image, op) : flipH(image, op);
     case "crop":
       return crop(image, {
         x: op.x ?? 0,
         y: op.y ?? 0,
         width: op.width ?? op.w,
         height: op.height ?? op.h,
-      });
+      }, null, null, null, op);
     case "resize":
     case "scale":
       return resize(image, {
         width: op.width ?? op.w,
         height: op.height ?? op.h,
         method: op.method ?? op.interpolation ?? "nearest",
-      });
+      }, null, null, op);
     case "adjust":
     case "color":
       return adjustImage(image, op);
     case "brightness":
-      return adjustImage(image, { brightness: op.value ?? op.amount ?? 0 });
+      return adjustImage(image, { brightness: op.value ?? op.amount ?? 0, _allowLimitOverride: op._allowLimitOverride });
     case "contrast":
-      return adjustImage(image, { contrast: op.value ?? op.amount ?? 0 });
+      return adjustImage(image, { contrast: op.value ?? op.amount ?? 0, _allowLimitOverride: op._allowLimitOverride });
     case "saturation":
-      return adjustImage(image, { saturation: op.value ?? op.amount ?? 0 });
-    case "invert": return invert(image);
+      return adjustImage(image, { saturation: op.value ?? op.amount ?? 0, _allowLimitOverride: op._allowLimitOverride });
+    case "invert": return invert(image, op);
     case "extractChannel":
-    case "channel": return extractChannel(image, op.channel ?? 0);
-    case "splitChannels": return splitChannels(image);
+    case "channel": return extractChannel(image, op.channel ?? 0, op);
+    case "splitChannels": return splitChannels(image, op);
     case "mapChannels":
       return mapChannels(image, op.mapping || op.channels || op, op);
     case "bitPlane":
     case "bitplane": return bitPlane(image, op);
-    case "none": return cloneImage(image);
+    case "none": return cloneImage(image, op);
     default:
       throw new Error(`未知图像操作：${type || "(空)"}`);
   }

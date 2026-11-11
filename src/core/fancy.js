@@ -61,13 +61,12 @@ function morseDecode(text) {
   return s.split(/\s*\/\s*/).map((word) =>
     word.trim().split(/\s+/).filter(Boolean).map((c) => {
       if (MORSE[c]) return MORSE[c];
-   // ④ 非纯点划 token = 类外输入：按「忽略」处置，该 token 不产出任何字符
-   //   （此前把任何非 '.' 字符都当作 '1' 位，故 '#' 会静默解出 U+0001 控制字符）
-      if (!/^[.\-]+$/.test(c)) return "";
-   // ⑤ 未知纯点划码回退：'.'→0 '-'→1 → 16 位二进制 → chr（参考实现行为，仅对纯点划生效）
-      const bin = [...c].map((ch) => (ch === "." ? "0" : "1")).join("").padStart(16, "0");
-      const v = parseInt(bin, 2);
-      return v > 0 && v <= 0xffff ? String.fromCharCode(v) : "?";
+   // ④ 非纯点划 token = 类外输入：原样保留（不再静默删除整 token）。
+   //   与 encode 对不支持字符的「原样保留」对称，保证混合文本可解释、可回看。
+      if (!/^[.\-]+$/.test(c)) return c;
+   // ⑤ 未知纯点划码也原样保留：旧的 16 位二进制→chr 回退会产出控制字符/怪字符，
+   //   把「未知码」伪装成合法解码结果；现改为显式保留，便于人工判断。
+      return c;
     }).join("")
   ).join(" ");
 }
@@ -615,7 +614,7 @@ function yunyingEncode(text) {
 
 // ---- 注册 ----
 register({
-  id: "morse", cat: "fancy", name: "摩斯电码", desc: "ITU-R M.1677（字母/数字/标点，/ 分词）",
+  id: "morse", cat: "fancy", name: "摩斯电码", desc: "ITU-R M.1677（字母/数字/标点，/ 分词）；不支持字符编码时原样保留，解码未知 token 也原样保留（不静默丢字）",
   encode: morseEncode, decode: morseDecode,
   detect: (t) => (/^[.\-/\s]+$/.test(t.trim()) && /[.-]/.test(t) && t.trim().length >= 5 ? 0.6 : 0),
 });

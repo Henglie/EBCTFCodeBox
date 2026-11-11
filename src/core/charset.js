@@ -153,7 +153,10 @@ function getEncMap(label) {
 }
 
 // 通用：字符串 → 目标字符集字节（UTF-8 走 TextEncoder，其余走反向表）
-function strToBytes(label, str) {
+// 目标字符集不可表示的字符默认显式报错：旧实现静默回退 UTF-8，产出的字节在
+// 目标字符集里会被解成乱码（例如 emoji 混进 GBK），是典型静默损坏。
+// allowFallback=true 可显式恢复旧的回退行为（调用方主动承担乱码风险）。
+function strToBytes(label, str, allowFallback = false) {
   if (label === "utf-8" || label === "utf8") return te(str);
   const map = getEncMap(label);
   const out = [];
@@ -161,7 +164,11 @@ function strToBytes(label, str) {
     const cp = ch.codePointAt(0);
     const bytes = map.get(cp);
     if (bytes) for (const b of bytes) out.push(b);
-    else for (const b of te(ch)) out.push(b); // 回退 UTF-8（保不丢，但非目标字符集）
+    else if (allowFallback) for (const b of te(ch)) out.push(b);
+    else {
+      const hex = "U+" + cp.toString(16).toUpperCase().padStart(4, "0");
+      throw new Error(`字符集 ${label} 无法表示字符 ${JSON.stringify(ch)}（${hex}），已停止以避免 UTF-8 回退造成乱码。请删除该字符或改用 UTF-8。`);
+    }
   }
   return new Uint8Array(out);
 }
@@ -173,7 +180,7 @@ function bytesToStr(label, bytes) {
 // ============ GBK / GB2312 / GB18030 ↔ UTF-8 ============
 function gbEncode(text, p) {
   const cs = (p && p.charset) || "gbk";
-  return formatBytes(strToBytes(cs, textFromRawBytes(text, p)), (p && p.format) || "hex");
+  return formatBytes(strToBytes(cs, textFromRawBytes(text, p), !!(p && p.allowFallback)), (p && p.format) || "hex");
 }
 function gbDecode(text, p) {
   const cs = (p && p.charset) || "gbk";
@@ -183,7 +190,7 @@ function gbDecode(text, p) {
 // ============ 通用单字符集 op 工厂（big5/shift_jis/euc-kr/latin 全系）============
 function makeCodec(label) {
   return {
-    encode: (text, p) => formatBytes(strToBytes(label, textFromRawBytes(text, p)), (p && p.format) || "hex"),
+    encode: (text, p) => formatBytes(strToBytes(label, textFromRawBytes(text, p), !!(p && p.allowFallback)), (p && p.format) || "hex"),
     decode: (text, p) => bytesToStr(label, decodeBytesIn(text, p, (p && p.format) || "hex")),
   };
 }
@@ -271,21 +278,116 @@ function quweiEncode(text, p) {
   }
   return groups.join(sepCh);
 }
+function quweiIsDigit(ch) { return ch >= "0" && ch <= "9"; }
+function quweiIsGroup(s, pos) {
+  if (pos < 0 || pos + 4 > s.length) return false;
+  const g = s.slice(pos, pos + 4);
+  if (!/^\d{4}$/.test(g)) return false;
+  const q = parseInt(g.slice(0, 2), 10);
+  const w = parseInt(g.slice(2), 10);
+  return q >= 1 && q <= 94 && w >= 1 && w <= 94;
+}
+function quweiChainLeft(s, pos) {
+  let n = 0, i = pos;
+  while (i >= 0 && quweiIsDigit(s[i])) {
+    n++;
+    if (i >= 2 && s[i - 1] === "\n" && quweiIsDigit(s[i - 2])) i -= 2;
+    else break;
+  }
+  return n;
+}
+function quweiChainRight(s, pos) {
+  let n = 0, i = pos;
+  while (i < s.length && quweiIsDigit(s[i])) {
+    n++;
+    if (i + 2 < s.length && s[i + 1] === "\n" && quweiIsDigit(s[i + 2])) i += 2;
+    else break;
+  }
+  return n;
+}
+function quweiAutoNewlines(s) {
+  if (/(?:^|[^\d])\d(?:\n\d){3,}(?!\d)/.test(s)) return true;
+  const runRe = /\n+/g;
+  let m;
+  while ((m = runRe.exec(s)) !== null) {
+    const i = m.index, j = runRe.lastIndex;
+    const lg = quweiIsGroup(s, i - 4) && (i < 5 || !quweiIsDigit(s[i - 5]));
+    const rg = quweiIsGroup(s, j) && (j + 4 >= s.length || !quweiIsDigit(s[j + 4]));
+    const ld = i > 0 && quweiIsDigit(s[i - 1]);
+    const rd = j < s.length && quweiIsDigit(s[j]);
+    if ((lg && rd) || (rg && ld)) return true;
+  }
+  return false;
+}
+function quweiStripAutoNewlines(s) {
+  if (!quweiAutoNewlines(s)) return s;
+  const gaps = new Set();
+  const gapRe = /(?:^|[^\d])(\d(?:\n\d){3,})(?!\d)/g;
+  let gm;
+  while ((gm = gapRe.exec(s)) !== null) {
+    const start = gm.index + (gm[0].length - gm[1].length);
+    for (let i = start; i < start + gm[1].length; i++) if (s[i] === "\n") gaps.add(i);
+  }
+  let out = "", last = 0;
+  const runRe = /\n+/g;
+  let m;
+  while ((m = runRe.exec(s)) !== null) {
+    const i = m.index, j = runRe.lastIndex, k = j - i;
+    const lg = quweiIsGroup(s, i - 4) && (i < 5 || !quweiIsDigit(s[i - 5]));
+    const rg = quweiIsGroup(s, j) && (j + 4 >= s.length || !quweiIsDigit(s[j + 4]));
+    let rep;
+    if (lg && rg) rep = "\uE000" + "\n".repeat(Math.max(0, k - 2)) + "\uE000";
+    else if (lg || rg) rep = "\uE000" + "\n".repeat(Math.max(0, k - 1));
+    else {
+      const ld = i > 0 && quweiIsDigit(s[i - 1]);
+      const rd = j < s.length && quweiIsDigit(s[j]);
+      let sep = false, keep = k;
+      if (ld && rd) {
+        const leftSplit = quweiChainLeft(s, i - 1) >= 4;
+        const rightSplit = quweiChainRight(s, j) >= 4;
+        if (k === 1) sep = gaps.has(i);
+        else if (leftSplit && rightSplit) { sep = true; keep = Math.max(0, k - 2); }
+        else if (leftSplit || rightSplit) { sep = true; keep = k - 1; }
+      } else if (ld) sep = quweiChainLeft(s, i - 1) >= 4;
+      else if (rd) sep = quweiChainRight(s, j) >= 4;
+      if (sep && keep === k) keep = k - 1;
+      rep = sep ? "\uE000" + "\n".repeat(keep) : "\n".repeat(k);
+    }
+    out += s.slice(last, i) + rep;
+    last = j;
+  }
+  out += s.slice(last);
+  return out;
+}
+function quweiUnwrapSeparator(s, sepCh) {
+  const parts = s.split(sepCh);
+  let out = "", i = 0, first = true;
+  while (i < parts.length) {
+    if (parts[i] !== "") {
+      out += (first ? "" : "\uE000") + parts[i];
+      first = false;
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < parts.length && parts[j] === "") j++;
+    out += sepCh.repeat(Math.floor((j - i) / 2)) + "\uE000";
+    i = j;
+  }
+  return out;
+}
 function quweiDecode(text, p) {
   const sep = (p && p.sep) || "none";
- // sep=none 也要剥离换行：编码端在「含连续 ≥4 位数字」时会**自动切换为换行分隔**，
- // 故解码端把换行视为分隔符，才能还原自动切换过的密文。
-  const sepSet = sep === "space" ? new Set([" "])
-    : sep === "newline" ? new Set(["\n", "\r"])
-    : new Set(["\n", "\r"]);
+  const body = sep === "space" ? quweiUnwrapSeparator(text, " ")
+    : sep === "newline" ? quweiUnwrapSeparator(text, "\n")
+    : quweiStripAutoNewlines(text);
   const out = [];
   const re = /\d{4}/g;
   let last = 0;
   let m;
-  while ((m = re.exec(text)) !== null) {
- // 透传两个匹配之间的非数字字符（ASCII）
-    for (const ch of text.slice(last, m.index)) {
-      if (ch.charCodeAt(0) < 0x80 && !(sepSet && sepSet.has(ch))) out.push(ch.charCodeAt(0));
+  while ((m = re.exec(body)) !== null) {
+    for (const ch of body.slice(last, m.index)) {
+      if (ch.charCodeAt(0) < 0x80) out.push(ch.charCodeAt(0));
     }
     const q = parseInt(m[0].slice(0, 2), 10);
     const w = parseInt(m[0].slice(2, 4), 10);
@@ -296,8 +398,8 @@ function quweiDecode(text, p) {
     }
     last = m.index + 4;
   }
-  for (const ch of text.slice(last)) {
-    if (ch.charCodeAt(0) < 0x80 && !(sepSet && sepSet.has(ch))) out.push(ch.charCodeAt(0));
+  for (const ch of body.slice(last)) {
+    if (ch.charCodeAt(0) < 0x80) out.push(ch.charCodeAt(0));
   }
   return bytesToStr("gb2312", new Uint8Array(out));
 }
@@ -533,7 +635,7 @@ register({
     },
     FORMAT_PARAM,
   ],
-  encode: (text, p) => formatBytes(strToBytes((p && p.charset) || "iso-8859-1", textFromRawBytes(text, p)), (p && p.format) || "hex"),
+  encode: (text, p) => formatBytes(strToBytes((p && p.charset) || "iso-8859-1", textFromRawBytes(text, p), !!(p && p.allowFallback)), (p && p.format) || "hex"),
   decode: (text, p) => bytesToStr((p && p.charset) || "iso-8859-1", decodeBytesIn(text, p, (p && p.format) || "hex")),
 });
 

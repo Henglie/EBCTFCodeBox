@@ -230,14 +230,19 @@ async function caesarBruteParallel(text, options = {}) {
 }
 
 // ============ 终止 Worker 池（清理资源） ============
+// 幂等：可重复调用；先摘引用再 terminate/revoke，避免异常路径留下 Blob URL。
 function terminatePool() {
-  if (_workerPool) {
-    for (const { worker } of _workerPool) worker.terminate();
-    _workerPool = null;
+  const pool = _workerPool;
+  _workerPool = null;
+  if (pool) {
+    for (const { worker } of pool) {
+      try { worker.terminate(); } catch { /* 已停止 */ }
+    }
   }
-  if (_workerUrl) {
-    URL.revokeObjectURL(_workerUrl);
-    _workerUrl = null;
+  const url = _workerUrl;
+  _workerUrl = null;
+  if (url) {
+    try { URL.revokeObjectURL(url); } catch { /* 已释放 */ }
   }
 }
 

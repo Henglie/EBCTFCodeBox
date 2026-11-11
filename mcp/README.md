@@ -2,9 +2,9 @@
 
 把恒烈CTF编码工具箱的能力（列分类 / 列 op / 查参数 / 智能识别 / 跑 op / 一键智能解码）暴露成 MCP 工具，供支持 MCP 的 AI 客户端（Claude Desktop、Cline 等）调用。全程本地进程，零外发。
 
-server 版本 `0.1.15`，对外可见 op 978 个。`ebctf_list_categories` 列出 23 个功能分类（注册表 `CATEGORIES` 共 24 项，含 `home` 首页；首页不计入功能分类）。
+server 版本 `0.2.0-beta`，对外可见 op 978 个。`ebctf_list_categories` 列出 23 个功能分类（注册表 `CATEGORIES` 共 24 项，含 `home` 首页；首页不计入功能分类）。
 
-> **安全**：建议使用 Node ≥ 26.5.1（或 24.18.1 / 22.23.2）——2026-07 安全公告修复权限模型越权与 HTTP/2 UAF；`server.mjs` 会对受影响版本在 stderr 提示。JSFuck / JJEncode 默认不暴露；确需使用传 `allowUnsafe:true`（或设 `EBCTF_MCP_UNSAFE=1`），二者解码会用 `new Function` 执行输入，风险自担。MCP 是本机 stdio 服务，不应部署为公网/多用户后端；后端不代用户外发（用户授权外发只发生在浏览器前端的自定义实现里）。
+> **安全**：建议使用 Node ≥ 26.5.1（或 24.18.1 / 22.23.2）——2026-07 安全公告修复权限模型越权与 HTTP/2 UAF；`server.mjs` 会对受影响版本在 stderr 提示。JSFuck / JJEncode 默认不暴露；确需使用时由宿主设 `EBCTF_MCP_UNSAFE=1`（或 `server.mjs --unsafe`），二者解码会用 `new Function` 执行输入，风险自担；请求参数 `allowUnsafe` / `includeUnsafe` 一律忽略，防止提示注入自行提权。MCP 是本机 stdio 服务，不应部署为公网/多用户后端；后端不代用户外发（用户授权外发只发生在浏览器前端的自定义实现里）。
 
 ## 文件
 
@@ -22,9 +22,17 @@ server 版本 `0.1.15`，对外可见 op 978 个。`ebctf_list_categories` 列�
 | `ebctf_list_ops` | `keyword?`、`cat?`、`includeUnsafe?` | 列 op，可按关键词或分类过滤。每条含 id、分类、名称、支持方向(encode/decode/run)、是否带参。默认隐藏 JS 执行类。 |
 | `ebctf_op_schema` | `opId` | 查指定 op 的完整参数 schema（key/类型/默认值/可选项）与支持方向。跑带参 op 前先用它。 |
 | `ebctf_detect` | `input`、`limit?`（默认 15） | 智能识别：对文本跑全部带指纹的算法，返回按置信度(0~1)排序的候选编码/加密类型，不做解码。 |
-| `ebctf_run_op` | `opId`、`input`、`fileBase64?`、`filePath?`、`inputEncoding?`、`outputDir?`、`includeBase64?`、`direction?`、`params?`、`allowUnsafe?` | 对输入执行指定 op。文本走 `input`；图片/pcap/zip/pyc/exe 等二进制走 `fileBase64` 或 `filePath`；产物可 base64 返回或 `outputDir` 落盘。 |
+| `ebctf_run_op` | `opId`、`input`、`fileBase64?`、`filePath?`、`inputEncoding?`、`outputDir?`、`includeBase64?`、`allowOverLimit?`、`direction?`、`params?`、`allowUnsafe?` | 对输入执行指定 op。文本走 `input`；图片/pcap/zip/pyc/exe 等二进制走 `fileBase64` 或 `filePath`；产物 ≤128KB 可按需 base64 内联，>128KB 必须 `outputDir` 落盘。超限返回结构化错误。 |
 | `ebctf_read_file` | `path`、`maxBytes?`、`encoding?` | 读取本机文件供 AI 检查，返回大小、MIME 猜测、sha256 与内容（二进制默认 base64）。 |
 | `ebctf_magic_decode` | `input`、`crib?`、`maxDepth?`（默认 1，多层传 3）、`intensive?`（默认 false） | 一键智能解码，返回按可能性排序的候选明文与解码链路。可开多层链式解码与 1-byte XOR / 位旋转暴力。 |
+
+## 大产物与超限语义
+
+- 产物总大小 **≤128KB（131072 字节）**：未给 `outputDir` 且未显式 `includeBase64:false` 时默认内联 base64；给 `outputDir` 时默认落盘不内联，可再传 `includeBase64:true` 同时返回。
+- 产物总大小 **>128KB**：绝不内联 base64（即使 `includeBase64:true`）。必须传 `outputDir`，返回绝对路径、`size`、`sha256`、`omitted:true`、`inline:false`。未给 `outputDir` 会返回 `isError` + `code:"EBCTF_MCP_OUTPUT_TOO_LARGE"`、`retryable:true`、`requiresOutputDir:true`，不会静默丢内容。
+- 超限错误统一结构化：`{ code, message, meta, retryable, ... }`。软阈值 `EBCTF_LIMIT_CONFIRM` → `retryable:true`，用同一参数加 `allowOverLimit:true` 重试；`EBCTF_LIMIT_HARD` / `EBCTF_LIMIT_CANCEL` → `retryable:false`；超时 `EBCTF_TIMEOUT` → 可重试。`allowOverLimit` 只放宽 soft→hard，硬上限永远拒绝，且确认状态会传给嵌套解码器。
+- 输出护栏：单工具结果 JSON 上限 256KB、单个 `text`/`content` 字段上限 200KB；超限时截断并加 `textTruncated`/`contentTruncated`、`textLength`/`contentLength`。stdio server 单行再兜底 512KB，超限返回 `EBCTF_MCP_RESULT_TOO_LARGE`，不会产生 40 万字符单行。
+- CLI 对齐：`mcp/cli.mjs run ... --out <目录>` 处理大产物，`--allow-over-limit` 对应 `allowOverLimit:true`。
 
 ## 三个资源
 
@@ -87,7 +95,7 @@ py 通用点我启动.py --mcp          # 直接跑 MCP stdio server（供手动
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | node mcp/server.mjs
 ```
 
-应返回 6 个 tool。再测一次解码：
+应返回 7 个 tool。再测一次解码：
 
 ```
 echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"ebctf_run_op","arguments":{"opId":"base64","input":"SGVsbG8=","direction":"decode"}}}' | node mcp/server.mjs

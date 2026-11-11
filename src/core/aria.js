@@ -69,6 +69,13 @@ const SB3 = new Uint8Array(256), SB4 = new Uint8Array(256); // SB3=SB1⁻¹, SB4
 // ============================================================
 const XOR = (a, b) => { const r = new Uint8Array(16); for (let i = 0; i < 16; i++) r[i] = a[i] ^ b[i]; return r; };
 
+function strictHex(input, label) {
+  let s = String(input == null ? "" : input).replace(/0x/gi, "").replace(/[\s:,]+/g, "");
+  if (!/^[0-9a-fA-F]*$/.test(s)) throw new Error(`${label}含非法 hex 字符（仅允许 0-9/A-F、空白、0x、冒号等分隔）`);
+  if (s.length % 2) throw new Error(`${label} hex 长度必须为偶数（当前 ${s.length} 位）`);
+  return s;
+}
+
 function rotLeft(v, r) {
   r = ((r % 128) + 128) % 128;
   if (r === 0) return v.slice();
@@ -120,7 +127,7 @@ const CK2 = Uint8Array.from([0x6d,0xb1,0x4a,0xcc,0x9e,0x21,0xc8,0x20,0xff,0x28,0
 const CK3 = Uint8Array.from([0xdb,0x92,0x37,0x1d,0x21,0x26,0xe9,0x70,0x03,0x24,0x97,0x75,0x04,0xe8,0xc9,0x0e]);
 
 function keysched(keyHex) {
-  const c = keyHex.replace(/[^0-9a-fA-F]/g, "");
+  const c = strictHex(keyHex, "ARIA 密钥");
   if (![32, 48, 64].includes(c.length)) throw new Error("ARIA 密钥须为 128/192/256 位（32/48/64 hex）");
   const K = new Uint8Array(32);
   for (let i = 0; i < c.length; i += 2) K[i >> 1] = parseInt(c.substr(i, 2), 16);
@@ -189,7 +196,7 @@ const blockToHex = (b) => { let s = ""; for (const x of b) s += x.toString(16).p
 function ariaCrypt(text, p, decrypt) {
   const keyHex = String((p && p.key) || "");
   const { ek, rounds } = keysched(keyHex);
-  const inHex = String(text || "").replace(/[^0-9a-fA-F]/g, "");
+  const inHex = strictHex(text, "ARIA 输入");
   if (inHex.length === 0 || inHex.length % 32 !== 0) throw new Error("输入须为 16 字节（32 hex）的整数倍，ECB 不自动填充");
   let out = "";
   for (let off = 0; off < inHex.length; off += 32) {

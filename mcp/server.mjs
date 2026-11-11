@@ -4,6 +4,7 @@
 //
 // 用法（桌面客户端配置）：
 //   { "mcpServers": { "ebctf-codebox": { "command": "node", "args": ["<项目路径>/mcp/server.mjs"] } } }
+// 需要 JS 执行类 op（jsfuck/jjencode）时在 args 里追加 "--unsafe"（仅本进程生效）。
 // 自测：
 //   echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | node mcp/server.mjs
 //
@@ -11,6 +12,10 @@
 //   src/core/debugLog.js（默认静默；设 EBCTF_DEBUG=1 输出到 stderr），stdout 全程干净，
 //   这里不再需要劫持 process.stdout.write。
 import { createInterface } from "node:readline";
+
+// 命令行 --unsafe：仅本进程恢复 JS 执行类 op（等价宿主 EBCTF_MCP_UNSAFE=1）。
+// 桌面客户端可在 mcpServers args 里追加 "--unsafe"；请求参数 allowUnsafe 仍一律忽略。
+if (process.argv.slice(2).includes("--unsafe")) process.env.EBCTF_MCP_UNSAFE = "1";
 
 const { callMcpTool, MCP_TOOLS, listMcpResources, readMcpResourceContents } = await import("./ebctf-core-adapter.mjs");
 const { APP_VERSION } = await import("../src/core/version.js");
@@ -35,7 +40,68 @@ const realStdoutWrite = process.stdout.write.bind(process.stdout);
 // 支持的 MCP 协议版本（本实现只用基础 tools/resources 面，这三版兼容；协商见 initialize）。
 const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
-const send = (msg) => realStdoutWrite(JSON.stringify(msg) + "\n");
+// 输出单行上限（JSON-RPC 消息序列化后）。mcpBridge 已把单个工具结果压到
+// 256KB 以内；这里再兜底一次，避免任何路径产生 40 万字符单行。
+const MAX_OUTPUT_LINE_CHARS = 512 * 1024;
+
+function tooLargePayload(actualChars) {
+  return JSON.stringify({
+    code: "EBCTF_MCP_RESULT_TOO_LARGE",
+    message:
+      `MCP 响应序列化后 ${actualChars} 字符，超过单行上限 ${MAX_OUTPUT_LINE_CHARS}。` +
+      "结果未内联；请使用 outputDir 落盘后读取路径，或缩小输入。",
+    retryable: true,
+    meta: { limitChars: MAX_OUTPUT_LINE_CHARS, actualChars, outputDirRequired: true },
+  });
+}
+
+const send = (msg) => {
+  let line;
+  try {
+    line = JSON.stringify(msg);
+  } catch (e) {
+    line = JSON.stringify({
+      jsonrpc: "2.0",
+      id: msg && msg.id !== undefined ? msg.id : null,
+      error: { code: -32603, message: `响应序列化失败：${e && e.message ? e.message : e}` },
+    });
+  }
+  if (line.length > MAX_OUTPUT_LINE_CHARS) {
+    if (msg && msg.result && Array.isArray(msg.result.content)) {
+      msg = {
+        ...msg,
+        result: {
+          ...msg.result,
+          isError: true,
+          content: [{ type: "text", text: tooLargePayload(line.length) }],
+        },
+      };
+      line = JSON.stringify(msg);
+    }
+    if (line.length > MAX_OUTPUT_LINE_CHARS) {
+      line = JSON.stringify({
+        jsonrpc: "2.0",
+        id: msg && msg.id !== undefined ? msg.id : null,
+        error: { code: -32603, message: tooLargePayload(line.length) },
+      });
+    }
+  }
+  realStdoutWrite(line + "\n");
+};
+
+function structuredRpcError(e) {
+  const code = e && typeof e.code === "string" && e.code ? e.code : "EBCTF_MCP_ERROR";
+  const cancelled = !!(e && (e.cancelled === true || code === "EBCTF_LIMIT_CANCEL"));
+  const retryable = code === "EBCTF_LIMIT_CONFIRM" || code === "EBCTF_TIMEOUT" ||
+    code === "ETIMEDOUT" || code === "EAGAIN" || code === "EBUSY";
+  return {
+    code,
+    meta: e && e.meta !== undefined ? e.meta : null,
+    retryable,
+    ...(cancelled ? { cancelled: true } : {}),
+  };
+}
+
 const rl = createInterface({ input: process.stdin });
 
 rl.on("line", async (line) => {
@@ -45,7 +111,8 @@ rl.on("line", async (line) => {
   try { req = JSON.parse(text); } catch { return; }
   const { id, method, params } = req;
   const ok = (result) => send({ jsonrpc: "2.0", id, result });
-  const err = (code, message) => send({ jsonrpc: "2.0", id, error: { code, message } });
+  const err = (code, message, data) =>
+    send({ jsonrpc: "2.0", id, error: { code, message, ...(data ? { data } : {}) } });
 
   try {
     if (method === "initialize") {
@@ -76,6 +143,6 @@ rl.on("line", async (line) => {
     }
     return err(-32601, `未实现方法：${method}`);
   } catch (e) {
-    return err(-32603, e && e.message ? e.message : String(e));
+    return err(-32603, e && e.message ? e.message : String(e), structuredRpcError(e));
   }
 });

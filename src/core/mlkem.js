@@ -29,18 +29,29 @@ import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源�
 // 字节工具
 // ============================================================
 
+const HEX_VAL = new Int8Array(256).fill(-1);
+for (let i = 0; i < 10; i++) HEX_VAL[48 + i] = i;
+for (let i = 0; i < 6; i++) { HEX_VAL[97 + i] = 10 + i; HEX_VAL[65 + i] = 10 + i; }
+const HEX2 = [];
+for (let i = 0; i < 256; i++) HEX2.push(i.toString(16).padStart(2, "0"));
+
 function hexToBytes(hex) {
   let h = String(hex == null ? "" : hex).replace(/^0x/i, "").replace(/\s+/g, "");
   if (!h) return new Uint8Array(0);
   if (h.length % 2) h = "0" + h;
-  if (!/^[0-9a-fA-F]*$/.test(h)) throw new Error(`含非 hex 字符: ${hex}`);
-  const out = new Uint8Array(h.length / 2);
-  for (let i = 0; i < out.length; i++) out[i] = parseInt(h.substr(i * 2, 2), 16);
+  const out = new Uint8Array(h.length >> 1);
+  for (let i = 0, j = 0; i < out.length; i++, j += 2) {
+    const a = HEX_VAL[h.charCodeAt(j)] ?? -1, b = HEX_VAL[h.charCodeAt(j + 1)] ?? -1;
+    if (a < 0 || b < 0) throw new Error(`含非 hex 字符: ${hex}`);
+    out[i] = (a << 4) | b;
+  }
   return out;
 }
 
 function bytesToHex(bytes) {
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  const parts = new Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) parts[i] = HEX2[bytes[i]];
+  return parts.join("");
 }
 
 function concatBytes(...arrs) {
@@ -75,31 +86,47 @@ function seedBytes(v, name) {
 // Keccak 海绵（FIPS 202 §5/§6.2；复用 hash.js keccakF1600，cmac.js 先例）
 // ============================================================
 
+// 海绵状态 / 末块 / 种子拼接复用缓冲（同步调用，无重入）。
+const SPONGE_LO = new Uint32Array(25);
+const SPONGE_HI = new Uint32Array(25);
+const PAD_BLOCK = new Uint8Array(168); // 最大 rate（SHAKE128）
+const SEED_BUF = new Uint8Array(64);
+
+/** 整块吸收（rate 为 8 的倍数：136 / 168）。 */
+function absorbBlock(src, off, rate, sLo, sHi) {
+  for (let i = 0; i < rate; i += 8) {
+    const li = i >> 3;
+    const p = off + i;
+    const lo = (src[p] | (src[p + 1] << 8) | (src[p + 2] << 16) | (src[p + 3] << 24)) >>> 0;
+    const hi = (src[p + 4] | (src[p + 5] << 8) | (src[p + 6] << 16) | (src[p + 7] << 24)) >>> 0;
+    sLo[li] = (sLo[li] ^ lo) >>> 0;
+    sHi[li] = (sHi[li] ^ hi) >>> 0;
+  }
+}
+
 /**
  * rate 字节海绵。padByte：SHA3=0x06、SHAKE=0x1f（域分隔 + pad10*1）。
  * 与 hash.js 内部 keccak() 同构：sLo/sHi 双 32 位模拟 64 位 × 25 lane。
+ * 整块消息直接吸收（不再复制整段 padded），末块走复用缓冲。
  */
 function sponge(rate, padByte, msg, outLen) {
-  const sLo = new Array(25).fill(0);
-  const sHi = new Array(25).fill(0);
+  const sLo = SPONGE_LO, sHi = SPONGE_HI;
+  sLo.fill(0);
+  sHi.fill(0);
   const msgLen = msg.length;
-  const padLen = rate - (msgLen % rate); // 1..rate
-  const total = msgLen + padLen;
-  const padded = new Uint8Array(total);
-  padded.set(msg);
-  padded[msgLen] = padByte;
-  padded[total - 1] |= 0x80;
-  for (let off = 0; off < total; off += rate) {
-    for (let i = 0; i < rate; i += 8) {
-      const li = i >> 3;
-      const p = off + i;
-      const lo = (padded[p] | (padded[p + 1] << 8) | (padded[p + 2] << 16) | (padded[p + 3] << 24)) >>> 0;
-      const hi = (padded[p + 4] | (padded[p + 5] << 8) | (padded[p + 6] << 16) | (padded[p + 7] << 24)) >>> 0;
-      sLo[li] = (sLo[li] ^ lo) >>> 0;
-      sHi[li] = (sHi[li] ^ hi) >>> 0;
-    }
+  const full = msgLen - (msgLen % rate);
+  for (let off = 0; off < full; off += rate) {
+    absorbBlock(msg, off, rate, sLo, sHi);
     keccakF1600(sLo, sHi);
   }
+  const rem = msgLen - full; // 0..rate-1
+  const block = PAD_BLOCK;
+  block.fill(0, 0, rate);
+  for (let i = 0; i < rem; i++) block[i] = msg[full + i];
+  block[rem] = padByte;
+  block[rate - 1] |= 0x80;
+  absorbBlock(block, 0, rate, sLo, sHi);
+  keccakF1600(sLo, sHi);
   const out = new Uint8Array(outLen);
   let produced = 0;
   while (produced < outLen) {
@@ -119,8 +146,17 @@ function sponge(rate, padByte, msg, outLen) {
 const H = (m) => sponge(136, 0x06, m, 32);        // H = SHA3-256
 const G = (m) => sponge(72, 0x06, m, 64);         // G = SHA3-512（输出 64B，调用方切两半）
 const J = (m) => sponge(136, 0x1f, m, 32);        // J = SHAKE-256(s, 32)
-const prf = (eta, s, b) => sponge(136, 0x1f, concatBytes(s, new Uint8Array([b])), 64 * eta); // PRF = SHAKE-256(s‖b, 64η)
-const xof = (s, x, y, outLen) => sponge(168, 0x1f, concatBytes(s, new Uint8Array([x, y])), outLen); // XOF = SHAKE-128(s‖x‖y)
+function prf(eta, s, b) {                         // PRF = SHAKE-256(s‖b, 64η)
+  SEED_BUF.set(s, 0);
+  SEED_BUF[32] = b;
+  return sponge(136, 0x1f, SEED_BUF.subarray(0, 33), 64 * eta);
+}
+function xof(s, x, y, outLen) {                   // XOF = SHAKE-128(s‖x‖y)
+  SEED_BUF.set(s, 0);
+  SEED_BUF[32] = x;
+  SEED_BUF[33] = y;
+  return sponge(168, 0x1f, SEED_BUF.subarray(0, 34), outLen);
+}
 
 // ============================================================
 // Z_3329 与 NTT（FIPS 203 §4.3）
@@ -144,27 +180,43 @@ function powMod(b, e) {
 }
 
 // ZETA[i] = 17^BitRev7(i) mod q（ζ=17 为 256 次本原单位根，FIPS 203 §4.3）
-// ZETA[1..127] 按蝶形消耗顺序取用（ZETA[0] 不用，与 17^BitRev7(0)=1 对齐参考表）
-const ZETA = new Int32Array(128);
+// ZETA_M 为 Montgomery 形式 ζ·2^16 mod q（R=2^16，q·q^{-1}≡1 mod R，q^{-1}=62209）。
+const ZETA_M = new Int32Array(128);
 // GAMMA[i] = 17^(2·BitRev7(i)+1) mod q —— NTT 域基乘 γ（FIPS 203 §4.3 MultiplyNTTs）
 const GAMMA = new Int32Array(128);
+const MONT_R = 65536;
+const MONT_QINV = 62209; // q^{-1} mod 2^16
 for (let i = 0; i < 128; i++) {
   const r = bitRev7(i);
-  ZETA[i] = powMod(17, r);
+  ZETA_M[i] = (powMod(17, r) * MONT_R) % Q;
   GAMMA[i] = powMod(17, 2 * r + 1);
 }
-const NTT_F = 3303; // 128^{-1} mod q（NTT^-1 末尾缩放，FIPS 203 §4.3）
+const NTT_F_M = (3303 * MONT_R) % Q; // 128^{-1} mod q 的 Montgomery 形式
+
+/** Montgomery 乘：a·bM·R^{-1} mod q（bM 为 Montgomery 形式，结果 [0,q)）。 */
+function montMul(a, bM) {
+  const t = a * bM;
+  const m = (t * MONT_QINV) & 0xffff;
+  let r = (t - m * Q) >> 16;
+  if (r < 0) r += Q;
+  return r;
+}
 
 /** 正向 NTT（FIPS 203 §4.3，Cooley–Tukey 负卷绕）。就地修改 f，输入须已化为 [0,q)。 */
 function ntt(f) {
   let k = 1;
   for (let len = 128; len >= 2; len >>= 1) {
     for (let start = 0; start < 256; start += len << 1) {
-      const zeta = ZETA[k++];
+      const zeta = ZETA_M[k++];
       for (let j = start; j < start + len; j++) {
-        const t = (zeta * f[j + len]) % Q;
-        f[j + len] = (f[j] - t + Q) % Q;
-        f[j] = (f[j] + t) % Q;
+        const v = f[j], u = f[j + len];
+        const t = montMul(u, zeta);
+        let x = v - t;
+        if (x < 0) x += Q;
+        f[j + len] = x;
+        x = v + t;
+        if (x >= Q) x -= Q;
+        f[j] = x;
       }
     }
   }
@@ -175,32 +227,52 @@ function intt(f) {
   let k = 127;
   for (let len = 2; len <= 128; len <<= 1) {
     for (let start = 0; start < 256; start += len << 1) {
-      const zeta = ZETA[k--];
+      const zeta = ZETA_M[k--];
       for (let j = start; j < start + len; j++) {
-        const t = f[j];
-        f[j] = (t + f[j + len]) % Q;
-        f[j + len] = (zeta * ((f[j + len] - t + Q) % Q)) % Q;
+        const v = f[j], u = f[j + len];
+        let x = v + u;
+        if (x >= Q) x -= Q;
+        f[j] = x;
+        let d = u - v;
+        if (d < 0) d += Q;
+        f[j + len] = montMul(d, zeta);
       }
     }
   }
-  for (let j = 0; j < 256; j++) f[j] = (f[j] * NTT_F) % Q;
+  for (let j = 0; j < 256; j++) f[j] = montMul(f[j], NTT_F_M);
 }
 
-/** NTT 域多项式乘（FIPS 203 §4.3 MultiplyNTTs，基乘 γ=GAMMA[m] 逐 2 元块）。 */
-function mulHat(a, b) {
-  const out = new Int32Array(256);
+// Barrett 归约（x ∈ [0, 2q²)）：一次乘减 + 条件修正，替代 %。
+const INV_Q = 1 / Q;
+function redcQ(x) {
+  let r = x - ((x * INV_Q) | 0) * Q;
+  if (r >= Q) r -= Q;
+  return r;
+}
+
+/** NTT 域多项式乘累加（FIPS 203 §4.3 MultiplyNTTs，基乘 γ=GAMMA[m] 逐 2 元块）。 */
+function mulAddInto(dst, a, b) {
   for (let m = 0; m < 128; m++) {
     const a0 = a[2 * m], a1 = a[2 * m + 1], b0 = b[2 * m], b1 = b[2 * m + 1];
-    out[2 * m] = (a0 * b0 + GAMMA[m] * ((a1 * b1) % Q)) % Q;
-    out[2 * m + 1] = (a0 * b1 + a1 * b0) % Q;
+    const p0 = redcQ(a0 * b0 + GAMMA[m] * a1 * b1);
+    const p1 = redcQ(a0 * b1 + a1 * b0);
+    let x = dst[2 * m] + p0;
+    if (x >= Q) x -= Q;
+    dst[2 * m] = x;
+    x = dst[2 * m + 1] + p1;
+    if (x >= Q) x -= Q;
+    dst[2 * m + 1] = x;
   }
-  return out;
 }
 
 /** dst += src（NTT 域，模 q），src 可含小负值。 */
 function addInto(dst, src) {
   for (let j = 0; j < 256; j++) {
-    dst[j] = (dst[j] + src[j] % Q + Q) % Q;
+    let s = src[j];
+    if (s < 0) s += Q;
+    let x = dst[j] + s;
+    if (x >= Q) x -= Q;
+    dst[j] = x;
   }
 }
 
@@ -208,27 +280,25 @@ function addInto(dst, src) {
 // 字节编解码 / 压缩（FIPS 203 §4.2.1）
 // ============================================================
 
-/** ByteEncode_d：256 系数 × d 位，LSB 先行的位流。系数须 < 2^d。 */
-function byteEncode(f, d) {
-  const out = new Uint8Array(32 * d);
-  let acc = 0, accBits = 0, pos = 0;
+/** ByteEncode_d 写入 out[off..]：256 系数 × d 位，LSB 先行的位流。系数须 < 2^d。 */
+function byteEncodeTo(f, d, out, off) {
+  let acc = 0, accBits = 0;
   for (let j = 0; j < 256; j++) {
     acc |= f[j] << accBits;
     accBits += d;
     while (accBits >= 8) {
-      out[pos++] = acc & 0xff;
+      out[off++] = acc & 0xff;
       acc >>>= 8;
       accBits -= 8;
     }
   }
-  return out;
 }
 
-/** ByteDecode_d：返回原始 0..2^d-1 系数；d=12 的调用方须自行 mod q（FIPS 203 语义）。 */
-function byteDecode(bytes, d) {
+/** ByteDecode_d 自 bytes[off..]：返回原始 0..2^d-1 系数；d=12 的调用方须自行 mod q。 */
+function byteDecodeAt(bytes, off, d) {
   const f = new Int32Array(256);
   const mask = (1 << d) - 1;
-  let acc = 0, accBits = 0, pos = 0;
+  let acc = 0, accBits = 0, pos = off;
   for (let j = 0; j < 256; j++) {
     while (accBits < d) {
       acc |= bytes[pos++] << accBits;
@@ -241,22 +311,43 @@ function byteDecode(bytes, d) {
   return f;
 }
 
+/** ByteDecode_d 后立即 Decompress_d（省去中间原始系数数组）。 */
+function decodeDecompressAt(bytes, off, d) {
+  const f = new Int32Array(256);
+  const mask = (1 << d) - 1;
+  let acc = 0, accBits = 0, pos = off;
+  for (let j = 0; j < 256; j++) {
+    while (accBits < d) {
+      acc |= bytes[pos++] << accBits;
+      accBits += 8;
+    }
+    f[j] = decompressVal(acc & mask, d);
+    acc >>>= d;
+    accBits -= d;
+  }
+  return f;
+}
+
 /** Compress_d(x) = ⌊2^d·x/q + 1/2⌋ mod 2^d（x ∈ [0,q)，整数式无浮点误差）。 */
 const compressVal = (x, d) => Math.floor((x * (1 << d) + 1664) / Q) % (1 << d); // 1664 = ⌊q/2⌋，与 (2x·2^d+q)//2q 等价
 
 /** Decompress_d(y) = ⌊q·y/2^d + 1/2⌋。 */
 const decompressVal = (y, d) => (Q * y + (1 << (d - 1))) >> d;
 
-function compressPoly(f, d) {
-  const out = new Int32Array(256);
-  for (let j = 0; j < 256; j++) out[j] = compressVal(f[j], d);
-  return out;
-}
-
-function decompressPoly(f, d) {
-  const out = new Int32Array(256);
-  for (let j = 0; j < 256; j++) out[j] = decompressVal(f[j], d);
-  return out;
+/** Compress_d + ByteEncode_d 一次写入 out[off..]（省去中间系数数组）。 */
+function encodeCompressed(f, d, out, off) {
+  const mod = 1 << d;
+  const mask = mod - 1;
+  let acc = 0, accBits = 0;
+  for (let j = 0; j < 256; j++) {
+    acc |= (Math.floor((f[j] * mod + 1664) / Q) & mask) << accBits;
+    accBits += d;
+    while (accBits >= 8) {
+      out[off++] = acc & 0xff;
+      acc >>>= 8;
+      accBits -= 8;
+    }
+  }
 }
 
 // ============================================================
@@ -288,17 +379,38 @@ function sampleNtt(seed, x, y) {
  * 值 = popcount(低 η 位) − popcount(高 η 位)（定稿对半形式，非 round-3 交错位），
  * 归一化到 [0,q)。
  */
+// η=2（4 位块）/ η=3（6 位块）的 popcount 差查表，值已归一到 [0,q)。
+const CBD2 = new Int32Array(16);
+for (let v = 0; v < 16; v++) {
+  const a = (v & 1) + ((v >> 1) & 1);
+  const b = ((v >> 2) & 1) + ((v >> 3) & 1);
+  CBD2[v] = a - b < 0 ? a - b + Q : a - b;
+}
+const CBD3 = new Int32Array(64);
+for (let v = 0; v < 64; v++) {
+  const a = (v & 1) + ((v >> 1) & 1) + ((v >> 2) & 1);
+  const b = ((v >> 3) & 1) + ((v >> 4) & 1) + ((v >> 5) & 1);
+  CBD3[v] = a - b < 0 ? a - b + Q : a - b;
+}
+
 function sampleCbd(block, eta) {
   const f = new Int32Array(256);
-  let bit = 0;
-  for (let j = 0; j < 256; j++) {
-    let a = 0, b = 0;
-    for (let t = 0; t < eta; t++) {
-      a += (block[(bit + t) >> 3] >> ((bit + t) & 7)) & 1;
-      b += (block[(bit + eta + t) >> 3] >> ((bit + eta + t) & 7)) & 1;
+  if (eta === 2) {
+    for (let j = 0; j < 256; j++) {
+      const byte = block[j >> 1];
+      f[j] = CBD2[(j & 1) ? (byte >> 4) : (byte & 15)];
     }
-    f[j] = ((a - b) % Q + Q) % Q;
-    bit += 2 * eta;
+    return f;
+  }
+  let acc = 0, accBits = 0, pos = 0; // η=3：6 位/系数，跨字节取块
+  for (let j = 0; j < 256; j++) {
+    while (accBits < 6) {
+      acc |= block[pos++] << accBits;
+      accBits += 8;
+    }
+    f[j] = CBD3[acc & 63];
+    acc >>>= 6;
+    accBits -= 6;
   }
   return f;
 }
@@ -327,25 +439,26 @@ function getSet(key) {
 /** K_PKE.KeyGen（Alg 13）。注意定稿用 G(d‖byte(k))（参数集域分隔），z 不进 K-PKE。 */
 function kpkeKeyGen(s, d) {
   const g = G(concatBytes(d, new Uint8Array([s.k])));
-  const rho = g.slice(0, 32);
-  const sigma = g.slice(32);
+  const rho = g.subarray(0, 32);
+  const sigma = g.subarray(32);
 
   let N = 0;
   const sHat = [], eHat = [];
   for (let i = 0; i < s.k; i++) { const f = sampleCbd(prf(s.eta1, sigma, N++), s.eta1); ntt(f); sHat.push(f); }
   for (let i = 0; i < s.k; i++) { const f = sampleCbd(prf(s.eta1, sigma, N++), s.eta1); ntt(f); eHat.push(f); }
 
-  let ek = new Uint8Array(0);
+  const ek = new Uint8Array(384 * s.k + 32);
   for (let i = 0; i < s.k; i++) {
     // t̂_i = Σ_j Â[i][j] ∘ ŝ_j + ê_i；Â[i][j] = SampleNTT(XOF(ρ, j, i))
     const acc = eHat[i];
-    for (let j = 0; j < s.k; j++) addInto(acc, mulHat(sampleNtt(rho, j, i), sHat[j]));
-    ek = concatBytes(ek, byteEncode(acc, 12));
+    for (let j = 0; j < s.k; j++) mulAddInto(acc, sampleNtt(rho, j, i), sHat[j]);
+    byteEncodeTo(acc, 12, ek, i * 384);
   }
-  let dk = new Uint8Array(0);
-  for (let i = 0; i < s.k; i++) dk = concatBytes(dk, byteEncode(sHat[i], 12));
+  ek.set(rho, 384 * s.k);
+  const dkPke = new Uint8Array(384 * s.k);
+  for (let i = 0; i < s.k; i++) byteEncodeTo(sHat[i], 12, dkPke, i * 384);
 
-  return { ekPke: concatBytes(ek, rho), dkPke: dk };
+  return { ekPke: ek, dkPke };
 }
 
 /** K_PKE.Encrypt（Alg 14）。含 FIPS 203 §7.2 的 ek 类型检查 + 模数检查（t̂ 重编码比对）。 */
@@ -353,19 +466,17 @@ function kpkeEncrypt(s, ekPke, m, r) {
   if (ekPke.length !== s.ekLen) {
     throw new Error(`ek 长度错误：ML-KEM-${s.name} 应为 ${s.ekLen} 字节，实得 ${ekPke.length}`);
   }
-  const tHatBytes = ekPke.slice(0, 384 * s.k);
-  const rho = ekPke.slice(384 * s.k);
-
   const tHat = [];
   for (let i = 0; i < s.k; i++) {
-    const chunk = tHatBytes.slice(i * 384, (i + 1) * 384);
-    const f = byteDecode(chunk, 12);
-    for (let j = 0; j < 256; j++) f[j] %= Q; // ByteDecode_12 归约到 Z_q
-    if (!bytesEqual(byteEncode(f, 12), chunk)) {
-      throw new Error("ek 模数检查失败：t̂ 非规范编码（所有 12 位值须 < q=3329）");
+    const f = byteDecodeAt(ekPke, i * 384, 12);
+    for (let j = 0; j < 256; j++) {
+      if (f[j] >= Q) { // 12 位值 ≥ q 时重编码必不等于原串
+        throw new Error("ek 模数检查失败：t̂ 非规范编码（所有 12 位值须 < q=3329）");
+      }
     }
     tHat.push(f);
   }
+  const rho = ekPke.subarray(384 * s.k);
 
   let N = 0;
   const yHat = [], e1 = [];
@@ -373,55 +484,61 @@ function kpkeEncrypt(s, ekPke, m, r) {
   for (let i = 0; i < s.k; i++) e1.push(sampleCbd(prf(s.eta2, r, N++), s.eta2));
   const e2 = sampleCbd(prf(s.eta2, r, N++), s.eta2);
 
+  const c = new Uint8Array(s.ctLen);
+  const duBytes = 32 * s.du;
   // u_i = INTT(Σ_j Âᵀ[i][j] ∘ ŷ_j) + e1_i，其中 Âᵀ[i][j] = Â[j][i] = SampleNTT(XOF(ρ, i, j))
-  const u = [];
   for (let i = 0; i < s.k; i++) {
     const acc = new Int32Array(256);
-    for (let j = 0; j < s.k; j++) addInto(acc, mulHat(sampleNtt(rho, i, j), yHat[j]));
+    for (let j = 0; j < s.k; j++) mulAddInto(acc, sampleNtt(rho, i, j), yHat[j]);
     intt(acc);
     addInto(acc, e1[i]);
-    u.push(acc);
+    encodeCompressed(acc, s.du, c, i * duBytes);
   }
 
   // v = INTT(Σ_i t̂_i ∘ ŷ_i) + e2 + μ，μ = Decompress_1(ByteDecode_1(m))
   const accV = new Int32Array(256);
-  for (let i = 0; i < s.k; i++) addInto(accV, mulHat(tHat[i], yHat[i]));
+  for (let i = 0; i < s.k; i++) mulAddInto(accV, tHat[i], yHat[i]);
   intt(accV);
   addInto(accV, e2);
-  addInto(accV, decompressPoly(byteDecode(m, 1), 1));
-
-  let c = new Uint8Array(0);
-  for (let i = 0; i < s.k; i++) c = concatBytes(c, byteEncode(compressPoly(u[i], s.du), s.du));
-  c = concatBytes(c, byteEncode(compressPoly(accV, s.dv), s.dv));
+  for (let j = 0; j < 256; j++) {
+    if ((m[j >> 3] >> (j & 7)) & 1) { // μ_j = 1665（= Decompress_1(1)）
+      let x = accV[j] + 1665;
+      if (x >= Q) x -= Q;
+      accV[j] = x;
+    }
+  }
+  encodeCompressed(accV, s.dv, c, s.k * duBytes);
   return c;
 }
 
 /** K_PKE.Decrypt（Alg 15）。 */
 function kpkeDecrypt(s, dkPke, c) {
   const n1 = s.k * s.du * 32;
-  const c1 = c.slice(0, n1);
-  const c2 = c.slice(n1);
 
   const uHat = [];
   for (let i = 0; i < s.k; i++) {
-    const u = decompressPoly(byteDecode(c1.slice(i * s.du * 32, (i + 1) * s.du * 32), s.du), s.du);
+    const u = decodeDecompressAt(c, i * s.du * 32, s.du);
     ntt(u);
     uHat.push(u);
   }
-  const v = decompressPoly(byteDecode(c2, s.dv), s.dv);
+  const v = decodeDecompressAt(c, n1, s.dv);
 
   const acc = new Int32Array(256);
   for (let i = 0; i < s.k; i++) {
-    const sHat = byteDecode(dkPke.slice(i * 384, (i + 1) * 384), 12);
-    for (let j = 0; j < 256; j++) sHat[j] %= Q;
-    addInto(acc, mulHat(sHat, uHat[i]));
+    const sHat = byteDecodeAt(dkPke, i * 384, 12);
+    for (let j = 0; j < 256; j++) { const x = sHat[j]; if (x >= Q) sHat[j] = x - Q; }
+    mulAddInto(acc, sHat, uHat[i]);
   }
   intt(acc);
 
   // m = ByteEncode_1(Compress_1(v − w))
-  const out = new Int32Array(256);
-  for (let j = 0; j < 256; j++) out[j] = compressVal((v[j] - acc[j] + Q) % Q, 1);
-  return byteEncode(out, 1);
+  const out = new Uint8Array(32);
+  for (let j = 0; j < 256; j++) {
+    let x = v[j] - acc[j];
+    if (x < 0) x += Q;
+    if (compressVal(x, 1)) out[j >> 3] |= 1 << (j & 7);
+  }
+  return out;
 }
 
 // ============================================================
@@ -462,10 +579,10 @@ export function mlkemDecapsBytes(setKey, dk, ct) {
   if (dk.length !== s.dkLen) {
     throw new Error(`dk 类型检查失败：ML-KEM-${s.name} 应为 ${s.dkLen} 字节，实得 ${dk.length}`);
   }
-  const dkPke = dk.slice(0, 384 * s.k);
-  const ekPke = dk.slice(384 * s.k, 768 * s.k + 32);
-  const h = dk.slice(768 * s.k + 32, 768 * s.k + 64);
-  const z = dk.slice(768 * s.k + 64);
+  const dkPke = dk.subarray(0, 384 * s.k);
+  const ekPke = dk.subarray(384 * s.k, 768 * s.k + 32);
+  const h = dk.subarray(768 * s.k + 32, 768 * s.k + 64);
+  const z = dk.subarray(768 * s.k + 64);
   if (!bytesEqual(H(ekPke), h)) throw new Error("dk 哈希检查失败：H(ek) 与 dk 内嵌哈希不符");
 
   const m2 = kpkeDecrypt(s, dkPke, ct);

@@ -231,11 +231,24 @@ export function renderStegSolvePage(host, op) {
   const metaEl = el("span", { class: "sspage-meta", text: "" });
   const statusEl = el("div", { class: "sspage-status", role: "status", "aria-live": "polite", text: "打开或拖入 PNG / JPEG / GIF / BMP / WebP 图像" });
   const toolbar = el("div", { class: "sspage-toolbar" }, openBtn, saveBtn, nameEl, metaEl);
-  const drop = el("div", { class: "sspage-drop" },
+  const drop = el("div", {
+    class: "sspage-drop",
+    role: "button",
+    tabindex: "0",
+    "aria-label": "打开图像：点击选择文件，或拖入图片",
+    title: "点击选择图像，或直接拖入",
+  },
     msym("cloud_upload", "sspage-drop-icon"),
-    el("div", { class: "sspage-drop-title", text: "拖入图片，或点「打开图像」" }),
+    el("div", { class: "sspage-drop-title", text: "拖入图片，或点击此处选择" }),
     el("div", { class: "sspage-drop-sub", text: "支持 PNG / APNG / GIF / JPEG / BMP / WebP；全部本地计算" }),
   );
+  drop.addEventListener("click", () => fileInput.click());
+  drop.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      fileInput.click();
+    }
+  });
 
   // ---- 主视图（42 变换） ----
   const transformCanvas = el("canvas", { class: "sspage-canvas", role: "img", "aria-label": "变换预览" });

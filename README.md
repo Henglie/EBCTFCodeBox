@@ -47,9 +47,36 @@
 | 百度网盘 | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
 | 夸克网盘 | https://pan.quark.cn/s/3b7e573b19c0 | 无 |
 
-当前版本 **v0.1.15**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
+当前版本 **v0.2.0-beta**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
 
 ## 更新日志
+
+## v0.2.0-beta（2026-11-11）
+
+> 0.2.0 beta 聚焦资源阈值、稳定性、MCP 与大产物处理；0.1.15 的 UI 与 978 个算法基线保留。完整历史见 [CHANGELOG.md](./CHANGELOG.md)。
+
+### 新增与改进
+
+- 统一资源阈值确认：软阈值确认、硬上限、取消与确认后重试贯通图像/GIF/音频/归档/LZMA/LZ4/DeepSound/PNG/FFT。
+- MCP 返回结构化 `code/meta/retryable`，新增 `allowOverLimit`；超过 128KB 的产物不内联，要求 `outputDir` 并返回 `omitted`/路径。
+- 音频新增“只分析前 N 分钟”预览参数 `previewMinutes`。
+- ZIP/7z/TAR 统一文件数与总量阈值；7z 不再 800 条静默截断，TAR 接入统一确认。
+- 全局 128KB 内联阈值：大结果只给下载/落盘；ZIP 修复不再塞整档 base64。
+- StegSolve 桌面单列全宽、拖入区可点击选图、菜单当前分类置顶高亮。
+- 参数标签支持中英切换；贡献者新增“江北”。
+
+### 修复
+
+- GIF 多帧移除 30 秒墙钟和每帧 2 秒压缩等待，浏览器原生 PNG 编码，实测 39ms / ZIP 59KB。
+- 修复确认后嵌套解码仍失败、Worker 确认状态串任务、超时僵尸 Worker、`postMessage` 泄漏。
+- 修复 `LIMIT_CANCEL/HARD` 被 canvas/direct/7z 吞掉，穷举取消二次执行。
+- 修复批量 `allowAll` 泄漏、重复确认、ZIP Deflate 错误码丢失、Service Worker 更新后仍跑旧 JS。
+- 清理敏感来源命名；`资料/` 不入库。
+
+### 已知限制
+
+- bridge token / Origin / Content-Type 改造、图片分析 GIF 双解码、PNG 块选择 UI、音频自动分析预览入口留待后续。
+- 完整细节与未完成项见本地 progress.md（未入库）。
 
 ## v0.1.15（2026-11-08）
 
@@ -1264,7 +1291,7 @@ public/
 | pngChunkList | PNG 全块解析 | 列举 PNG 所有 chunk（IHDR/PLTE/tEXt/zTXt/iTXt/bKGD/iCCP/IDAT/IEND 等），解析文本块与元数据（压缩文本经仓库内 inflate 解出，无需 pako）；可导出逐块原字节（含长度/类型/CRC）、PLTE 调色板与调色板索引位流 |
 | jpegAppList | JPEG APPn 段列举 | 列举 JPEG 所有 APP0-APP15 段及 marker 段（SOF/DQT/DHT/COM 等），标识段内容 |
 | gifComment | GIF 注释扩展 | 提取 GIF 89a 注释扩展块（0x21 0xFE），拼接所有 sub-block 文本 |
-| gifFrames | GIF 多帧提取 | 逐帧解码合成并压缩为 PNG，单 ZIP 下载；默认全部帧，受4096帧/128MiB ZIP及像素、时间预算约束，失败不交付不完整包 |
+| gifFrames | GIF 多帧提取 | 逐帧解码合成并编码为 PNG，单 ZIP 下载；默认全部帧，受4096帧/128MiB ZIP及像素上限约束，失败不交付不完整包 |
 | iccStrip | ICC 剥离 | 剥离 ICC profile（PNG iCCP chunk / JPEG APP2 ICC_PROFILE 段），返回去 ICC 后的 base64 |
 | imageBasic | 图像基础操作 | 反色/翻转/通道分离/位平面提取/纯色图制作等图像基础变换 |
 | splitChannels | 拆分颜色通道（R/G/B/A） | 同 CyberChef Split Colour Channels：输入图片 → 输出 4 张 PNG（R/G/B/A 各一张，其余通道置 0） |
@@ -1347,7 +1374,7 @@ public/
 | oursecretLaunch | OurSecret · 隐写 | OurSecret GUI 隐写工具，私有格式无法纯前端复刻。 本工具为纯 GUI 程序（私有格式 / 无无人值守命令行），本功能仅「启动本机 exe」，点击后在弹出的窗口里手动操作，工具箱不代为喂输入或取结果。仅 Windows，需先起 python bridge.py。 |
 | jsteg | jsteg JPEG 隐写 编/解 | jsteg 隐写双向工具：encode 把消息顺序写入 DCT 系数 LSB（跳过 0 与 ±1，幅值翻转符号不变，避免产生 0），重新 Huffman 编码回写 JPEG（标记段原样保留）；decode 顺序读 LSB 还原消息。封装 = "jsteg" 魔数 + LE32 长度，兼容原版 jsteg CLI 的 hide/reveal。仅基线单扫描 JPEG，渐进式报错。纯前端零外发 |
 | lsbDeep | LSB 深度扫描（全通道 · 位平面） | 对 PNG/BMP 枚举 通道组合 × 位平面 0-7 × 行/列优 × MSB/LSB 位序 × 起始偏移 0-7 的 LSB 提取，按 flag、Base64、URL 与可读性评分排前。与 zstegScan 的区别是列优先、位序和位偏移都参与；复用 R6 lsbDeepScan，大图自动缩短探测前缀并限额，不返回假结果。 |
-| rasterStego | 光栅隐写拆图（zbRasterTerminator） | 复刻 zbRasterTerminator：对 PNG/BMP 的宽/高枚举 2..maxDivisor 的因数，按 x/y 轴和相位拆出每张相位图 PNG（文件名如 x-5-1.png、y-5-1.png）。默认中灰 #808080 填充，黑/白笔画都可见，也可选深灰/黑/透明；用于把光栅图里的隐藏文字/图案拆出来；产物直接列入可下载文件，张数/单张/总像素均有上限，超限明确报错不静默截断。 |
+| rasterStego | 光栅隐写拆图 | 对 PNG/BMP 的宽/高枚举 2..maxDivisor 的因数，按 x/y 轴和相位拆出每张相位图 PNG（文件名如 x-5-1.png、y-5-1.png）。默认中灰 #808080 填充，黑/白笔画都可见，也可选深灰/黑/透明；用于把光栅图里的隐藏文字/图案拆出来；产物直接列入可下载文件，张数/单张/总像素均有上限，超限明确报错不静默截断。 |
 | mp3stego | MP3Stego 解码（-X -P） | 按 MP3Stego 1.1.19 源码复刻：读取 MPEG-1 Layer III 帧 side info 的 part2_3_length 奇偶位，用密码驱动的 SHA-1 比特流选出承载位，3DES-CBC 解密后 gunzip 还原隐藏文本/文件。密码错误、空密码、未嵌入、LSF 帧均明确失败；不调用外部 exe，不伪造成功。 |
 | imageThumb | EXIF 缩略图提取 | 从 JPEG 的 APP0(JFIF) / APP1(EXIF IFD1) 与 PNG eXIf chunk 中提取内嵌缩略图，按原始编码输出可下载文件（JPEG 原样、JFIF 裸 RGB 转 PNG）。无缩略图时明确说明「未发现」，不把主图或尾部数据冒充缩略图；纯字节解析，零 DOM。 |
 | stegSolve | StegSolve 图像分析 | StegSolve 1.4 独立页面：42 种通道/位平面/颜色变换、Data Extract 任意通道位平面导出、Stereogram Solver、Frame Browser、Image Combiner 13 种模式、文件格式报告。支持 PNG/APNG/GIF/JPEG/BMP/WebP，全部本地计算。 |

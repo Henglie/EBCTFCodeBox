@@ -39,6 +39,7 @@
  * lsbDeepScan 产生，内部保留只读像素引用（非枚举 _source）；也可先传 bytes。
  */
 import { decodePNG, encodePNG, rgbaToDataURL } from "./stegoPixels.js";
+import { isLimitError } from "./limitGuard.js";
 import { decodeBmpPixels } from "./lsbExtract.js";
 
 const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -124,6 +125,7 @@ function decodeSource(input) {
         source: { width: img.width, height: img.height, channels: 4, samples: img.data, format: "png" },
       };
     } catch (e) {
+      if (isLimitError(e)) throw e;
       return { ok: false, reason: "PNG 解码失败：" + (e && e.message ? e.message : String(e)) };
     }
   }

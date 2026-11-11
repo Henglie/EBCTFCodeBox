@@ -10,9 +10,30 @@
  * 候选枚举按「稳健外接框 + 游程众数估 pitch」生成，全部有界（见各函数注释里的预算说明）。
  */
 
+import { checkLimit } from "./limitGuard.js";
+
 // 合法 QR 尺寸：21 + 4k, k = 0..40
 export const LEGAL_SIZES = Array.from({ length: 40 }, (_, i) => 21 + 4 * i);
 const LEGAL_SET = new Set(LEGAL_SIZES);
+const IMAGE_PIXELS_SOFT = 16 * 1024 * 1024;
+const IMAGE_PIXELS_HARD = 64 * 1024 * 1024;
+
+function _checkPixels(pixels, label, limit) {
+  const n = Number(pixels);
+  const soft = limit && Number.isFinite(Number(limit.soft)) ? Number(limit.soft) : IMAGE_PIXELS_SOFT;
+  const hard = limit && Number.isFinite(Number(limit.hard)) ? Number(limit.hard) : IMAGE_PIXELS_HARD;
+  if (!Number.isFinite(n) || n <= soft) return;
+  const params = (limit && limit.params) || globalThis.__ebctfLimitParams || null;
+  checkLimit({
+    scope: "qrscanSample.pixels",
+    actual: n,
+    soft,
+    hard,
+    params,
+    label,
+    unit: " 像素",
+  });
+}
 
 // ------------------------------------------------------------
 // 二值化
@@ -58,7 +79,8 @@ function integralImage(gray, w, h) {
  * 二值化：返回 { bits, w, h, ... }，1 = 暗（QR 深色模块），0 = 亮。
  * method: "otsu" | "adaptive" | "fixed"
  */
-export function binarize(gray, w, h, method = "otsu", opt = {}) {
+export function binarize(gray, w, h, method = "otsu", opt = {}, limit = null) {
+  _checkPixels(w * h, `二维码二值化 ${w}×${h}`, limit);
   const bits = new Uint8Array(w * h);
   if (method === "fixed") {
     const th = opt.threshold == null ? 128 : opt.threshold;

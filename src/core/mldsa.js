@@ -35,18 +35,29 @@ import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源�
 // 字节工具（与 mlkem.js 同风格，件内自包含）
 // ============================================================
 
+const HEX_VAL = new Int8Array(256).fill(-1);
+for (let i = 0; i < 10; i++) HEX_VAL[48 + i] = i;
+for (let i = 0; i < 6; i++) { HEX_VAL[97 + i] = 10 + i; HEX_VAL[65 + i] = 10 + i; }
+const HEX2 = [];
+for (let i = 0; i < 256; i++) HEX2.push(i.toString(16).padStart(2, "0"));
+
 function hexToBytes(hex) {
   let h = String(hex == null ? "" : hex).replace(/^0x/i, "").replace(/\s+/g, "");
   if (!h) return new Uint8Array(0);
   if (h.length % 2) h = "0" + h;
-  if (!/^[0-9a-fA-F]*$/.test(h)) throw new Error(`含非 hex 字符: ${hex}`);
-  const out = new Uint8Array(h.length / 2);
-  for (let i = 0; i < out.length; i++) out[i] = parseInt(h.substr(i * 2, 2), 16);
+  const out = new Uint8Array(h.length >> 1);
+  for (let i = 0, j = 0; i < out.length; i++, j += 2) {
+    const a = HEX_VAL[h.charCodeAt(j)] ?? -1, b = HEX_VAL[h.charCodeAt(j + 1)] ?? -1;
+    if (a < 0 || b < 0) throw new Error(`含非 hex 字符: ${hex}`);
+    out[i] = (a << 4) | b;
+  }
   return out;
 }
 
 function bytesToHex(bytes) {
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  const parts = new Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) parts[i] = HEX2[bytes[i]];
+  return parts.join("");
 }
 
 function concatBytes(...arrs) {
@@ -119,28 +130,42 @@ function ctxBytes(v) {
 // Keccak 海绵（FIPS 202 §5/§6.2；复用 hash.js keccakF1600，mlkem.js 先例）
 // ============================================================
 
-/** 一次性 sponge：SHAKE 域分隔 0x1f + pad10*1，输入任意长度。 */
+// 海绵状态 / 末块复用缓冲（同步调用，无重入）。
+const SPONGE_LO = new Uint32Array(25);
+const SPONGE_HI = new Uint32Array(25);
+const PAD_BLOCK = new Uint8Array(168); // 最大 rate（SHAKE128）
+
+/** 整块吸收（rate 为 8 的倍数：136 / 168）。 */
+function absorbBlock(src, off, rate, sLo, sHi) {
+  for (let i = 0; i < rate; i += 8) {
+    const li = i >> 3;
+    const p = off + i;
+    const lo = (src[p] | (src[p + 1] << 8) | (src[p + 2] << 16) | (src[p + 3] << 24)) >>> 0;
+    const hi = (src[p + 4] | (src[p + 5] << 8) | (src[p + 6] << 16) | (src[p + 7] << 24)) >>> 0;
+    sLo[li] = (sLo[li] ^ lo) >>> 0;
+    sHi[li] = (sHi[li] ^ hi) >>> 0;
+  }
+}
+
+/** 一次性 sponge：SHAKE 域分隔 0x1f + pad10*1，输入任意长度（整块直吸收）。 */
 function sponge(rate, msg, outLen) {
-  const sLo = new Array(25).fill(0);
-  const sHi = new Array(25).fill(0);
+  const sLo = SPONGE_LO, sHi = SPONGE_HI;
+  sLo.fill(0);
+  sHi.fill(0);
   const msgLen = msg.length;
-  const padLen = rate - (msgLen % rate); // 1..rate
-  const total = msgLen + padLen;
-  const padded = new Uint8Array(total);
-  padded.set(msg);
-  padded[msgLen] = 0x1f;
-  padded[total - 1] |= 0x80;
-  for (let off = 0; off < total; off += rate) {
-    for (let i = 0; i < rate; i += 8) {
-      const li = i >> 3;
-      const p = off + i;
-      const lo = (padded[p] | (padded[p + 1] << 8) | (padded[p + 2] << 16) | (padded[p + 3] << 24)) >>> 0;
-      const hi = (padded[p + 4] | (padded[p + 5] << 8) | (padded[p + 6] << 16) | (padded[p + 7] << 24)) >>> 0;
-      sLo[li] = (sLo[li] ^ lo) >>> 0;
-      sHi[li] = (sHi[li] ^ hi) >>> 0;
-    }
+  const full = msgLen - (msgLen % rate);
+  for (let off = 0; off < full; off += rate) {
+    absorbBlock(msg, off, rate, sLo, sHi);
     keccakF1600(sLo, sHi);
   }
+  const rem = msgLen - full;
+  const block = PAD_BLOCK;
+  block.fill(0, 0, rate);
+  for (let i = 0; i < rem; i++) block[i] = msg[full + i];
+  block[rem] = 0x1f;
+  block[rate - 1] |= 0x80;
+  absorbBlock(block, 0, rate, sLo, sHi);
+  keccakF1600(sLo, sHi);
   const out = new Uint8Array(outLen);
   let produced = 0;
   while (produced < outLen) {
@@ -160,49 +185,35 @@ function sponge(rate, msg, outLen) {
 const shake256 = (msg, outLen) => sponge(136, msg, outLen);
 
 /**
- * 流式 SHAKE reader：供拒绝采样按需取字节（rate=168 → SHAKE-128，136 → SHAKE-256）。
+ * 流式 SHAKE reader：供拒绝采样按需逐字节取（rate=168 → SHAKE-128，136 → SHAKE-256）。
  * 仅接受 seed ≤ rate−2（本文件全部采样 seed 均满足：最大 ρ'66B / c̃64B）。
- * 与一次性 sponge 输出逐字节一致（同 absorb/pad 逻辑）。
+ * 复用单块缓冲，不按读取长度切片分配。
  */
 function shakeStream(rate, seed) {
-  const sLo = new Array(25).fill(0);
-  const sHi = new Array(25).fill(0);
+  const sLo = new Uint32Array(25), sHi = new Uint32Array(25);
   if (seed.length > rate - 2) throw new Error("shakeStream 内部错误：seed 超出单块海绵容量");
   const block = new Uint8Array(rate);
   block.set(seed);
   block[seed.length] = 0x1f;
   block[rate - 1] |= 0x80;
-  for (let i = 0; i < rate; i += 8) {
-    const li = i >> 3;
-    const lo = (block[i] | (block[i + 1] << 8) | (block[i + 2] << 16) | (block[i + 3] << 24)) >>> 0;
-    const hi = (block[i + 4] | (block[i + 5] << 8) | (block[i + 6] << 16) | (block[i + 7] << 24)) >>> 0;
-    sLo[li] = (sLo[li] ^ lo) >>> 0;
-    sHi[li] = (sHi[li] ^ hi) >>> 0;
-  }
+  absorbBlock(block, 0, rate, sLo, sHi);
   keccakF1600(sLo, sHi);
-  let buf = new Uint8Array(0);
-  let pos = 0;
-  const squeeze = () => {
-    const nb = new Uint8Array(buf.length + rate);
-    nb.set(buf);
+  const buf = new Uint8Array(rate);
+  let pos = 0, len = 0;
+  const refill = () => {
     for (let i = 0; i < rate; i++) {
       const laneIdx = i >> 3;
       const bil = i & 7;
       const word = bil < 4 ? sLo[laneIdx] : sHi[laneIdx];
-      nb[buf.length + i] = (word >>> ((bil & 3) * 8)) & 0xff;
+      buf[i] = (word >>> ((bil & 3) * 8)) & 0xff;
     }
-    buf = nb;
     keccakF1600(sLo, sHi); // 挤出一块后再置换，供下一块
+    pos = 0;
+    len = rate;
   };
-  return function read(n) {
-    while (buf.length - pos < n) {
-      if (buf.length > (1 << 20)) throw new Error("拒绝采样随机流异常增长（输入数据异常）");
-      squeeze();
-    }
-    const out = buf.slice(pos, pos + n);
-    pos += n;
-    if (pos > (1 << 16)) { buf = buf.slice(pos); pos = 0; } // 防长流内存增长
-    return out;
+  return function next() {
+    if (pos >= len) refill();
+    return buf[pos++];
   };
 }
 
@@ -236,19 +247,39 @@ for (let i = 0; i < 256; i++) ZETAS[i] = powMod(1753, bitRev8(i));
 /** 非负剩余。 */
 const modQ = (x) => ((x % Q) + Q) % Q;
 
+// Barrett 归约：x ∈ [0, 2q²)，用 1/q 倒数一次乘减再修正（比 % 快且结果精确）。
+const INV_Q = 1 / Q;
+function redc(x) {
+  let r = x - ((x * INV_Q) | 0) * Q; // x/q < 2^31，|0 即向下取整
+  if (r >= Q) r -= Q;
+  else if (r < 0) r += Q;
+  return r;
+}
+
+
+
 /** 正向完整 NTT（Alg 41）：就地，位反转序输出，逐蝶形归约在 [0,q)。
- *  输入任意整数（先归一化）；与「末端一次取模」的数学结果一致（参考实现无中间归约，
- *  JS 需防双精度溢出故逐层压界，模等价）。 */
+ *  输入为 (-q, 2q) 内整数；与「末端一次取模」的数学结果一致，模等价。 */
 function ntt(f) {
-  for (let j = 0; j < 256; j++) f[j] = modQ(f[j]);
+  for (let j = 0; j < 256; j++) {
+    let x = f[j];
+    if (x < 0) x += Q;
+    else if (x >= Q) x %= Q;
+    f[j] = x;
+  }
   let k = 0;
   for (let len = 128; len > 0; len >>= 1) {
     for (let start = 0; start < 256; start += len << 1) {
       const zeta = ZETAS[++k];
       for (let j = start; j < start + len; j++) {
-        const t = (zeta * f[j + len]) % Q;
-        f[j + len] = (f[j] - t + Q) % Q;
-        f[j] = (f[j] + t) % Q;
+        const v = f[j], u = f[j + len];
+        const t = redc(zeta * u);
+        let x = v - t;
+        if (x < 0) x += Q;
+        f[j + len] = x;
+        x = v + t;
+        if (x >= Q) x -= Q;
+        f[j] = x;
       }
     }
   }
@@ -261,25 +292,27 @@ function intt(f) {
     for (let start = 0; start < 256; start += len << 1) {
       const zeta = Q - ZETAS[--k]; // −ζ mod q
       for (let j = start; j < start + len; j++) {
-        const t = f[j];
-        f[j] = (t + f[j + len]) % Q;
-        f[j + len] = (zeta * (t - f[j + len] + Q)) % Q;
+        const v = f[j], u = f[j + len];
+        let x = v + u;
+        if (x >= Q) x -= Q;
+        f[j] = x;
+        x = v - u;
+        if (x < 0) x += Q;
+        f[j + len] = redc(zeta * x);
       }
     }
   }
-  for (let j = 0; j < 256; j++) f[j] = (f[j] * NTT_F) % Q;
+  for (let j = 0; j < 256; j++) f[j] = redc(f[j] * NTT_F);
 }
 
 /** NTT 域点乘累加：dst[j] += a[j]·b[j] mod q。 */
 function addPwInto(dst, a, b) {
-  for (let j = 0; j < 256; j++) dst[j] = (dst[j] + a[j] * b[j]) % Q;
+  for (let j = 0; j < 256; j++) dst[j] = redc(dst[j] + a[j] * b[j]);
 }
 
-/** NTT 域点乘（新多项式）。 */
-function mulPw(a, b) {
-  const out = new Int32Array(256);
-  for (let j = 0; j < 256; j++) out[j] = (a[j] * b[j]) % Q;
-  return out;
+/** NTT 域点乘写入复用缓冲。 */
+function mulPwInto(out, a, b) {
+  for (let j = 0; j < 256; j++) out[j] = redc(a[j] * b[j]);
 }
 
 /** 拷贝并正向 NTT。 */
@@ -289,36 +322,50 @@ const nttOf = (f) => { const g = f.slice(); ntt(g); return g; };
 // 位打包（FIPS 204 §4.2/§7.2，LSB 先行位流）
 // ============================================================
 
-/** SimpleBitPack/BitPack 通用：256 系数 × nBits 位（系数须在 [0, 2^nBits)）。
- *  算术移位实现（非 32 位位运算），nBits≤20 时 acc < 2^28 精确。 */
-function bitPack(coeffs, nBits) {
-  const out = new Uint8Array(32 * nBits);
-  const width = Math.pow(2, nBits);
-  let acc = 0, accBits = 0, pos = 0;
+/** SimpleBitPack/BitPack 通用写入 out[off..]：256 系数 × nBits 位。
+ *  位运算实现（nBits≤20 时累加器 ≤28 位，精确）。系数须在 [0, 2^nBits)。 */
+function bitPackTo(coeffs, nBits, out, off) {
+  let acc = 0, accBits = 0;
   for (let j = 0; j < 256; j++) {
-    acc += coeffs[j] * Math.pow(2, accBits);
+    acc |= coeffs[j] << accBits;
     accBits += nBits;
     while (accBits >= 8) {
-      out[pos++] = acc % 256;
-      acc = Math.floor(acc / 256);
+      out[off++] = acc & 0xff;
+      acc >>>= 8;
       accBits -= 8;
     }
   }
-  return out;
 }
 
-/** BitUnpack 通用：返回原始 [0, 2^nBits) 系数（中心化语义修正由调用方做）。 */
-function bitUnpack(bytes, nBits) {
+/** BitUnpack：原始 [0, 2^nBits) 系数。 */
+function bitUnpackAt(bytes, off, nBits) {
   const f = new Int32Array(256);
-  const mask = Math.pow(2, nBits) - 1;
-  let acc = 0, accBits = 0, pos = 0;
+  const mask = (1 << nBits) - 1;
+  let acc = 0, accBits = 0, pos = off;
   for (let j = 0; j < 256; j++) {
     while (accBits < nBits) {
-      acc += bytes[pos++] * Math.pow(2, accBits);
+      acc |= bytes[pos++] << accBits;
       accBits += 8;
     }
-    f[j] = acc % (mask + 1);
-    acc = Math.floor(acc / (mask + 1));
+    f[j] = acc & mask;
+    acc >>>= nBits;
+    accBits -= nBits;
+  }
+  return f;
+}
+
+/** BitUnpack 后做中心化修正 out[j] = base − v（s1/s2/z/t0/ExpandMask 共用）。 */
+function bitUnpackSignedAt(bytes, off, nBits, base) {
+  const f = new Int32Array(256);
+  const mask = (1 << nBits) - 1;
+  let acc = 0, accBits = 0, pos = off;
+  for (let j = 0; j < 256; j++) {
+    while (accBits < nBits) {
+      acc |= bytes[pos++] << accBits;
+      accBits += 8;
+    }
+    f[j] = base - (acc & mask);
+    acc >>>= nBits;
     accBits -= nBits;
   }
   return f;
@@ -328,32 +375,22 @@ function bitUnpack(bytes, nBits) {
 // 分解与提示（FIPS 204 §4.4，Alg 35–40）
 // ============================================================
 
-/** r mod^± n：归一到 (−n/2, n/2]（n 偶）。 */
-function reduceModPm(r, n) {
-  r %= n;
-  if (r > (n >> 1)) r -= n;
-  return r;
+/** HighBits（Alg 37）：标量实现，不分配 [r1,r0]。 */
+function highBits(r, alpha) {
+  const rp = modQ(r);
+  let r0 = rp % alpha;
+  if (r0 > (alpha >> 1)) r0 -= alpha;
+  if (rp - r0 === Q - 1) return 0;
+  return (rp - r0) / alpha;
 }
 
-/** Decompose（Alg 36）：r = r1·alpha + r0，r0 ∈ (−alpha/2, alpha/2]；r=q−1 边界特例。 */
-function decompose(r, alpha) {
+/** LowBits（Alg 38）：标量实现。 */
+function lowBits(r, alpha) {
   const rp = modQ(r);
-  let r0 = reduceModPm(rp, alpha);
-  let r1;
-  if (rp - r0 === Q - 1) { r1 = 0; r0 = r0 - 1; }
-  else r1 = (rp - r0) / alpha;
-  return [r1, r0];
-}
-
-/** HighBits（Alg 37）/ LowBits（Alg 38）。 */
-const highBits = (r, alpha) => decompose(r, alpha)[0];
-const lowBits = (r, alpha) => decompose(r, alpha)[1];
-
-/** Power2Round（Alg 35）：r = r1·2^d + r0，r0 ∈ (−2^{d-1}, 2^{d-1}]。 */
-function power2Round(r, d) {
-  const rp = modQ(r);
-  const r0 = reduceModPm(rp, 1 << d);
-  return [(rp - r0) / (1 << d), r0];
+  let r0 = rp % alpha;
+  if (r0 > (alpha >> 1)) r0 -= alpha;
+  if (rp - r0 === Q - 1) r0 -= 1;
+  return r0;
 }
 
 /** MakeHint（Alg 39）：r 与 r+z 的高位是否跨桶。 */
@@ -362,7 +399,12 @@ const makeHint1 = (z, r, alpha) => (highBits(r, alpha) !== highBits(r + z, alpha
 /** UseHint（Alg 40）：桶数模 m = ⌊(q−1)/alpha⌋ 环回。 */
 function useHint1(h, r, alpha) {
   const m = Math.floor((Q - 1) / alpha);
-  const [r1, r0] = decompose(r, alpha);
+  const rp = modQ(r);
+  let r0 = rp % alpha;
+  if (r0 > (alpha >> 1)) r0 -= alpha;
+  let r1;
+  if (rp - r0 === Q - 1) { r1 = 0; r0 -= 1; }
+  else r1 = (rp - r0) / alpha;
   if (h === 1) {
     if (r0 > 0) return (r1 + 1) % m;
     return ((r1 - 1) % m + m) % m;
@@ -372,7 +414,9 @@ function useHint1(h, r, alpha) {
 
 /** 中心化绝对值（无穷范数用）。 */
 function absCentered(x) {
-  let v = modQ(x);
+  let v = x;
+  if (v < 0) { v %= Q; if (v < 0) v += Q; }
+  else if (v >= Q) v %= Q;
   if (v > (Q - 1) / 2) v = Q - v;
   return v;
 }
@@ -384,16 +428,23 @@ const normFail = (x, bound) => absCentered(x) >= bound;
 // 采样（FIPS 204 §4.3.1，Alg 29–34）
 // ============================================================
 
-const i2b16 = (x) => new Uint8Array([x & 0xff, (x >> 8) & 0xff]);
+// RejBoundedPoly 半字节查表（0x7fff 表示拒绝）。
+const REJ2 = new Int32Array(16).fill(0x7fff);
+for (let v = 0; v < 15; v++) REJ2[v] = 2 - (v % 5);
+const REJ4 = new Int32Array(16).fill(0x7fff);
+for (let v = 0; v < 9; v++) REJ4[v] = 4 - v;
 
 /** RejNTTPoly（Alg 30）：SHAKE128 流上 3 字节产 23 位候选，拒绝 ≥ q。 */
 function rejNttPoly(rho, col, row) {
-  const rd = shakeStream(168, concatBytes(rho, new Uint8Array([col, row])));
+  const seed = new Uint8Array(34);
+  seed.set(rho, 0);
+  seed[32] = col;
+  seed[33] = row;
+  const next = shakeStream(168, seed);
   const f = new Int32Array(256);
   let n = 0;
   while (n < 256) {
-    const b = rd(3);
-    const v = (b[0] | (b[1] << 8) | (b[2] << 16)) & 0x7fffff;
+    const v = (next() | (next() << 8) | (next() << 16)) & 0x7fffff;
     if (v < Q) f[n++] = v;
   }
   return f;
@@ -402,17 +453,21 @@ function rejNttPoly(rho, col, row) {
 /** RejBoundedPoly（Alg 31）：SHAKE256 流上按半字节拒绝采样，值域 [−η, η]。
  *  η=2：v<15 → 2−(v mod 5)；η=4：v<9 → 4−v。低半字节先用，填满 256 即止。 */
 function rejBoundedPoly(sigma, nonce, eta) {
-  const rd = shakeStream(136, concatBytes(sigma, i2b16(nonce)));
+  const seed = new Uint8Array(66);
+  seed.set(sigma, 0);
+  seed[64] = nonce & 0xff;
+  seed[65] = (nonce >> 8) & 0xff;
+  const next = shakeStream(136, seed.subarray(0, 66));
+  const tbl = eta === 2 ? REJ2 : REJ4;
   const f = new Int32Array(256);
   let n = 0;
-  const fromNibble = (v) => (eta === 2 ? (v < 15 ? 2 - (v % 5) : null) : (v < 9 ? 4 - v : null));
   while (n < 256) {
-    const b = rd(1)[0];
-    let c = fromNibble(b & 15);
-    if (c !== null) f[n++] = c;
+    const b = next();
+    let c = tbl[b & 15];
+    if (c !== 0x7fff) f[n++] = c;
     if (n >= 256) break;
-    c = fromNibble(b >> 4);
-    if (c !== null) f[n++] = c;
+    c = tbl[b >> 4];
+    if (c !== 0x7fff) f[n++] = c;
   }
   return f;
 }
@@ -422,12 +477,14 @@ function rejBoundedPoly(sigma, nonce, eta) {
 function expandMask(s, rhoPrime, kappa) {
   const y = [];
   const byteLen = 32 * s.zBits;
+  const seed = new Uint8Array(66);
+  seed.set(rhoPrime, 0);
   for (let i = 0; i < s.l; i++) {
-    const buf = shake256(concatBytes(rhoPrime, i2b16(kappa + i)), byteLen);
-    const raw = bitUnpack(buf, s.zBits);
-    const f = new Int32Array(256);
-    for (let j = 0; j < 256; j++) f[j] = s.gamma1 - raw[j];
-    y.push(f);
+    const t = kappa + i;
+    seed[64] = t & 0xff;
+    seed[65] = (t >> 8) & 0xff;
+    const buf = shake256(seed, byteLen);
+    y.push(bitUnpackSignedAt(buf, 0, s.zBits, s.gamma1));
   }
   return y;
 }
@@ -435,13 +492,14 @@ function expandMask(s, rhoPrime, kappa) {
 /** SampleInBall（Alg 29）：SHAKE256(c_tilde) 前 8 字节定符号（LE 位序），
  *  位置带拒绝的 Fisher–Yates 摆 τ 个 ±1。 */
 function sampleInBall(cTilde, tau) {
-  const rd = shakeStream(136, cTilde);
-  const signBytes = rd(8);
+  const next = shakeStream(136, cTilde);
+  const signBytes = new Uint8Array(8);
+  for (let i = 0; i < 8; i++) signBytes[i] = next();
   let signPos = 0;
   const f = new Int32Array(256);
   for (let i = 256 - tau; i < 256; i++) {
-    let j = rd(1)[0];
-    while (j > i) j = rd(1)[0];
+    let j = next();
+    while (j > i) j = next();
     f[i] = f[j];
     const sign = (signBytes[signPos >> 3] >> (signPos & 7)) & 1;
     signPos++;
@@ -491,9 +549,10 @@ function expandA(s, rho) {
 }
 
 /** pkEncode（Alg 22）：pk = ρ ‖ 逐多项式 SimpleBitPack_10(t1)。 */
-function pkEncode(rho, t1) {
-  let pk = rho;
-  for (const f of t1) pk = concatBytes(pk, bitPack(f, 10));
+function pkEncode(s, rho, t1) {
+  const pk = new Uint8Array(s.pkLen);
+  pk.set(rho, 0);
+  for (let i = 0; i < s.k; i++) bitPackTo(t1[i], 10, pk, 32 + 320 * i);
   return pk;
 }
 
@@ -504,17 +563,31 @@ function pkDecode(s, pk) {
   }
   const rho = pk.slice(0, 32);
   const t1 = [];
-  for (let i = 0; i < s.k; i++) t1.push(bitUnpack(pk.slice(32 + 320 * i, 32 + 320 * (i + 1)), 10));
+  for (let i = 0; i < s.k; i++) t1.push(bitUnpackAt(pk, 32 + 320 * i, 10));
   return { rho, t1 };
 }
 
 /** skEncode（Alg 24）：ρ‖K‖tr‖s1‖s2‖t0；s 用 BitPack_η（存 η−c），t0 存 2^12−c。 */
 function skEncode(s, rho, K, tr, s1, s2, t0) {
-  let sk = concatBytes(rho, K, tr);
-  const packS = (f) => bitPack(Array.from(f, (c) => s.eta - c), s.sPolyBits);
-  for (const f of s1) sk = concatBytes(sk, packS(f));
-  for (const f of s2) sk = concatBytes(sk, packS(f));
-  for (const f of t0) sk = concatBytes(sk, bitPack(Array.from(f, (c) => 4096 - c), 13));
+  const sk = new Uint8Array(s.skLen);
+  sk.set(rho, 0);
+  sk.set(K, 32);
+  sk.set(tr, 64);
+  const sBytes = 32 * s.sPolyBits;
+  const tmp = new Int32Array(256);
+  let off = 128;
+  const packS = (f) => {
+    for (let j = 0; j < 256; j++) tmp[j] = s.eta - f[j];
+    bitPackTo(tmp, s.sPolyBits, sk, off);
+    off += sBytes;
+  };
+  for (const f of s1) packS(f);
+  for (const f of s2) packS(f);
+  for (const f of t0) {
+    for (let j = 0; j < 256; j++) tmp[j] = 4096 - f[j];
+    bitPackTo(tmp, 13, sk, off);
+    off += 416;
+  }
   return sk;
 }
 
@@ -529,39 +602,37 @@ function skDecode(s, sk) {
   const sBytes = 32 * s.sPolyBits;
   const s1 = [], s2 = [], t0 = [];
   let off = 128;
-  for (let i = 0; i < s.l; i++) {
-    const raw = bitUnpack(sk.slice(off, off + sBytes), s.sPolyBits); off += sBytes;
-    s1.push(Int32Array.from(Array.from(raw, (v) => s.eta - v)));
-  }
-  for (let i = 0; i < s.k; i++) {
-    const raw = bitUnpack(sk.slice(off, off + sBytes), s.sPolyBits); off += sBytes;
-    s2.push(Int32Array.from(Array.from(raw, (v) => s.eta - v)));
-  }
-  for (let i = 0; i < s.k; i++) {
-    const raw = bitUnpack(sk.slice(off, off + 416), 13); off += 416;
-    t0.push(Int32Array.from(Array.from(raw, (v) => 4096 - v)));
-  }
+  for (let i = 0; i < s.l; i++) { s1.push(bitUnpackSignedAt(sk, off, s.sPolyBits, s.eta)); off += sBytes; }
+  for (let i = 0; i < s.k; i++) { s2.push(bitUnpackSignedAt(sk, off, s.sPolyBits, s.eta)); off += sBytes; }
+  for (let i = 0; i < s.k; i++) { t0.push(bitUnpackSignedAt(sk, off, 13, 4096)); off += 416; }
   return { rho, K, tr, s1, s2, t0 };
 }
 
 /** w1Encode（Alg 28）：逐多项式 SimpleBitPack（6 或 4 位）。 */
 function w1Encode(s, w1) {
-  let out = new Uint8Array(0);
-  for (const f of w1) out = concatBytes(out, bitPack(f, s.w1Bits));
+  const per = 32 * s.w1Bits;
+  const out = new Uint8Array(per * w1.length);
+  for (let i = 0; i < w1.length; i++) bitPackTo(w1[i], s.w1Bits, out, i * per);
   return out;
 }
 
 /** sigEncode（Alg 26）：σ = c̃ ‖ BitPack_γ1(z) ‖ h（ω 字节位置流 + k 字节累计偏移）。 */
 function sigEncode(s, cTilde, z, h) {
-  let out = cTilde;
-  for (const f of z) out = concatBytes(out, bitPack(Array.from(f, (c) => s.gamma1 - c), s.zBits));
-  const pos = new Uint8Array(s.omega + s.k);
+  const zBytes = 32 * s.zBits;
+  const out = new Uint8Array(s.sigLen);
+  out.set(cTilde, 0);
+  const tmp = new Int32Array(256);
+  for (let i = 0; i < s.l; i++) {
+    for (let j = 0; j < 256; j++) tmp[j] = s.gamma1 - z[i][j];
+    bitPackTo(tmp, s.zBits, out, s.ctLen + i * zBytes);
+  }
+  const posOff = s.ctLen + s.l * zBytes;
   let count = 0;
   for (let i = 0; i < s.k; i++) {
-    for (let j = 0; j < 256; j++) if (h[i][j] === 1) pos[count++] = j;
-    pos[s.omega + i] = count;
+    for (let j = 0; j < 256; j++) if (h[i][j] === 1) out[posOff + count++] = j;
+    out[posOff + s.omega + i] = count;
   }
-  return concatBytes(out, pos);
+  return out;
 }
 
 /** sigDecode（Alg 27）：严格长度 + 偏移单调不减 + 累计 ≤ ω + 填充区全零 + 位置严格递增。
@@ -571,20 +642,18 @@ function sigDecode(s, sig) {
     throw new Error(`签名长度错误：ML-DSA-${s.name} 应为 ${s.sigLen} 字节，实得 ${sig.length}`);
   }
   const cTilde = sig.slice(0, s.ctLen);
-  const zBytes = sig.slice(s.ctLen, s.ctLen + 32 * s.zBits * s.l);
-  const hBytes = sig.slice(s.ctLen + 32 * s.zBits * s.l);
+  const zBytes = 32 * s.zBits;
   const z = [];
-  for (let i = 0; i < s.l; i++) {
-    const raw = bitUnpack(zBytes.slice(i * 32 * s.zBits, (i + 1) * 32 * s.zBits), s.zBits);
-    z.push(Int32Array.from(Array.from(raw, (v) => s.gamma1 - v)));
-  }
-  const offsets = [0].concat(Array.from(hBytes.slice(s.omega)));
+  for (let i = 0; i < s.l; i++) z.push(bitUnpackSignedAt(sig, s.ctLen + i * zBytes, s.zBits, s.gamma1));
+  const hOff = s.ctLen + s.l * zBytes;
+  const offsets = new Int32Array(s.k + 1);
+  for (let i = 0; i < s.k; i++) offsets[i + 1] = sig[hOff + s.omega + i];
   for (let i = 0; i < s.k; i++) {
     if (offsets[i] > offsets[i + 1]) throw new Error("sigDecode 失败：h 偏移非单调不减");
   }
   if (offsets[s.k] > s.omega) throw new Error("sigDecode 失败：hint 偏移累计超 ω");
   for (let i = offsets[s.k]; i < s.omega; i++) {
-    if (hBytes[i] !== 0) throw new Error("sigDecode 失败：h 填充区非零");
+    if (sig[hOff + i] !== 0) throw new Error("sigDecode 失败：h 填充区非零");
   }
   const h = [];
   let hintCount = 0;
@@ -592,7 +661,7 @@ function sigDecode(s, sig) {
     const f = new Uint8Array(256);
     let prev = -1;
     for (let p = offsets[i]; p < offsets[i + 1]; p++) {
-      const v = hBytes[p];
+      const v = sig[hOff + p];
       if (v <= prev) throw new Error("sigDecode 失败：hint 位置非严格递增");
       f[v] = 1; prev = v; hintCount++;
     }
@@ -611,9 +680,9 @@ export function mldsaKeyGenBytes(setKey, zeta) {
   const s = getSet(setKey);
   zeta = seedBytes(zeta, "种子 ξ");
   const seed = shake256(concatBytes(zeta, new Uint8Array([s.k, s.l])), 128);
-  const rho = seed.slice(0, 32);
-  const rhoPrime = seed.slice(32, 96);
-  const K = seed.slice(96, 128);
+  const rho = seed.subarray(0, 32);
+  const rhoPrime = seed.subarray(32, 96);
+  const K = seed.subarray(96, 128);
 
   const A = expandA(s, rho);
   const s1 = [], s2 = [];
@@ -621,22 +690,26 @@ export function mldsaKeyGenBytes(setKey, zeta) {
   for (let i = 0; i < s.k; i++) s2.push(rejBoundedPoly(rhoPrime, s.l + i, s.eta)); // ExpandS：nonce l..l+k−1
 
   const s1Hat = s1.map(nttOf);
-  const t = [];
+  const t1 = [], t0 = [];
   for (let i = 0; i < s.k; i++) {
     const acc = new Int32Array(256);
     for (let j = 0; j < s.l; j++) addPwInto(acc, A[i][j], s1Hat[j]);
     intt(acc);
-    for (let j = 0; j < 256; j++) acc[j] = (acc[j] + s2[i][j] + Q) % Q;
-    t.push(acc);
-  }
-  const t1 = [], t0 = [];
-  for (const f of t) {
     const hi = new Int32Array(256), lo = new Int32Array(256);
-    for (let j = 0; j < 256; j++) { const [a, b] = power2Round(f[j], D); hi[j] = a; lo[j] = b; }
+    for (let j = 0; j < 256; j++) {
+      let x = acc[j] + s2[i][j];
+      if (x < 0) x += Q;
+      else if (x >= Q) x -= Q;
+      // Power2Round（Alg 35）：2^13 为 2 的幂 → 掩码取余
+      let r0 = x & 8191;
+      if (r0 > 4096) r0 -= 8192;
+      hi[j] = (x - r0) / 8192;
+      lo[j] = r0;
+    }
     t1.push(hi); t0.push(lo);
   }
 
-  const pk = pkEncode(rho, t1);
+  const pk = pkEncode(s, rho, t1);
   const tr = shake256(pk, 64);
   const sk = skEncode(s, rho, K, tr, s1, s2, t0);
   return { set: s.name, s, zeta, pk, sk };
@@ -668,6 +741,17 @@ export function mldsaSignInternalBytes(setKey, skHex, mPrime, rnd) {
   const rhoPrime = shake256(concatBytes(K, rnd, mu), 64);
   const alpha = 2 * s.gamma2;
 
+  // 复用缓冲：拒绝采样重试时只覆写，不重复分配。
+  const w = [], w1 = [], cs2 = [], h = [], z = [];
+  for (let i = 0; i < s.k; i++) {
+    w.push(new Int32Array(256));
+    w1.push(new Int32Array(256));
+    cs2.push(new Int32Array(256));
+    h.push(new Uint8Array(256));
+  }
+  for (let j = 0; j < s.l; j++) z.push(new Int32Array(256));
+  const scratch = new Int32Array(256);
+
   let kappa = 0, rounds = 0;
   for (;;) {
     if (++rounds > 1000) throw new Error("签名拒绝采样超限（输入数据异常）");
@@ -676,15 +760,13 @@ export function mldsaSignInternalBytes(setKey, skHex, mPrime, rnd) {
     const yHat = y.map(nttOf);
 
     // w = INTT(Â·ŷ)，w1 = HighBits(w, 2γ2)
-    const w = [], w1 = [];
     for (let i = 0; i < s.k; i++) {
-      const acc = new Int32Array(256);
+      const acc = w[i];
+      acc.fill(0);
       for (let j = 0; j < s.l; j++) addPwInto(acc, A[i][j], yHat[j]);
       intt(acc);
-      w.push(acc);
-      const hi = new Int32Array(256);
+      const hi = w1[i];
       for (let t = 0; t < 256; t++) hi[t] = highBits(acc[t], alpha);
-      w1.push(hi);
     }
     const cTilde = shake256(concatBytes(mu, w1Encode(s, w1)), s.ctLen);
     const cHat = nttOf(sampleInBall(cTilde, s.tau));
@@ -692,24 +774,25 @@ export function mldsaSignInternalBytes(setKey, skHex, mPrime, rnd) {
     // z = y + INTT(ĉ·ŝ1)，须 ‖z‖∞ < γ1 − β。INTT 输出在 [0,q)，先中心化再与 y 相加
     //（与参考实现 _add_ 的 mod^± q 语义一致），否则打包 γ1−c 会越界。
     let zBad = false;
-    const z = [];
-    for (let j = 0; j < s.l && !zBad; j++) {
-      const cs1 = mulPw(cHat, s1Hat[j]);
-      intt(cs1);
-      const p = new Int32Array(256);
+    for (let j = 0; j < s.l; j++) {
+      mulPwInto(scratch, cHat, s1Hat[j]);
+      intt(scratch);
+      const p = z[j];
       for (let t = 0; t < 256; t++) {
-        const ct = cs1[t] > (Q - 1) / 2 ? cs1[t] - Q : cs1[t];
+        const ct = scratch[t] > (Q - 1) / 2 ? scratch[t] - Q : scratch[t];
         const v = y[j][t] + ct;
         if (normFail(v, s.gamma1 - s.beta)) { zBad = true; break; }
         p[t] = v;
       }
-      z.push(p);
+      if (zBad) break;
     }
     if (zBad) continue;
 
     // r0 = LowBits(w − INTT(ĉ·ŝ2))，须 ‖r0‖∞ < γ2 − β
-    const cs2 = [];
-    for (let i = 0; i < s.k; i++) { const a = mulPw(cHat, s2Hat[i]); intt(a); cs2.push(a); }
+    for (let i = 0; i < s.k; i++) {
+      mulPwInto(cs2[i], cHat, s2Hat[i]);
+      intt(cs2[i]);
+    }
     let r0Bad = false;
     for (let i = 0; i < s.k && !r0Bad; i++) {
       for (let t = 0; t < 256; t++) {
@@ -719,21 +802,22 @@ export function mldsaSignInternalBytes(setKey, skHex, mPrime, rnd) {
     if (r0Bad) continue;
 
     // c_t0 = INTT(ĉ·t̂0)，须 ‖c_t0‖∞ < γ2；h = MakeHint(−c_t0, w − c_s2 + c_t0)
-    const h = [];
     let t0Bad = false;
     for (let i = 0; i < s.k && !t0Bad; i++) {
-      const ct0 = mulPw(cHat, t0Hat[i]);
-      intt(ct0);
-      const hp = new Uint8Array(256);
+      mulPwInto(scratch, cHat, t0Hat[i]);
+      intt(scratch);
+      const hp = h[i];
       for (let t = 0; t < 256; t++) {
-        if (normFail(ct0[t], s.gamma2)) { t0Bad = true; break; }
-        hp[t] = makeHint1(-ct0[t], w[i][t] - cs2[i][t] + ct0[t], alpha);
+        if (normFail(scratch[t], s.gamma2)) { t0Bad = true; break; }
+        hp[t] = makeHint1(-scratch[t], w[i][t] - cs2[i][t] + scratch[t], alpha);
       }
-      h.push(hp);
     }
     if (t0Bad) continue;
     let hintCount = 0;
-    for (const hp of h) for (let t = 0; t < 256; t++) hintCount += hp[t];
+    for (let i = 0; i < s.k; i++) {
+      const hp = h[i];
+      for (let t = 0; t < 256; t++) hintCount += hp[t];
+    }
     if (hintCount > s.omega) continue;
 
     return { set: s.name, s, sig: sigEncode(s, cTilde, z, h), cTilde, rounds, hintCount, rnd };
@@ -785,14 +869,18 @@ export function mldsaVerifyInternalBytes(setKey, pkHex, mPrime, sigHex) {
 
   // w′_approx = INTT(Â·ẑ − ĉ·2^d·t̂1)，w′1 = UseHint(h, w′_approx, 2γ2)
   const w1p = [];
+  const acc = new Int32Array(256);
+  const t1w = new Int32Array(256);
   for (let i = 0; i < s.k; i++) {
-    const acc = new Int32Array(256);
+    acc.fill(0);
     for (let j = 0; j < s.l; j++) addPwInto(acc, A[i][j], zHat[j]);
-    const t1w = new Int32Array(256);
-    for (let t = 0; t < 256; t++) t1w[t] = (t1[i][t] * (1 << D)) % Q;
+    for (let t = 0; t < 256; t++) t1w[t] = t1[i][t] << D; // t1 ≤ 2^10−1 → 乘积 ≤ q−1
     ntt(t1w);
-    const ct1 = mulPw(cHat, t1w);
-    for (let t = 0; t < 256; t++) acc[t] = (acc[t] - ct1[t] + Q) % Q;
+    for (let t = 0; t < 256; t++) {
+      let x = acc[t] - redc(cHat[t] * t1w[t]);
+      if (x < 0) x += Q;
+      acc[t] = x;
+    }
     intt(acc);
     const hi = new Int32Array(256);
     for (let t = 0; t < 256; t++) hi[t] = useHint1(h[i][t], acc[t], alpha);

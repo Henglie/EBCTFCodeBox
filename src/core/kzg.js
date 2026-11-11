@@ -44,6 +44,7 @@ import { sha256Hex } from "./shaExt.js";
 const R = BLS_MODULUS; // BLS12-381 标量域阶 r（= 曲线群阶）
 const G1 = bls12_381.G1.Point;
 const G2 = bls12_381.G2.Point;
+const Fp = bls12_381.fields.Fp;
 const Fp12 = bls12_381.fields.Fp12;
 const N = FIELD_ELEMENTS_PER_BLOB;
 const HEX_BLOB = BLOB_BYTES * 2; // 262144
@@ -151,13 +152,24 @@ function rev12Table() {
   return _rev12;
 }
 
+// 可信设置常量点的快速解压：setup 为固定公开仪式产出，跳过昂贵的 r 阶子群复检（每点两次标量乘）。
+function g1FromSetupHex(t) {
+  const b0 = parseInt(t.slice(0, 2), 16);
+  if (b0 & 0x40) return G1.ZERO;
+  const sort = (b0 & 0x20) !== 0;
+  const x = BigInt("0x" + (b0 & 0x1f).toString(16).padStart(2, "0") + t.slice(2));
+  let y = Fp.sqrt(Fp.add(Fp.pow(x, 3n), 4n));
+  if ((y * 2n >= Fp.ORDER) !== sort) y = Fp.neg(y);
+  return new G1(x, y, 1n);
+}
+
 let _lagBrp = null;
 /** G1 Lagrange 点，位反转序（下标 i ↔ 求值域第 i 个 brp 单位根）。 */
 function lagrangeBrp() {
   if (_lagBrp) return _lagBrp;
   const rv = rev12Table();
   _lagBrp = new Array(N);
-  for (let i = 0; i < N; i++) _lagBrp[i] = G1.fromHex(G1_LAGRANGE[rv[i]]);
+  for (let i = 0; i < N; i++) _lagBrp[i] = g1FromSetupHex(G1_LAGRANGE[rv[i]]);
   return _lagBrp;
 }
 
@@ -168,8 +180,11 @@ function rootsBrp() {
   const w = fPow(7n, (R - 1n) / 8192n); // c-kzg setup.c ROOT_OF_UNITY 的构造式
   const root = fMul(w, w); // 4096 阶子群生成元
   const rv = rev12Table();
+  const powTab = new Array(N);
+  powTab[0] = 1n;
+  for (let j = 1; j < N; j++) powTab[j] = fMul(powTab[j - 1], root);
   _rootsBrp = new Array(N);
-  for (let i = 0; i < N; i++) _rootsBrp[i] = fPow(root, BigInt(rv[i]));
+  for (let i = 0; i < N; i++) _rootsBrp[i] = powTab[rv[i]];
   return _rootsBrp;
 }
 
@@ -180,42 +195,193 @@ function s2() {
   return _s2;
 }
 
-// ============ 多标量乘（Pippenger 桶法） ============
+// ============ 多标量乘（Pippenger 桶法，Jacobian 混合坐标） ============
+// 仿射预计算 + 有符号窗口 + 混合加法桶累加；只在乘法后取模。
+
+const FP_MOD = G1.Fp.ORDER;
+
+const fpMul = (a, b) => (a * b) % FP_MOD;
+const fpSqr = (a) => (a * a) % FP_MOD;
+function fpCanon(a) {
+  const r = a % FP_MOD;
+  return r < 0n ? r + FP_MOD : r;
+}
+
+function jDouble(X1, Y1, Z1) {
+  if (Z1 === 0n) return [0n, 1n, 0n];
+  const A = fpSqr(X1);
+  const B = fpSqr(Y1);
+  const C = fpSqr(B);
+  const t = X1 + B;
+  const D = 2n * (fpSqr(t) - A - C);
+  const E = 3n * A;
+  const F = fpSqr(E);
+  const X3 = fpCanon(F - 2n * D);
+  const Y3 = fpCanon(E * (D - X3) - 8n * C);
+  const Z3 = fpCanon(2n * Y1 * Z1);
+  return [X3, Y3, Z3];
+}
+
+function jAdd(X1, Y1, Z1, X2, Y2, Z2) {
+  if (Z1 === 0n) return [X2, Y2, Z2];
+  if (Z2 === 0n) return [X1, Y1, Z1];
+  const Z1Z1 = fpSqr(Z1);
+  const Z2Z2 = fpSqr(Z2);
+  const U1 = fpMul(X1, Z2Z2);
+  const U2 = fpMul(X2, Z1Z1);
+  const S1 = fpMul(fpMul(Y1, Z2), Z2Z2);
+  const S2 = fpMul(fpMul(Y2, Z1), Z1Z1);
+  const H = U2 - U1;
+  if (H === 0n) return S2 === S1 ? jDouble(X1, Y1, Z1) : [0n, 1n, 0n];
+  const I = fpSqr(2n * H);
+  const J = fpMul(H, I);
+  const r = 2n * (S2 - S1);
+  const V = fpMul(U1, I);
+  const X3 = fpCanon(fpSqr(r) - J - 2n * V);
+  const Y3 = fpCanon(r * (V - X3) - 2n * fpMul(S1, J));
+  const t = Z1 + Z2;
+  const Z3 = fpCanon((fpSqr(t) - Z1Z1 - Z2Z2) * H);
+  return [X3, Y3, Z3];
+}
+
+let _lagAff = null;
+function lagrangeAffine() {
+  if (!_lagAff) {
+    const pts = lagrangeBrp();
+    const n = pts.length;
+    const xs = new Array(n), ys = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const p = pts[i];
+      if (p.Z === 1n) { xs[i] = p.X; ys[i] = p.Y; }
+      else if (p.is0()) { xs[i] = 0n; ys[i] = 0n; }
+      else { const a = p.toAffine(); xs[i] = a.x; ys[i] = a.y; }
+    }
+    _lagAff = { xs, ys };
+  }
+  return _lagAff;
+}
 
 /** 变点 MSM：Σ scalars[i]·points[i]。标量为公开数据，允许 0。 */
 function msmPippenger(points, scalars) {
   const n = scalars.length;
-  let result = null;
   let maxBits = 0;
   for (const s of scalars) if (s !== 0n) { const b = s.toString(2).length; if (b > maxBits) maxBits = b; }
   if (maxBits === 0) return G1.ZERO;
-  const c = n <= 16 ? 5 : n <= 64 ? 6 : n <= 256 ? 8 : 9;
-  const winCount = Math.ceil(maxBits / c);
-  const mask = (1 << c) - 1;
-  let win = winCount - 1;
-  for (; win >= 0; win--) {
-    const m = mask; // 桶数 m（下标 0..m-1 表示窗口值 1..m）
-    const buckets = new Array(m).fill(null);
-    let maxB = -1;
-    const shift = BigInt(win * c);
+
+  // 仿射坐标：setup 数组走缓存，其它数组按需转换（每个点一次）。
+  let xs, ys, zeros = null;
+  if (points === _lagBrp) {
+    const aff = lagrangeAffine();
+    xs = aff.xs; ys = aff.ys;
+  } else {
+    xs = new Array(n); ys = new Array(n); zeros = new Uint8Array(n);
     for (let i = 0; i < n; i++) {
-      const s = scalars[i];
-      if (s === 0n) continue;
-      const idx = Number((s >> shift) & BigInt(mask));
-      if (idx === 0) continue;
-      const b = idx - 1;
-      buckets[b] = buckets[b] === null ? points[i] : buckets[b].add(points[i]);
-      if (b > maxB) maxB = b;
+      const p = points[i];
+      if (p.is0()) { zeros[i] = 1; xs[i] = 0n; ys[i] = 0n; }
+      else if (p.Z === 1n) { xs[i] = p.X; ys[i] = p.Y; }
+      else { const a = p.toAffine(); xs[i] = a.x; ys[i] = a.y; }
     }
-    let sum = G1.ZERO, acc = G1.ZERO;
-    for (let b = maxB; b >= 0; b--) {
-      if (buckets[b] !== null) sum = sum.add(buckets[b]);
-      acc = acc.add(sum);
-    }
-    if (result === null) result = acc;
-    else result = acc.add(result.multiplyUnsafe(BigInt(1 << c)));
   }
-  return result === null ? G1.ZERO : result;
+
+  const c = n <= 16 ? 5 : n <= 64 ? 6 : n <= 256 ? 8 : 10;
+  const radix = 1 << c;
+  const half = radix >> 1;
+  const maskBig = BigInt(radix - 1);
+  const shiftBig = BigInt(c);
+  const maxDigits = Math.ceil(maxBits / c) + 1;
+  const digits = new Uint16Array(n * maxDigits);
+  const negs = new Uint8Array(n * maxDigits);
+  let usedDigits = 0;
+  for (let i = 0; i < n; i++) {
+    let s = scalars[i];
+    if (s === 0n) continue;
+    let carry = 0n;
+    let w = 0;
+    const base = i * maxDigits;
+    while (s > 0n || carry !== 0n) {
+      let d = Number(s & maskBig) + Number(carry);
+      s >>= shiftBig;
+      if (d > half) { d -= radix; carry = 1n; } else carry = 0n;
+      const neg = d < 0;
+      digits[base + w] = neg ? -d : d;
+      negs[base + w] = neg ? 1 : 0;
+      w++;
+    }
+    if (w > usedDigits) usedDigits = w;
+  }
+  if (usedDigits === 0) return G1.ZERO;
+
+  const bx = new Array(half).fill(0n);
+  const by = new Array(half).fill(1n);
+  const bz = new Array(half).fill(0n);
+  let rX = 0n, rY = 1n, rZ = 0n;
+
+  for (let w = usedDigits - 1; w >= 0; w--) {
+    for (let t = 0; t < c; t++) {
+      const d = jDouble(rX, rY, rZ);
+      rX = d[0]; rY = d[1]; rZ = d[2];
+    }
+    // 清空桶
+    bx.fill(0n); by.fill(1n); bz.fill(0n);
+    let maxB = 0;
+    for (let i = 0; i < n; i++) {
+      const idx = digits[i * maxDigits + w];
+      if (idx === 0) continue;
+      if (zeros !== null && zeros[i]) continue;
+      if (idx > maxB) maxB = idx;
+      const ax = xs[i];
+      const yy = ys[i];
+      const ay = negs[i * maxDigits + w] ? (yy === 0n ? 0n : FP_MOD - yy) : yy;
+      const j = idx - 1;
+      const Z1 = bz[j];
+      if (Z1 === 0n) { bx[j] = ax; by[j] = ay; bz[j] = 1n; continue; }
+      const X1 = bx[j], Y1 = by[j];
+      const Z1Z1 = fpSqr(Z1);
+      const U2 = fpMul(ax, Z1Z1);
+      const S2 = fpMul(fpMul(ay, Z1), Z1Z1);
+      const H = U2 - X1;
+      if (H === 0n) {
+        if (S2 === Y1) {
+          const d = jDouble(X1, Y1, Z1);
+          bx[j] = d[0]; by[j] = d[1]; bz[j] = d[2];
+        } else { bx[j] = 0n; by[j] = 1n; bz[j] = 0n; }
+        continue;
+      }
+      const HH = fpSqr(H);
+      const I = 4n * HH;
+      const J = fpMul(H, I);
+      const r = 2n * (S2 - Y1);
+      const V = fpMul(X1, I);
+      const X3 = fpCanon(fpSqr(r) - J - 2n * V);
+      const Y3 = fpCanon(r * (V - X3) - 2n * fpMul(Y1, J));
+      const Z3 = fpCanon(2n * Z1 * H);
+      bx[j] = X3; by[j] = Y3; bz[j] = Z3;
+    }
+    // 桶求和：sum = Σ bucket[b]，acc = Σ sum（加权 1,2,...）
+    let sX = 0n, sY = 1n, sZ = 0n;
+    let aX = 0n, aY = 1n, aZ = 0n;
+    for (let b = maxB - 1; b >= 0; b--) {
+      if (bz[b] !== 0n) {
+        const t = jAdd(sX, sY, sZ, bx[b], by[b], bz[b]);
+        sX = t[0]; sY = t[1]; sZ = t[2];
+      }
+      if (sZ !== 0n) {
+        const t = jAdd(aX, aY, aZ, sX, sY, sZ);
+        aX = t[0]; aY = t[1]; aZ = t[2];
+      }
+    }
+    if (aZ !== 0n) {
+      const t = jAdd(rX, rY, rZ, aX, aY, aZ);
+      rX = t[0]; rY = t[1]; rZ = t[2];
+    }
+  }
+
+  if (rZ === 0n) return G1.ZERO;
+  const zi = G1.Fp.inv(rZ);
+  const zi2 = fpCanon(fpMul(zi, zi));
+  const x = fpCanon(fpMul(rX, zi2));
+  const y = fpCanon(fpMul(fpMul(rY, zi2), zi));
+  return new G1(x, y, 1n);
 }
 
 // ============ EIP-4844 核心算法 ============

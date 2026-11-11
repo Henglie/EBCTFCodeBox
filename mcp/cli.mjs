@@ -12,6 +12,7 @@
  *   node mcp/cli.mjs magic --input SGVsbG8= [--crib flag] [--depth 3]
  *   node mcp/cli.mjs run --op pngSizeRecover --file out.png --out ./out
  *   node mcp/cli.mjs run --op base64 --input SGVsbG8= --direction decode
+ *   node mcp/cli.mjs run --op someOp --input ... --allow-over-limit
  *   node mcp/cli.mjs read --file pcap.pcap [--max-bytes 65536] [--encoding auto]
  *
  * 参数：--param key=value（可重复）；--json 输出原始 MCP JSON。
@@ -34,7 +35,8 @@ function usage() {
   magic    一键解码        --input <文本> | --file <路径> [--crib <片段>] [--depth 3] [--intensive]
   run      跑 op           --op <opId> [--input <文本> | --file <路径> | --stdin]
                           [--direction encode|decode|run] [--param k=v ...]
-                          [--out <目录>] [--base64]
+                          [--out <目录>] [--base64] [--allow-over-limit]
+                          产物 >128KB 时必须给 --out，否则显式报错（不静默丢内容）
   read     读本地文件      --file <路径> [--max-bytes N] [--encoding auto|utf8|hex|base64]
 
 全局：--json（原始 MCP JSON 输出）
@@ -48,7 +50,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (!a.startsWith("--")) { out._.push(a); continue; }
     const key = a.slice(2);
-    if (key === "json" || key === "unsafe" || key === "intensive" || key === "base64" || key === "stdin") {
+    if (key === "json" || key === "unsafe" || key === "intensive" || key === "base64" || key === "stdin" || key === "allow-over-limit") {
       out[key] = true;
       continue;
     }
@@ -96,6 +98,9 @@ async function main() {
   let args;
   try { args = parseArgs(argv); } catch (e) { process.stderr.write(String(e.message) + "\n"); usage(); process.exitCode = 2; return; }
 
+  // --unsafe 恢复旧能力：只在当前 CLI 进程内设置宿主 env，mcpBridge 仍不认请求参数 allowUnsafe。
+  if (args.unsafe) process.env.EBCTF_MCP_UNSAFE = "1";
+
   let tool, payload;
   if (cmd === "list") {
     tool = "ebctf_list_ops";
@@ -121,7 +126,9 @@ async function main() {
       direction: args.direction,
       params: args.params,
       allowUnsafe: !!args.unsafe,
-      includeBase64: !!args.base64 || !args.out,
+      allowOverLimit: !!args["allow-over-limit"],
+      // undefined = 走 MCP 默认：≤128KB 且无 --out 时内联；>128KB 必须 --out。
+      includeBase64: args.base64 ? true : (args.out ? false : undefined),
     };
     if (args.file) payload.filePath = resolve(args.file);
     else if (args.stdin) payload.fileBase64 = await sourceInput(args);

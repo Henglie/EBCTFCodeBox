@@ -648,8 +648,8 @@ register({
   acceptsBytes: true,
   desc: "Snefru 哈希（Merkle 1990，Snefru 2.5a；Size 32-480（step 32）与 Rounds 2/4/8 与 CyberChef 对齐；默认 256/8 保持项目旧输出）",
   params: [
-    { key: "size", label: "Size（位，32-480 step 32）", type: "number", default: 256, placeholder: "默认 256" },
-    { key: "rounds", label: "Rounds", type: "select", default: "8",
+    { key: "size", label: "输出位数（32-480，步长 32）", labelKey: "op.snefru.param.size", type: "number", default: 256, placeholder: "默认 256" },
+    { key: "rounds", label: "轮数", labelKey: "op.snefru.param.rounds", type: "select", default: "8",
       options: [{ value: "8", label: "8" }, { value: "4", label: "4" }, { value: "2", label: "2" }] },
     INPUT_PARAM,
   ],
@@ -665,7 +665,7 @@ register({
   acceptsBytes: true,
   desc: "SHA-0（FIPS 180 原版 1993，被 SHA-1/FIPS 180-1 替换，仅历史兼容；与 SHA-1 唯一差异是消息扩展不旋转）；Rounds 默认 80",
   params: [
-    { key: "rounds", label: "Rounds（1-80）", type: "number", default: 80 },
+    { key: "rounds", label: "轮数（1-80）", labelKey: "op.sha0.param.rounds", type: "number", default: 80 },
     INPUT_PARAM,
   ],
   run: (t, p) => sha0(inputBytes(t, p), Number((p && p.rounds) || 80)),

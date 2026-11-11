@@ -155,7 +155,7 @@ function ftpExtractRun(text, p = {}) {
   for (const [, flow] of flows) {
     const dirs = [];
     for (const [, dir] of flow.dirs) {
-      const r = reassembleDir(dir);
+      const r = reassembleDir(dir, p);
       dirs.push({ label: `${dir.from} → ${dir.to}`, from: dir.from, to: dir.to, bytes: r.bytes, diag: r.diag });
     }
     flowList.push({ a: flow.a, b: flow.b, dirs, firstIndex: flow.firstIndex });

@@ -323,19 +323,19 @@ register({
   id: "xorBrute", cat: "analysis", name: "XOR 单字节爆破",
   desc: "对输入逐字节异或 0-255，输出全部结果（可过滤可打印）",
   params: [
-    { key: "printableOnly", label: "仅显示可打印结果", type: "bool", default: false },
-    { key: "keyLength", label: "Key length（1-2）", type: "number", default: 1 },
-    { key: "sampleLength", label: "Sample length", type: "number", default: 100 },
-    { key: "sampleOffset", label: "Sample offset", type: "number", default: 0 },
-    { key: "scheme", label: "Scheme", type: "select", default: "Standard", options: [
-      { value: "Standard", label: "Standard" },
-      { value: "Input differential", label: "Input differential" },
-      { value: "Output differential", label: "Output differential" },
+    { key: "printableOnly", label: "仅显示可打印结果", labelKey: "op.xorBrute.param.printableOnly", type: "bool", default: false },
+    { key: "keyLength", label: "密钥长度（1-2 字节）", labelKey: "op.xorBrute.param.keyLength", type: "number", default: 1 },
+    { key: "sampleLength", label: "样本长度", labelKey: "op.xorBrute.param.sampleLength", type: "number", default: 100 },
+    { key: "sampleOffset", label: "样本偏移", labelKey: "op.xorBrute.param.sampleOffset", type: "number", default: 0 },
+    { key: "scheme", label: "模式", labelKey: "op.xorBrute.param.scheme", type: "select", default: "Standard", options: [
+      { value: "Standard", label: "标准", labelKey: "op.xorBrute.param.scheme.standard" },
+      { value: "Input differential", label: "输入差分", labelKey: "op.xorBrute.param.scheme.inputDiff" },
+      { value: "Output differential", label: "输出差分", labelKey: "op.xorBrute.param.scheme.outputDiff" },
     ] },
-    { key: "nullPreserving", label: "Null preserving", type: "bool", default: false },
-    { key: "printKey", label: "Print key", type: "bool", default: true },
-    { key: "outputHex", label: "Output as hex", type: "bool", default: false },
-    { key: "crib", label: "Crib（已知明文）", type: "text", default: "" },
+    { key: "nullPreserving", label: "保留空字节", labelKey: "op.xorBrute.param.nullPreserving", type: "bool", default: false },
+    { key: "printKey", label: "输出密钥", labelKey: "op.xorBrute.param.printKey", type: "bool", default: true },
+    { key: "outputHex", label: "以十六进制输出", labelKey: "op.xorBrute.param.outputHex", type: "bool", default: false },
+    { key: "crib", label: "已知明文片段", labelKey: "op.xorBrute.param.crib", type: "text", default: "" },
   ],
   run: xorBrute,
 });
@@ -382,10 +382,10 @@ register({
   id: "levenshtein", cat: "analysis", name: "编辑距离",
   desc: "Levenshtein 编辑距离（插入/删除/替换，DP）；Sample delimiter 与三类代价与 CyberChef 对齐，默认输出保持旧格式",
   params: [
-    { key: "sampleDelimiter", label: "Sample delimiter", type: "text", default: "\\n", placeholder: "默认 \\n" },
-    { key: "insCost", label: "Insertion cost", type: "number", default: 1 },
-    { key: "delCost", label: "Deletion cost", type: "number", default: 1 },
-    { key: "subCost", label: "Substitution cost", type: "number", default: 1 },
+    { key: "sampleDelimiter", label: "样本分隔符", labelKey: "op.levenshtein.param.sampleDelimiter", type: "text", default: "\\n", placeholder: "默认 \\n" },
+    { key: "insCost", label: "插入代价", labelKey: "op.levenshtein.param.insCost", type: "number", default: 1 },
+    { key: "delCost", label: "删除代价", labelKey: "op.levenshtein.param.delCost", type: "number", default: 1 },
+    { key: "subCost", label: "替换代价", labelKey: "op.levenshtein.param.subCost", type: "number", default: 1 },
   ],
   run: (t, p) => {
     const delim = String((p && p.sampleDelimiter) || "\\n");

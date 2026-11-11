@@ -43,8 +43,21 @@ function focusableIn(container) {
 // 挂在 root 上的监听器收不到 Esc/Tab。因此统一挂 document 捕获阶段，并用本栈保证
 // 「只有最上层弹层响应」，避免叠加弹层时多个实例同时抢键。
 const STACK = [];
+const ACTIVE = new Map(); // root → { close, release }，供路由切换统一收尾
 function isTopmost(root) {
   return STACK.length > 0 && STACK[STACK.length - 1] === root;
+}
+
+/**
+ * 关闭当前所有活动弹层（路由切换/工作区重渲染前调用）。
+ * 优先走各弹层自己的 onClose（保证动画、objectURL 等收尾），随后幂等 release。
+ */
+export function releaseAllModals() {
+  const entries = [...ACTIVE.values()].reverse();
+  for (const entry of entries) {
+    try { entry.close(); } catch { /* 单个弹层关闭失败不阻塞其余 */ }
+    try { entry.release(); } catch { /* release 幂等 */ }
+  }
 }
 
 function focusNode(node) {
@@ -170,6 +183,7 @@ export function attachModalLifecycle(root, opts = {}) {
   }
   doc.addEventListener("keydown", onKeydown, true);
   STACK.push(root);
+  ACTIVE.set(root, { close: requestClose, release });
 
   // ---- 遮罩关闭（统一为 mousedown，与站内多数弹层及「按下即响应」口径一致）----
   function onBackdrop(e) {
@@ -193,6 +207,7 @@ export function attachModalLifecycle(root, opts = {}) {
     doc.removeEventListener("keydown", onKeydown, true);
     const at = STACK.lastIndexOf(root);
     if (at > -1) STACK.splice(at, 1);
+    ACTIVE.delete(root);
     if (o.closeOnBackdrop !== "none") root.removeEventListener("mousedown", onBackdrop);
     for (const el of inerted) el.removeAttribute("inert");
     inerted.length = 0;

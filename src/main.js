@@ -21,7 +21,7 @@ import { ensureOp, ensureCat, ensureAll, preloadIdle } from "./core/lazyCore.js"
 import { OP_FILE_MAP } from "./core/lazyTables.generated.js";
 import { t, tBilingual, getLocale, setLocale, locales, onLocaleChange, initLocale, warmEnglish, getDir, LOCALE_META, localeCoverage } from "./i18n/index.js";
 import { downloadBytes, cloudWarnGate, fmtByteSize, isCloudDeploy } from "./ui/download.js";
-import { productFileEntries } from "./core/productResult.js";
+import { productFileEntries, PRODUCT_INLINE_MAX_BYTES, base64DecodedSize, dataUrlDecodedSize, planDataUrlMedia, mediaRenderPlan } from "./core/productResult.js";
 import { magicFilterReset, filterMagicCands, filterBruteCands, magicFilterBar } from "./ui/resultFilter.js";
 import { magicDecode } from "./core/magic/magic.js";
 import { runMagic, cancelMagic, pauseMagic, resumeMagic } from "./core/magic/magicClient.js"; // 真多线程调度（Worker 优先，降级主线程）+ 中断/暂停接管
@@ -66,6 +66,7 @@ import { RAND_MODES, warmupServer } from "./core/randSource.js";
 import { resolveDecodeConfig, loadLastConfig, saveLastConfig } from "./core/decodeProfile.js"; // 解码强度档 → op 白名单 + 预算
 import { isExplicitRunOp, explicitRunHint, isLazyRunOp, lazyRunHint, manualRunHint } from "./core/explicitRun.js"; // 重运算 op 显式触发白名单 + 图像惰执行清单
 import { runOpOffThread, cancelOpRun, opRunBusy } from "./core/opRunClient.js"; // 重 op 独立线程执行（可取消/超时）
+import { setLimitMessageBuilder, withLimitContext } from "./core/limitGuard.js";
 import { openDecodeStrength } from "./ui/decodeStrength.js"; // 「解码强度」弹窗（5 档滑块 + 参与算法多选 + 命名方案）
 import { applyAccent, enableHctEngine, DEFAULT_ACCENT, resetAccent } from "./ui/dynamicColor.js"; // M3 动态取色（HSL 近似 + HCT 精确引擎）
 import { themeVariant } from "./ui/themePicker.js";
@@ -79,7 +80,7 @@ import { loadFavorites, isFavorite, toggleFavorite, openFavMenu } from "./ui/fav
 // 自定义算法（魔改）——UI 开关/编辑器 + Worker 沙箱执行（magic/穷举侧排除）
 import { renderCustomToggle } from "./ui/customImplEditor.js";
 import { getCustomImpl, listEnabledOpIds } from "./core/customImplStore.js";
-import { runCustomWithTimeout } from "./core/customImplClient.js";
+import { runCustomWithTimeout, cancelCustomImpl } from "./core/customImplClient.js";
 
 // ---------- i18n 包装 ----------
 // t 缺 key 时回退到 key 本身；这里再包一层：查不到就回退 registry 里的中文字面量
@@ -107,6 +108,14 @@ if (typeof window !== "undefined") {
   window.__ebctfCatName = (id) => catNameById(id);
   window.__ebctfToast = (m) => toast(m);
 }
+// 限额确认文案走 i18n；缺 key 时 limitGuard 回退内置中文。
+setLimitMessageBuilder(({ kind, label, actual, soft, hard, unit }) => {
+  const key = kind === "hard" ? "ui.limit.hard"
+    : kind === "notice" ? "ui.limit.softNotice"
+      : "ui.limit.softConfirm";
+  const s = t(key, label, actual, unit, soft, hard);
+  return s === key ? null : s;
+});
 function opDesc(op) {
   if (!op.desc) return "";
   const k = "op." + op.id + ".desc";
@@ -168,7 +177,7 @@ import { refreshMobileDrawerLabels } from "./ui/mobileDrawer.js"; // ≤860px �
 import { synonymsOf, expandAliases } from "./ui/searchSynonyms.js"; // 图像/视频/编码等同义词检索（只改检索，不改 op 名）
 import { exhaustiveDecode } from "./core/exhaustiveDecode.js"; // 穷举全解并入首页智能解码（末尾追加可折叠区）
 import { expandableInput, ensureExpStyles, openExpandModal } from "./ui/expandableInput.js";
-import { attachModalLifecycle } from "./ui/modalLifecycle.js"; // 密钥/IV/crib 可展开输入框 + 弹层样式注入
+import { attachModalLifecycle, releaseAllModals } from "./ui/modalLifecycle.js"; // 密钥/IV/crib 可展开输入框 + 弹层样式注入
 import { decompileBytes, formatResult as formatDecompileResult } from "./core/exebridge.js"; // 拖入分派用
 // 以下模块已注册 op 且有 detect 的须排在下方 detectExt3/detectSupplement 之前，避免 detect 覆盖顺序错乱。
 import "./core/detectExt3.js"; // EASY 30 op detect 补齐（须在所有 op 注册后）
@@ -231,6 +240,7 @@ const workspaceDrafts = createWorkspaceDrafts($ws, {
     _lastOpOutput = null; state.homeInput = "";
     document.getElementById("ioOut")?.__opFeedback?.set("idle");
     clearRecipeIO(); clearExhaustiveIO();
+    revokeTransientPreviewUrls(); revokeFilePreviewUrls();
     _inspectLoaded?.clearUniversalViewerIO(); _quickConvLoaded?.clearQuickConvIO();
     for (const selector of [".onekey-out", ".file-report", "#ioOutMedia"]) $ws.querySelector(selector)?.replaceChildren();
     for (const host of $ws.querySelectorAll(".home-hero, .onekey-out")) if (host.__toc) destroyResultToc(host);
@@ -240,6 +250,9 @@ window.addEventListener('pagehide', () => {
   const running = opRunBusy() || !!document.querySelector('.op-feedback[data-state="running"]');
   _convSeq++; // Drafts checkpoint first; unloading jobs cannot write back a late result.
   cancelOpRun();
+  cancelMagic(); // pagehide 与 op 一并取消 magic，防止后台 Worker 继续跑
+  // 切后台（visibilitychange hidden）不取消，仅页面真正卸载时释放自定义实现 Worker。
+  try { cancelCustomImpl(); } catch { /* 无在途任务/环境不支持 */ }
   if (running) document.getElementById('ioOut')?.__opFeedback?.set('cancelled');
 });
 
@@ -331,7 +344,7 @@ function buildOpReport(op) {
   else if (Array.isArray(op.fields)) {
     input = op.fields.map((f) => (document.getElementById("fld_" + f.key)?.value ?? "")).join(op.fieldsJoin ?? "\n");
   }
-  const output = outEl ? outEl.value : "";
+  const output = outEl ? outAreaFullText(outEl) : "";
   const failed = /^✗/.test(output);
   const paramRows = (op.params || [])
     .filter((d) => !d.sensitive)
@@ -617,6 +630,11 @@ function navRail() {
   if (window.innerWidth <= NAV_RAIL_BP) return false;
   return state.navCollapsed;
 }
+// 显示计数统一口径：虚拟工具（cryptoTryAll）不计入侧栏分类数/关于页功能数，
+// 与 README 的 978 op 对齐；注册表本身不动。
+function isCountedOp(op) {
+  return !!op && op.id !== "cryptoTryAll" && !op.__virtual && !op.virtual;
+}
 function renderNav() {
   $nav.innerHTML = "";
   $nav.classList.toggle("collapsed", navRail());
@@ -641,7 +659,7 @@ function renderNav() {
     }
     if (cat.id === "base") $nav.append(renderFavNav());
     const isHome = cat.id === "home";
-    const count = isHome ? 0 : opsByCat(cat.id).length;
+    const count = isHome ? 0 : opsByCat(cat.id).filter(isCountedOp).length;
     const curCat = state.view === "op" ? getOp(state.opId)?.cat : (state.view === "home" ? "home" : null);
     const active = curCat === cat.id;
     const expanded = state.expandedCats.includes(cat.id) && !navRail() && !isHome;
@@ -714,7 +732,13 @@ function renderNav() {
      // 走原逐条渲染，零回归。无 family 的 op 渲染路径一字不动。
       const famMap = new Map(familyGroup(cat.id).map((g) => [g.family, g]));
       const _famDone = new Set(); // 已渲染聚合条的族（族内后续成员跳过）
-      for (const op of opsByCat(cat.id)) {
+      // 当前 op 置顶当前分类（只影响本分类二级菜单顺序，收藏/搜索/其他分类保持原序）。
+      const _catOps = opsByCat(cat.id);
+      if (state.view === "op" && state.opId && cat.id === curCat) {
+        const _cur = _catOps.findIndex((o) => o.id === state.opId);
+        if (_cur > 0) _catOps.unshift(_catOps.splice(_cur, 1)[0]);
+      }
+      for (const op of _catOps) {
         if (op.family && famMap.has(op.family)) {
           if (_famDone.has(op.family)) continue;
           _famDone.add(op.family);
@@ -1092,6 +1116,8 @@ window.addEventListener("hashchange", () => {
 // ============ 工作区渲染 ============
 // 上次渲染的 view/opId——用于「真实视图切换才取消」的判定（见 renderWorkspaceInner 内）。
 let _wsView = null, _wsOpId = null;
+// 上次路由指纹（view/opId/hash）——弹层收尾只跟真实路由变化走，同视图重渲染不关闭。
+let _wsRouteKey = null;
 let disposeOpWorkbench = null;
 let _docTitleAll = false;
 function syncDocTitle() {
@@ -1105,6 +1131,21 @@ function syncDocTitle() {
   }
 }
 function renderWorkspaceInner() {
+  // 真实路由变化（hashchange / applyRoute 切换）才收尾 body 级弹层：走各弹层 onClose
+  // （动画/objectURL），再兜底清掉未注册进生命周期的 .exp-overlay / .img-lightbox，
+  // 避免旧弹窗叠在新页面上。同视图重渲染（语言切换、edu 懒加载等）保留活动弹窗/灯箱。
+  const routeKey = `${state.view}|${state.opId || ""}|${location.hash}`;
+  if (routeKey !== _wsRouteKey) {
+    _wsRouteKey = routeKey;
+    try { releaseAllModals(); } catch { /* 单个弹层异常不影响路由 */ }
+    for (const node of Array.from(document.body.children)) {
+      if (node.classList && (node.classList.contains("exp-overlay") || node.classList.contains("img-lightbox"))) {
+        node.remove();
+      }
+    }
+    revokeTransientPreviewUrls();
+  }
+  revokeFilePreviewUrls();
   finishExpressiveMotion();
   workspaceDrafts.release();
   const draftKey = state.view === "op" ? `op:${state.opId}` : state.view;
@@ -1722,6 +1763,10 @@ async function runOneKey(text, outWrap, crib, strengthCfg, force = false, topBan
   outWrap.__rf_magic = null;
   outWrap.__rf_brute = null;
   outWrap.__rf_rerender = null;
+  outWrap.__rf_meta = null;
+  outWrap.__rf_pending = [];
+  outWrap.__rf_showAllBtn = null;
+  outWrap.__rf_showAll = false;
   destroyResultToc(outWrap);
   if (outWrap.__runbar) { try { outWrap.__runbar.dispose(); } catch { /* ignore */ } outWrap.__runbar = null; }
   outWrap.innerHTML = "";
@@ -1828,7 +1873,7 @@ async function runOneKey(text, outWrap, crib, strengthCfg, force = false, topBan
   clearCountdown();
   if (token !== runOneKey._token) return;  // 已有更新的输入，弃
 
-  renderMagicCands(outWrap, q, cands, crib);
+  renderMagicCands(outWrap, q, cands, crib, { final: true });
   runBar.setDone(cands.length);
   // 保留外层「一键解码」运行条直到下一次运行：多段解码（文本→图片→图片分析）
   // 期间嵌套 handleFile 会再生成自己的运行条，两层进度都可见；不再 2.5s 后提前销毁。
@@ -1901,14 +1946,14 @@ async function appendSpecialTextSections(outWrap, q, token, key) {
         card.append(txt);
         const bar = el("div", { class: "file-section-actions" });
         for (const ent of productFileEntries(out)) {
-          const url = URL.createObjectURL(new Blob([ent.bytes], { type: ent.mime || "image/png" }));
-          setTimeout(() => { try { URL.revokeObjectURL(url); } catch { /* ignore */ } }, 120000);
-          if ((ent.mime || "").startsWith("image/")) {
+          if ((ent.mime || "").startsWith("image/") && mediaRenderPlan(ent.mime, ent.bytes.length) === "inline-image") {
+            const url = URL.createObjectURL(new Blob([ent.bytes], { type: ent.mime || "image/png" }));
             const im = el("img", {
               class: "io-out-file-preview", src: url, alt: ent.name,
               style: "max-width:min(100%,520px);max-height:420px;border-radius:6px;cursor:zoom-in;background:#fff;border:1px solid var(--outline);margin-top:8px;image-rendering:pixelated",
             });
-            im.addEventListener("click", (e) => { e.stopPropagation(); openImagePreview(url, ent.name, ent.bytes); });
+            trackTransientPreviewUrl(url, im);
+            im.addEventListener("click", (e) => { e.stopPropagation(); openImagePreview(url, ent.name, ent.bytes, ent.mime); });
             card.append(im);
           }
           bar.append(el("button", {
@@ -1965,8 +2010,7 @@ function renderBruteResults(outWrap, q, results) {
 const _STRONG_FLAG_UI_RE = /(^|[^a-z])(flag|ctf|key|pass|hgame|moectf)[a-z0-9_]*[\{:=_]/i;
 function textHasStrongFlag(s) { return _STRONG_FLAG_UI_RE.test(String(s == null ? "" : s)); }
 
-function appendBruteResults(outWrap, results) {
-  if (!results.length) return;
+function buildBruteResultsCard(results) {
   const sec = el("details", { class: "onekey-brute" });
   // 爆破结果一律默认折叠（含凯撒 25 位移）：用户 2026-10-26 明确要求爆破参数不自动展开。
   sec.open = false;
@@ -1986,28 +2030,28 @@ function appendBruteResults(outWrap, results) {
     list.append(item);
   }
   sec.append(list);
-  outWrap.append(markTocCard(sec, { title: t("ui.home.bruteTitle", results.length), color: "var(--warning)", badge: String(results.length), group: "爆破参数" }));
+  return markTocCard(sec, { title: t("ui.home.bruteTitle", results.length), color: "var(--warning)", badge: String(results.length), group: "爆破参数" });
 }
 
-// 渲染 magic 候选（供 onPartial 部分结果 + 最终结果两处复用；每次全量重渲染 outWrap）。
-// 幂等：先清空 outWrap 再画原始卡 + 摘要 + 分组卡，多次调用只是用更全的候选覆盖。
-function renderMagicCands(outWrap, q, cands, crib) {
-  outWrap.__rf_magic = { q, cands: Array.isArray(cands) ? cands : [], crib };
-  outWrap.__rf_rerender = () => renderOneKeySnapshot(outWrap);
-  renderOneKeySnapshot(outWrap);
+// 结果首屏最多渲染的卡片数；其余按需增量 append，避免上百张卡一次建 DOM。
+const RESULT_CARD_LIMIT = 50;
+
+function magicCandKey(c) {
+  const chain = Array.isArray(c && c.chain) ? c.chain.join("\u0000") : "";
+  return chain + "\u0001" + String(c && c.result != null ? c.result : "");
 }
 
-function renderOneKeySnapshot(outWrap) {
-  const snap = outWrap.__rf_magic;
-  if (!snap) return;
-  const { q, crib } = snap;
-  let cands = snap.cands.slice();
-  const brute = outWrap.__rf_brute ? outWrap.__rf_brute.results : [];
+function directCardCount(outWrap) {
+  let n = 0;
+  for (const child of outWrap.children) {
+    if (!child.classList) continue;
+    if (child.classList.contains("onekey-card") || child.classList.contains("onekey-brute")) n++;
+  }
+  return n;
+}
 
-  outWrap.innerHTML = "";
-  if (outWrap.__runbar) outWrap.append(outWrap.__runbar.element);
-  appendRawCard(outWrap, q);
-
+function prepareMagicCands(q, list, crib) {
+  const cands = list.slice();
   // Leet 假命中标记与原排序规则保持不变；筛选只取保序子集。
   const cribRe = literalMatcher(crib);
   const rawMatchesCrib = cribRe ? cribRe.test(q) : false;
@@ -2015,7 +2059,119 @@ function renderOneKeySnapshot(outWrap) {
     c._leetFalseHit = !!(cribRe && c.matchesCrib && rawMatchesCrib && c.chain.includes("leetSpeak"));
     c._cribHit = c.matchesCrib && !c._leetFalseHit;
   }
-  cands = [...cands.filter((c) => !c._leetFalseHit), ...cands.filter((c) => c._leetFalseHit)];
+  return [...cands.filter((c) => !c._leetFalseHit), ...cands.filter((c) => c._leetFalseHit)];
+}
+
+function appendMagicFactories(outWrap, factories) {
+  const btn = outWrap.__rf_showAllBtn;
+  for (const make of factories) {
+    let node = null;
+    try { node = make(); } catch { node = null; }
+    if (!node) continue;
+    if (btn && btn.parentNode === outWrap) outWrap.insertBefore(node, btn);
+    else outWrap.append(node);
+  }
+}
+
+function showAllMagicCards(outWrap) {
+  const pending = (outWrap.__rf_pending || []).splice(0);
+  outWrap.__rf_showAll = true;
+  appendMagicFactories(outWrap, pending);
+  if (outWrap.__rf_meta) outWrap.__rf_meta.cardCount += pending.length;
+  syncMagicShowAll(outWrap);
+  refreshResultToc(outWrap);
+}
+
+function syncMagicShowAll(outWrap) {
+  let btn = outWrap.__rf_showAllBtn;
+  const pending = outWrap.__rf_pending || [];
+  if (!pending.length) {
+    if (btn) { btn.remove(); outWrap.__rf_showAllBtn = null; }
+    return;
+  }
+  if (!btn) {
+    btn = el("button", { type: "button", class: "ok-copy-btn onekey-show-all" });
+    btn.addEventListener("click", () => showAllMagicCards(outWrap));
+    outWrap.__rf_showAllBtn = btn;
+    outWrap.append(btn);
+  }
+  const key = "ui.result.showAll";
+  const label = t(key, pending.length);
+  btn.textContent = label === key ? `显示全部（剩余 ${pending.length}）` : label;
+}
+
+function appendMagicCards(outWrap, factories) {
+  const meta = outWrap.__rf_meta || { cardCount: directCardCount(outWrap) };
+  outWrap.__rf_meta = meta;
+  const showAll = outWrap.__rf_showAll === true;
+  const room = showAll ? factories.length : Math.max(0, RESULT_CARD_LIMIT - meta.cardCount);
+  const now = factories.slice(0, room);
+  const later = factories.slice(room);
+  appendMagicFactories(outWrap, now);
+  meta.cardCount += now.length;
+  if (later.length) outWrap.__rf_pending.push(...later);
+  syncMagicShowAll(outWrap);
+}
+
+// 渲染 magic 候选（供 onPartial 部分结果 + 最终结果两处复用）。
+// partial 且候选只增不减时只更新统计与新增卡，不整块重建；final 或结构变化才全量重绘。
+function renderMagicCands(outWrap, q, cands, crib, opts) {
+  const nextCands = Array.isArray(cands) ? cands : [];
+  const final = !!(opts && opts.final);
+  const prev = outWrap.__rf_magic;
+  const search = resultSearchState(outWrap);
+  const canAppend = !final && prev && prev.q === q && prev.crib === crib &&
+    outWrap.__rf_meta && !search.query && isAppendOnlyCands(prev.cands, nextCands);
+  outWrap.__rf_magic = { q, cands: nextCands, crib };
+  outWrap.__rf_rerender = () => renderOneKeySnapshot(outWrap);
+  if (canAppend) {
+    appendMagicPartial(outWrap, q, nextCands, crib);
+    return;
+  }
+  renderOneKeySnapshot(outWrap);
+}
+
+function isAppendOnlyCands(prev, next) {
+  if (!Array.isArray(prev) || next.length < prev.length) return false;
+  const keys = new Set(next.map(magicCandKey));
+  for (const c of prev) if (!keys.has(magicCandKey(c))) return false;
+  return true;
+}
+
+function appendMagicPartial(outWrap, q, cands, crib) {
+  const meta = outWrap.__rf_meta;
+  const prepared = prepareMagicCands(q, cands, crib);
+  const fresh = [];
+  for (const c of prepared) {
+    const key = magicCandKey(c);
+    if (!meta.seenKeys.has(key)) { meta.seenKeys.add(key); fresh.push(c); }
+  }
+  const brute = outWrap.__rf_brute ? outWrap.__rf_brute.results : [];
+  const shown = filterMagicCands(outWrap, prepared);
+  const shownBrute = filterBruteCands(outWrap, brute);
+  magicFilterBar(outWrap, shown.length + shownBrute.length, prepared.length + brute.length);
+  if (fresh.length) {
+    const search = resultSearchState(outWrap);
+    const factories = groupSweepCands(fresh).map((g) => () =>
+      g.items.length >= 2 ? renderBruteGroupCard(g, search) : renderCandCard(g.items[0], search));
+    appendMagicCards(outWrap, factories);
+  }
+  refreshResultToc(outWrap);
+}
+
+function renderOneKeySnapshot(outWrap) {
+  const snap = outWrap.__rf_magic;
+  if (!snap) return;
+  const { q, crib } = snap;
+  const cands = prepareMagicCands(q, snap.cands, crib);
+  const brute = outWrap.__rf_brute ? outWrap.__rf_brute.results : [];
+  const showAll = outWrap.__rf_showAll === true;
+
+  outWrap.innerHTML = "";
+  if (outWrap.__runbar) outWrap.append(outWrap.__runbar.element);
+  appendRawCard(outWrap, q);
+  outWrap.__rf_showAllBtn = null;
+  outWrap.__rf_pending = [];
 
   const shown = filterMagicCands(outWrap, cands);
   const shownBrute = filterBruteCands(outWrap, brute);
@@ -2024,6 +2180,9 @@ function renderOneKeySnapshot(outWrap) {
 
   if (total) magicFilterBar(outWrap, matched, total);
   else {
+    outWrap.__rf_meta = null;
+    outWrap.__rf_pending = [];
+    if (outWrap.__rf_showAllBtn) { outWrap.__rf_showAllBtn.remove(); outWrap.__rf_showAllBtn = null; }
     outWrap.append(el("div", { class: "onekey-empty" },
       t("ui.home.empty"),
       el("div", { class: "onekey-hint" }, t("ui.home.emptyHint")),
@@ -2040,12 +2199,19 @@ function renderOneKeySnapshot(outWrap) {
     outWrap.append(renderSummaryCard(top, resultSearchState(outWrap)));
   }
 
-  const groups = groupSweepCands(shown);
-  for (const g of groups) {
-    if (g.items.length >= 2) outWrap.append(renderBruteGroupCard(g, resultSearchState(outWrap)));
-    else outWrap.append(renderCandCard(g.items[0], resultSearchState(outWrap)));
-  }
-  appendBruteResults(outWrap, shownBrute);
+  const search = resultSearchState(outWrap);
+  const factories = groupSweepCands(shown).map((g) => () =>
+    g.items.length >= 2 ? renderBruteGroupCard(g, search) : renderCandCard(g.items[0], search));
+  if (shownBrute.length) factories.push(() => buildBruteResultsCard(shownBrute));
+
+  const baseCards = directCardCount(outWrap);
+  outWrap.__rf_meta = { cardCount: baseCards, seenKeys: new Set(cands.map(magicCandKey)) };
+  outWrap.__rf_showAll = showAll;
+  const room = showAll ? factories.length : Math.max(0, RESULT_CARD_LIMIT - baseCards);
+  appendMagicFactories(outWrap, factories.slice(0, room));
+  outWrap.__rf_meta.cardCount += Math.min(room, factories.length);
+  if (factories.length > room) outWrap.__rf_pending.push(...factories.slice(room));
+  syncMagicShowAll(outWrap);
   refreshResultToc(outWrap);
 }
 
@@ -2831,18 +2997,19 @@ function renderFileReport(outWrap, r, opts = {}) {
       }
     }
 
- // 图片产物直接内联预览；点击优先走统一图像查看器（R7 未接线时回退灯箱）。
+ // 图片产物直接内联预览（>128KB 只保留下载按钮，不创建 `<img>`）；点击优先走统一图像查看器（R7 未接线时回退灯箱）。
     for (const a of previewActs) {
       const u8a = a.bytes instanceof Uint8Array ? a.bytes : new Uint8Array(a.bytes);
+      if (mediaRenderPlan(a.mime || "image/png", u8a.length) !== "inline-image") continue;
       const url = URL.createObjectURL(new Blob([u8a], { type: a.mime || "image/png" }));
-      setTimeout(() => { try { URL.revokeObjectURL(url); } catch { /* ignore */ } }, 120000);
       const img = el("img", {
         class: "io-out-file-preview", src: url, alt: a.filename || a.label || "preview",
         style: "max-width:min(100%,420px);max-height:320px;border-radius:6px;cursor:zoom-in;background:#fff;border:1px solid var(--outline);margin-top:8px",
       });
+      trackTransientPreviewUrl(url, img);
       img.addEventListener("click", (e) => {
         e.stopPropagation();
-        openImagePreview(url, a.filename || a.label || "", u8a);
+        openImagePreview(url, a.filename || a.label || "", u8a, a.mime);
       });
       card.append(img);
     }
@@ -2904,7 +3071,7 @@ function renderFileReport(outWrap, r, opts = {}) {
 }
 
 // 预览图点击：优先统一图像查看器（存在时），否则灯箱。
-async function openImagePreview(url, alt, bytes) {
+async function openImagePreview(url, alt, bytes, mime) {
   try {
     const mod = await import("./ui/imageOpsViewer.js");
     if (mod && typeof mod.openImageOpsViewer === "function") {
@@ -2912,7 +3079,7 @@ async function openImagePreview(url, alt, bytes) {
       return;
     }
   } catch { /* R7 未接线 → 回退灯箱 */ }
-  openImageLightbox(url, alt);
+  openImageLightbox(url, alt, { bytes, mime });
 }
 
 // section view 动作：只读查看窗（文本 pre / 图片 img），复用 expandableInput 注入的 .exp-* modal 样式。
@@ -2926,11 +3093,12 @@ function openSectionView(title, act) {
     el("button", { type: "button", class: "exp-close", title: t("ui.expand.cancel"), onclick: close }, msym("close")),
   );
   let bodyEl;
+  let objectUrl = null;
   if (act.mime && /^image\//.test(act.mime) && act.bytes) {
     const u8a = act.bytes instanceof Uint8Array ? act.bytes : new Uint8Array(act.bytes);
-    const url = URL.createObjectURL(new Blob([u8a], { type: act.mime }));
-    bodyEl = el("div", { class: "exp-view exp-view-img" }, el("img", { src: url, alt: title || "" }));
-    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    objectUrl = URL.createObjectURL(new Blob([u8a], { type: act.mime }));
+    bodyEl = el("div", { class: "exp-view exp-view-img" }, el("img", { src: objectUrl, alt: title || "" }));
+    trackTransientPreviewUrl(objectUrl, bodyEl);
   } else {
     const text = act.text != null ? act.text
       : (act.bytes ? new TextDecoder("utf-8").decode(act.bytes instanceof Uint8Array ? act.bytes : new Uint8Array(act.bytes)) : "");
@@ -2945,7 +3113,14 @@ function openSectionView(title, act) {
     closed = true;
     if (lifecycle) { lifecycle.release(); lifecycle = null; }
     overlay.classList.add("exp-closing");
-    setTimeout(() => overlay.remove(), 250);
+    setTimeout(() => {
+      overlay.remove();
+      if (objectUrl) {
+        try { URL.revokeObjectURL(objectUrl); } catch { /* 已释放忽略 */ }
+        _transientPreviewUrls.delete(objectUrl);
+        objectUrl = null;
+      }
+    }, 250);
   }
   let lifecycle = attachModalLifecycle(overlay, { dialog, onClose: close, restoreFocusTo: previousFocus });
 }
@@ -2959,9 +3134,81 @@ function dataUrlToBytes(url) {
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
 }
-function mimeOfDataUrl(url) {
-  const m = /^data:([^;,]+)/.exec(url);
-  return m ? m[1] : "image/png";
+const OUT_MIME_EXT = Object.freeze({
+  "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp",
+  "image/bmp": "bmp", "image/x-icon": "ico", "image/svg+xml": "svg",
+  "application/zip": "zip", "application/pdf": "pdf", "application/gzip": "gz",
+  "application/x-7z-compressed": "7z", "application/vnd.rar": "rar",
+  "application/octet-stream": "bin",
+});
+function outMediaExt(mime) {
+  return OUT_MIME_EXT[String(mime || "").toLowerCase()] || "bin";
+}
+function outMediaName(index, mime) {
+  return `${state.opId || "output"}_${index}.${outMediaExt(mime)}`;
+}
+// base64（含 URL-safe / 无 padding）→ 字节；仅供输出渲染层恢复下载内容。
+function base64TextToBytes(text) {
+  let s = String(text == null ? "" : text).replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+  if (s.length % 4 === 1) throw new Error("bad base64 length");
+  s += "=".repeat((4 - (s.length % 4)) % 4);
+  return dataUrlToBytes("data:application/octet-stream;base64," + s);
+}
+function sniffOutputMime(bytes) {
+  const b = bytes;
+  const has = (...seq) => seq.every((v, i) => b[i] === v);
+  if (has(0x89, 0x50, 0x4e, 0x47)) return "image/png";
+  if (has(0xff, 0xd8, 0xff)) return "image/jpeg";
+  if (has(0x47, 0x49, 0x46, 0x38)) return "image/gif";
+  if (has(0x42, 0x4d)) return "image/bmp";
+  if (has(0x52, 0x49, 0x46, 0x46) && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "image/webp";
+  if (has(0x50, 0x4b, 0x03, 0x04) || has(0x50, 0x4b, 0x05, 0x06)) return "application/zip";
+  if (has(0x25, 0x50, 0x44, 0x46)) return "application/pdf";
+  if (has(0x1f, 0x8b)) return "application/gzip";
+  if (has(0x37, 0x7a, 0xbc, 0xaf)) return "application/x-7z-compressed";
+  if (has(0x52, 0x61, 0x72, 0x21)) return "application/vnd.rar";
+  return "application/octet-stream";
+}
+function outMaskHint(name, size) {
+  const en = /^en/i.test(getLocale());
+  const label = name ? ` ${name}` : "";
+  return en
+    ? `[Generated file${label} (${fmtByteSize(size)}), download below]`
+    : `[已生成文件${label}（${fmtByteSize(size)}），点击下方下载]`;
+}
+
+// 输出文本框中的超大 base64：默认不铺满界面，换成「已生成文件」提示。
+// data URL 的下载按钮由 renderOutMedia 提供；裸 base64 在这里解成文件，交给 renderOutFiles。
+const DATA_URL_BASE64_RE_GLOBAL = /data:([\w.+-]+\/[\w.+-]+);base64,[A-Za-z0-9+/]+={0,2}/g;
+const OUT_RAW_B64_MIN_CHARS = Math.ceil(PRODUCT_INLINE_MAX_BYTES / 3) * 4;
+const OUT_RAW_B64_RE = new RegExp(`[A-Za-z0-9+/_-]{${OUT_RAW_B64_MIN_CHARS},}={0,2}`, "g");
+function maskOversizedOutputText(text) {
+  const src = String(text == null ? "" : text);
+  if (src.length < OUT_RAW_B64_MIN_CHARS) return { text: src, masked: false, files: [] };
+  let seq = 0;
+  const files = [];
+  let out = src.replace(DATA_URL_BASE64_RE_GLOBAL, (url, mime) => {
+    const size = dataUrlDecodedSize(url);
+    if (size == null || size <= PRODUCT_INLINE_MAX_BYTES) return url;
+    let bytes;
+    try { bytes = dataUrlToBytes(url); } catch { return url; }
+    const name = outMediaName(++seq, mime);
+    files.push({ name, mime, bytes });
+    return outMaskHint(name, size);
+  });
+  out = out.replace(OUT_RAW_B64_RE, (run) => {
+    // 纯十六进制串（hex 输出）不是 base64，绝不按 base64 解码/掩码。
+    if (/^[0-9A-Fa-f]+$/.test(run)) return run;
+    const size = base64DecodedSize(run);
+    if (size <= PRODUCT_INLINE_MAX_BYTES) return run;
+    let bytes;
+    try { bytes = base64TextToBytes(run); } catch { return run; }
+    const mime = sniffOutputMime(bytes);
+    const name = outMediaName(++seq, mime);
+    files.push({ name, mime, bytes });
+    return outMaskHint(name, size);
+  });
+  return { text: out, masked: out !== src, files };
 }
 
 // ---- op 产物协议（产品负责人 2026-09-02 下单：全能密码学工具箱，该给文件的输出给下载按钮）----
@@ -2972,19 +3219,59 @@ function mimeOfDataUrl(url) {
 // files 为 null/空时只移除旧列表（早退/清空路径由 renderOutMedia 的 innerHTML 清空兜底）。
 // 图片类产物（如流量可读结论的键鼠轨迹/节奏 PNG）同时渲染内联预览图，直接「画出来」而非只给下载。
 let _filePreviewUrls = [];
+// 非弹窗的内联预览图 objectURL：不再用固定 120s 定时回收（会误杀仍在展示的图），
+// 改由工作区路由切换/清理时统一 revoke；弹窗/灯箱自己持有的 URL 在关闭回调里释放。
+const _transientPreviewUrls = new Set();
+const _previewUrlOwner = new Map(); // DOM 节点 → objectURL，节点被替换时自动释放
+let _previewUrlObserver = null;
+function ensurePreviewUrlObserver() {
+  if (_previewUrlObserver || typeof MutationObserver !== "function" || !document.body) return;
+  _previewUrlObserver = new MutationObserver(() => {
+    for (const [node, u] of _previewUrlOwner) {
+      if (!node.isConnected) {
+        _previewUrlOwner.delete(node);
+        _transientPreviewUrls.delete(u);
+        try { URL.revokeObjectURL(u); } catch { /* 已释放忽略 */ }
+      }
+    }
+    if (!_previewUrlOwner.size) {
+      _previewUrlObserver.disconnect();
+      _previewUrlObserver = null;
+    }
+  });
+  _previewUrlObserver.observe(document.body, { childList: true, subtree: true });
+}
+function trackTransientPreviewUrl(url, owner) {
+  if (!url) return url;
+  _transientPreviewUrls.add(url);
+  if (owner && owner.nodeType === 1) {
+    _previewUrlOwner.set(owner, url);
+    ensurePreviewUrlObserver();
+  }
+  return url;
+}
+function revokeTransientPreviewUrls() {
+  for (const u of _transientPreviewUrls) { try { URL.revokeObjectURL(u); } catch { /* 已释放忽略 */ } }
+  _transientPreviewUrls.clear();
+  _previewUrlOwner.clear();
+  if (_previewUrlObserver) { _previewUrlObserver.disconnect(); _previewUrlObserver = null; }
+}
+function revokeFilePreviewUrls() {
+  for (const u of _filePreviewUrls) { try { URL.revokeObjectURL(u); } catch { /* 已释放忽略 */ } }
+  _filePreviewUrls = [];
+}
 function renderOutFiles(container, files) {
   if (!container) return;
   const old = container.querySelector(".io-out-files");
   if (old) old.remove();
-  for (const u of _filePreviewUrls) { try { URL.revokeObjectURL(u); } catch { /* 已释放忽略 */ } }
-  _filePreviewUrls = [];
+  revokeFilePreviewUrls();
   if (!Array.isArray(files) || !files.length) return;
   const box = el("div", { class: "io-out-files", style: "display:flex;flex-direction:column;gap:6px;margin-top:10px;align-items:flex-start" });
   for (const { bytes, mime, name } of productFileEntries({ files })) {
     const row = el('div', { class: 'io-out-file-row' },
       el('div', { class: 'io-out-file-meta' }, name,
         el('span', { class: 'io-out-file-type' }, `${mime || 'application/octet-stream'} · ${fmtByteSize(bytes.length)}`)));
-    if (mime && mime.startsWith("image/")) {
+    if (mime && mime.startsWith("image/") && mediaRenderPlan(mime, bytes.length) === "inline-image") {
       const preview = el('details', {}, el('summary', {}, t('ui.file.viewTitle')));
       let image = null;
       const loadPreview = () => {
@@ -2994,8 +3281,8 @@ function renderOutFiles(container, files) {
         image = el('img', {
           class: 'io-out-file-preview', src: url, alt: name,
           style: 'max-width:100%;max-height:240px;object-fit:contain;cursor:zoom-in;border-radius:var(--r-md)',
-          ...keyBtn(() => openImageLightbox(url, name)),
-          onclick: () => openImageLightbox(url, name),
+          ...keyBtn(() => openImageLightbox(url, name, { bytes, mime })),
+          onclick: () => openImageLightbox(url, name, { bytes, mime }),
         });
         preview.append(image);
       };
@@ -3013,40 +3300,61 @@ function renderOutFiles(container, files) {
   if (box.children.length) container.append(box);
 }
 
-// 输出区图片渲染：扫描 op 输出文本里的 data:image/*;base64,...（出图类 op 约定：
-// qrGen 二维码 / gifFrames 逐帧 / mcMap / bin2img / imgFft / spectrogram 等），
-// 逐个渲染成可见缩略图 + 下载按钮，点缩略图走灯箱放大。无匹配则清空媒体区。
-const OUT_IMG_RE = /data:image\/(?:png|jpe?g|gif|webp|bmp);base64,[A-Za-z0-9+/]+=*/g;
+// 输出区图片渲染：扫描 op 输出文本里的 data:*;base64,...（出图类 op 约定：
+// qrGen 二维码 / gifFrames 逐帧 / mcMap / bin2img / imgFft / spectrogram 等）。
+// 超过 128KB（解码后）一律不创建 `<img>`，只给文件名/大小/下载按钮；≤128KB 仍内联缩略图。
 function renderOutMedia(container, text) {
   if (!container) return;
+  // 输出区重渲染 = 旧产物关闭：先释放文件预览 URL（图片节点马上会被清空）。
+  revokeFilePreviewUrls();
   container.innerHTML = "";
   if (!text) return;
-  const urls = String(text).match(OUT_IMG_RE);
-  if (!urls || !urls.length) return;
+  const plan = planDataUrlMedia(text);
+  if (!plan.length) return;
   const grid = el("div", { class: "io-out-media-grid", style: "display:flex;flex-wrap:wrap;gap:12px;margin-top:8px" });
-  const multi = urls.length > 1;
-  urls.forEach((url, i) => {
-    const img = el("img", Object.assign({
-      class: "io-out-media-img", src: url, alt: "", loading: "lazy",
-      "aria-label": t("ui.file.viewTitle"),
-      style: "max-width:180px;max-height:180px;cursor:zoom-in;border-radius:6px;image-rendering:pixelated;background:#fff",
-    }, keyBtn(() => openImageLightbox(url, ""))));
-    img.addEventListener("click", () => openImageLightbox(url, ""));
+  plan.forEach(({ url, mime, size, kind }, i) => {
+    const name = outMediaName(i + 1, mime);
+    const sizeLabel = size == null ? "?" : fmtByteSize(size);
     const dl = el("button", {
       type: "button", class: "file-section-act",
-      onclick: (e) => { e.stopPropagation(); cloudWarnGate(() => downloadBytes(dataUrlToBytes(url), (state.opId || "image") + (multi ? "_" + (i + 1) : "") + ".png", mimeOfDataUrl(url))); },
-    }, msym("download", "file-act-glyph"), el("span", {}, t("ui.op.export")));
-    grid.append(el("figure", { class: "io-out-media-cell", style: "display:flex;flex-direction:column;gap:4px;align-items:center;margin:0" }, img, dl));
+      "aria-label": `${t("ui.outFiles.download")} ${name} (${sizeLabel})`,
+      onclick: (e) => { e.stopPropagation(); cloudWarnGate(() => downloadBytes(dataUrlToBytes(url), name, mime)); },
+    }, msym("download", "file-act-glyph"),
+       el("span", {}, kind === "inline-image" ? t("ui.op.export") : t("ui.outFiles.download")));
+    if (kind === "inline-image") {
+      const img = el("img", Object.assign({
+        class: "io-out-media-img", src: url, alt: name, loading: "lazy",
+        "aria-label": t("ui.file.viewTitle"),
+        style: "max-width:180px;max-height:180px;cursor:zoom-in;border-radius:6px;image-rendering:pixelated;background:#fff",
+      }, keyBtn(() => openImageLightbox(url, name))));
+      img.addEventListener("click", () => openImageLightbox(url, name));
+      grid.append(el("figure", { class: "io-out-media-cell", style: "display:flex;flex-direction:column;gap:4px;align-items:center;margin:0" }, img, dl));
+      return;
+    }
+    const meta = el("div", {
+      class: "io-out-media-file",
+      style: "max-width:220px;padding:8px 10px;border:1px solid var(--outline);border-radius:6px;background:var(--surface-2)",
+    },
+      el("div", { style: "font-weight:600;word-break:break-all" }, name),
+      el("div", { style: "font-size:.85em;opacity:.8" }, `${mime} · ${sizeLabel}`));
+    grid.append(el("figure", { class: "io-out-media-cell", style: "display:flex;flex-direction:column;gap:4px;align-items:center;margin:0" }, meta, dl));
   });
-  container.append(grid);
+  if (grid.children.length) container.append(grid);
 }
 
 // 图片灯箱：全屏遮罩内居中大图，点击遮罩/图片或 Esc 关闭。
 // 与 openSectionView 的小编辑弹窗分开——灯箱要尽量大 + 高保真渲染（不套 stego 的 pixelated）。
-function openImageLightbox(url, alt) {
+function openImageLightbox(url, alt, opts = {}) {
   const previousFocus = document.activeElement;
+  // 灯箱自己有独立的 objectURL 时才在关闭时 revoke；dataURL / 调用方共享的 URL 不动，
+  // 避免关闭灯箱把页面上仍在用的内联预览图打成裂图。
+  let ownUrl = null;
+  if (opts.bytes) {
+    const bytes = opts.bytes instanceof Uint8Array ? opts.bytes : new Uint8Array(opts.bytes);
+    ownUrl = URL.createObjectURL(new Blob([bytes], { type: opts.mime || "image/png" }));
+  }
   const overlay = el("div", { class: "img-lightbox", role: "dialog", "aria-modal": "true", "aria-label": alt || t("ui.file.viewTitle") });
-  const img = el("img", { class: "img-lightbox-img", src: url, alt: alt || "" });
+  const img = el("img", { class: "img-lightbox-img", src: ownUrl || url, alt: alt || "" });
   const closeBtn = el("button", { type: "button", class: "img-lightbox-close", title: t("ui.expand.cancel"), onclick: close }, msym("close"));
   overlay.append(img, closeBtn);
   document.body.append(overlay);
@@ -3056,9 +3364,31 @@ function openImageLightbox(url, alt) {
     closed = true;
     if (lifecycle) { lifecycle.release(); lifecycle = null; }
     overlay.classList.add("img-lightbox-closing");
-    setTimeout(() => overlay.remove(), 250);
+    setTimeout(() => {
+      overlay.remove();
+      if (ownUrl) {
+        try { URL.revokeObjectURL(ownUrl); } catch { /* 已释放忽略 */ }
+        ownUrl = null;
+      }
+    }, 250);
   }
   let lifecycle = attachModalLifecycle(overlay, { dialog: overlay, onClose: close, closeOnBackdrop: "always", initialFocus: closeBtn, restoreFocusTo: previousFocus });
+}
+
+// 大文件字节 → hex：LUT + 分块拼接，避免 10MB 逐字节 `s += ...` 的 O(n²) 拷贝。
+const HEX_LUT = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, "0"));
+const HEX_CHUNK = 8192;
+function bytesToHexFast(bytes) {
+  const n = bytes.length;
+  if (!n) return "";
+  let out = "";
+  for (let start = 0; start < n; start += HEX_CHUNK) {
+    const end = Math.min(start + HEX_CHUNK, n);
+    const parts = new Array(end - start);
+    for (let i = start; i < end; i++) parts[i - start] = HEX_LUT[bytes[i]];
+    out += parts.join("");
+  }
+  return out;
 }
 
 // 给任意 textarea 挂「拖入文件」能力（op 输入框继承首页智能框）：
@@ -3094,9 +3424,7 @@ async function loadFileIntoArea(ta, f, onLoaded) {
     ta._isFilePlaceholder = false;
     toast(t("ui.op.droppedText", f.name));
   } else {
-    let hex = "";
-    for (let i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, "0");
-    ta.value = hex;
+    ta.value = bytesToHexFast(bytes);
     ta._isFilePlaceholder = false;
     toast(t("ui.op.droppedHex", f.name));
   }
@@ -3144,7 +3472,9 @@ function attachDropDecode(ta, onLoaded, batchCtx) {
 // Shared by workspace family tabs and the search index.
 const FAM_LBL_ZH = { "fam.lbl.attack": "重用 k 攻击", "fam.lbl.sharedPub": "由公钥推导", "fam.lbl.homAdd": "同态加", "fam.lbl.scan": "扫描", "fam.lbl.formatBrute": "爆破", "fam.lbl.smartReport": "智能报告", "fam.lbl.rail": "经典栅栏", "fam.lbl.redefence": "Redefence 重排", "fam.lbl.compress": "压缩", "fam.lbl.decompress": "解压" };
 // 弹簧动效总开关：默认开（产品负责人 2026-09-12 真机验演示后批准第一批灰度）；'0'=整体回退 CSS 动画
-document.documentElement.classList.toggle("spring-motion", localStorage.getItem("ebctf.springMotion") !== "0");
+let _springMotionOn = true;
+try { _springMotionOn = localStorage.getItem("ebctf.springMotion") !== "0"; } catch { /* storage 被禁：用默认开 */ }
+document.documentElement.classList.toggle("spring-motion", _springMotionOn);
 initMotionPreferences();
 initOpLayout();
 initSharedControls();
@@ -3678,11 +4008,11 @@ function renderOp() {
   }
   const chainAct = el("button", { class: "act-btn io-chain", title: t("ui.op.chainToInput"), "aria-label": t("ui.op.chainToInput") },
     msym("swap_vert"));
-  chainAct.addEventListener("click", () => { inArea.value = outArea.value; invalidateFileBytes(inArea); convert(); });
+  chainAct.addEventListener("click", () => { inArea.value = outAreaFullText(outArea); invalidateFileBytes(inArea); convert(); });
 
   const swapAct = el("button", { class: "act-btn io-swap", title: t("ui.op.swap"), "aria-label": t("ui.op.swap") }, msym("sync_alt"));
   swapAct.addEventListener("click", () => {
-    const input = inArea.value, output = outArea.value;
+    const input = inArea.value, output = outAreaFullText(outArea);
     _convSeq++;
     _lastOpOutput = null;
     cancelOpRun();
@@ -3819,8 +4149,8 @@ function renderOp() {
     el("div", { class: "io-pane io-pane-output" },
       createIoEditorFrame(t('ui.op.outTitle'),
         el("div", { class: "io-pane-tools" },
-          toolBtn("content_copy", t("ui.op.copy"), () => { navigator.clipboard?.writeText(outArea.value); toast(t("ui.toast.copied")); }),
-          toolBtn("download", t("ui.op.export"), () => exportTextAsFile(outArea.value)),
+          toolBtn("content_copy", t("ui.op.copy"), () => { navigator.clipboard?.writeText(outAreaFullText(outArea)); toast(t("ui.toast.copied")); }),
+          toolBtn("download", t("ui.op.export"), () => exportTextAsFile(outAreaFullText(outArea))),
           extraOutputTools,
         ),
       outArea,
@@ -4314,20 +4644,30 @@ const REVEALABLE_KEY_RE = /^(key|keys|dict|seed|salt|keyword|alphabet|pass|pwd|p
 function renderParam(op, d) {
   const wrap = el("div", { class: "param" });
   const id = "p_" + d.key;
+  // labelKey 优先，缺失/未翻译时回退 core 里的中文 label；选项同理。
+  const plabel = (x) => {
+    if (!x) return "";
+    if (x.labelKey) {
+      const s = t(x.labelKey);
+      if (s && s !== x.labelKey) return s;
+    }
+    return x.label != null ? x.label : "";
+  };
+  const ptext = (x) => (x && typeof x === "object" ? (x.label != null || x.labelKey ? plabel(x) : String(x.value ?? x)) : String(x));
   if (d.type === "bool") {
     const cb = el("input", { type: "checkbox", id });
     cb.checked = !!state.params[d.key];
     cb.addEventListener("change", () => { state.params[d.key] = cb.checked; convert("param"); });
     wrap.append(
       el("label", { class: "switch", for: id }, cb, el("span", { class: "track" }), el("span", { class: "knob" })),
-      el("label", { for: id }, d.label),
+      el("label", { for: id }, plabel(d)),
     );
   } else if (d.type === "select") {
     const sel = el("select", { id });
-    for (const o of d.options || []) sel.append(el("option", { value: o.value ?? o }, o.label ?? o));
+    for (const o of d.options || []) sel.append(el("option", { value: o.value ?? o }, ptext(o)));
     sel.value = state.params[d.key];
     sel.addEventListener("change", () => { state.params[d.key] = sel.value; convert("param"); });
-    wrap.append(el("label", { for: id }, d.label), sel);
+    wrap.append(el("label", { for: id }, plabel(d)), sel);
   } else if (d.type === "number") {
  // M3 stepper 自实现，替代浏览器原生 spinner。[−][input][＋] flex 容器。
     const min = d.min ?? null, max = d.max ?? null, step = d.step ?? 1;
@@ -4361,8 +4701,8 @@ function renderParam(op, d) {
       return b;
     };
     const box = el("div", { class: "stepper" }, btn("remove", -1, "减"), inp, btn("add", 1, "加"));
-    if (numericSecret) wrap.append(el("label", { for: id }, d.label), el("div", { class: "param-bigbox secret-field" }, box, secretEyeButton(() => inp, () => wrap, { defaultHidden: true })));
-    else wrap.append(el("label", { for: id }, d.label), box);
+    if (numericSecret) wrap.append(el("label", { for: id }, plabel(d)), el("div", { class: "param-bigbox secret-field" }, box, secretEyeButton(() => inp, () => wrap, { defaultHidden: true })));
+    else wrap.append(el("label", { for: id }, plabel(d)), box);
   } else if (d.ui === "bigText" || d.type === "textarea") {
     wrap.classList.add("param-big");
     if (d.sensitive) wrap.classList.add("param-sensitive");
@@ -4379,7 +4719,7 @@ function renderParam(op, d) {
     btn.addEventListener("click", () => {
       openExpandModal(ta.value, value => {
         setValue(value);
-      }, { modalTitle: d.label, cancelLabel: t("ui.expand.cancel"), saveLabel: t("ui.expand.save") });
+      }, { modalTitle: plabel(d), cancelLabel: t("ui.expand.cancel"), saveLabel: t("ui.expand.save") });
     });
     const box = el("div", { class: "param-bigbox" + (d.sensitive ? " secret-field" : "") }, ta, d.sensitive ? secretEyeButton(() => ta, () => wrap) : null);
     if (d.acceptFile) {
@@ -4392,13 +4732,13 @@ function renderParam(op, d) {
       box.append(ub, fi);
     }
     box.append(btn);
-    wrap.append(el("label", { for: id }, d.label), box);
+    wrap.append(el("label", { for: id }, plabel(d)), box);
   } else if (d.type === "password") {
     const inp = makeMaskedInput({ id, placeholder: d.placeholder || "", autocomplete: "off", spellcheck: "false" });
     inp.value = state.params[d.key] ?? "";
     inp.addEventListener("input", () => { state.params[d.key] = inp.value; convert("param"); });
     if (d.acceptFile) attachTextFileDrop(inp, (v) => { inp.value = v; state.params[d.key] = v; convert("param"); });
-    wrap.append(el("label", { for: id }, d.label),
+    wrap.append(el("label", { for: id }, plabel(d)),
       el("div", { class: "param-bigbox secret-field" }, inp, secretEyeButton(() => inp, () => wrap)));
   } else if (d.type === "image") {
  // 图片参数：可点按钮选文件、可直接拖图进框，也可粘贴 base64/dataURL（值仍是字符串）
@@ -4424,12 +4764,12 @@ function renderParam(op, d) {
       const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
       if (f) setFrom(f);
     });
-    wrap.append(el("label", { for: id }, d.label), el("div", { class: "param-bigbox" }, inp, btn), fi);
+    wrap.append(el("label", { for: id }, plabel(d)), el("div", { class: "param-bigbox" }, inp, btn), fi);
   } else if (EXPANDABLE_KEYS.has(d.key)) {
  // 密钥/IV/字典/替换表/crib 等长文本，用可展开输入框（加宽 + 展开 modal）
     const box = expandableInput({
       id, type: "text", value: state.params[d.key] ?? "", placeholder: d.placeholder || "",
-      title: t("ui.expand.title"), modalTitle: d.label,
+      title: t("ui.expand.title"), modalTitle: plabel(d),
       cancelLabel: t("ui.expand.cancel"), saveLabel: t("ui.expand.save"),
       onInput: (v) => { state.params[d.key] = v; convert("param"); },
     });
@@ -4439,9 +4779,9 @@ function renderParam(op, d) {
       if (MASK_CSS_SUPPORTED && expInput) expInput.dataset.maskCss = "1";
       const defaultHidden = !!d.sensitive;
       if (defaultHidden && expInput) applyMask(expInput, true);
-      wrap.append(el("label", { for: id }, d.label), el("div", { class: "param-bigbox secret-field" }, box, secretEyeButton(() => expInput, () => box, { defaultHidden })));
+      wrap.append(el("label", { for: id }, plabel(d)), el("div", { class: "param-bigbox secret-field" }, box, secretEyeButton(() => expInput, () => box, { defaultHidden })));
     } else {
-      wrap.append(el("label", { for: id }, d.label), box);
+      wrap.append(el("label", { for: id }, plabel(d)), box);
     }
   } else {
     const numericSecret = d.type === "number" && (!!d.sensitive || REVEALABLE_KEY_RE.test(String(d.key)));
@@ -4474,16 +4814,16 @@ function renderParam(op, d) {
             toast(t("ui.op.localFontsDone").replace("{0}", seen.size));
           } catch (e) { toast(t("ui.op.localFontsFail").replace("{0}", String(e && e.message || e))); }
         });
-        wrap.append(el("label", { for: id }, d.label), el("div", { class: "param-bigbox" }, inp, fb, dl));
+        wrap.append(el("label", { for: id }, plabel(d)), el("div", { class: "param-bigbox" }, inp, fb, dl));
         return wrap;
       }
     }
     if (maskText || numericSecret) {
-      wrap.append(el("label", { for: id }, d.label), el("div", { class: "param-bigbox secret-field" }, inp, secretEyeButton(() => inp, () => wrap, { defaultHidden: true })));
+      wrap.append(el("label", { for: id }, plabel(d)), el("div", { class: "param-bigbox secret-field" }, inp, secretEyeButton(() => inp, () => wrap, { defaultHidden: true })));
     } else if (revealText) {
-      wrap.append(el("label", { for: id }, d.label), el("div", { class: "param-bigbox secret-field" }, inp, secretEyeButton(() => inp, () => wrap, { defaultHidden: false })));
+      wrap.append(el("label", { for: id }, plabel(d)), el("div", { class: "param-bigbox secret-field" }, inp, secretEyeButton(() => inp, () => wrap, { defaultHidden: false })));
     } else {
-      wrap.append(el("label", { for: id }, d.label), inp);
+      wrap.append(el("label", { for: id }, plabel(d)), inp);
     }
     if (dl) wrap.append(dl);
   }
@@ -4525,23 +4865,38 @@ function rememberOpOutput(opId, value, outText, outFiles, params) {
   _lastOpOutput = { opId, value, outText, outFiles, params: p, runId: newDraftIdentity() };
 }
 
+function outAreaFullText(outArea) {
+  if (!outArea) return "";
+  if (outArea.__fullText != null && outArea.value === outArea.__maskedText) return outArea.__fullText;
+  return outArea.value;
+}
+
 function applyOpOutput(entry) {
   const outArea = document.getElementById("ioOut");
   if (!outArea || !entry) return;
   const inArea = document.getElementById("ioIn");
   const ctl = outArea.__ioCoding || (inArea && inArea.__ioCoding);
+  let displayText;
   if (ctl) {
     const formatted = ctl.formatOutput(entry.value, { params: entry.params, op: getOp(entry.opId) });
-    outArea.value = formatted.text;
+    displayText = formatted.text;
     if (formatted.warnings && formatted.warnings.length) ctl.reportWarnings(formatted.warnings);
   } else {
-    outArea.value = entry.outText;
+    displayText = entry.outText;
   }
+  const masked = maskOversizedOutputText(displayText);
+  const files = entry.outFiles ? entry.outFiles.slice() : [];
+  if (masked.files.length) files.push(...masked.files);
+  outArea.__maskedText = masked.masked ? masked.text : null;
+  outArea.__fullText = masked.masked ? displayText : null;
+  outArea.value = masked.text;
   outArea.style.color = "";
   outArea.classList.remove("error");
   const mediaBox = document.getElementById("ioOutMedia");
-  renderOutMedia(mediaBox, entry.outText);
-  renderOutFiles(mediaBox, entry.outFiles);
+  // 掩码后的文本已把 >128KB 的 data URL 换成提示 + 文件产物，避免媒体区重复下载按钮；
+  // 未掩码时保持原行为（优先用 outText，兼容非文本视图）。
+  renderOutMedia(mediaBox, masked.masked ? masked.text : (entry.outText || masked.text));
+  renderOutFiles(mediaBox, files);
 }
 
 function rerenderOpOutput() {
@@ -4639,6 +4994,8 @@ async function convert(src) {
     ? (text, p) => runCustomWithTimeout({
         code: ci.code, dir: operationDir, input: text, params: p, rawBytes: p.rawBytes || null,
       }).then((r) => {
+        // 主线程降级没有超时硬杀能力：结果里带 warning 时必须让用户看见，不能只写 console。
+        if (r.warning) { try { ioCtl?.reportWarnings?.([r.warning]); } catch { /* 无输入工具栏时忽略 */ } }
         if (!r.ok) throw new Error(r.error + (r.line ? `（第 ${r.line} 行）` : ""));
         return r.out;
       })
@@ -4693,7 +5050,7 @@ async function convert(src) {
     outArea.style.color = "";
     outArea.classList.remove("error");
     renderOutMedia(document.getElementById("ioOutMedia"), "");
-    const out = await fn(text, callParams);
+    const out = await withLimitContext(callParams, () => fn(text, callParams));
     if (seq !== _convSeq || !outArea.isConnected) return; // 有更新的一次转换，丢弃本次
     // 产物协议：返回 {text, files:[...]} 对象 → text 进 outArea，files 渲染下载按钮；
     // 字符串返回走旧路径完全不变。
@@ -4841,6 +5198,7 @@ try {
 
 let _pwaRefreshPending = false;
 let _pwaBarNotified = false;
+let _pwaDismissedWaiting = null;  // 用户已关闭提示条的 waiting worker
 
 // 温和版更新提示：检测到新版本 SW 已安装待命时，给可点击的更新提示条；
 // 用户点「刷新」才走 SKIP_WAITING → controllerchange → reload，绝不自动刷新。
@@ -4852,6 +5210,8 @@ function notifyNewVersion(reg, attempt) {
     if ((attempt || 0) < 20) setTimeout(() => notifyNewVersion(reg, (attempt || 0) + 1), 400);
     return;
   }
+  // 同一 waiting worker 被用户关闭过就不再骚扰；出现新版本（worker 对象变化）仍会提示。
+  if (waiting === _pwaDismissedWaiting) return;
   _pwaBarNotified = true;
   const bar = el("div", { class: "pwa-update-bar" },
     el("span", { class: "pwa-update-text" }, t("ui.pwa.updateBar")),
@@ -4865,7 +5225,12 @@ function notifyNewVersion(reg, attempt) {
     }, t("ui.pwa.updateRefresh")),
     el("button", {
       class: "pwa-update-close", type: "button", "aria-label": "×",
-      onclick: () => bar.remove(),
+      onclick: () => {
+        // 关闭只重置“已提示”标志；记住这个 waiting 版本，后续新版本仍能弹条。
+        _pwaDismissedWaiting = waiting;
+        _pwaBarNotified = false;
+        bar.remove();
+      },
     }, "×"),
   );
   document.body.append(bar);
@@ -5541,8 +5906,8 @@ function renderAbout(host) {
     return sec;
   };
 
- // op 统计（从 registry 动态取，含 10 大类 + 本地桥细分类）
-  const opCount = OPS.length;
+  // op 统计（从 registry 动态取，含 10 大类 + 本地桥细分类）；虚拟 cryptoTryAll 不计入。
+  const opCount = OPS.filter(isCountedOp).length;
   const catCount = CATEGORIES.filter((c) => c.id !== "home").length;
 
  // ⑤ 技术栈 + 功能规模 + 隐私（键值行）
@@ -5640,6 +6005,7 @@ function renderAbout(host) {
     { name: "二月犬", tierKey: "ui.about.tierContributor", note: String(getLocale()).toLowerCase().startsWith("zh") ? "提出哦齁编码、哈基米加密与杂鱼密语" : "Suggested the Ohou, Hakimi and Zako meme codecs" },
     { name: "橙子", tierKey: "ui.about.tierContributor", note: String(getLocale()).toLowerCase().startsWith("zh") ? "提出多个 Misc 逻辑代码修复" : "Proposed multiple Misc logic fixes" },
     { name: "Tokeii", tierKey: "ui.about.tierContributor", note: String(getLocale()).toLowerCase().startsWith("zh") ? "贡献改版图标，提供各类识别模型权重支持，项目下游优化作者" : "Contributed the redesigned icon and downstream direction suggestions" },
+    { name: "江北", tierKey: "ui.about.tierFeeder", note: String(getLocale()).toLowerCase().startsWith("zh") ? "提供海量词元用于项目开发" : "Provided massive token credits for project development" },
     { name: "Jason", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribJason" },
   ];
   for (const c of OTHER_CONTRIBUTORS) {
@@ -5854,9 +6220,11 @@ function initNavResizer() {
 // ============ 启动 ============
 // 应用内减动效开关（默认关＝动画照常；localStorage 'ebctf.reduceMotion'='1' 开启）。
 // 必须在任何渲染前落类，保证首屏动画策略一致。OS 偏好不再自动接管（产品负责人 2026-09-09 指示）。
-if (localStorage.getItem("ebctf.reduceMotion") === "1") {
-  document.documentElement.classList.add("reduce-motion");
-}
+try {
+  if (localStorage.getItem("ebctf.reduceMotion") === "1") {
+    document.documentElement.classList.add("reduce-motion");
+  }
+} catch { /* storage 被禁：默认不开启减动效，不白屏 */ }
 initPwa();
 // 加载屏遮白屏。模块顶层 import 已完成才执行到这，故进度从「初始化界面」起步。
 setLoadingProgress(60, "ui.loading.ui");

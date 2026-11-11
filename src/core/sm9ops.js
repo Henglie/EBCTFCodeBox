@@ -318,8 +318,10 @@ function rawBytesOrNull(p, text) {
 function parseScalarHex(s, label) {
   const t = String(s == null ? "" : s).trim();
   if (!t) throw new Error(`缺少参数 ${label}（hex）`);
-  const clean = t.replace(/[^0-9a-fA-F]/g, "");
+  const clean = t.replace(/[\s:]/g, "").replace(/^0[xX]/, "");
   if (!clean) throw new Error(`参数 ${label} 不是合法 hex`);
+  if (!/^[0-9a-fA-F]+$/.test(clean)) throw new Error(`参数 ${label} 含非 hex 字符（仅允许 0-9a-fA-F、空白、冒号、0x 前缀）`);
+  if (clean.length % 2) throw new Error(`参数 ${label} 长度必须为偶数（当前 ${clean.length} 个 hex 字符）`);
   const v = BigInt("0x" + clean);
   if (v <= 0n || v >= N) throw new Error(`参数 ${label} 须在 [1, n-1]（32 字节 hex）`);
   return v;
@@ -329,8 +331,9 @@ function parseOptionalScalarHex(s, label) {
   return t ? parseScalarHex(t, label) : null;
 }
 function parseHid(s, def) {
-  const t = String(s == null ? "" : s).trim().replace(/^0[xX]/, "").replace(/[^0-9a-fA-F]/g, "");
+  const t = String(s == null ? "" : s).trim().replace(/[\s:]/g, "").replace(/^0[xX]/, "");
   if (!t) return def;
+  if (!/^[0-9a-fA-F]{1,2}$/.test(t)) throw new Error("SM9：hid 须为 1 字节 hex（1~2 个 hex 字符，如 01/02/03）");
   const v = parseInt(t, 16);
   if (!Number.isInteger(v) || v < 0 || v > 255) throw new Error("SM9：hid 须为 1 字节（hex，如 01/02/03）");
   return v;

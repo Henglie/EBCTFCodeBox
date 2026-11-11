@@ -15,6 +15,7 @@ import { mp3stegoDecode } from "./mp3stego.js";
 import { buildZip } from "./batchRun.js";
 import { alphaStripScan } from "./alphaStrip.js";
 import { carve } from "./foremostJs.js";
+import { isLimitError } from "./limitGuard.js";
 
 const MAX_TEXT = 6000;
 
@@ -161,6 +162,8 @@ export async function scanStegoFile(bytes, name = "", opts = {}) {
       } catch (e) {
         out = null;
         err = String((e && e.message) || e);
+        // 用户取消/硬上限时停止该算法的其余 key，避免重复弹确认或继续重跑。
+        if (isLimitError(e)) break;
       }
       const t = typeof out === "string" ? out : (out && out.text) || "";
       const timed = /timeout/i.test(err);

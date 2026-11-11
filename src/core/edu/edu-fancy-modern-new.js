@@ -120,7 +120,7 @@ export default {
     tips: [
       "CTF 题面给 Malbolge 源码求输出时用本 op；题面只问装载形式/合法性时用「Malbolge 识别」。",
       "非停机程序（如无限回显的 cat 变体）会被步数上限截停并明确报错，这是护栏不是故障。",
-      "实现对拍 zb3/malbolge-vm（malbolge-tools 参照页内嵌 VM，MIT）七个官方样例逐字节一致。",
+      "实现对拍 malbolge-vm（malbolge-tools 参照页内嵌 VM，MIT）七个官方样例逐字节一致。",
     ],
     aka: ["Malbolge 执行", "malbolge 执行器", "malbolge interpreter", "malbolge run", "malbolge 解释器",
           "malbolge vm", "malbolge exec", "马尔博尔赫", "地狱语言执行", "深奥语言解释器", "esolang 解释器", "Olmstead"],

@@ -13,13 +13,14 @@
  *   6. p−1 / p+1 B-光滑（最大素因子 ≤ B；试除 + Pollard rho 分解后判定，Pollard p−1 /
  *      Williams p+1 口径）
  *   7. 概率素数档：直接复用 bigmath.isPrimeBigInt（n < 3.3e24 用 13 个固定质数 witness
- *      确定性判定（FIPS 186-4 Table C.2），更大 n 取前 32 个小质数固定基（FIPS 186-5
- *      App. B，误判 < 4^-32）），本库不重写素性检验器。
+ *      确定性判定（FIPS 186-4 Table C.2），更大 n 取前 32 个小质数固定基（轮数口径参考
+ *      FIPS 186-5 App. B；固定基不具备随机基的严格 4^-t 概率界）），本库不重写素性检验器。
  *
  * 复用（不重写）：
  *   - bigmath.js：isPrimeBigInt / factorBigInt / smallPrimesList / modPowBig / bitLenOf
- *   - primeGen.js：随机素数生成口径（本库的 generatePrimeBudgeted 为其可中断薄封装，
- *     素性判定共用 bigmath.isPrimeBigInt 同一套 Miller-Rabin 例程）
+ *   - primeGen.js：随机素数生成口径（本库的 generatePrimeBudgeted 为其可中断薄封装；
+ *     primeGen/primeTest 为 64 位内 7 确定性基、3.3e24 内 13 固定基、更大 n 固定基 + 随机基；
+ *     本文件 judgeAll 的素性判定仍走 bigmath.isPrimeBigInt）
  *
  * 判定依据出处（逐项详见配套文档）：
  *   - Lucas-Lehmer 定理（E. Lucas 1876/1878；D. H. Lehmer 1930s）、GIMPS 已知梅森素数表、
@@ -581,7 +582,7 @@ export function judgeAll(n, opts = {}) {
   const prime = isPrimeBigInt(a);
   lines.push(`素性：${prime ? "素数" : "合数"}（Miller-Rabin：${a < MR13_BOUND
     ? "n < 3.3e24，13 个固定质数 witness 确定性判定（FIPS 186-4 Table C.2）"
-    : "n 超过确定性界，前 32 个小质数固定基轮数档（FIPS 186-5 App. B，误判 < 4^-32）"}）`);
+    : "n 超过确定性界，前 32 个小质数固定基轮数档（轮数口径参考 FIPS 186-5 App. B；固定基不具备随机基的严格 4^-t 概率界，属工程近似）"}）`);
   lines.push(`位长：${bitLenOf(a)} 位（二进制）`);
   lines.push(`[1] ${mersenneJudge(a).detail}`);
   if (!prime) {
@@ -596,8 +597,8 @@ export function judgeAll(n, opts = {}) {
   }
   lines.push(`[4] ${fermatJudge(a).detail}`);
   lines.push(`[4b] ${pepinFormJudge(a).detail}`);
-  lines.push("[7] 概率素数档说明：见上方素性行——小 n 确定性、大 n 轮数档（FIPS 186-5 App. B）；"
-    + "BPSW（MR base-2 + Lucas）无已知反例，本工具未内置，口径以 primeTest 为准");
+  lines.push("[7] 概率素数档说明：见上方素性行——n < 3.3e24 为确定性判定，更大 n 为本工具固定基多轮（非严格随机基概率界）；"
+    + "BPSW（MR base-2 + Lucas）本工具未内置；更强概率判定请用 primeTest/primeGen 的固定基+随机基多轮 MR");
   return lines;
 }
 

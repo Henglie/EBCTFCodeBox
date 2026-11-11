@@ -111,6 +111,7 @@ const RECIPE_FALLBACK = {
   "ui.recipe.autoRunOff": "自动执行已关闭：改动后点 Bake 或 Ctrl+Enter 运行",
   "ui.recipe.staleLarge": "输入较大，已暂停自动执行。改完点「执行！（Bake！）」或 Ctrl+Enter。",
   "ui.recipe.staleHeavy": "链中含重运算节点，已暂停自动执行。点「执行！（Bake！）」或 Ctrl+Enter 手动运行。",
+  "ui.recipe.manualOnly": "配方含会联网或持久化全局随机配置的操作，已跳过自动执行；请手动点击「执行！（Bake！）」运行。",
   "ui.recipe.staleRunning": "正在执行；本次改动已排队，当前步骤结束后再运行。",
   "ui.recipe.cancel": "取消",
   "ui.recipe.cancelRequested": "已请求取消：同步运算无法中途打断，将在当前步骤结束后停止。",
@@ -365,6 +366,11 @@ function maybeRunChain() {
     setStale("manual");
     return;
   }
+  if (hasManualOnlyNodes()) {
+    setStale("manualOnly");
+    showManualOnlyNotice();
+    return;
+  }
   if (hasHeavyNodes()) {
     setStale("heavy");
     return;
@@ -405,6 +411,7 @@ function reflectPending() {
   const text = document.getElementById("recipeBakeHintText");
   if (!text) return;
   if (_running) text.textContent = tt("ui.recipe.running");
+  else if (_pendingReason === "manualOnly") text.textContent = tt("ui.recipe.manualOnly");
   else if (_pendingReason === "heavy") text.textContent = tt("ui.recipe.staleHeavy");
   else if (_pendingReason === "fileLarge") text.textContent = tf("ui.recipe.staleLargeFile", fmtByteSize(effectiveInputSize()));
   else if (_pendingReason === "large") text.textContent = tt("ui.recipe.staleLarge");
@@ -421,6 +428,31 @@ function nodeIsHeavy(node) {
 }
 function hasHeavyNodes() {
   return rState.nodes.some((n) => !n.disabled && nodeIsHeavy(n));
+}
+// 自动路径禁区：会联网或改写全局随机配置的节点。自动执行一律跳过，手动 Bake 仍可运行。
+export function nodeNeedsManualRun(node) {
+  if (!node || node.disabled) return false;
+  const id = node.opId;
+  const p = node.params || {};
+  if (id === "randBeacon") return p.action === "fetch" || p.allowNetwork === true;
+  if (id === "randomSecure" || id === "randServer") return p.mode === "server" || p.mode === "custom";
+  return false;
+}
+function hasManualOnlyNodes() {
+  return rState.nodes.some((n) => nodeNeedsManualRun(n));
+}
+function showManualOnlyNotice() {
+  const text = tt("ui.recipe.manualOnly");
+  setRunStatus(text, "warn");
+  const steps = document.getElementById("recipeSteps");
+  if (!steps) return;
+  let notice = steps.querySelector(".recipe-manual-notice");
+  if (!notice) {
+    notice = el("div", { class: "recipe-manual-notice", role: "status" }, text);
+    steps.prepend(notice);
+  } else {
+    notice.textContent = text;
+  }
 }
 // 惰载 op 兜底：执行前确保链上真实模块已注册，否则 stub 没有 encode/decode 会误报「no encode」。
 async function ensureChainOpsLoaded() {
@@ -1456,6 +1488,15 @@ const RECIPE_SECRET_KEY_RE = /^(key|keys|dict|seed|salt|keyword|alphabet|pass|pw
 function renderRecipeParam(node, d, i) {
   const wrap = el("div", { class: "recipe-param" });
   const inputId = "rp_" + i + "_" + d.key;
+  const plabel = (x) => {
+    if (!x) return "";
+    if (x.labelKey) {
+      const s = tt(x.labelKey);
+      if (s && s !== x.labelKey) return s;
+    }
+    return x.label != null ? x.label : "";
+  };
+  const ptext = (x) => (x && typeof x === "object" ? (x.label != null || x.labelKey ? plabel(x) : String(x.value ?? x)) : String(x));
   if (d.type === "bool") {
  // M3 switch，替代原生 checkbox
  // sid 用节点下标 i（节点对象无 id 字段），避免同 op 多节点撞 id → label-for 劫持/switch 串台
@@ -1465,14 +1506,14 @@ function renderRecipeParam(node, d, i) {
     cb.addEventListener("change", () => commitRecipeParam(node, d, cb.checked));
     wrap.append(
       el("label", { class: "switch", for: sid }, cb, el("span", { class: "track" }), el("span", { class: "knob" })),
-      el("label", { for: sid }, d.label),
+      el("label", { for: sid }, plabel(d)),
     );
   } else if (d.type === "select") {
     const sel = el("select", { id: inputId });
-    for (const o of d.options || []) sel.append(el("option", { value: o.value ?? o }, o.label ?? o));
+    for (const o of d.options || []) sel.append(el("option", { value: o.value ?? o }, ptext(o)));
     sel.value = node.params[d.key];
     sel.addEventListener("change", () => commitRecipeParam(node, d, sel.value));
-    wrap.append(el("label", { for: inputId }, d.label), sel);
+    wrap.append(el("label", { for: inputId }, plabel(d)), sel);
   } else if (d.type === "number") {
  // M3 stepper 自实现，替浏览器原生 spinner（与 main.js renderParam 同形）。[−][input][＋]
     const min = d.min ?? null, max = d.max ?? null, step = d.step ?? 1;
@@ -1513,8 +1554,8 @@ function renderRecipeParam(node, d, i) {
       return b;
     };
     const box = el("div", { class: "stepper" }, btn("remove", -1, "减"), inp, btn("add", 1, "加"));
-    if (numericSecret) wrap.append(el("label", { for: inputId }, d.label), el("div", { class: "param-bigbox secret-field" }, box, recipeSecretEyeButton(() => inp, { defaultHidden: true })));
-    else wrap.append(el("label", { for: inputId }, d.label), box);
+    if (numericSecret) wrap.append(el("label", { for: inputId }, plabel(d)), el("div", { class: "param-bigbox secret-field" }, box, recipeSecretEyeButton(() => inp, { defaultHidden: true })));
+    else wrap.append(el("label", { for: inputId }, plabel(d)), box);
   } else if (d.ui === "bigText" || d.type === "textarea") {
     // 多行参数：与主 op 页 param-bigta 同形，带展开 modal。
     wrap.classList.add("param-big");
@@ -1535,9 +1576,9 @@ function renderRecipeParam(node, d, i) {
       openExpandModal(ta.value, (value) => {
         ta.value = value;
         commitRecipeParam(node, d, value);
-      }, { modalTitle: d.label, cancelLabel: "取消", saveLabel: "保存" });
+      }, { modalTitle: plabel(d), cancelLabel: "取消", saveLabel: "保存" });
     });
-    wrap.append(el("label", { for: inputId }, d.label),
+    wrap.append(el("label", { for: inputId }, plabel(d)),
       el("div", { class: "param-bigbox" + (secretTa ? " secret-field" : "") },
         ta, secretTa ? recipeSecretEyeButton(() => ta, { defaultHidden: true }) : null, btn));
   } else if (d.type === "image") {
@@ -1577,19 +1618,19 @@ function renderRecipeParam(node, d, i) {
       const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
       if (f) setFrom(f);
     });
-    wrap.append(el("label", { for: inputId }, d.label), el("div", { class: "param-bigbox" }, inp, btn), fi, preview);
+    wrap.append(el("label", { for: inputId }, plabel(d)), el("div", { class: "param-bigbox" }, inp, btn), fi, preview);
   } else if (d.type === "password") {
     // 口令类（type:"password"）：M3 遮罩 + 小眼睛，与主 op 页 renderParam 同口径。
     const inp = makeRecipeMaskedInput({ id: inputId, placeholder: d.placeholder || "", autocomplete: "off", spellcheck: "false" });
     inp.value = node.params[d.key] ?? "";
     inp.addEventListener("input", () => commitRecipeParam(node, d, inp.value));
-    wrap.append(el("label", { for: inputId }, d.label),
+    wrap.append(el("label", { for: inputId }, plabel(d)),
       el("div", { class: "param-bigbox secret-field" }, inp, recipeSecretEyeButton(() => inp, { defaultHidden: true })));
   } else if (d.ui === "expandable" || EXPANDABLE_KEYS.has(d.key)) {
     // 长文本：复用通用可展开输入框（内部自带 editHistory 与 modal 样式）。
     const box = expandableInput({
       id: inputId, type: "text", value: node.params[d.key] ?? "", placeholder: d.placeholder || "",
-      title: "展开编辑", modalTitle: d.label, cancelLabel: "取消", saveLabel: "保存",
+      title: "展开编辑", modalTitle: plabel(d), cancelLabel: "取消", saveLabel: "保存",
       onInput: (v) => commitRecipeParam(node, d, v),
     });
     const secretKey = !!d.sensitive || RECIPE_SECRET_KEY_RE.test(String(d.key || ""));
@@ -1598,10 +1639,10 @@ function renderRecipeParam(node, d, i) {
       const expInput = box.querySelector(".exp-input");
       if (RECIPE_MASK_CSS_SUPPORTED && expInput) expInput.dataset.maskCss = "1";
       if (defaultHidden && expInput) expInput.classList.add("is-masked");
-      wrap.append(el("label", { for: inputId }, d.label),
+      wrap.append(el("label", { for: inputId }, plabel(d)),
         el("div", { class: "param-bigbox secret-field" }, box, recipeSecretEyeButton(() => expInput, { defaultHidden })));
     } else {
-      wrap.append(el("label", { for: inputId }, d.label), box);
+      wrap.append(el("label", { for: inputId }, plabel(d)), box);
     }
   } else {
     const keySecret = RECIPE_SECRET_KEY_RE.test(String(d.key || ""));
@@ -1619,9 +1660,9 @@ function renderRecipeParam(node, d, i) {
       for (const v of d.datalist) dl.append(el("option", { value: String(v) }));
       inp.setAttribute("list", dlId);
     }
-    if (maskText) wrap.append(el("label", { for: inputId }, d.label), el("div", { class: "param-bigbox secret-field" }, inp, recipeSecretEyeButton(() => inp, { defaultHidden: true })));
-    else if (revealText) wrap.append(el("label", { for: inputId }, d.label), el("div", { class: "param-bigbox secret-field" }, inp, recipeSecretEyeButton(() => inp, { defaultHidden: false })));
-    else wrap.append(el("label", { for: inputId }, d.label), inp);
+    if (maskText) wrap.append(el("label", { for: inputId }, plabel(d)), el("div", { class: "param-bigbox secret-field" }, inp, recipeSecretEyeButton(() => inp, { defaultHidden: true })));
+    else if (revealText) wrap.append(el("label", { for: inputId }, plabel(d)), el("div", { class: "param-bigbox secret-field" }, inp, recipeSecretEyeButton(() => inp, { defaultHidden: false })));
+    else wrap.append(el("label", { for: inputId }, plabel(d)), inp);
     if (dl) wrap.append(dl);
   }
   return wrap;
@@ -1907,9 +1948,16 @@ async function runChain(opts = {}) {
   if (!out) return false;
   clearTimeout(_runTimer);
   _runTimer = null;
+  document.querySelectorAll("#recipeSteps .recipe-manual-notice").forEach((n) => n.remove());
   if (_running || _loadingOps) {
     setStale("running");
     setRunStatus(tt("ui.recipe.staleRunning"), "warn");
+    return false;
+  }
+  // 自动路径二次防线：确认延迟窗口内配置未被改成联网/全局随机配置，再真正执行。
+  if (opts.auto && hasManualOnlyNodes()) {
+    setStale("manualOnly");
+    showManualOnlyNotice();
     return false;
   }
 
@@ -2144,6 +2192,7 @@ function ensureRecipeStyle() {
 .recipe-mini-btn.active { color: var(--warning); }
 .recipe-mini-btn:disabled { opacity: .4; cursor: not-allowed; }
 .recipe-run-status { font-size: var(--fs-xs); color: var(--on-surface-var); max-width: 34rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recipe-manual-notice { margin: 0 0 8px; padding: 8px 10px; border-inline-start: 3px solid var(--warning); background: var(--surface-2); color: var(--on-surface-var); font-size: var(--fs-xs); line-height: 1.5; border-radius: 8px; }
 @media (max-width: 860px) { .recipe-run-status { flex-basis: 100%; white-space: normal; } }
 .recipe-help-overlay { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.45); }
 .recipe-help-card { max-width: 560px; width: 100%; max-height: 80vh; overflow: auto; padding: 18px 20px; background: var(--surface-1); color: var(--on-surface); border: 1px solid var(--outline-var); border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.35); }

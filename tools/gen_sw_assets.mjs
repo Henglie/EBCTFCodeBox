@@ -101,24 +101,25 @@ const dropped = tracked.filter(isExcluded);
 
 // ---------------------------------------------------------------------------
 // T709 离线增强包清单：条目与 src/core/offlinePacks.js 的 PACKS 完全一致。
-// rev = 包内 (name + "\0" + bytes) 逐条拼接后的 sha256 前 8 位；缓存名带 rev，
-// 条目一变旧包缓存即失效。包条目不在预缓存清单里，只在用户点安装时由 SW 下载。
+// rev = 包内 (name + "\0" + **文件实际内容**) 逐条拼接后的 sha256 前 8 位；缓存名带 rev，
+// 条目或内容一变旧包缓存即失效。声明 bytes 只用于体积漂移校验，不能代替内容哈希。
+// 包条目不在预缓存清单里，只在用户点安装时由 SW 下载。
 // ---------------------------------------------------------------------------
-const packRev = (p) => {
+const packRev = async (p) => {
   const h = createHash("sha256");
   for (const e of p.entries) {
     h.update(e.name);
     h.update("\0");
-    h.update(String(e.bytes));
+    h.update(await readFile(join(process.cwd(), e.name.slice(1))));
   }
   return h.digest("hex").slice(0, 8);
 };
-const packsOut = PACKS.map((p) => ({
+const packsOut = await Promise.all(PACKS.map(async (p) => ({
   id: p.id,
-  rev: packRev(p),
+  rev: await packRev(p),
   bytes: p.bytes,
   entries: p.entries.map((e) => e.name),
-}));
+})));
 const packsSource = `self.__EBCTF_PACK_REV = ${JSON.stringify(packsOut.map((p) => p.id + ":" + p.rev).join(","))};\n`
   + `self.__EBCTF_PACKS = ${JSON.stringify(packsOut, null, 2)};\n`;
 

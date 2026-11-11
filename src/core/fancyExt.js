@@ -570,7 +570,7 @@ const scytaleDcodeDecode = (cipher, N, { trimFiller = false, filler = "_" } = {}
 
 register({
   id: "scytale", cat: "classic", name: "Scytale 密码棒",
-  desc: "栅格转置；密钥可按栏数或每栏字数解释。编码补 |，解码保留完整格子，不删除真实竖线；原长与补位无法自动区分。dCode 兼容三开关（补位符 _/剥非字母数字/裁尾填充）默认关闭，开启即与 dCode.fr 逐字节同口径（三源对拍 36/36）",
+  desc: "栅格转置；密钥可按栏数或每栏字数解释。编码补 |，解码默认保留完整格子，不删除真实竖线；原长与补位无法自动区分。dCode 兼容三开关（补位符 _/剥非字母数字/裁尾填充）默认关闭，显式开启裁尾填充（dcodeTrim=true）时裁掉尾部补位，与 dCode.fr 逐字节同口径（三源对拍 36/36）",
   params: [
     { key: "column", label: "栏数", type: "number", default: 2, placeholder: "≥1" },
     { key: "keyMode", label: "密钥含义", type: "select", default: "column", options: [{ value: "column", label: "栏数" }, { value: "perCol", label: "每栏字数" }] },
@@ -588,9 +588,22 @@ register({
     return scytaleCrypto(t, Number((p && p.column) ?? 2), false, p?.keyMode);
   },
   decode: (t, p) => {
-    if (p && p.dcodeTrim) {
-      if (p.keyMode === "perCol") throw new Error("dCode 兼容选项仅支持「栏数」密钥模式");
-      return scytaleDcodeDecode(t, Number((p && p.column) ?? 2), { trimFiller: true, filler: (p.dcodePad && p.dcodePad !== "|" ? p.dcodePad : "_") });
+    if (p && p.dcodeTrim === true) {
+      const colParam = Number((p && p.column) ?? 2);
+      if (!Number.isSafeInteger(colParam) || colParam < 1) throw new Error("scytale: 密钥须为正安全整数");
+      const mode = (p && p.keyMode) || "column";
+      if (!["column", "perCol"].includes(mode)) throw new Error("scytale: 未知密钥模式");
+      if (!t.length) return "";
+      const N = mode === "perCol" ? Math.ceil(t.length / colParam) : colParam;
+      if (!Number.isSafeInteger(N) || N < 1) throw new Error("scytale: 密钥须为正安全整数");
+      if (t.length % N !== 0) throw new Error("scytale: 补位密文长度须为密钥的整数倍");
+      const filler = (p && p.dcodePad === "_") ? "_" : "|";
+      const full = scytaleDcodeDecode(t, N, { trimFiller: false });
+      // 编码补位最多 N-1 个，只裁这么多，避免把原文尾部真实补位符一并吃掉
+      // （补位符与真实字符同形，天然无法完全区分；这是该格式的固有限制）。
+      let end = full.length, maxTrim = N - 1;
+      while (maxTrim > 0 && end > 0 && full[end - 1] === filler) { end--; maxTrim--; }
+      return full.slice(0, end);
     }
     return scytaleCrypto(t, Number((p && p.column) ?? 2), true, p?.keyMode);
   },

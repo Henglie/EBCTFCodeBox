@@ -31,18 +31,29 @@
  *            · ZIP APPNOTE.TXT · GZIP RFC 1952 · PDF ISO 32000 · 7z · RAR · ELF · PE · RIFF/WAVE
  */
 
-const HEX_ALPHA = "0123456789abcdef";
+const HEX_ENC_LOWER = new Array(256);
+const HEX_ENC_UPPER = new Array(256);
+const HEX_DEC = new Int16Array(256).fill(-1);
+for (let i = 0; i < 256; i++) {
+  const h = i.toString(16).padStart(2, "0");
+  HEX_ENC_LOWER[i] = h;
+  HEX_ENC_UPPER[i] = h.toUpperCase();
+  if (i >= 0x30 && i <= 0x39) HEX_DEC[i] = i - 0x30;
+  else if (i >= 0x61 && i <= 0x66) HEX_DEC[i] = i - 0x61 + 10;
+  else if (i >= 0x41 && i <= 0x46) HEX_DEC[i] = i - 0x41 + 10;
+}
 
 /** hex 串 → 字节。**无损**：长度必须为偶数、字符必须是 hex，否则抛错（不静默丢字符）。 */
 export function hexToBytes(hex) {
   const s = String(hex == null ? "" : hex).trim();
   if (s.length % 2 !== 0) throw new Error("hex 长度必须为偶数（当前 " + s.length + "）");
   const out = new Uint8Array(s.length / 2);
-  for (let i = 0; i < s.length; i += 2) {
-    const hi = HEX_ALPHA.indexOf(s[i].toLowerCase());
-    const lo = HEX_ALPHA.indexOf(s[i + 1].toLowerCase());
+  for (let i = 0, j = 0; i < s.length; i += 2, j++) {
+    const c0 = s.charCodeAt(i), c1 = s.charCodeAt(i + 1);
+    const hi = c0 < 256 ? HEX_DEC[c0] : -1;
+    const lo = c1 < 256 ? HEX_DEC[c1] : -1;
     if (hi < 0 || lo < 0) throw new Error("非法 hex 字符：" + JSON.stringify(s.slice(i, i + 2)));
-    out[i / 2] = (hi << 4) | lo;
+    out[j] = (hi << 4) | lo;
   }
   return out;
 }
@@ -51,40 +62,55 @@ export function hexToBytes(hex) {
 export function bytesToHex(bytes, opts) {
   const o = opts || {};
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+  const LUT = o.upper ? HEX_ENC_UPPER : HEX_ENC_LOWER;
   const sep = o.space ? " " : "";
-  const parts = new Array(b.length);
-  for (let i = 0; i < b.length; i++) {
-    const h = b[i].toString(16).padStart(2, "0");
-    parts[i] = o.upper ? h.toUpperCase() : h;
+  const CHUNK = 1 << 14;
+  const parts = [];
+  for (let i = 0; i < b.length; i += CHUNK) {
+    const n = Math.min(CHUNK, b.length - i);
+    const a = new Array(n);
+    for (let j = 0; j < n; j++) a[j] = LUT[b[i + j]];
+    parts.push(a.join(sep));
   }
   return parts.join(sep);
 }
 
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const B64_DEC = new Int16Array(256).fill(-1);
+for (let i = 0; i < 64; i++) B64_DEC[B64.charCodeAt(i)] = i;
 
 /** base64 串 → 字节。**无损**：非法字符抛错，不跳过。 */
 export function b64ToBytes(s) {
   const t = String(s == null ? "" : s).replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/").replace(/=+$/, "");
-  const out = [];
-  let buf = 0, bits = 0;
-  for (const c of t) {
-    const v = B64.indexOf(c);
-    if (v < 0) throw new Error("非法 base64 字符：" + JSON.stringify(c));
-    buf = (buf << 6) | v; bits += 6;
-    if (bits >= 8) { bits -= 8; out.push((buf >> bits) & 0xff); }
+  const n = t.length;
+  for (let i = 0; i < n; i++) {
+    const c = t.charCodeAt(i);
+    if (c >= 256 || B64_DEC[c] < 0) throw new Error("非法 base64 字符：" + JSON.stringify(t[i]));
   }
-  return new Uint8Array(out);
+  // 单余字符只贡献 6 bit（不足 1 字节），旧实现同样不产出字节。
+  const bodyLen = (n & 3) === 1 ? n - 1 : n;
+  if (bodyLen <= 0) return new Uint8Array(0);
+  const rem = bodyLen & 3;
+  const outLen = ((bodyLen - rem) / 4) * 3 + (rem === 2 ? 1 : rem === 3 ? 2 : 0);
+  const out = new Uint8Array(outLen);
+  const CHUNK = 1 << 20;
+  let off = 0;
+  for (let i = 0; i < bodyLen; i += CHUNK) {
+    const end = Math.min(i + CHUNK, bodyLen);
+    const pad = (4 - ((end - i) & 3)) & 3;
+    const bin = atob(t.slice(i, end) + (pad ? "=".repeat(pad) : ""));
+    for (let k = 0; k < bin.length; k++) out[off++] = bin.charCodeAt(k);
+  }
+  return out;
 }
 
 /** 字节 → base64。 */
 export function bytesToB64(bytes) {
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+  // 块大小取 3 的倍数（32766=0x7FFE），否则每块 btoa 自补 "=" 会拼进输出中间
   let out = "";
-  for (let i = 0; i < b.length; i += 3) {
-    const n = (b[i] << 16) | ((b[i + 1] || 0) << 8) | (b[i + 2] || 0);
-    out += B64[(n >> 18) & 63] + B64[(n >> 12) & 63] +
-      (i + 1 < b.length ? B64[(n >> 6) & 63] : "=") +
-      (i + 2 < b.length ? B64[n & 63] : "=");
+  for (let i = 0; i < b.length; i += 0x7ffe) {
+    out += btoa(String.fromCharCode.apply(null, b.subarray(i, i + 0x7ffe)));
   }
   return out;
 }
@@ -190,15 +216,23 @@ export function looksLikeText(bytes) {
  *   纯 hex（`89504e47…`）要靠心算，报告则**把内容换成了描述**，用户没法复制去解第二轮。
  *   本函数的输出可被现用的 `jsHex` op 无损解回（它已有 `detect`，一把梭能自动识别）。
  */
+const ESC_LUT = new Array(256);
+for (let i = 0; i < 256; i++) {
+  ESC_LUT[i] = (i >= 0x20 && i <= 0x7e && i !== 0x5c)
+    ? String.fromCharCode(i)
+    : "\\x" + i.toString(16).padStart(2, "0");
+}
 export function bytesToEscapedText(bytes) {
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
-  let out = "";
-  for (let i = 0; i < b.length; i++) {
-    const c = b[i];
-    if (c >= 0x20 && c <= 0x7e && c !== 0x5c) out += String.fromCharCode(c);
-    else out += "\\x" + c.toString(16).padStart(2, "0");
+  const CHUNK = 1 << 13;
+  const parts = [];
+  for (let i = 0; i < b.length; i += CHUNK) {
+    const n = Math.min(CHUNK, b.length - i);
+    const a = new Array(n);
+    for (let j = 0; j < n; j++) a[j] = ESC_LUT[b[i + j]];
+    parts.push(a.join(""));
   }
-  return out;
+  return parts.join("");
 }
 
 /** 按魔数给下载产物起名：`<name>.png` / `<name>.bin`。 */

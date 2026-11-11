@@ -268,7 +268,7 @@ register({
   desc: "SHA-1 消息摘要（160 位，FIPS 180-4 纯 JS）；Rounds 可调（默认 80，与 CyberChef SHA1 对齐）",
   acceptsBytes: true, textTransit: true,
   params: [
-    { key: "rounds", label: "Rounds", type: "number", default: 80, placeholder: "默认 80（最小 16）" },
+    { key: "rounds", label: "轮数", labelKey: "op.sha1.param.rounds", type: "number", default: 80, placeholder: "默认 80（最小 16）" },
   ],
   run: (t, p) => {
     const raw = p?.rawBytes;
@@ -290,9 +290,8 @@ register({
   run: async (t, p) => {
     if (!(p && p.mode === "all")) return sha("SHA-256", p?.rawBytes ?? t);
     const data = p?.rawBytes ?? t;
-    const text = typeof data === "string" ? data : new TextDecoder().decode(data);
     const rows = [
-      ["MD5", md5(text)],
+      ["MD5", md5(data)],
       ["SHA-1", await sha("SHA-1", data)],
       ["SHA-256", await sha("SHA-256", data)],
       ["SHA-384", await sha("SHA-384", data)],
@@ -345,21 +344,17 @@ register({
 register({
   id: "ntlm", cat: "hash", name: "NTLM", desc: "NTLM 哈希（MD4 of UTF-16LE 密码，Windows 密码存储）",
   acceptsBytes: true, textTransit: true,
-  run: (t, p) => ntlm(p?.rawBytes ?? t),
+  run: (t, p) => {
+    if (p?.rawBytes != null) throw new Error("NTLM 仅支持文本口令输入，不支持二进制原始字节（rawBytes）");
+    if (typeof t !== "string") throw new Error("NTLM 仅支持文本口令输入（UTF-16LE），不支持二进制数据");
+    return ntlm(t);
+  },
 });
 
 // ============ SHA3 / Keccak / SHAKE（纯 JS Keccak-f[1600]，双 32 位模拟 64 位） ============
 // FIPS 202。SHA3 与 Keccak 仅 padding 不同（domain 0x06 vs 0x01），SHAKE 用 0x1f。
 // 每条 lane 存为 (lo, hi) 两个 32 位无符号字；state 25 lane。
 
-// rho 旋转量，索引 idx = x + 5*y
-const KECCAK_RHO = [
-  0, 1, 62, 28, 27,
-  36, 44, 6, 55, 20,
-  3, 10, 43, 25, 39,
-  41, 45, 15, 21, 8,
-  18, 2, 61, 56, 14,
-];
 // 24 轮迭代常量，拆成低/高 32 位
 const KECCAK_RC_LO = [
   0x00000001, 0x00008082, 0x0000808a, 0x80008000, 0x0000808b, 0x80000001,
@@ -374,106 +369,264 @@ const KECCAK_RC_HI = [
   0x00000000, 0x80000000, 0x80000000, 0x80000000, 0x00000000, 0x80000000,
 ];
 
-// Keccak-f[1600] 就地置换。sLo/sHi 为 25 长 Int32/普通数组。
+// scratch 复用，避免每次置换新建数组
+const K_B_LO = new Uint32Array(25), K_B_HI = new Uint32Array(25);
+const K_SLO = new Uint32Array(25), K_SHI = new Uint32Array(25);
+const K_MSG = new Uint8Array(168); // 最大 rate（SHAKE128）
+
+// Keccak-f[1600] 就地置换（theta/rho/pi/chi 展开，scratch 复用）。
 function keccakF1600(sLo, sHi) {
-  const cLo = new Array(5), cHi = new Array(5);
-  const dLo = new Array(5), dHi = new Array(5);
-  const bLo = new Array(25), bHi = new Array(25);
+  const bLo = K_B_LO, bHi = K_B_HI;
   for (let r = 0; r < 24; r++) {
- // theta：列奇偶校验
-    for (let x = 0; x < 5; x++) {
-      cLo[x] = (sLo[x] ^ sLo[x + 5] ^ sLo[x + 10] ^ sLo[x + 15] ^ sLo[x + 20]) >>> 0;
-      cHi[x] = (sHi[x] ^ sHi[x + 5] ^ sHi[x + 10] ^ sHi[x + 15] ^ sHi[x + 20]) >>> 0;
+    let c0Lo = sLo[0] ^ sLo[5] ^ sLo[10] ^ sLo[15] ^ sLo[20];
+    let c0Hi = sHi[0] ^ sHi[5] ^ sHi[10] ^ sHi[15] ^ sHi[20];
+    let c1Lo = sLo[1] ^ sLo[6] ^ sLo[11] ^ sLo[16] ^ sLo[21];
+    let c1Hi = sHi[1] ^ sHi[6] ^ sHi[11] ^ sHi[16] ^ sHi[21];
+    let c2Lo = sLo[2] ^ sLo[7] ^ sLo[12] ^ sLo[17] ^ sLo[22];
+    let c2Hi = sHi[2] ^ sHi[7] ^ sHi[12] ^ sHi[17] ^ sHi[22];
+    let c3Lo = sLo[3] ^ sLo[8] ^ sLo[13] ^ sLo[18] ^ sLo[23];
+    let c3Hi = sHi[3] ^ sHi[8] ^ sHi[13] ^ sHi[18] ^ sHi[23];
+    let c4Lo = sLo[4] ^ sLo[9] ^ sLo[14] ^ sLo[19] ^ sLo[24];
+    let c4Hi = sHi[4] ^ sHi[9] ^ sHi[14] ^ sHi[19] ^ sHi[24];
+    let d0Lo = c4Lo ^ (((c1Lo << 1) | (c1Hi >>> 31)) >>> 0);
+    let d0Hi = c4Hi ^ (((c1Hi << 1) | (c1Lo >>> 31)) >>> 0);
+    let d1Lo = c0Lo ^ (((c2Lo << 1) | (c2Hi >>> 31)) >>> 0);
+    let d1Hi = c0Hi ^ (((c2Hi << 1) | (c2Lo >>> 31)) >>> 0);
+    let d2Lo = c1Lo ^ (((c3Lo << 1) | (c3Hi >>> 31)) >>> 0);
+    let d2Hi = c1Hi ^ (((c3Hi << 1) | (c3Lo >>> 31)) >>> 0);
+    let d3Lo = c2Lo ^ (((c4Lo << 1) | (c4Hi >>> 31)) >>> 0);
+    let d3Hi = c2Hi ^ (((c4Hi << 1) | (c4Lo >>> 31)) >>> 0);
+    let d4Lo = c3Lo ^ (((c0Lo << 1) | (c0Hi >>> 31)) >>> 0);
+    let d4Hi = c3Hi ^ (((c0Hi << 1) | (c0Lo >>> 31)) >>> 0);
+    {
+      const lo = sLo[0] ^ d0Lo, hi = sHi[0] ^ d0Hi;
+      bLo[0] = lo; bHi[0] = hi;
     }
-    for (let x = 0; x < 5; x++) {
-      const x1 = (x + 1) % 5, x4 = (x + 4) % 5;
- // rotl(C[x+1], 1)
-      const rlLo = ((cLo[x1] << 1) | (cHi[x1] >>> 31)) >>> 0;
-      const rlHi = ((cHi[x1] << 1) | (cLo[x1] >>> 31)) >>> 0;
-      dLo[x] = (cLo[x4] ^ rlLo) >>> 0;
-      dHi[x] = (cHi[x4] ^ rlHi) >>> 0;
+    {
+      const lo = sLo[1] ^ d1Lo, hi = sHi[1] ^ d1Hi;
+      bLo[10] = ((lo << 1) | (hi >>> 31)) >>> 0;
+      bHi[10] = ((hi << 1) | (lo >>> 31)) >>> 0;
     }
-    for (let x = 0; x < 5; x++) {
-      for (let y = 0; y < 5; y++) {
-        const idx = x + 5 * y;
-        sLo[idx] = (sLo[idx] ^ dLo[x]) >>> 0;
-        sHi[idx] = (sHi[idx] ^ dHi[x]) >>> 0;
-      }
+    {
+      const lo = sLo[2] ^ d2Lo, hi = sHi[2] ^ d2Hi;
+      bLo[20] = ((hi << 30) | (lo >>> 2)) >>> 0;
+      bHi[20] = ((lo << 30) | (hi >>> 2)) >>> 0;
     }
- // rho + pi：B[y][(2x+3y)%5] = rotl(A[x][y], RHO[idx])
-    for (let x = 0; x < 5; x++) {
-      for (let y = 0; y < 5; y++) {
-        const idx = x + 5 * y;
-        const destIdx = y + 5 * ((2 * x + 3 * y) % 5);
-        const n = KECCAK_RHO[idx];
-        const lo = sLo[idx], hi = sHi[idx];
-        let rLo, rHi;
-        if (n === 0) { rLo = lo; rHi = hi; }
-        else if (n < 32) {
-          rLo = ((lo << n) | (hi >>> (32 - n))) >>> 0;
-          rHi = ((hi << n) | (lo >>> (32 - n))) >>> 0;
-        } else if (n === 32) { rLo = hi; rHi = lo; }
-        else {
-          const m = n - 32;
-          rLo = ((hi << m) | (lo >>> (32 - m))) >>> 0;
-          rHi = ((lo << m) | (hi >>> (32 - m))) >>> 0;
-        }
-        bLo[destIdx] = rLo; bHi[destIdx] = rHi;
-      }
+    {
+      const lo = sLo[3] ^ d3Lo, hi = sHi[3] ^ d3Hi;
+      bLo[5] = ((lo << 28) | (hi >>> 4)) >>> 0;
+      bHi[5] = ((hi << 28) | (lo >>> 4)) >>> 0;
     }
- // chi
-    for (let y = 0; y < 5; y++) {
-      for (let x = 0; x < 5; x++) {
-        const idx = x + 5 * y;
-        const i1 = ((x + 1) % 5) + 5 * y;
-        const i2 = ((x + 2) % 5) + 5 * y;
-        sLo[idx] = (bLo[idx] ^ ((~bLo[i1]) & bLo[i2])) >>> 0;
-        sHi[idx] = (bHi[idx] ^ ((~bHi[i1]) & bHi[i2])) >>> 0;
-      }
+    {
+      const lo = sLo[4] ^ d4Lo, hi = sHi[4] ^ d4Hi;
+      bLo[15] = ((lo << 27) | (hi >>> 5)) >>> 0;
+      bHi[15] = ((hi << 27) | (lo >>> 5)) >>> 0;
     }
- // iota
+    {
+      const lo = sLo[5] ^ d0Lo, hi = sHi[5] ^ d0Hi;
+      bLo[16] = ((hi << 4) | (lo >>> 28)) >>> 0;
+      bHi[16] = ((lo << 4) | (hi >>> 28)) >>> 0;
+    }
+    {
+      const lo = sLo[6] ^ d1Lo, hi = sHi[6] ^ d1Hi;
+      bLo[1] = ((hi << 12) | (lo >>> 20)) >>> 0;
+      bHi[1] = ((lo << 12) | (hi >>> 20)) >>> 0;
+    }
+    {
+      const lo = sLo[7] ^ d2Lo, hi = sHi[7] ^ d2Hi;
+      bLo[11] = ((lo << 6) | (hi >>> 26)) >>> 0;
+      bHi[11] = ((hi << 6) | (lo >>> 26)) >>> 0;
+    }
+    {
+      const lo = sLo[8] ^ d3Lo, hi = sHi[8] ^ d3Hi;
+      bLo[21] = ((hi << 23) | (lo >>> 9)) >>> 0;
+      bHi[21] = ((lo << 23) | (hi >>> 9)) >>> 0;
+    }
+    {
+      const lo = sLo[9] ^ d4Lo, hi = sHi[9] ^ d4Hi;
+      bLo[6] = ((lo << 20) | (hi >>> 12)) >>> 0;
+      bHi[6] = ((hi << 20) | (lo >>> 12)) >>> 0;
+    }
+    {
+      const lo = sLo[10] ^ d0Lo, hi = sHi[10] ^ d0Hi;
+      bLo[7] = ((lo << 3) | (hi >>> 29)) >>> 0;
+      bHi[7] = ((hi << 3) | (lo >>> 29)) >>> 0;
+    }
+    {
+      const lo = sLo[11] ^ d1Lo, hi = sHi[11] ^ d1Hi;
+      bLo[17] = ((lo << 10) | (hi >>> 22)) >>> 0;
+      bHi[17] = ((hi << 10) | (lo >>> 22)) >>> 0;
+    }
+    {
+      const lo = sLo[12] ^ d2Lo, hi = sHi[12] ^ d2Hi;
+      bLo[2] = ((hi << 11) | (lo >>> 21)) >>> 0;
+      bHi[2] = ((lo << 11) | (hi >>> 21)) >>> 0;
+    }
+    {
+      const lo = sLo[13] ^ d3Lo, hi = sHi[13] ^ d3Hi;
+      bLo[12] = ((lo << 25) | (hi >>> 7)) >>> 0;
+      bHi[12] = ((hi << 25) | (lo >>> 7)) >>> 0;
+    }
+    {
+      const lo = sLo[14] ^ d4Lo, hi = sHi[14] ^ d4Hi;
+      bLo[22] = ((hi << 7) | (lo >>> 25)) >>> 0;
+      bHi[22] = ((lo << 7) | (hi >>> 25)) >>> 0;
+    }
+    {
+      const lo = sLo[15] ^ d0Lo, hi = sHi[15] ^ d0Hi;
+      bLo[23] = ((hi << 9) | (lo >>> 23)) >>> 0;
+      bHi[23] = ((lo << 9) | (hi >>> 23)) >>> 0;
+    }
+    {
+      const lo = sLo[16] ^ d1Lo, hi = sHi[16] ^ d1Hi;
+      bLo[8] = ((hi << 13) | (lo >>> 19)) >>> 0;
+      bHi[8] = ((lo << 13) | (hi >>> 19)) >>> 0;
+    }
+    {
+      const lo = sLo[17] ^ d2Lo, hi = sHi[17] ^ d2Hi;
+      bLo[18] = ((lo << 15) | (hi >>> 17)) >>> 0;
+      bHi[18] = ((hi << 15) | (lo >>> 17)) >>> 0;
+    }
+    {
+      const lo = sLo[18] ^ d3Lo, hi = sHi[18] ^ d3Hi;
+      bLo[3] = ((lo << 21) | (hi >>> 11)) >>> 0;
+      bHi[3] = ((hi << 21) | (lo >>> 11)) >>> 0;
+    }
+    {
+      const lo = sLo[19] ^ d4Lo, hi = sHi[19] ^ d4Hi;
+      bLo[13] = ((lo << 8) | (hi >>> 24)) >>> 0;
+      bHi[13] = ((hi << 8) | (lo >>> 24)) >>> 0;
+    }
+    {
+      const lo = sLo[20] ^ d0Lo, hi = sHi[20] ^ d0Hi;
+      bLo[14] = ((lo << 18) | (hi >>> 14)) >>> 0;
+      bHi[14] = ((hi << 18) | (lo >>> 14)) >>> 0;
+    }
+    {
+      const lo = sLo[21] ^ d1Lo, hi = sHi[21] ^ d1Hi;
+      bLo[24] = ((lo << 2) | (hi >>> 30)) >>> 0;
+      bHi[24] = ((hi << 2) | (lo >>> 30)) >>> 0;
+    }
+    {
+      const lo = sLo[22] ^ d2Lo, hi = sHi[22] ^ d2Hi;
+      bLo[9] = ((hi << 29) | (lo >>> 3)) >>> 0;
+      bHi[9] = ((lo << 29) | (hi >>> 3)) >>> 0;
+    }
+    {
+      const lo = sLo[23] ^ d3Lo, hi = sHi[23] ^ d3Hi;
+      bLo[19] = ((hi << 24) | (lo >>> 8)) >>> 0;
+      bHi[19] = ((lo << 24) | (hi >>> 8)) >>> 0;
+    }
+    {
+      const lo = sLo[24] ^ d4Lo, hi = sHi[24] ^ d4Hi;
+      bLo[4] = ((lo << 14) | (hi >>> 18)) >>> 0;
+      bHi[4] = ((hi << 14) | (lo >>> 18)) >>> 0;
+    }
+    sLo[0] = (bLo[0] ^ ((~bLo[1]) & bLo[2])) >>> 0;
+    sHi[0] = (bHi[0] ^ ((~bHi[1]) & bHi[2])) >>> 0;
+    sLo[1] = (bLo[1] ^ ((~bLo[2]) & bLo[3])) >>> 0;
+    sHi[1] = (bHi[1] ^ ((~bHi[2]) & bHi[3])) >>> 0;
+    sLo[2] = (bLo[2] ^ ((~bLo[3]) & bLo[4])) >>> 0;
+    sHi[2] = (bHi[2] ^ ((~bHi[3]) & bHi[4])) >>> 0;
+    sLo[3] = (bLo[3] ^ ((~bLo[4]) & bLo[0])) >>> 0;
+    sHi[3] = (bHi[3] ^ ((~bHi[4]) & bHi[0])) >>> 0;
+    sLo[4] = (bLo[4] ^ ((~bLo[0]) & bLo[1])) >>> 0;
+    sHi[4] = (bHi[4] ^ ((~bHi[0]) & bHi[1])) >>> 0;
+    sLo[5] = (bLo[5] ^ ((~bLo[6]) & bLo[7])) >>> 0;
+    sHi[5] = (bHi[5] ^ ((~bHi[6]) & bHi[7])) >>> 0;
+    sLo[6] = (bLo[6] ^ ((~bLo[7]) & bLo[8])) >>> 0;
+    sHi[6] = (bHi[6] ^ ((~bHi[7]) & bHi[8])) >>> 0;
+    sLo[7] = (bLo[7] ^ ((~bLo[8]) & bLo[9])) >>> 0;
+    sHi[7] = (bHi[7] ^ ((~bHi[8]) & bHi[9])) >>> 0;
+    sLo[8] = (bLo[8] ^ ((~bLo[9]) & bLo[5])) >>> 0;
+    sHi[8] = (bHi[8] ^ ((~bHi[9]) & bHi[5])) >>> 0;
+    sLo[9] = (bLo[9] ^ ((~bLo[5]) & bLo[6])) >>> 0;
+    sHi[9] = (bHi[9] ^ ((~bHi[5]) & bHi[6])) >>> 0;
+    sLo[10] = (bLo[10] ^ ((~bLo[11]) & bLo[12])) >>> 0;
+    sHi[10] = (bHi[10] ^ ((~bHi[11]) & bHi[12])) >>> 0;
+    sLo[11] = (bLo[11] ^ ((~bLo[12]) & bLo[13])) >>> 0;
+    sHi[11] = (bHi[11] ^ ((~bHi[12]) & bHi[13])) >>> 0;
+    sLo[12] = (bLo[12] ^ ((~bLo[13]) & bLo[14])) >>> 0;
+    sHi[12] = (bHi[12] ^ ((~bHi[13]) & bHi[14])) >>> 0;
+    sLo[13] = (bLo[13] ^ ((~bLo[14]) & bLo[10])) >>> 0;
+    sHi[13] = (bHi[13] ^ ((~bHi[14]) & bHi[10])) >>> 0;
+    sLo[14] = (bLo[14] ^ ((~bLo[10]) & bLo[11])) >>> 0;
+    sHi[14] = (bHi[14] ^ ((~bHi[10]) & bHi[11])) >>> 0;
+    sLo[15] = (bLo[15] ^ ((~bLo[16]) & bLo[17])) >>> 0;
+    sHi[15] = (bHi[15] ^ ((~bHi[16]) & bHi[17])) >>> 0;
+    sLo[16] = (bLo[16] ^ ((~bLo[17]) & bLo[18])) >>> 0;
+    sHi[16] = (bHi[16] ^ ((~bHi[17]) & bHi[18])) >>> 0;
+    sLo[17] = (bLo[17] ^ ((~bLo[18]) & bLo[19])) >>> 0;
+    sHi[17] = (bHi[17] ^ ((~bHi[18]) & bHi[19])) >>> 0;
+    sLo[18] = (bLo[18] ^ ((~bLo[19]) & bLo[15])) >>> 0;
+    sHi[18] = (bHi[18] ^ ((~bHi[19]) & bHi[15])) >>> 0;
+    sLo[19] = (bLo[19] ^ ((~bLo[15]) & bLo[16])) >>> 0;
+    sHi[19] = (bHi[19] ^ ((~bHi[15]) & bHi[16])) >>> 0;
+    sLo[20] = (bLo[20] ^ ((~bLo[21]) & bLo[22])) >>> 0;
+    sHi[20] = (bHi[20] ^ ((~bHi[21]) & bHi[22])) >>> 0;
+    sLo[21] = (bLo[21] ^ ((~bLo[22]) & bLo[23])) >>> 0;
+    sHi[21] = (bHi[21] ^ ((~bHi[22]) & bHi[23])) >>> 0;
+    sLo[22] = (bLo[22] ^ ((~bLo[23]) & bLo[24])) >>> 0;
+    sHi[22] = (bHi[22] ^ ((~bHi[23]) & bHi[24])) >>> 0;
+    sLo[23] = (bLo[23] ^ ((~bLo[24]) & bLo[20])) >>> 0;
+    sHi[23] = (bHi[23] ^ ((~bHi[24]) & bHi[20])) >>> 0;
+    sLo[24] = (bLo[24] ^ ((~bLo[20]) & bLo[21])) >>> 0;
+    sHi[24] = (bHi[24] ^ ((~bHi[20]) & bHi[21])) >>> 0;
     sLo[0] = (sLo[0] ^ KECCAK_RC_LO[r]) >>> 0;
     sHi[0] = (sHi[0] ^ KECCAK_RC_HI[r]) >>> 0;
   }
 }
 
-/**
- * Keccak 海绵函数。
- * @param {number} rate 速率（字节，恒为 8 的倍数）
- * @param {number} padByte domain 分隔 + pad10*1 首字节（SHA3=0x06 / Keccak=0x01 / SHAKE=0x1f）
- * @param {Uint8Array} msg 输入字节
- * @param {number} outLen 输出字节数
- * @returns {Uint8Array}
- */
+function keccakAbsorb(sLo, sHi, bytes, off, rate) {
+  for (let i = 0; i < rate; i += 8) {
+    const li = i >> 3;
+    const p = off + i;
+    const lo = (bytes[p] | (bytes[p + 1] << 8) | (bytes[p + 2] << 16) | (bytes[p + 3] << 24)) >>> 0;
+    const hi = (bytes[p + 4] | (bytes[p + 5] << 8) | (bytes[p + 6] << 16) | (bytes[p + 7] << 24)) >>> 0;
+    sLo[li] ^= lo;
+    sHi[li] ^= hi;
+  }
+}
+
 function keccak(rate, padByte, msg, outLen) {
-  const sLo = new Array(25).fill(0);
-  const sHi = new Array(25).fill(0);
+  const sLo = K_SLO, sHi = K_SHI;
+  sLo.fill(0);
+  sHi.fill(0);
   const msgLen = msg.length;
- // 多速率填充 pad10*1，凑到 rate 的整数倍
-  const padLen = rate - (msgLen % rate); // 1..rate
-  const total = msgLen + padLen;
-  const padded = new Uint8Array(total);
-  padded.set(msg);
-  padded[msgLen] = padByte;
-  padded[total - 1] |= 0x80; // 与 padByte 同字节时自动合并成 padByte|0x80
- // 吸收
-  for (let off = 0; off < total; off += rate) {
-    for (let i = 0; i < rate; i += 8) {
-      const li = i >> 3;
-      const p = off + i;
-      const lo = (padded[p] | (padded[p + 1] << 8) | (padded[p + 2] << 16) | (padded[p + 3] << 24)) >>> 0;
-      const hi = (padded[p + 4] | (padded[p + 5] << 8) | (padded[p + 6] << 16) | (padded[p + 7] << 24)) >>> 0;
-      sLo[li] = (sLo[li] ^ lo) >>> 0;
-      sHi[li] = (sHi[li] ^ hi) >>> 0;
-    }
+ // 直接吸收完整块，末尾块在 168 字节 scratch 中补齐（不复制整条消息）
+  let off = 0;
+  for (; off + rate <= msgLen; off += rate) {
+    keccakAbsorb(sLo, sHi, msg, off, rate);
     keccakF1600(sLo, sHi);
   }
- // 挤出
+  const rem = msgLen - off; // 0..rate-1
+  const buf = K_MSG;
+  for (let i = 0; i < rem; i++) buf[i] = msg[off + i];
+  buf.fill(0, rem, rate);
+  buf[rem] = padByte;
+  buf[rate - 1] |= 0x80; // 与 padByte 同字节时自动合并成 padByte|0x80
+  keccakAbsorb(sLo, sHi, buf, 0, rate);
+  keccakF1600(sLo, sHi);
+ // 挤出（按 32 位字写，尾部逐字节）
   const out = new Uint8Array(outLen);
   let produced = 0;
   while (produced < outLen) {
     const blockBytes = Math.min(rate, outLen - produced);
-    for (let i = 0; i < blockBytes; i++) {
+    let i = 0;
+    for (; i + 8 <= blockBytes; i += 8) {
+      const laneIdx = i >> 3;
+      const lo = sLo[laneIdx], hi = sHi[laneIdx];
+      out[produced] = lo & 0xff;
+      out[produced + 1] = (lo >>> 8) & 0xff;
+      out[produced + 2] = (lo >>> 16) & 0xff;
+      out[produced + 3] = (lo >>> 24) & 0xff;
+      out[produced + 4] = hi & 0xff;
+      out[produced + 5] = (hi >>> 8) & 0xff;
+      out[produced + 6] = (hi >>> 16) & 0xff;
+      out[produced + 7] = (hi >>> 24) & 0xff;
+      produced += 8;
+    }
+    for (; i < blockBytes; i++) {
       const laneIdx = i >> 3;
       const bil = i & 7;
       const word = bil < 4 ? sLo[laneIdx] : sHi[laneIdx];

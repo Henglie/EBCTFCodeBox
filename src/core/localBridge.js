@@ -16,6 +16,11 @@ import { register } from "./registry.js";
 const BRIDGE_URL = "http://127.0.0.1:8181";  // 127.0.0.1 保证命中 bridge 监听的 IPv4 地址（localhost 可能解析到 ::1）
 const BRIDGE_TIMEOUT = 70000; // 略大于 bridge 的 60s
 const HEALTH_TIMEOUT = 1500;  // 探活必须快：桥未起时立刻返回，不拖启动
+// 与 bridge.py 默认两级上限对齐：软 128 MiB / 硬 512 MiB。
+// 超过软上限先弹确认，确认后才带 X-EBCTF-Allow-Large: 1；硬上限任何请求都不能越过。
+const REQUEST_SOFT_LIMIT = 128 * 1024 * 1024;
+const REQUEST_HARD_LIMIT = 512 * 1024 * 1024;
+const ALLOW_LARGE_HEADER = "X-EBCTF-Allow-Large";
 
 async function fetchJsonWithTimeout(url, ms, opts) {
   const ctrl = new AbortController();
@@ -53,8 +58,78 @@ async function bridgeHealth() {
   return { ok: false, error: `本地桥未运行（127.0.0.1:8181）：${lastErr || "无法连接"}` };
 }
 
+// base64 后的字节长度（不做实际编码，便于发送前估算大请求）。
+function b64LengthForBytes(n) {
+  const len = Number(n) || 0;
+  return Math.ceil(len / 3) * 4;
+}
+
+// 请求体大致字节数：args/tool 元信息 + stdin base64 + files base64（含键名）。
+function estimateRequestBytes(tool, args, stdinBytes, filesMap) {
+  let total = 64 + String(tool || "").length;
+  try {
+    total += JSON.stringify(args || []).length;
+  } catch { /* 不可序列化时按 0 估 */ }
+  if (stdinBytes && stdinBytes.length) total += 16 + b64LengthForBytes(stdinBytes.length);
+  if (filesMap) {
+    for (const [k, v] of Object.entries(filesMap)) {
+      total += 8 + String(k).length + b64LengthForBytes(v && v.length);
+    }
+  }
+  return total;
+}
+
+// 大请求确认：只有 window.confirm 返回 true 才继续；无确认环境按取消处理。
+function confirmLargeRequest(approx, softLimit) {
+  const approxMiB = (approx / (1024 * 1024)).toFixed(1);
+  const softMiB = Math.round(softLimit / (1024 * 1024));
+  const msg = `文件较大（约 ${approxMiB} MiB，超过本地桥软上限 ${softMiB} MiB），是否继续读取/发送？`;
+  const host = (typeof window !== "undefined" && window) ? window : globalThis;
+  if (host && typeof host.confirm === "function") {
+    try { return { ok: !!host.confirm(msg), msg }; }
+    catch (e) { return { ok: false, msg, error: String((e && e.message) || e) }; }
+  }
+  return { ok: false, msg, unavailable: true };
+}
+
+// 截断字段 → 可见提示（成功/失败响应都检查，绝不静默）。
+function truncationNotice(j) {
+  if (!j || typeof j !== "object") return "";
+  const parts = [];
+  if (j.stdoutTruncated) parts.push("stdout");
+  if (j.stderrTruncated) parts.push("stderr");
+  if (!parts.length && j.truncated) parts.push("输出");
+  if (!parts.length && j.partial) parts.push("部分结果");
+  if (!parts.length) return "";
+  const cap = Number(j.outputLimit);
+  const limitText = Number.isFinite(cap) && cap > 0 ? `（上限 ${cap} 字节）` : "";
+  return `本地桥提示：${parts.join(" / ")} 已截断${limitText}，当前内容不完整。`;
+}
+
 // 调用 bridge /api/run。返回 {ok, stdout, stderr, exitCode} 或 {ok:false, error}。
-async function bridgeRun(tool, args, stdinBytes, filesMap) {
+// limits 仅供测试/特殊调用覆盖软硬阈值；正常调用不传，用默认 128/512 MiB。
+async function bridgeRun(tool, args, stdinBytes, filesMap, limits) {
+  const softLimit = limits && Number.isFinite(limits.soft) ? limits.soft : REQUEST_SOFT_LIMIT;
+  const hardLimit = limits && Number.isFinite(limits.hard)
+    ? Math.max(softLimit, limits.hard)
+    : Math.max(softLimit, REQUEST_HARD_LIMIT);
+  const approx = estimateRequestBytes(tool, args, stdinBytes, filesMap);
+  if (approx > hardLimit) {
+    const approxMiB = (approx / (1024 * 1024)).toFixed(1);
+    const hardMiB = Math.round(hardLimit / (1024 * 1024));
+    return { ok: false, error: `请求约 ${approxMiB} MiB，超过本地桥硬上限 ${hardMiB} MiB，已中止（未发送）。` };
+  }
+  let allowLarge = false;
+  if (approx > softLimit) {
+    const confirmed = confirmLargeRequest(approx, softLimit);
+    if (!confirmed.ok) {
+      const reason = confirmed.unavailable ? "当前环境不支持确认弹窗" : "已取消";
+      const approxMiB = (approx / (1024 * 1024)).toFixed(1);
+      const softMiB = Math.round(softLimit / (1024 * 1024));
+      return { ok: false, error: `${reason}：请求约 ${approxMiB} MiB，超过软上限 ${softMiB} MiB，未发送。` };
+    }
+    allowLarge = true;
+  }
   const body = { tool, args: args || [] };
   if (stdinBytes && stdinBytes.length) {
     body.stdin = b64encode(stdinBytes);
@@ -69,7 +144,10 @@ async function bridgeRun(tool, args, stdinBytes, filesMap) {
   try {
     const r = await fetch(`${BRIDGE_URL}/api/run`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(allowLarge ? { [ALLOW_LARGE_HEADER]: "1" } : {}),
+      },
       body: JSON.stringify(body),
       signal: ctrl.signal,
     });
@@ -78,6 +156,8 @@ async function bridgeRun(tool, args, stdinBytes, filesMap) {
       try {
         const j = await r.json();
         if (j && j.error) msg += ": " + j.error;
+        const note = truncationNotice(j);
+        if (note) msg += "\n" + note;
       } catch { /* 非 JSON 错误体 */ }
       return { ok: false, error: msg };
     }
@@ -87,13 +167,27 @@ async function bridgeRun(tool, args, stdinBytes, filesMap) {
     } catch {
       return { ok: false, error: "bridge 返回非 JSON 响应" };
     }
-    if (!j.ok) return { ok: false, error: j.error || "bridge error" };
-    return {
+    if (!j.ok) {
+      let msg = j.error || "bridge error";
+      const note = truncationNotice(j);
+      if (note) msg += "\n" + note;
+      return { ok: false, error: msg };
+    }
+    const stdout = b64decodeText(j.stdout);
+    const stderr = b64decodeText(j.stderr);
+    const notice = truncationNotice(j);
+    const result = {
       ok: true,
       exitCode: j.exitCode,
-      stdout: b64decodeText(j.stdout),
-      stderr: b64decodeText(j.stderr),
+      stdout,
+      stderr: notice ? (stderr ? stderr + "\n\n" + notice : notice) : stderr,
     };
+    if (notice) {
+      result.truncated = true;
+      result.notice = notice;
+      result.outputLimit = j.outputLimit;
+    }
+    return result;
   } catch (e) {
     const aborted = e && (e.name === "AbortError" || e.name === "TimeoutError");
     return {
@@ -105,10 +199,13 @@ async function bridgeRun(tool, args, stdinBytes, filesMap) {
   }
 }
 
-// bytes → base64
+// bytes → base64（分块，避免大文件逐字节拼接导致卡死）
 function b64encode(bytes) {
   let bin = "";
-  for (const x of bytes) bin += String.fromCharCode(x);
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
   return btoa(bin);
 }
 // base64 → utf8 文本（容错）

@@ -90,14 +90,11 @@ function sm3Bytes(bytes, rounds = 64, length = 256) {
   const msg = new Uint8Array(total);
   msg.set(bytes, 0);
   msg[origLen] = 0x80;
- // 大端长度（位）
-  const bitLen = origLen * 8;
- // 高 32 位（消息长度 < 2^32 字节，高 32 位为 0）
-  msg[total - 8] = 0; msg[total - 7] = 0; msg[total - 6] = 0; msg[total - 5] = 0;
-  msg[total - 4] = (bitLen >>> 24) & 0xff;
-  msg[total - 3] = (bitLen >>> 16) & 0xff;
-  msg[total - 2] = (bitLen >>> 8) & 0xff;
-  msg[total - 1] = bitLen & 0xff;
+  // 大端长度（位）
+  const bitLen = BigInt(origLen) * 8n;
+  for (let i = 0; i < 8; i++) {
+    msg[total - 1 - i] = Number((bitLen >> BigInt(i * 8)) & 0xffn);
+  }
 
   let V = SM3_IV.slice();
   for (let i = 0; i < total; i += 64) {

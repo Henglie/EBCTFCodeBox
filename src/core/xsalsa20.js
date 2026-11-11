@@ -42,6 +42,7 @@
  * 契约：register({id, cat:"stream", name, desc, params, encode, decode})。
  */
 import { register } from "./registry.js";
+import { finishBytesDecode } from "./bytesIo.js";
 
 const SIGMA = [0x61707865, 0x3320646e, 0x79622d32, 0x6b206574]; // "expand 32-byte k"
 const TAU = [0x61707865, 0x3120646e, 0x79622d36, 0x6b206574];   // "expand 16-byte k"
@@ -339,7 +340,7 @@ register({
     const key = decodeInput(p.key || "", p.keyEnc || "hex");
     const nonce = buildNonce(p);
     const data = rawBytesOrNull(p, String(text).trim()) || decodeInput(String(text).trim(), p.outEnc || "base64");
-    return td(xsalsa20(data, key, nonce, Number((p && p.counter) || 0), Number((p && p.rounds) || 20)));
+    return finishBytesDecode(xsalsa20(data, key, nonce, Number((p && p.counter) || 0), Number((p && p.rounds) || 20)));
   },
 });
 

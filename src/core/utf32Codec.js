@@ -31,8 +31,10 @@ function utf32Decode(bytes, endian) {
   const lsbFirst = endian === "le";
   const out = [];
   for (let i = 0; i < bytes.length; i += 4) {
+    // 整体 >>>0：旧写法只有最高字节做了无符号化，LE 高位 >=0x80 时得到负数，
+    // 绕过代理区/上限检查并在 String.fromCodePoint 处抛 RangeError。
     const cp = lsbFirst
-      ? bytes[i] | (bytes[i + 1] << 8) | (bytes[i + 2] << 16) | (bytes[i + 3] << 24) >>> 0
+      ? (bytes[i] | (bytes[i + 1] << 8) | (bytes[i + 2] << 16) | (bytes[i + 3] << 24)) >>> 0
       : ((bytes[i] << 24) | (bytes[i + 1] << 16) | (bytes[i + 2] << 8) | bytes[i + 3]) >>> 0;
     if (cp >= 0xd800 && cp <= 0xdfff) {
       throw new Error(`UTF-32 解码失败（严格模式，偏移 ${i}）：码位 U+${cp.toString(16).toUpperCase()} 落在代理区 D800-DFFF（UTF-32 不允许）`);
@@ -109,7 +111,13 @@ register({
         endianUsed = "be"; bomSeen = "BE（00 00 FE FF）";
         bytes = bytes.subarray(4);
       }
-      const s = utf32Decode(bytes, endianUsed);
+      let s;
+      try {
+        s = utf32Decode(bytes, endianUsed);
+      } catch (e) {
+        if (e && /超出 Unicode 上限/.test(e.message)) return "✗ " + e.message;
+        throw e;
+      }
       return [
         `=== UTF-32 解码（严格模式）===`,
         `BOM：${bomSeen}；实际端序：${endianUsed.toUpperCase()}`,

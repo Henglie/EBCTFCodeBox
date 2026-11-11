@@ -100,8 +100,14 @@ const KC = [
   0x3779B99E,0x6EF3733C,0xDDE6E678,0xBBCDCCF1,
   0x779B99E3,0xEF3733C6,0xDE6E678D,0xBCDCCF1B,
 ];
+function strictHex(input, label) {
+  const s = String(input == null ? "" : input).replace(/0x/gi, "").replace(/[\s:,]+/g, "");
+  if (!/^[0-9a-fA-F]*$/.test(s)) throw new Error(`${label}含非法 hex 字符（仅允许 0-9/A-F、空白、0x、冒号等分隔）`);
+  if (s.length % 2) throw new Error(`${label} hex 长度必须为偶数（当前 ${s.length} 位）`);
+  return s;
+}
 function seedKeySchedule(keyHex) {
-  const c = keyHex.replace(/[^0-9a-fA-F]/g, "");
+  const c = strictHex(keyHex, "SEED 密钥");
   if (c.length !== 32) throw new Error("SEED 密钥须为 128 位（32 hex 字符）");
   let k0 = parseInt(c.substr(0, 8), 16) >>> 0;
   let k1 = parseInt(c.substr(8, 8), 16) >>> 0;
@@ -148,7 +154,7 @@ function seedCryptBlock(Lh, Ll, Rh, Rl, rks, decrypt) {
 const u32 = (x) => x.toString(16).padStart(8, "0");
 function seedCrypt(text, p, decrypt) {
   const rks = seedKeySchedule(String((p && p.key) || ""));
-  const inHex = String(text || "").replace(/[^0-9a-fA-F]/g, "");
+  const inHex = strictHex(text, "SEED 输入");
   if (inHex.length === 0 || inHex.length % 32 !== 0) throw new Error("输入须为 16 字节（32 hex）的整数倍，ECB 不自动填充");
   let out = "";
   for (let off = 0; off < inHex.length; off += 32) {

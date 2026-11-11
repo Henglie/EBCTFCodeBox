@@ -2431,3 +2431,24 @@ html.reduce-motion .act-btn.pending-run { animation: none; box-shadow: 0 0 0 3px
 .file-qr-edit:focus { outline: 2px solid var(--primary); border-color: transparent; }
 html.reduce-motion .rtoc-panel, html.reduce-motion .rtoc-flash { animation: none; }
 html.reduce-motion .rtoc-rail-dot { transition: none; }
+
+/* StegSolve 页面：强制单列全宽（控件在上、画布在下），即使工作台偏好为左右分栏。 */
+.op-workbench.sspage-workbench[data-layout="split"] {
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 16px;
+}
+.op-workbench.sspage-workbench[data-layout="split"] > .op-splitter { display: none; }
+.op-workbench.sspage-workbench[data-layout="split"] > .special-config,
+.op-workbench.sspage-workbench[data-layout="split"] > .special-data {
+  max-height: none;
+  overflow: visible;
+  padding-inline: 0;
+}
+.op-workbench.sspage-workbench[data-layout="split"] > .special-config { padding: 0; }
+.op-workbench.sspage-workbench[data-layout="split"] > .special-data { padding-inline-start: 0; }
+.op-workbench.sspage-workbench .sspage-viewport { width: 100%; }
+.sspage .sspage-drop { cursor: pointer; }
+.sspage .sspage-drop:hover { border-color: var(--primary); }
+.sspage .sspage-drop:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
+.stegsolve-dialog .stegsolve-drop { cursor: pointer; }
+.stegsolve-dialog .stegsolve-drop:focus-visible { outline: 2px solid var(--primary); outline-offset: -4px; }

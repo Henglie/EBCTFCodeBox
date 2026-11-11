@@ -333,18 +333,18 @@ register({
   params: [
     { key: "opMode", label: "模式", type: "select", default: "rotate", options: [
       { value: "rotate", label: "循环移位（原有模式）" },
-      { value: "shiftLeft", label: "Bit shift left" },
-      { value: "shiftRight", label: "Bit shift right" },
+      { value: "shiftLeft", label: "左移", labelKey: "op.bitRotate.param.shiftLeft" },
+      { value: "shiftRight", label: "右移", labelKey: "op.bitRotate.param.shiftRight" },
     ] },
     { key: "dir", label: "方向（rotate）", type: "select", default: "left", options: [
       { value: "left", label: "循环左移" },
       { value: "right", label: "循环右移" },
     ] },
     { key: "bits", label: "位数（1-7）", type: "number", default: 1 },
-    { key: "carryThrough", label: "Carry through（跨字节 carry）", type: "bool", default: false },
-    { key: "shiftType", label: "右移类型（shiftRight）", type: "select", default: "logical", options: [
-      { value: "logical", label: "Logical shift" },
-      { value: "arithmetic", label: "Arithmetic shift" },
+    { key: "carryThrough", label: "进位贯穿（跨字节进位）", labelKey: "op.bitRotate.param.carryThrough", type: "bool", default: false },
+    { key: "shiftType", label: "右移类型", labelKey: "op.bitRotate.param.shiftType", type: "select", default: "logical", options: [
+      { value: "logical", label: "逻辑右移", labelKey: "op.bitRotate.param.logicalShift" },
+      { value: "arithmetic", label: "算术右移", labelKey: "op.bitRotate.param.arithmeticShift" },
     ] },
   ],
   encode: (t, p) => {
@@ -515,8 +515,8 @@ register({
         { value: "add", label: "加 (x + key)" },
         { value: "sub", label: "减 (x - key)" },
         { value: "mul", label: "乘 (x * key)" },
-        { value: "and", label: "AND (x & key)" },
-        { value: "or", label: "OR (x | key)" },
+        { value: "and", label: "AND（x & key）", labelKey: "op.byteArith.param.and" },
+        { value: "or", label: "OR（x | key）", labelKey: "op.byteArith.param.or" },
         { value: "not", label: "NOT (~x，忽略 key)" },
       ] },
     { key: "key", label: "key 单字节（Decimal 且 keyText 留空时生效，0-255）", type: "number", default: 1 },
@@ -556,11 +556,11 @@ register({
       { value: "text", label: "文本 → 倒序 Hex" },
       { value: "hex", label: "Hex ↔ Hex（整串倒序，自逆）" },
     ] },
-    { key: "by", label: "By（Byte / Character / Line）", type: "select", default: "byte",
+    { key: "by", label: "倒序单位（字节 / 字符 / 行）", labelKey: "op.byteReverse.param.by", type: "select", default: "byte",
       options: [
-        { value: "byte", label: "Byte" },
-        { value: "character", label: "Character" },
-        { value: "line", label: "Line" },
+        { value: "byte", label: "字节", labelKey: "op.byteReverse.param.by.byte" },
+        { value: "character", label: "字符", labelKey: "op.byteReverse.param.by.character" },
+        { value: "line", label: "行", labelKey: "op.byteReverse.param.by.line" },
       ] },
   ],
   encode: (t, p) => {

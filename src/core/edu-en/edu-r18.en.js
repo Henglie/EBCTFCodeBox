@@ -87,7 +87,7 @@ export default {
   // ==================== Raster stego phase split ====================
   rasterStego: {
     what:
-      "Raster stego phase split (rasterStego) — a replica of zbRasterTerminator: it splits an image by each " +
+      "Raster stego phase split (rasterStego): it splits an image by each " +
       "divisor d of its width/height and by phase into multiple phase images that keep only " +
       "\"x % d == phase\" (or \"y % d == phase\"). Hidden text or patterns often become legible only in one " +
       "phase, while the original image looks normal.",
@@ -146,13 +146,13 @@ export default {
       "With alpha the default fill is transparent; if the output looks all black, compare fillMode=black and fillMode=transparent.",
       "When there are many products, start with small d (2, 3, 5, 10); large d makes the image sparse and text may be only a few columns wide.",
       "Limits are hard: `maxImages` defaults to 128 and `maxTotalPixels` to 64M; exceeding them raises RASTER_LIMIT_* instead of freezing the browser.",
-      "Sources and limits: local cross-check 49/0; reference `zbCrypto.zbRasterTerminator.py`; pure JS, zero DOM.",
+      "Sources and limits: local cross-check 49/0; pure JS, zero DOM.",
     ],
     aka: [
-      "光栅隐写", "光栅图拆图", "zbRasterTerminator", "光栅终止器", "相位拆图",
+      "光栅隐写", "光栅图拆图", "光栅终止器", "相位拆图",
       "x/y 相位图", "光栅扫描隐写", "栅格隐写", "raster stego", "raster terminator",
       "phase decomposition", "divisor phase images", "光栅图分离", "列/行相位拆图", "栅格拆图",
-      "raster phase split", "grid stego", "divisor split", "phase image", "zbRaster",
+      "raster phase split", "grid stego", "divisor split", "phase image",
     ],
   },
 

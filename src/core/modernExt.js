@@ -26,6 +26,7 @@
  */
 import { register } from "./registry.js";
 import { padBytes, unpadBytes, PADDING_OPTIONS } from "./modern.js";
+import { finishBytesDecode } from "./bytesIo.js";
 
 const te = (s) => new TextEncoder().encode(s);
 const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(b));
@@ -348,36 +349,60 @@ function sm4Tau(a) {
 function sm4L(b) { return (b ^ rotl(b, 2) ^ rotl(b, 10) ^ rotl(b, 18) ^ rotl(b, 24)) >>> 0; }
 // L' 线性变换（密钥扩展用）
 function sm4Lprime(b) { return (b ^ rotl(b, 13) ^ rotl(b, 23)) >>> 0; }
-// T = L ∘ τ（加密用）
-function sm4T(x) { return sm4L(sm4Tau(x)); }
+// T = L ∘ τ（加密用）：按字节位置预计算 4 张复合表，32 轮只做 4 次查表 + 异或
+const SM4_T0 = new Uint32Array(256);
+const SM4_T1 = new Uint32Array(256);
+const SM4_T2 = new Uint32Array(256);
+const SM4_T3 = new Uint32Array(256);
+for (let i = 0; i < 256; i++) {
+  const s = SM4_SBOX[i];
+  SM4_T0[i] = sm4L(s << 24);
+  SM4_T1[i] = sm4L(s << 16);
+  SM4_T2[i] = sm4L(s << 8);
+  SM4_T3[i] = sm4L(s);
+}
+function sm4T(x) {
+  return (SM4_T0[x >>> 24] ^ SM4_T1[(x >>> 16) & 0xff] ^ SM4_T2[(x >>> 8) & 0xff] ^ SM4_T3[x & 0xff]) >>> 0;
+}
 // T' = L' ∘ τ（密钥扩展用）
 function sm4Tprime(x) { return sm4Lprime(sm4Tau(x)); }
 
 function sm4KeyExpansion(key) {
-  const mk = [readU32BE(key, 0), readU32BE(key, 4), readU32BE(key, 8), readU32BE(key, 12)];
-  const k = [mk[0] ^ SM4_FK[0], mk[1] ^ SM4_FK[1], mk[2] ^ SM4_FK[2], mk[3] ^ SM4_FK[3]];
-  const rk = new Array(32);
+  const rk = new Uint32Array(32);
+  let k0 = readU32BE(key, 0) ^ SM4_FK[0];
+  let k1 = readU32BE(key, 4) ^ SM4_FK[1];
+  let k2 = readU32BE(key, 8) ^ SM4_FK[2];
+  let k3 = readU32BE(key, 12) ^ SM4_FK[3];
   for (let i = 0; i < 32; i++) {
-    const tmp = (k[1] ^ k[2] ^ k[3] ^ SM4_CK[i]) >>> 0;
-    rk[i] = (k[0] ^ sm4Tprime(tmp)) >>> 0;
-    k[0] = k[1]; k[1] = k[2]; k[2] = k[3]; k[3] = rk[i];
+    const tmp = (k1 ^ k2 ^ k3 ^ SM4_CK[i]) >>> 0;
+    const r = (k0 ^ sm4Tprime(tmp)) >>> 0;
+    rk[i] = r;
+    k0 = k1; k1 = k2; k2 = k3; k3 = r;
   }
   return rk;
 }
 
-function sm4CryptBlock(block, rk) {
-  let x = [readU32BE(block, 0), readU32BE(block, 4), readU32BE(block, 8), readU32BE(block, 12)];
+// 就地写入 out，避免每块新建数组；rk 为 32 轮密钥（解密传逆序表）
+function sm4CryptInto(block, inOff, out, outOff, rk) {
+  let x0 = readU32BE(block, inOff);
+  let x1 = readU32BE(block, inOff + 4);
+  let x2 = readU32BE(block, inOff + 8);
+  let x3 = readU32BE(block, inOff + 12);
   for (let i = 0; i < 32; i++) {
-    const tmp = (x[1] ^ x[2] ^ x[3] ^ rk[i]) >>> 0;
-    const newX = (x[0] ^ sm4T(tmp)) >>> 0;
-    x[0] = x[1]; x[1] = x[2]; x[2] = x[3]; x[3] = newX;
+    const tmp = (x1 ^ x2 ^ x3 ^ rk[i]) >>> 0;
+    const newX = (x0 ^ sm4T(tmp)) >>> 0;
+    x0 = x1; x1 = x2; x2 = x3; x3 = newX;
   }
  // 密文 = (X[35], X[34], X[33], X[32]) = 逆序
+  writeU32BE(out, outOff, x3);
+  writeU32BE(out, outOff + 4, x2);
+  writeU32BE(out, outOff + 8, x1);
+  writeU32BE(out, outOff + 12, x0);
+}
+
+function sm4CryptBlock(block, rk) {
   const out = new Uint8Array(16);
-  writeU32BE(out, 0, x[3]);
-  writeU32BE(out, 4, x[2]);
-  writeU32BE(out, 8, x[1]);
-  writeU32BE(out, 12, x[0]);
+  sm4CryptInto(block, 0, out, 0, rk);
   return out;
 }
 
@@ -388,6 +413,91 @@ function sm4DecryptBlock(block, key) {
   const rk = sm4KeyExpansion(key);
   rk.reverse(); // 解密用逆序 rk
   return sm4CryptBlock(block, rk);
+}
+
+// SM4 专用模式循环（复用已展开轮密钥，按块直写输出）
+function sm4EcbEnc(data, rk, pad) {
+  const d = padBytes(data, 16, pad);
+  const out = new Uint8Array(d.length);
+  for (let i = 0; i < d.length; i += 16) sm4CryptInto(d, i, out, i, rk);
+  return out;
+}
+function sm4EcbDec(data, rk, pad) {
+  if (data.length % 16) throw new Error("密文需为 16 字节整数倍");
+  const out = new Uint8Array(data.length);
+  for (let i = 0; i < data.length; i += 16) sm4CryptInto(data, i, out, i, rk);
+  return unpadBytes(out, 16, pad);
+}
+function sm4CbcEnc(data, rk, iv, pad) {
+  const d = padBytes(data, 16, pad);
+  const out = new Uint8Array(d.length);
+  const x = new Uint8Array(16);
+  for (let i = 0; i < d.length; i += 16) {
+    const po = i === 0 ? 0 : i - 16;
+    const prev = i === 0 ? iv : out;
+    for (let j = 0; j < 16; j++) x[j] = d[i + j] ^ prev[po + j];
+    sm4CryptInto(x, 0, out, i, rk);
+  }
+  return out;
+}
+function sm4CbcDec(data, dk, iv, pad) {
+  if (data.length % 16) throw new Error("密文需为 16 字节整数倍");
+  const out = new Uint8Array(data.length);
+  const tmp = new Uint8Array(16);
+  for (let i = 0; i < data.length; i += 16) {
+    sm4CryptInto(data, i, tmp, 0, dk);
+    const po = i === 0 ? 0 : i - 16;
+    const prev = i === 0 ? iv : data;
+    for (let j = 0; j < 16; j++) out[i + j] = tmp[j] ^ prev[po + j];
+  }
+  return unpadBytes(out, 16, pad);
+}
+function sm4CfbEnc(data, rk, iv) {
+  const out = new Uint8Array(data.length);
+  const ks = new Uint8Array(16);
+  for (let i = 0; i < data.length; i += 16) {
+    const src = i === 0 ? iv : out;
+    const so = i === 0 ? 0 : i - 16;
+    sm4CryptInto(src, so, ks, 0, rk);
+    const n = Math.min(16, data.length - i);
+    for (let j = 0; j < n; j++) out[i + j] = data[i + j] ^ ks[j];
+  }
+  return out;
+}
+function sm4CfbDec(data, rk, iv) {
+  const out = new Uint8Array(data.length);
+  const ks = new Uint8Array(16);
+  for (let i = 0; i < data.length; i += 16) {
+    const src = i === 0 ? iv : data;
+    const so = i === 0 ? 0 : i - 16;
+    sm4CryptInto(src, so, ks, 0, rk);
+    const n = Math.min(16, data.length - i);
+    for (let j = 0; j < n; j++) out[i + j] = data[i + j] ^ ks[j];
+  }
+  return out;
+}
+function sm4OfbCrypt(data, rk, iv) {
+  const out = new Uint8Array(data.length);
+  const fb = new Uint8Array(16);
+  fb.set(iv.subarray(0, 16));
+  for (let i = 0; i < data.length; i += 16) {
+    sm4CryptInto(fb, 0, fb, 0, rk);
+    const n = Math.min(16, data.length - i);
+    for (let j = 0; j < n; j++) out[i + j] = data[i + j] ^ fb[j];
+  }
+  return out;
+}
+function sm4CtrCrypt(data, rk, iv) {
+  const out = new Uint8Array(data.length);
+  const ctr = Uint8Array.from(iv.subarray(0, 16));
+  const ks = new Uint8Array(16);
+  for (let i = 0; i < data.length; i += 16) {
+    sm4CryptInto(ctr, 0, ks, 0, rk);
+    const n = Math.min(16, data.length - i);
+    for (let j = 0; j < n; j++) out[i + j] = data[i + j] ^ ks[j];
+    incCounter(ctr);
+  }
+  return out;
 }
 
 // ============================================================
@@ -670,14 +780,14 @@ export function sm4Encrypt(data, key, { mode = "ECB", iv, aad, pad = true, paddi
   }
   if (!SM4_MODES.has(mode)) throw new Error(`不支持的 SM4 模式: ${mode}`);
   if (mode !== "ECB" && (!iv || iv.length !== 16)) throw new Error(`SM4-${mode} IV 需 16 字节`);
-  const encBlock = (b) => sm4EncryptBlock(b, key);
+  const rk = sm4KeyExpansion(key);
   const ivv = iv || new Uint8Array(16);
   switch (mode) {
-    case "ECB": return ecbEncrypt(data, encBlock, 16, padOpt);
-    case "CBC": return cbcEncrypt(data, encBlock, 16, ivv, padOpt);
-    case "CFB": return cfbEncrypt(data, encBlock, 16, ivv); // 流模式，无填充
-    case "OFB": return ofbCrypt(data, encBlock, 16, ivv);
-    case "CTR": return ctrCrypt(data, encBlock, 16, ivv);
+    case "ECB": return sm4EcbEnc(data, rk, padOpt);
+    case "CBC": return sm4CbcEnc(data, rk, ivv, padOpt);
+    case "CFB": return sm4CfbEnc(data, rk, ivv); // 流模式，无填充
+    case "OFB": return sm4OfbCrypt(data, rk, ivv);
+    case "CTR": return sm4CtrCrypt(data, rk, ivv);
     default: throw new Error(`不支持的 SM4 模式: ${mode}`);
   }
 }
@@ -691,14 +801,15 @@ export function sm4Decrypt(data, key, { mode = "ECB", iv, aad, pad = true, paddi
   }
   if (!SM4_MODES.has(mode)) throw new Error(`不支持的 SM4 模式: ${mode}`);
   if (mode !== "ECB" && (!iv || iv.length !== 16)) throw new Error(`SM4-${mode} IV 需 16 字节`);
-  const encBlock = (b) => sm4EncryptBlock(b, key);
+  const rk = sm4KeyExpansion(key);
+  const drk = rk.slice().reverse();
   const ivv = iv || new Uint8Array(16);
   switch (mode) {
-    case "ECB": return ecbDecrypt(data, (b) => sm4DecryptBlock(b, key), 16, padOpt);
-    case "CBC": return cbcDecrypt(data, (b) => sm4DecryptBlock(b, key), 16, ivv, padOpt);
-    case "CFB": return cfbDecrypt(data, encBlock, 16, ivv); // CFB 解密也用加密函数（反馈 XOR）
-    case "OFB": return ofbCrypt(data, encBlock, 16, ivv);
-    case "CTR": return ctrCrypt(data, encBlock, 16, ivv);
+    case "ECB": return sm4EcbDec(data, drk, padOpt);
+    case "CBC": return sm4CbcDec(data, drk, ivv, padOpt);
+    case "CFB": return sm4CfbDec(data, rk, ivv); // CFB 解密也用加密函数（反馈 XOR）
+    case "OFB": return sm4OfbCrypt(data, rk, ivv);
+    case "CTR": return sm4CtrCrypt(data, rk, ivv);
     default: throw new Error(`不支持的 SM4 模式: ${mode}`);
   }
 }
@@ -771,88 +882,191 @@ function incCounter(ctr) {
 // GCTR 加密，GHASH 认证。输出 = ciphertext ‖ tag(16B)。
 // ============================================================
 
-// GF(2^128) 乘法（SP 800-38D §6.3 Algorithm 2，MSB-first 位序，reduction 多项式 0xE10000…0）
-// 注意：MSB-first 表示下「乘 x」= 右移（a128 移出，MSB 补 0），不能用左移。
-function gcmMul(x, y) {
-  let X = 0n, Y = 0n;
-  for (let i = 0; i < 16; i++) { X = (X << 8n) | BigInt(x[i]); Y = (Y << 8n) | BigInt(y[i]); }
-  const R = 0xe1000000000000000000000000000000n;
-  let Z = 0n, V = X;
-  for (let i = 0; i < 128; i++) {
-    if ((Y >> BigInt(127 - i)) & 1n) Z ^= V; // 从 Y 的 MSB 逐位检查
-    if (V & 1n) V = (V >> 1n) ^ R; else V >>= 1n;
+// GF(2^128) 乘法（SP 800-38D §6.3，MSB-first 位序，reduction 多项式 0xE10000…0）
+// 8-bit 预计算表：T_p[b] = (第 p 个字节 = b) · H，p=0..15；每块 16 次查表代替 128 次移位。
+const GCM_Y = new Uint32Array(4);
+const GCM_PAD = new Uint8Array(16);
+let gcmTableCache = null;
+let gcmCacheH0 = 0, gcmCacheH1 = 0, gcmCacheH2 = 0, gcmCacheH3 = 0;
+
+function gcmBuildTable(h0, h1, h2, h3) {
+  const t = new Uint32Array(16 * 256 * 4);
+  for (let b = 0; b < 256; b++) {
+    let v0 = h0, v1 = h1, v2 = h2, v3 = h3;
+    let z0 = 0, z1 = 0, z2 = 0, z3 = 0;
+    for (let bit = 0x80; bit !== 0; bit >>>= 1) {
+      if (b & bit) { z0 ^= v0; z1 ^= v1; z2 ^= v2; z3 ^= v3; }
+      const lsb = v3 & 1;
+      v3 = (v3 >>> 1) | (v2 << 31);
+      v2 = (v2 >>> 1) | (v1 << 31);
+      v1 = (v1 >>> 1) | (v0 << 31);
+      v0 = (v0 >>> 1) ^ (lsb ? 0xe1000000 : 0);
+    }
+    const o = b * 4;
+    t[o] = z0 >>> 0; t[o + 1] = z1 >>> 0; t[o + 2] = z2 >>> 0; t[o + 3] = z3 >>> 0;
   }
-  const out = new Uint8Array(16);
-  for (let i = 15; i >= 0; i--) { out[i] = Number(Z & 0xffn); Z >>= 8n; }
-  return out;
+  for (let p = 1; p < 16; p++) {
+    const prev = (p - 1) * 1024, cur = p * 1024;
+    for (let b = 0; b < 256; b++) {
+      const po = prev + b * 4;
+      let v0 = t[po], v1 = t[po + 1], v2 = t[po + 2], v3 = t[po + 3];
+      for (let k = 0; k < 8; k++) {
+        const lsb = v3 & 1;
+        v3 = (v3 >>> 1) | (v2 << 31);
+        v2 = (v2 >>> 1) | (v1 << 31);
+        v1 = (v1 >>> 1) | (v0 << 31);
+        v0 = (v0 >>> 1) ^ (lsb ? 0xe1000000 : 0);
+      }
+      const o = cur + b * 4;
+      t[o] = v0 >>> 0; t[o + 1] = v1 >>> 0; t[o + 2] = v2 >>> 0; t[o + 3] = v3 >>> 0;
+    }
+  }
+  return t;
+}
+
+function gcmGetTable(h0, h1, h2, h3) {
+  if (gcmTableCache && h0 === gcmCacheH0 && h1 === gcmCacheH1 && h2 === gcmCacheH2 && h3 === gcmCacheH3) {
+    return gcmTableCache;
+  }
+  gcmTableCache = gcmBuildTable(h0, h1, h2, h3);
+  gcmCacheH0 = h0; gcmCacheH1 = h1; gcmCacheH2 = h2; gcmCacheH3 = h3;
+  return gcmTableCache;
+}
+
+// GCM_Y *= H（表查完直接写回 GCM_Y）
+function gcmMulTable(t) {
+  const y0 = GCM_Y[0], y1 = GCM_Y[1], y2 = GCM_Y[2], y3 = GCM_Y[3];
+  let o = (y0 >>> 24) * 4;
+  let z0 = t[o], z1 = t[o + 1], z2 = t[o + 2], z3 = t[o + 3];
+  o = 1024 + ((y0 >>> 16) & 0xff) * 4;
+  z0 ^= t[o]; z1 ^= t[o + 1]; z2 ^= t[o + 2]; z3 ^= t[o + 3];
+  o = 2048 + ((y0 >>> 8) & 0xff) * 4;
+  z0 ^= t[o]; z1 ^= t[o + 1]; z2 ^= t[o + 2]; z3 ^= t[o + 3];
+  o = 3072 + (y0 & 0xff) * 4;
+  z0 ^= t[o]; z1 ^= t[o + 1]; z2 ^= t[o + 2]; z3 ^= t[o + 3];
+  o = 4096 + (y1 >>> 24) * 4;
+  z0 ^= t[o]; z1 ^= t[o + 1]; z2 ^= t[o + 2]; z3 ^= t[o + 3];
+  o = 5120 + ((y1 >>> 16) & 0xff) * 4;
+  z0 ^= t[o]; z1 ^= t[o + 1]; z2 ^= t[o + 2]; z3 ^= t[o + 3];
+  o = 6144 + ((y1 >>> 8) & 0xff) * 4;
+  z0 ^= t[o]; z1 ^= t[o + 1]; z2 ^= t[o + 2]; z3 ^= t[o + 3];
+  o = 7168 + (y1 & 0xff) * 4;
+  z0 ^= t[o]; z1 ^= t[o + 1]; z2 ^= t[o + 2]; z3 ^= t[o + 3];
+  o = 8192 + (y2 >>> 24) * 4;
+  z0 ^= t[o]; z1 ^= t[o + 1]; z2 ^= t[o + 2]; z3 ^= t[o + 3];
+  o = 9216 + ((y2 >>> 16) & 0xff) * 4;
+  z0 ^= t[o]; z1 ^= t[o + 1]; z2 ^= t[o + 2]; z3 ^= t[o + 3];
+  o = 10240 + ((y2 >>> 8) & 0xff) * 4;
+  z0 ^= t[o]; z1 ^= t[o + 1]; z2 ^= t[o + 2]; z3 ^= t[o + 3];
+  o = 11264 + (y2 & 0xff) * 4;
+  z0 ^= t[o]; z1 ^= t[o + 1]; z2 ^= t[o + 2]; z3 ^= t[o + 3];
+  o = 12288 + (y3 >>> 24) * 4;
+  z0 ^= t[o]; z1 ^= t[o + 1]; z2 ^= t[o + 2]; z3 ^= t[o + 3];
+  o = 13312 + ((y3 >>> 16) & 0xff) * 4;
+  z0 ^= t[o]; z1 ^= t[o + 1]; z2 ^= t[o + 2]; z3 ^= t[o + 3];
+  o = 14336 + ((y3 >>> 8) & 0xff) * 4;
+  z0 ^= t[o]; z1 ^= t[o + 1]; z2 ^= t[o + 2]; z3 ^= t[o + 3];
+  o = 15360 + (y3 & 0xff) * 4;
+  z0 ^= t[o]; z1 ^= t[o + 1]; z2 ^= t[o + 2]; z3 ^= t[o + 3];
+  GCM_Y[0] = z0 >>> 0; GCM_Y[1] = z1 >>> 0; GCM_Y[2] = z2 >>> 0; GCM_Y[3] = z3 >>> 0;
+}
+
+// 累加若干 16 字节块：Y_i = (Y_{i-1} ⊕ X_i) · H（末块不足 16 字节补零）
+function gcmAbsorbBlocks(bytes, t) {
+  const y = GCM_Y;
+  let off = 0;
+  const full = bytes.length & ~15;
+  for (; off < full; off += 16) {
+    y[0] ^= readU32BE(bytes, off);
+    y[1] ^= readU32BE(bytes, off + 4);
+    y[2] ^= readU32BE(bytes, off + 8);
+    y[3] ^= readU32BE(bytes, off + 12);
+    gcmMulTable(t);
+  }
+  if (off < bytes.length) {
+    GCM_PAD.fill(0);
+    GCM_PAD.set(bytes.subarray(off));
+    y[0] ^= readU32BE(GCM_PAD, 0);
+    y[1] ^= readU32BE(GCM_PAD, 4);
+    y[2] ^= readU32BE(GCM_PAD, 8);
+    y[3] ^= readU32BE(GCM_PAD, 12);
+    gcmMulTable(t);
+  }
 }
 // 按 16 字节块累加 GHASH：Y_i = (Y_{i-1} ⊕ X_i) · H，最后补 len(A)‖len(C)（各 64 位）。
 function gcmGhash(h, aad, c) {
-  const y = new Uint8Array(16);
-  let acc = y;
-  const blocks = [];
-  for (let i = 0; i < aad.length; i += 16) blocks.push(aad.subarray(i, i + 16));
-  for (let i = 0; i < c.length; i += 16) blocks.push(c.subarray(i, i + 16));
-  const full = new Uint8Array(16);
-  for (const b of blocks) {
-    full.fill(0);
-    full.set(b);
-    acc = gcmMul(xorBytes(acc, full), h);
-  }
+  const h0 = readU32BE(h, 0), h1 = readU32BE(h, 4), h2 = readU32BE(h, 8), h3 = readU32BE(h, 12);
+  const t = gcmGetTable(h0, h1, h2, h3);
+  GCM_Y.fill(0);
+  gcmAbsorbBlocks(aad, t);
+  gcmAbsorbBlocks(c, t);
   // len(A)‖len(C)，各 64 位大端（输入以字节计，×8 转位；< 2^53 安全）
-  const lenBlock = new Uint8Array(16);
-  const la = BigInt(aad.length * 8), lc = BigInt(c.length * 8);
-  lenBlock[0] = Number((la >> 56n) & 0xffn); lenBlock[1] = Number((la >> 48n) & 0xffn);
-  lenBlock[2] = Number((la >> 40n) & 0xffn); lenBlock[3] = Number((la >> 32n) & 0xffn);
-  lenBlock[4] = Number((la >> 24n) & 0xffn); lenBlock[5] = Number((la >> 16n) & 0xffn);
-  lenBlock[6] = Number((la >> 8n) & 0xffn);  lenBlock[7] = Number(la & 0xffn);
-  lenBlock[8]  = Number((lc >> 56n) & 0xffn); lenBlock[9]  = Number((lc >> 48n) & 0xffn);
-  lenBlock[10] = Number((lc >> 40n) & 0xffn); lenBlock[11] = Number((lc >> 32n) & 0xffn);
-  lenBlock[12] = Number((lc >> 24n) & 0xffn); lenBlock[13] = Number((lc >> 16n) & 0xffn);
-  lenBlock[14] = Number((lc >> 8n) & 0xffn);  lenBlock[15] = Number(lc & 0xffn);
-  return gcmMul(xorBytes(acc, lenBlock), h);
+  const la = aad.length * 8, lc = c.length * 8;
+  const lah = Math.floor(la / 4294967296), lal = la >>> 0;
+  const lch = Math.floor(lc / 4294967296), lcl = lc >>> 0;
+  GCM_Y[0] ^= lah; GCM_Y[1] ^= lal; GCM_Y[2] ^= lch; GCM_Y[3] ^= lcl;
+  gcmMulTable(t);
+  const out = new Uint8Array(16);
+  writeU32BE(out, 0, GCM_Y[0]);
+  writeU32BE(out, 4, GCM_Y[1]);
+  writeU32BE(out, 8, GCM_Y[2]);
+  writeU32BE(out, 12, GCM_Y[3]);
+  return out;
 }
-// 计数器低位 +1（32 位递增，照 SP 800-38D inc32）
+// 计数器低位 +1（32 位递增，照 SP 800-38D inc32），就地更新
+function inc32InPlace(cb) {
+  for (let i = 15; i >= 12; i--) {
+    cb[i] = (cb[i] + 1) & 0xff;
+    if (cb[i] !== 0) break;
+  }
+}
 function inc32(cb) {
   const o = cb.slice();
-  for (let i = 15; i >= 12; i--) { o[i] = (o[i] + 1) & 0xff; if (o[i] !== 0) break; }
+  inc32InPlace(o);
   return o;
 }
-// GCTR：C = P ⊕ E_K(ICB++）
-function gcmGctr(encBlock, icb, data) {
+// GCTR：C = P ⊕ E_K(ICB++)，复用 counter/keystream 缓冲
+function gcmGctr(rk, icb, data) {
   const out = new Uint8Array(data.length);
-  let cb = icb.slice();
+  const cb = icb.slice();
+  const ks = new Uint8Array(16);
   for (let i = 0; i < data.length; i += 16) {
-    const ks = encBlock(cb);
+    sm4CryptInto(cb, 0, ks, 0, rk);
     const n = Math.min(16, data.length - i);
     for (let j = 0; j < n; j++) out[i + j] = data[i + j] ^ ks[j];
-    cb = inc32(cb);
+    inc32InPlace(cb);
   }
   return out;
 }
 // J0：IV=12 字节 → IV‖0^31‖1；否则 J0 = GHASH_H(IV‖0^(s+64)‖[len(IV)]_64)
 // 注：整串作为 GHASH 数据（不追加 AAD/C 长度块），长度字段内嵌在串末尾。
-function gcmJ0(encBlock, iv) {
+function gcmJ0(rk, iv) {
   if (iv.length === 12) {
     const j0 = new Uint8Array(16);
     j0.set(iv);
     j0[15] = 1;
     return j0;
   }
-  const h = encBlock(new Uint8Array(16));
+  const zero = new Uint8Array(16);
+  const h = new Uint8Array(16);
+  sm4CryptInto(zero, 0, h, 0, rk);
   const s = (16 - (iv.length % 16)) % 16; // 补到块边界的零字节数
   const buf = new Uint8Array(iv.length + s + 16);
   buf.set(iv, 0);
-  const bitLen = BigInt(iv.length * 8);
+  const bits = iv.length * 8;
   const off = iv.length + s + 8; // 0^(s+64) 后 8 字节放 len(IV)
-  for (let i = 0; i < 8; i++) buf[off + i] = Number((bitLen >> BigInt(56 - 8 * i)) & 0xffn);
-  const full = new Uint8Array(16);
-  let acc = new Uint8Array(16);
-  for (let i = 0; i < buf.length; i += 16) {
-    full.fill(0);
-    full.set(buf.subarray(i, i + 16));
-    acc = gcmMul(xorBytes(acc, full), h);
-  }
+  const hi = Math.floor(bits / 4294967296), lo = bits >>> 0;
+  buf[off] = (hi >>> 24) & 0xff; buf[off + 1] = (hi >>> 16) & 0xff; buf[off + 2] = (hi >>> 8) & 0xff; buf[off + 3] = hi & 0xff;
+  buf[off + 4] = (lo >>> 24) & 0xff; buf[off + 5] = (lo >>> 16) & 0xff; buf[off + 6] = (lo >>> 8) & 0xff; buf[off + 7] = lo & 0xff;
+  const h0 = readU32BE(h, 0), h1 = readU32BE(h, 4), h2 = readU32BE(h, 8), h3 = readU32BE(h, 12);
+  const t = gcmGetTable(h0, h1, h2, h3);
+  GCM_Y.fill(0);
+  gcmAbsorbBlocks(buf, t);
+  const acc = new Uint8Array(16);
+  writeU32BE(acc, 0, GCM_Y[0]);
+  writeU32BE(acc, 4, GCM_Y[1]);
+  writeU32BE(acc, 8, GCM_Y[2]);
+  writeU32BE(acc, 12, GCM_Y[3]);
   return acc;
 }
 // SM4-GCM tag 长度（字节），与 SP 800-38D 允许的截断档一致
@@ -866,12 +1080,14 @@ function sm4NormTagLen(tagLen) {
 // SM4-GCM 加密：返回 ciphertext ‖ tag（tagLen 字节，默认 16）
 export function sm4GcmEncrypt(data, key, iv, aad, tagLen = 16) {
   const tl = sm4NormTagLen(tagLen);
-  const encBlock = (b) => sm4EncryptBlock(b, key);
-  const h = encBlock(new Uint8Array(16));
-  const j0 = gcmJ0(encBlock, iv);
-  const c = gcmGctr(encBlock, inc32(j0), data);
+  const rk = sm4KeyExpansion(key);
+  const zero = new Uint8Array(16);
+  const h = new Uint8Array(16);
+  sm4CryptInto(zero, 0, h, 0, rk);
+  const j0 = gcmJ0(rk, iv);
+  const c = gcmGctr(rk, inc32(j0), data);
   const s = gcmGhash(h, aad || new Uint8Array(0), c);
-  const t = gcmGctr(encBlock, j0, s).subarray(0, tl);
+  const t = gcmGctr(rk, j0, s).subarray(0, tl);
   const out = new Uint8Array(c.length + tl);
   out.set(c, 0);
   out.set(t, c.length);
@@ -883,15 +1099,17 @@ export function sm4GcmDecrypt(data, key, iv, aad, tagLen = 16) {
   if (data.length < tl) throw new Error("SM4-GCM 密文过短（需含 tag）");
   const c = data.subarray(0, data.length - tl);
   const tag = data.subarray(data.length - tl);
-  const encBlock = (b) => sm4EncryptBlock(b, key);
-  const h = encBlock(new Uint8Array(16));
-  const j0 = gcmJ0(encBlock, iv);
+  const rk = sm4KeyExpansion(key);
+  const zero = new Uint8Array(16);
+  const h = new Uint8Array(16);
+  sm4CryptInto(zero, 0, h, 0, rk);
+  const j0 = gcmJ0(rk, iv);
   const s = gcmGhash(h, aad || new Uint8Array(0), c);
-  const t = gcmGctr(encBlock, j0, s).subarray(0, tl);
+  const t = gcmGctr(rk, j0, s).subarray(0, tl);
   let diff = 0;
   for (let i = 0; i < tl; i++) diff |= tag[i] ^ t[i];
   if (diff !== 0) throw new Error("SM4-GCM tag 校验失败（密钥/IV/密文可能错误）");
-  return gcmGctr(encBlock, inc32(j0), c);
+  return gcmGctr(rk, inc32(j0), c);
 }
 
 // ============================================================
@@ -1004,7 +1222,7 @@ function makeBlockOp(encFn, decFn) {
         if (data.length < ivLen + tl) continue;
         const iv = o.includeIv === "prepend" ? data.subarray(0, ivLen) : data.subarray(data.length - ivLen);
         const body = o.includeIv === "prepend" ? data.subarray(ivLen) : data.subarray(0, data.length - ivLen);
-        try { return td(decFn(body, key, { ...o, iv })); }
+        try { return finishBytesDecode(decFn(body, key, { ...o, iv })); }
         catch (e) { lastErr = e; }
       }
       throw lastErr || new Error("GCM Include IV 解密失败：无法确定 IV 长度");
@@ -1033,7 +1251,7 @@ function makeBlockOp(encFn, decFn) {
       if (tag.length !== tl) throw new Error(`GCM 独立 tag 需 ${tl} 字节（当前 ${tag.length} 字节）`);
       data = concatBytes(data, tag);
     }
-    return td(decFn(data, key, o));
+    return finishBytesDecode(decFn(data, key, o));
   };
   return { encode, decode };
 }
@@ -1071,7 +1289,7 @@ function makeBlockOp(encFn, decFn) {
   const decode = (text, p) => {
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
     const data = rawBytesOrNull(p, text.trim()) || decodeInput(text.trim(), p.outEnc || "base64");
-    return td(xxteaDecrypt(data, key));
+    return finishBytesDecode(xxteaDecrypt(data, key));
   };
   register({
     id: "xxtea",
@@ -1145,7 +1363,7 @@ function makeStreamCipherOp(fn, keyHint, nonceHint, integerNonceLen = 8) {
     const counter = Number(p.counter) || 0;
     const rounds = p.rounds ? Number(p.rounds) : 20;
     const data = rawBytesOrNull(p, text.trim()) || decodeInput(text.trim(), (p && p.inEnc) || p.outEnc || "base64");
-    return td(fn(data, key, nonce, counter, rounds));
+    return finishBytesDecode(fn(data, key, nonce, counter, rounds));
   };
   return { params, encode, decode };
 }
@@ -1176,7 +1394,9 @@ function makeStreamCipherOp(fn, keyHint, nonceHint, integerNonceLen = 8) {
   const decode = (text, p) => {
     const data = rawBytesOrNull(p, text.trim()) || decodeInput(text.trim(), p.outEnc || "hex");
     const key = decodeInput(p.key || "", p.keyEnc || "utf8");
-    return encodeOutput(xorExtend(data, key), p.inEnc || "utf8");
+    const out = xorExtend(data, key);
+    const outEnc = p.inEnc || "utf8";
+    return outEnc === "utf8" ? finishBytesDecode(out) : encodeOutput(out, outEnc);
   };
   register({
     id: "xorStrings",

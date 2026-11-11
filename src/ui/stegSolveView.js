@@ -346,9 +346,22 @@ export function openStegSolveView(source, opts = {}) {
   const combineMode = el("select", { class: "stegsolve-select", "aria-label": "合并方式" },
     ...COMBINE_MODES.map((m) => el("option", { value: m }, m.toUpperCase())));
   const combineCanvas = el("canvas", { class: "stegsolve-canvas", role: "img", "aria-label": "图像合并预览" });
-  const combineCaption = el("div", { class: "stegsolve-caption", text: "选择第二张同尺寸图像后合并" });
+  const combineCaption = el("div", { class: "stegsolve-caption", text: "点击或拖入第二张同尺寸图像后合并" });
   const exportCombineBtn = el("button", { type: "button", class: "stegsolve-btn primary", disabled: "" }, "导出合并结果 PNG");
-  const combineStage = el("div", { class: "stegsolve-stage stegsolve-drop" }, combineCanvas);
+  const combineStage = el("div", {
+    class: "stegsolve-stage stegsolve-drop",
+    role: "button",
+    tabindex: "0",
+    "aria-label": "选择第二张图像：点击选择文件，或拖入图片",
+    title: "点击选择第二张图像，或直接拖入",
+  }, combineCanvas);
+  combineStage.addEventListener("click", () => combineFile.click());
+  combineStage.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      combineFile.click();
+    }
+  });
 
   const combinePanel = el("div", {
     class: "stegsolve-panel", id: "stegsolve-panel-combine", role: "tabpanel", "aria-labelledby": "stegsolve-tab-combine", hidden: "",

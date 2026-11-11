@@ -18,6 +18,13 @@
 import { pngCheckSig, pngParseChunks } from "./stegoImage2.js";
 import { inflateRaw } from "./pcapDeep.js";
 import { crc32 as _crc32Std } from "./formatTable.js";
+import { checkLimit, isLimitError } from "./limitGuard.js";
+
+const MAX_CHUNKS = 10000;                       // 单次报告/导出遍历块数软阈值
+const MAX_CHUNKS_HARD = 40000;                  // 确认后的硬上限
+const MAX_EXPORT_TOTAL = 64 * 1024 * 1024;      // 原块导出总字节软阈值
+const MAX_EXPORT_TOTAL_HARD = 256 * 1024 * 1024; // 确认后的硬上限
+const INFLATE_SLACK = 1024 * 1024;               // 索引流解压相对扫描线预期的余量
 
 // CRC32（PNG chunk 校验，多项式 0xEDB88320）：等价收敛——统一走声明式格式表的 crc32（ISO 3309 / ITU-T V.42）
 function _crc32(bytes, start, end) {
@@ -29,16 +36,16 @@ function _hex4(n) { return (n >>> 0).toString(16).padStart(8, "0"); }
 
 // zlib 流解压（RFC 1950）：校验 2 字节头（CM=8 且 CMF/FLG 为 31 的倍数），
 // 剥头部 2 字节与尾 adler32 4 字节后走仓库内 inflateRaw（同 compress.js/stegoPixels.js 范式）。
-function _inflateZlib(zb) {
+function _inflateZlib(zb, params, maxOutput) {
   if (!zb || zb.length < 6) throw new Error("zlib 数据过短");
   const cmf = zb[0], flg = zb[1];
   if ((cmf & 0x0f) !== 8) throw new Error("zlib CM≠8（压缩方法非法）");
   if (((cmf << 8) | flg) % 31 !== 0) throw new Error("zlib 头校验失败（CMF/FLG 非 31 倍数）");
-  return inflateRaw(zb.subarray(2, zb.length - 4));
+  return inflateRaw(zb.subarray(2, zb.length - 4), maxOutput, params);
 }
 
 // 从文本块 chunk 提取关键字/值（tEXt 明文；zTXt/iTXt 压缩文本经仓库内 inflate 解出）
-function _extractText(bytes, c) {
+function _extractText(bytes, c, params) {
   const d = bytes.subarray(c.dataOff, c.dataOff + c.len);
   const nul = d.indexOf(0);
   if (c.type === "tEXt") {
@@ -50,7 +57,7 @@ function _extractText(bytes, c) {
     const kw = nul >= 0 ? _latin1(d, 0, nul) : "";
     const comp = nul >= 0 ? d.subarray(nul + 2) : new Uint8Array(0);
     let val = null;
-    try { val = new TextDecoder("utf-8", { fatal: false }).decode(_inflateZlib(comp)); } catch (e) { /* 压缩流损坏 → 仅标注 */ }
+    try { val = new TextDecoder("utf-8", { fatal: false }).decode(_inflateZlib(comp, params)); } catch (e) { if (isLimitError(e)) throw e; /* 压缩流损坏 → 仅标注 */ }
     return { type: "zTXt", kw, val: val !== null ? val : `(zlib 压缩 ${comp.length} 字节，解压失败)` };
   }
   if (c.type === "iTXt") {
@@ -66,7 +73,7 @@ function _extractText(bytes, c) {
       if (compFlag === 0) val = new TextDecoder("utf-8", { fatal: false }).decode(raw);
       else {
         let dec = null;
-        try { dec = new TextDecoder("utf-8", { fatal: false }).decode(_inflateZlib(raw)); } catch (e) { /* 损坏 → 仅标注 */ }
+        try { dec = new TextDecoder("utf-8", { fatal: false }).decode(_inflateZlib(raw, params)); } catch (e) { if (isLimitError(e)) throw e; /* 损坏 → 仅标注 */ }
         val = dec !== null ? dec : `(zlib 压缩 ${raw.length} 字节，解压失败)`;
       }
     }
@@ -76,15 +83,28 @@ function _extractText(bytes, c) {
 }
 
 // 可打印 ASCII 串（≥min 个连续字符）：暴露越界块里的明文片段。
-function _asciiRuns(b, min = 4) {
+// 报告用途，总输出上限 maxTotal，避免大 base64/尾部数据整段灌进文本区。
+function _asciiRuns(b, min = 4, maxTotal = 2048) {
   const out = [];
-  let cur = "";
+  let cur = "", total = 0;
+  const flush = () => {
+    if (cur.length >= min && total < maxTotal) {
+      const room = maxTotal - total;
+      const s = cur.length > room ? cur.slice(0, room) : cur;
+      out.push(s);
+      total += s.length;
+    }
+    cur = "";
+  };
   for (let i = 0; i < b.length; i++) {
     const c = b[i];
-    if (c >= 0x20 && c < 0x7F) cur += String.fromCharCode(c);
-    else { if (cur.length >= min) out.push(cur); cur = ""; }
+    if (c >= 0x20 && c < 0x7F) {
+      if (total + cur.length >= maxTotal) { flush(); break; }
+      cur += String.fromCharCode(c);
+    } else flush();
+    if (total >= maxTotal) break;
   }
-  if (cur.length >= min) out.push(cur);
+  flush();
   return out;
 }
 function _findSeq(b, s) {
@@ -106,13 +126,25 @@ function _hexBytes(b, n) {
  *  lenInvalid=true 表示块声明长度超出文件剩余字节（伪造块 / 尾部隐藏数据）：
  *  此时 dataLen 为文件里真实可用的字节数，hiddenHex/hiddenText 暴露块内明文，
  *  hasIend 表示真实 IEND 被该块长度吞入。 */
-function pngChunkCrcReport(bytes) {
+function pngChunkCrcReport(bytes, params) {
   if (!pngCheckSig(bytes)) return null;
   const chunks = pngParseChunks(bytes);
+  if (chunks.length > MAX_CHUNKS) {
+    checkLimit({
+      scope: "pngChunks.report.chunkCount",
+      actual: chunks.length,
+      soft: MAX_CHUNKS,
+      hard: MAX_CHUNKS_HARD,
+      params,
+      label: "PNG 块数量",
+      unit: " 个",
+    });
+  }
   const out = [];
   const texts = [];
   let anyCrcFail = false;
   for (const c of chunks) {
+    if (out.length >= MAX_CHUNKS_HARD) break;
     const crcPos = c.dataOff + c.len;
     const lenInvalid = c.lenInvalid === true || crcPos + 4 > bytes.length;
     let storedCrc = null, calcCrc = null, crcOk = null;
@@ -133,7 +165,7 @@ function pngChunkCrcReport(bytes) {
     }
     out.push(item);
     if (c.type === "tEXt" || c.type === "zTXt" || c.type === "iTXt") {
-      const t = _extractText(bytes, c);
+      const t = _extractText(bytes, c, params);
       if (t) texts.push(t);
     }
   }
@@ -153,19 +185,40 @@ function _paeth(a, b, c) {
  * 返回 Uint8Array（每行 w*bitDepth/8 字节打包索引），非调色板图返回 null。
  * IDAT 任意分块（含单字节/空 IDAT）不影响：拼接后再解压（W3C PNG：IDAT 是一条连续流）。
  */
-function pngIndexStream(bytes, ihdrInfo) {
+function pngIndexStream(bytes, ihdrInfo, params) {
   const { width, height, bitDepth, colorType } = ihdrInfo;
   if (colorType !== 3) return null;
   const chunks = pngParseChunks(bytes);
   let zs = [];
   for (const c of chunks) if (c.type === "IDAT") zs.push(bytes.subarray(c.dataOff, c.dataOff + c.len));
   const total = zs.reduce((n, z) => n + z.length, 0);
+  // 预算先于拼接/解压：压缩 IDAT 与解压后的扫描线都先过统一阈值，避免先分配再确认。
+  checkLimit({
+    scope: "pngChunks.export.indexCompressed",
+    actual: total,
+    soft: MAX_EXPORT_TOTAL,
+    hard: MAX_EXPORT_TOTAL_HARD,
+    params,
+    label: "PNG 索引流压缩数据",
+    unit: " 字节",
+  });
+  const rowBytes = Math.max(1, Math.ceil((width * bitDepth) / 8));
+  const expected = height * (rowBytes + 1);
+  if (!Number.isSafeInteger(expected) || expected <= 0) throw new Error(`索引位流尺寸非法（${width}×${height}，bitDepth=${bitDepth}）`);
+  checkLimit({
+    scope: "pngChunks.export.indexStream",
+    actual: expected,
+    soft: MAX_EXPORT_TOTAL,
+    hard: MAX_EXPORT_TOTAL_HARD,
+    params,
+    label: "PNG 索引位流导出",
+    unit: " 字节",
+  });
   const zbuf = new Uint8Array(total);
   let o = 0;
   for (const z of zs) { zbuf.set(z, o); o += z.length; }
-  const raw = _inflateZlib(zbuf);
-  const rowBytes = Math.max(1, Math.ceil((width * bitDepth) / 8));
-  if (raw.length < height * (rowBytes + 1)) throw new Error(`IDAT 解压后 ${raw.length} 字节 < 期望 ${height * (rowBytes + 1)}（每行含 1 过滤字节）——数据损坏或参数不符`);
+  const raw = _inflateZlib(zbuf, params, expected + INFLATE_SLACK);
+  if (raw.length < expected) throw new Error(`IDAT 解压后 ${raw.length} 字节 < 期望 ${expected}（每行含 1 过滤字节）——数据损坏或参数不符`);
   const out = new Uint8Array(height * rowBytes);
   const prev = new Uint8Array(rowBytes);
   for (let y = 0; y < height; y++) {
@@ -191,9 +244,20 @@ function pngIndexStream(bytes, ihdrInfo) {
  * 原块逐字节导出 + PLTE/tRNS + 调色板索引位流。非 PNG 返回 null。
  * chunks[].raw 含 长度(4)+类型(4)+数据(len)+CRC(4) 整块原字节，逐字节保留。
  */
-function pngChunkRawExport(bytes) {
+function pngChunkRawExport(bytes, params) {
   if (!pngCheckSig(bytes)) return null;
   const chunks = pngParseChunks(bytes);
+  if (chunks.length > MAX_CHUNKS) {
+    checkLimit({
+      scope: "pngChunks.export.chunkCount",
+      actual: chunks.length,
+      soft: MAX_CHUNKS,
+      hard: MAX_CHUNKS_HARD,
+      params,
+      label: "PNG 块数量",
+      unit: " 个",
+    });
+  }
   const ihdr = chunks.find((c) => c.type === "IHDR");
   let ihdrInfo = null;
   if (ihdr && ihdr.len >= 13) {
@@ -203,19 +267,40 @@ function pngChunkRawExport(bytes) {
       compression: bytes[ihdr.dataOff + 10], filter: bytes[ihdr.dataOff + 11], interlace: bytes[ihdr.dataOff + 12],
     };
   }
+  // 统一预算先于任何 slice：先统计全部要导出的原块字节数，确认通过后再逐块复制。
+  // 旧实现边切边算，超限时已经复制了软阈值内的数据才弹确认。
+  const exportTotal = chunks.reduce((n, c) => {
+    const totalLen = Math.min(c.len + 12, Math.max(0, bytes.length - c.totalOff));
+    return n + totalLen;
+  }, 0);
+  if (!Number.isSafeInteger(exportTotal) || exportTotal < 0) throw new Error("PNG 原块导出长度非法");
+  checkLimit({
+    scope: "pngChunks.export.totalBytes",
+    actual: exportTotal,
+    soft: MAX_EXPORT_TOTAL,
+    hard: MAX_EXPORT_TOTAL_HARD,
+    params,
+    label: "PNG 原块导出",
+    unit: " 字节",
+  });
   const out = [];
   let plte = null, trns = null;
+  let exportTruncated = false;
   for (const c of chunks) {
-    const totalLen = Math.min(c.len + 12, bytes.length - c.totalOff);
+    if (out.length >= MAX_CHUNKS_HARD) { exportTruncated = true; break; }
+    const totalLen = Math.min(c.len + 12, Math.max(0, bytes.length - c.totalOff));
     out.push({ type: c.type, len: c.len, offset: c.totalOff, raw: bytes.slice(c.totalOff, c.totalOff + totalLen) });
     if (c.type === "PLTE") plte = { count: Math.floor(c.len / 3), bytes: bytes.slice(c.dataOff, c.dataOff + c.len) };
     if (c.type === "tRNS") trns = { count: c.len, bytes: bytes.slice(c.dataOff, c.dataOff + c.len) };
   }
   let indexStream = null, indexError = null;
   if (ihdrInfo && ihdrInfo.colorType === 3 && ihdrInfo.interlace === 0) {
-    try { indexStream = pngIndexStream(bytes, ihdrInfo); } catch (e) { indexError = (e && e.message) || String(e); }
+    try { indexStream = pngIndexStream(bytes, ihdrInfo, params); } catch (e) {
+      if (isLimitError(e)) throw e;
+      indexError = (e && e.message) || String(e);
+    }
   }
-  return { chunks: out, plte, trns, indexStream, indexError, ihdr: ihdrInfo };
+  return { chunks: out, plte, trns, indexStream, indexError, ihdr: ihdrInfo, exportTruncated };
 }
 
 export { pngChunkCrcReport, pngChunkRawExport, pngIndexStream, _inflateZlib };

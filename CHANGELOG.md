@@ -2,6 +2,46 @@
 
 > 本文档记录完整更新历史。README.md「更新日志」仅保留最新版本变更。
 
+## v0.2.0-beta（2026-11-11）
+
+> 0.2.0 beta 聚焦资源阈值、稳定性、MCP 与大产物处理；0.1.15 的 UI 与 978 个算法基线保留。
+
+### 新增功能
+
+- 资源阈值确认体系：主线程 / Worker 共用 `limitGuard`，软阈值确认、硬上限、用户取消、确认后重试一次贯通；覆盖图像、GIF、音频、ZIP/7z/TAR、LZMA、LZ4、DeepSound、PNG 块、图片 FFT。
+- MCP 结构化结果：超限错误返回 `code/meta/retryable`，新增 `allowOverLimit`；超过 128KB 的产物不内联，要求 `outputDir`，返回 `omitted`/路径/sha256；stdio 单行输出有上限。
+- 音频新增“只分析前 N 分钟”预览参数：`morseWav`、`spectrogram`、`audioAnalysis` 支持 `previewMinutes`，默认 0=全量。
+- 归档阈值统一：ZIP/7z/TAR 文件数软 1000/硬 5000，总量与单成员软 256MiB/硬 1GiB；7z 不再到 800 条静默截断，TAR 接入统一确认。
+- 输出统一 128KB 内联阈值：小结果可读 base64，大结果只给下载/落盘；ZIP 修复不再把整档 base64 塞进报告。
+- StegSolve：桌面单列全宽，点击拖入区可选择图像，StegSolve 菜单在当前分类置顶并高亮。
+- 参数标签支持中英切换；XOR 单字节爆破的“已知明文片段”等文案清理。
+- 贡献者新增“江北”，角色为投喂者，说明“提供海量词元用于项目开发”。
+
+### 修复
+
+- GIF 多帧提取：移除 30 秒墙钟和每帧 2 秒 CompressionStream 等待；浏览器改用原生 PNG 编码，36 帧 126×126 实测 39ms / ZIP 59KB，Node 兜底 53ms。
+- 修复软阈值确认后嵌套解码/解压仍抛 `LIMIT_CONFIRM` 的问题；确认状态可贯穿同一次调用。
+- 修复 Worker 单例并发时确认状态串任务、超时后僵尸 Worker、`postMessage` 失败 pending 泄漏。
+- 修复 `LIMIT_CANCEL` / `LIMIT_HARD` 被 canvas、direct、7z 兜底吞掉；穷举取消不再回主线程二次确认/二次执行。
+- 修复批量 `allowAll` 泄漏、morse/f5/StegSolve 重复确认、ZIP Deflate 丢失限额错误码、7z 200 条静默截断。
+- 修复 Service Worker 先 reload 后预缓存导致继续跑旧 JS；改为 install 完成预缓存再 activating。
+- 移除敏感来源的算法名、注释与搜索别名明文引用；`资料/` 不入库；旧 git 历史未重写。
+
+### 优化与验证
+
+- magic 改为候选数/工作量预算，不再把墙钟当唯一截止，避免后台标签页定时器节流导致漏候选。
+- bridge 输入/文件/总量统一软 128MiB / 硬 512MiB，base64 解码前预检。
+- imgFft 先读文件头再解码；PNG 块导出先预算再切片；GIF 合成对齐 16M/64M；LZMA 128/512MiB；LZ4 压缩 64MiB；DeepSound 总输出预算。
+- 已通过：全部改动文件语法检查、`io_mode_check` 20 PASS、`worker_lifecycle_check` 12 PASS、SW 同 rev、`git diff --check`；GIF、MCP、bridge、归档、TAR 等局部回归通过。
+
+### 已知限制
+
+- P0-5 bridge token / Origin / Content-Type 改造按计划留到后续。
+- P1-5 图片分析 GIF 双解码 + 每帧 ZXing 6 秒需重新研究，本版未改。
+- P1-2 PNG 块“默认只导选中块”的选择 UI 未做，当前仍由 `exportRaw` 显式导出全部块。
+- 音频 `previewMinutes` 尚未接入拖文件后的自动分析入口，目前音频 op 页面生效。
+- 未做真实浏览器后台标签页与超大文件全链路端到端回归。
+
 ## v0.1.15（2026-11-08）
 
 ### 新增功能

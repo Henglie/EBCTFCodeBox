@@ -277,12 +277,12 @@ function rasterReport(scan, opts) {
 export const RASTER_STEGO_OP = register({
   id: "rasterStego",
   cat: "stegoFile",
-  name: "光栅隐写拆图（zbRasterTerminator）",
+  name: "光栅隐写拆图",
   desc:
-    "复刻 zbRasterTerminator：对 PNG/BMP 的宽/高枚举 2..maxDivisor 的因数，按 x/y 轴和相位拆出每张相位图 PNG（文件名如 x-5-1.png、y-5-1.png）。默认中灰 #808080 填充，黑/白笔画都可见，也可选深灰/黑/透明；用于把光栅图里的隐藏文字/图案拆出来；产物直接列入可下载文件，张数/单张/总像素均有上限，超限明确报错不静默截断。",
+    "对 PNG/BMP 的宽/高枚举 2..maxDivisor 的因数，按 x/y 轴和相位拆出每张相位图 PNG（文件名如 x-5-1.png、y-5-1.png）。默认中灰 #808080 填充，黑/白笔画都可见，也可选深灰/黑/透明；用于把光栅图里的隐藏文字/图案拆出来；产物直接列入可下载文件，张数/单张/总像素均有上限，超限明确报错不静默截断。",
   acceptsBytes: true,
   aka: [
-    "光栅隐写", "光栅图拆图", "zbRasterTerminator", "光栅终止器", "相位拆图",
+    "光栅隐写", "光栅图拆图", "光栅终止器", "相位拆图",
     "x/y 相位图", "光栅扫描隐写", "栅格隐写", "raster stego", "raster terminator",
     "phase decomposition", "divisor phase images", "光栅图分离", "列/行相位拆图", "栅格拆图",
   ],

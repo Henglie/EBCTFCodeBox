@@ -23,6 +23,115 @@
 import { register } from "./registry.js";
 import { decodePngPixels, decodeBmpPixels } from "./lsbExtract.js";
 import { rgbaToDataURL } from "./mcMap.js";
+import { checkLimit } from "./limitGuard.js";
+
+const FFT_SAMPLES_SOFT = 16 * 1024 * 1024;
+const FFT_SAMPLES_HARD = 64 * 1024 * 1024;
+const FFT_SOURCE_SOFT = 16 * 1024 * 1024;
+const FFT_SOURCE_HARD = 64 * 1024 * 1024;
+
+function _checkFftSamples(actual, label, params) {
+  const n = Number(actual);
+  if (!Number.isFinite(n) || n <= FFT_SAMPLES_SOFT) return;
+  checkLimit({
+    scope: "imgFft.samples",
+    actual: n,
+    soft: FFT_SAMPLES_SOFT,
+    hard: FFT_SAMPLES_HARD,
+    params,
+    label,
+    unit: " 样本",
+  });
+}
+
+// 源图解压/像素缓冲预算：必须在 decodePngPixels/decodeBmpPixels 之前检查，
+// 否则 4097×4096 这类图会先分配上百 MB 再弹确认；超软阈值先确认，超硬上限直接拒绝。
+function _checkSourcePixels(header, params) {
+  const pixels = header.width * header.height;
+  if (!Number.isSafeInteger(pixels) || pixels <= 0) {
+    throw new Error(`图像尺寸非法（${header.width}×${header.height}=${pixels} 像素）`);
+  }
+  checkLimit({
+    scope: "imgFft.sourcePixels",
+    actual: pixels,
+    soft: FFT_SOURCE_SOFT,
+    hard: FFT_SOURCE_HARD,
+    params,
+    label: `源图像 ${header.width}×${header.height}`,
+    unit: " 像素",
+  });
+}
+
+// ============================================================
+// 文件头嗅探：先拿宽高/位深/隔行，再决定是否解码整图。
+// 仅接受 lsbExtract 实际支持的 PNG（8 位、非隔行、0/2/3/4/6 色彩类型）
+// 与 BMP（24/32 位未压缩）。不支持格式在解码前直接拒绝。
+// ============================================================
+function _u32be(b, o) {
+  return ((b[o] * 0x1000000) + ((b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3])) >>> 0;
+}
+function _u32le(b, o) {
+  return (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] * 0x1000000)) >>> 0;
+}
+function _i32le(b, o) { return _u32le(b, o) | 0; }
+function _u16le(b, o) { return (b[o] | (b[o + 1] << 8)) >>> 0; }
+
+function _isPng(buf) {
+  return buf.length >= 8 &&
+    buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47 &&
+    buf[4] === 0x0D && buf[5] === 0x0A && buf[6] === 0x1A && buf[7] === 0x0A;
+}
+
+function _sniffPng(buf) {
+  // 签名(8) + 长度(4) + 类型(4) + IHDR 数据(13) = 29
+  if (buf.length < 29) return { format: "png", unsupported: "PNG 头不完整（缺 IHDR）" };
+  const ihdrLen = _u32be(buf, 8);
+  const type = String.fromCharCode(buf[12], buf[13], buf[14], buf[15]);
+  if (type !== "IHDR" || ihdrLen !== 13) {
+    return { format: "png", unsupported: `PNG 首块不是完整 IHDR（${type}，长度 ${ihdrLen}）` };
+  }
+  const width = _u32be(buf, 16);
+  const height = _u32be(buf, 20);
+  const bitDepth = buf[24], colorType = buf[25], compression = buf[26], filter = buf[27], interlace = buf[28];
+  if (!width || !height) return { format: "png", unsupported: "PNG 宽或高为 0" };
+  if (!Number.isSafeInteger(width * height)) {
+    return { format: "png", unsupported: `PNG 尺寸非法（${width}×${height}）` };
+  }
+  if (bitDepth !== 8) return { format: "png", unsupported: `位深 ${bitDepth}（仅支持 8 位，16 位等需先转换）` };
+  if (interlace !== 0) return { format: "png", unsupported: "Adam7 隔行 PNG（仅支持非隔行）" };
+  if (compression !== 0) return { format: "png", unsupported: `PNG 压缩方法 ${compression}（仅支持 0）` };
+  if (filter !== 0) return { format: "png", unsupported: `PNG 过滤方法 ${filter}（仅支持 0）` };
+  if (![0, 2, 3, 4, 6].includes(colorType)) {
+    return { format: "png", unsupported: `PNG 色彩类型 ${colorType}` };
+  }
+  return { format: "png", width, height, bitDepth, colorType, interlace };
+}
+
+function _sniffBmp(buf) {
+  if (buf.length < 54) return { format: "bmp", unsupported: "BMP 头不完整" };
+  const dataOff = _u32le(buf, 10);
+  const headerSize = _u32le(buf, 14);
+  const width = _i32le(buf, 18);
+  const rawHeight = _i32le(buf, 22);
+  const bpp = _u16le(buf, 28);
+  const compression = _u32le(buf, 30);
+  if (headerSize < 40) return { format: "bmp", unsupported: `BMP 头大小 ${headerSize}（仅支持 BITMAPINFOHEADER 及以上）` };
+  if (compression !== 0) return { format: "bmp", unsupported: `BMP 压缩类型 ${compression}（仅支持未压缩）` };
+  if (bpp !== 24 && bpp !== 32) return { format: "bmp", unsupported: `BMP 位深 ${bpp}（仅支持 24/32 位）` };
+  if (!width || !rawHeight || width < 0) return { format: "bmp", unsupported: "BMP 宽或高非法" };
+  if (dataOff > buf.length) return { format: "bmp", unsupported: `BMP 数据区起点 ${dataOff} 超出文件长度 ${buf.length}` };
+  const height = Math.abs(rawHeight);
+  if (!Number.isSafeInteger(width * height)) {
+    return { format: "bmp", unsupported: `BMP 尺寸非法（${width}×${height}）` };
+  }
+  return { format: "bmp", width, height, bpp, channels: bpp === 32 ? 4 : 3 };
+}
+
+function _sniffImageHeader(buf) {
+  if (_isPng(buf)) return _sniffPng(buf);
+  if (buf.length >= 2 && buf[0] === 0x42 && buf[1] === 0x4D) return _sniffBmp(buf);
+  return null;
+}
 
 // radix-2 Cooley-Tukey FFT（原地，re/im 为 Float64Array，长度须 2 的幂）
 function fft(re, im) {
@@ -89,14 +198,32 @@ function imgFftRun(text, p = {}) {
     return "（空输入）请拖入或粘贴 PNG/BMP 图片（base64/hex）。\n" +
       "对图片做 2D FFT，输出 log 幅度谱（低频居中）。CTF 频域隐写常在幅度谱里藏 flag 文字/图案。";
   }
-  let decoded = decodePngPixels(buf);
-  if (!decoded) decoded = decodeBmpPixels(buf);
+  // 先读文件头：拿源尺寸/位深/隔行，算目标网格与输出像素，再决定是否解码整图。
+  const header = _sniffImageHeader(buf);
+  if (!header) return "非 PNG/BMP，或无法解码像素（仅支持 PNG/BMP）。";
+  if (header.unsupported) return "像素解码不支持：" + header.unsupported;
+
+  const maxSizeRaw = Number(p.maxSize);
+  const maxSize = Number.isFinite(maxSizeRaw) ? Math.max(32, Math.min(1024, Math.floor(maxSizeRaw))) : 512;
+  const scaleRaw = Number(p.scale);
+  const scale = Number.isFinite(scaleRaw) ? Math.max(1, Math.min(16, Math.floor(scaleRaw))) : 1;
+
+  const W = pow2Floor(header.width, maxSize);
+  const H = pow2Floor(header.height, maxSize);
+  const outW = W * scale, outH = H * scale;
+  if (!Number.isSafeInteger(W * H) || W * H <= 0 || !Number.isSafeInteger(outW * outH) || outW * outH <= 0) {
+    return `图像尺寸非法（${header.width}×${header.height} → FFT ${W}×${H} ×${scale}）`;
+  }
+  _checkFftSamples(W * H, `FFT 网格 ${W}×${H}`, p);
+  _checkFftSamples(outW * outH, `FFT 输出 ${outW}×${outH}`, p);
+  _checkSourcePixels(header, p);
+
+  const decoded = header.format === "png" ? decodePngPixels(buf, p) : decodeBmpPixels(buf, p);
   if (!decoded) return "非 PNG/BMP，或无法解码像素（仅支持 PNG/BMP）。";
   if (decoded.unsupported) return "像素解码不支持：" + decoded.unsupported;
-
-  const maxSize = Math.max(32, Math.min(1024, Number(p.maxSize || 512)));
-  const W = pow2Floor(decoded.width, maxSize);
-  const H = pow2Floor(decoded.height, maxSize);
+  if (decoded.width !== header.width || decoded.height !== header.height) {
+    throw new Error(`图像头尺寸 ${header.width}×${header.height} 与解码结果 ${decoded.width}×${decoded.height} 不一致，拒绝继续`);
+  }
   const gray = luminanceGrid(decoded, W, H);
 
   // 2D FFT：先对每行做 1D FFT，再对每列做 1D FFT
@@ -132,9 +259,7 @@ function imgFftRun(text, p = {}) {
       if (m > maxLog) maxLog = m;
     }
   }
-  // 归一化到 0-255 灰度 → RGBA
-  const scale = Math.max(1, Math.min(16, Number(p.scale || 1)));
-  const outW = W * scale, outH = H * scale;
+  // 归一化到 0-255 灰度 → RGBA（输出尺寸/预算已在解码前算好）
   const rgba = new Uint8Array(outW * outH * 4);
   const inv = maxLog > 0 ? 255 / maxLog : 0;
   for (let y = 0; y < H; y++) {

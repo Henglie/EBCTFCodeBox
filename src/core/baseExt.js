@@ -14,12 +14,39 @@
  * 注册进 registry，cat:'base'。
  */
 import { register } from "./registry.js";
-import { finishBytesDecode } from "./bytesIo.js";
+import { finishBytesDecode, b64ToBytes, bytesToB64, bytesToHex, hexToBytes } from "./bytesIo.js";
 import { streamDecompress, streamCompress } from "./compress.js"; // v0.1.5：安全流（超时+纯JS兜底）
 
 const te = (s) => new TextEncoder().encode(s);
 // 注：本文件已无「有损字节→文本」的出口——所有 decode 出口走 finishBytesDecode（见 ./bytesIo.js）。
 const cp = (n) => String.fromCodePoint(n);
+
+// 自定义码表校验（长度 + 无重复）：重复字符会让 encode 永不产出后一个字符、
+// decode 只能命中首个索引，静默歧义。
+function validateDictExt(dict, expected, label) {
+  if (typeof dict !== "string" || dict.length < 2) {
+    throw new Error(label + " 码表须为至少 2 个字符的字符串");
+  }
+  if (expected != null && dict.length !== expected) {
+    throw new Error(label + " 码表长度须为 " + expected + "（实为 " + dict.length + "）");
+  }
+  const seen = new Set();
+  for (const ch of dict) {
+    if (seen.has(ch)) throw new Error(label + " 码表含重复字符「" + ch + "」");
+    seen.add(ch);
+  }
+  return dict;
+}
+// 256 项反查表（码表含非 Latin-1 字符时返回 null，走 indexOf 慢路径）
+function asciiLutExt(dict) {
+  const lut = new Int16Array(256).fill(-1);
+  for (let i = 0; i < dict.length; i++) {
+    const c = dict.charCodeAt(i);
+    if (c >= 256) return null;
+    lut[c] = i;
+  }
+  return lut;
+}
 
 // ============ 同步 SHA-256（base58check 校验用，FIPS 180-4，照抄 baseExtra.js）============
 const K256 = [
@@ -82,13 +109,26 @@ function sha256Bytes(bytes) {
 
 // ============ radixN 大整数编解码（base58check 复用，前导零字节→前导首字符）============
 function radixNEncodeBytes(bytes, dict) {
-  const radix = BigInt(dict.length);
+  const radixNum = dict.length;
   let zeros = 0;
   while (zeros < bytes.length && bytes[zeros] === 0) zeros++;
-  let num = 0n;
-  for (const b of bytes) num = num * 256n + BigInt(b);
+  // 字节 → hex → BigInt：引擎实现近线性；逐字节乘 256 是 O(n²)。
+  const hex = bytes.length ? bytesToHex(bytes) : "";
+  let num = hex ? BigInt("0x" + hex) : 0n;
+  let K = 1, safe = radixNum;
+  while (safe * radixNum <= Number.MAX_SAFE_INTEGER) { safe *= radixNum; K++; }
+  const safeBig = BigInt(safe);
   const parts = [];
-  while (num > 0n) { parts.push(dict[Number(num % radix)]); num /= radix; }
+  while (num > 0n) {
+    const chunk = Number(num % safeBig);
+    num /= safeBig;
+    let c = chunk;
+    if (num > 0n) {
+      for (let k = 0; k < K; k++) { parts.push(dict[c % radixNum]); c = Math.floor(c / radixNum); }
+    } else {
+      while (c > 0) { parts.push(dict[c % radixNum]); c = Math.floor(c / radixNum); }
+    }
+  }
   parts.reverse();
   return dict[0].repeat(zeros) + parts.join("");
 }
@@ -101,31 +141,35 @@ function radixNDecodeBytes(text, dict) {
   while (safe * radixNum <= Number.MAX_SAFE_INTEGER) { safe *= radixNum; K++; }
   let zeros = 0;
   while (zeros < s.length && s[zeros] === dict[0]) zeros++;
+  const lut = asciiLutExt(dict);
   let num = 0n;
   let acc = 0, cnt = 0;
-  for (const ch of s) {
-    const idx = dict.indexOf(ch);
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    const code = s.charCodeAt(i);
+    const idx = lut && code < 256 ? lut[code] : dict.indexOf(ch);
     if (idx === -1) throw new Error("非法字符: " + ch);
     acc = acc * radixNum + idx;
     if (++cnt === K) { num = num * BigInt(safe) + BigInt(acc); acc = 0; cnt = 0; }
   }
   if (cnt > 0) { let pw = 1; for (let t = 0; t < cnt; t++) pw *= radixNum; num = num * BigInt(pw) + BigInt(acc); }
-  const bytes = [];
+  let bytes = null;
   if (num > 0n) {
     // 大端字节直出：toString(16) 对 2 的幂基数为近线性，替代逐字节 &/>> 的 O(n²)
-    const hex = num.toString(16);
-    bytes.length = (hex.length + 1) >> 1;
-    let j = bytes.length - 1;
-    for (let off = hex.length - 2; off >= 0; off -= 2, j--) bytes[j] = parseInt(hex.slice(off, off + 2), 16);
-    if (hex.length & 1) bytes[0] = parseInt(hex[0], 16);
+    let hex = num.toString(16);
+    if (hex.length & 1) hex = "0" + hex;
+    bytes = hexToBytes(hex);
   }
-  return new Uint8Array([...new Array(zeros).fill(0), ...bytes]);
+  if (!zeros) return bytes || new Uint8Array(0);
+  const out = new Uint8Array(zeros + (bytes ? bytes.length : 0));
+  if (bytes) out.set(bytes, zeros);
+  return out;
 }
 
 // ============ base58check（radixN + 双 SHA-256 4 字节校验）============
 const B58_DICT = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function base58CheckEncode(text, p) {
-  const D = (p && p.dict) || B58_DICT;
+  const D = (p && p.dict) ? validateDictExt(p.dict, 58, "base58check") : B58_DICT;
   // 字节直通：Base58Check 的载荷是真字节（比特币地址语义），上游真字节直接编。
   const payload = (p && p.rawBytes) || te(text);
   const hash = sha256Bytes(sha256Bytes(payload));
@@ -135,7 +179,7 @@ function base58CheckEncode(text, p) {
   return radixNEncodeBytes(full, D);
 }
 function base58CheckDecode(text, p) {
-  const D = (p && p.dict) || B58_DICT;
+  const D = (p && p.dict) ? validateDictExt(p.dict, 58, "base58check") : B58_DICT;
   const full = radixNDecodeBytes(text, D);
   if (full.length < 4) throw new Error("base58check: 数据过短");
   const payload = full.slice(0, full.length - 4);
@@ -148,27 +192,30 @@ function base58CheckDecode(text, p) {
 // ============ radix64（./A-Za-z0-9 crypt 表，照抄 baseExtra.js RADIX64_DICT）============
 const RADIX64_DICT = "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 function base64WithDict(bytes, dict) {
-  let out = "";
+  const parts = [];
   for (let i = 0; i < bytes.length; i += 3) {
     const c0 = bytes[i], c1 = bytes[i + 1], c2 = bytes[i + 2];
     const n = (c0 << 16) | ((c1 || 0) << 8) | (c2 || 0);
-    out += dict[(n >> 18) & 63] + dict[(n >> 12) & 63];
-    if (c1 !== undefined) out += dict[(n >> 6) & 63];
-    if (c2 !== undefined) out += dict[n & 63];
+    let s = dict[(n >> 18) & 63] + dict[(n >> 12) & 63];
+    if (c1 !== undefined) s += dict[(n >> 6) & 63];
+    if (c2 !== undefined) s += dict[n & 63];
+    parts.push(s);
   }
-  return out;
+  return parts.join("");
 }
 function base64DecodeWithDict(text, dict, name) {
   const s = text.replace(/[^\x21-\x7e]/g, "");
-  let bits = 0, val = 0;
-  const out = [];
-  for (const ch of s) {
-    const idx = dict.indexOf(ch);
-    if (idx === -1) throw new Error("radix64: 非法字符 " + ch);
+  const lut = asciiLutExt(dict);
+  const out = new Uint8Array(Math.ceil(s.length * 3 / 4));
+  let oi = 0, bits = 0, val = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    const idx = lut && c < 256 ? lut[c] : dict.indexOf(s[i]);
+    if (idx === -1) throw new Error("radix64: 非法字符 " + s[i]);
     val = (val << 6) | idx; bits += 6;
-    if (bits >= 8) { bits -= 8; out.push((val >> bits) & 0xff); }
+    if (bits >= 8) { bits -= 8; out[oi++] = (val >> bits) & 0xff; }
   }
-  return finishBytesDecode(out, { textMode: "hex", name: "name" });
+  return finishBytesDecode(out.subarray(0, oi), { textMode: "hex", name: "name" });
 }
 // 字节直通：crypt 表编码对象是真字节。
 const radix64Encode = (t, p) => base64WithDict((p && p.rawBytes) || te(t), RADIX64_DICT);
@@ -181,24 +228,32 @@ function byteToBase69Char(byte, D) {
   return D[((byte % 69) + 69) % 69] + D[Math.floor(byte / 69)];
 }
 function base69Encode(text, p) {
-  const D = (p && p.dict) || B69;
+  const D = (p && p.dict) ? validateDictExt(p.dict, 69, "Base69") : B69;
   // 字节直通：base69 本是二进制分块编码，上游真字节直接编。
   const bytes = (p && p.rawBytes) || te(text);
-  let out = "";
+  const parts = [];
   for (let i = 0; i < bytes.length; i += B69_CHUNK) {
-    const chunk = bytes.slice(i, i + B69_CHUNK);
-    const bin = [...chunk].map((b) => b.toString(2).padStart(8, "0")).join("");
-    for (let j = 0; j < bin.length; j += B69_CHUNK) {
-      out += byteToBase69Char(parseInt(bin.slice(j, j + B69_CHUNK).padEnd(B69_CHUNK, "0"), 2), D);
+    const size = Math.min(B69_CHUNK, bytes.length - i);
+    let acc = 0, bits = 0;
+    for (let k = 0; k < size; k++) {
+      acc = (acc << 8) | bytes[i + k];
+      bits += 8;
+      while (bits >= B69_CHUNK) {
+        bits -= B69_CHUNK;
+        parts.push(byteToBase69Char((acc >>> bits) & 0x7f, D));
+      }
+      acc &= (1 << bits) - 1;
     }
+    if (bits > 0) parts.push(byteToBase69Char((acc << (B69_CHUNK - bits)) & 0x7f, D));
   }
+  let out = parts.join("");
   // 长度恰为 7 的倍数时不附标记（pad=0）；否则 pad = 7 - (L % 7)，取 1..6
   const pad = (B69_CHUNK - (bytes.length % B69_CHUNK)) % B69_CHUNK;
   if (pad) out += "AA".repeat(pad - 1) + pad + "=";
   return out;
 }
 function base69Decode(text, p) {
-  const D = (p && p.dict) || B69;
+  const D = (p && p.dict) ? validateDictExt(p.dict, 69, "Base69") : B69;
   let s = text.trim();   // 旧 7= 尾形态需截尾，故用 let
   if (!s) return "";
  // 规范形态：总长恒为 16 的倍数（每 7 字节 → 8 对字符）。
@@ -221,16 +276,21 @@ function base69Decode(text, p) {
   const body = padN ? s.slice(0, -2) : s;
  // 有标记时，尾部 (padN-1) 对是补齐用的 "AA" 占位，不参与解码
   const dataPairs = body.length / 2 - (padN ? padN - 1 : 0);
-  let bin = "";
+  const lut = asciiLutExt(D);
+  const out = new Uint8Array(Math.floor(dataPairs * 7 / 8));
+  let oi = 0, acc = 0, bits = 0;
   for (let i = 0; i < dataPairs; i++) {
-    const pair = body.slice(i * 2, i * 2 + 2);
-    const val = 69 * D.indexOf(pair[1]) + D.indexOf(pair[0]);
-    bin += val.toString(2).padStart(B69_CHUNK, "0");
+    const p0 = body.charCodeAt(i * 2), p1 = body.charCodeAt(i * 2 + 1);
+    const i0 = p0 < 256 && lut ? lut[p0] : D.indexOf(body[i * 2]);
+    const i1 = p1 < 256 && lut ? lut[p1] : D.indexOf(body[i * 2 + 1]);
+    if (i0 < 0 || i1 < 0) throw new Error("base69: 非法字符");
+    acc = (acc << B69_CHUNK) | (69 * i1 + i0);
+    bits += B69_CHUNK;
+    while (bits >= 8) { bits -= 8; out[oi++] = (acc >>> bits) & 0xff; }
+    acc &= (1 << bits) - 1;
   }
  // 原始字节数 L = floor(dataPairs * 7 / 8)（encode 时 padEnd 补的零位在末尾，被 floor 丢弃）
-  const out = [];
-  for (let i = 0; i + 8 <= bin.length; i += 8) out.push(parseInt(bin.slice(i, i + 8), 2));
-  return finishBytesDecode(out, { textMode: "hex", name: "base69" });
+  return finishBytesDecode(out.subarray(0, oi), { textMode: "hex", name: "base69" });
 }
 
 // ============ 字典式 Base85（z85 / IPv6，照抄 codec.js）============
@@ -238,44 +298,47 @@ const B85_Z85 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.
 const B85_IPV6 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~";
 function base85DictDecode(text, dict, name) {
   const s = text.trim().replace(/\s/g, "");
-  const out = [];
+  const lut = asciiLutExt(dict);
+  const out = new Uint8Array(Math.ceil(s.length / 5) * 4);
+  let oi = 0;
   for (let i = 0; i < s.length; i += 5) {
-    const chunk = s.slice(i, i + 5);
-    const size = chunk.length;
+    const size = Math.min(5, s.length - i);
     const count = size === 2 ? 1 : size === 3 ? 2 : size === 4 ? 3 : 4;
-    let num = 0n;
+    let num = 0;
     for (let k = 0; k < 5; k++) {
-      const v = k < size ? dict.indexOf(chunk[k]) : 84;
-      if (k < size && v === -1) throw new Error("非法 Base85 字符");
-      num = num * 85n + BigInt(v);
+      let v = 84;
+      if (k < size) {
+        const c = s.charCodeAt(i + k);
+        v = lut && c < 256 ? lut[c] : dict.indexOf(s[i + k]);
+        if (v === -1) throw new Error("非法 Base85 字符");
+      }
+      num = num * 85 + v;
     }
-    const b = [
-      Number((num >> 24n) & 0xffn),
-      Number((num >> 16n) & 0xffn),
-      Number((num >> 8n) & 0xffn),
-      Number(num & 0xffn),
-    ];
-    for (let k = 0; k < count; k++) out.push(b[k]);
+    const n = num >>> 0;
+    if (count > 0) out[oi++] = (n >>> 24) & 0xff;
+    if (count > 1) out[oi++] = (n >>> 16) & 0xff;
+    if (count > 2) out[oi++] = (n >>> 8) & 0xff;
+    if (count > 3) out[oi++] = n & 0xff;
   }
-  return finishBytesDecode(out, { textMode: "hex", name: "name" });
+  return finishBytesDecode(out.subarray(0, oi), { textMode: "hex", name: "name" });
 }
 function base85DictEncode(text, dict, p) {
   // 字节直通：Z85/RFC1924 均为 4 字节 → 5 字符的定长二进制编码。
   const bytes = (p && p.rawBytes) || te(text);
-  let out = "";
+  const parts = [];
+  const enc = new Array(5);
   for (let i = 0; i < bytes.length; i += 4) {
-    const chunk = bytes.slice(i, i + 4);
-    const size = chunk.length;
-    let num = 0n;
-    for (let k = 0; k < 4; k++) num = num * 256n + BigInt(k < size ? chunk[k] : 0);
-    const enc = [];
-    for (let k = 0; k < 5; k++) { enc.unshift(dict[Number(num % 85n)]); num /= 85n; }
-    out += enc.slice(0, size + 1).join("");
+    const size = Math.min(4, bytes.length - i);
+    let num = 0;
+    for (let k = 0; k < 4; k++) num = num * 256 + (k < size ? bytes[i + k] : 0);
+    let n = num;
+    for (let k = 4; k >= 0; k--) { enc[k] = dict[n % 85]; n = Math.floor(n / 85); }
+    parts.push(enc.slice(0, size + 1).join(""));
   }
-  return out;
+  return parts.join("");
 }
 const z85Encode = (t, p) => base85DictEncode(t, B85_Z85, p);
-const z85Decode = (t, p) => base85DictDecode(t, (p && p.dict && p.dict.length === 85) ? p.dict : B85_Z85, "z85");
+const z85Decode = (t, p) => base85DictDecode(t, (p && p.dict) ? validateDictExt(p.dict, 85, "z85") : B85_Z85, "z85");
 // RFC 1924 §5：16 字节（IPv6 地址）视为一个 128 位大整数，反复除 85 取余逆读——
 // 与分块（4B→5char）数学不等价（85^5 ≠ 2^32）。decode 25 字符按整数口径；
 // 5 的倍数长度回落历史分块形态（兼容旧串，字母表相同按长度可区分）。
@@ -296,7 +359,7 @@ const base85Ipv6Encode = (t, p) => {
 };
 const base85Ipv6Decode = (t, p) => {
   const s = String(t).trim();
-  const D = (p && p.dict && p.dict.length === 85) ? p.dict : B85_IPV6;
+  const D = (p && p.dict) ? validateDictExt(p.dict, 85, "base85ipv6") : B85_IPV6;
   if (s.length > 0 && s.length <= 25) {
     let n = 0n;
     for (const ch of s) {
@@ -329,34 +392,39 @@ for (const [bits, chars] of Object.entries(B2048_E)) {
 function base2048Encode(text, p) {
   // 字节直通：11-bit 位流编的是原始字节。
   const bytes = (p && p.rawBytes) || te(text);
-  let out = "", z = 0, numZBits = 0;
-  for (const byte of bytes) {
-    for (let j = 7; j >= 0; j--) {
-      z = (z << 1) + ((byte >> j) & 1);
-      numZBits++;
-      if (numZBits === 11) { out += B2048_E[11][z]; z = 0; numZBits = 0; }
+  const out = [];
+  let z = 0, numZBits = 0;
+  for (let i = 0; i < bytes.length; i++) {
+    z = (z << 8) | bytes[i];
+    numZBits += 8;
+    while (numZBits >= 11) {
+      numZBits -= 11;
+      out.push(B2048_E[11][(z >>> numZBits) & 0x7ff]);
     }
+    z &= (1 << numZBits) - 1;
   }
   if (numZBits !== 0) {
     while (!B2048_E[numZBits]) { z = (z << 1) + 1; numZBits++; }
-    out += B2048_E[numZBits][z];
+    out.push(B2048_E[numZBits][z]);
   }
-  return out;
+  return out.join("");
 }
 function base2048Decode(text) {
-  const out = [];
-  let uint8 = 0, numUint8Bits = 0;
-  for (const ch of [...text]) {
+  const out = new Uint8Array(Math.ceil(text.length * 11 / 8) + 1);
+  let oi = 0, uint8 = 0, numUint8Bits = 0;
+  for (const ch of text) {
     const d = B2048_D.get(ch);
     if (!d) continue;
-    const [numZBits, z] = d;
-    for (let j = numZBits - 1; j >= 0; j--) {
-      uint8 = (uint8 << 1) + ((z >> j) & 1);
-      numUint8Bits++;
-      if (numUint8Bits === 8) { out.push(uint8 & 0xff); uint8 = 0; numUint8Bits = 0; }
+    const numZBits = d[0], z = d[1];
+    uint8 = (uint8 << numZBits) | z;
+    numUint8Bits += numZBits;
+    while (numUint8Bits >= 8) {
+      numUint8Bits -= 8;
+      out[oi++] = (uint8 >>> numUint8Bits) & 0xff;
     }
+    uint8 &= (1 << numUint8Bits) - 1;
   }
-  return finishBytesDecode(out, { textMode: "hex", name: "base2048" });
+  return finishBytesDecode(out.subarray(0, oi), { textMode: "hex", name: "base2048" });
 }
 
 // ============ base65536（每 2 字节 1 CJK，码表照抄 bigBase.js B65_START）============
@@ -366,25 +434,32 @@ for (const [b2, start] of Object.entries(B65_START)) B65_REV[start] = Number(b2)
 function base65536Encode(text, p) {
   // 字节直通：每 2 字节映射 1 字符，编的是原始字节。
   const bytes = (p && p.rawBytes) || te(text);
-  let out = "";
-  for (let i = 0; i < bytes.length; i += 2) {
-    const b1 = bytes[i] & 0xff;
-    const b2 = i + 1 < bytes.length ? bytes[i + 1] & 0xff : -1;
-    out += cp(B65_START[b2] + b1);
+  const parts = [];
+  const CHUNK = 4096;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const n = Math.min(CHUNK, bytes.length - i);
+    const a = [];
+    for (let j = 0; j < n; j += 2) {
+      const b1 = bytes[i + j] & 0xff;
+      const b2 = i + j + 1 < bytes.length ? bytes[i + j + 1] & 0xff : -1;
+      a.push(cp(B65_START[b2] + b1));
+    }
+    parts.push(a.join(""));
   }
-  return out;
+  return parts.join("");
 }
 function base65536Decode(text) {
-  const out = [];
-  for (const ch of [...text]) {
+  const out = new Uint8Array(text.length * 2);
+  let oi = 0;
+  for (const ch of text) {
     const code = ch.codePointAt(0);
     const b1 = code & 0xff;
     const start = code - b1;
     const b2 = B65_REV[start];
-    if (b2 === undefined || b2 === -1) out.push(b1);
-    else { out.push(b1); out.push(b2 & 0xff); }
+    out[oi++] = b1;
+    if (b2 !== undefined && b2 !== -1) out[oi++] = b2 & 0xff;
   }
-  return finishBytesDecode(out, { textMode: "hex", name: "base65536" });
+  return finishBytesDecode(out.subarray(0, oi), { textMode: "hex", name: "base65536" });
 }
 
 // ============ ecoji（1024 emoji 表 + padding，码表照抄 bigBase.js ECO_MAP/ECO_PAD/ECO_PAD4）============
@@ -397,16 +472,15 @@ const ecojiRevGetOrZero = (k) => (ECO_REV.has(k) ? ECO_REV.get(k) : 0);
 function ecojiEncode(text, p) {
   // 字节直通：ecoji 本是 5 字节 → 4 emoji 的二进制编码。
   const bytes = (p && p.rawBytes) || te(text);
-  let out = "";
+  const out = [];
   for (let i = 0; i < bytes.length; i += 5) {
-    const chunk = bytes.slice(i, i + 5);
-    const size = chunk.length;
+    const size = Math.min(5, bytes.length - i);
     let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0;
-    if (size >= 1) b0 = chunk[0] & 0xff;
-    if (size >= 2) b1 = chunk[1] & 0xff;
-    if (size >= 3) b2 = chunk[2] & 0xff;
-    if (size >= 4) b3 = chunk[3] & 0xff;
-    if (size >= 5) b4 = chunk[4] & 0xff;
+    if (size >= 1) b0 = bytes[i] & 0xff;
+    if (size >= 2) b1 = bytes[i + 1] & 0xff;
+    if (size >= 3) b2 = bytes[i + 2] & 0xff;
+    if (size >= 4) b3 = bytes[i + 3] & 0xff;
+    if (size >= 5) b4 = bytes[i + 4] & 0xff;
     const chars = [ECO_MAP[(b0 << 2) | (b1 >> 6)], ECO_PAD, ECO_PAD, ECO_PAD];
     if (size >= 3) {
       chars[2] = ECO_MAP[((b2 & 0x0f) << 6) | (b3 >> 2)];
@@ -419,41 +493,44 @@ function ecojiEncode(text, p) {
     } else if (size === 5) {
       chars[3] = ECO_MAP[((b3 & 0x03) << 8) | b4];
     }
-    out += chars.map(cp).join("");
+    out.push(cp(chars[0]), cp(chars[1]), cp(chars[2]), cp(chars[3]));
   }
-  return out;
+  return out.join("");
 }
 function ecojiDecode(text) {
-  const chars = [...text].map((c) => c.codePointAt(0));
-  const out = [];
-  for (let i = 0; i + 4 <= chars.length; i += 4) {
-    const grp = chars.slice(i, i + 4);
+  const out = new Uint8Array(Math.ceil(text.length * 5 / 8) + 1);
+  let oi = 0;
+  const grp = [0, 0, 0, 0];
+  let gi = 0;
+  for (const c of text) {
+    grp[gi++] = c.codePointAt(0);
+    if (gi < 4) continue;
+    gi = 0;
     let len;
     if (grp[1] === ECO_PAD) len = 1;
     else if (grp[2] === ECO_PAD) len = 2;
     else if (grp[3] === ECO_PAD) len = 3;
     else if (ECO_PAD4.includes(grp[3])) len = 4;
     else len = 5;
-    const ints = grp.map((emojiInt, idx) => {
-      if (idx === 3) {
-        if (emojiInt === 9884) return 0;
-        if (emojiInt === 127949) return 1 << 8;
-        if (emojiInt === 128209) return 2 << 8;
-        if (emojiInt === 128587) return 3 << 8;
-        return ecojiRevGetOrZero(emojiInt);
-      }
-      return ecojiRevGetOrZero(emojiInt);
-    });
+    const i0 = ecojiRevGetOrZero(grp[0]);
+    const i1 = ecojiRevGetOrZero(grp[1]);
+    const i2 = ecojiRevGetOrZero(grp[2]);
+    let i3;
+    if (grp[3] === 9884) i3 = 0;
+    else if (grp[3] === 127949) i3 = 1 << 8;
+    else if (grp[3] === 128209) i3 = 2 << 8;
+    else if (grp[3] === 128587) i3 = 3 << 8;
+    else i3 = ecojiRevGetOrZero(grp[3]);
     const bytes = [
-      (ints[0] >> 2) & 0xff,
-      (((ints[0] & 0x3) << 6) | (ints[1] >> 4)) & 0xff,
-      (((ints[1] & 0xf) << 4) | (ints[2] >> 6)) & 0xff,
-      (((ints[2] & 0x3f) << 2) | (ints[3] >> 8)) & 0xff,
-      ints[3] & 0xff,
+      (i0 >> 2) & 0xff,
+      (((i0 & 0x3) << 6) | (i1 >> 4)) & 0xff,
+      (((i1 & 0xf) << 4) | (i2 >> 6)) & 0xff,
+      (((i2 & 0x3f) << 2) | (i3 >> 8)) & 0xff,
+      i3 & 0xff,
     ];
-    for (let k = 0; k < len; k++) out.push(bytes[k]);
+    for (let k = 0; k < len; k++) out[oi++] = bytes[k];
   }
-  return finishBytesDecode(out, { textMode: "hex", name: "ecoji" });
+  return finishBytesDecode(out.subarray(0, oi), { textMode: "hex", name: "ecoji" });
 }
 
 // ============ base64steg（base64 补位隐写）============
@@ -463,21 +540,23 @@ function ecojiDecode(text) {
 // 注意：常见实现 encode 用 random 填充文本，本实现用确定性填充便于往返测试。
 const B64_STD = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 function _b64EncodeStd(bytes) {
-  let out = "";
-  for (let i = 0; i < bytes.length; i += 3) {
-    const chunk = bytes.slice(i, i + 3);
-    const n = (chunk[0] << 16) | ((chunk[1] || 0) << 8) | (chunk[2] || 0);
-    out += B64_STD[(n >> 18) & 63] + B64_STD[(n >> 12) & 63];
-    out += chunk.length > 1 ? B64_STD[(n >> 6) & 63] : "=";
-    out += chunk.length > 2 ? B64_STD[n & 63] : "=";
-  }
-  return out;
+  return bytesToB64(bytes);
 }
 function _b64DecodeStd(text) {
-  let s = text.replace(/\s/g, "");
-  while (s.length % 4) s += "=";
-  const bin = atob(s);
-  return new Uint8Array([...bin].map((c) => c.charCodeAt(0)));
+  return b64ToBytes(text);
+}
+const BYTE_BIN = new Array(256);
+for (let i = 0; i < 256; i++) BYTE_BIN[i] = i.toString(2).padStart(8, "0");
+function bytesToBinString(bytes) {
+  const parts = [];
+  const CHUNK = 1 << 13;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const n = Math.min(CHUNK, bytes.length - i);
+    const a = new Array(n);
+    for (let j = 0; j < n; j++) a[j] = BYTE_BIN[bytes[i + j]];
+    parts.push(a.join(""));
+  }
+  return parts.join("");
 }
 function base64StegDecode(text) {
   const lines = text.replace(/^\n+/, "").replace(/\n+$/, "").split(/\r?\n/);
@@ -501,7 +580,7 @@ function base64StegDecode(text) {
 }
 function base64StegEncode(text) {
   const flag = text;
-  const binStr = [...te(flag)].map((b) => b.toString(2).padStart(8, "0")).join("");
+  const binStr = bytesToBinString(te(flag));
   let bits = binStr;
   const lines = [];
   let idx = 0;
@@ -587,7 +666,7 @@ function base32StegDecode(text) {
   return finishBytesDecode(out, { textMode: "hex", name: "base32steg" });
 }
 function base32StegEncode(text) {
-  const binStr = [...te(text)].map((b) => b.toString(2).padStart(8, "0")).join("");
+  const binStr = bytesToBinString(te(text));
   let bits = binStr;
   const lines = [];
   let idx = 0;
@@ -620,34 +699,41 @@ function base32StegEncode(text) {
 // 原理：用 64 字符自定义字典做字符替换 → 标准 base64 → 解码
 // 参考实现只有 decode，encode 按逻辑补齐（标准 b64 → 用 key 反替换）
 function base64DictEncode(text, p) {
-  const key = (p && p.key) || B64_STD;
-  if (key.length !== 64) throw new Error("字典必须 64 字符");
+  const key = (p && p.key) ? validateDictExt(p.key, 64, "base64dict 字典") : B64_STD;
   // 字节直通：先按标准 base64 编真字节，再做字典替换。
   const std = _b64EncodeStd((p && p.rawBytes) || te(text));
-  let out = "";
-  for (const ch of std) {
-    if (ch === "=") out += "=";
-    else {
-      const j = B64_STD.indexOf(ch);
-      out += key[j];
-    }
+  const map = new Uint16Array(256);
+  for (let i = 0; i < 64; i++) map[B64_STD.charCodeAt(i)] = key.charCodeAt(i);
+  map[61] = 61;
+  const codes = new Uint16Array(std.length);
+  for (let i = 0; i < std.length; i++) codes[i] = map[std.charCodeAt(i)];
+  const parts = [];
+  for (let i = 0; i < codes.length; i += 0x2000) {
+    parts.push(String.fromCharCode.apply(null, codes.subarray(i, i + 0x2000)));
   }
-  return out;
+  return parts.join("");
 }
 function base64DictDecode(text, p) {
-  const key = (p && p.key) || B64_STD;
-  if (key.length !== 64) throw new Error("字典必须 64 字符");
-  let res = "";
-  for (const ch of text) {
-    if (ch === "=") res += "=";
+  const key = (p && p.key) ? validateDictExt(p.key, 64, "base64dict 字典") : B64_STD;
+  const lut = asciiLutExt(key);
+  const codes = new Uint16Array(text.length + 3);
+  let n = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i], c = text.charCodeAt(i);
+    if (ch === "=") codes[n++] = 61;
     else {
-      const j = key.indexOf(ch);
-      if (j === -1) continue;  // 跳过空白/非法字符（静默跳过）
-      res += B64_STD[j];
+      if (c === 32 || c === 9 || c === 10 || c === 11 || c === 12 || c === 13 || /\s/.test(ch)) continue; // 空白是分隔符，允许
+      const j = lut && c < 256 ? lut[c] : key.indexOf(ch);
+      if (j === -1) throw new Error("base64dict: 非字母表字符 " + JSON.stringify(ch));
+      codes[n++] = B64_STD.charCodeAt(j);
     }
   }
-  if (res.length % 4 !== 0) res += "=".repeat(4 - (res.length % 4));
-  return finishBytesDecode(_b64DecodeStd(res), { textMode: "hex", name: "base64dict" });
+  while (n % 4 !== 0) codes[n++] = 61;
+  const parts = [];
+  for (let i = 0; i < n; i += 0x2000) {
+    parts.push(String.fromCharCode.apply(null, codes.subarray(i, Math.min(i + 0x2000, n))));
+  }
+  return finishBytesDecode(_b64DecodeStd(parts.join("")), { textMode: "hex", name: "base64dict" });
 }
 
 // ============ multilineBase64（多行 base64 解码）============
@@ -666,7 +752,8 @@ function multilineBase64Encode(text, p) {
 }
 function multilineBase64Decode(text) {
   const lines = text.split(/\r?\n/);
-  const allBytes = [];
+  const chunks = [];
+  let total = 0;
   for (const line of lines) {
     const s = line.replace(/\s/g, "");
     if (!s) continue;
@@ -675,13 +762,17 @@ function multilineBase64Decode(text) {
     if (rem) padded += "=".repeat(4 - rem);
     try {
       const bytes = _b64DecodeStd(padded);
-      for (const b of bytes) allBytes.push(b);
+      chunks.push(bytes);
+      total += bytes.length;
     } catch {
  // 跳过无法解码的行（静默）
     }
   }
  // 拼接所有字节后一次性 UTF-8 解码（避免行边界切断多字节字符）
-  return finishBytesDecode(new Uint8Array(allBytes), { textMode: "hex", name: "multilineBase64" });
+  const all = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) { all.set(c, off); off += c.length; }
+  return finishBytesDecode(all, { textMode: "hex", name: "multilineBase64" });
 }
 
 // ============ base64decompress（zlib + base64）============
@@ -691,21 +782,10 @@ function multilineBase64Decode(text) {
 const _inflate = (bytes) => streamDecompress("deflate", bytes);
 const _deflate = (bytes) => streamCompress("deflate", bytes);
 function _bytesToB64(bytes) {
-  let out = "";
-  for (let i = 0; i < bytes.length; i += 3) {
-    const chunk = bytes.slice(i, i + 3);
-    const n = (chunk[0] << 16) | ((chunk[1] || 0) << 8) | (chunk[2] || 0);
-    out += B64_STD[(n >> 18) & 63] + B64_STD[(n >> 12) & 63];
-    out += chunk.length > 1 ? B64_STD[(n >> 6) & 63] : "=";
-    out += chunk.length > 2 ? B64_STD[n & 63] : "=";
-  }
-  return out;
+  return bytesToB64(bytes);
 }
 function _b64ToBytes(text) {
-  let s = text.replace(/\s/g, "");
-  while (s.length % 4) s += "=";
-  const bin = atob(s);
-  return new Uint8Array([...bin].map((c) => c.charCodeAt(0)));
+  return b64ToBytes(text);
 }
 async function base64DecompressDecode(text) {
   const bytes = _b64ToBytes(text);

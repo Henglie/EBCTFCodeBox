@@ -34,9 +34,18 @@ import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源�
 const te = (s) => new TextEncoder().encode(s);
 const td = (b) => new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(b));
 
+/** 规范化 hex：允许空白、冒号分隔与 0x 前缀；非法字符/奇数长度抛错，绝不静默删除。 */
+function cleanHex(s, label = "hex") {
+  const raw = String(s == null ? "" : s).trim();
+  const clean = raw.replace(/\s+/g, "").replace(/:/g, "").replace(/^0x/i, "");
+  if (!/^[0-9a-fA-F]*$/.test(clean)) {
+    throw new Error(`${label} 含非法字符（仅允许 0-9a-fA-F、空白、冒号、0x 前缀）`);
+  }
+  if (clean.length % 2) throw new Error(`${label} 长度必须为偶数（当前 ${clean.length} 个 hex 字符）`);
+  return clean;
+}
 function hexToBytes(s) {
-  const clean = s.replace(/[^0-9a-fA-F]/g, "");
-  if (clean.length % 2) throw new Error("hex 长度必须为偶数");
+  const clean = cleanHex(s);
   const out = new Uint8Array(clean.length / 2);
   for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);
   return out;
@@ -121,7 +130,7 @@ function randomK(p) {
 function textToBigInt(text, enc) {
   if (enc === "dec") return BigInt(text.trim());
   if (enc === "hex") {
-    const hex = text.trim().replace(/[^0-9a-fA-F]/g, "");
+    const hex = cleanHex(text, "明文 hex");
     return hex ? BigInt("0x" + hex) : 0n;
   }
  // base64 / utf8 → bytes → BigInt
@@ -149,6 +158,8 @@ function bigIntToText(n, enc) {
  * @returns {{c1: bigint, c2: bigint}} 密文对
  */
 function elgamalEncrypt(m, p, g, y) {
+  if (p <= 3n) throw new Error(`素数 p 过小（当前 p=${p}）`);
+  if (!(y > 1n && y < p)) throw new Error(`公钥 y 不合法：需满足 1 < y < p（当前 y=${y}，p=${p}）`);
   if (m < 0n || m >= p) throw new Error(`明文 m 必须 < p（m 位数 ${m.toString(2).length} ≥ p 位数 ${p.toString(2).length}）`);
   const k = randomK(p);
   const c1 = modPow(g, k, p);
@@ -166,6 +177,9 @@ function elgamalEncrypt(m, p, g, y) {
  * @returns {bigint} 明文 m
  */
 function elgamalDecrypt(c1, c2, p, x) {
+  if (p <= 3n) throw new Error(`素数 p 过小（当前 p=${p}）`);
+  if (!(c1 > 0n && c1 < p)) throw new Error(`密文 c1 不合法：需满足 0 < c1 < p（当前 c1=${c1}，p=${p}）`);
+  if (!(c2 >= 0n && c2 < p)) throw new Error(`密文 c2 不合法：需满足 0 ≤ c2 < p（当前 c2=${c2}，p=${p}）`);
  // s = c1^x mod p
   const s = modPow(c1, x, p);
  // s⁻¹ = s^(p-2) mod p（Fermat 小定理，p 素数）
@@ -181,7 +195,11 @@ function parseCipher(text) {
   const s = text.trim().replace(/[\s\n\r]/g, "");
   const parts = s.split(",");
   if (parts.length !== 2) throw new Error('密文格式：c1,c2（逗号分隔）');
-  return { c1: BigInt(parts[0].trim()), c2: BigInt(parts[1].trim()) };
+  try {
+    return { c1: BigInt(parts[0].trim()), c2: BigInt(parts[1].trim()) };
+  } catch {
+    throw new Error("密文 c1/c2 不是合法十进制整数");
+  }
 }
 
 function formatCipher(c1, c2) {

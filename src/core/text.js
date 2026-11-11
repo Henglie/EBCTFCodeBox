@@ -86,11 +86,12 @@ function htmlEntityDecode(text) {
     (m, hex, dec, name) => {
       if (hex !== undefined) {
         const cp = parseInt(hex, 16);
-        return cp <= 0x10FFFF ? String.fromCodePoint(cp) : m;
+        // 孤立代理码点（&#xD800;）不生成非法字符串，保持原文。
+        return cp <= 0x10FFFF && !(cp >= 0xD800 && cp <= 0xDFFF) ? String.fromCodePoint(cp) : m;
       }
       if (dec !== undefined) {
         const cp = parseInt(dec, 10);
-        return cp <= 0x10FFFF && cp > 0 ? String.fromCodePoint(cp) : m;
+        return cp <= 0x10FFFF && cp > 0 && !(cp >= 0xD800 && cp <= 0xDFFF) ? String.fromCodePoint(cp) : m;
       }
       if (name !== undefined) {
         return HTML_NAMED.hasOwnProperty(name) ? HTML_NAMED[name] : m;
@@ -136,26 +137,50 @@ function unicodeEscapeEncode(text, p) {
   return out;
 }
 function unicodeEscapeDecode(text) {
-  let out = text;
- // 先解代理对 \uXXXX\uXXXX / %uXXXX%uXXXX
-  out = out.replace(/(?:\\u|%u)([0-9a-fA-F]{4})(?:\\u|%u)([0-9a-fA-F]{4})/g, (m, hi, lo) => {
-    const h = parseInt(hi, 16), l = parseInt(lo, 16);
-    if (h >= 0xD800 && h <= 0xDBFF && l >= 0xDC00 && l <= 0xDFFF) {
-      return String.fromCodePoint(0x10000 + ((h - 0xD800) << 10) + (l - 0xDC00));
+  // \u/\u% 支持精确 4/6/8 位（padding 6/8 的产物），另支持 \u{...}（1-6 位码点）。
+  // 先切成「文本段 + 转义 token」，再按相邻 token 合并代理对；孤立代理保持原文，
+  // 不产出非法字符串（旧实现 \uD800 会直接生成孤立代理）。
+  const re = /\\u\{([0-9a-fA-F]{1,6})\}|(?:\\u|%u)([0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4})/g;
+  const toks = [];
+  let last = 0, m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) toks.push({ text: text.slice(last, m.index) });
+    const cp = parseInt(m[1] !== undefined ? m[1] : m[2], 16);
+    toks.push({ raw: m[0], cp, start: m.index, end: re.lastIndex });
+    last = re.lastIndex;
+  }
+  if (last < text.length) toks.push({ text: text.slice(last) });
+  let out = "";
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i];
+    if (t.text !== undefined) { out += t.text; continue; }
+    const isHigh = t.cp >= 0xD800 && t.cp <= 0xDBFF;
+    const isLow = t.cp >= 0xDC00 && t.cp <= 0xDFFF;
+    if (isHigh) {
+      const nx = toks[i + 1];
+      if (nx && nx.cp !== undefined && nx.start === t.end && nx.cp >= 0xDC00 && nx.cp <= 0xDFFF) {
+        out += String.fromCodePoint(0x10000 + ((t.cp - 0xD800) << 10) + (nx.cp - 0xDC00));
+        i++;
+        continue;
+      }
+      out += t.raw; // 孤立高代理：保留原文
+      continue;
     }
-    return m;
-  });
- // 单个 \uXXXX / %uXXXX
-  out = out.replace(/(?:\\u|%u)([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
- // U+XXXX（4-6 位十六进制）
-  out = out.replace(/U\+([0-9a-fA-F]{4,6})/g, (_, h) => {
+    if (isLow) { out += t.raw; continue; } // 孤立低代理：保留原文
+    if (t.cp > 0x10FFFF) { out += t.raw; continue; }
+    out += String.fromCodePoint(t.cp);
+  }
+  // U+XXXX（4-8 位十六进制，含 padding 6/8 的前导零）
+  out = out.replace(/U\+([0-9a-fA-F]{4,8})/g, (raw, h) => {
     const cp = parseInt(h, 16);
-    return cp <= 0x10FFFF ? String.fromCodePoint(cp) : _;
+    if (cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) return raw;
+    return String.fromCodePoint(cp);
   });
- // &#xHH;（HTML 数字型，兼容）
-  out = out.replace(/&#x([0-9a-fA-F]+);/g, (_, h) => {
+  // &#xHH;（HTML 数字型，兼容；孤立代理保持原文）
+  out = out.replace(/&#x([0-9a-fA-F]+);/g, (raw, h) => {
     const cp = parseInt(h, 16);
-    return cp <= 0x10FFFF ? String.fromCodePoint(cp) : _;
+    if (cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) return raw;
+    return String.fromCodePoint(cp);
   });
   return out;
 }

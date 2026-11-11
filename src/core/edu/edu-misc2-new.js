@@ -60,7 +60,7 @@ export default {
       { in: "（一串想曰中文/Emoji 密文）", param: "口令默认", out: "还原的原文", desc: "自动识别映射与格式" },
     ],
     tips: ["想曰密文形态多变（可能是汉字、Emoji、看不见的零宽字符、日韩文），靠内置 650 条映射表识别。", "format1 用 Argon2id 内存 64MiB，解密会卡一下几秒是正常的。"],
-    aka: ["想曰", "xiangyue", "XiangYue", "想曰解密", "zbXiangYue", "xiang yue", "想曰编码",
+    aka: ["想曰", "xiangyue", "XiangYue", "想曰解密", "xiang yue", "想曰编码",
       "argon2想曰", "chacha想曰", "重加密中文", "想曰密文", "多映射解密", "想曰XiangYue"],
   },
 
@@ -90,7 +90,7 @@ export default {
       { in: "hi", out: "熊曰：呋…（熊语汉字）", desc: "前缀固定，正文压缩+base91" },
     ],
     tips: ["看到「熊曰：呋」开头 + 一串「食性很雜哞嗄哈」这类字，就是熊曰。", "「呋」是标头必须在前缀后第一个字，缺了会报「缺失标头」。"],
-    aka: ["熊曰", "xiongyue", "熊曰编码", "熊语", "zbXiongYue", "xiong yue",
+    aka: ["熊曰", "xiongyue", "熊曰编码", "熊语", "xiong yue",
       "熊语编码", "base91熊曰", "熊曰密码", "呋编码", "熊曰：呋", "熊话编码"],
   },
 

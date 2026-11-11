@@ -14,7 +14,7 @@
 
 import {
   listPlugins, deactivate, uninstall, loadFromUrl, enableBuiltin, onPluginsChange,
-  exportConfig, importConfig,
+  exportConfig, importConfig, isRemoteSource, isSupportedSource, listPendingRemote,
 } from "../plugin/pluginHost.js";
 import { exportManifest } from "../plugin/mcpBridge.js";
 // 离线增强包：数据/状态迁移在内核，本面板负责持久化与 SW 消息接线。
@@ -87,6 +87,10 @@ const _ZH = {
   "ui.ext.batchCancelled": "已取消（当前包完成后停止）。",
   "ui.ext.batchClose": "关闭",
   "ui.ext.fontsNote": "首屏子集默认已加载；全量四平面按需拉取，点击「加载」即刻补齐子集外生僻字。全部本地文件，零外发。",
+  "ui.plugin.pendingRemote": "待确认的远程扩展",
+  "ui.plugin.pendingRemoteNote": "以下远程扩展上次已启用，但本会话尚未确认。确认后本次会话可运行；刷新页面后需重新确认。",
+  "ui.plugin.pendingConfirm": "确认并加载",
+  "ui.plugin.pendingDeclined": "已跳过该远程扩展",
   "ui.env.fonts": "天珩字库",
   "ui.env.fontSubset": "首屏子集",
   "ui.env.fontSubsetNote": "已加载（秒开，覆盖 CTF 常用字 + GB2312）",
@@ -295,7 +299,11 @@ function renderOfficial(host, installed, rerender) {
       btn.addEventListener("click", async () => {
         btn.disabled = true;
         try {
-          await loadFromUrl(p.url || `./addons/${p.id}/index.js`);
+          const url = p.url || `./addons/${p.id}/index.js`;
+          if (!isSupportedSource(url)) { toast(T("ui.plugin.loadErr", "仅允许 http/https 或本地相对路径")); btn.disabled = false; return; }
+          const remote = isRemoteSource(url);
+          if (remote && !confirm(T("ui.plugin.urlConfirm", url))) { btn.disabled = false; return; }
+          await loadFromUrl(url, { confirmed: remote });
           toast(T("ui.plugin.loaded"));
           rerender();
         } catch (e) {
@@ -345,6 +353,38 @@ function sectionPlugins(rerender) {
   box.append(officialBox);
   renderOfficial(officialBox, list, rerender);
 
+  // 启动时被暂缓的远程扩展：本会话逐个确认后才运行（刷新后需重新确认）。
+  const pending = listPendingRemote();
+  if (pending.length) {
+    const pendBox = el("div", { class: "plugin-sect", "data-role": "ext-pending-remote" },
+      el("h4", { class: "ext-sub-title" }, T("ui.plugin.pendingRemote")),
+      el("p", { class: "plugin-page-note" }, T("ui.plugin.pendingRemoteNote")),
+    );
+    for (const p of pending) {
+      const btn = el("button", { class: "chip-btn primary" }, T("ui.plugin.pendingConfirm"));
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        if (!confirm(T("ui.plugin.urlConfirm", p.url))) { btn.disabled = false; return; }
+        try {
+          await loadFromUrl(p.url, { confirmed: true });
+          toast(T("ui.plugin.loaded"));
+          rerender();
+        } catch (e) {
+          btn.disabled = false;
+          toast(T("ui.plugin.loadErr", e && e.message ? e.message : e));
+        }
+      });
+      pendBox.append(el("div", { class: "plugin-item" },
+        el("div", { class: "plugin-item-main" },
+          el("span", { class: "plugin-item-name" }, p.id),
+          el("div", { class: "plugin-item-meta" }, p.url),
+        ),
+        el("div", { class: "plugin-item-actions" }, btn),
+      ));
+    }
+    box.append(pendBox);
+  }
+
   // 从 URL 加载
   const urlInput = el("input", { class: "plugin-input", type: "text", placeholder: T("ui.plugin.urlPh"), spellcheck: "false" });
   box.append(
@@ -353,9 +393,11 @@ function sectionPlugins(rerender) {
       el("button", { class: "chip-btn primary", onclick: async () => {
         const url = urlInput.value.trim();
         if (!url) return;
+        if (!isSupportedSource(url)) { toast(T("ui.plugin.loadErr", "仅允许 http/https 或本地相对路径")); return; }
  // 外源加载确认（跨源代码执行，需用户显式同意）
-        if (!/^(\.|\/)/.test(url) && !confirm(T("ui.plugin.urlConfirm", url))) return;
-        try { await loadFromUrl(url); toast(T("ui.plugin.loaded")); }
+        const remote = isRemoteSource(url);
+        if (remote && !confirm(T("ui.plugin.urlConfirm", url))) return;
+        try { await loadFromUrl(url, { confirmed: remote }); toast(T("ui.plugin.loaded")); }
         catch (e) { toast(T("ui.plugin.loadErr", e && e.message ? e.message : e)); }
       } }, T("ui.plugin.load")),
     ),
@@ -375,7 +417,9 @@ function sectionPlugins(rerender) {
       if (!f) return;
       try {
         const cfg = JSON.parse(await f.text());
-        const n = await importConfig(cfg);
+        const n = await importConfig(cfg, {
+          confirm: (url) => confirm(T("ui.plugin.urlConfirm", url)),
+        });
         toast(T("ui.plugin.configImported", n));
         rerender();
       } catch (err) { toast(T("ui.plugin.configImportErr", err && err.message ? err.message : err)); }

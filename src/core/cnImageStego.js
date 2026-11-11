@@ -23,6 +23,7 @@
  */
 import { register } from "./registry.js";
 import { decodePNG, dataURLToBytes } from "./stegoPixels.js";
+import { isLimitError } from "./limitGuard.js";
 import { encodePNG, rgbaToDataURL } from "./mcMap.js";
 
 /* ==================== 共用：输入字节 → 精确 RGBA ==================== */
@@ -46,7 +47,10 @@ async function bytesToRGBA(bytes) {
     try {
       const dec = decodePNG(u8);
       return { width: dec.width, height: dec.height, data: dec.data };
-    } catch (e) { /* 隔行等异常 PNG 回落 canvas */ }
+    } catch (e) {
+      if (isLimitError(e)) throw e;
+      /* 隔行等异常 PNG 回落 canvas */
+    }
   }
   if (typeof document !== "undefined" && typeof createImageBitmap === "function") {
     try {

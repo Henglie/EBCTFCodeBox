@@ -24,6 +24,10 @@ const STORE_SOURCES = "ebctf_plugins_sources"; // 用户加载过的插件源（
 
 /** 已加载插件：id → { manifest, record, module } */
 const _loaded = new Map();
+/** 本会话内用户显式确认过的远程源（resolved href）。刷新页面后清空，必须重新确认。 */
+const _sessionConfirmed = new Set();
+/** 启动时因未确认而暂缓的远程插件：id → url。 */
+const _pendingRemote = new Map();
 /** 全部一键解码贡献 + AI 提供方的聚合视图（跨插件），供 UI/aiClient 读取。 */
 const _listeners = new Set();
 
@@ -80,6 +84,7 @@ export async function activate(mod) {
 
   const rec = { manifest, record, module: mod };
   _loaded.set(manifest.id, rec);
+  _pendingRemote.delete(manifest.id);
   emit();
   return rec;
 }
@@ -149,18 +154,68 @@ function writeSources(map) {
 // 动态 import 的相对说明符以本模块（src/plugin/）为基准，用户在插件面板填的
 // ./addons/… 却按站点根理解。统一按页面 baseURI 解析；持久化仍存原串，
 // 换部署路径（根目录 / GitHub Pages 子路径）时不失效。
-function resolveSource(url) {
-  try { return new URL(url, document.baseURI).href; } catch { return url; }
+function sourceInfo(url) {
+  const raw = String(url == null ? "" : url).trim();
+  if (!raw) return { ok: false, reason: "empty" };
+  let base = "";
+  try { if (typeof document !== "undefined" && document.baseURI) base = document.baseURI; } catch { /* 无 DOM */ }
+  let u;
+  try { u = base ? new URL(raw, base) : new URL(raw); } catch { return { ok: false, reason: "invalid" }; }
+  if (u.protocol !== "http:" && u.protocol !== "https:") {
+    return { ok: false, reason: "protocol", href: u.href };
+  }
+  let pageOrigin = "";
+  try { if (typeof location !== "undefined" && location.origin) pageOrigin = location.origin; } catch { /* 无 location */ }
+  if (!pageOrigin && base) { try { pageOrigin = new URL(base).origin; } catch { /* 忽略 */ } }
+  return { ok: true, href: u.href, remote: !pageOrigin || u.origin !== pageOrigin };
+}
+
+/** 该源是否为跨源 http(s)（需要用户逐次确认）。 */
+export function isRemoteSource(url) {
+  const info = sourceInfo(url);
+  return info.ok && info.remote;
+}
+
+/** 该源协议是否被允许（http/https 或可解析为 http(s) 的本地相对路径）。 */
+export function isSupportedSource(url) {
+  return sourceInfo(url).ok;
+}
+
+/** 启动时被暂缓、等待用户确认的远程插件（id → {id,url}）。 */
+export function listPendingRemote() {
+  return [..._pendingRemote.entries()].map(([id, url]) => ({ id, url }));
+}
+
+function assertLoadableSource(url) {
+  const info = sourceInfo(url);
+  if (!info.ok) {
+    const reason = info.reason === "protocol"
+      ? `不支持的协议（仅允许 http/https 或本地相对路径）：${url}`
+      : `插件源非法或为空：${url}`;
+    throw new Error(reason);
+  }
+  return info;
 }
 
 /**
  * 从 URL 动态加载一个插件（用户"自行增加算法/创作语言"的入口）。
- * 仅接受同源或用户显式确认的 URL；加载成功记入 sources 供下次自动启用。
+ * 同源/本地 addons 直接加载；跨源 http(s) 必须由面板确认后传 confirmed:true
+ * （确认只对当前 resolved href 在本会话有效）。
+ * 加载成功记入 sources 供下次启动恢复（远程源下次仍需重新确认）。
  * @param {string} url 插件 ESM 模块 URL
+ * @param {{confirmed?:boolean}} [opts]
  */
-export async function loadFromUrl(url) {
-  const mod = await import(/* @vite-ignore */ resolveSource(url));
+export async function loadFromUrl(url, opts = {}) {
+  const info = assertLoadableSource(url);
+  if (info.remote && !_sessionConfirmed.has(info.href)) {
+    if (!opts || opts.confirmed !== true) {
+      throw new Error(`远程插件源需用户显式确认后才能执行：${info.href}`);
+    }
+    _sessionConfirmed.add(info.href);
+  }
+  const mod = await import(/* @vite-ignore */ info.href);
   const rec = await activate(mod);
+  _pendingRemote.delete(rec.manifest.id);
   const sources = readSources();
   sources[rec.manifest.id] = url;
   writeSources(sources);
@@ -173,6 +228,7 @@ export async function loadFromUrl(url) {
 /** 停用并从持久化里移除（下次启动不再加载）。 */
 export function uninstall(pluginId) {
   deactivate(pluginId);
+  _pendingRemote.delete(pluginId);
   writeEnabled(readEnabled().filter((id) => id !== pluginId));
   const sources = readSources();
   delete sources[pluginId];
@@ -191,7 +247,21 @@ export async function restoreEnabled(builtins = {}) {
     if (_loaded.has(id)) continue;
     try {
       if (builtins[id]) { await activate(builtins[id]); continue; }
-      if (sources[id]) { await import(/* @vite-ignore */ resolveSource(sources[id])).then(activate); }
+      const raw = sources[id];
+      if (!raw) continue;
+      const info = sourceInfo(raw);
+      if (!info.ok) {
+        console.warn(`[pluginHost] 恢复插件 ${id} 失败：源协议不受支持 ${raw}`);
+        continue;
+      }
+      // 同源 / 本地 addons 正常恢复；跨源必须本会话显式确认过才执行。
+      if (info.remote && !_sessionConfirmed.has(info.href)) {
+        _pendingRemote.set(id, raw);
+        console.warn(`[pluginHost] 远程插件 ${id} 需用户确认后运行，已暂缓：${info.href}`);
+        continue;
+      }
+      await import(/* @vite-ignore */ info.href).then(activate);
+      _pendingRemote.delete(id);
     } catch (e) {
       console.warn(`[pluginHost] 恢复插件 ${id} 失败，已跳过：`, e && e.message ? e.message : e);
     }
@@ -220,26 +290,61 @@ export function exportConfig() {
   return { version: 1, enabled: readEnabled(), sources: readSources() };
 }
 
+function defaultConfirm(href) {
+  try {
+    if (typeof window !== "undefined" && typeof window.confirm === "function") {
+      return window.confirm(`从远程源加载插件？\n${href}\n\n远程代码将在本页执行，仅在你信任该来源时继续。`);
+    }
+  } catch { /* 无 UI 时失败关闭 */ }
+  return false;
+}
+
 /**
- * 导入插件配置：合并 sources/enabled 并即时加载有源 URL 的插件。
+ * 导入插件配置：逐个校验源、逐个确认远程源后加载。
+ * 同源/本地源直接加载；跨源 http(s) 必须经 confirmFn 同意，拒绝或非法协议不写入配置。
  * 无源的 id（内置插件）只记启用态，由 restoreEnabled 在下次启动时兜底。
  * @param {{enabled?:string[], sources?:Record<string,string>}} cfg
+ * @param {{confirm?:(url:string,id:string)=>boolean|Promise<boolean>}} [opts]
  * @returns {Promise<number>} 本次新加载成功的插件数
  */
-export async function importConfig(cfg) {
+export async function importConfig(cfg, opts = {}) {
   if (!cfg || typeof cfg !== "object") throw new Error("配置格式非法（需 JSON 对象）");
   const inSources = (cfg.sources && typeof cfg.sources === "object") ? cfg.sources : {};
   const inEnabled = Array.isArray(cfg.enabled) ? cfg.enabled : [];
-  const sources = { ...readSources(), ...inSources };
-  writeSources(sources);
-  writeEnabled([...readEnabled(), ...inEnabled]);
+  const sources = { ...readSources() };
+  const enabled = new Set(readEnabled());
+  const confirmFn = typeof opts.confirm === "function" ? opts.confirm : defaultConfirm;
   let loaded = 0;
   for (const id of new Set(inEnabled)) {
-    if (_loaded.has(id)) continue;
-    const url = sources[id];
-    if (!url) continue; // 内置插件无源，交给 restoreEnabled
-    try { await import(/* @vite-ignore */ resolveSource(url)).then(activate); loaded++; }
-    catch (e) { console.warn(`[pluginHost] 导入插件 ${id} 失败，已跳过：`, e && e.message ? e.message : e); }
+    if (typeof id !== "string") continue;
+    if (_loaded.has(id)) { enabled.add(id); continue; }
+    const url = inSources[id] != null ? inSources[id] : sources[id];
+    if (!url) { enabled.add(id); continue; } // 内置插件无源，交给 restoreEnabled
+    const info = sourceInfo(url);
+    if (!info.ok) {
+      console.warn(`[pluginHost] 导入插件 ${id} 失败：源协议不受支持 ${url}`);
+      continue;
+    }
+    if (info.remote && !_sessionConfirmed.has(info.href)) {
+      let ok = false;
+      try { ok = !!(await confirmFn(info.href, id)); } catch { ok = false; }
+      if (!ok) {
+        console.warn(`[pluginHost] 用户未确认远程插件 ${id}，已跳过：${info.href}`);
+        continue;
+      }
+      _sessionConfirmed.add(info.href);
+    }
+    try {
+      await import(/* @vite-ignore */ info.href).then(activate);
+      _pendingRemote.delete(id);
+      sources[id] = url;
+      enabled.add(id);
+      loaded++;
+    } catch (e) {
+      console.warn(`[pluginHost] 导入插件 ${id} 失败，已跳过：`, e && e.message ? e.message : e);
+    }
   }
+  writeSources(sources);
+  writeEnabled([...enabled]);
   return loaded;
 }

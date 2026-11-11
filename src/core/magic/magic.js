@@ -92,22 +92,39 @@ const FLAG_FORMAT_RE = /[a-z0-9_]{2,}\{[^{}]{1,}\}/i;
 // 普通 token 误判为强 flag，整组置顶并高亮（用户 2026-10-26 反馈「高光误导」）。
 const FLAG_STRONG_RE = /(^|[^a-z])(flag|ctf|key|pass|hgame|moectf)[a-z0-9_]*\{[^{}\n]{1,}\}/i;
 
+// ============ 惰载钩子（0.2.0 Worker 按需注册） ============
+// worker 侧只加载 magic 候选 op 的源文件，OPS 里没有未加载的 stub；主线程/Node 若仍处于
+// 惰载态（stub 无 decode/detect），首次遇到 stub 时回退全量 ensureAll 一次，之后全部为真 op。
+// 钩子可注入（magicWorker 传自己的按需加载器），失败吞掉——stub 自然进不了候选，行为等同未加载。
+let _defaultEnsureAllPromise = null;
+function defaultEnsureMagicOpLoaded() {
+  if (!_defaultEnsureAllPromise) {
+    _defaultEnsureAllPromise = import("../lazyCore.js")
+      .then((m) => m.ensureAll())
+      .then(() => true)
+      .catch(() => false);
+  }
+  return _defaultEnsureAllPromise;
+}
+
 const DEFAULTS = {
   maxDepth: 1,            // 最大解码层数（默认 1=单层；多层链式解码由 UI「多层」开关传 3）
   maxCandidates: 50,      // 最多返回候选数
   crib: null,             // crib 字面片段（如 "flag{"），RegExp 对象忽略
   intensive: false,       // 1-byte XOR + 位旋转暴力
   bruteBytes: 100,        // intensive 只对前 N 字节跑（防大输入爆炸）
-  guard: 50000,           // 总迭代兜底（防组合爆炸）
+  guard: 50000,           // 确定性工作量预算：最多尝试的 op / 参数组合 / BFS 节点数。
+                          // 不依赖墙钟——后台标签页定时器节流不会改变可跑候选数。
   paramScan: true,        // 带参 op 参数网格扫描（白名单绕过 detect 要求直接扫描）
   paramScanLimit: PARAM_SCAN_DEFAULT_LIMIT, // 总组合数上限，超限只扫 P0
   key: null,              // 用户在工具栏填的密钥（需求3）——带 key 时试各加解密 op
   allowOps: null,         // 参与解码的 op id 白名单（Set/数组）。null=不限制（旧行为）。
                           // 由 UI 的「解码强度」预设/自定义勾选传入，见 core/decodeProfile.js。
-  timeBudget: 30000,      // 硬墙钟死线（毫秒）：兜底上限，超时无条件收尾（防病态输入无限跑）
+  maxResults: 0,          // 候选数量预算：累计候选硬上限。0=自动（guard + intensive 固定量 + 1）。
+                          // 只防病态输入无限累积；正常输入远达不到，不裁剪既有结果。
+  // 兼容旧调用方：timeBudget / softDeadlineMs 墙钟参数已移除，传入会被忽略，不参与任何截止判断。
   signal: null,           // AbortSignal（看门狗/新输入接管）——aborted 立即收尾返回已有候选
-  softDeadlineMs: 5000,   // 软死线（毫秒）：兜底回调 onPartial(已得结果) 让 UI 先渲染，之后继续跑
-  onPartial: null,        // 流式部分结果回调 (candidates)=>void——节流增量，不中断后台继续
+  onPartial: null,        // 流式部分结果回调 (candidates)=>void——按新增候选数节流，不中断后台继续
   onProgress: null,       // 进度回调 ({phase,done,total,opId,label,percent})=>void
   _control: null,         // 内部：共享暂停控制对象 {paused:boolean}（Worker/主线程降级同款）
   yieldEvery: 40,         // 每跑 N 个 op 让出一次主线程（宏任务）：UI 可刷新/倒计时可走/abort 可收
@@ -242,13 +259,15 @@ function resultText(v) {
   return v;
 }
 
-// 单个 op.decode 的墙钟兜底：把（可能永不 resolve 的）decode 与一个超时竞速。
+// 单个 op.decode 的异步安全阀：把（可能永不 resolve 的）decode 与一个超时竞速。
 // 浏览器专属根因——无 detect 的图像/音频类 op（spectrogram/blindWatermark/mcMap…）
 // 拿到文本输入（非合法图片字节）时 `img.onload` 永不触发、Promise 永不 settle，
 // node 里这些 API 直接抛错被跳过（所以 node 测不出），浏览器里却把整个 magicDecode 挂死
 // → await 永不返回 → 连原始输入卡都不出。这里给每个 op 单独套超时，超时即当作「此 op 无结果」
 // 跳过，绝不阻塞其余 op。注意：**只能拦截 async 永不 resolve**；同步死循环 JS 主线程无法中断
 // （那类 op 需从 plainOps 过滤或修 op 本体）。
+// 这不是 magic 的总预算：后台标签页节流只会让该超时更晚触发（不会提前砍候选），
+// 候选是否继续只由 guard / 候选数量预算决定。
 const PER_OP_TIMEOUT_MS = 700;
 function decodeWithTimeout(fn, text, params, ms = PER_OP_TIMEOUT_MS) {
   // 性能关键：绝大多数 op（古典/base/花式）是纯同步函数，永不永挂。
@@ -269,10 +288,29 @@ function decodeWithTimeout(fn, text, params, ms = PER_OP_TIMEOUT_MS) {
   ]);
 }
 
-// 让出主线程（宏任务）：magic 是主线程 BFS，同步 op 密集时不让出会冻结 UI——
-// 倒计时不动、AbortSignal 收不到、按钮点不动。周期性 await yieldToMain() 把控制权交回事件循环，
-// 让浏览器有机会刷新倒计时、响应中断、渲染部分结果。node 里 setTimeout(0) 同样有效。
-const yieldToMain = () => new Promise((r) => setTimeout(r, 0));
+// 让出主线程（宏任务），但不用墙钟决定预算：magic 是主线程 BFS，同步 op 密集时不让出会冻结 UI——
+// 倒计时不动、AbortSignal 收不到、按钮点不动。后台标签页会把 setTimeout 节流到 ≥1s，这不会改变
+// “是否继续”，却会拖慢 UI/中断响应。优先 scheduler.yield，其次 MessageChannel（Worker/浏览器），
+// 再 setImmediate（Node），最后才退化为微任务——仅老环境兜底。
+const yieldToMain = (() => {
+  const sched = typeof globalThis !== "undefined" ? globalThis.scheduler : null;
+  if (sched && typeof sched.yield === "function") return () => sched.yield();
+  if (typeof MessageChannel === "function") {
+    return () => new Promise((resolve) => {
+      const ch = new MessageChannel();
+      ch.port1.onmessage = () => {
+        try { ch.port1.close(); } catch { /* ignore */ }
+        try { ch.port2.close(); } catch { /* ignore */ }
+        resolve();
+      };
+      ch.port2.postMessage(0);
+    });
+  }
+  if (typeof setImmediate === "function") {
+    return () => new Promise((resolve) => setImmediate(resolve));
+  }
+  return () => Promise.resolve();
+})();
 
 // 中断异常（用户输入新内容 → abort 旧任务 → 循环里检测 signal 抛此错 → 上层识别为「被接管」不报错）。
 class MagicAbort extends Error {
@@ -615,8 +653,8 @@ function outputCheckPasses(text, check) {
  * @returns {Promise<Array<{chain:string[], result:string, confidence:number, score:number, matchesCrib:boolean}>>}
  * 候选数组，按综合分升序（分低=优）。chain 含合成 id（xor:K / rot:R）或 op id。
  */
-// 大输入安全线：超过则跳过 paramScan/intensive/plainOps（只跑有 detect 的解码）。
-// 原因：这些网格/暴力对长输入是同步长任务，timeBudget 的让出检查点无法中断它们，
+// 大输入安全线（确定性输入字节预算）：超过则跳过 paramScan/intensive/plainOps（只跑有 detect 的解码）。
+// 原因：这些网格/暴力对长输入是同步长任务，让出检查点无法中断它们，
 // 用户 force 一键解码跑 100KB+ 输入会卡死主线程。detect 解码（base64 等）无此问题。
 const BIG_INPUT_LIMIT = 100000;
 // 单条候选结果长度上限：RLE 等解码器对短输入可产出数百万字符（实测 hex 串 → rle 6.2MB），
@@ -633,6 +671,10 @@ export async function magicDecode(input, opts = {}) {
     o.intensive = false;
     o.maxDepth = 1;
   }
+  // 确定性预算归一化：guard 是唯一的总工作量截止（BFS 节点 + detect/plain/keyed 尝试 +
+  // 参数网格组合）。旧 timeBudget/softDeadlineMs 已不参与任何截止判断。
+  const _guardOpt = Number(o.guard);
+  o.guard = Number.isFinite(_guardOpt) && _guardOpt >= 0 ? Math.floor(_guardOpt) : DEFAULTS.guard;
 
   const cribRe = literalMatcher(o.crib);
 
@@ -685,23 +727,39 @@ export async function magicDecode(input, opts = {}) {
  // ② plainOps ：无 detect 的纯编解码/花式 op —— 按字符集定义域(coarseAdmitPlain)预筛
  //   只在 depth 0 单层跑（不进 BFS，避免花式算法组合爆炸）。命中定义域才纳入。
  // requiresBridge（exe 桥）与 noAuto（想曰等重 op）排除：自动跑无意义又慢。
-  const decoders = OPS.filter(
-    (op) => typeof op.detect === "function" && typeof op.decode === "function"
+  // 惰载态（stub 无 decode/detect）先让注入的加载器落地，再按同一套条件筛选。
+  // 顺序敏感：OPS 保持 registerAll 注册序，候选数组顺序与全量 eager 完全一致。
+  // 钩子只对 stub 调用，已注册真 op 零开销（Worker 预载后整个循环无 await 分支）。
+  const ensureMagicOpLoaded = typeof o.ensureMagicOpLoaded === "function"
+    ? o.ensureMagicOpLoaded
+    : defaultEnsureMagicOpLoaded;
+  const decoders = [];
+  // 无 detect 的**纯解码** op（radix/base 变体/花式衍生…），按定义域预筛后单层跑。
+  // **只收 op.decode**（真解码器）——run-only 的 op 是哈希/分析/取证报告工具（md5/crc32/
+  // hexView/xorAnalyze/stegosaurus 等），对任意输入都吐一段「报告文本」，其中文/英文说明
+  // 会被 compositeScore 当有意义明文误判 99% 冒头污染结果。它们不是解码器，绝不进自动解码。
+  // 排除：有 detect 的（走 decoders）、PARAM_SWEEP 白名单（走参数扫描）、
+  // requiresBridge/noAuto、keyed 加解密 op（走 keyed-crypto 注入，需 key）。
+  // 小字母表门（字符类型数缩限）：plainOps 只在 depth0 跑（cur.text===input），门对原输入算一次。
+  const _smallGate0 = smallAlphabetGate(input);
+  const plainOps = [];
+  for (const opRef of OPS) {
+    let op = opRef;
+    if (op.__stub) {
+      try { await ensureMagicOpLoaded(op.id); } catch { /* 加载失败按未加载处理 */ }
+      const live = getOp(op.id);
+      if (!live || live.__stub) continue;  // 仍无 decode/detect，不可能成为候选
+      op = live;
+    }
+    if (typeof op.detect === "function" && typeof op.decode === "function"
       && !isAutoCandidateExcluded(op) && !NO_MAGIC_OPS.has(op.id)
       && op.cat !== "hash"   // 哈希不可逆：decode 档（若存在）只吐摘要/报告，自动解码纯噪声
       && !excluded(op.id)
-      && allowed(op.id)
-  );
- // 无 detect 的**纯解码** op（radix/base 变体/花式衍生…），按定义域预筛后单层跑。
- // **只收 op.decode**（真解码器）——run-only 的 op 是哈希/分析/取证报告工具（md5/crc32/
- // hexView/xorAnalyze/stegosaurus 等），对任意输入都吐一段「报告文本」，其中文/英文说明
- // 会被 compositeScore 当有意义明文误判 99% 冒头污染结果。它们不是解码器，绝不进自动解码。
- // 排除：有 detect 的（走 decoders）、PARAM_SWEEP 白名单（走参数扫描）、
- // requiresBridge/noAuto、keyed 加解密 op（走 keyed-crypto 注入，需 key）。
- // 小字母表门（字符类型数缩限）：plainOps 只在 depth0 跑（cur.text===input），门对原输入算一次。
-  const _smallGate0 = smallAlphabetGate(input);
-  const plainOps = OPS.filter(
-    (op) => typeof op.detect !== "function"
+      && allowed(op.id)) {
+      decoders.push(op);
+      continue;
+    }
+    if (typeof op.detect !== "function"
       && typeof op.decode === "function"
       && !isAutoCandidateExcluded(op) && !NO_MAGIC_OPS.has(op.id)
       && op.cat !== "hash"
@@ -710,8 +768,10 @@ export async function magicDecode(input, opts = {}) {
       && !KEYED_OPS.has(op.id)
       && allowed(op.id)
       && (!_smallGate0 || _smallGate0.has(op.id))
-      && coarseAdmitPlain(op, f, !!o.lenient)
-  );
+      && coarseAdmitPlain(op, f, !!o.lenient)) {
+      plainOps.push(op);
+    }
+  }
 
  // 参数网格扫描预算。白名单 op（caesar/affine/railFence 等无 detect 的经典密码）
  // 绕过 detect 要求直接扫描。只在 depth 0 跑（cur.text === input），网格按 input 长度
@@ -733,6 +793,12 @@ export async function magicDecode(input, opts = {}) {
 
  /** @type {{chain:string[], result:string, confidence:number, score:number, matchesCrib:boolean}[]} */
   const results = [];
+  // 候选数量预算（确定性）：guard 约束尝试次数，但一条候选可占多种结果，再给累计上限兜底。
+  // 正常输入远低于此；只有病态输入才触发，不会比旧 guard 行为少出候选。
+  const _maxResultsOpt = Number(o.maxResults);
+  results._maxResults = Number.isFinite(_maxResultsOpt) && _maxResultsOpt > 0
+    ? Math.floor(_maxResultsOpt)
+    : o.guard + (o.intensive ? 262 : 0) + 1;
   const seen = new Set(); // 去重 key = chain.join(">") + "|" + result
 
  // BFS 双队列（bug2 修复）：可信节点(trusted)优先于投机节点(speculative)出队。
@@ -750,61 +816,50 @@ export async function magicDecode(input, opts = {}) {
   };
 
   let guard = 0;
- // 硬墙钟死线（兜底上限）：无论迭代计数如何，超 o.timeBudget 毫秒无条件收尾返回已有候选。
- // 防病态输入无限跑；正常在软死线(5s)已回调部分结果，用户多半已看到解。
- // 暂停期间补回墙钟（见 waitIfPaused），不把用户按暂停的时间算进预算。
-  const start = Date.now();
-  let hardDeadline = start + o.timeBudget;
- // 软死线（看门狗 5s）：兜底再回调一次 onPartial，之后**不中断**继续跑。
-  let softDeadline = start + o.softDeadlineMs;
- // abort（新输入接管 / 用户强制中断）：signal.aborted 立即收尾，历史任务不再往下跑，
- // 不堆积、不崩溃。返回已得候选（调用方靠 token 决定是否丢弃）。
+  // 确定性工作量预算：guard 同时约束 BFS 节点、detect/plain/keyed 尝试、参数网格组合数。
+  // 旧 hardDeadline/softDeadline 墙钟截止已移除——后台标签页定时器节流不再提前结束/漏候选。
+  // 用户主动停止仍走 o.signal（主线程降级）或 Worker terminate（magicClient）。
+  // abort（新输入接管 / 用户强制中断）：signal.aborted 立即收尾，历史任务不再往下跑，
+  // 不堆积、不崩溃。返回已得候选（调用方靠 token 决定是否丢弃）。
   const aborted = () => o.signal && o.signal.aborted;
 
  // ---- 协作式暂停（Worker pause/resume 或主线程共享 control 对象）----
- // 每个 yield 点检查 control.paused；暂停期间用定时器让出事件循环（非忙等），done 计数不推进，
- // 恢复后从原处继续。暂停时长补回两条死线，暂停再久也不会把任务耗尽。
+  // 每个 yield 点检查 control.paused；暂停期间用定时器让出事件循环（非忙等），done 计数不推进，
+  // 恢复后从原处继续。暂停不消耗 guard，也不存在墙钟死线可被暂停耗尽。
   const control = o._control && typeof o._control === "object" ? o._control : null;
   const waitIfPaused = async () => {
     if (!control || !control.paused) return aborted();
-    const t0 = Date.now();
     while (control.paused) {
       if (aborted()) return true;
       await new Promise((r) => setTimeout(r, 20));
     }
-    const delta = Date.now() - t0;
-    hardDeadline += delta;
-    softDeadline += delta;
     return aborted();
   };
 
- // ---- 流式部分结果（节流增量）----
- // 新候选置脏，innerTick 每轮约 150ms 节流回调一次；depth0 各阶段收尾再强制补一次，
- // 小输入也能看到「逐个算法出结果」而非等到 softDeadline 才一次性给。候选数组始终是
- // finalizeResults 的当前快照。
-  const PARTIAL_THROTTLE_MS = 150;
+ // ---- 流式部分结果（按新增候选数/已跑 op 数节流，非墙钟）----
+  // 新候选置脏，累积到 32 条候选或 64 次 op 心跳回调一次；各阶段收尾再强制补一次。
+  // 后台标签页不会因定时器节流少收 partial；候选数组始终是 finalizeResults 的当前快照。
+  const PARTIAL_EVERY_CANDIDATES = 32;
+  const PARTIAL_EVERY_OPS = 64;
   let partialDirty = false;
-  let lastPartialAt = 0;
-  let softFired = false;
+  let candidatesSincePartial = 0;
+  let opsSincePartial = 0;
   const maybePartial = (force = false) => {
     if (!o.onPartial || !partialDirty) return;
-    const now = Date.now();
-    if (!force && now - lastPartialAt < PARTIAL_THROTTLE_MS) return;
-    lastPartialAt = now;
-    partialDirty = false;
-    try { o.onPartial(finalizeResults(results, o)); } catch { /* 回调异常不影响主流程 */ }
-  };
-  const maybeSoftPartial = () => {
-    if (softFired || !o.onPartial || Date.now() < softDeadline) return;
-    softFired = true;
-    lastPartialAt = Date.now();
+    if (!force) {
+      opsSincePartial++;
+      if (candidatesSincePartial < PARTIAL_EVERY_CANDIDATES && opsSincePartial < PARTIAL_EVERY_OPS) return;
+    }
+    candidatesSincePartial = 0;
+    opsSincePartial = 0;
     partialDirty = false;
     try { o.onPartial(finalizeResults(results, o)); } catch { /* 回调异常不影响主流程 */ }
   };
 
  // ---- 进度上报（onProgress）----
- // 五阶段：detect/param/plain/keyed/bfs。done/total 为该阶段计数（total 允许估算，按实际
- // 工作量上修），percent 是加权总进度，单独钳制为 0-100 单调不减。节流 100ms，收尾强制 100。
+  // 五阶段：detect/param/plain/keyed/bfs。done/total 为该阶段计数（total 允许估算，按实际
+  // 工作量上修），percent 是加权总进度，单独钳制为 0-100 单调不减。节流 100ms，收尾强制 100。
+  // 注：这个墙钟节流只影响进度消息频率，不参与“是否继续/预算”判断，后台节流不会少跑候选。
   const PROGRESS_THROTTLE_MS = 100;
   const PHASE_WEIGHT = { detect: 0.45, param: 0.18, plain: 0.12, keyed: 0.1, bfs: 0.15 };
   const progDone = { detect: 0, param: 0, plain: 0, keyed: 0, bfs: 0 };
@@ -879,42 +934,33 @@ export async function magicDecode(input, opts = {}) {
     }
   };
  // 候选新增置脏：_record 通过 results._onCandidate 回调（数组自定义属性，不参与结果序列化）。
-  results._onCandidate = () => { partialDirty = true; };
+  results._onCandidate = () => { partialDirty = true; candidatesSincePartial++; };
 
-  // 协作式让出：按「时间窗 + op 数」双阈值让出宏任务。只看 op 数时，慢 op 或
-  // 密集暴力循环会把 Worker 消息队列压住，pause 要等几十个 op 才被派发；时间窗保证
-  // 最迟约 12ms 回到事件循环，暂停/终止按钮能及时生效。
+  // 协作式让出：只按 op 数（yieldEvery）让出宏任务，预算判断完全不依赖时间。
+  // 后台标签页定时器节流不会改变“是否继续”；让出本身用 scheduler.yield/MessageChannel，
+  // 不经过会被节流的 setTimeout。单次同步慢 op 仍无法中断，这是 JS 语言限制。
   let sinceYield = 0;
-  let lastYieldAt = Date.now();
   const maybeYield = async (force = false) => {
-    const now = Date.now();
-    const byCount = ++sinceYield >= o.yieldEvery;
-    const byTime = now - lastYieldAt >= 12;
-    if (force || byCount || byTime) {
+    if (force || ++sinceYield >= o.yieldEvery) {
       sinceYield = 0;
-      lastYieldAt = now;
-      await new Promise((r) => setTimeout(r, 0));
+      await yieldToMain();
     }
   };
- // 内层 op 循环的每轮心跳：暂停协作 + 让出主线程 + 节流 partial + 软死线兜底 + 检查中断。
- // 默认单层解码(maxDepth=1)全部 op 扫描都在**一次** while 迭代的内层 for 里跑完，故必须
- // 在内层每轮都让出/回调，不能只等 while 顶层。返回 true 表示已中断（新输入接管/超时）。
+ // 内层 op 循环的每轮心跳：暂停协作 + 让出主线程 + 按候选数节流 partial + 检查中断。
+  // 默认单层解码(maxDepth=1)全部 op 扫描都在**一次** while 迭代的内层 for 里跑完，故必须
+  // 在内层每轮都让出/回调，不能只等 while 顶层。返回 true 表示已中断（新输入接管/用户停止）。
   const innerTick = async () => {
     if (await waitIfPaused()) return true;
     await maybeYield();
     maybePartial(false);
-    maybeSoftPartial();
-    if (Date.now() > hardDeadline) return true;  // 硬死线到 → 中断内层 op 扫描
     return aborted();
   };
   emitProgress("detect", null, "", true);  // 起始 0%
   while (queue.length > 0) {
-    if (guard++ > o.guard) break; // 兜底防爆（迭代计数）
-    if (Date.now() > hardDeadline) break; // 兜底防爆（硬墙钟死线）
+    if (guard++ > o.guard) break; // 确定性工作量预算耗尽 → 收尾
     if (await waitIfPaused()) break;      // 暂停协作：恢复后从这里继续
     if (aborted()) break;                 // 新输入接管 / 用户中断 → 立即收尾
-    maybePartial(false);                  // 节流增量 partial
-    maybeSoftPartial();                   // 软死线兜底回调
+    maybePartial(false);                  // 按新增候选数增量 partial
     await maybeYield();                   // 周期让出主线程（倒计时能走 / abort 能收）
     const cur = queue.shift();
     nodesStarted++;
@@ -940,7 +986,7 @@ export async function magicDecode(input, opts = {}) {
       for (let key = 1; key <= 255; key++) {
         progDone.detect++;
         emitProgress("detect", `xor:${key}`, `xor ${key}`);
-        // 暴力通道同样要给暂停/终止/死线留心跳；否则一次 intensive 可把 Worker 锁死十几秒。
+        // 暴力通道同样要给暂停/终止/中断留心跳；否则一次 intensive 可把 Worker 锁死十几秒。
         if ((key & 15) === 0 && await innerTick()) { bruteAborted = true; break; }
         const xored = new Array(bytes.length);
         for (let i = 0; i < bytes.length; i++) xored[i] = bytes[i] ^ key;
@@ -994,7 +1040,7 @@ export async function magicDecode(input, opts = {}) {
         for (const params of grid) {
           if (guard++ > o.guard) { scanOver = true; break; }
           progDone.param++;
-          if (await innerTick()) { scanOver = true; break; }  // 暂停/软死线回调 + 让出 + 中断
+          if (await innerTick()) { scanOver = true; break; }  // 暂停/partial 节流 + 让出 + 中断
           const tag = formatParamTag(opId, params);
           emitProgress("param", opId, tag);
           let decoded;
@@ -1023,7 +1069,7 @@ export async function magicDecode(input, opts = {}) {
       for (const op of admitPlain) {
         if (guard++ > o.guard) break;
         progDone.plain++;
-        if (await innerTick()) break;  // 暂停/软死线回调 + 让出 + 中断
+        if (await innerTick()) break;  // 暂停/partial 节流 + 让出 + 中断
         emitProgress("plain", op.id, op.name || op.id);
         const fn = op.decode || op.run;
         let decoded;
@@ -1058,7 +1104,7 @@ export async function magicDecode(input, opts = {}) {
         for (const { params, tag } of attempts) {
           if (guard++ > o.guard) break;
           progDone.keyed++;
-          if (await innerTick()) break;   // 暂停/软死线回调 + 让出 + 中断
+          if (await innerTick()) break;   // 暂停/partial 节流 + 让出 + 中断
           emitProgress("keyed", opId, tag);
           let decoded;
           try {
@@ -1084,7 +1130,7 @@ export async function magicDecode(input, opts = {}) {
     for (const op of decoders) {
       if (guard++ > o.guard) break;
       progDone.detect++;
-      if (await innerTick()) break;   // 暂停/软死线回调 + 让出 + 中断
+      if (await innerTick()) break;   // 暂停/partial 节流 + 让出 + 中断
       emitProgress("detect", op.id, op.name || op.id);
       if (curIsFlag && PLAINTEXT_STYLE_OPS.has(op.id)) continue;
       if (combinedAdmit(op.id, cur.text) === false) continue;
@@ -1157,7 +1203,7 @@ export async function magicDecode(input, opts = {}) {
 }
 
 // 把累积的候选整理成最终返回数组：Occam 去重 + 排序 + 全列。
-// 抽成独立函数供两处调用：① 流式 onPartial / 软死线兜底（当前部分结果快照）② 主循环跑完最终返回。
+// 抽成独立函数供两处调用：① 流式 onPartial（按候选数节流的当前部分结果快照）② 主循环跑完最终返回。
 // **纯函数、无副作用**：每次基于当前 results 快照重算，多次调用互不干扰（partial 多次、结尾一次）。
 function finalizeResults(results, o) {
  // 共享信号有限加权：基于原始基础分计算，重复 partial/final 不累计。
@@ -1333,6 +1379,7 @@ function _parseStepLabel(label) {
 }
 function _record(text, cur, opId, detectScore, results, seen, cribRe, queue, byteStatHint, source = null) {
   if (typeof text !== "string" || text.length > MAGIC_MAX_RESULT_LEN) return;
+  if (results._maxResults && results.length >= results._maxResults) return; // 确定性候选数预算耗尽
   const newChain = [...cur.chain, opId];
   const matchesCrib = cribRe ? cribRe.test(text) : false;
 

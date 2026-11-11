@@ -1,6 +1,53 @@
 import { decodePNG, encodePNG, rgbaToDataURL, dataURLToBytes } from "./stegoPixels.js";
+import { checkLimit, withLimit } from "./limitGuard.js";
 
 const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const MAX_IMAGE_PIXELS = 16 * 1024 * 1024;            // 单帧画布像素软阈值
+const MAX_IMAGE_PIXELS_HARD = 64 * 1024 * 1024;       // 确认后的画布/单帧硬上限
+const MAX_TOTAL_FRAME_PIXELS = 64 * 1024 * 1024;      // 实际累计帧像素软阈值
+const MAX_TOTAL_FRAME_PIXELS_HARD = 256 * 1024 * 1024;// 确认后的累计帧像素硬上限
+
+function checkCanvasLimit(w, h, pixels, params, kind) {
+  if (pixels <= MAX_IMAGE_PIXELS) return params;
+  checkLimit({
+    scope: `stegSolve.${kind}.canvas`,
+    actual: pixels,
+    soft: MAX_IMAGE_PIXELS,
+    hard: MAX_IMAGE_PIXELS_HARD,
+    params,
+    label: `${kind.toUpperCase()} 画布 ${w}×${h}`,
+    unit: "像素",
+  });
+  return withLimit(params, { _allowLimitOverride: true });
+}
+
+function checkFramePixels(w, h, pixels, params, kind) {
+  if (pixels <= MAX_IMAGE_PIXELS) return params;
+  checkLimit({
+    scope: `stegSolve.${kind}.frame`,
+    actual: pixels,
+    soft: MAX_IMAGE_PIXELS,
+    hard: MAX_IMAGE_PIXELS_HARD,
+    params,
+    label: `${kind.toUpperCase()} 单帧 ${w}×${h}`,
+    unit: "像素",
+  });
+  return withLimit(params, { _allowLimitOverride: true });
+}
+
+function checkTotalFramePixels(total, params, kind) {
+  if (total <= MAX_TOTAL_FRAME_PIXELS) return params;
+  checkLimit({
+    scope: `stegSolve.${kind}.totalFramePixels`,
+    actual: total,
+    soft: MAX_TOTAL_FRAME_PIXELS,
+    hard: MAX_TOTAL_FRAME_PIXELS_HARD,
+    params,
+    label: `${kind.toUpperCase()} 累计帧像素`,
+    unit: "像素",
+  });
+  return withLimit(params, { _allowLimitOverride: true });
+}
 
 export const CHANNELS = [
   { id: "r", label: "R 红", index: 0, tint: [255, 70, 70] },
@@ -85,7 +132,7 @@ export function mimeForFormat(format) {
   return { png: "image/png", apng: "image/png", gif: "image/gif", jpeg: "image/jpeg", bmp: "image/bmp", webp: "image/webp" }[format] || "application/octet-stream";
 }
 
-function lzwDecodeGif(sub, minCodeSize) {
+function lzwDecodeGif(sub, minCodeSize, maxOut = Infinity) {
   const clear = 1 << minCodeSize;
   const eoi = clear + 1;
   const MAX = 4096;
@@ -107,6 +154,7 @@ function lzwDecodeGif(sub, minCodeSize) {
   const out = [];
   let firstCode = -1;
   while (bitpos + codeSize <= nbits) {
+    if (out.length >= maxOut) break; // 帧像素预算：正常帧恰好 maxOut 个索引，多余码不再展开
     let code = 0;
     for (let k = 0; k < codeSize; k++) {
       code |= (((sub[(bitpos + k) >> 3] >> ((bitpos + k) & 7)) & 1) << k);
@@ -114,7 +162,7 @@ function lzwDecodeGif(sub, minCodeSize) {
     bitpos += codeSize;
     if (code === clear) { reset(); firstCode = -1; continue; }
     if (code === eoi) break;
-    if (prev === -1) { out.push(code); firstCode = code; prev = code; continue; }
+    if (prev === -1) { if (out.length < maxOut) out.push(code); firstCode = code; prev = code; continue; }
     const incode = code;
     if (code >= next) { stack[sp++] = firstCode; code = prev; }
     while (code >= clear) {
@@ -130,7 +178,7 @@ function lzwDecodeGif(sub, minCodeSize) {
       next++;
       if (next === (1 << codeSize) && codeSize < 12) codeSize++;
     }
-    while (sp > 0) out.push(stack[--sp]);
+    while (sp > 0 && out.length < maxOut) out.push(stack[--sp]);
     prev = incode;
   }
   return out;
@@ -202,6 +250,9 @@ export function decodeGifFrames(bytes, opts = {}) {
   const W = u16le(b, 6);
   const H = u16le(b, 8);
   if (!W || !H) throw new Error("GIF 尺寸为 0");
+  const canvasPixels = W * H;
+  let totalFramePixels = 0;
+  let limitParams = checkCanvasLimit(W, H, canvasPixels, opts.params, "gif");
   const packed = b[10];
   let pos = 13;
   let gct = null;
@@ -211,7 +262,8 @@ export function decodeGifFrames(bytes, opts = {}) {
     pos += n * 3;
   }
 
-  const maxFrames = Math.max(1, opts.maxFrames || 600);
+  const wantedFrames = Number(opts.maxFrames);
+  const maxFrames = Number.isFinite(wantedFrames) && wantedFrames > 0 ? Math.floor(wantedFrames) : Infinity;
   const canvas = new Uint8ClampedArray(W * H * 4);
   const frames = [];
   let gce = { delay: 0, dispose: 0, transparent: -1 };
@@ -256,6 +308,10 @@ export function decodeGifFrames(bytes, opts = {}) {
     const fh = u16le(b, pos + 7);
     const ipacked = b[pos + 9];
     pos += 10;
+    const framePixels = fw * fh;
+    totalFramePixels += framePixels;
+    limitParams = checkFramePixels(fw, fh, framePixels, limitParams, "gif");
+    limitParams = checkTotalFramePixels(totalFramePixels, limitParams, "gif");
     let palette = gct;
     if (ipacked & 0x80) {
       const n = 1 << ((ipacked & 7) + 1);
@@ -268,7 +324,7 @@ export function decodeGifFrames(bytes, opts = {}) {
     const sub = readSubBlocks(b, pos);
     pos = sub.pos;
     const data = concatBytes(sub.chunks);
-    const decoded = Uint8Array.from(lzwDecodeGif(data, minCodeSize));
+    const decoded = Uint8Array.from(lzwDecodeGif(data, minCodeSize, framePixels));
     const indices = (ipacked & 0x40) ? deinterlaceIndices(decoded, fw, fh) : decoded;
 
     if (prevDispose === 2 && prevRect) clearRect(canvas, W, H, prevRect.left, prevRect.top, prevRect.w, prevRect.h);
@@ -412,17 +468,26 @@ export function decodeAPNGFrames(bytes, opts = {}) {
   if (!ihdr) throw new Error("APNG 缺少 IHDR");
   const W = ihdr.width;
   const H = ihdr.height;
+  if (!W || !H) throw new Error("APNG 尺寸为 0");
+  const canvasPixels = W * H;
+  let totalFramePixels = 0;
+  let limitParams = checkCanvasLimit(W, H, canvasPixels, opts.params, "apng");
 
   if (!frameDefs.length) {
     if (!defaultIdat.length) throw new Error("APNG 缺少帧数据");
-    const img = decodePNG(apngFramePNG(ihdr, palette, trns, concatBytes(defaultIdat)));
+    const img = decodePNG(apngFramePNG(ihdr, palette, trns, concatBytes(defaultIdat)), {
+      maxPixels: MAX_IMAGE_PIXELS,
+      hardMaxPixels: MAX_IMAGE_PIXELS_HARD,
+      params: limitParams,
+    });
     return {
       format: "apng", width: W, height: H, total: 1, loop: actl ? actl.numPlays : null,
       frames: [{ width: W, height: H, data: img.data, delay: 0, dispose: 0, blend: 0 }],
     };
   }
 
-  const maxFrames = Math.max(1, opts.maxFrames || 600);
+  const wantedFrames = Number(opts.maxFrames);
+  const maxFrames = Number.isFinite(wantedFrames) && wantedFrames > 0 ? Math.floor(wantedFrames) : Infinity;
   const canvas = new Uint8ClampedArray(W * H * 4);
   const frames = [];
   let prev = null;
@@ -441,9 +506,20 @@ export function decodeAPNGFrames(bytes, opts = {}) {
       if (prev.dispose === 1) clearRect(canvas, W, H, prev.x, prev.y, prev.width, prev.height);
       else if (prev.dispose === 2 && prevSnapshot) canvas.set(prevSnapshot);
     }
+    if (!def.width || !def.height) {
+      throw new Error(`APNG 帧尺寸非法（${def.width}×${def.height}）。`);
+    }
+    const framePixels = def.width * def.height;
+    totalFramePixels += framePixels;
+    limitParams = checkFramePixels(def.width, def.height, framePixels, limitParams, "apng");
+    limitParams = checkTotalFramePixels(totalFramePixels, limitParams, "apng");
     const snapshot = def.dispose === 2 ? canvas.slice() : null;
     const fihdr = Object.assign({}, ihdr, { width: def.width, height: def.height });
-    const img = decodePNG(apngFramePNG(fihdr, palette, trns, data));
+    const img = decodePNG(apngFramePNG(fihdr, palette, trns, data), {
+      maxPixels: MAX_IMAGE_PIXELS_HARD,
+      hardMaxPixels: MAX_IMAGE_PIXELS_HARD,
+      params: limitParams,
+    });
     blendAPNGFrame(canvas, W, H, img.data, img.width, img.height, def.x, def.y, def.blend);
     const den = def.delayDen === 0 ? 100 : def.delayDen;
     frames.push({
@@ -471,7 +547,11 @@ export function decodeImageFrames(bytes, opts = {}) {
   const format = detectImageFormat(b);
   if (format === "apng") return decodeAPNGFrames(b, opts);
   if (format === "png") {
-    const img = decodePNG(b);
+    const img = decodePNG(b, {
+      maxPixels: MAX_IMAGE_PIXELS,
+      hardMaxPixels: MAX_IMAGE_PIXELS_HARD,
+      params: opts.params,
+    });
     return {
       format: "png", width: img.width, height: img.height, total: 1, loop: null,
       frames: [{ width: img.width, height: img.height, data: img.data, delay: 0, dispose: 0, blend: 0 }],

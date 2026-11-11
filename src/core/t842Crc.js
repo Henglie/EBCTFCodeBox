@@ -482,13 +482,13 @@ register({
   desc: "CyberChef CRC Checksum 对齐：171 个命名 CRC 预设 + Custom（width/poly/init/refIn/refOut/xorOut），输出小写 hex。BigInt 支持 3-82 位宽度；不影响既有 crcGeneric/crc32/crc16。",
   acceptsBytes: true,
   params: [
-    { key: "algorithm", label: "Algorithm", type: "select", default: "CRC-32/ISO-HDLC", options: ALGO_NAMES },
-    { key: "width", label: "Width (bits)", type: "text", default: "0", placeholder: "Custom 时生效" },
-    { key: "poly", label: "Polynomial (hex)", type: "text", default: "0", placeholder: "如 04C11DB7" },
-    { key: "init", label: "Initialization (hex)", type: "text", default: "0", placeholder: "如 FFFFFFFF" },
-    { key: "refIn", label: "Reflect input", type: "bool", default: false },
-    { key: "refOut", label: "Reflect output", type: "bool", default: false },
-    { key: "xorOut", label: "Xor Output (hex)", type: "text", default: "0", placeholder: "如 FFFFFFFF" },
+    { key: "algorithm", label: "算法", labelKey: "op.crcChecksum.param.algorithm", type: "select", default: "CRC-32/ISO-HDLC", options: ALGO_NAMES },
+    { key: "width", label: "宽度（位）", labelKey: "op.crcChecksum.param.width", type: "text", default: "0", placeholder: "Custom 时生效" },
+    { key: "poly", label: "多项式（hex）", labelKey: "op.crcChecksum.param.poly", type: "text", default: "0", placeholder: "如 04C11DB7" },
+    { key: "init", label: "初始值（hex）", labelKey: "op.crcChecksum.param.init", type: "text", default: "0", placeholder: "如 FFFFFFFF" },
+    { key: "refIn", label: "反射输入", labelKey: "op.crcChecksum.param.refIn", type: "bool", default: false },
+    { key: "refOut", label: "反射输出", labelKey: "op.crcChecksum.param.refOut", type: "bool", default: false },
+    { key: "xorOut", label: "输出异或值（hex）", labelKey: "op.crcChecksum.param.xorOut", type: "text", default: "0", placeholder: "如 FFFFFFFF" },
     { key: "inputMode", label: "输入编码", type: "select", default: "auto", options: [
       { value: "auto", label: "自动（真字节 / UTF-8 文本）" },
       { value: "text", label: "UTF-8 文本" },
@@ -518,8 +518,8 @@ register({
   desc: "CyberChef Generate all checksums 对齐：按 CC 同顺序输出 171 个 CRC + Fletcher-8/16/32/64 + Adler-32，支持 Length (bits) 过滤与 Include names。",
   acceptsBytes: true,
   params: [
-    { key: "length", label: "Length (bits)", type: "select", default: "All", options: LENGTHS },
-    { key: "includeNames", label: "Include names", type: "bool", default: true },
+    { key: "length", label: "长度（位）", labelKey: "op.generateAllChecksums.param.length", type: "select", default: "All", options: LENGTHS },
+    { key: "includeNames", label: "包含名称", labelKey: "op.generateAllChecksums.param.includeNames", type: "bool", default: true },
     { key: "inputMode", label: "输入编码", type: "select", default: "auto", options: [
       { value: "auto", label: "自动（真字节 / UTF-8 文本）" },
       { value: "text", label: "UTF-8 文本" },

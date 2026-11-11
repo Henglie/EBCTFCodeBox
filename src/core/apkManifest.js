@@ -33,6 +33,7 @@ import { register } from "./registry.js";
 import { zipEntries, zipReadEntry } from "./ooxmlMeta.js";
 import { inputToBytes } from "./compress.js";
 import { makeStoredZip } from "./zipRepair.js";
+import { checkLimit } from "./limitGuard.js";
 
 // ============ 基础工具 ============
 
@@ -57,6 +58,10 @@ function xmlUnescape(s) {
 
 // ============ Android 二进制 XML（AXML）解析 ============
 
+const MAX_AXML_STRINGS = 1024 * 1024;       // 字符串池条数软阈值
+const MAX_AXML_STRINGS_HARD = 4 * 1024 * 1024; // 确认后的硬上限
+const MAX_AXML_STRING_UNITS = 1024 * 1024;  // 单条字符串码元/字节上限
+
 // length=UTF8：(u8&0x7f)<<8 | u8（2 字节）或 u8（1 字节）；UTF16 同理按 u16 高位
 function readResUtf8Len(data, pos) {
   const b0 = data[pos];
@@ -72,34 +77,58 @@ function readResUtf16Len(data, pos) {
 }
 
 /** 解析字符串池 chunk（0x0001），返回字符串数组；非法 null。 */
-export function parseStringPool(data, offset) {
+export function parseStringPool(data, offset, params) {
   if (le16(data, offset) !== 0x0001) return null;
   const headerSize = le16(data, offset + 2) || 0;
   const chunkSize = le32(data, offset + 4) || 0;
-  const stringCount = le32(data, offset + 8) || 0;
+  let stringCount = le32(data, offset + 8) || 0;
   const flags = le32(data, offset + 16) || 0;
   const stringsStart = le32(data, offset + 20) || 0;
-  if (offset + chunkSize > data.length || headerSize < 28) return null;
+  if (!chunkSize || offset + chunkSize > data.length || headerSize < 28) return null;
+  const poolEnd = offset + chunkSize;
+  // 声明条数按「块内可容纳的 offset 表项」夹紧，超软阈值先确认，确认后放宽到硬上限。
+  const feasibleStrings = Math.min(stringCount, Math.floor(Math.max(0, chunkSize - headerSize) / 4));
+  if (feasibleStrings > MAX_AXML_STRINGS) {
+    checkLimit({
+      scope: "apkManifest.strings",
+      actual: feasibleStrings,
+      soft: MAX_AXML_STRINGS,
+      hard: MAX_AXML_STRINGS_HARD,
+      params,
+      label: "AXML 字符串数",
+      unit: " 条",
+    });
+  }
+  stringCount = Math.min(feasibleStrings, MAX_AXML_STRINGS_HARD);
   const utf8 = (flags & 0x0000_0100) !== 0;
   const offsetsStart = offset + headerSize;
   const dataStart = offset + stringsStart;
+  if (dataStart > poolEnd) return null;
   const out = [];
   for (let i = 0; i < stringCount; i++) {
     const itemOff = le32(data, offsetsStart + i * 4);
-    const pos = dataStart + (itemOff || 0);
-    if (pos >= data.length) { out.push(""); continue; }
+    if (itemOff == null) { out.push(""); continue; }
+    const pos = dataStart + itemOff;
+    if (pos >= poolEnd) { out.push(""); continue; }
     if (utf8) {
       const [, a] = readResUtf8Len(data, pos);
       const [byteLen, b] = readResUtf8Len(data, pos + a);
       const start = pos + a + b;
-      const end = Math.min(start + byteLen, data.length);
+      const end = Math.min(start + Math.min(byteLen, MAX_AXML_STRING_UNITS), poolEnd);
       out.push(new TextDecoder("utf-8").decode(data.subarray(start, end)));
     } else {
-      const [units, a] = readResUtf16Len(data, pos);
+      const [declaredUnits, a] = readResUtf16Len(data, pos);
       const start = pos + a;
-      const words = [];
-      for (let j = 0; j < units; j++) words.push(le16(data, start + j * 2) || 0);
-      out.push(String.fromCharCode(...words)); // 由 UTF-16 码元直接组合
+      const units = Math.min(declaredUnits, MAX_AXML_STRING_UNITS, Math.max(0, Math.floor((poolEnd - start) / 2)));
+      // 分块拼接，避免 String.fromCharCode(...words) 在超长字符串上触发参数个数 RangeError。
+      let s = "";
+      for (let j = 0; j < units; j += 4096) {
+        const words = [];
+        const end = Math.min(units, j + 4096);
+        for (let k = j; k < end; k++) words.push(le16(data, start + k * 2) || 0);
+        s += String.fromCharCode.apply(null, words);
+      }
+      out.push(s);
     }
   }
   return out;
@@ -127,7 +156,7 @@ function axmlValue(strings, rawIdx, dataType, dataValue) {
  * AXML 全文件解析。返回 { strings:[], elements:[{name, attrs:[[k,v]]}] }。
  * {strings:0, elements:0} 表示解析失败（与参考实现空报告判定一致）。
  */
-export function parseAxml(data) {
+export function parseAxml(data, params) {
   const rootType = le16(data, 0);
   const start = rootType === 0x0003 ? (le16(data, 2) || 8) : 0;
   let offset = start;
@@ -141,7 +170,7 @@ export function parseAxml(data) {
     if (chunkSize < 8 || offset + chunkSize > data.length) break;
     switch (chunkType) {
       case 0x0001: {
-        const pool = parseStringPool(data, offset);
+        const pool = parseStringPool(data, offset, params);
         if (pool) strings = pool;
         break;
       }
@@ -238,7 +267,7 @@ function apkManifestRun(text, p) {
   const isText = manifest.subarray(0, 16).some((b) => b === 0x3c); // '<'
   const report = isText
     ? textManifestReport(new TextDecoder("utf-8").decode(manifest))
-    : parseAxml(manifest);
+    : parseAxml(manifest, pp);
 
   const COMP_TYPES = ["activity", "service", "receiver", "provider"];
   const manifestEl = report.elements.find((e) => e.name === "manifest");

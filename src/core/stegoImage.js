@@ -19,6 +19,7 @@
 import { register } from "./registry.js";
 import { dataURLToBytes, decodePNG, rgbaToDataURL } from "./stegoPixels.js";
 import { inflateRaw } from "./pcapDeep.js";
+import { isLimitError } from "./limitGuard.js";
 
 // ============ lsbImage：通用 LSB 像素隐写 ============
 // 每 channel 最低位藏 1 bit，前 32 bit 存消息字节长度（big-endian）
@@ -532,7 +533,10 @@ async function lsbImageEncodeOp(text, p = {}) {
   const bytes = _imageInputBytes(text, p);
   if (bytes && bytes.length) {
     try { imageData = decodePNG(bytes); }
-    catch (e) { imageData = await _inputImageData(text, p); }
+    catch (e) {
+      if (isLimitError(e)) throw e;
+      imageData = await _inputImageData(text, p);
+    }
   } else {
     imageData = await _inputImageData(text, p);
   }
@@ -548,7 +552,10 @@ async function lsbImageDecodeOp(text, p = {}) {
   if (bytes && bytes.length) {
     try {
       return lsbMultiDecode(decodePNG(bytes), p);
-    } catch (e) { /* 非 PNG / 解码器不支持 → 回退 canvas */ }
+    } catch (e) {
+      // 限额取消/硬上限必须上抛；只有格式不支持才回退 canvas。
+      if (isLimitError(e)) throw e;
+    }
   }
   const imageData = await _inputImageData(text, p);
   return lsbMultiDecode(imageData, p);
@@ -750,6 +757,7 @@ async function arnoldCatBruteOp(text, p = {}) {
     try {
       imageData = decodePNG(rawBytes ? rawBytes : dataURLToBytes(text));
     } catch (e) {
+      if (isLimitError(e)) throw e;
       pngReason = (e && e.message) ? e.message : String(e);
     }
   }
@@ -1080,18 +1088,21 @@ function lsbMultiDecode(imageData, p = {}) {
   const chanMask = _lsbChannelMask(channels);
   const bitDepth = Math.max(1, Math.min(3, Number(p.bitDepth) || 1));
   const data = imageData.data;
+  const totalSlots = Math.floor(data.length / 4) * chanMask.length * bitDepth;
   const readBit = (g) => {
+    if (!(g >= 0) || g >= totalSlots) return 0; // 越界防护：短图/损坏长度头不得读越界
     const slot = Math.floor(g / bitDepth);
     const sub = g % bitDepth;
     const pxIdx = Math.floor(slot / chanMask.length) * 4;
     const cIdx = chanMask[slot % chanMask.length];
+    if (pxIdx + cIdx >= data.length) return 0;
     return (data[pxIdx + cIdx] >> sub) & 1;
   };
   let len = 0;
   for (let i = 0; i < 32; i++) len = (len << 1) | readBit(i);
   len >>>= 0; // 32 位无符号化：最高位为 1 时避免负长度绕过下面的上限检查
-  const totalSlots = Math.floor(data.length / 4) * chanMask.length * bitDepth;
-  const maxLen = Math.floor(totalSlots / 8);
+  // 长度头本身占前 32 个槽位，可承载的载荷字节数必须扣除这 32 位。
+  const maxLen = Math.floor(Math.max(0, totalSlots - LSB_HEADER_BITS) / 8);
   if (len === 0 || len > maxLen) {
     // 不是本 op 的「32 位长度前缀」格式 ⇒ 按原始位流再试一次。
     const raw = lsbRawPayload(readBit, totalSlots);

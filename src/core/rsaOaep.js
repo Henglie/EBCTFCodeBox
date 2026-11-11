@@ -20,9 +20,10 @@
  */
 
 import { register } from "./registry.js";
-import { modPow } from "./primeGen.js";
+import { modPow, modPowCrt } from "./primeGen.js";
 import { derDecode, derBytesToBigint } from "./rsagen.js";
 import { randomBytes as randBytes } from "./randSource.js"; // 统一随机源（默认档 system 逐字节零回归）
+import { assertUsableRsaPublicKey } from "./rsaKeyCheck.js";
 
 const HASHES = {
   sha1: { label: "SHA-1", hLen: 20, subtleName: "SHA-1" },
@@ -60,7 +61,7 @@ async function mgf1(hashKey, seed, maskLen) {
 
 // ---- 字节助手 ----
 function hexToBytes(hex, label = "hex") {
-  const s = String(hex == null ? "" : hex).trim().replace(/^0x/i, "").replace(/\s+/g, "");
+  const s = String(hex == null ? "" : hex).trim().replace(/^0x/i, "").replace(/[\s:]/g, "");
   if (!s) throw new Error(`缺少输入（${label}）`);
   if (s.length % 2 || /[^0-9a-fA-F]/.test(s)) throw new Error(`${label} 非法：须为偶数个 hex 字符`);
   const out = new Uint8Array(s.length / 2);
@@ -156,10 +157,30 @@ function rsaPrivFromDer(der) {
     throw new Error("RSAPrivateKey DER 非法：前四项须为 INTEGER（version,n,e,d）");
   }
   if (derBytesToBigint(v.value) !== 0n) throw new Error("RSAPrivateKey 版本须为 0（多素数不支持）");
-  return { n: derBytesToBigint(n.value), e: derBytesToBigint(e.value), d: derBytesToBigint(d.value) };
+  const out = { n: derBytesToBigint(n.value), e: derBytesToBigint(e.value), d: derBytesToBigint(d.value) };
+  if (root.children.length >= 9) { // 两素数完整 CRT 参数：p,q,dp,dq,qinv
+    const [p, q, dp, dq, qinv] = root.children.slice(4, 9);
+    for (const [node, what] of [[p, "p"], [q, "q"], [dp, "dp"], [dq, "dq"], [qinv, "qinv"]]) {
+      if (node.tag !== 0x02) throw new Error(`RSAPrivateKey DER 非法：${what} 不是 INTEGER`);
+    }
+    out.p = derBytesToBigint(p.value);
+    out.q = derBytesToBigint(q.value);
+    out.dp = derBytesToBigint(dp.value);
+    out.dq = derBytesToBigint(dq.value);
+    out.qinv = derBytesToBigint(qinv.value);
+  }
+  return out;
 }
 
 function keyModulusBytes(k) { return (k.n.toString(2).length + 7) >> 3; }
+
+/** 复用 rsaKeyCheck：拒绝 e=1/e<=0/n 偶数等明显无效密钥；返回弱密钥提示。 */
+function checkRsaPublicPart(key) {
+  const checked = assertUsableRsaPublicKey(key.n, key.e);
+  key.n = checked.n;
+  key.e = checked.e;
+  return checked.warnings;
+}
 
 // ---- EME-OAEP ----
 async function oaepEncode(hashKey, msg, k, seed) {
@@ -212,17 +233,20 @@ const OAEP_ERR = new Error("OAEP 解密失败：密文与密钥/哈希档不匹�
 // 核心加密/解密原语（导出供验证/复用）
 /** RSAES-OAEP 加密：返回定宽 k 字节密文。 */
 export async function rsaOaepEncrypt(key, hashKey, msg, seed) {
+  checkRsaPublicPart(key);
   const k = keyModulusBytes(key);
   const em = await oaepEncode(hashKey, msg, k, seed);
   return bigIntToBytes(modPow(bytesToBigInt(em), key.e, key.n), k);
 }
 /** RSAES-OAEP 解密：返回明文字节；失败抛统一错误。 */
 export async function rsaOaepDecrypt(key, hashKey, ct) {
+  checkRsaPublicPart(key);
+  if (typeof key.d !== "bigint" || key.d <= 0n) throw new Error("RSA 私钥指数 d 不合法：需为正整数");
   const k = keyModulusBytes(key);
   if (ct.length !== k) throw new Error(`密文长度须等于模数字节数 k = ${k}，当前 ${ct.length} 字节`);
   const c = bytesToBigInt(ct);
   if (c >= key.n) throw new Error(`密文数值 ≥ n（超出 RSA 定义域，k = ${k} 字节）`);
-  const em = bigIntToBytes(modPow(c, key.d, key.n), k);
+  const em = bigIntToBytes(modPowCrt(c, key.d, key.n, key.p, key.q, key.dp, key.dq, key.qinv), k);
   return oaepDecode(hashKey, em, k);
 }
 
@@ -274,6 +298,7 @@ register({
     const key = ((p && p.keyEnc) === "dec")
       ? { n: parseBigAuto(p.n, "模数 n"), e: parseBigAuto(p.e, "指数 e") }
       : parsePublicPem(p && p.pem);
+    const warnings = checkRsaPublicPart(key);
     const k = keyModulusBytes(key);
     const hLen = HASHES[hashKey].hLen;
     const seedRaw = (p && p.seed && String(p.seed).trim());
@@ -294,6 +319,7 @@ register({
       "",
       `密文（${k} 字节 hex）= ${bytesToHex(ct)}`,
       "",
+      ...(warnings.length ? ["⚠ 弱/异常密钥提示：", ...warnings.map((w) => "  · " + w), ""] : []),
       "说明：对拍命令 node:crypto publicEncrypt(RSA_PKCS1_OAEP_PADDING, oaepHash 同档) 应逐字节相等（seed 给定时）。",
     ].join("\n");
   },
@@ -314,11 +340,13 @@ register({
     const key = ((p && p.keyEnc) === "dec")
       ? { n: parseBigAuto(p.n, "模数 n"), e: parseBigAuto(p.e, "指数 e"), d: parseBigAuto(p.d, "私钥指数 d") }
       : parsePrivatePem(p && p.pem);
+    const warnings = checkRsaPublicPart(key);
+    if (typeof key.d !== "bigint" || key.d <= 0n) throw new Error("RSA 私钥指数 d 不合法：需为正整数");
     const k = keyModulusBytes(key);
     if (ct.length !== k) throw new Error(`密文长度须等于模数字节数 k = ${k}，当前 ${ct.length} 字节`);
     const c = bytesToBigInt(ct);
     if (c >= key.n) throw new Error(`密文数值 ≥ n（超出 RSA 定义域，k = ${k} 字节）`);
-    const m = modPow(c, key.d, key.n);
+    const m = modPowCrt(c, key.d, key.n, key.p, key.q, key.dp, key.dq, key.qinv);
     const em = bigIntToBytes(m, k);
     const msg = await oaepDecode(hashKey, em, k);
     const utf8 = tryUtf8(msg);
@@ -328,6 +356,7 @@ register({
       `明文（${msg.length} 字节 hex）= ${bytesToHex(msg)}`,
     ];
     if (utf8 != null) lines.push(`明文（UTF-8）= ${utf8}`);
+    if (warnings.length) lines.push("", "⚠ 弱/异常密钥提示：", ...warnings.map((w) => "  · " + w));
     lines.push("", "说明：二进制明文请用 hex 行；与「RSA-OAEP 加密」往返自洽，node:crypto privateDecrypt 同档可互解。");
     return lines.join("\n");
   },
