@@ -7,7 +7,67 @@ import { bytesToEscapedText, bytesToHex, bytesToB64, b64ToBytes } from "./bytesI
  */
 export const PRODUCT_INLINE_MAX_BYTES = 128 * 1024;
 
-const DATA_URL_BASE64_RE = /data:([\w.+-]+\/[\w.+-]+);base64,([A-Za-z0-9+/]+={0,2})/g;
+/**
+ * 图片内联预览上限（与文本内联阈值分开）：文件产物走 Blob URL，不需要把 base64
+ * 铺进输出框，因此可以比 128KB 文本阈值宽得多。超过上限仍保留下载按钮。
+ */
+export const IMAGE_PREVIEW_MAX_BYTES = 24 * 1024 * 1024;
+/** 单次输出最多内联多少张图片；GIF 多帧提取同样只预览前 8 帧。 */
+export const IMAGE_PREVIEW_MAX_COUNT = 8;
+
+const IMAGE_MIME_ALIASES = {
+  "image/jpg": "image/jpeg",
+  "image/pjpeg": "image/jpeg",
+  "image/x-png": "image/png",
+  "image/vnd.microsoft.icon": "image/x-icon",
+};
+
+/** 归一化 MIME（image/jpg → image/jpeg 等）；空串表示没有声明。 */
+export function normalizeImageMime(mime) {
+  const s = String(mime || "").toLowerCase().split(";")[0].trim();
+  if (!s) return "";
+  return IMAGE_MIME_ALIASES[s] || s;
+}
+
+/** 按文件头嗅探图片 MIME；无法识别返回空串。 */
+export function sniffImageMime(bytes) {
+  if (!bytes || typeof bytes.length !== "number" || !bytes.length) return "";
+  const b = bytes;
+  const has = (...seq) => seq.every((v, i) => b[i] === v);
+  if (has(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return "image/png";
+  if (has(0xff, 0xd8, 0xff)) return "image/jpeg";
+  if (has(0x47, 0x49, 0x46, 0x38)) return "image/gif";
+  if (has(0x42, 0x4d)) return "image/bmp";
+  if (has(0x52, 0x49, 0x46, 0x46) && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "image/webp";
+  if (has(0x00, 0x00, 0x01, 0x00)) return "image/x-icon";
+  if (has(0x66, 0x74, 0x79, 0x70)) {
+    const brand = String.fromCharCode(b[8] || 0, b[9] || 0, b[10] || 0, b[11] || 0).toLowerCase();
+    if (brand === "avif" || brand === "avis") return "image/avif";
+  }
+  const head = new TextDecoder("utf-8", { fatal: false }).decode(b.subarray(0, Math.min(1024, b.length)));
+  if (/<svg[\s>]/i.test(head)) return "image/svg+xml";
+  return "";
+}
+
+/** 声明 MIME 优先；声明缺失/非图片时按字节嗅探（解压、雕刻产物常给 octet-stream）。 */
+export function resolveImageMime(declaredMime, bytes) {
+  const declared = normalizeImageMime(declaredMime);
+  if (/^image\//.test(declared)) return declared;
+  return sniffImageMime(bytes);
+}
+
+/**
+ * 图片内联预览计划：`preview` 可内联；`too-large` 只给下载；
+ * `null` 表示不是图片。
+ */
+export function imagePreviewPlan(mime, size) {
+  const normalized = normalizeImageMime(mime);
+  if (!/^image\//.test(normalized)) return null;
+  if (size != null && size > IMAGE_PREVIEW_MAX_BYTES) return "too-large";
+  return "preview";
+}
+
+const DATA_URL_BASE64_RE = /data:([\w.+-]+\/[\w.+-]+)(?:;[^,\r\n]*)?;base64,([A-Za-z0-9+/_-]+={0,2})/gi;
 
 /** 按 base64 文本长度估算解码后字节数（不实际解码，容忍空白/padding）。 */
 export function base64DecodedSize(input) {

@@ -43,6 +43,7 @@ import {
   buildApplyPayload,
 } from "../core/decodeProfile.js";
 import { ensureAll } from "../core/lazyCore.js";
+import { readFileAudioPreviewMinutes, saveFileAudioPreviewMinutes, fmtAudioPreviewMinutes } from "../core/audioPreview.js";
 import { icon as iconSvg } from "./icons.js";
 import { attachModalLifecycle } from "./modalLifecycle.js";
 
@@ -116,6 +117,12 @@ const _ZH = {
   "ui.ds.catAll": "整类",
   "ui.ds.tier": "热度档",
   "ui.ds.customBadge": "已改动（自定义）",
+  "ui.home.audioPreviewLabel": "音频仅分析前 N 分钟",
+  "ui.home.audioPreviewPlaceholder": "0 = 全量（默认）",
+  "ui.home.audioPreviewHint": "拖入 WAV 时生效，0 = 全量；只影响音频分析，不影响图片/归档/文本。",
+  "ui.ds.audioUnit": "分钟",
+  "ui.ds.audioDec": "减少音频分析时长",
+  "ui.ds.audioInc": "增加音频分析时长",
 };
 function t(key, ...args) {
   let s = key;
@@ -132,6 +139,41 @@ function t(key, ...args) {
 function catLabel(catId, fallback) {
   const v = t("cat." + catId);
   return v && v !== "cat." + catId ? v : fallback;
+}
+
+// 自实现 M3 stepper（[−][input][＋]），与 main.js renderParam / quickConv 同形；
+// 禁止使用原生 type=number spinner（平台样式不一、触控目标过小）。
+function audioPreviewStepper() {
+  const inp = el("input", {
+    type: "text", inputmode: "decimal", class: "stepper-inp",
+    "aria-label": t("ui.home.audioPreviewLabel"),
+    placeholder: t("ui.home.audioPreviewPlaceholder"),
+  });
+  inp.value = fmtAudioPreviewMinutes(readFileAudioPreviewMinutes());
+  const commit = (value) => {
+    const saved = saveFileAudioPreviewMinutes(value);
+    inp.value = fmtAudioPreviewMinutes(saved);
+  };
+  const bump = (dir) => {
+    const cur = Number(inp.value);
+    commit((Number.isFinite(cur) ? cur : 0) + dir * 0.5);
+  };
+  inp.addEventListener("input", () => {
+    const n = Number(inp.value);
+    if (inp.value.trim() !== "" && Number.isFinite(n) && n >= 0) saveFileAudioPreviewMinutes(n);
+  });
+  inp.addEventListener("change", () => commit(inp.value));
+  inp.addEventListener("blur", () => commit(inp.value));
+  const btn = (icon, dir, label) => {
+    const b = el("button", { type: "button", class: "stepper-btn", "aria-label": label, tabindex: "-1" }, msym(icon));
+    b.addEventListener("click", () => bump(dir));
+    return b;
+  };
+  return el("div", { class: "stepper" },
+    btn("remove", -1, t("ui.ds.audioDec")),
+    inp,
+    btn("add", 1, t("ui.ds.audioInc")),
+  );
 }
 
 // ============================================================
@@ -307,11 +349,23 @@ export function openDecodeStrength(opt = {}) {
       depthBtns.push(b);
       depthRow.append(b);
     }
-    body.append(el("div", { class: "ds-sec ds-sec-depth" },
+    const depthSec = el("div", { class: "ds-sec ds-sec-depth" },
       el("div", { class: "ds-sec-title" }, msym("layers"), t("ui.ds.depth.title")),
       el("div", { class: "ds-sec-note" }, t("ui.ds.depth.note")),
       depthRow,
-    ));
+    );
+    // 文件页：音频分析范围放在本页的解析层数下方（0 = 全量）。
+    if (scope === "file") {
+      depthSec.append(el("div", { class: "ds-sec ds-sec-audio" },
+        el("div", { class: "ds-sec-title" }, msym("graphic_eq"), t("ui.home.audioPreviewLabel")),
+        el("div", { class: "ds-sec-note" }, t("ui.home.audioPreviewHint")),
+        el("div", { class: "ds-audio-row" },
+          audioPreviewStepper(),
+          el("span", { class: "ds-audio-unit" }, t("ui.ds.audioUnit")),
+        ),
+      ));
+    }
+    body.append(depthSec);
 
     // ---- 搜索 + 批量 ----
     const search = el("input", { type: "text", class: "ds-search", placeholder: t("ui.ds.search"), spellcheck: "false" });

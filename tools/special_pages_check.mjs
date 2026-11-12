@@ -241,6 +241,20 @@ try {
   check(steg.meta.special.file.size === png.length && steg.meta.special.secondFile.size === png.length, 'both original files survive reload');
   await fit('StegSolve desktop'); await shot('stegsolve-desktop');
   await page.setViewportSize({ width: 320, height: 844 }); await fit('StegSolve mobile'); await shot('stegsolve-mobile');
+  await page.locator('.sspage-toolbar button').filter({ hasText: '帧/通道总览' }).click();
+  await page.locator('.sspage-gallery-overlay').waitFor(); await settle();
+  check((await page.locator('.sspage-gallery-tab').first().textContent()).includes('(1)'), 'gallery frame tab counts source frames');
+  await page.locator('.sspage-gallery-tab').nth(1).click(); await settle();
+  check(await page.locator('.sspage-gallery-cell').count() === 42, 'gallery lists all 42 channel transforms');
+  const [galleryZip] = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('.sspage-gallery-actions button').first().click(),
+  ]);
+  let galleryZipBytes = 0;
+  const galleryStream = await galleryZip.createReadStream();
+  for await (const chunk of galleryStream) galleryZipBytes += chunk.length;
+  check(galleryZipBytes > 1000 && /stegsolve_frames_channels\.zip$/.test(galleryZip.suggestedFilename()), 'frames/channels batch export downloads a ZIP');
+  await page.keyboard.press('Escape'); await page.locator('.sspage-gallery-overlay').waitFor({ state: 'detached' });
   await clearAll();
   check(await page.locator('.sspage-drop').isVisible(), 'global clear removes canvas input');
   await page.evaluate(() => {
@@ -262,10 +276,10 @@ try {
     }) });
   }, pngData);
   await go('op/uiResultFixture'); await page.locator('.io-actions .primary').click(); await page.locator('.io-out-file-row').first().waitFor();
-  check(await page.locator('.io-out-file-row').count() === 2 && await page.locator('.io-out-file-preview').count() === 0, 'multiple products start as compact file rows');
+  check(await page.locator('.io-out-file-row').count() === 2 && await page.locator('.io-out-preview-img').count() === 1, 'multiple products show image preview inline and compact rows');
   check(await page.locator('#ioOut').evaluate(n => n.scrollHeight > n.clientHeight), 'long report scrolls inside its output editor');
-  await page.locator('.io-out-file-row details > summary').click(); await page.locator('.io-out-file-preview').waitFor();
-  check(await page.locator('.io-out-file-preview').evaluate(n => n.naturalWidth === 32), 'file preview is loaded on demand');
+  await page.waitForFunction(() => { const img = document.querySelector('.io-out-preview-img'); return img && img.complete && img.naturalWidth > 0; });
+  check(await page.locator('.io-out-preview-img').evaluate(n => n.naturalWidth === 32), 'image file preview renders inline without download');
   const [download] = await Promise.all([page.waitForEvent('download'), page.locator('.io-out-file-row').last().getByRole('button').click()]);
   const stream = await download.createReadStream(), chunks = []; for await (const chunk of stream) chunks.push(chunk);
   check(Buffer.concat(chunks).toString() === 'exact result', 'file-list download preserves exact bytes');

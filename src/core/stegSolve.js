@@ -782,6 +782,24 @@ export function imageToPNG(image) {
   return encodePNG(image.data, image.width, image.height);
 }
 
+/**
+ * PNG 编码（优先真实 DEFLATE 压缩）。
+ *
+ * encodePNG 默认用 stored 块（不压缩），单帧 RGBA 会按 4B/px 膨胀；StegSolve 的
+ * 42 通道批量导出在 2K 图上会轻松超过 256MiB。这里优先用浏览器 CompressionStream
+ * ('deflate' = zlib/RFC1950，PNG IDAT 可直接使用)，不可用时回退 stored PNG。
+ * @returns {Promise<Uint8Array>|Uint8Array}
+ */
+export function imageToPNGCompressed(image) {
+  if (typeof CompressionStream !== "function" || typeof Blob === "undefined") {
+    return imageToPNG(image);
+  }
+  return encodePNG(image.data, image.width, image.height, raw => {
+    const stream = new Blob([raw]).stream().pipeThrough(new CompressionStream("deflate"));
+    return new Response(stream).arrayBuffer().then(buf => new Uint8Array(buf));
+  });
+}
+
 export function imageToDataURL(image) {
   return rgbaToDataURL(image.data, image.width, image.height);
 }

@@ -21,7 +21,7 @@ fork 后想复现构建、自己打包发行，看这里。日常开发用不到
 | `interaction_perf_check.mjs` | 实页切换、千卡滚动/悬停、OP 输入、快速换算的布局读取/圆角扫描和长任务；同时核位按钮复用与双十进制结果 | 同机同浏览器前后对照；`--verify` 验有界工作量，Chromium 可加 `--profile` 输出 CPU 热点；Firefox/WebKit 不把缺失 Long Tasks API 当零长任务证据 |
 | `alignment_check.mjs` | 字符集/四种视图、编辑框间距、标题基线、代码编辑器与旧草稿迁移 | 工作台对齐变更后，三引擎分别验证明暗与 320–1440px |
 | `surfaces_check.mjs` | 环境设置分组、短窗口边界、展开编辑器、非工作台圆角、菜单和报告对齐 | 三引擎真实页面；`--screenshots-dir` 留图，`--json` 输出几何证据；系统 select 弹出菜单仍由浏览器管理 |
-| `special_pages_check.mjs` | 配方/Fork/Merge、图形分区、裁剪恢复、独立字段、比例持久化、大报告/文件下载、特殊草稿、中断及清空竞态 | 三引擎；`--audit-inputs` 额外逐页核全部普通无主输入工具，使用隔离上下文 |
+| `special_pages_check.mjs` | 配方/Fork/Merge、图形分区、裁剪恢复、独立字段、比例持久化、大报告/文件下载、StegSolve 帧通道总览与批量导出、特殊草稿、中断及清空竞态 | 三引擎；`--audit-inputs` 额外逐页核全部普通无主输入工具，使用隔离上下文 |
 | `draft_binary_check.mjs` | 文件草稿字节/类型/名称、空文件、共享引用与循环结构 | 无浏览器的存储协议检查；用户运行不依赖 Node |
 | `worker_lifecycle_check.mjs` | 取消后的迟到错误、新线程归属和真实线程失败回报 | 无浏览器的客户端生命周期夹具 |
 | `apple_profile_check.mjs` | 四角原始十进制参数、限幅公式与完整路径独立对拍 | 对照 PixelCut 公开 UIKit shape_1，不以镜像近似冒充逐角原值 |

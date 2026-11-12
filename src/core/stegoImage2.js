@@ -1077,10 +1077,17 @@ async function extractGifFrames(text, p, checkCurrent) {
   const zip = buildZipMulti(zipEntriesAll);
   if (zip.length > GIF_PACK_BYTES_MAX) throw new Error("ZIP容器和元数据超过128MiB，未交付不完整包");
   lines.push("");
+  // 产品负责人：帧图直接内联预览；帧多时只交付前 8 帧单图，其余仍在 ZIP 中，
+  // 既避免上千个文件行拖垮界面，也保证每一帧都能从 ZIP 取到。
+  const previewCount = Math.min(frameEntries.length, 8);
+  if (frameEntries.length > previewCount) {
+    lines.push(`已内联预览前 ${previewCount} 帧；其余 ${frameEntries.length - previewCount} 帧在 ZIP 中。`);
+  }
   lines.push(`已打包 ${frameEntries.length} 帧（ZIP 共 ${zip.length} 字节，含 frame_*.png 与 frames.txt 元数据），点击下方按钮直接下载。`);
   return {
     text: lines.join("\n"),
-    files: [{ name: "gif_frames.zip", mime: "application/zip", bytes: zip }],
+    // ZIP 保持在 files[0]：批处理取首文件作为该条目的产物，不能被预览帧挤掉。
+    files: [{ name: "gif_frames.zip", mime: "application/zip", bytes: zip }, ...frameEntries.slice(0, previewCount)],
   };
 }
 

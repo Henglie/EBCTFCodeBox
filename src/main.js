@@ -21,7 +21,7 @@ import { ensureOp, ensureCat, ensureAll, preloadIdle } from "./core/lazyCore.js"
 import { OP_FILE_MAP } from "./core/lazyTables.generated.js";
 import { t, tBilingual, getLocale, setLocale, locales, onLocaleChange, initLocale, warmEnglish, getDir, LOCALE_META, localeCoverage } from "./i18n/index.js";
 import { downloadBytes, cloudWarnGate, fmtByteSize, isCloudDeploy } from "./ui/download.js";
-import { productFileEntries, PRODUCT_INLINE_MAX_BYTES, base64DecodedSize, dataUrlDecodedSize, planDataUrlMedia, mediaRenderPlan } from "./core/productResult.js";
+import { productFileEntries, PRODUCT_INLINE_MAX_BYTES, IMAGE_PREVIEW_MAX_BYTES, IMAGE_PREVIEW_MAX_COUNT, base64DecodedSize, dataUrlDecodedSize, planDataUrlMedia, resolveImageMime, imagePreviewPlan } from "./core/productResult.js";
 import { magicFilterReset, filterMagicCands, filterBruteCands, magicFilterBar } from "./ui/resultFilter.js";
 import { magicDecode } from "./core/magic/magic.js";
 import { runMagic, cancelMagic, pauseMagic, resumeMagic } from "./core/magic/magicClient.js"; // 真多线程调度（Worker 优先，降级主线程）+ 中断/暂停接管
@@ -64,6 +64,7 @@ import { renderRandSecureToggle, installRandConfig, currentRandMode, serverArmed
 import { opUsesRandom, opExternalRand, externalRandLib } from "./core/randOps.js"; // 随机性 op 白名单 + 「随机来自内置库」清单
 import { RAND_MODES, warmupServer } from "./core/randSource.js";
 import { resolveDecodeConfig, loadLastConfig, saveLastConfig } from "./core/decodeProfile.js"; // 解码强度档 → op 白名单 + 预算
+import { normalizeAudioPreviewMinutes, readFileAudioPreviewMinutes, fmtAudioPreviewMinutes } from "./core/audioPreview.js"; // 音频仅分析前 N 分钟（解码强度·文件页编辑）
 import { isExplicitRunOp, explicitRunHint, isLazyRunOp, lazyRunHint, manualRunHint } from "./core/explicitRun.js"; // 重运算 op 显式触发白名单 + 图像惰执行清单
 import { runOpOffThread, cancelOpRun, opRunBusy } from "./core/opRunClient.js"; // 重 op 独立线程执行（可取消/超时）
 import { setLimitMessageBuilder, withLimitContext } from "./core/limitGuard.js";
@@ -732,11 +733,11 @@ function renderNav() {
      // 走原逐条渲染，零回归。无 family 的 op 渲染路径一字不动。
       const famMap = new Map(familyGroup(cat.id).map((g) => [g.family, g]));
       const _famDone = new Set(); // 已渲染聚合条的族（族内后续成员跳过）
-      // 当前 op 置顶当前分类（只影响本分类二级菜单顺序，收藏/搜索/其他分类保持原序）。
+      // 仅 StegSolve 固定在「文件隐写」二级菜单首位（高频入口）；选中项只高亮，不改顺序。
       const _catOps = opsByCat(cat.id);
-      if (state.view === "op" && state.opId && cat.id === curCat) {
-        const _cur = _catOps.findIndex((o) => o.id === state.opId);
-        if (_cur > 0) _catOps.unshift(_catOps.splice(_cur, 1)[0]);
+      if (cat.id === "stegoFile") {
+        const _stegIdx = _catOps.findIndex((o) => o.id === "stegSolve");
+        if (_stegIdx > 0) _catOps.unshift(_catOps.splice(_stegIdx, 1)[0]);
       }
       for (const op of _catOps) {
         if (op.family && famMap.has(op.family)) {
@@ -1441,28 +1442,6 @@ function renderHome() {
     spellcheck: "false",
   });
   keyInput.value = state.homeKey || "";
-  // 音频预览上限：只作用于拖入音频的自动分析，0 = 全量（默认不变）。
-  // 与 op 页的 previewMinutes 同一语义，但文件分析没有独立参数面板，故在此提供可改入口并持久化。
-  if (state.fileAudioPreviewMinutes === undefined) {
-    state.fileAudioPreviewMinutes = readFileAudioPreviewMinutes();
-  }
-  const audioPreviewInput = el("input", {
-    type: "number", class: "magic-crib magic-audio-preview",
-    min: "0", step: "0.5", inputmode: "decimal",
-    placeholder: t("ui.home.audioPreviewPlaceholder"),
-    title: t("ui.home.audioPreviewHint"),
-    style: "max-width:150px",
-  });
-  audioPreviewInput.value = String(state.fileAudioPreviewMinutes);
-  const syncAudioPreview = () => {
-    state.fileAudioPreviewMinutes = normalizeAudioPreviewMinutes(audioPreviewInput.value);
-    saveFileAudioPreviewMinutes(state.fileAudioPreviewMinutes);
-  };
-  audioPreviewInput.addEventListener("input", syncAudioPreview);
-  audioPreviewInput.addEventListener("change", () => {
-    syncAudioPreview();
-    audioPreviewInput.value = String(state.fileAudioPreviewMinutes);
-  });
  // 解码强度（替代原「深度爆破 / 多层链式」两个裸开关）：按钮开弹窗，
  // 内含 5 档预设滑块（快速→最强，按 CTF 考点热→冷逐层放开）+ 参与算法多选 + 命名方案。
  // 文本/文件两套配置各存各的（弹窗内切页签）。配置存 localStorage，回首页沿用上次。
@@ -1514,11 +1493,9 @@ function renderHome() {
     el("div", { class: "magic-row" },
       targetEditor.element,
     ),
-  // 第二行：密钥 / 音频预览
+  // 第二行：密钥
     el("div", { class: "magic-row" },
       el("label", { class: "magic-crib-label" }, t("ui.home.keyLabel"), keyInput),
-      el("label", { class: "magic-crib-label", title: t("ui.home.audioPreviewHint") },
-        t("ui.home.audioPreviewLabel"), audioPreviewInput),
     ),
   );
   const actions = el("div", { class: "magic-row magic-row-actions" },
@@ -1604,7 +1581,6 @@ function renderHome() {
     }
     const info = await handleFile(f, fileReport, state.fileStrength, ctrl, token, {
       bytes,
-      audioPreviewMinutes: state.fileAudioPreviewMinutes,
     });
     if (_activeFileCtrl === ctrl) _activeFileCtrl = null;
     if (info && info.lsbText) {
@@ -1973,14 +1949,15 @@ async function appendSpecialTextSections(outWrap, q, token, key) {
         card.append(txt);
         const bar = el("div", { class: "file-section-actions" });
         for (const ent of productFileEntries(out)) {
-          if ((ent.mime || "").startsWith("image/") && mediaRenderPlan(ent.mime, ent.bytes.length) === "inline-image") {
-            const url = URL.createObjectURL(new Blob([ent.bytes], { type: ent.mime || "image/png" }));
+          const imageMime = resolveImageMime(ent.mime, ent.bytes);
+          if (imageMime && ent.bytes.length <= IMAGE_PREVIEW_MAX_BYTES) {
+            const url = URL.createObjectURL(new Blob([ent.bytes], { type: imageMime }));
             const im = el("img", {
               class: "io-out-file-preview", src: url, alt: ent.name,
               style: "max-width:min(100%,520px);max-height:420px;border-radius:6px;cursor:zoom-in;background:#fff;border:1px solid var(--outline);margin-top:8px;image-rendering:pixelated",
             });
             trackTransientPreviewUrl(url, im);
-            im.addEventListener("click", (e) => { e.stopPropagation(); openImagePreview(url, ent.name, ent.bytes, ent.mime); });
+            im.addEventListener("click", (e) => { e.stopPropagation(); openImagePreview(url, ent.name, ent.bytes, imageMime); });
             card.append(im);
           }
           bar.append(el("button", {
@@ -2574,29 +2551,6 @@ function isTextFile(bytes, name = "") {
   }
 }
 
-// ---- 文件分析：音频预览时长设置（0 = 全量；仅作用于拖入音频的子链）----
-const FILE_AUDIO_PREVIEW_KEY = "ebctf_file_audio_preview_minutes";
-const FILE_AUDIO_PREVIEW_DEFAULT = 0;
-function normalizeAudioPreviewMinutes(value) {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? n : FILE_AUDIO_PREVIEW_DEFAULT;
-}
-function readFileAudioPreviewMinutes() {
-  try {
-    const raw = localStorage.getItem(FILE_AUDIO_PREVIEW_KEY);
-    if (raw == null || raw === "") return FILE_AUDIO_PREVIEW_DEFAULT;
-    return normalizeAudioPreviewMinutes(raw);
-  } catch { return FILE_AUDIO_PREVIEW_DEFAULT; }
-}
-function saveFileAudioPreviewMinutes(value) {
-  const n = normalizeAudioPreviewMinutes(value);
-  try { localStorage.setItem(FILE_AUDIO_PREVIEW_KEY, String(n)); } catch { /* 隐私模式只保留会话态 */ }
-  return n;
-}
-function fmtAudioPreviewMinutes(value) {
-  return Number.isFinite(value) ? String(+value.toFixed(3)) : "?";
-}
-
 // ---- 智能分析三链懒载（fileAnalysis/imageAnalysis/audioAnalysis，含 QR·pcap·inflate·音频子树，退出首屏闭包）----
 // 触发：首次拖入文件分析时（handleFile 内 await）+ 启动后空闲预热；失败允许下次重试。
 let _analysisChains = null;
@@ -3065,11 +3019,12 @@ function renderFileReport(outWrap, r, opts = {}) {
       }
     }
 
- // 图片产物直接内联预览（>128KB 只保留下载按钮，不创建 `<img>`）；点击优先走统一图像查看器（R7 未接线时回退灯箱）。
+ // 图片产物直接内联预览（≤24MB 走 Blob URL；更大只保留下载按钮）；点击优先走统一图像查看器。
     for (const a of previewActs) {
       const u8a = a.bytes instanceof Uint8Array ? a.bytes : new Uint8Array(a.bytes);
-      if (mediaRenderPlan(a.mime || "image/png", u8a.length) !== "inline-image") continue;
-      const url = URL.createObjectURL(new Blob([u8a], { type: a.mime || "image/png" }));
+      const previewMime = resolveImageMime(a.mime || "image/png", u8a);
+      if (!previewMime || u8a.length > IMAGE_PREVIEW_MAX_BYTES) continue;
+      const url = URL.createObjectURL(new Blob([u8a], { type: previewMime }));
       const img = el("img", {
         class: "io-out-file-preview", src: url, alt: a.filename || a.label || "preview",
         style: "max-width:min(100%,420px);max-height:320px;border-radius:6px;cursor:zoom-in;background:#fff;border:1px solid var(--outline);margin-top:8px",
@@ -3077,7 +3032,7 @@ function renderFileReport(outWrap, r, opts = {}) {
       trackTransientPreviewUrl(url, img);
       img.addEventListener("click", (e) => {
         e.stopPropagation();
-        openImagePreview(url, a.filename || a.label || "", u8a, a.mime);
+        openImagePreview(url, a.filename || a.label || "", u8a, previewMime);
       });
       card.append(img);
     }
@@ -3193,10 +3148,12 @@ function openSectionView(title, act) {
   let lifecycle = attachModalLifecycle(overlay, { dialog, onClose: close, restoreFocusTo: previousFocus });
 }
 
-// dataURL → 字节 / MIME（出图类 op 下载复用）。
+// dataURL → 字节 / MIME（出图类 op 下载复用）。容忍 URL-safe 字母表与换行/空白。
 function dataUrlToBytes(url) {
   const comma = url.indexOf(",");
-  const b64 = comma >= 0 ? url.slice(comma + 1) : url;
+  let b64 = comma >= 0 ? url.slice(comma + 1) : url;
+  b64 = b64.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+  b64 += "=".repeat((4 - (b64.length % 4)) % 4);
   const bin = atob(b64);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
@@ -3241,13 +3198,13 @@ function outMaskHint(name, size) {
   const en = /^en/i.test(getLocale());
   const label = name ? ` ${name}` : "";
   return en
-    ? `[Generated file${label} (${fmtByteSize(size)}), download below]`
-    : `[已生成文件${label}（${fmtByteSize(size)}），点击下方下载]`;
+    ? `[Generated file${label} (${fmtByteSize(size)}) — download below; images preview inline]`
+    : `[已生成文件${label}（${fmtByteSize(size)}），下方可下载；图片会自动预览]`;
 }
 
 // 输出文本框中的超大 base64：默认不铺满界面，换成「已生成文件」提示。
 // data URL 的下载按钮由 renderOutMedia 提供；裸 base64 在这里解成文件，交给 renderOutFiles。
-const DATA_URL_BASE64_RE_GLOBAL = /data:([\w.+-]+\/[\w.+-]+);base64,[A-Za-z0-9+/]+={0,2}/g;
+const DATA_URL_BASE64_RE_GLOBAL = /data:([\w.+-]+\/[\w.+-]+)(?:;[^,\r\n]*)?;base64,[A-Za-z0-9+/_-]+={0,2}/gi;
 const OUT_RAW_B64_MIN_CHARS = Math.ceil(PRODUCT_INLINE_MAX_BYTES / 3) * 4;
 const OUT_RAW_B64_RE = new RegExp(`[A-Za-z0-9+/_-]{${OUT_RAW_B64_MIN_CHARS},}={0,2}`, "g");
 function maskOversizedOutputText(text) {
@@ -3334,44 +3291,100 @@ function renderOutFiles(container, files) {
   if (old) old.remove();
   revokeFilePreviewUrls();
   if (!Array.isArray(files) || !files.length) return;
-  const box = el("div", { class: "io-out-files", style: "display:flex;flex-direction:column;gap:6px;margin-top:10px;align-items:flex-start" });
-  for (const { bytes, mime, name } of productFileEntries({ files })) {
-    const row = el('div', { class: 'io-out-file-row' },
-      el('div', { class: 'io-out-file-meta' }, name,
-        el('span', { class: 'io-out-file-type' }, `${mime || 'application/octet-stream'} · ${fmtByteSize(bytes.length)}`)));
-    if (mime && mime.startsWith("image/") && mediaRenderPlan(mime, bytes.length) === "inline-image") {
-      const preview = el('details', {}, el('summary', {}, t('ui.file.viewTitle')));
-      let image = null;
-      const loadPreview = () => {
-        if (image) return;
-        const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
-        _filePreviewUrls.push(url);
-        image = el('img', {
-          class: 'io-out-file-preview', src: url, alt: name,
-          style: 'max-width:100%;max-height:240px;object-fit:contain;cursor:zoom-in;border-radius:var(--r-md)',
-          ...keyBtn(() => openImageLightbox(url, name, { bytes, mime })),
-          onclick: () => openImageLightbox(url, name, { bytes, mime }),
-        });
-        preview.append(image);
-      };
-      preview.addEventListener('toggle', () => { if (preview.open) loadPreview(); });
-      if (files.length === 1) { preview.open = true; loadPreview(); }
-      row.append(preview);
+  let entries;
+  try { entries = productFileEntries({ files }); } catch { entries = []; }
+  if (!entries.length) return;
+
+  const box = el("div", { class: "io-out-files" });
+  const previewed = new Set();
+  const imageEntries = [];
+  for (const ent of entries) {
+    const mime = resolveImageMime(ent.mime, ent.bytes);
+    if (mime) imageEntries.push({ ent, mime });
+  }
+  const imageTotal = imageEntries.length;
+  // 预览位优先给可解码的图片；大图只占剩余空位，避免第一张超限图挤掉后面能预览的图。
+  const previewEntries = imageEntries
+    .filter(({ ent, mime }) => imagePreviewPlan(mime, ent.bytes.length) === "preview")
+    .slice(0, IMAGE_PREVIEW_MAX_COUNT)
+    .map(({ ent, mime }) => ({ ent, mime, tooLarge: false }));
+  for (const { ent, mime } of imageEntries) {
+    if (previewEntries.length >= IMAGE_PREVIEW_MAX_COUNT) break;
+    if (imagePreviewPlan(mime, ent.bytes.length) !== "too-large") continue;
+    previewEntries.push({ ent, mime, tooLarge: true });
+  }
+
+  // 图片产物直接内联预览：不点下载、不展开 details。最多前 8 张；
+  // 超过 24MB 的单图只给提示与下载，避免解码把页面拖死。
+  if (previewEntries.length) {
+    const grid = el("div", { class: "io-out-previews" });
+    for (const { ent, mime, tooLarge } of previewEntries) {
+      if (tooLarge) {
+        grid.append(el("figure", { class: "io-out-preview io-out-preview-blocked" },
+          el("figcaption", { class: "io-out-preview-caption" },
+            el("span", { class: "io-out-preview-name" }, ent.name),
+            el("span", { class: "io-out-preview-sub" }, `${mime} · ${fmtByteSize(ent.bytes.length)} · ${t("ui.outFiles.tooLarge")}`))));
+        continue;
+      }
+      previewed.add(ent);
+      const url = URL.createObjectURL(new Blob([ent.bytes], { type: mime }));
+      _filePreviewUrls.push(url);
+      const sub = el("span", { class: "io-out-preview-sub" }, `${mime} · ${fmtByteSize(ent.bytes.length)}`);
+      const img = el("img", {
+        class: "io-out-preview-img", src: url, alt: ent.name, loading: "lazy",
+      });
+      img.addEventListener("load", () => {
+        if (img.naturalWidth && img.naturalHeight) {
+          sub.textContent = `${img.naturalWidth}×${img.naturalHeight} · ${mime} · ${fmtByteSize(ent.bytes.length)}`;
+        }
+      });
+      const open = () => openImagePreview(url, ent.name, ent.bytes, mime);
+      const figure = el("figure", { class: "io-out-preview" },
+        el("button", {
+          type: "button", class: "io-out-preview-open",
+          title: t("ui.file.viewTitle"), "aria-label": `${t("ui.file.viewTitle")} ${ent.name}`,
+          onclick: open, ...keyBtn(open),
+        }, img),
+        el("figcaption", { class: "io-out-preview-caption" },
+          el("span", { class: "io-out-preview-name" }, ent.name), sub));
+      img.addEventListener("error", () => figure.remove(), { once: true });
+      grid.append(figure);
+    }
+    box.append(grid);
+    if (imageTotal > IMAGE_PREVIEW_MAX_COUNT) {
+      box.append(el("div", { class: "io-out-preview-more" },
+        t("ui.outFiles.previewLimit", IMAGE_PREVIEW_MAX_COUNT, imageTotal)));
+    }
+  }
+
+  const list = el("div", { class: "io-out-file-list" });
+  for (const ent of entries) {
+    const { bytes, mime, name } = ent;
+    const row = el("div", { class: "io-out-file-row" },
+      el("div", { class: "io-out-file-meta" }, name,
+        el("span", { class: "io-out-file-type" }, `${mime || "application/octet-stream"} · ${fmtByteSize(bytes.length)}`)));
+    const imageMime = resolveImageMime(mime, bytes);
+    if (imageMime && !previewed.has(ent)) {
+      row.append(el("button", {
+        type: "button", class: "file-section-act",
+        onclick: () => openImagePreview("", name, bytes, imageMime),
+      }, msym("open_in_full", "file-act-glyph"), el("span", {}, t("ui.file.viewTitle"))));
     }
     row.append(el("button", {
       type: "button", class: "file-section-act",
       onclick: () => cloudWarnGate(() => downloadBytes(bytes, name, mime)),
     }, msym("download", "file-act-glyph"),
        el("span", {}, `${t("ui.outFiles.download")} ${name} (${fmtByteSize(bytes.length)})`)));
-    box.append(row);
+    list.append(row);
   }
-  if (box.children.length) container.append(box);
+  box.append(list);
+  container.append(box);
 }
 
 // 输出区图片渲染：扫描 op 输出文本里的 data:*;base64,...（出图类 op 约定：
 // qrGen 二维码 / gifFrames 逐帧 / mcMap / bin2img / imgFft / spectrogram 等）。
 // 超过 128KB（解码后）一律不创建 `<img>`，只给文件名/大小/下载按钮；≤128KB 仍内联缩略图。
-function renderOutMedia(container, text) {
+function renderOutMedia(container, text, opts = {}) {
   if (!container) return;
   // 输出区重渲染 = 旧产物关闭：先释放文件预览 URL（图片节点马上会被清空）。
   revokeFilePreviewUrls();
@@ -3380,7 +3393,11 @@ function renderOutMedia(container, text) {
   const plan = planDataUrlMedia(text);
   if (!plan.length) return;
   const grid = el("div", { class: "io-out-media-grid", style: "display:flex;flex-wrap:wrap;gap:12px;margin-top:8px" });
+  const fileImageSizes = opts.imageSizes || null;
+  let imagePreviews = 0;
   plan.forEach(({ url, mime, size, kind }, i) => {
+    // 同一张图既出现在文本 dataURL 又作为文件产物返回时，只保留文件预览，避免双份。
+    if (kind === "inline-image" && fileImageSizes && size != null && fileImageSizes.has(size)) return;
     const name = outMediaName(i + 1, mime);
     const sizeLabel = size == null ? "?" : fmtByteSize(size);
     const dl = el("button", {
@@ -3389,13 +3406,14 @@ function renderOutMedia(container, text) {
       onclick: (e) => { e.stopPropagation(); cloudWarnGate(() => downloadBytes(dataUrlToBytes(url), name, mime)); },
     }, msym("download", "file-act-glyph"),
        el("span", {}, kind === "inline-image" ? t("ui.op.export") : t("ui.outFiles.download")));
-    if (kind === "inline-image") {
+    if (kind === "inline-image" && imagePreviews < IMAGE_PREVIEW_MAX_COUNT) {
+      imagePreviews++;
       const img = el("img", Object.assign({
         class: "io-out-media-img", src: url, alt: name, loading: "lazy",
         "aria-label": t("ui.file.viewTitle"),
-        style: "max-width:180px;max-height:180px;cursor:zoom-in;border-radius:6px;image-rendering:pixelated;background:#fff",
-      }, keyBtn(() => openImageLightbox(url, name))));
-      img.addEventListener("click", () => openImageLightbox(url, name));
+        style: "max-width:220px;max-height:220px;cursor:zoom-in;border-radius:6px;image-rendering:pixelated;background:#fff",
+      }, keyBtn(() => openImagePreview(url, name, null, mime))));
+      img.addEventListener("click", () => openImagePreview(url, name, null, mime));
       grid.append(el("figure", { class: "io-out-media-cell", style: "display:flex;flex-direction:column;gap:4px;align-items:center;margin:0" }, img, dl));
       return;
     }
@@ -4024,7 +4042,10 @@ function renderOp() {
           });
           runInput = prepared.text;
           ioCtl.reportWarnings(prepared.warnings);
-          if (op.acceptsBytes && prepared.bytes) {
+          // 文本视图里的 rawBytes 只是 UTF-8 回编码，不能覆盖算法自己对 base64/dataURL
+          // 文本的解释（否则小番茄等 acceptsBytes op 粘贴图片 base64 会被当成 PNG 字节）。
+          // 只有真文件字节（source=file）或 hex/base64/bits 等字节视图（source=view）才注入。
+          if (op.acceptsBytes && prepared.bytes && prepared.source !== "text") {
             runParams.rawBytes = prepared.bytes;
             runParams.rawFileName = inArea && inArea._rawFileName;
           }
@@ -4963,7 +4984,12 @@ function applyOpOutput(entry) {
   const mediaBox = document.getElementById("ioOutMedia");
   // 掩码后的文本已把 >128KB 的 data URL 换成提示 + 文件产物，避免媒体区重复下载按钮；
   // 未掩码时保持原行为（优先用 outText，兼容非文本视图）。
-  renderOutMedia(mediaBox, masked.masked ? masked.text : (entry.outText || masked.text));
+  // 文件产物里已有同尺寸图片时，文本 dataURL 不再重复预览（gifshuffle / lsbEmbed 等）。
+  const fileImageSizes = new Set();
+  for (const ent of files) {
+    if (resolveImageMime(ent.mime, ent.bytes)) fileImageSizes.add(ent.bytes.length);
+  }
+  renderOutMedia(mediaBox, masked.masked ? masked.text : (entry.outText || masked.text), { imageSizes: fileImageSizes });
   renderOutFiles(mediaBox, files);
 }
 
@@ -5095,7 +5121,8 @@ async function convert(src) {
     }
     text = prepared.text;
     ioCtl.reportWarnings(prepared.warnings);
-    if (op.acceptsBytes && !hasFields && prepared.bytes) {
+    // 同 runAct：文本视图的 UTF-8 回编码不覆盖 op 对 base64/dataURL 文本的自行解释。
+    if (op.acceptsBytes && !hasFields && prepared.bytes && prepared.source !== "text") {
       callParams = { ...callParams, rawBytes: prepared.bytes, rawFileName: inArea && inArea._rawFileName };
     }
   }

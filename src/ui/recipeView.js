@@ -11,6 +11,7 @@ import { createHistory } from "../core/historyStack.js";
 import { ensureOp } from "../core/lazyCore.js";
 import { isExplicitRunOp, isLazyRunOp } from "../core/explicitRun.js";
 import { downloadBytes, cloudWarnGate, fmtByteSize } from "./download.js";
+import { IMAGE_PREVIEW_MAX_COUNT, resolveImageMime, imagePreviewPlan } from "../core/productResult.js";
 import { icon as iconSvg } from "./icons.js";
 import { attachInlineEditorToolbar } from "./editorToolbar.js";
 import { createIoEditorFrame } from './ioEditorFrame.js';
@@ -1874,12 +1875,108 @@ function markErrorNode(nodeId) {
 function renderOutFiles(result) {
   const filesBox = document.getElementById("recipeOutFiles");
   if (!filesBox) return;
+  revokeRecipePreviewUrls();
   let files = [];
   try { files = recipeFileEntries(result); } catch { files = []; }
-  filesBox.replaceChildren(...files.map((f) => el("button", {
-    type: "button", class: "file-section-act",
-    onclick: () => cloudWarnGate(() => downloadBytes(f.bytes, f.name, f.mime)),
-  }, msym("download"), `${f.name} (${fmtByteSize(f.bytes.length)})`)));
+  filesBox.replaceChildren();
+  if (!files.length) return;
+
+  const previewed = new Set();
+  let imageTotal = 0;
+  const previewEntries = [];
+  for (const f of files) {
+    const mime = resolveImageMime(f.mime, f.bytes);
+    if (!mime) continue;
+    imageTotal++;
+    if (previewEntries.length >= IMAGE_PREVIEW_MAX_COUNT) continue;
+    if (imagePreviewPlan(mime, f.bytes.length) !== "preview") continue;
+    previewEntries.push({ file: f, mime });
+  }
+
+  if (previewEntries.length) {
+    const grid = el("div", { class: "io-out-previews" });
+    for (const { file: f, mime } of previewEntries) {
+      previewed.add(f);
+      const url = URL.createObjectURL(new Blob([f.bytes], { type: mime }));
+      _recipePreviewUrls.push(url);
+      const sub = el("span", { class: "io-out-preview-sub" }, `${mime} · ${fmtByteSize(f.bytes.length)}`);
+      const img = el("img", { class: "io-out-preview-img", src: url, alt: f.name, loading: "lazy" });
+      img.addEventListener("load", () => {
+        if (img.naturalWidth && img.naturalHeight) {
+          sub.textContent = `${img.naturalWidth}×${img.naturalHeight} · ${mime} · ${fmtByteSize(f.bytes.length)}`;
+        }
+      });
+      const open = () => openRecipeImagePreview(url, f.bytes, mime, f.name);
+      const figure = el("figure", { class: "io-out-preview" },
+        el("button", {
+          type: "button", class: "io-out-preview-open",
+          title: tt("ui.file.viewTitle"), "aria-label": `${tt("ui.file.viewTitle")} ${f.name}`,
+          onclick: open,
+        }, img),
+        el("figcaption", { class: "io-out-preview-caption" },
+          el("span", { class: "io-out-preview-name" }, f.name), sub));
+      img.addEventListener("error", () => figure.remove(), { once: true });
+      grid.append(figure);
+    }
+    filesBox.append(grid);
+    if (imageTotal > IMAGE_PREVIEW_MAX_COUNT) {
+      filesBox.append(el("div", { class: "io-out-preview-more" },
+        tf("ui.outFiles.previewLimit", IMAGE_PREVIEW_MAX_COUNT, imageTotal)));
+    }
+  }
+
+  const list = el("div", { class: "io-out-file-list" });
+  for (const f of files) {
+    const mime = resolveImageMime(f.mime, f.bytes);
+    const row = el("div", { class: "io-out-file-row" },
+      el("div", { class: "io-out-file-meta" }, f.name,
+        el("span", { class: "io-out-file-type" }, `${f.mime || "application/octet-stream"} · ${fmtByteSize(f.bytes.length)}`)));
+    if (mime && !previewed.has(f)) {
+      row.append(el("button", {
+        type: "button", class: "file-section-act",
+        onclick: () => {
+          const url = URL.createObjectURL(new Blob([f.bytes], { type: mime }));
+          _recipePreviewUrls.push(url);
+          openRecipeImagePreview(url, f.bytes, mime, f.name);
+        },
+      }, msym("open_in_full"), tt("ui.file.viewTitle")));
+    }
+    row.append(el("button", {
+      type: "button", class: "file-section-act",
+      onclick: () => cloudWarnGate(() => downloadBytes(f.bytes, f.name, f.mime)),
+    }, msym("download"), `${f.name} (${fmtByteSize(f.bytes.length)})`));
+    list.append(row);
+  }
+  filesBox.append(list);
+}
+
+let _recipePreviewUrls = [];
+function revokeRecipePreviewUrls() {
+  for (const url of _recipePreviewUrls) { try { URL.revokeObjectURL(url); } catch { /* 已释放忽略 */ } }
+  _recipePreviewUrls = [];
+}
+
+function openRecipeImagePreview(url, bytes, mime, name) {
+  import("./imageOpsViewer.js").then(({ openImageOpsViewer }) => {
+    openImageOpsViewer(bytes, { title: name || "图片预览" });
+  }).catch(() => {
+    const overlay = el("div", { class: "img-lightbox", role: "dialog", "aria-modal": "true", "aria-label": name || "图片预览" });
+    const img = el("img", { class: "img-lightbox-img", src: url, alt: name || "" });
+    const closeBtn = el("button", { type: "button", class: "img-lightbox-close", title: tt("ui.expand.cancel"), "aria-label": tt("ui.expand.cancel") }, msym("close"));
+    overlay.append(img, closeBtn);
+    const close = () => {
+      overlay.classList.add("img-lightbox-closing");
+      setTimeout(() => overlay.remove(), 250);
+      document.removeEventListener("keydown", onKey);
+    };
+    const onKey = (event) => { if (event.key === "Escape") close(); };
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay || event.target.closest(".img-lightbox-close")) close();
+    });
+    document.addEventListener("keydown", onKey);
+    document.body.append(overlay);
+    closeBtn.focus();
+  });
 }
 function updateRunUi() {
   const bake = document.getElementById("recipeBake");

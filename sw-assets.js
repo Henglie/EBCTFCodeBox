@@ -1,4 +1,4 @@
-self.__EBCTF_ASSET_REV = "41dcdf743eb8ee47";
+self.__EBCTF_ASSET_REV = "102a0f27ef345d07";
 self.__EBCTF_ASSETS = [
   "./",
   "./index.html",
@@ -116,6 +116,7 @@ self.__EBCTF_ASSETS = [
   "./src/core/asmDisasm.js",
   "./src/core/astroSymbols.js",
   "./src/core/audioAnalysis.js",
+  "./src/core/audioPreview.js",
   "./src/core/audiostego.js",
   "./src/core/babylonianNumerals.js",
   "./src/core/balloon.js",

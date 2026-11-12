@@ -12,6 +12,8 @@ import { icon as iconSvg } from "./icons.js";
 import { downloadBytes } from "./download.js";
 import { createSpecialWorkbench } from "./specialWorkbench.js";
 import { connectSpecialDraft, newDraftIdentity } from "./workspaceDrafts.js";
+import { attachModalLifecycle } from "./modalLifecycle.js";
+import { buildZip } from "../core/batchRun.js";
 import { isLimitError } from "../core/limitGuard.js";
 import {
   STEGSOLVE_TRANSFORMS,
@@ -24,6 +26,7 @@ import {
   mimeForFormat,
   decodeImageFrames,
   imageToPNG,
+  imageToPNGCompressed,
 } from "../core/stegSolve.js";
 
 const STYLE_ID = "stegsolve-page-styles";
@@ -161,13 +164,25 @@ function paint(canvas, image) {
   ctx.putImageData(new ImageData(data, image.width, image.height), 0, 0);
 }
 
-function downloadPNG(image, name) {
-  downloadBytes(imageToPNG(image), name, "image/png");
+async function downloadPNG(image, name) {
+  try {
+    downloadBytes(await imageToPNGCompressed(image), name, "image/png");
+  } catch {
+    downloadBytes(imageToPNG(image), name, "image/png");
+  }
 }
 
 function safeName(name) {
   return String(name || "stegsolve").replace(/[\\/:*?"<>|]+/g, "_").slice(0, 80) || "stegsolve";
 }
+
+const EXPORT_MAX_BYTES = 256 * 1024 * 1024;
+function padNum(n, width) { return String(n).padStart(width, "0"); }
+function safeFilePart(text) {
+  return String(text || "item").replace(/[\\/:*?"<>|\s]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60) || "item";
+}
+function nextFrame() { return new Promise(resolve => requestAnimationFrame(() => resolve())); }
+function yieldToUi() { return new Promise(resolve => setTimeout(resolve, 0)); }
 
 export function setPendingStegSolve(bytes, name) {
   const u8 = byteInput(bytes);
@@ -229,10 +244,14 @@ export function renderStegSolvePage(host, op) {
   const fileInput = el("input", { type: "file", accept: "image/*", class: "sspage-file", "aria-label": "打开图像" });
   const openBtn = btn("打开图像", "image");
   const saveBtn = btn("保存当前视图", "download");
+  const galleryBtn = btn("帧/通道总览", "grid_view");
+  const exportAllBtn = btn("批量导出帧/通道", "download");
+  galleryBtn.disabled = true;
+  exportAllBtn.disabled = true;
   const nameEl = el("span", { class: "sspage-name", text: "尚未载入图像" });
   const metaEl = el("span", { class: "sspage-meta", text: "" });
   const statusEl = el("div", { class: "sspage-status", role: "status", "aria-live": "polite", text: "打开或拖入 PNG / JPEG / GIF / BMP / WebP 图像" });
-  const toolbar = el("div", { class: "sspage-toolbar" }, openBtn, saveBtn, nameEl, metaEl);
+  const toolbar = el("div", { class: "sspage-toolbar" }, openBtn, saveBtn, galleryBtn, exportAllBtn, nameEl, metaEl);
   const drop = el("div", {
     class: "sspage-drop",
     role: "button",
@@ -600,6 +619,290 @@ export function renderStegSolvePage(host, op) {
     statusEl.dataset.level = level || "info";
   }
 
+  // ---- 帧 / 通道总览 + 批量导出 ----
+  let gallery = null;
+  let galleryObserver = null;
+  let galleryPumping = false;
+  let exportBusy = false;
+  const galleryPending = new Set();
+  const galleryScratch = document.createElement("canvas");
+  const galleryScratchCtx = galleryScratch.getContext("2d");
+
+  function drawGalleryThumb(canvas, image) {
+    const w = Math.max(1, image.width | 0), h = Math.max(1, image.height | 0);
+    if (!galleryScratchCtx) throw new Error("浏览器不支持 canvas 2D");
+    galleryScratch.width = w;
+    galleryScratch.height = h;
+    const data = image.data instanceof Uint8ClampedArray ? image.data : new Uint8ClampedArray(image.data);
+    galleryScratchCtx.putImageData(new ImageData(data, w, h), 0, 0);
+    const maxW = 168, maxH = 120;
+    const scale = Math.min(maxW / w, maxH / h);
+    const tw = Math.max(1, Math.round(w * scale)), th = Math.max(1, Math.round(h * scale));
+    canvas.width = tw;
+    canvas.height = th;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("浏览器不支持 canvas 2D");
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(galleryScratch, 0, 0, w, h, 0, 0, tw, th);
+  }
+
+  function galleryItem(kind, index) {
+    if (kind === "frame") return state.frames[index] || null;
+    if (!state.sourceImage) return null;
+    return applyStegSolveTransform(state.sourceImage, index);
+  }
+
+  function galleryItemLabel(kind, index) {
+    if (kind === "frame") return `帧 ${index + 1}`;
+    return STEGSOLVE_TRANSFORMS[index]?.label || `通道 ${index + 1}`;
+  }
+
+  function enqueueGalleryCell(cell) {
+    if (!cell || !cell.isConnected) return;
+    galleryPending.add(cell);
+    if (!galleryPumping) {
+      galleryPumping = true;
+      requestAnimationFrame(pumpGallery);
+    }
+  }
+
+  function pumpGallery() {
+    galleryPumping = false;
+    const cell = galleryPending.values().next().value;
+    if (!cell) return;
+    galleryPending.delete(cell);
+    if (cell.isConnected) {
+      try { cell.__galleryRender?.(); } catch { /* 单格失败不阻断其余缩略图 */ }
+    }
+    if (galleryPending.size) {
+      galleryPumping = true;
+      requestAnimationFrame(pumpGallery);
+    }
+  }
+
+  function galleryCell(kind, index, observer) {
+    const label = galleryItemLabel(kind, index);
+    const image = kind === "frame" ? state.frames[index] : state.sourceImage;
+    const canvas = document.createElement("canvas");
+    const open = el("button", {
+      type: "button", class: "sspage-gallery-open",
+      title: "点击在主视图查看", "aria-label": `${label}，在主视图查看`,
+    },
+      el("span", { class: "sspage-gallery-thumb" }, canvas),
+      el("span", { class: "sspage-gallery-label" }, label),
+      el("span", { class: "sspage-gallery-sub" }, image ? `${image.width}×${image.height}` : ""),
+    );
+    open.addEventListener("click", () => locateGalleryItem(kind, index));
+    const zoom = el("button", {
+      type: "button", class: "sspage-gallery-zoom",
+      title: "放大查看", "aria-label": `放大查看 ${label}`,
+    }, msym("open_in_full"));
+    zoom.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openGalleryZoom(kind, index);
+    });
+    const cell = el("div", { class: "sspage-gallery-cell", role: "listitem", "data-kind": kind, "data-index": String(index) }, open, zoom);
+    cell.__galleryRender = () => {
+      if (cell.dataset.rendered || !cell.isConnected) return;
+      cell.dataset.rendered = "1";
+      try {
+        const img = galleryItem(kind, index);
+        if (!img) throw new Error("图像未就绪");
+        drawGalleryThumb(canvas, img);
+      } catch (e) {
+        cell.classList.add("error");
+        const sub = open.querySelector(".sspage-gallery-sub");
+        if (sub) sub.textContent = "缩略图失败：" + (e && e.message ? e.message : e);
+      }
+    };
+    observer.observe(cell);
+    return cell;
+  }
+
+  function locateGalleryItem(kind, index) {
+    closeGallery();
+    if (kind === "frame") {
+      state.frameIndex = index;
+      switchTab("frame");
+    } else {
+      state.transformIndex = index;
+      switchTab("transform");
+      renderTransform();
+    }
+    draft?.changed();
+  }
+
+  async function openGalleryZoom(kind, index) {
+    try {
+      const image = galleryItem(kind, index);
+      if (!image) throw new Error("图像未就绪");
+      const label = galleryItemLabel(kind, index);
+      closeGallery();
+      const { openImageOpsViewer } = await import("./imageOpsViewer.js");
+      openImageOpsViewer(image, { title: label });
+    } catch (e) {
+      status("放大查看失败：" + (e && e.message ? e.message : e), "error");
+    }
+  }
+
+  function closeGallery() {
+    if (galleryObserver) {
+      try { galleryObserver.disconnect(); } catch { /* ignore */ }
+      galleryObserver = null;
+    }
+    galleryPending.clear();
+    const current = gallery;
+    gallery = null;
+    if (!current) return;
+    try { current.lifecycle?.release(); } catch { /* ignore */ }
+    try { current.overlay.remove(); } catch { /* ignore */ }
+  }
+
+  function openFrameChannelGallery() {
+    if (!state.sourceImage) { status("请先打开图像", "warn"); return; }
+    closeGallery();
+    const titleId = "sspage-gallery-title";
+    const dialog = el("div", {
+      class: "sspage-gallery-dialog",
+      role: "dialog", "aria-modal": "true", "aria-labelledby": titleId,
+    });
+    const closeBtn = btn("关闭", "close");
+    const exportBtn = btn("导出全部 ZIP", "download");
+    const head = el("div", { class: "sspage-gallery-head" },
+      el("div", { class: "sspage-gallery-title", id: titleId },
+        el("span", {}, "帧 / 通道总览"),
+        el("span", { class: "sspage-gallery-source", text: state.name || "image" }),
+      ),
+      el("div", { class: "sspage-gallery-actions" }, exportBtn, closeBtn),
+    );
+    const frameTab = el("button", { type: "button", class: "sspage-gallery-tab", role: "tab" }, `动画帧 (${state.frames.length})`);
+    const channelTab = el("button", { type: "button", class: "sspage-gallery-tab", role: "tab" }, `通道变换 (${STEGSOLVE_TRANSFORMS.length})`);
+    const tabs = el("div", { class: "sspage-gallery-tabs", role: "tablist" }, frameTab, channelTab);
+    const grid = el("div", { class: "sspage-gallery-grid", role: "list" });
+    const galleryStatus = el("div", { class: "sspage-gallery-status", role: "status", "aria-live": "polite" });
+    dialog.append(head, tabs, grid, galleryStatus);
+    const overlay = el("div", { class: "sspage-gallery-overlay" }, dialog);
+    document.body.append(overlay);
+    const lifecycle = attachModalLifecycle(overlay, {
+      dialog, onClose: closeGallery, initialFocus: closeBtn,
+      restoreFocusTo: document.activeElement,
+    });
+    gallery = { overlay, lifecycle, statusEl: galleryStatus, exportBtn };
+    exportBtn.addEventListener("click", () => batchExportFramesChannels(galleryStatus, exportBtn));
+    closeBtn.addEventListener("click", closeGallery);
+
+    const setMode = (mode) => {
+      frameTab.classList.toggle("active", mode === "frame");
+      channelTab.classList.toggle("active", mode === "transform");
+      frameTab.setAttribute("aria-selected", String(mode === "frame"));
+      channelTab.setAttribute("aria-selected", String(mode === "transform"));
+      if (galleryObserver) {
+        try { galleryObserver.disconnect(); } catch { /* ignore */ }
+      }
+      galleryPending.clear();
+      grid.replaceChildren();
+      const observer = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          observer.unobserve(entry.target);
+          enqueueGalleryCell(entry.target);
+        }
+      }, { root: grid, rootMargin: "200px" });
+      galleryObserver = observer;
+      if (mode === "frame") {
+        for (let i = 0; i < state.frames.length; i++) grid.append(galleryCell("frame", i, observer));
+        galleryStatus.textContent = `共 ${state.frames.length} 帧`;
+      } else {
+        for (let i = 0; i < STEGSOLVE_TRANSFORMS.length; i++) grid.append(galleryCell("transform", i, observer));
+        galleryStatus.textContent = `${STEGSOLVE_TRANSFORMS.length} 个通道变换（基于首帧）`;
+      }
+      if (mode === "frame" && state.frames.length > 1) {
+        const active = grid.children[Math.min(state.frameIndex, state.frames.length - 1)];
+        if (active) requestAnimationFrame(() => active.scrollIntoView({ block: "nearest" }));
+      }
+    };
+    frameTab.addEventListener("click", () => setMode("frame"));
+    channelTab.addEventListener("click", () => setMode("transform"));
+    setMode(state.frames.length > 1 ? "frame" : "transform");
+  }
+
+  async function batchExportFramesChannels(modalStatus = null, modalExportBtn = null) {
+    if (!state.sourceImage) { status("请先打开图像", "warn"); return; }
+    if (exportBusy) return;
+    exportBusy = true;
+    exportAllBtn.disabled = true;
+    const busyBtn = modalExportBtn || gallery?.exportBtn || null;
+    if (busyBtn) busyBtn.disabled = true;
+    const setExportStatus = (text, level) => {
+      status(text, level);
+      if (modalStatus) {
+        modalStatus.textContent = text;
+        modalStatus.dataset.level = level || "info";
+      } else if (gallery?.statusEl) {
+        gallery.statusEl.textContent = text;
+        gallery.statusEl.dataset.level = level || "info";
+      }
+    };
+    try {
+      const files = [];
+      let totalBytes = 0;
+      const manifest = [
+        "StegSolve 帧 / 通道批量导出",
+        "来源: " + (state.name || "image"),
+        "格式: " + String(state.format || "").toUpperCase(),
+        "尺寸: " + state.sourceImage.width + "×" + state.sourceImage.height,
+        "帧数: " + state.frames.length,
+        "通道变换: " + STEGSOLVE_TRANSFORMS.length + "（基于首帧）",
+        "生成时间: " + new Date().toISOString(),
+        "",
+        "文件清单:",
+      ];
+      const pushFile = (name, bytes, desc) => {
+        totalBytes += bytes.length;
+        if (totalBytes > EXPORT_MAX_BYTES) {
+          throw new Error(`导出体积超过 ${Math.round(EXPORT_MAX_BYTES / 1024 / 1024)}MiB，已中止；请减少帧数或改用单帧导出`);
+        }
+        files.push({ name, bytes });
+        manifest.push(`  ${name}  ${desc}`);
+      };
+      const total = state.frames.length + STEGSOLVE_TRANSFORMS.length;
+      let done = 0;
+      for (let i = 0; i < state.frames.length; i++) {
+        if (state.disposed || !page.isConnected) throw new Error("页面已离开，导出中止");
+        const frame = state.frames[i];
+        pushFile(`frames/frame_${padNum(i + 1, 3)}.png`, await imageToPNGCompressed(frame), `${frame.width}×${frame.height}`);
+        done++;
+        if (done % 4 === 0 || done === total) setExportStatus(`正在导出 ${done}/${total}…`);
+        await yieldToUi();
+      }
+      for (let i = 0; i < STEGSOLVE_TRANSFORMS.length; i++) {
+        if (state.disposed || !page.isConnected) throw new Error("页面已离开，导出中止");
+        const def = STEGSOLVE_TRANSFORMS[i];
+        const image = applyStegSolveTransform(state.sourceImage, i);
+        pushFile(`channels/${padNum(i + 1, 2)}_${safeFilePart(def.label)}.png`, await imageToPNGCompressed(image), `${image.width}×${image.height}`);
+        done++;
+        if (done % 4 === 0 || done === total) setExportStatus(`正在导出 ${done}/${total}…`);
+        await yieldToUi();
+      }
+      files.push({ name: "manifest.txt", text: manifest.join("\n") + "\n" });
+      setExportStatus("正在打包 ZIP…");
+      await yieldToUi();
+      const zip = buildZip(files);
+      const zipName = safeName(state.name).replace(/\.[A-Za-z0-9]{1,8}$/, "") + "_stegsolve_frames_channels.zip";
+      downloadBytes(zip, zipName, "application/zip");
+      setExportStatus(`已导出 ${state.frames.length} 帧 + ${STEGSOLVE_TRANSFORMS.length} 通道（${Math.round(zip.length / 1024)} KiB）`, "ok");
+    } catch (e) {
+      setExportStatus("导出失败：" + (e && e.message ? e.message : e), "error");
+    } finally {
+      exportBusy = false;
+      exportAllBtn.disabled = false;
+      if (busyBtn) busyBtn.disabled = false;
+    }
+  }
+
+  galleryBtn.addEventListener("click", openFrameChannelGallery);
+  exportAllBtn.addEventListener("click", () => batchExportFramesChannels());
+
   // ---- Load image ----
   function applyLoaded(decoded, name, bytes, file = new Blob([bytes])) {
     reportSeq++;
@@ -622,6 +925,9 @@ export function renderStegSolvePage(host, op) {
     drop.hidden = true;
     transformPanel.hidden = false;
     saveBtn.disabled = false;
+    galleryBtn.disabled = false;
+    exportAllBtn.disabled = false;
+    closeGallery();
     renderTransform();
     renderFrame();
     renderCombine();
@@ -637,7 +943,8 @@ export function renderStegSolvePage(host, op) {
     state.frames = []; state.fileReport = ''; state.fileReportDone = false; _lastTransform = null;
     extractOut.textContent = formatOut.textContent = ''; combineSave.disabled = true;
     for (const canvas of page.querySelectorAll('canvas')) { canvas.width = canvas.height = 1; }
-    state.binaryKey = newDraftIdentity(); saveBtn.disabled = true; draft?.changed();
+    state.binaryKey = newDraftIdentity(); saveBtn.disabled = true;
+    galleryBtn.disabled = true; exportAllBtn.disabled = true; closeGallery(); draft?.changed();
     try {
       status(`正在读取 ${file.name || "图像"}…`);
       const bytes = new Uint8Array(await file.arrayBuffer());
@@ -658,7 +965,8 @@ export function renderStegSolvePage(host, op) {
     state.frames = []; state.fileReport = ''; state.fileReportDone = false; _lastTransform = null;
     extractOut.textContent = formatOut.textContent = ''; combineSave.disabled = true;
     for (const canvas of page.querySelectorAll('canvas')) { canvas.width = canvas.height = 1; }
-    state.binaryKey = newDraftIdentity(); saveBtn.disabled = true; draft?.changed();
+    state.binaryKey = newDraftIdentity(); saveBtn.disabled = true;
+    galleryBtn.disabled = true; exportAllBtn.disabled = true; closeGallery(); draft?.changed();
     try {
       status(`正在解析 ${name || "图像"}…`);
       const decoded = await decodeFramesWithFallback(bytes);
@@ -788,7 +1096,8 @@ export function renderStegSolvePage(host, op) {
       state.bytes = state.file = state.secondFile = state.sourceImage = state.combineImage = null; state.frames = [];
       state.binaryKey = newDraftIdentity(); state.name = ''; state.fileReport = ''; state.fileReportDone = false;
       _lastTransform = combineResult = stereoResult = null; nameEl.textContent = ''; metaEl.textContent = '';
-      drop.hidden = false; saveBtn.disabled = true; combineSave.disabled = true; formatBtn.disabled = false;
+      drop.hidden = false; saveBtn.disabled = true; galleryBtn.disabled = true; exportAllBtn.disabled = true;
+      combineSave.disabled = true; formatBtn.disabled = false; closeGallery();
       fileInput.value = combineFile.value = ''; extractOut.textContent = formatOut.textContent = '';
       for (const canvas of page.querySelectorAll('canvas')) { canvas.width = canvas.height = 1; }
       status('', 'info');
@@ -809,6 +1118,7 @@ export function renderStegSolvePage(host, op) {
 
   const api = {
     dispose() {
+      closeGallery();
       draft.dispose(); workbench.dispose(); primarySeq++; secondarySeq++; reportSeq++;
       state.disposed = true;
       window.removeEventListener("keydown", onKey);

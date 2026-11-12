@@ -191,6 +191,18 @@
 .sspage-workbench [data-controls="transform"] .sspage-range { grid-row: 2; grid-column: 2 / 4; width: 100%; max-width: none; }
 .sspage-workbench [data-controls="transform"] .sspage-round:last-of-type { grid-column: 4; }
 .sspage-workbench [data-controls="transform"] .sspage-zoom { grid-row: 3; grid-column: 2 / 4; }
+.io-out-files { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; min-width: 0; width: 100%; }
+.io-out-previews { display: flex; flex-wrap: wrap; gap: 10px; width: 100%; min-width: 0; }
+.io-out-preview { display: flex; flex-direction: column; gap: 6px; width: min(220px, 100%); min-width: 0; margin: 0; padding: 8px; background: var(--surface-1); border-radius: var(--r-md); }
+.io-out-preview-open { display: block; width: 100%; padding: 0; border: 0; background: transparent; border-radius: var(--r-sm); cursor: zoom-in; }
+.io-out-preview-open:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.io-out-preview-img { display: block; max-width: 100%; max-height: 200px; width: auto; height: auto; margin-inline: auto; border-radius: var(--r-sm); background: #fff; }
+.io-out-preview-caption { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-xs); color: var(--on-surface-var); line-height: 1.4; }
+.io-out-preview-name { color: var(--on-surface); font-weight: 600; overflow-wrap: anywhere; }
+.io-out-preview-sub { overflow-wrap: anywhere; }
+.io-out-preview-blocked { justify-content: center; min-height: 96px; border: 1px dashed var(--outline-var); }
+.io-out-preview-more { width: 100%; font-size: var(--fs-xs); color: var(--on-surface-var); }
+.io-out-file-list { display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: 0; }
 .io-out-file-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px; min-width: 0; width: 100%; background: var(--surface-1); border-radius: var(--r-md); }
 .io-out-file-row > .io-out-file-meta { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; }
 .io-out-file-type { display: block; color: var(--on-surface-var); font-size: var(--fs-xs); }
@@ -223,8 +235,15 @@
   .io-tools-extra > .io-compact-file { display: inline-flex; }
 }
 .env-layout-setting { padding-block: 12px; }
-.env-layout-seg { flex-wrap: wrap; max-width: 100%; }
-.env-layout-seg > button { white-space: normal; }
+/* 两个长中文选项必须保持单行胶囊：换行会把分段控件拉成两层高的巨大胶囊。 */
+.dir-seg.env-layout-seg { display: flex; flex-wrap: nowrap; width: 100%; max-width: 100%; }
+.env-layout-seg > button { flex: 1 1 0; min-width: 0; padding-inline: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 420px) {
+  .env-layout-seg > button { padding-inline: 6px; font-size: var(--fs-xs); }
+}
+@media (max-width: 340px) {
+  .env-layout-seg > button { padding-inline: 4px; font-size: 12px; }
+}
 @media (pointer: coarse) {
   .op-data .io-pane-input .io-pane-tools > .tool-btn:nth-child(-n+2) { display: none; }
   .io-tools-extra > .io-touch-tool { display: inline-flex; }

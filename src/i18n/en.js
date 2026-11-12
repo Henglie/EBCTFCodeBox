@@ -126,6 +126,8 @@ export default {
 
  // ---- output artifacts + cloud download warning ----
   "ui.outFiles.download": "Download",
+  "ui.outFiles.previewLimit": "Only the first {0} of {1} images are previewed inline; download the rest to view.",
+  "ui.outFiles.tooLarge": "Image is too large for inline preview; download to view",
   "ui.cloudWarn.title": "Cloud Deployment Notice",
   "ui.cloudWarn.body": "This toolbox is running from a cloud server deployment: local bridge features are unavailable, and sensitive artifacts (e.g. private keys) you download remain in this browser. For private-key / sensitive operations, prefer the offline local build.",
   "ui.cloudWarn.dontAsk": "Don't remind me again (resets when browser site data is cleared)",
@@ -523,6 +525,9 @@ export default {
   "ui.home.audioPreviewLabel": "Audio: analyze first N minutes",
   "ui.home.audioPreviewPlaceholder": "0 = full (default)",
   "ui.home.audioPreviewHint": "Applies to dropped WAV files; 0 = full analysis. Affects audio only, not images/archives/text.",
+  "ui.ds.audioUnit": "minutes",
+  "ui.ds.audioDec": "Decrease audio analysis duration",
+  "ui.ds.audioInc": "Increase audio analysis duration",
   "ui.magic.verdict.confirmed": "Confirmed",
   "ui.magic.verdict.likely": "Likely",
   "ui.magic.verdict.ambiguous": "Ambiguous",

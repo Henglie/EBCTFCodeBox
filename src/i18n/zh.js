@@ -132,6 +132,8 @@ export default {
 
  // ---- 产物协议 + 云端下载警告 ----
   "ui.outFiles.download": "下载",
+  "ui.outFiles.previewLimit": "仅内联预览前 {0} 张图片（共 {1} 张），其余请下载查看。",
+  "ui.outFiles.tooLarge": "图片较大，未内联预览，请下载查看",
   "ui.cloudWarn.title": "云端部署提醒",
   "ui.cloudWarn.body": "当前工具运行在云端服务器部署上：本地桥功能不可用，且下载的密钥等敏感产物会留存在浏览器中。涉及私钥 / 敏感数据的操作，建议使用本地离线版完成。",
   "ui.cloudWarn.dontAsk": "下次不再提醒（清除浏览器站点数据后恢复提醒）",
@@ -538,6 +540,9 @@ export default {
   "ui.home.audioPreviewLabel": "音频仅分析前 N 分钟",
   "ui.home.audioPreviewPlaceholder": "0 = 全量（默认）",
   "ui.home.audioPreviewHint": "拖入 WAV 时生效，0 = 全量；只影响音频分析，不影响图片/归档/文本。",
+  "ui.ds.audioUnit": "分钟",
+  "ui.ds.audioDec": "减少音频分析时长",
+  "ui.ds.audioInc": "增加音频分析时长",
   "ui.magic.verdict.confirmed": "已确认",
   "ui.magic.verdict.likely": "很可能",
   "ui.magic.verdict.ambiguous": "存疑",
