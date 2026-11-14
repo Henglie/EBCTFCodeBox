@@ -46,6 +46,7 @@ import { ensureAll } from "../core/lazyCore.js";
 import { readFileAudioPreviewMinutes, saveFileAudioPreviewMinutes, fmtAudioPreviewMinutes } from "../core/audioPreview.js";
 import { icon as iconSvg } from "./icons.js";
 import { attachModalLifecycle } from "./modalLifecycle.js";
+import { themedSelect } from './themedSelect.js';
 
 // ---- 轻量 DOM 工具（与 envPanel.js 同形；注意 false 不当属性写，防 disabled="false" 坑）----
 function el(tag, attrs = {}, ...children) {
@@ -223,7 +224,7 @@ export function openDecodeStrength(opt = {}) {
   };
 
   const dialog = el("div", { class: "ds-dialog", role: "dialog", "aria-modal": "true", "aria-label": t("ui.ds.title") });
-  const body = el("div", { class: "ds-body" });
+  const body = el("div", { class: "ds-body", tabindex: '0', 'aria-label': t('ui.ds.title') });
 
   // ---- 头部 ----
   const closeBtn = el("button", { class: "ds-close", type: "button", "aria-label": t("ui.ds.close") }, msym("close"));
@@ -381,7 +382,7 @@ export function openDecodeStrength(opt = {}) {
     // ---- op 列表（分类折叠 + 按需渲染 + 独立滚动条）----
     // 文本页把「暴力爆破（独立通道）」作为虚拟分类 prepend 到列表最前；
     // 文件页不渲染该分类，勾选状态仍只在 text 的 work.bruteIds 里。
-    const list = el("div", { class: "ds-list" });
+    const list = el("div", { class: "ds-list", tabindex: '0', role: 'group', 'aria-label': t('ui.ds.search') });
     body.append(list);
 
     // catId → { rowsHost, built, opsShown, idSet }
@@ -414,7 +415,7 @@ export function openDecodeStrength(opt = {}) {
           // brute 通道勾选不触发 markCustom（brute 不归档，level 含义不变），仅同步计数。
           if (g.cat === "_brute") syncCountLine(); else markCustom();
         });
-        host.append(el("label", { class: "ds-op-row" },
+        host.append(el("label", { class: "ds-op-row m3-choice-row" },
           cb,
           el("span", { class: "ds-op-name" }, o.name || o.id),
           el("span", { class: "ds-op-id" }, o.id),
@@ -537,7 +538,7 @@ export function openDecodeStrength(opt = {}) {
 
     // ---- 我的方案（命名保存 / 载入 / 删除 / 导入导出，按当前作用域）----
     const nameInput = el("input", { type: "text", class: "ds-prof-name", placeholder: t("ui.ds.profileName"), spellcheck: "false" });
-    const sel = el("select", { class: "ds-prof-sel" });
+    const sel = el("select", { class: "ds-prof-sel", 'aria-label': t('ui.ds.profiles') });
     const rebuildSel = () => {
       sel.innerHTML = "";
       const names = listProfiles(scope);
@@ -617,7 +618,7 @@ export function openDecodeStrength(opt = {}) {
     body.append(el("div", { class: "ds-sec ds-sec-prof" },
       el("div", { class: "ds-sec-title" }, msym("star"), t("ui.ds.profiles")),
       el("div", { class: "ds-prof-row" }, nameInput, saveBtn),
-      el("div", { class: "ds-prof-row" }, sel, loadBtn, delBtn),
+      el("div", { class: "ds-prof-row" }, themedSelect(sel), loadBtn, delBtn),
       el("div", { class: "ds-prof-row" }, expBtn, impBtn),
       profMsg,
     ));

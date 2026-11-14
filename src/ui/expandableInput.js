@@ -235,6 +235,9 @@ const CSS = `
   align-items: stretch;
   gap: var(--sp-1);
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .exp-input {
   flex: 1;

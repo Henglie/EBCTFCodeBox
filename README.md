@@ -3,10 +3,10 @@
 </p>
 
 <p align="center">
-  <img src="./public/icons/logo.png" width="120" height="120" alt="恒烈 CTF 编码工具箱" />
+  <img src="./public/icons/logo.png" width="120" height="120" alt="码小妹 · EBCrypto" />
 </p>
 <h1 align="center">
-  <span>恒烈 CTF 编码工具箱 · EBCTFCodeBox</span>
+  <span>码小妹 · EBCrypto</span>
 </h1>
 <p align="center">
   <span align="center">本地优先、零外发的编解码 / 加解密 / 隐写分析工具箱：978 个注册操作覆盖 23 类能力，绝大多数在浏览器本地运行，Windows 另可启用本地桥能力，macOS / Linux 提供双击启动器。</span>
@@ -57,6 +57,9 @@
 
 ### 新增与改进
 
+- 默认名称按语言显示码小妹 / EBCrypto，保留旧授权自定义名称；关于页接入签名图标和离线授权验证。
+- 新增本机环境工具管理页，提供 Python / npm 库和运行环境的元数据版本、官网、镜像命令与用户触发安装。
+- 本地启动器自动启动回环 HTTP MCP，可选令牌、可禁用；CLI 增加 Windows / POSIX 统一入口，仍需 Node.js。
 - 统一资源阈值确认：软阈值确认、硬上限、取消与确认后重试贯通图像/GIF/音频/归档/LZMA/LZ4/DeepSound/PNG/FFT。
 - MCP 返回结构化 `code/meta/retryable`，新增 `allowOverLimit`；超过 128KB 的产物不内联，要求 `outputDir` 并返回 `omitted`/路径。
 - 音频新增“只分析前 N 分钟”预览参数 `previewMinutes`。
@@ -67,6 +70,10 @@
 
 ### 修复
 
+- 修复单分区密钥输入过窄与展开按钮溢出，自定义编辑器增加真实加载反馈、取消与失败重试并移除重复关闭键。
+- 编辑器辅助内容改下拉抽屉，预设与方案选择使用主题化 M3 控件，解码强度弹窗和算法列表可完整滚动。
+- 修复原生启动器拒绝官方扩展和离线清单资源，恢复 dCode 扩展加载与离线资源安装。
+- 修复原生 HTTP Range、gzip / ETag 协商和 HEAD 响应；macOS / Linux 更新启动器仍待真机复核。
 - GIF 多帧移除 30 秒墙钟和每帧 2 秒压缩等待，浏览器原生 PNG 编码，实测 39ms / ZIP 59KB。
 - 修复确认后嵌套解码仍失败、Worker 确认状态串任务、超时僵尸 Worker、`postMessage` 泄漏。
 - 修复 `LIMIT_CANCEL/HARD` 被 canvas/direct/7z 吞掉，穷举取消二次执行。
@@ -120,6 +127,10 @@
 - 长报告可只读展开，多个产物采用文件列表和按需预览；窄数据列自动收纳次要工具，避免分隔条拖动后横溢。
 
 ## 项目简介
+
+**北极星**：从 CTF 编解码走向通用密码学工具箱，服务竞赛、学习与日常研究；算法核心独立可复用，正确性依据标准、来源和测试向量持续核查。坚持跨平台与本地处理，平台专属能力通过适配层提供，已验证范围和外部依赖分别说明。
+
+0.2.0 仍在开发中。新独立窗口单文件发行、鸿蒙原生版及后续算法资料工作按各自进度推进；双语离线手册暂缓。仓库地址迁移另行进行，当前链接仍使用现有仓库。
 
 `恒烈 CTF 编码工具箱`（EBCTFCodeBox）是一个以 CTF 场景为入口、面向通用编解码与密码学需求的本地优先工具箱。
 

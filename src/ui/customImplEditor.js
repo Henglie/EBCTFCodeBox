@@ -24,15 +24,24 @@ import { icon as iconSvg } from "./icons.js";
 import { attachModalLifecycle } from "./modalLifecycle.js";
 import { codeInputExtensions } from './customCodeInput.js';
 import { enterSurface } from './expressiveMotion.js';
+import { themedSelect } from './themedSelect.js';
 
 // ---- CM6 bundle（单文件 ESM，已真浏览器验证） ----
 // ⚠ 性能审计 H2：821KB bundle 曾是顶层静态 import，随 main.js 进首屏关键路径——
 //  而「编辑代码」入口多数会话根本不打开。改为首次打开编辑器时动态 import + 模块级缓存；
 //  SW 不预缓存该文件：首次在线打开编辑器时拉取，之后由 runtime cache 回填，离线可用。
 let _CM = null;
+let _cmLoading = null;
+let _cmRetry = 0;
+const _pendingEditors = new Map();
 async function loadCM() {
-  if (!_CM) _CM = await import("../vendor/codemirror.bundle.js");
-  return _CM;
+  if (_CM) return _CM;
+  const url = new URL('../vendor/codemirror.bundle.js', import.meta.url);
+  if (_cmRetry) url.searchParams.set('retry', String(_cmRetry));
+  if (!_cmLoading) _cmLoading = import(url.href)
+    .then(module => (_CM = module))
+    .catch(error => { _cmLoading = null; _cmRetry++; throw error; });
+  return _cmLoading;
 }
 
 // 持久化 API 从 core 转出，main.js 等调用方可继续从本模块拿（保持既有 import 不破）
@@ -144,6 +153,10 @@ const _ZH = {
   "ui.custom.resultStale": "代码已修改，请重新测试",
   "ui.custom.draftRestored": "已恢复未保存的编辑",
   "ui.custom.editsKept": "已保留当前编辑，未覆盖代码",
+  "ui.custom.loadingEditor": "正在加载代码编辑器…",
+  "ui.custom.cancelLoading": "取消加载",
+  "ui.custom.loadFailed": "编辑器加载失败：{0}",
+  "ui.custom.loadingFiles": "正在收集依赖源码 · 已读取 {0} 个文件",
 };
 function t(key, ...args) {
   let s = key;
@@ -216,6 +229,12 @@ const CI_CSS = `
 .ci-mask.full{padding:0;}
 .ci-dialog{--ci-fs:15px;--ci-lh:23px;position:relative;background:var(--surface-1);border:0;border-radius:var(--r-xl);max-width:1440px;width:100%;height:calc(100dvh - 32px);display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--elevation-floating,var(--el-3));touch-action:manipulation;}
 .ci-mask.full .ci-dialog{max-width:none;width:100%;height:100%;border-radius:0;border:0;animation:none;}
+.ci-loading-card{width:min(440px,100%);box-sizing:border-box;padding:24px;display:flex;flex-direction:column;gap:16px;background:var(--surface-2);color:var(--on-surface);border-radius:var(--r-xl);box-shadow:var(--elevation-floating,var(--el-3));}
+.ci-loading-card h3,.ci-loading-card p{margin:0;overflow-wrap:anywhere;}
+.ci-loading-card progress{width:100%;height:6px;accent-color:var(--primary);}
+.ci-loading-card .btn{align-self:flex-end;min-height:44px;}
+.ci-loading-stage{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--surface-1) 92%,transparent);padding:16px;box-sizing:border-box;}
+.ci-loading-stage[hidden]{display:none;}
 
 /* ---- 头部（对齐 .ds-head：标题图标染 primary，右侧操作区靠右；全部 .ci-dialog 作用域，防泄漏污染编码图查询器同名类） ---- */
 .ci-dialog .ci-head{display:flex;align-items:center;gap:12px;padding:8px 16px;border:0;min-height:64px;flex-wrap:wrap;flex:none;}
@@ -432,6 +451,14 @@ html[data-theme="light"] .ci-dialog{--ci-hl-kw:#b4501a;--ci-hl-str:#256d47;--ci-
 @media (max-width:860px) and (max-height:640px){
   .ci-panel{height:min(var(--ci-panel-h,168px),30vh);}
 }
+/* One downward disclosure owns scrolling for all source/variable/helper items. */
+.ci-dialog .ci-panel{position:absolute;inset:auto 16px;top:var(--ci-tools-top,64px);z-index:8;width:auto!important;height:min(50dvh,360px)!important;max-height:max(80px,calc(100% - var(--ci-tools-top,64px) - 72px));min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;margin:0;box-shadow:var(--elevation-floating,var(--el-3));}
+.ci-dialog .ci-panel .ci-psec,.ci-dialog .ci-panel .ci-psec.grow{overflow:visible;flex:none;min-height:0;max-height:none;}
+.ci-dialog .ci-panel h4{position:static;white-space:normal;}
+.ci-dialog .ci-chip{white-space:normal;overflow-wrap:anywhere;min-height:40px;}
+.ci-dialog .ci-body{min-height:min(120px,28dvh);}
+.ci-dialog .ci-resize-v{display:none;}
+@media(max-width:860px){.ci-dialog .ci-panel{inset-inline:12px;}}
 `;
 
 // ============ 开关行（挂在 op 参数栏后） ============
@@ -443,6 +470,8 @@ let editorEpoch = 0;
 /** 关掉所有已打开的编辑器（切 op / 切页面时调用，防旧 op 的弹窗滞留）。 */
 export function closeAllCustomEditors() {
   editorEpoch++;
+  for (const loading of _pendingEditors.values()) loading.cancel();
+  _pendingEditors.clear();
   for (const [, e] of _editors) { try { e.close(); } catch { /* ignore */ } }
   _editors.clear();
 }
@@ -549,7 +578,37 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   const previousFocus = document.activeElement;
   const epoch = editorEpoch;
   ensureCiCss();
-  const CM = await loadCM();
+  const active = _editors.get(opId);
+  if (active?.mask?.isConnected) { active.focus?.(); return; }
+  if (_pendingEditors.has(opId)) { _pendingEditors.get(opId).focus(); return; }
+  let CM;
+  if (_CM) CM = _CM;
+  else {
+    const loadingMask = el('div', { class: 'ci-mask ci-loading-mask' });
+    const message = el('p', { role: 'status', 'aria-live': 'polite' }, t('ui.custom.loadingEditor'));
+    const progress = el('progress', { 'aria-label': t('ui.custom.loadingEditor') });
+    const card = el('div', { class: 'ci-loading-card', role: 'dialog', 'aria-modal': 'true', 'aria-label': t('ui.custom.editorTitle') },
+      el('h3', {}, t('ui.custom.editorTitle')), message, progress);
+    let cancelled = false, lifecycle, ticket;
+    const dispose = () => { lifecycle?.release(); loadingMask.remove(); if (_pendingEditors.get(opId) === ticket) _pendingEditors.delete(opId); };
+    const cancel = () => { cancelled = true; dispose(); };
+    const cancelButton = el('button', { class: 'btn', type: 'button', onclick: cancel }, t('ui.custom.cancelLoading'));
+    card.append(cancelButton); loadingMask.append(card); document.body.append(loadingMask);
+    lifecycle = attachModalLifecycle(loadingMask, { dialog: card, onClose: cancel, restoreFocusTo: previousFocus });
+    ticket = { cancel, focus: () => cancelButton.focus() };
+    _pendingEditors.set(opId, ticket);
+    await new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)));
+    try { CM = await loadCM(); }
+    catch (error) {
+      if (!cancelled && epoch === editorEpoch) {
+        progress.remove(); message.textContent = t('ui.custom.loadFailed', error.message || String(error));
+        card.append(el('button', { class: 'btn', type: 'button', onclick: () => { cancel(); openCustomImplEditor(opId, ctx); } }, t('ui.custom.retry')));
+      } else dispose();
+      return;
+    }
+    if (cancelled || epoch !== editorEpoch) { dispose(); return; }
+    dispose();
+  }
   if (epoch !== editorEpoch) return;
   const {
     EditorView, EditorState, Compartment, lineNumbers,
@@ -580,6 +639,11 @@ export async function openCustomImplEditor(opId, ctx = {}) {
 
   const mask = el("div", { class: "ci-mask", onclick: (e) => { if (e.target === mask) close(); } });
   const dialog = el("div", { class: "ci-dialog ci-tools-hidden", role: "dialog", "aria-modal": "true", "aria-label": t("ui.custom.editorTitle") + " · " + opId });
+  const sourceProgressText = el('p', { role: 'status', 'aria-live': 'polite' }, t('ui.custom.building'));
+  const sourceProgress = el('div', { class: 'ci-loading-stage', hidden: 'hidden' },
+    el('div', { class: 'ci-loading-card' }, sourceProgressText,
+      el('progress', { 'aria-label': t('ui.custom.building') }),
+      el('button', { type: 'button', class: 'btn', onclick: () => close() }, t('ui.custom.cancelLoading'))));
   let lifecycle = null;
   try { if (localStorage.getItem("ebctf.customImpl.tools") === "1") dialog.classList.remove("ci-tools-hidden"); } catch { /* Default to the editor. */ }
 
@@ -649,7 +713,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     el("h3", {}, t("ui.custom.editorTitle") + " · " + opId),
     draftState,
     el("div", { class: "ci-ops" },
-      presetSel,
+      themedSelect(presetSel),
       srcToggleBtn,
       toolsBtn,
       fullBtn,
@@ -830,9 +894,9 @@ export async function openCustomImplEditor(opId, ctx = {}) {
 
   // 可拖拽分隔条（宽屏竖向改面板宽，窄屏横向改面板高）
   const resize = el("div", { class: "ci-resize-v", title: t("ui.custom.resizeHint") });
-  body.append(resize);
 
-  const panel = el("div", { class: "ci-panel" });
+  const panel = el("div", { class: "ci-panel", id: `ci-tools-${opId}`, role: 'region', 'aria-label': t('ui.custom.helpers') });
+  toolsBtn.setAttribute('aria-controls', panel.id);
 
   // 内置实现区：默认自动内联完整依赖闭包，用户打开就是可直接运行/修改的真算法。
   const builtinBox = el("div", { class: "ci-builtin" });
@@ -938,8 +1002,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     if (n !== fontIdx) { fontIdx = n; applyFont(); }
   }, { passive: false });
 
-  body.append(panel);
-  dialog.append(body);
+  dialog.append(panel, body);
 
   // ---- 底部按钮 ----
   const importInp = el("input", { type: "file", accept: ".js,.txt", style: "display:none" });
@@ -956,10 +1019,10 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     el("button", { type: "button", class: "btn btn-tonal", title: 'Ctrl+S', onclick: () => doSave(false) }, t("ui.custom.save")),
     more,
     el("span", { class: "spacer" }),
-    el("button", { type: "button", class: "btn", onclick: () => close() }, t("ui.custom.close")),
     importInp,
   );
   dialog.append(foot);
+  dialog.append(sourceProgress);
   mask.append(dialog);
   document.body.append(mask);
 
@@ -1089,8 +1152,12 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   });
 
   // 编辑器尺寸变化（全屏 / 拖拽 / 窄屏翻转）时重测量
-  const ro = new ResizeObserver(() => { try { view.requestMeasure(); } catch { /* ignore */ } });
+  const ro = new ResizeObserver(() => {
+    panel.style.setProperty('--ci-tools-top', dialog.querySelector('.ci-head').offsetHeight + 'px');
+    try { view.requestMeasure(); } catch { /* ignore */ }
+  });
   ro.observe(editorWrap);
+  ro.observe(dialog.querySelector('.ci-head'));
   // 深浅主题切换跟随 html[data-theme]（左右两个独立 CM6 实例各自 reconfigure）
   const themeMo = new MutationObserver(() => {
     try { view.dispatch({ effects: themeComp.reconfigure(themeExt()) }); } catch { /* ignore */ }
@@ -1369,6 +1436,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     const rec = { url: u.href, text: await r.text() };
     _modCache.set(url, rec);
     _modCache.set(u.href, rec);
+    sourceProgressText.textContent = t('ui.custom.loadingFiles', new Set([..._modCache.values()].map(item => item.url)).size + 1);
     return rec;
   }
 
@@ -1389,6 +1457,9 @@ export async function openCustomImplEditor(opId, ctx = {}) {
       if (!untouched && !window.confirm(t("ui.custom.overwrite"))) return false;
     }
     _fullBuilding = true;
+    sourceProgress.hidden = false;
+    dialog.setAttribute('aria-busy', 'true');
+    sourceProgressText.textContent = t('ui.custom.building');
     setStatus(t("ui.custom.building"));
     try {
       const text = await loadSource();
@@ -1434,6 +1505,8 @@ export async function openCustomImplEditor(opId, ctx = {}) {
       return false;
     } finally {
       _fullBuilding = false;
+      sourceProgress.hidden = true;
+      dialog.removeAttribute('aria-busy');
     }
   }
 
@@ -1445,7 +1518,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   function requestEditorEscape() {
     if (more.open) { more.open = false; more.querySelector('summary').focus(); return true; }
     if ((view && closeSearchPanel(view)) || (srcView && closeSearchPanel(srcView))) { view?.focus(); return true; }
-    if (isNarrow() && !dialog.classList.contains('ci-tools-hidden')) { toolsBtn.click(); toolsBtn.focus(); return true; }
+    if (!dialog.classList.contains('ci-tools-hidden')) { toolsBtn.click(); toolsBtn.focus(); return true; }
     close(); return true;
   }
   for (const name of ['pointerdown', 'focusin']) dialog.addEventListener(name, event => {

@@ -1,8 +1,8 @@
 {
-  "name": "恒烈 CTF 编码工具箱",
-  "short_name": "恒烈CTF",
-  "description": "全平台 · 纯前端 · 零外发的 CTF 编解码工具箱",
-  "lang": "zh-CN",
+  "name": "EBCrypto",
+  "short_name": "EBCrypto",
+  "description": "Local-first cryptography, encoding and steganalysis toolbox",
+  "lang": "en",
   "dir": "ltr",
   "start_url": "./",
   "scope": "./",

@@ -63,6 +63,8 @@ const INCLUDE_FILES = [
   "LICENSE",
   "通用点我启动.py",
   "bridge.py",
+  "local_tools.py",
+  "runtime_services.py",
   "bridge_cli.py",
   "HenglieICO.png",
   // 2026-09-27 恒烈指缺补录：各平台双击启动器（v0.1.8-beta 首包漏收）

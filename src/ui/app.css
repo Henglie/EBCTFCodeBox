@@ -361,11 +361,19 @@ label.switch,
 .param-bigta.dragover, .param input.dragover { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent); }
 /* M3 自实现密钥/口令字段：外框 + 自定义可见性按钮，压掉浏览器原生 reveal */
 .secret-field {
+  display: flex;
   position: relative;
   align-items: center; padding: 2px 4px 2px 10px;
   border: 1px solid var(--outline); border-radius: var(--r-sm);
   background: var(--field-bg); transition: border-color 120ms ease, box-shadow 120ms ease;
 }
+.param-bigbox.secret-field { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.op-params > .param:has(> .secret-field),
+.recipe-node-params > .recipe-param:has(> .secret-field) { flex: 1 1 320px; min-width: 0; flex-wrap: wrap; }
+.op-params > .param:has(> .secret-field) > label,
+.recipe-node-params > .recipe-param:has(> .secret-field) > label { flex: 0 0 100%; white-space: normal; }
+.secret-field > :is(input, textarea, .exp-wrap, .stepper) { flex: 1 1 0; width: 0; min-width: 0; }
+.secret-field .exp-input { flex: 1 1 0; width: 0; min-width: 0; }
 .secret-field:focus-within { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
 .secret-field > input, .secret-field > textarea, .secret-field > .exp-wrap, .secret-field .exp-input {
   border: 0 !important; background: transparent !important; box-shadow: none !important; outline: none !important;
@@ -1411,6 +1419,9 @@ label.switch,
 .about-ext-link:hover,
 .about-ext-link:focus-visible { border-bottom-color: currentColor; }
 .about-title { font-size: var(--fs-2xl); font-weight: 800; color: var(--on-surface); }
+.about-local-quote { margin: 24px 0; padding: 20px; background: var(--surface-1); border-inline-start: 4px solid var(--primary); border-radius: var(--r-lg); line-height: 1.8; overflow-wrap: anywhere; }
+.about-local-quote p { margin: 0 0 12px; }
+.about-local-quote footer { color: var(--on-surface-var); text-align: end; font-size: var(--fs-sm); }
 .about-ver {
   font-family: var(--mono);
   font-size: var(--fs-xs);

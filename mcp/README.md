@@ -1,10 +1,34 @@
-# EBCTF MCP 接入
+# EBCrypto MCP / CLI 接入
 
 把恒烈CTF编码工具箱的能力（列分类 / 列 op / 查参数 / 智能识别 / 跑 op / 一键智能解码）暴露成 MCP 工具，供支持 MCP 的 AI 客户端（Claude Desktop、Cline 等）调用。全程本地进程，零外发。
 
 server 版本 `0.2.0-beta`，对外可见 op 978 个。`ebctf_list_categories` 列出 23 个功能分类（注册表 `CATEGORIES` 共 24 项，含 `home` 首页；首页不计入功能分类）。
 
-> **安全**：建议使用 Node ≥ 26.5.1（或 24.18.1 / 22.23.2）——2026-07 安全公告修复权限模型越权与 HTTP/2 UAF；`server.mjs` 会对受影响版本在 stderr 提示。JSFuck / JJEncode 默认不暴露；确需使用时由宿主设 `EBCTF_MCP_UNSAFE=1`（或 `server.mjs --unsafe`），二者解码会用 `new Function` 执行输入，风险自担；请求参数 `allowUnsafe` / `includeUnsafe` 一律忽略，防止提示注入自行提权。MCP 是本机 stdio 服务，不应部署为公网/多用户后端；后端不代用户外发（用户授权外发只发生在浏览器前端的自定义实现里）。
+> **安全**：建议使用 Node ≥ 26.5.1（或 24.18.1 / 22.23.2）。stdio 模式默认隐藏 JSFuck / JJEncode；显式开启 `--unsafe` 会允许执行输入代码。HTTP 模式始终拒绝 JS 执行、本机桥/进程操作和工作区逃逸，不受请求参数提权。服务仅监听回环，不作为公网多用户后端；默认无令牌不代表能够阻止本机恶意软件。
+
+## 自动 HTTP 服务
+
+本地原生启动器和通用 Python 启动器在可用 Node.js 环境下自动启动 `http://127.0.0.1:8182/mcp`，支持标准 Streamable HTTP 的 stateless JSON 方式；GET/SSE 未实现并返回 405。客户端应同时接受 `application/json, text/event-stream`。现有 stdio、工具名和资源 URI 保持兼容。
+
+可在应用目录创建以下配置，保存后重启；也可使用 `--no-mcp` 禁用启动器的自动服务。Node 缺失或端口冲突会报告服务不可用，静态界面仍可使用。
+
+```json
+{
+  "services": {
+    "mcp": {
+      "enabled": true,
+      "host": "127.0.0.1",
+      "port": 8182,
+      "token": "",
+      "workspace": "."
+    }
+  }
+}
+```
+
+配置文件名为 `ebcrypto.config.json`；空 token 默认不鉴权，设置可打印无空白 ASCII 令牌后，客户端需传 `Authorization: Bearer <token>`。HTTP 文件输入/读取/产物限定在 workspace 内，拒绝链接和特殊文件；stdio/CLI 继续使用原有本地文件能力。HTTP 请求、并发、结果和单次作业都有预算，超时/取消会终止执行 Worker。
+
+手动启动：`node mcp/server.mjs --http`；参数与环境覆盖见 `node mcp/server.mjs --help`。启动器退出/重启会回收它拥有的 HTTP 服务。当前 CLI 包装脚本为 `bin/ebcrypto.cmd`、`sh bin/ebcrypto.sh`，六个命令仍需 Node.js，不属于免运行时独立二进制。
 
 ## 文件
 

@@ -4,7 +4,7 @@
 //
 // 功能：
 // - 点开才检测（懒检测，非启动时）：先判运行形态（纯静态→服务端模式；本地有 bridge→探本机工具）
-// - 本地模式：fetch bridge /api/env 拿 Python/Node/Java/7z 版本 + 系统信息
+// - 本地模式：fetch bridge /api/env 拿系统信息；工具详情迁至独立工具管理页
 // - 服务端模式：仅显示浏览器信息 + 提示运行 bridge.py 可启用本机检测
 // - 面板顶部明确声明「以下信息仅本地显示、绝不外发」
 //
@@ -67,6 +67,8 @@ const _ZH = {
   "ui.env.system": "系统",
   "ui.env.browser": "浏览器",
   "ui.env.tools": "本机工具",
+  "ui.env.localToolsTitle": "本机环境工具管理",
+  "ui.env.localToolsHint": "查看 Python / npm 库和本机运行环境、版本、安装命令与日志",
   "ui.env.toolName.python": "Python",
   "ui.env.toolName.node": "Node.js",
   "ui.env.toolName.java": "Java",
@@ -103,7 +105,11 @@ function t(key, ...a) {
       if (v && v !== key) return v;
     }
   } catch { /* 回退 */ }
-  let s = _ZH[key] || key;
+  const localToolsEn = {
+    "ui.env.localToolsTitle": "Local environment tools",
+    "ui.env.localToolsHint": "Inspect Python / npm libraries, runtimes, versions, installation commands and logs",
+  };
+  let s = (getLocale() === "en" && localToolsEn[key]) || _ZH[key] || key;
   for (let i = 0; i < a.length; i++) s = s.replace("{" + i + "}", String(a[i]));
   return s;
 }
@@ -289,6 +295,12 @@ function renderPanelContent(state) {
   const detectBox = el("div", { class: "env-detect-box" });
   detectBox.append(renderDetectContent(state));
   wrap.append(detectBox);
+  wrap.append(el("div", { class: "env-section" },
+    el("button", { type: "button", class: "act-btn", onclick: () => {
+      closeEnvPanel();
+      location.hash = "#/tools";
+    } }, msym("build"), t("ui.env.localToolsTitle")),
+    el("div", { class: "env-mode-note" }, t("ui.env.localToolsHint"))));
  // 增强随机安全区（全局随机源档位 + 配置 + 服务器测试连接）
   wrap.append(renderRandSecureSection());
   // 昼夜切换区（与强调色同属「外观」，放一起）
@@ -406,7 +418,6 @@ function renderDetectContent(state) {
  // 本机工具（仅本地模式）
   if (state.mode === "local" && state.env) {
     box.append(renderSystemSection(state.env));
-    box.append(renderToolsSection(state.env.tools || {}));
     if (state.envError) {
       box.append(el("div", { class: "env-error" }, msym("warning"), state.envError));
     }
@@ -436,40 +447,6 @@ function renderSystemSection(env) {
   sec.append(envRow(t("ui.env.platform"), plat + " " + rel + " (" + mach + ")"));
   if (env.win) sec.append(envRow("bridge", "127.0.0.1:8181 ", msym("check_circle", "--success")));
   return sec;
-}
-
-// 本机工具版本（本地模式，来自 bridge /api/env tools）
-function renderToolsSection(tools) {
-  const sec = el("div", { class: "env-section" });
-  sec.append(el("div", { class: "env-section-title" }, msym("build"), t("ui.env.tools")));
-  const order = ["python", "node", "java", "7z"];
-  for (const key of order) {
-    const info = tools[key];
-    if (!info) {
-      sec.append(toolRow(key, { ok: false, error: "未检测" }));
-      continue;
-    }
-    sec.append(toolRow(key, info));
-  }
-  return sec;
-}
-
-function toolRow(key, info) {
-  const name = t("ui.env.toolName." + key);
-  const row = el("div", { class: "env-tool-row" + (info.ok ? " ok" : " miss") });
-  row.append(el("span", { class: "env-tool-name" }, name));
-  if (info.ok) {
-    row.append(
-      el("span", { class: "env-tool-version" }, info.version || ""),
-      el("span", { class: "env-tool-tag ok" }, t("ui.env.installed")),
-    );
-  } else {
-    row.append(
-      el("span", { class: "env-tool-version err" }, info.error || ""),
-      el("span", { class: "env-tool-tag miss" }, t("ui.env.notInstalled")),
-    );
-  }
-  return row;
 }
 
 // ---- 强调色区（动态取色）----

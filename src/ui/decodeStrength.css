@@ -331,3 +331,22 @@
 .ds-audio-row .stepper { flex: none; }
 .ds-audio-row .stepper-inp { width: 5.5em; min-width: 0; }
 .ds-audio-unit { font-size: var(--fs-sm); color: var(--on-surface-var); }
+
+/* The dialog body owns page scrolling; the algorithm list keeps a usable
+   viewport instead of shrinking to the leftover fraction of a grid row. */
+.ds-dialog { height: min(92dvh, 960px); max-height: calc(100dvh - 24px); }
+.ds-body { overflow-y: scroll; scrollbar-gutter: stable; grid-template-rows: auto auto auto minmax(280px, 1fr); }
+.ds-body > * { min-width: 0; }
+.ds-body > .ds-list { height: clamp(260px, 44dvh, 520px); min-height: 240px; max-height: none; overflow-y: auto; scrollbar-gutter: stable; border: 0; border-radius: var(--r-lg); padding: 4px; }
+.ds-cat { margin: 4px; border-radius: var(--r-md); overflow: hidden; background: var(--surface-2); }
+.ds-cat-headrow, .ds-cat-rows { border: 0; }
+.ds-cat-head { min-height: 44px; }
+.ds-op-row { min-height: 44px; box-sizing: border-box; padding: 8px 12px; margin: 3px; border-radius: var(--r-md); }
+.ds-op-row:has(input:checked) { background: var(--primary-container); color: var(--on-primary-container); }
+.ds-cb { width: 20px; height: 20px; }
+@media(max-width:860px){
+  .ds-dialog { height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); }
+  .ds-body { grid-template-rows: none; grid-auto-rows: max-content; }
+  .ds-body > .ds-list { height: clamp(260px, 46dvh, 520px); }
+  .ds-cat-rows { grid-template-columns: minmax(0, 1fr); }
+}

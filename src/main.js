@@ -19,7 +19,7 @@ import { loadTargetConfig } from "./core/magic/signals.js";
 import { CATEGORIES, OPS, opsByCat, getOp, defaultParams, register, familyGroup, FAMILY_NAMES, inferIoMode } from "./core/registry.js";
 import { ensureOp, ensureCat, ensureAll, preloadIdle } from "./core/lazyCore.js";
 import { OP_FILE_MAP } from "./core/lazyTables.generated.js";
-import { t, tBilingual, getLocale, setLocale, locales, onLocaleChange, initLocale, warmEnglish, getDir, LOCALE_META, localeCoverage } from "./i18n/index.js";
+import { t, tBilingual, getLocale, setLocale, locales, onLocaleChange, initLocale, warmEnglish, getDir, LOCALE_META, localeCoverage, mergeDict } from "./i18n/index.js";
 import { downloadBytes, cloudWarnGate, fmtByteSize, isCloudDeploy } from "./ui/download.js";
 import { productFileEntries, PRODUCT_INLINE_MAX_BYTES, IMAGE_PREVIEW_MAX_BYTES, IMAGE_PREVIEW_MAX_COUNT, base64DecodedSize, dataUrlDecodedSize, planDataUrlMedia, resolveImageMime, imagePreviewPlan } from "./core/productResult.js";
 import { magicFilterReset, filterMagicCands, filterBruteCands, magicFilterBar } from "./ui/resultFilter.js";
@@ -30,6 +30,9 @@ import { batchPanel } from "./ui/batchPanel.js"; // 批处理面板（多文件 
 import { planBatch as batchPlanBatch, runBatch as batchRunBatch, buildZip as batchBuildZip, makeCancelToken as batchMakeCancelToken } from "./core/batchRun.js"; // 批处理内核
 // fileAnalysis / imageAnalysis / audioAnalysis（智能分析三链，含 QR·pcap·inflate·音频子树）已改懒载，见 ensureAnalysisChains()
 import { loadLicense, OPENSOURCE_LICENSE } from "./core/license.js";
+import { prepareLicenseBranding, resolveLicenseBranding } from './core/licenseBranding.js';
+import { displayAppName, showLocalQuote, LOCAL_QUOTE } from './core/branding.js';
+import { refreshManifestBranding } from './ui/appBranding.js';
 import { analyze7zFile } from "./core/sevenzip.js"; // 7z 拖入文件真列表/解压（wasm 缺失降级）
 import { cryptoTryAll } from "./core/cryptoTryAll.js";
 import { bridgeHealth } from "./core/localBridge.js";
@@ -1008,10 +1011,12 @@ let _routing = false;
 let _appBootReady = false;
 // 授权信息（启动异步 loadLicense 填入；未读到前按开源自编译默认显示）。
 let _license = OPENSOURCE_LICENSE;
+let _licenseBranding = resolveLicenseBranding(OPENSOURCE_LICENSE);
+let _localToolsRoot = null;
 // 授权自定义软件名（2026-09-13 产品负责人新需求）：license payload.appName（签名保护）优先，
 // 未声明回退 i18n 内置名。消费者：顶栏品牌/页面标题/关于页应用名。
 function appDisplayName() {
-  return (_license && _license.verified && _license.appName) || null;
+  return displayAppName(getLocale(), _license);
 }
 function writeHash(h) {
   if (location.hash === h) return;
@@ -1065,6 +1070,9 @@ function applyRoute() {
     state.expandedCats = [];
     renderNav();
     renderWorkspace();
+  } else if (h === '#/tools') {
+    state.view = 'tools'; state.opId = null; state.expandedCats = [];
+    renderNav(); renderWorkspace();
   } else if (h === "#/plugins") {
     state.view = "plugins";
     state.opId = null;
@@ -1193,6 +1201,7 @@ function renderWorkspaceInner() {
   disposeSpecialWorkbenches();
   disposeCodeImageViewer();
   disposeRecipeView();
+  _localToolsRoot?.dispose?.(); _localToolsRoot = null;
   $ws.innerHTML = "";
   if (state.view === "home") return renderHome();
   if (state.view === "all") return renderAllOpsView($ws);
@@ -1212,6 +1221,19 @@ function renderWorkspaceInner() {
   }
   if (state.view === "about") return renderAbout($ws);
   if (state.view === "plugins") return renderPluginsView($ws);
+  if (state.view === 'tools') {
+    const generation = _wsRenderGeneration;
+    $ws.append(el('p', { role: 'status' }, t('ui.loading.ready')));
+    return import('./ui/localToolsPage.js').then(module => {
+      if (state.view !== 'tools' || generation !== _wsRenderGeneration) return;
+      mergeDict(Object.fromEntries(['zh', 'en'].map((locale, index) => [locale,
+        Object.fromEntries(Object.entries(module.LOCAL_TOOLS_TEXT).map(([key, value]) => ['ui.localTools.' + key, value[index]]))])));
+      $ws.replaceChildren();
+      _localToolsRoot = module.renderLocalToolsPage($ws);
+    }).catch(error => {
+      if (state.view === 'tools' && generation === _wsRenderGeneration) $ws.replaceChildren(el('p', { role: 'alert' }, String(error.message || error)));
+    });
+  }
   return renderOp();
 }
 
@@ -5969,7 +5991,8 @@ function renderAbout(host) {
 
  // ① 顶部 logo（软件图标）
   const logo = el("div", { class: "about-logo", "aria-hidden": "true" },
-    el("img", { class: "about-logo-img", src: "public/logo.webp", alt: "", width: "96", height: "96", loading: "lazy" }));
+    el("img", { class: "about-logo-img", src: _licenseBranding.appIcon?.dataUrl || "public/logo.webp", alt: "", width: "96", height: "96", loading: "lazy",
+      onerror: event => { if (event.target.getAttribute('src') !== 'public/logo.webp') event.target.src = 'public/logo.webp'; } }));
 
  // ② 标题（去掉 badges，只留名 + 版本号小字）
   const title = el("div", { class: "about-title" }, appDisplayName() || t("ui.about.appName"));
@@ -5992,6 +6015,9 @@ function renderAbout(host) {
   );
 
   page.append(el("div", { class: "about-hero" }, logo, title, ver, intro, repoBtn, docBtns));
+  docBtns.append(el('a', { class: 'about-repo-btn', href: 'public/license-verifier/index.html', target: '_blank', rel: 'noopener noreferrer' }, msym('verified'), t('ui.about.verifyLicense')));
+  if (showLocalQuote(getLocale())) page.append(el('blockquote', { class: 'about-local-quote' },
+    el('p', {}, '“' + LOCAL_QUOTE.text + '”'), el('footer', {}, LOCAL_QUOTE.attribution)));
 
  // 通用小节工厂
   const section = (labelKey, ...nodes) => {
@@ -6118,7 +6144,7 @@ function renderAbout(host) {
 
  // ⑦.5 授权附加展示项（_license.ext）：全部文本与数据均来自 license.bin，源码不含任何字面量。
  //  无 bin 时 ext 为 null，整体跳过。结构：{ title, img, imgCap, rows:[{icon,label,value,href}] }。
-  const ext = _license.ext || null;
+  const ext = _licenseBranding.ext || null;
   if (ext && typeof ext === "object") {
     const extNodes = [];
     if (ext.img) {
@@ -6174,7 +6200,7 @@ function renderAbout(host) {
     );
   const licNodes = [];
   if (licVerified) {
-    licNodes.push(pill("verified", t("ui.about.regVerified"), _license.licensedTo || null));
+    licNodes.push(pill("verified", t("ui.about.regToLabel"), _license.licensedTo || null));
     if (_license.source) licNodes.push(pill("source", t("ui.about.regFromLabel"), _license.source));
     if (_license.issuedAt) {
       const d = new Date(_license.issuedAt);
@@ -6221,6 +6247,13 @@ function applyStaticI18n() {
   const set = (sel, txt) => { const n = document.querySelector(sel); if (n) n.textContent = txt; };
   const brandName = appDisplayName() || t("ui.brand.title"); // 授权 appName 覆盖（未声明用内置名）
   set(".brand-title", brandName);
+  const brandIcon = document.querySelector('.brand-icon');
+  if (brandIcon) {
+    const fallback = 'public/icons/app-icon-192.png';
+    brandIcon.src = _licenseBranding.appIcon?.dataUrl || fallback;
+    brandIcon.onerror = () => { if (brandIcon.getAttribute('src') !== fallback) brandIcon.src = fallback; };
+  }
+  refreshManifestBranding(getLocale(), _license);
   document.title = brandName;
   set("#btnUpdate .icon-btn-label", t("ui.topbar.update"));
   set("#btnLang .icon-btn-label", t("ui.topbar.lang"));
@@ -6347,8 +6380,9 @@ _appBootReady = true;
 applyRoute();
 // 授权：异步读 license.bin 验签，写回 _license；若当前在关于页则重渲染以显示授权信息。
 // fire-and-forget，不阻塞启动。未读到 / 验签失败时 _license 保持开源自编译默认。
-loadLicense().then((lic) => {
+loadLicense().then(async (lic) => {
   if (lic) _license = lic;
+  _licenseBranding = await prepareLicenseBranding(_license);
   if (state.view === "about") renderWorkspace();
  // 授权自带自定义软件名时刷新顶栏品牌与页面标题（启动时 license 已按内置名渲染过一遍）
   if (appDisplayName()) applyStaticI18n();

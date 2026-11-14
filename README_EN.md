@@ -3,10 +3,10 @@
 </p>
 
 <p align="center">
-  <img src="./public/icons/logo.png" width="120" height="120" alt="EternalBlaze CTF Codebox" />
+  <img src="./public/icons/logo.png" width="120" height="120" alt="EBCrypto" />
 </p>
 <h1 align="center">
-  <span>EternalBlaze CTF Codebox · EBCTFCodeBox</span>
+  <span>EBCrypto</span>
 </h1>
 <p align="center">
   <span align="center">A local-first, zero-upload codec / cryptography / steganalysis toolbox: 978 registered operations across 23 categories, most running entirely in your browser; Windows can additionally enable local-bridge capabilities, while macOS / Linux ship with double-click launchers.</span>
@@ -57,6 +57,9 @@ Current version **v0.2.0-beta**. The source of truth is always the GitHub reposi
 
 ### New and improved
 
+- Localized EBCrypto / 码小妹 branding preserves signed custom names; the About page supports signed icons and offline license verification.
+- Added local environment tool management with Python / npm metadata versions, official links, registry mirrors and user-triggered installation.
+- Local launchers start loopback HTTP MCP automatically, with optional tokens and an off switch; Windows / POSIX CLI wrappers still require Node.js.
 - Unified resource-limit confirmation: soft-limit prompts, hard caps, cancellation and one-shot retry across images/GIF/audio/archives/LZMA/LZ4/DeepSound/PNG/FFT.
 - MCP returns structured `code/meta/retryable`, adds `allowOverLimit`; outputs over 128KB are not inlined and require `outputDir`, returning `omitted`/path.
 - Audio gains a `previewMinutes` option to analyze only the first N minutes.
@@ -67,6 +70,10 @@ Current version **v0.2.0-beta**. The source of truth is always the GitHub reposi
 
 ### Fixes
 
+- Fixed cramped secret inputs and overflowing expand buttons in the traditional layout; the code editor now shows real loading stages, cancellation and retry, with one editor close button.
+- Editor helpers use a downward drawer; preset/profile selectors follow the M3 theme, and decode-strength controls and algorithm lists remain scrollable.
+- Fixed the native launcher's resource allowlist blocking official add-ons and the offline manifest, restoring dCode loading and offline resource installation.
+- Fixed native HTTP ranges, gzip / ETag negotiation and HEAD responses; the updated macOS / Linux launchers still require real-machine verification.
 - GIF frame extraction removes the 30-second wall clock and 2-second per-frame compression wait; native PNG encoding, 39ms / 59KB ZIP measured.
 - Fixed nested decode still failing after confirmation, worker limit-state leaking across jobs, zombie workers after timeout, and pending leaks on `postMessage` failure.
 - Fixed `LIMIT_CANCEL/HARD` being swallowed by canvas/direct/7z fallbacks and exhaustive decode re-running after cancel.
@@ -121,6 +128,10 @@ Current version **v0.2.0-beta**. The source of truth is always the GitHub reposi
 - Long reports offer read-only expanded viewing, multiple products use file rows with on-demand previews, and narrow data columns move secondary tools into menus.
 
 ## Introduction
+
+**North star:** grow from a CTF codec collection into a general cryptography toolbox for competitions, learning and everyday research. Keep the algorithm core independently reusable, with correctness traced to standards, sources and test vectors. Preserve cross-platform, local-first processing; document platform adapters, verified scope and external dependencies separately.
+
+Version 0.2.0 remains in development. The new single-executable windowed distribution, native HarmonyOS edition and further algorithm/documentation work follow their own milestones; the bilingual offline manual is paused. Repository URL migration is separate, so current links still point to the existing repository.
 
 `EternalBlaze CTF Codebox` (EBCTFCodeBox) is a local-first toolbox built around CTF scenarios but aimed at general-purpose encoding/decoding and cryptography needs.
 

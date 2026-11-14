@@ -1,94 +1,46 @@
-/*
- * license.js — 授权信息读取与验签（纯前端，Web Crypto）。
- *
- * 启动时 fetch 项目根的 license.bin，用内嵌公钥验签（ECDSA P-256 / SHA-256）。
- * 验签通过 → 返回授权信息（来源自 / 授权给），关于页据此显示。
- * 无 bin 或验签失败 → 视为「开源自编译」，返回默认：来源 = GitHub 源码，授权给 = 无。
- *
- * bin 格式（JWT 式，两段 base64url 以 "." 连接）：
- *   base64url(JSON.stringify(payload)) + "." + base64url(signature)
- * payload = { v, source, licensedTo, issuedAt, note, ext, appName }
- *   ext：授权附带的可选展示元数据（对象，缺省无）。仅在 bin 中声明，签名保护，不可篡改。
- *   appName：可选自定义软件名（2026-09-13 产品负责人新需求）——签发时写入，运行期替换顶栏品牌/
- *   页面标题/关于页应用名；未声明或缺省回退内置名（向后兼容旧 5 份 license）。
- *
- * 私钥只由发布方的签发工具离线保管（不进入仓库），任何人无私钥都伪造不出通过验签的 bin。
- * 公钥公开无妨——只能验签不能签发。
- */
+// ECDSA P-256 / SHA-256, IEEE-P1363. The shared engine has no DOM or Node dependency.
+import "../../public/license-verifier/verifier.js";
+const engine = globalThis.EBCryptoLicense;
+export const { PUBLIC_KEY_B64, verifyLicense, fingerprint: licensePublicKeyFingerprint } = engine;
 
-// 内嵌公钥（SPKI DER，base64）。对应签发工具持有的私钥。
-const PUBLIC_KEY_B64 =
-  "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEkOkYdb4i7EAZ1KukarDW12eqfLQf1S18MlgIqVp7H7jqOJdZotjIigSMYPDtvSJdYdydRwfpFXXJ273987Ke3w==";
-
-const LICENSE_URL = "license.bin";
-
-// 无 bin / 验签失败时的默认授权信息。ext/appName 缺省为 null（无附带元数据/用内置名）。
-export const OPENSOURCE_LICENSE = {
+export const OPENSOURCE_LICENSE = Object.freeze({
   verified: false,
   source: "opensource",
   licensedTo: null,
   ext: null,
   appName: null,
-};
+  appIcon: null,
+});
 
-function b64ToBytes(b64) {
-  const bin = atob(b64);
-  const arr = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  return arr;
-}
-
-function b64urlToBytes(s) {
-  // base64url → base64（补 padding）
-  let b64 = s.replace(/-/g, "+").replace(/_/g, "/");
-  while (b64.length % 4) b64 += "=";
-  return b64ToBytes(b64);
-}
-
-async function importPubKey() {
-  const der = b64ToBytes(PUBLIC_KEY_B64);
-  return crypto.subtle.importKey(
-    "spki",
-    der,
-    { name: "ECDSA", namedCurve: "P-256" },
-    false,
-    ["verify"],
-  );
+async function readLicenseText(response) {
+  if (!response.body?.getReader) return response.text();
+  const reader = response.body.getReader(), chunks = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read(); if (done) break;
+      if ((size += value.length) > engine.LIMITS.binBytes) { await reader.cancel(); throw new Error("BIN_BUDGET"); }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  const bytes = new Uint8Array(size); let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 }
 
 /**
  * 读取并验签 license.bin。
- * @returns {Promise<{verified:boolean, source:string, licensedTo:string|null, issuedAt?:string, note?:string}>}
- *   验签通过返回 bin 里的授权信息（verified:true）；无 bin / 失败返回 OPENSOURCE_LICENSE。
+ * Existing no-argument caller stays compatible. Public-key override is for explicit offline/test use.
+ * Missing/invalid files return the immutable opensource fallback. ext remains the signed legacy object.
  */
-export async function loadLicense() {
+export async function loadLicense({ url = "license.bin", fetchImpl = globalThis.fetch, publicKey = PUBLIC_KEY_B64 } = {}) {
   try {
-    const res = await fetch(LICENSE_URL, { cache: "no-store" });
+    const res = await fetchImpl(url, { cache: "no-store" });
     if (!res.ok) return OPENSOURCE_LICENSE;
-    const text = (await res.text()).trim();
-    const dot = text.indexOf(".");
-    if (dot < 0) return OPENSOURCE_LICENSE;
-
-    const payloadB64 = text.slice(0, dot);
-    const sigB64 = text.slice(dot + 1);
- // 签发端（sign.mjs / 授权 index.html）对 payload JSON 原文字节签名，
- // 故验签 data 必须是 base64url 解码回的 payload 字节，与签发端保持一致。
-    const payloadBytes = b64urlToBytes(payloadB64);
-    const sigBytes = b64urlToBytes(sigB64);
-
-    const key = await importPubKey();
-    const ok = await crypto.subtle.verify(
-      { name: "ECDSA", hash: "SHA-256" },
-      key,
-      sigBytes,
-      payloadBytes,
-    );
-    if (!ok) return OPENSOURCE_LICENSE;
-
-    const payload = JSON.parse(new TextDecoder().decode(payloadBytes));
-    // ext：授权可选展示元数据，原样透传（未声明则为 null）。
+    const length = Number(res.headers?.get("content-length"));
+    if (length > engine.LIMITS.binBytes) return OPENSOURCE_LICENSE;
+    const { payload } = await verifyLicense(await readLicenseText(res), { publicKey });
     const ext = payload.ext && typeof payload.ext === "object" ? payload.ext : null;
-    // appName：可选自定义软件名（签名保护）；空串/非字符串视为未声明。
     const appName = typeof payload.appName === "string" && payload.appName.trim() ? payload.appName.trim() : null;
     return {
       verified: true,
@@ -98,9 +50,9 @@ export async function loadLicense() {
       note: payload.note || null,
       ext,
       appName,
+      appIcon: typeof payload.appIcon === "string" ? payload.appIcon : null,
     };
   } catch {
-    // fetch 失败（无 bin）、解析失败、Web Crypto 不可用 → 一律回落开源自编译
     return OPENSOURCE_LICENSE;
   }
 }

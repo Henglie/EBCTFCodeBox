@@ -34,6 +34,9 @@ except ImportError:
     winreg = None
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
+from local_tools import LocalToolsService, LocalToolsError
+
+LOCAL_TOOLS = LocalToolsService()
 
 def _force_utf8_stdio():
     """重定向到管道/文件时把 stdout/stderr 切到 UTF-8。
@@ -793,6 +796,47 @@ def decompile_env():
     }
 
 class BridgeHandler(BaseHTTPRequestHandler):
+    def _local_tools_guard(self, post=False):
+        """Scoped guard for the new capability; existing bridge routes retain their policy."""
+        try:
+            host = urlparse("http://" + self.headers.get("Host", "")).hostname
+            origin = self.headers.get("Origin")
+            parts = urlparse(origin) if origin else None
+            allowed = (self.client_address[0] in ("127.0.0.1", "::1")
+                       and host in ALLOWED_ORIGIN_HOSTS
+                       and (parts is None or (parts.scheme in ("http", "https")
+                            and parts.hostname in ALLOWED_ORIGIN_HOSTS
+                            and not parts.username and not parts.password
+                            and not parts.path and not parts.query and not parts.fragment)))
+        except ValueError:
+            allowed = False
+        if not allowed:
+            self._send_json(403, {"ok": False, "error": "Local origin required"})
+            return False
+        if post and self.headers.get_content_type() != "application/json":
+            self._send_json(415, {"ok": False, "error": "application/json required"})
+            return False
+        return True
+
+    def _handle_local_tools(self):
+        if not self._local_tools_guard(post=True):
+            return
+        try:
+            if self.headers.get("Transfer-Encoding"):
+                raise LocalToolsError("Transfer-Encoding is not supported")
+            length = int(self.headers.get("Content-Length", "0"))
+            if length < 0 or length > 4096:
+                raise LocalToolsError("Request exceeds 4096 bytes", 413)
+            req = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            action = urlparse(self.path).path.removeprefix("/api/local-tools/")
+            self._send_json(200, LOCAL_TOOLS.dispatch(action, req))
+        except LocalToolsError as exc:
+            self._send_json(exc.status, {"ok": False, "schema": 1, "error": str(exc)})
+        except (ValueError, UnicodeError):
+            self._send_json(400, {"ok": False, "schema": 1, "error": "Invalid JSON request"})
+        except Exception:
+            self._send_json(500, {"ok": False, "schema": 1, "error": "Local tools service failed"})
+
     def _allow_large(self):
         """请求头显式带 X-EBCTF-Allow-Large: 1 才放宽到硬上限。"""
         return str(self.headers.get(ALLOW_LARGE_HEADER, "") or "").strip() == "1"
@@ -869,6 +913,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
         return json.loads(raw.decode("utf-8") or "{}")
 
     def do_OPTIONS(self):
+        if urlparse(self.path).path.startswith("/api/local-tools/") and not self._local_tools_guard():
+            return
         self.send_response(204)
         self._cors()
         self.end_headers()
@@ -887,6 +933,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 "apiVersion": "1",
                 "bridge": "python",
                 "decompile": True,
+                "localTools": {"schema": 1, "transport": "http", "base": "/api/local-tools/"},
             })
         elif path == "/api/tools":
             info = {}
@@ -919,6 +966,9 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+        if path.startswith("/api/local-tools/"):
+            self._handle_local_tools()
+            return
         if path == "/api/decompile":
             self._handle_decompile()
             return
@@ -1234,6 +1284,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        LOCAL_TOOLS.close()
         httpd.server_close()
 
 if __name__ == "__main__":

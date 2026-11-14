@@ -1,0 +1,8 @@
+:root{color-scheme:light dark;--bg:#fffbff;--surface:#f6eeeb;--text:#211a18;--primary:#8f3d33;--on-primary:#fff;--outline:#85736e}
+@media(prefers-color-scheme:dark){:root{--bg:#1b1614;--surface:#2b211e;--text:#f2dfd8;--primary:#f0b3a7;--on-primary:#4a1c17;--outline:#b8a39b}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 "Segoe UI","Microsoft YaHei UI",system-ui,sans-serif}
+main{max-width:900px;margin:auto;padding:24px}h1{font-size:28px}h2{font-size:20px}section{background:var(--surface);border-radius:24px;padding:24px;margin:20px 0}
+label{display:block;margin-top:12px}textarea,input,button{font:inherit;max-width:100%;min-height:44px}textarea{width:100%;padding:12px;border:1px solid var(--outline);border-radius:12px;background:var(--bg);color:var(--text)}
+button{margin:16px 0;padding:10px 24px;border:0;border-radius:999px;background:var(--primary);color:var(--on-primary);cursor:pointer}button:disabled{opacity:.5}a{color:var(--primary)}
+:focus-visible{outline:2px solid var(--primary);outline-offset:3px}pre,output{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}#branding img{display:block;max-width:100%;max-height:256px;object-fit:contain;margin:12px 0}#branding .app-icon{width:64px;height:64px}
+@media(max-width:480px){main{padding:12px}section{padding:16px;border-radius:20px}h1{font-size:24px}}

@@ -67,7 +67,7 @@ function nodeSecurityNotice() {
 }
 
 // 支持的 MCP 协议版本（本实现只用基础 tools/resources 面，这三版兼容；协商见 initialize）。
-const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
+export const SUPPORTED_PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 
 // 输出单行上限（JSON-RPC 消息序列化后）。mcpBridge 已把单个工具结果压到
 // 256KB 以内；这里再兜底一次，避免任何路径产生 40 万字符单行。
@@ -181,6 +181,7 @@ function workerError(message, code = "EBCTF_MCP_WORKER_ERROR") {
 export function createWorkerToolRunner({
   adapter = adapterUrl.href,
   warn = (message) => process.stderr.write(message + "\n"),
+  env = process.env,
 } = {}) {
   let worker = null;
   let ready = false;
@@ -189,6 +190,7 @@ export function createWorkerToolRunner({
   let current = null;
   let seq = 0;
   const queue = [];
+  const terminating = new Set();
 
   function cleanupJob(job) {
     if (job.timer !== null) {
@@ -216,7 +218,11 @@ export function createWorkerToolRunner({
     try { if (w.stdout) { w.stdout.removeAllListeners(); w.stdout.destroy(); } } catch { /* ignore */ }
     try { if (w.stderr) { w.stderr.removeAllListeners(); w.stderr.destroy(); } } catch { /* ignore */ }
     try { w.removeAllListeners(); } catch { /* ignore */ }
-    try { w.terminate(); } catch { /* ignore */ }
+    try {
+      const stopped = w.terminate();
+      terminating.add(stopped);
+      stopped.finally(() => terminating.delete(stopped));
+    } catch { /* ignore */ }
   }
 
   function failAll(err) {
@@ -236,6 +242,7 @@ export function createWorkerToolRunner({
       w = new Worker(WORKER_SOURCE, {
         eval: true,
         workerData: { adapterUrl: adapter },
+        env,
         stdout: true,
         stderr: true,
       });
@@ -379,13 +386,14 @@ export function createWorkerToolRunner({
   }
 
   function close() {
-    if (closed) return;
+    if (closed) return Promise.allSettled([...terminating]);
     closed = true;
     failAll(makeCancelledError(null, "MCP server 已关闭"));
     killWorker();
+    return Promise.allSettled([...terminating]);
   }
 
-  return { run, close };
+  return { run, close, get pendingCount() { return queue.length + (current ? 1 : 0); } };
 }
 
 function tooLargePayload(actualChars) {
@@ -475,7 +483,7 @@ export function createMcpServer({
     writeLine(line);
   };
 
-  async function handleRequest(req) {
+  async function handleRequest(req, options = {}) {
     if (closed) return null;
     const { id, method, params } = req || {};
     const ok = (result) => ({ jsonrpc: "2.0", id, result });
@@ -493,9 +501,10 @@ export function createMcpServer({
           "恒烈 CTF 编码工具箱：本地编解码 / 密码学算法集（全在本地运行、零外发）。推荐路径：ebctf_detect 先识别编码类型 → ebctf_magic_decode 一键解码（多层链式用 maxDepth:3）→ 不够再用 ebctf_list_ops / ebctf_op_schema 下钻、ebctf_run_op 精确执行。资源 ebctf://guide 是同一引导的常驻版本，适合直接挂进对话。",
       });
     }
+    if (method === "ping") return ok({});
     if (method === "notifications/cancelled") {
       const requestId = params && params.requestId;
-      const controller = pending.get(String(requestId));
+      const controller = pending.get(JSON.stringify(requestId));
       if (controller) controller.abort();
       return null;
     }
@@ -505,17 +514,19 @@ export function createMcpServer({
     if (method === "tools/call") {
       const { name, arguments: args } = params || {};
       const controller = new AbortController();
-      if (id !== undefined) pending.set(String(id), controller);
+      if (id !== undefined) pending.set(JSON.stringify(id), controller);
       try {
         const toolArgs = args || {};
-        const result = await runnerFor(name, toolArgs).run(name, toolArgs, { timeoutMs, signal: controller.signal });
+        const result = await runnerFor(name, toolArgs).run(name, toolArgs, {
+          timeoutMs: options.timeoutMs ?? timeoutMs, signal: controller.signal,
+        });
         return ok(result);
       } catch (e) {
         if (e && (e.cancelled === true || e.code === "EBCTF_CANCELLED")) return null;
         if (e && e.code === "EBCTF_TIMEOUT") return ok(timeoutToolResult(e));
         throw e;
       } finally {
-        if (id !== undefined) pending.delete(String(id));
+        if (id !== undefined) pending.delete(JSON.stringify(id));
       }
     }
     if (method === "resources/list") return ok(listMcpResources());
@@ -573,7 +584,7 @@ export function createMcpServer({
     }
     pending.clear();
     try { inlineRunner.close(); } catch { /* ignore */ }
-    try { if (workerRunner) workerRunner.close(); } catch { /* ignore */ }
+    try { if (workerRunner) return workerRunner.close(); } catch { /* ignore */ }
   }
 
   return { handleRequest, handleLine, close, noteInputClosed };
@@ -590,13 +601,33 @@ function isMainModule() {
 }
 
 if (isMainModule()) {
-  nodeSecurityNotice();
-  const server = createMcpServer();
-  const rl = createInterface({ input: process.stdin });
-  rl.on("line", (line) => { server.handleLine(line).catch(() => {}); });
-  const shutdown = () => server.close();
-  rl.on("close", () => server.noteInputClosed());
-  process.on("exit", shutdown);
-  process.on("SIGINT", () => { shutdown(); process.exit(0); });
-  process.on("SIGTERM", () => { shutdown(); process.exit(0); });
+  if (ARGV.includes("--help") || ARGV.includes("-h")) {
+    process.stderr.write("MCP (Node required): node mcp/server.mjs [--stdio | --http] [--timeout ms]\n" +
+      "HTTP: --config path --enabled true|false --host 127.0.0.1 --port 8182 --token value --workspace path\n" +
+      "HTTP defaults: stateless JSON, http://127.0.0.1:8182/mcp, no token, workspace=current directory.\n" +
+      "Config: ebcrypto.config.json / services.mcp. Env: EBCRYPTO_MCP_ENABLED/HOST/PORT/TOKEN/WORKSPACE/TIMEOUT_MS.\n");
+  } else if (ARGV.includes("--http")) {
+    import("./http-server.mjs").then(async ({ startMcpHttpService }) => {
+      const service = await startMcpHttpService({ argv: ARGV });
+      if (service) {
+        process.stderr.write(`[ebctf] MCP ${service.url} (stateless JSON; token ${service.config.token ? "enabled" : "disabled"})\n`);
+        const shutdown = async () => { await service.close(); };
+        process.once("SIGINT", shutdown);
+        process.once("SIGTERM", shutdown);
+      }
+    }).catch((e) => {
+      process.stderr.write(`[ebctf] MCP HTTP: ${e.message}\n`);
+      process.exitCode = 1;
+    });
+  } else {
+    nodeSecurityNotice();
+    const server = createMcpServer();
+    const rl = createInterface({ input: process.stdin });
+    rl.on("line", (line) => { server.handleLine(line).catch(() => {}); });
+    const shutdown = () => server.close();
+    rl.on("close", () => server.noteInputClosed());
+    process.on("exit", shutdown);
+    process.on("SIGINT", () => { shutdown(); process.exit(0); });
+    process.on("SIGTERM", () => { shutdown(); process.exit(0); });
+  }
 }

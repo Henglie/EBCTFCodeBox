@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>EBCrypto 离线授权验证</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body><main>
+<h1>离线授权验证</h1>
+<p>本地选择文件即可验证。支持直接双击打开和 HTTP；不上传、不联网，不读取私钥。</p>
+<section><h2>信任公钥</h2>
+<p>默认内置现有 ECDSA P-256 / SHA-256 公钥，指纹为 SPKI DER 的 SHA256。请经恒烈的独立可信渠道核对指纹。</p>
+<label for="public-key">可选公钥（SPKI PEM 或 Base64；留空使用内置公钥）</label>
+<textarea id="public-key" rows="4" spellcheck="false" placeholder="留空使用内置公钥"></textarea>
+<label for="key-file">或选择公钥文件</label><input type="file" id="key-file" accept=".pem,.b64,.txt">
+<p id="key-kind">当前信任锚：内置公钥</p><output id="fingerprint"></output>
+<p><a href="public-key.pem" download>下载内置公钥 PEM</a> · <a href="fingerprint.txt" download>下载指纹</a> · <a href="说明.md">使用与证明边界</a></p>
+</section>
+<section><h2>选择授权</h2>
+<label for="license-file">license.bin（≤8 MiB）</label><input type="file" id="license-file">
+<button id="verify" type="button">验证签名</button>
+<p id="status" role="status" aria-live="polite">等待选择文件</p>
+<pre id="details"></pre><div id="branding"></div>
+<details><summary>显示本地授权字段（含个人信息，不会自动保存或发布）</summary><pre id="payload"></pre></details>
+</section>
+<section><h2>结论边界</h2>
+<p>验签仅证明原文由对应私钥签署且未改变，不证明授权对象的现实身份、当前有效或法律上的绝对不可否认性。日期是签发者声明；无可信时间戳、自动撤销查询或证书信任链。自带公钥的结果不代表恒烈官方授权。</p>
+<p>本工具不公开逐授权证明。公开 license.bin 会泄露其中的授权对象、备注、联系项与图片；是否发布由恒烈逐项决定。</p>
+</section>
+</main><script src="verifier.js"></script><script src="images.js"></script><script src="ui.js"></script></body>
+</html>

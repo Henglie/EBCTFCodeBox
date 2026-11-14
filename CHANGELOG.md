@@ -8,6 +8,9 @@
 
 ### 新增功能
 
+- 默认品牌按语言显示码小妹 / EBCrypto，保留已签授权自定义名，关于页支持签名图标与离线验证入口。
+- 新增本机环境工具管理页，检测常用 Python / npm 库和运行环境，支持镜像命令及用户触发的有界安装。
+- 本地启动器自动提供回环 HTTP MCP，支持可选令牌、禁用和退出回收；CLI 增加 Windows / POSIX 包装入口。
 - 资源阈值确认体系：主线程 / Worker 共用 `limitGuard`，软阈值确认、硬上限、用户取消、确认后重试一次贯通；覆盖图像、GIF、音频、ZIP/7z/TAR、LZMA、LZ4、DeepSound、PNG 块、图片 FFT。
 - MCP 结构化结果：超限错误返回 `code/meta/retryable`，新增 `allowOverLimit`；超过 128KB 的产物不内联，要求 `outputDir`，返回 `omitted`/路径/sha256；stdio 单行输出有上限。
 - 音频新增“只分析前 N 分钟”预览参数：`morseWav`、`spectrogram`、`audioAnalysis` 支持 `previewMinutes`，默认 0=全量。
@@ -19,6 +22,10 @@
 
 ### 修复
 
+- 修复单分区密钥过窄和展开动作溢出，编辑器加载增加真实状态、取消与重试，去掉重复关闭入口。
+- 辅助函数改为下拉抽屉，预设/方案列表使用主题化 M3 控件，解码强度主体和算法区可完整滚动。
+- 修复原生启动器拒绝官方扩展和离线清单资源，恢复 dCode 扩展加载与离线资源安装。
+- 修复原生 HTTP Range、gzip / ETag 协商和 HEAD 响应；macOS / Linux 更新启动器仍待真机复核。
 - GIF 多帧提取：移除 30 秒墙钟和每帧 2 秒 CompressionStream 等待；浏览器改用原生 PNG 编码，36 帧 126×126 实测 39ms / ZIP 59KB，Node 兜底 53ms。
 - 修复软阈值确认后嵌套解码/解压仍抛 `LIMIT_CONFIRM` 的问题；确认状态可贯穿同一次调用。
 - 修复 Worker 单例并发时确认状态串任务、超时后僵尸 Worker、`postMessage` 失败 pending 泄漏。

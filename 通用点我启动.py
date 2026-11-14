@@ -97,7 +97,7 @@ DENY_FILE_PREFIXES = (
     "keygen", "encrypt_key",
 )
 DENY_FILE_SUFFIXES = (".pem", ".key", ".pfx", ".p12", ".keystore")
-DENY_FILE_EXACT = frozenset({"sign.mjs", "private_key.enc"})
+DENY_FILE_EXACT = frozenset({"sign.mjs", "private_key.enc", "ebcrypto.config.json"})
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -204,7 +204,7 @@ class Service:
     不能像旧实现那样就地阻塞在 serve_forever 上。
     """
 
-    def __init__(self, preferred_port, bridge_enabled, no_open, dev):
+    def __init__(self, preferred_port, bridge_enabled, no_open, dev, no_mcp=False):
         self.preferred_port = preferred_port
         self.bridge_enabled = bridge_enabled
         self.no_open = no_open
@@ -216,9 +216,13 @@ class Service:
         self.bridge_httpd = None
         self.bridge_thread = None
         self.last_error = ""
+        from runtime_services import McpService
+        self.mcp = McpService(ROOT)
+        self.no_mcp = no_mcp
 
     # ---- 静态服务 ----
     def stop_static(self):
+        self.mcp.stop()
         if self.bridge_httpd is not None:
             try:
                 self.bridge_httpd.shutdown()
@@ -281,6 +285,11 @@ class Service:
                 self.bridge_ok = False
                 self.last_error = ("本地桥 %d 被占用或起不来：静态服务照常可用，桥未挂载"
                                    "（按 2 可清理占用端口）｜%s" % (BRIDGE_PORT, exc))
+        mcp = self.mcp.start(not self.no_mcp)
+        if mcp["state"] == "ready":
+            print("  MCP HTTP  %s（%s）" % (mcp["url"], "token" if mcp["tokenRequired"] else "no token"))
+        elif mcp["state"] == "unavailable":
+            self.last_error = " | ".join(filter(None, (self.last_error, mcp.get("error", "MCP unavailable"))))
         return True
 
     def stop_all(self):
@@ -789,7 +798,7 @@ def main():
             port = int(a)
             break
 
-    svc = Service(port, not no_bridge, no_open, dev_mode)
+    svc = Service(port, not no_bridge, no_open, dev_mode, no_mcp="--no-mcp" in args)
     started = svc.start()
     if not started:
         # 与原生版同一口径：交互时进面板把原因摆出来（不闪退）；非交互保持旧行为。

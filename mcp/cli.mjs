@@ -23,13 +23,12 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const ADAPTER = new URL("./ebctf-core-adapter.mjs", import.meta.url);
 const BRIDGE = new URL("../src/plugin/mcpBridge.js", import.meta.url);
-const { callMcpTool, MCP_TOOLS } = await import(ADAPTER.href);
-const { callMcpToolWithTimeout, resolveCallTimeoutMs, timeoutToolResult } = await import(BRIDGE.href);
+const { createWorkerToolRunner } = await import("./server.mjs");
+const { resolveCallTimeoutMs, timeoutToolResult } = await import(BRIDGE.href);
 
 function usage() {
-  const text = `恒烈 CTF 工具箱 CLI（与 MCP 同一能力面）
+  const text = `EBCrypto / 码小妹 CLI（与 MCP 同一能力面；需要 Node.js）
 
 命令：
   list     列 op          [--cat <分类>] [--keyword <词>] [--unsafe]
@@ -44,6 +43,8 @@ function usage() {
 
 全局：--json（原始 MCP JSON 输出）
       --timeout <ms>（单次调用总超时，默认 30s；0=不限时）
+入口：bin/ebcrypto.cmd（Windows）；sh bin/ebcrypto.sh（POSIX）。二者是包装脚本，仍需 Node。
+服务：node mcp/server.mjs --http [--config ebcrypto.config.json]；默认 stdio 入口保留。
 `;
   process.stderr.write(text);
 }
@@ -75,13 +76,13 @@ function parseArgs(argv) {
   return out;
 }
 
-async function sourceInput(args) {
+async function sourceInput(args, text = false) {
   if (args.stdin) {
     const chunks = [];
     for await (const c of process.stdin) chunks.push(c);
-    return Buffer.concat(chunks).toString("base64");
+    return Buffer.concat(chunks).toString(text ? "utf8" : "base64");
   }
-  if (args.file) return (await readFile(resolve(args.file))).toString("base64");
+  if (args.file) return (await readFile(resolve(args.file))).toString(text ? "utf8" : "base64");
   if (args.input != null) return args.input;
   return "";
 }
@@ -104,6 +105,11 @@ async function main() {
 
   // --unsafe 恢复旧能力：只在当前 CLI 进程内设置宿主 env，mcpBridge 仍不认请求参数 allowUnsafe。
   if (args.unsafe) process.env.EBCTF_MCP_UNSAFE = "1";
+  if (args.timeout !== undefined && (!/^\d+$/.test(args.timeout) || !Number.isSafeInteger(Number(args.timeout)) || Number(args.timeout) > 2147483647)) {
+    process.stderr.write("--timeout must be an integer in 0..2147483647\n");
+    process.exitCode = 2;
+    return;
+  }
 
   let tool, payload;
   if (cmd === "list") {
@@ -115,11 +121,10 @@ async function main() {
     payload = { opId: args.op, includeUnsafe: !!args.unsafe };
   } else if (cmd === "detect") {
     tool = "ebctf_detect";
-    payload = { input: await sourceInput(args) };
-    if (args.file) payload.input = (await readFile(resolve(args.file))).toString("utf8");
+    payload = { input: await sourceInput(args, true) };
   } else if (cmd === "magic") {
     tool = "ebctf_magic_decode";
-    payload = { input: args.file ? (await readFile(resolve(args.file))).toString("utf8") : await sourceInput(args), crib: args.crib };
+    payload = { input: await sourceInput(args, true), crib: args.crib };
     if (args.intensive) payload.intensive = true;
     if (args.depth) payload.maxDepth = Number(args.depth);
   } else if (cmd === "run") {
@@ -150,11 +155,21 @@ async function main() {
   }
 
   let r;
+  const runner = createWorkerToolRunner();
+  const controller = new AbortController();
+  const interrupt = () => { process.exitCode = 130; controller.abort(); };
+  process.once("SIGINT", interrupt);
+  process.once("SIGTERM", interrupt);
   try {
-    r = await callMcpToolWithTimeout(tool, payload, { timeoutMs: resolveCallTimeoutMs(args.timeout) });
+    r = await runner.run(tool, payload, { timeoutMs: resolveCallTimeoutMs(args.timeout), signal: controller.signal });
   } catch (e) {
     if (e && e.code === "EBCTF_TIMEOUT") r = timeoutToolResult(e);
+    else if (e && e.code === "EBCTF_CANCELLED") return;
     else throw e;
+  } finally {
+    process.off("SIGINT", interrupt);
+    process.off("SIGTERM", interrupt);
+    await runner.close();
   }
   if (args.json) process.stdout.write(JSON.stringify(r, null, 2) + "\n");
   else printResult(r);
