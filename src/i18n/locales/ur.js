@@ -219,7 +219,7 @@ export default {
   "op.alternatingCaps.name": "Alternating Caps",
 
  // ---- UI: topbar ----
-  "ui.brand.title": "EBCTFCodeBox",
+  "ui.brand.title": "EBCrypto",
   "ui.topbar.update": "اپ ڈیٹ چیک کریں",
   "ui.topbar.repo": "GitHub",
   "ui.topbar.theme": "تھیم بدلیں",
@@ -494,7 +494,7 @@ export default {
   "ui.font.loaded": "لوڈ ہو گیا",
   "ui.font.retry": "دوبارہ کوشش",
   "ui.font.btn": "فونٹ لائبریری",
-  "ui.loading.title": "EBCTFCodeBox",
+  "ui.loading.title": "EBCrypto",
   "ui.loading.core": "بنیادی ماڈیول لوڈ ہو رہے ہیں",
   "ui.loading.fonts": "فونٹس لوڈ ہو رہے ہیں",
   "ui.loading.ui": "UI شروع ہو رہا ہے",
@@ -1291,6 +1291,7 @@ export default {
   "ui.custom.preset": "پری سیٹ",
   "ui.custom.vars": "دستیاب متغیرات",
   "ui.custom.helpers": "معاون فنکشنز",
+  "ui.custom.assistant": "Assistant panel",
   "ui.custom.run": "ٹیسٹ رن",
   "ui.custom.save": "محفوظ کریں",
   "ui.custom.importBtn": ".js درآمد کریں",
@@ -1317,7 +1318,6 @@ export default {
   "ui.custom.confirmDel": "اسکیم «{0}» حذف کریں؟",
   "ui.custom.sandboxWorker": "سینڈ باکس: الگ تھریڈ (نیٹ ورک اور اسٹوریج کی صلاحیتیں ہٹا دی گئی ہیں؛ ٹائم آؤٹ پر زبردستی بند کیا جا سکتا ہے)",
   "ui.custom.sandboxMain": "فال بیک موڈ: مین تھریڈ پر عملدرآوری (کوئی تھریڈ علیحدگی نہیں؛ لامتناہی لوپ کو روکا نہیں جا سکتا)",
-  "ui.custom.reset": "ٹیمپلیٹ پر ری سیٹ کریں",
   "ui.custom.clear": "اس op کی حسبِ ضرورت عملدرآوری صاف کریں",
   "ui.custom.lineCol": "سطر {0}، کالم {1}",
   "ui.qc.tabAsm": "مشین کوڈ ⇄ اسمبلی",

@@ -220,7 +220,7 @@ export default {
   "op.alternatingCaps.name": "Alternating Caps",
 
  // ---- UI: topbar ----
-  "ui.brand.title": "EBCTFCodeBox",
+  "ui.brand.title": "EBCrypto",
   "ui.topbar.update": "بررسی به‌روزرسانی",
   "ui.topbar.repo": "GitHub",
   "ui.topbar.theme": "تغییر پوسته",
@@ -498,7 +498,7 @@ export default {
   "ui.font.loaded": "بارگذاری شد",
   "ui.font.retry": "تلاش مجدد",
   "ui.font.btn": "کتابخانه فونت",
-  "ui.loading.title": "EBCTFCodeBox",
+  "ui.loading.title": "EBCrypto",
   "ui.loading.core": "بارگذاری ماژول‌های اصلی",
   "ui.loading.fonts": "بارگذاری فونت‌ها",
   "ui.loading.ui": "راه‌اندازی رابط کاربری",
@@ -1300,6 +1300,7 @@ export default {
   "ui.custom.preset": "پیش‌تنظیم",
   "ui.custom.vars": "متغیرهای موجود",
   "ui.custom.helpers": "توابع کمکی",
+  "ui.custom.assistant": "Assistant panel",
   "ui.custom.run": "اجرای آزمایشی",
   "ui.custom.save": "ذخیره",
   "ui.custom.importBtn": "درون‌ریزی .js",
@@ -1326,7 +1327,6 @@ export default {
   "ui.custom.confirmDel": "طرح «{0}» حذف شود؟",
   "ui.custom.sandboxWorker": "سندباکس: رشتهٔ مجزا (قابلیت‌های شبکه و ذخیره‌سازی حذف شده‌اند؛ در صورت اتمام مهلت می‌توان به‌اجبار آن را پایان داد)",
   "ui.custom.sandboxMain": "حالت جایگزین: اجرا در رشتهٔ اصلی (بدون جداسازی رشته؛ حلقه‌های بی‌نهایت را نمی‌توان قطع کرد)",
-  "ui.custom.reset": "بازنشانی به الگو",
   "ui.custom.clear": "پاک‌کردن پیاده‌سازی سفارشی این op",
   "ui.custom.lineCol": "سطر {0}، ستون {1}",
   "ui.qc.tabAsm": "کد ماشین ⇄ اسمبلی",

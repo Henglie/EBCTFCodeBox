@@ -365,7 +365,7 @@ export default {
   "op.alternatingCaps.desc": "Wandelt Text in abwechselnde Groß- und Kleinschreibung um, etwa sPoNgEbOb.",
 
  // ---- UI: topbar ----
-  "ui.brand.title": "EBCTFCodeBox",
+  "ui.brand.title": "EBCrypto",
   "ui.topbar.update": "Auf Updates prüfen",
   "ui.topbar.repo": "GitHub",
   "ui.topbar.theme": "Theme wechseln",
@@ -672,7 +672,7 @@ export default {
   "ui.font.loaded": "Geladen",
   "ui.font.retry": "Erneut versuchen",
   "ui.font.btn": "Schriftbibliothek",
-  "ui.loading.title": "EBCTFCodeBox",
+  "ui.loading.title": "EBCrypto",
   "ui.loading.core": "Kernmodule werden geladen",
   "ui.loading.fonts": "Schriften werden geladen",
   "ui.loading.ui": "Oberfläche wird initialisiert",
@@ -1889,6 +1889,7 @@ export default {
   "ui.custom.preset": "Voreinstellung",
   "ui.custom.vars": "Verfügbare Variablen",
   "ui.custom.helpers": "Hilfsfunktionen",
+  "ui.custom.assistant": "Assistant panel",
   "ui.custom.run": "Testlauf",
   "ui.custom.save": "Speichern",
   "ui.custom.importBtn": ".js importieren",
@@ -1915,7 +1916,6 @@ export default {
   "ui.custom.confirmDel": "Schema „{0}“ löschen?",
   "ui.custom.sandboxWorker": "Sandbox: separater Worker-Thread (Netzwerk- und Speicherzugriff entfernt; bei Zeitüberschreitung zwangsweise beendbar)",
   "ui.custom.sandboxMain": "Fallback: Ausführung im Hauptthread (keine Thread-Isolation; Endlosschleifen lassen sich nicht abbrechen)",
-  "ui.custom.reset": "Auf Vorlage zurücksetzen",
   "ui.custom.clear": "Eigene Implementierung dieses op löschen",
   "ui.custom.lineCol": "Zeile {0}, Spalte {1}",
   "ui.qc.tabAsm": "Maschinencode ⇄ Assembly",

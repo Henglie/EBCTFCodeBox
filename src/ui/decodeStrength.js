@@ -16,7 +16,7 @@
  *
  * 防卡死（数百 op 的列表）：
  * - 分类默认折叠，只渲染标题行；展开某类才建该类的 checkbox（按需渲染）。
- * - 列表容器固定高度 + overflow:auto（滑动条），不撑爆弹窗。
+ * - 仅弹窗主体滚动；分类/算法列表按内容展开，不叠加固定高滚动容器。
  * - 搜索走 200ms 防抖，且只在已展开的类里重建 DOM。
  * - 勾选状态存 Set，不重渲染整表（只改单个 checkbox 的 checked）。
  *
@@ -46,7 +46,6 @@ import { ensureAll } from "../core/lazyCore.js";
 import { readFileAudioPreviewMinutes, saveFileAudioPreviewMinutes, fmtAudioPreviewMinutes } from "../core/audioPreview.js";
 import { icon as iconSvg } from "./icons.js";
 import { attachModalLifecycle } from "./modalLifecycle.js";
-import { themedSelect } from './themedSelect.js';
 
 // ---- 轻量 DOM 工具（与 envPanel.js 同形；注意 false 不当属性写，防 disabled="false" 坑）----
 function el(tag, attrs = {}, ...children) {
@@ -68,6 +67,21 @@ function msym(name, cls = "") {
   s.innerHTML = iconSvg(name);
   return s;
 }
+
+// Native state/focus and the decorative mark are separate, so an input's
+// platform paint cannot cover the row state layer or continuous corners.
+function checkboxControl(name, category = false) {
+  const cb = el("input", {
+    type: "checkbox", class: "ds-cb" + (category ? " ds-cat-cb" : ""), "aria-label": name,
+  });
+  const box = el("span", { class: "ds-check-box", "aria-hidden": "true" },
+    msym("check", "ds-check-tick"), msym("remove", "ds-check-mixed"));
+  const control = el(category ? "label" : "span", {
+    class: "ds-check", "data-continuous-corners": "off",
+  }, cb, box);
+  return { cb, control };
+}
+let _renderSeq = 0;
 
 // ---- i18n：优先主表，回退内置中文 ----
 const _ZH = {
@@ -118,6 +132,7 @@ const _ZH = {
   "ui.ds.catAll": "整类",
   "ui.ds.tier": "热度档",
   "ui.ds.customBadge": "已改动（自定义）",
+  "ui.search.empty": "没找到匹配的功能",
   "ui.home.audioPreviewLabel": "音频仅分析前 N 分钟",
   "ui.home.audioPreviewPlaceholder": "0 = 全量（默认）",
   "ui.home.audioPreviewHint": "拖入 WAV 时生效，0 = 全量；只影响音频分析，不影响图片/归档/文本。",
@@ -207,7 +222,7 @@ export function openDecodeStrength(opt = {}) {
     const custom = (cfg.customIds || []).filter((id) => valid.has(id));
     return {
       level,
-      ids: custom.length ? new Set(custom) : opsForLevel(level === "custom" ? "enhanced" : level, scope),
+      ids: custom.length || level === "custom" ? new Set(custom) : opsForLevel(level, scope),
       depth: Math.max(1, Math.min(3, Number(cfg.depth) || preset.magic.maxDepth || 1)),
       bruteIds: scope === "text" ? new Set((cfg.bruteIds || []).filter((id) => isBruteOp(id))) : new Set(),
     };
@@ -258,6 +273,7 @@ export function openDecodeStrength(opt = {}) {
     body.innerHTML = "";
     clearTimeout(_debounce);
     const scope = activeScope;
+    const renderId = ++_renderSeq;
     const work = works[scope];
     // noAuto 只适合 op 页手动运行；不放进档位勾选列表，避免出现“勾了也不跑”的假开关。
     const pool = opPoolByCat(scope)
@@ -268,21 +284,30 @@ export function openDecodeStrength(opt = {}) {
     const total = pool.reduce((n, g) => n + g.ops.length, 0) + bruteGroup.ops.length;
 
     // ---- 作用域页签（复用层数按钮样式，不新增 CSS 依赖）----
-    const tabRow = el("div", { class: "ds-depth-row ds-tabs", role: "tablist" });
+    const tabRow = el("div", { class: "ds-depth-row ds-tabs", role: "tablist", "aria-label": t("ui.ds.title") });
+    const changeScope = (sc) => {
+      if (activeScope !== sc) { activeScope = sc; renderBody(); body.scrollTop = 0; }
+      body.querySelector(`.ds-tabs [data-scope="${sc}"]`)?.focus({ preventScroll: true });
+    };
     for (const sc of ["text", "file"]) {
       const tab = el("button", {
         class: "ds-depth-btn" + (scope === sc ? " on" : ""),
         type: "button", role: "tab",
         "aria-selected": scope === sc ? "true" : "false",
         "data-scope": sc,
+        tabindex: scope === sc ? "0" : "-1",
       }, t(sc === "text" ? "ui.ds.tabText" : "ui.ds.tabFile"));
-      tab.addEventListener("click", () => {
-        if (activeScope === sc) return;
-        activeScope = sc;
-        renderBody();
-      });
+      tab.addEventListener("click", () => changeScope(sc));
       tabRow.append(tab);
     }
+    tabRow.addEventListener("keydown", (event) => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      const scopes = ["text", "file"];
+      const step = (event.key === "ArrowRight" ? 1 : -1) * (getComputedStyle(tabRow).direction === "rtl" ? -1 : 1);
+      changeScope(event.key === "Home" ? "text" : event.key === "End" ? "file"
+        : scopes[(scopes.indexOf(scope) + step + 2) % 2]);
+    });
 
     // ---- 强度滑块 ----
     const levelIdx = work.level === "custom" ? STRENGTH_LEVELS.length : STRENGTH_LEVELS.indexOf(work.level);
@@ -369,7 +394,7 @@ export function openDecodeStrength(opt = {}) {
     body.append(depthSec);
 
     // ---- 搜索 + 批量 ----
-    const search = el("input", { type: "text", class: "ds-search", placeholder: t("ui.ds.search"), spellcheck: "false" });
+    const search = el("input", { type: "text", class: "ds-search", placeholder: t("ui.ds.search"), "aria-label": t("ui.ds.search"), spellcheck: "false" });
     const allBtn = el("button", { class: "ds-mini", type: "button" }, msym("select_all"), t("ui.ds.selectAll"));
     const noneBtn = el("button", { class: "ds-mini", type: "button" }, msym("delete_sweep"), t("ui.ds.selectNone"));
     const invertBtn = el("button", { class: "ds-mini", type: "button" }, msym("swap_horiz"), t("ui.ds.invert"));
@@ -379,10 +404,11 @@ export function openDecodeStrength(opt = {}) {
       el("div", { class: "ds-mini-row" }, allBtn, noneBtn, invertBtn, resetBtn),
     ));
 
-    // ---- op 列表（分类折叠 + 按需渲染 + 独立滚动条）----
+    // ---- op 列表（分类折叠 + 按需渲染，滚动由body统一负责）----
     // 文本页把「暴力爆破（独立通道）」作为虚拟分类 prepend 到列表最前；
     // 文件页不渲染该分类，勾选状态仍只在 text 的 work.bruteIds 里。
     const list = el("div", { class: "ds-list", tabindex: '0', role: 'group', 'aria-label': t('ui.ds.search') });
+    const empty = el("div", { class: "ds-empty", hidden: true, role: "status" }, t("ui.search.empty"));
     body.append(list);
 
     // catId → { rowsHost, built, opsShown, idSet }
@@ -406,19 +432,21 @@ export function openDecodeStrength(opt = {}) {
         ? g.ops.filter((o) => o.id.toLowerCase().includes(q) || String(o.name || "").toLowerCase().includes(q))
         : g.ops;
       for (const o of ops) {
-        const cb = el("input", { type: "checkbox", class: "ds-cb" });
+        const { cb, control } = checkboxControl(`${o.name || o.id} (${o.id})`);
         cb.checked = idSet.has(o.id);
         cb.dataset.opId = o.id;
         cb.dataset.brute = g.cat === "_brute" ? "1" : "0";
         cb.addEventListener("change", () => {
           if (cb.checked) idSet.add(o.id); else idSet.delete(o.id);
+          groups.get(g.cat)?.syncBadge();
           // brute 通道勾选不触发 markCustom（brute 不归档，level 含义不变），仅同步计数。
           if (g.cat === "_brute") syncCountLine(); else markCustom();
         });
-        host.append(el("label", { class: "ds-op-row m3-choice-row" },
-          cb,
-          el("span", { class: "ds-op-name" }, o.name || o.id),
-          el("span", { class: "ds-op-id" }, o.id),
+        host.append(el("label", { class: "ds-op-row" },
+          control,
+          el("span", { class: "ds-op-text" },
+            el("span", { class: "ds-op-name" }, o.name || o.id),
+            el("span", { class: "ds-op-id" }, o.id)),
           el("span", { class: "ds-op-tier", title: t("ui.ds.tier") }, g.cat === "_brute" ? "爆" : "T" + o.tier),
         ));
       }
@@ -428,18 +456,20 @@ export function openDecodeStrength(opt = {}) {
     for (const g of poolWithBrute) {
       const isBrute = g.cat === "_brute";
       const idSet = isBrute ? work.bruteIds : work.ids;
-      const rowsHost = el("div", { class: "ds-cat-rows" });
+      const name = catLabel(g.cat, g.catName);
+      const rowsHost = el("div", { class: "ds-cat-rows", id: `ds-rows-${renderId}-${g.cat}`, role: "group", "aria-label": name, hidden: true });
       const countBadge = el("span", { class: "ds-cat-count" });
+      const { cb: catCb, control: catControl } = checkboxControl(t("ui.ds.catAll") + " · " + name, true);
       const syncBadge = () => {
         const on = g.ops.filter((o) => idSet.has(o.id)).length;
         countBadge.textContent = on + "/" + g.ops.length;
         countBadge.classList.toggle("partial", on > 0 && on < g.ops.length);
         countBadge.classList.toggle("full", on === g.ops.length && on > 0);
+        catCb.checked = on === g.ops.length && on > 0;
+        catCb.indeterminate = on > 0 && on < g.ops.length;
       };
       syncBadge();
 
-      const catCb = el("input", { type: "checkbox", class: "ds-cb ds-cat-cb" });
-      catCb.checked = g.ops.every((o) => idSet.has(o.id));
       catCb.addEventListener("click", (e) => e.stopPropagation());
       catCb.addEventListener("change", () => {
         for (const o of g.ops) { if (catCb.checked) idSet.add(o.id); else idSet.delete(o.id); }
@@ -450,27 +480,27 @@ export function openDecodeStrength(opt = {}) {
       });
 
       const caret = msym("chevron_right", "ds-caret");
-      const head = el("button", { class: "ds-cat-head" + (isBrute ? " ds-cat-head-brute" : ""), type: "button", "aria-expanded": "false" },
+      const head = el("button", { class: "ds-cat-head" + (isBrute ? " ds-cat-head-brute" : ""), type: "button", "aria-expanded": "false", "aria-controls": rowsHost.id },
         caret,
-        isBrute ? msym("bolt", "ds-cat-brute-icon") : null,
-        el("span", { class: "ds-cat-name" }, catLabel(g.cat, g.catName)),
+        el("span", { class: "ds-cat-name" }, name),
         countBadge,
       );
-      const wrap = el("div", { class: "ds-cat" + (isBrute ? " ds-cat-brute" : "") }, el("div", { class: "ds-cat-headrow" }, catCb, head), rowsHost);
+      const wrap = el("div", { class: "ds-cat" + (isBrute ? " ds-cat-brute" : ""), "data-cat": g.cat }, el("div", { class: "ds-cat-headrow" }, catControl, head), rowsHost);
       const state = { built: false, open: false, rowsHost, syncBadge, catCb, g, head, wrap, idSet, isBrute };
       head.addEventListener("click", () => {
         state.open = !state.open;
         wrap.classList.toggle("open", state.open);
         head.setAttribute("aria-expanded", state.open ? "true" : "false");
+        rowsHost.hidden = !state.open;
         if (state.open && !state.built) { buildRows(g, rowsHost, search.value, idSet); state.built = true; }
       });
       groups.set(g.cat, state);
       list.append(wrap);
     }
+    list.append(empty);
 
     function refreshAllChecks() {
       for (const st2 of groups.values()) {
-        st2.catCb.checked = st2.g.ops.every((o) => st2.idSet.has(o.id));
         st2.syncBadge();
         if (st2.built) {
           for (const cb of st2.rowsHost.querySelectorAll(".ds-cb")) {
@@ -519,20 +549,25 @@ export function openDecodeStrength(opt = {}) {
       clearTimeout(_debounce);
       _debounce = setTimeout(() => {
         const q = search.value.trim().toLowerCase();
+        let hits = 0;
         for (const st2 of groups.values()) {
           const hit = !q || st2.g.ops.some((o) =>
             o.id.toLowerCase().includes(q) || String(o.name || "").toLowerCase().includes(q));
           st2.wrap.classList.toggle("hidden", !hit);
+          st2.wrap.hidden = !hit;
+          if (hit) hits++;
           if (q && hit) {
             st2.open = true;
             st2.wrap.classList.add("open");
             st2.head.setAttribute("aria-expanded", "true");
+            st2.rowsHost.hidden = false;
             buildRows(st2.g, st2.rowsHost, q, st2.idSet);
             st2.built = true;
           } else if (st2.built) {
             buildRows(st2.g, st2.rowsHost, q, st2.idSet);
           }
         }
+        empty.hidden = hits > 0;
       }, 200);
     });
 
@@ -565,6 +600,7 @@ export function openDecodeStrength(opt = {}) {
       saveProfile(n, { level: work.level, customIds: [...work.ids] }, scope);
       nameInput.value = "";
       rebuildSel();
+      sel.value = n;
       profMsg.textContent = "✓ " + n;
     });
     loadBtn.addEventListener("click", () => {
@@ -575,12 +611,13 @@ export function openDecodeStrength(opt = {}) {
       const valid = selectableOpIds(scope);
       const loaded = (p.customIds || []).filter((id) => valid.has(id));
       work.level = p.level || "custom";
-      const next = loaded.length
+      const next = loaded.length || work.level === "custom"
         ? new Set(loaded)
-        : opsForLevel(work.level === "custom" ? "enhanced" : work.level, scope);
+        : opsForLevel(work.level, scope);
       work.ids.clear();
       for (const id of next) work.ids.add(id);
       renderBody();          // 载入后整体重建（档位/勾选全变）
+      body.querySelector(".ds-prof-sel")?.focus();
     });
     delBtn.addEventListener("click", () => {
       const n = sel.value;
@@ -618,7 +655,7 @@ export function openDecodeStrength(opt = {}) {
     body.append(el("div", { class: "ds-sec ds-sec-prof" },
       el("div", { class: "ds-sec-title" }, msym("star"), t("ui.ds.profiles")),
       el("div", { class: "ds-prof-row" }, nameInput, saveBtn),
-      el("div", { class: "ds-prof-row" }, themedSelect(sel), loadBtn, delBtn),
+      el("div", { class: "ds-prof-row" }, sel, loadBtn, delBtn),
       el("div", { class: "ds-prof-row" }, expBtn, impBtn),
       profMsg,
     ));
@@ -643,7 +680,7 @@ export function openDecodeStrength(opt = {}) {
     };
     renderBody();
     // 焦点进弹窗（键盘/读屏可达）
-    setTimeout(() => { try { dialog.querySelector(".ds-slider").focus(); } catch { /* 忽略 */ } }, 0);
+    setTimeout(() => { if (_overlay === ov && dialog.isConnected) dialog.querySelector(".ds-slider")?.focus(); }, 0);
   })();
 }
 

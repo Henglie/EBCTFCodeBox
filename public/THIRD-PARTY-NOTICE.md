@@ -2,7 +2,7 @@
 
 > 版本号与文件哈希均为本发行包内文件实测；许可文本为上游官方逐字副本（SHA256 附后）。
 
-本项目（恒烈 CTF 编码工具箱）自有代码采用 Apache License 2.0（见根目录 `LICENSE`）。随包第三方组件分两级列示：
+本项目网页、算法、MCP 与 CLI 自有代码采用 Apache License 2.0（见根目录 `LICENSE`）。三平台原生启动器及其二进制另采用 GPL-2.0-only，包含 Mongoose 的 GPLv2 版本；不能把根目录许可证套用于启动器。随包第三方组件分两级列示：
 **A 组（GPL/LGPL，发布门禁级）**须随附许可证全文与对应源码获取渠道；**B 组（宽松许可）**须署名。
 
 ---
@@ -14,7 +14,7 @@
 - **用途**：steghide 隐写双向（JPEG DCT / WAV LSB，口令派生加密）。调用方 `src/core/steghide.js`（op id `steghide`）。
 - **随包文件**：`public/wasm/steghide/steghide.js`（emscripten glue，SHA256 `ac94718a…29542`）、`public/wasm/steghide/steghide.wasm`（单线程引擎，SHA256 `9c3cec3f…d5c2a`）、`public/wasm/steghide/steghide.worker.js`（项目自研 Worker 壳，非上游代码）。
 - **上游**：steghide 0.5.1，源码 tarball `https://downloads.sourceforge.net/project/steghide/steghide/0.5.1/steghide-0.5.1.tar.gz`（SHA256 `78069b7cfe9d1f5348ae43f918f06f91d783c2b3ff25af021e6a312cf541b47b`）；镜像仓库 `https://github.com/StegHigh/steghide`（其 `COPYING` 与 tarball 内 `COPYING` 逐字节一致）。
-- **许可证**：GPL-2.0-or-later（上游 `COPYING` 全文＝`LICENSE-steghide.txt`，SHA256 `dc7091d200c57fd26a1f49c4db69bc42c71a16db174e0dbc4c153123d92657c4`）。
+- **许可证**：GPL-2.0-or-later（上游 `COPYING` 全文随包位于 `public/wasm/steghide/COPYING.txt`，SHA256 `dc7091d200c57fd26a1f49c4db69bc42c71a16db174e0dbc4c153123d92657c4`）。
 - **静态链入的 LGPL 依赖**（整体按最严的 GPL-2.0+ 口径分发即同时满足，逐件口径如下防下游写错版本）：
   - mhash 0.9.9.9 — **LGPL-2.0-or-later**（注意是 Library GPL v2，非 2.1；tarball SHA256 `3dcad09a…d13e`）；
   - libmcrypt 2.5.8 — LGPL-2.1-or-later（tarball SHA256 `e4eb6c07…373e`）；
@@ -30,7 +30,7 @@
 - **上游两级**：
   - 打包层：`keystone-wasm@1.0.4`（https://www.npmjs.com/package/keystone-wasm ，仓库 https://github.com/CzBiX/disasm-web `packages/keystone`，构建脚本 `build-lib.sh`：emsdk + CMake 从 keystone 源码编 wasm）；
   - 引擎层：Keystone Engine https://github.com/keystone-engine/keystone （1.0.4 发布对应 submodule commit `dc7932ef2b2c4a793836caec6ecab485005139d6`，2020-06-21；引擎发行线 0.9.2）。
-- **许可证**：GPL-2.0（官方 `COPYING` 全文＝`LICENSE-keystone.txt`，SHA256 `ab15fd526bd8dd18a9e77ebc139656bf4d33e97fc7238cd11bf60e2b9b8666c6`）。Keystone 另提供：
+- **许可证**：GPL-2.0（官方 `COPYING` 全文随包位于 `public/wasm/vendor/asm/COPYING.txt`，SHA256 `ab15fd526bd8dd18a9e77ebc139656bf4d33e97fc7238cd11bf60e2b9b8666c6`）。Keystone 另提供：
   - `EXCEPTIONS-CLIENT`（FOSS License Exception，基于 Oracle FOSS 例外，允许列入清单的 GPL 不兼容 FOSS 许可链接 Keystone 库）——本项目主代码为 Apache-2.0，本就与 GPL-2.0 单向兼容路径无关，不依赖此例外；
   - `LICENSE-COM.TXT`（商业双许可，联系人 keystone.engine@gmail.com）。
   - 说明：网传的「llvm 链接例外」在官方仓库根未见独立文件，本项目未采信任何链接例外，以上游仓库原文为准。
@@ -45,6 +45,15 @@
 - **上游**：https://openpgpjs.org/ ，仓库 https://github.com/openpgpjs/openpgpjs （tag `v5.11.3`），npm `openpgp@5.11.3`（license 字段 `LGPL-3.0+`）。
 - **许可证**：LGPL-3.0-or-later（`LICENSE-openpgpjs.txt`，SHA256 `e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118`）。⚠ LGPL-3.0 第 4b/4d0 条要求随对象码同时提供 GPL-3.0 文本与最小对应源码——随包建议同时附 `LICENSE-GPL-3.0.txt`（gnu.org 官方文本，SHA256 `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`）。
 - **如何自行获取对应源码**：`https://github.com/openpgpjs/openpgpjs/tree/v5.11.3`（官方源码）＋本文件上段记录的 2 处补丁即完整对应源码；或 npm `openpgp@5.11.3` 包（含 src/）。
+
+---
+
+### A4. Mongoose 7.23（GPL-2.0-only）— 三平台原生启动器的 HTTP 基座
+
+- **随包文件**：`Windows点我启动.exe`、`bin/Linux启动器`、`bin/macOS启动器`；这些是原生启动器，不包含在根项目的 Apache-2.0 授权内。
+- **上游**：https://github.com/cesanta/mongoose ，固定 commit `02bdbb9ed6f0a8f7c42228c6e7cb35d748b60551`（7.23）。版权：© 2004–2013 Sergey Lyubka；© 2013–2026 Cesanta Software Limited。
+- **许可证**：采用上游 GPLv2 选项；GPLv2 全文随包位于 `public/wasm/steghide/COPYING.txt`。上游另提供商业双许可，本项目未据此声明商业授权。
+- **对应源码**：Mongoose 上游源码见上述 commit；本项目宿主代码、构建脚本及完整对应源码的公开下载渠道仍待补齐，不能把上游链接视为完整启动器源码交付。
 
 ---
 
@@ -74,6 +83,10 @@
 | xpath | 0.0.34（wrapper 头注实测） | MIT © 2018 Cameron McCormack | `src/vendor/t819/xpath.mjs`（+ `src/vendor/t819/licenses/xpath-LICENSE`） | https://github.com/goto100/xpath |
 | jq-web（含 jq asm.js bundle） | 0.5.1（调用方头注实测） | ISC © 2019 fiatjaf；jq © 2012 Stephen Dolan（MIT） | `src/vendor/jq-web/jq.asm.bundle.min.mjs`（+ `src/vendor/jq-web/LICENSE`） | https://github.com/fiatjaf/jq-web 、https://github.com/jqlang/jq |
 | libyara-wasm | 1.2.1（调用方头注实测） | ISC © 2019 Matt Coomber | `src/vendor/libyara-wasm/libyara-wasm.mjs`（+ `src/vendor/libyara-wasm/LICENSE`） | https://www.npmjs.com/package/libyara-wasm |
+| bzip2（bzip2-wasm 封装） | 随附上游 1.0.8 | bzip2 许可 © 1996–2019 Julian R Seward | `src/vendor/bzip2-wasm/`（含 `LICENSE` 全文） | https://sourceware.org/bzip2/ |
+| js-yaml | 随包版本 | MIT © 2011–2015 Vitaly Puzrin | `src/vendor/js-yaml.mjs` + `src/vendor/LICENSE-js-yaml.txt` | https://github.com/nodeca/js-yaml |
+| tesseract.js + tesseract.js-core | 随包版本 | Apache-2.0 | `public/vendor/ocr/`（含 `LICENSE-tesseract.js.txt`、`LICENSE-tesseract.js-core.txt`） | https://github.com/naptha/tesseract.js |
+| Simple Icons 工具品牌图标 | 7 个 SVG | CC0-1.0；商标权仍归各权利人 | `public/icons/tools/`（含来源说明） | https://github.com/simple-icons/simple-icons （许可：https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md） |
 
 > `src/vendor/t819/licenses/` 另含上述打包内嵌依赖的许可证：estraverse、esutils（BSD-2-Clause）；@jridgewell/gen-mapping、resolve-uri、source-map、sourcemap-codec、trace-mapping（MIT）。
 > zxing-wasm 与 tesseract.js 的 vendor 默认 locateFile/workerPath 指向 jsdelivr，运行时由 `src/core/qrZxing.js`、`src/core/ocr.js` 显式覆盖到 `public/wasm/zxing/`、`public/vendor/ocr/`；默认 CDN 分支不触发。

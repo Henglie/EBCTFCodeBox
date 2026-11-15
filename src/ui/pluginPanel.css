@@ -167,6 +167,12 @@
   background: var(--surface-1);
   border-radius: var(--r-sm);
 }
+.plugin-mcp-method { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4); background: var(--surface-1); border: 1px solid var(--outline-var); border-radius: var(--r-lg); }
+.plugin-mcp-method h4 { margin: 0; font-size: var(--fs-md); color: var(--on-surface); }
+.plugin-mcp-http { background: transparent; padding: 0; }
+.plugin-inline-field { display: flex; align-items: center; gap: 10px; min-height: 44px; color: var(--on-surface); font-size: var(--fs-sm); }
+.plugin-inline-field input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--primary); }
+.plugin-mcp-method .plugin-prompt { margin-top: 0; }
 .plugin-how h5 {
   margin: 0;
   font-size: var(--fs-sm); font-weight: 700; color: var(--on-surface);

@@ -29,7 +29,7 @@ import { createResultToc } from "./ui/resultToc.js"; // 一键解码结果右侧
 import { batchPanel } from "./ui/batchPanel.js"; // 批处理面板（多文件 / 目录 + ZIP）
 import { planBatch as batchPlanBatch, runBatch as batchRunBatch, buildZip as batchBuildZip, makeCancelToken as batchMakeCancelToken } from "./core/batchRun.js"; // 批处理内核
 // fileAnalysis / imageAnalysis / audioAnalysis（智能分析三链，含 QR·pcap·inflate·音频子树）已改懒载，见 ensureAnalysisChains()
-import { loadLicense, OPENSOURCE_LICENSE } from "./core/license.js";
+import { loadLicense, OPENSOURCE_LICENSE, PUBLIC_KEY_B64 } from "./core/license.js";
 import { prepareLicenseBranding, resolveLicenseBranding } from './core/licenseBranding.js';
 import { displayAppName, showLocalQuote, LOCAL_QUOTE } from './core/branding.js';
 import { refreshManifestBranding } from './ui/appBranding.js';
@@ -103,6 +103,21 @@ function opName(op) {
 // 但左侧菜单/op 面板标题仍走 opName 单语。双语只在结果卡渲染层用 opNameBi。
 function opNameBi(op) {
   return tBilingual("op." + op.id + ".name", op.name);
+}
+
+let _licenseVerifierPromise = null;
+function ensureLicenseVerifier() {
+  if (globalThis.EBCryptoLicense?.verifyLicense) return Promise.resolve(globalThis.EBCryptoLicense);
+  if (_licenseVerifierPromise) return _licenseVerifierPromise;
+  _licenseVerifierPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = new URL('../public/license-verifier/verifier.js', import.meta.url).href;
+    script.onload = () => globalThis.EBCryptoLicense?.verifyLicense
+      ? resolve(globalThis.EBCryptoLicense) : reject(new Error('离线验证器未导出'));
+    script.onerror = () => reject(new Error('离线验证器加载失败'));
+    document.head.append(script);
+  });
+  return _licenseVerifierPromise;
 }
 // 暴露给独立视图模块（recipeView / exhaustiveView）复用，避免它们反向 import main.js
 if (typeof window !== "undefined") {
@@ -428,7 +443,7 @@ function toast(msg) {
   _toastTimer = setTimeout(() => t.remove(), 2000);
 }
 
-// ---- 一键解码结果卡通用件（复制 / 可编辑 / 出处 / 目录着色）----
+// ---- 一键解码结果卡通用件（只读 / 完整复制 / 出处 / 目录着色）----
 function copyPlainText(text, okMsg) {
   const s = String(text == null ? "" : text);
   const done = () => toast(okMsg || t("ui.toast.copiedResult"));
@@ -453,39 +468,45 @@ function copyBtn(getText, label) {
   return el("button", {
     type: "button", class: "ok-copy-btn", title: label || t("ui.common.clickCopy"),
     onclick: (e) => { e.stopPropagation(); copyPlainText(getText(), t("ui.toast.copiedResult")); },
-  }, msym("content_copy"), el("span", {}, label || "复制"));
+  }, msym("content_copy"), el("span", {}, label || t("ui.op.copy")));
 }
 
-// 可编辑结果值：默认展示截断文本，聚焦时自动换成全文；复制按钮取当前编辑后的内容。
-function editableResultValue(text, { limit = 500, className = "" } = {}) {
+let _resultValueSeq = 0;
+// 展示可截断，复制始终取原文；展开重排高亮并作废旧的异步预览任务。
+function readonlyResultValue(text, { limit = 500, className = "", signals = [], search = {} } = {}) {
   const full = String(text == null ? "" : text);
   const wrap = el("div", { class: "ok-val-wrap" });
-  const val = el("div", {
-    class: "ok-val ok-edit " + className,
-    contenteditable: "true",
-    spellcheck: "false",
-    role: "textbox",
-    "aria-multiline": "true",
-    title: "可直接编辑；复制按钮取编辑后的内容",
+  const val = ioArea({
+    id: "result-value-" + (++_resultValueSeq),
+    class: "ok-val " + className,
+    readonly: true,
+    "aria-label": t("ui.op.outTitle"),
   });
   const truncated = full.length > limit;
-  val.textContent = truncated ? full.slice(0, limit) + " …" : full;
   let expanded = !truncated;
-  val.addEventListener("focus", () => {
-    if (!expanded) { expanded = true; val.textContent = full; }
+  const render = () => highlightResult(val, full, signals, search, expanded ? Infinity : limit);
+  val.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "a") {
+      event.preventDefault();
+      selectAllIO(val);
+    }
   });
   wrap.append(val);
+  render();
   if (truncated) {
-    const btn = el("span", { class: "ok-expand" }, t("ui.common.expand", full.length));
+    const btn = el("button", {
+      type: "button", class: "ok-expand", "aria-expanded": "false", "aria-controls": val.id,
+    }, t("ui.common.expand", full.length));
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       expanded = !expanded;
-      if (expanded) { val.textContent = full; btn.textContent = t("ui.common.collapse"); }
-      else { val.textContent = full.slice(0, limit) + " …"; btn.textContent = t("ui.common.expand", full.length); }
+      render();
+      btn.setAttribute("aria-expanded", String(expanded));
+      btn.textContent = expanded ? t("ui.common.collapse") : t("ui.common.expand", full.length);
     });
     wrap.append(btn);
   }
-  return { wrap, val, getText: () => val.textContent, full };
+  return { wrap, val, getText: () => full };
 }
 
 let _tocCardSeq = 0;
@@ -493,6 +514,7 @@ function markTocCard(node, { title, color, badge, group } = {}) {
   node.id = node.id || "ok-toc-card-" + (++_tocCardSeq);
   node.dataset.tocTitle = title || "结果";
   node.dataset.tocColor = color || "var(--outline-var)";
+  node.style.setProperty("--result-color", node.dataset.tocColor);
   if (badge) node.dataset.tocBadge = badge;
   if (group) node.dataset.tocGroup = group;
   return node;
@@ -1926,11 +1948,11 @@ async function runOneKey(text, outWrap, crib, strengthCfg, force = false, topBan
 
   // 固定头/固定形态触发器：data:image 内嵌图、RGB 数值文本、带密钥 SNOW。
   // 这些不是普通文本编码，magic 的 decode 候选覆盖不到；单独补一段仍算「一键」。
-  try { await appendSpecialTextSections(outWrap, q, token, key); } catch { /* 特殊通道失败不影响主结果 */ }
+  try { await appendSpecialTextSections(outWrap, q, token, key, text); } catch { /* 特殊通道失败不影响主结果 */ }
 }
 
 // 固定头/固定形态补充卡片（在 magic/爆破结果之后追加；不参与主排序）。
-async function appendSpecialTextSections(outWrap, q, token, key) {
+async function appendSpecialTextSections(outWrap, q, token, key, rawText = q) {
   if (token !== runOneKey._token) return;
   const sp = await import("./core/specialInput.js");
   const imgs = sp.findDataUriImages(q);
@@ -1993,11 +2015,12 @@ async function appendSpecialTextSections(outWrap, q, token, key) {
     }
   }
 
-  if (key && sp.looksSnowText(q)) {
+  // 行尾空白是SNOW载荷，必须保留入口规范化之前的原始文本。
+  if (key && sp.looksSnowText(rawText)) {
     const op = getOp("snow");
     if (op && typeof op.decode === "function") {
       let r = null;
-      try { r = await op.decode(q, { password: key }); } catch { r = null; }
+      try { r = await op.decode(rawText, { password: key }); } catch { r = null; }
       if (r && (typeof r === "string" || (r && r.text))) {
         const text = typeof r === "string" ? r : r.text;
         const card = el("div", { class: "onekey-card onekey-special" },
@@ -2006,7 +2029,7 @@ async function appendSpecialTextSections(outWrap, q, token, key) {
             el("span", {}, "行尾空白隐写（使用工具栏密钥）"),
           ),
         );
-        const { wrap } = editableResultValue(text, { limit: 2000 });
+        const { wrap, getText } = readonlyResultValue(text, { limit: 2000 });
         card.append(wrap);
         if (r && Array.isArray(r.files)) {
           const bar = el("div", { class: "file-section-actions" });
@@ -2018,6 +2041,7 @@ async function appendSpecialTextSections(outWrap, q, token, key) {
           }
           card.append(bar);
         }
+        attachCardTools(card, getText);
         outWrap.append(markTocCard(card, { title: "SNOW 空白隐写", color: "var(--success)", badge: "命中" }));
       }
     }
@@ -2259,69 +2283,37 @@ function renderEvidenceChips(c) {
   return row;
 }
 
-// 结果卡工具条：复制（取当前编辑内容）+ 编辑/完成切换。
-function attachCardTools(card, valEl, fullText) {
-  const tools = el("div", { class: "ok-card-tools" });
-  let editing = false;
-  const editBtn = el("button", { type: "button", class: "ok-copy-btn", title: "编辑结果" }, msym("edit"), el("span", {}, "编辑"));
-  editBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    editing = !editing;
-    if (editing) {
-      valEl.textContent = fullText;
-      valEl.setAttribute("contenteditable", "true");
-      valEl.classList.add("ok-editing");
-      valEl.focus();
-      editBtn.querySelector("span").textContent = "完成";
-    } else {
-      valEl.setAttribute("contenteditable", "false");
-      valEl.classList.remove("ok-editing");
-      editBtn.querySelector("span").textContent = "编辑";
-    }
-  });
-  tools.append(copyBtn(() => valEl.textContent), editBtn);
+// 结果动作不修改展示节点；高亮/折叠不影响复制到的原始完整结果。
+function attachCardTools(card, getText) {
+  const tools = el("div", { class: "ok-card-tools" }, copyBtn(getText));
   card.append(tools);
   return tools;
 }
 
 // 三元组摘要行——置顶展示 magic 最优候选。
 // 格式：[解码N次] 明文（截断） + 混合解码结果: op1 › op2 › op3。
-// 复用 onekey-card 样式；结果可直接编辑，复制按钮取编辑后内容。
+// 复用只读结果组件，复制与折叠/高亮的展示状态无关。
 function renderSummaryCard(c, search = {}) {
   const chainLabel = c.chain
     .map((id) => { const o = getOp(id); return o ? opNameBi(o) : id; })
     .join(" › ");
-  const isLong = c.result.length > 500;
-  const valEl = el("div", { class: "ok-val" }, isLong ? c.result.slice(0, 500) + " …" : c.result);
-  valEl.setAttribute("contenteditable", "false");
  // 高光只在「真命中 flag/crib」或用户主动搜索时出现：普通 token 里的 key/ctf
  // 子串不再染色（用户 2026-10-26 反馈高光误导）。
   const marks = (c._cribHit || c.flagPriority || (search && search.query)) ? c.signals : [];
-  highlightResult(valEl, c.result, marks, typeof search === "undefined" ? {} : search);
+  const { wrap, getText } = readonlyResultValue(c.result, { signals: marks, search });
   const card = el("div",
     { class: "onekey-card onekey-summary" + (c._cribHit ? " crib-hit" : "") },
     el("div", { class: "ok-name" },
       el("span", { class: "ok-verdict ok-verdict-" + c.verdict }, t("ui.magic.verdict." + c.verdict)),
       el("span", { class: "onekey-summary-tag" }, t("ui.home.summaryDecoded", c.chain.length)),
       el("span", { class: "onekey-summary-title" }, t("ui.home.summaryTitle"))),
-    valEl,
+    wrap,
     renderEvidenceChips(c),
     el("div", { class: "onekey-summary-chain" },
       el("span", { class: "onekey-summary-chain-label" }, t("ui.home.summaryChain") + ":"),
       el("span", { class: "onekey-summary-chain-vals" }, chainLabel)),
   );
-  if (isLong) {
-    const expandBtn = el("span", { class: "ok-expand" }, t("ui.common.expand", c.result.length));
-    let expanded = false;
-    expandBtn.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      expanded = !expanded;
-      if (expanded) { valEl.textContent = c.result; expandBtn.textContent = t("ui.common.collapse"); }
-      else { valEl.textContent = c.result.slice(0, 500) + " …"; expandBtn.textContent = t("ui.common.expand", c.result.length); }
-    });
-    card.append(expandBtn);
-  }
-  attachCardTools(card, valEl, c.result);
+  attachCardTools(card, getText);
   return markTocCard(card, {
     title: t("ui.home.summaryTitle") + " · " + t("ui.magic.verdict." + c.verdict),
     color: verdictColor(c.verdict),
@@ -2374,34 +2366,20 @@ function renderCandCard(c, search = {}) {
     .map((id) => { const o = getOp(id); return o ? opNameBi(o) : id; })
     .join(" › ");
   const cribTag = c._cribHit ? " ●" : "";
-  const isLong = c.result.length > 500;
-  const valEl = el("div", { class: "ok-val" }, isLong ? c.result.slice(0, 500) + " …" : c.result);
-  valEl.setAttribute("contenteditable", "false");
   const marks = (c._cribHit || c.flagPriority || (search && search.query)) ? c.signals : [];
-  highlightResult(valEl, c.result, marks, typeof search === "undefined" ? {} : search);
+  const { wrap, getText } = readonlyResultValue(c.result, { signals: marks, search });
   const card = el("div",
     { class: "onekey-card" + (c._cribHit ? " crib-hit" : "") },
     el("div", { class: "ok-name" },
       el("span", { class: "ok-verdict ok-verdict-" + c.verdict }, t("ui.magic.verdict." + c.verdict)),
       el("span", { class: "ok-chain" }, chainLabel),
       el("span", { class: "ok-conf" }, `${t("ui.home.confidence")} ${(c.confidence * 100).toFixed(0)}%${cribTag}`)),
-    valEl,
+    wrap,
     resultSourceLine(c, chainLabel),
     renderEvidenceChips(c),
   );
   appendResultActions(card, c.result);
-  if (isLong) {
-    const expandBtn = el("span", { class: "ok-expand" }, t("ui.common.expand", c.result.length));
-    let expanded = false;
-    expandBtn.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      expanded = !expanded;
-      if (expanded) { valEl.textContent = c.result; expandBtn.textContent = t("ui.common.collapse"); }
-      else { valEl.textContent = c.result.slice(0, 500) + " …"; expandBtn.textContent = t("ui.common.expand", c.result.length); }
-    });
-    card.append(expandBtn);
-  }
-  attachCardTools(card, valEl, c.result);
+  attachCardTools(card, getText);
   return markTocCard(card, {
     title: chainLabel || c.chain[0] || "结果",
     color: verdictColor(c.verdict),
@@ -3009,7 +2987,7 @@ function renderFileReport(outWrap, r, opts = {}) {
       card.addEventListener("dblclick", () => openSectionView(s.title, viewAct));
     }
 
- // 二维码/条码结果：直接给可编辑文本框 + 一键复制 + 送入智能解码（不再是只读长串）。
+  // 二维码/条码结果保持只读；复制和送入智能解码均取原始识别文本。
     const isQr = /^img-qr/.test(String(s.id || "")) && !/flag/.test(String(s.id || ""));
     if (isQr) {
       let text = viewAct && typeof viewAct.text === "string" ? viewAct.text : null;
@@ -3020,20 +2998,20 @@ function renderFileReport(outWrap, r, opts = {}) {
       if (text) {
         const ta = el("textarea", {
           class: "file-qr-edit", rows: Math.min(10, Math.max(2, text.split("\n").length + 1)),
-          spellcheck: "false", "aria-label": "识别结果（可编辑）",
+          readonly: true, "aria-readonly": "true", spellcheck: "false", "aria-label": t("ui.op.outTitle"),
         });
         ta.value = text;
         const bar = el("div", { class: "file-section-actions" });
         bar.append(el("button", {
           class: "file-section-act",
-          onclick: (e) => { e.stopPropagation(); copyPlainText(ta.value, "二维码内容已复制"); },
+          onclick: (e) => { e.stopPropagation(); copyPlainText(text, "二维码内容已复制"); },
         }, msym("content_copy", "file-act-glyph"), el("span", {}, "复制内容")));
         bar.append(el("button", {
           class: "file-section-act",
           onclick: (e) => {
             e.stopPropagation();
-            if (outWrap.__sendToHome) outWrap.__sendToHome(ta.value);
-            else copyPlainText(ta.value, "已复制（未找到首页输入框）");
+            if (outWrap.__sendToHome) outWrap.__sendToHome(text);
+            else copyPlainText(text, "已复制（未找到首页输入框）");
           },
         }, msym("bolt", "file-act-glyph"), el("span", {}, "送入智能解码")));
         card.append(ta, bar);
@@ -3906,12 +3884,12 @@ function renderOp() {
   const workbench = el("div", { class: "op-workbench", "data-workbench-key": `op:${op.id}` }, config, splitter, data);
   $ws.append(workbench);
 
- // 方向切换（仅双向 op 显示）
-  const isDual = op.encode && op.decode;
-  if (isDual) {
-    const seg = el("div", { class: "dir-seg" },
-      el("button", { class: state.dir === "encode" ? "on" : "", onclick: () => { state.dir = "encode"; convert(); updateDirSeg(); } }, t("ui.op.encode")),
-      el("button", { class: state.dir === "decode" ? "on" : "", onclick: () => { state.dir = "decode"; convert(); updateDirSeg(); } }, t("ui.op.decode")),
+  // 方向切换（仅双向 op 显示）
+   const isDual = op.encode && op.decode;
+   if (isDual) {
+     const seg = el("div", { class: "dir-seg" },
+        el("button", { class: state.dir === "encode" ? "on" : "", onclick: () => { state.dir = "encode"; convert(); updateDirSeg(); } }, t("ui.op.encode")),
+        el("button", { class: state.dir === "decode" ? "on" : "", onclick: () => { state.dir = "decode"; convert(); updateDirSeg(); } }, t("ui.op.decode")),
     );
     seg.id = "dirSeg";
     config.append(seg);
@@ -3920,7 +3898,7 @@ function renderOp() {
  // 参数栏
   if (op.params.length) {
     const bar = el("div", { class: "op-params" });
-    for (const d of op.params) bar.append(renderParam(op, d));
+     for (const d of op.params) bar.append(renderParam(op, d));
     config.append(bar);
   }
 
@@ -4029,9 +4007,9 @@ function renderOp() {
 
  // 转换动作条：显式「转换/一键解码」按钮，不监听 input 实时跑。
   // encode-only 的按钮此前一律写「解码」（qrGen 实际在编码），按真实方向取文案。
-  const actLabel = isDual || op.run ? t("ui.op.convert")
-    : (op.decode ? t("ui.op.decode") : t("ui.op.encode"));
-  const runAct = el("button", { class: "act-btn primary", type: "button", "aria-keyshortcuts": "Control+Enter Meta+Enter" }, msym(isDual ? "sync_alt" : "bolt"), " " + actLabel);
+   const actLabel = isDual || op.run ? t("ui.op.convert")
+     : (op.decode ? t("ui.op.decode") : t("ui.op.encode"));
+   const runAct = el("button", { class: "act-btn primary", type: "button", "aria-keyshortcuts": "Control+Enter Meta+Enter" }, msym(isDual ? "sync_alt" : "bolt"), " " + actLabel);
   runAct.addEventListener("click", async () => {
     clearTimeout(_paramConvertTimer);
     runAct.classList.remove("pending-run"); // 惰执行 pending 高亮：用户已显式执行，撤掉呼吸提示
@@ -4170,53 +4148,26 @@ function renderOp() {
     outArea.__opFeedback?.set("idle");
   };
 
-  const extraInputTools = el("details", { class: "io-tools-more" },
-    el("summary", { class: "tool-btn", title: t("ui.topbar.more"), "aria-label": t("ui.topbar.more") }, msym("expand_more")),
-    el("div", { class: "io-tools-extra" }, fontDec, fontInc,
-      el("button", {
-        class: "tool-btn batch-open", type: "button", title: t("ui.workbench.batch"), "aria-label": t("ui.workbench.batch"),
-        onclick: () => openBatchDialog(null, { op: currentBatchOp(), params: { ...state.params } }),
-      }, msym("layers")),
-      hasFields ? null : toolBtn("select_all", t("ui.op.selectAll"), () => selectAllIO(inArea)),
-      hasFields ? null : toolBtn("download", t("ui.op.export"), () => exportTextAsFile(inArea.value)),
-    ));
-  for (const [name, label, action] of [
-    ["undo", "ui.op.undo", () => inArea.__editHistory?.undo()],
-    ["redo", "ui.op.redo", () => inArea.__editHistory?.redo()],
-  ]) {
-    if (hasFields) continue;
-    const button = toolBtn(name, t(label), action);
-    button.classList.add("io-touch-tool");
-    extraInputTools.querySelector(".io-tools-extra").prepend(button);
-  }
-  const compactFile = toolBtn('cloud_upload', t('ui.op.pickFile'), () => pickFileIntoArea(inArea, triggerConvert));
-  compactFile.classList.add('io-compact-file');
-  if (!hasFields) extraInputTools.querySelector('.io-tools-extra').append(compactFile);
-  const extraOutputTools = el('details', { class: 'io-tools-more' },
-    el('summary', { class: 'tool-btn', title: t('ui.topbar.more'), 'aria-label': t('ui.topbar.more') }, msym('expand_more')),
-    el('div', { class: 'io-tools-extra' },
-      toolBtn('select_all', t('ui.op.selectAll'), () => selectAllIO(outArea)),
-      toolBtn('open_in_full', t('ui.expand.title'), () => {
-        extraOutputTools.open = false; extraOutputTools.querySelector('summary').focus({ preventScroll: true });
-        openExpandModal(outArea.value, null, { modalTitle: t('ui.op.outTitle'), cancelLabel: t('ui.ci.close'), readonly: true });
-      })));
-  for (const menu of [extraInputTools, extraOutputTools]) {
-    menu.addEventListener("click", event => {
-      if (event.target.closest("button")) {
-        menu.open = false;
-        menu.querySelector("summary").focus({ preventScroll: true });
-      }
-    });
-    menu.addEventListener("keydown", event => {
-      if (event.key === "Escape") { event.preventDefault(); menu.open = false; menu.querySelector("summary").focus(); }
-    });
-  }
-  for (const eventName of ["focusin", "pointerdown"]) workbench.addEventListener(eventName, event => {
-    // Observe the settled destination, avoiding Safari's transient BODY focus
-    // between pointer-down and the eventual button click.
-    if (!extraInputTools.contains(event.target)) extraInputTools.open = false;
-    if (!extraOutputTools.contains(event.target)) extraOutputTools.open = false;
-  });
+  const extraInputTools = el("div", { class: "io-tools-extra" }, fontDec, fontInc,
+    el("button", {
+      class: "tool-btn batch-open", type: "button", title: t("ui.workbench.batch"), "aria-label": t("ui.workbench.batch"),
+      onclick: () => openBatchDialog(null, { op: currentBatchOp(), params: { ...state.params } }),
+    }, msym("layers")),
+    hasFields ? null : toolBtn("select_all", t("ui.op.selectAll"), () => selectAllIO(inArea)),
+    hasFields ? null : toolBtn("download", t("ui.op.export"), () => exportTextAsFile(inArea.value)),
+  );
+  const extraOutputTools = el('div', { class: 'io-tools-extra' },
+    toolBtn('select_all', t('ui.op.selectAll'), () => selectAllIO(outArea)),
+    toolBtn('open_in_full', t('ui.expand.title'), () => {
+      openExpandModal(outAreaFullText(outArea), null, { modalTitle: t('ui.op.outTitle'), cancelLabel: t('ui.ci.close'), readonly: true });
+    }));
+  const keepToolVisible = event => {
+    const tools = event.currentTarget, button = event.target.closest('button');
+    if (!button || !tools.contains(button)) return;
+    const bounds = tools.getBoundingClientRect(), rect = button.getBoundingClientRect();
+    const delta = rect.left < bounds.left ? rect.left - bounds.left : Math.max(0, rect.right - bounds.right);
+    if (delta) tools.scrollBy({ left: delta, behavior: 'instant' });
+  };
   const inputCodingMount = el("div", { class: "io-coding-mount io-coding-above" });
   const outputCodingMount = el("div", { class: "io-coding-mount io-coding-below" });
   const feedback = createOpFeedback(outArea, runAct, { getInputIdentity: () => JSON.stringify([
@@ -4243,7 +4194,7 @@ function renderOp() {
   // 输入
     el("div", { class: "io-pane io-pane-input" }, inputCodingMount,
       createIoEditorFrame(t('ui.op.inTitle'),
-        el("div", { class: "io-pane-tools" },
+        el("div", { class: "io-pane-tools", onfocusin: keepToolVisible },
           hasFields ? null : toolBtn("undo", t("ui.op.undo"), () => inArea.__editHistory?.undo()),
           hasFields ? null : toolBtn("redo", t("ui.op.redo"), () => inArea.__editHistory?.redo()),
           hasFields ? null : toolBtn("content_paste", t("ui.op.paste"), async () => { try { inArea.value = await navigator.clipboard.readText(); invalidateFileBytes(inArea); outArea.__opFeedback?.markStale(); } catch { toast(t("ui.toast.clipFail")); } }),
@@ -4259,7 +4210,7 @@ function renderOp() {
  // 输出
     el("div", { class: "io-pane io-pane-output" },
       createIoEditorFrame(t('ui.op.outTitle'),
-        el("div", { class: "io-pane-tools" },
+        el("div", { class: "io-pane-tools", onfocusin: keepToolVisible },
           toolBtn("content_copy", t("ui.op.copy"), () => { navigator.clipboard?.writeText(outAreaFullText(outArea)); toast(t("ui.toast.copied")); }),
           toolBtn("download", t("ui.op.export"), () => exportTextAsFile(outAreaFullText(outArea))),
           extraOutputTools,
@@ -6015,7 +5966,6 @@ function renderAbout(host) {
   );
 
   page.append(el("div", { class: "about-hero" }, logo, title, ver, intro, repoBtn, docBtns));
-  docBtns.append(el('a', { class: 'about-repo-btn', href: 'public/license-verifier/index.html', target: '_blank', rel: 'noopener noreferrer' }, msym('verified'), t('ui.about.verifyLicense')));
   if (showLocalQuote(getLocale())) page.append(el('blockquote', { class: 'about-local-quote' },
     el('p', {}, '“' + LOCAL_QUOTE.text + '”'), el('footer', {}, LOCAL_QUOTE.attribution)));
 
@@ -6211,6 +6161,14 @@ function renderAbout(host) {
   } else {
     licNodes.push(pill("oss", t("ui.about.regSourceGithub"), null));
   }
+  licNodes.push(el("div", { class: "about-public-key" },
+    el("div", { class: "about-public-key-label" }, "离线验签公钥（SPKI Base64）"),
+    el("code", { class: "about-public-key-value", dir: "ltr" }, PUBLIC_KEY_B64),
+    el("button", { type: "button", class: "chip-btn", onclick: async () => {
+      try { await navigator.clipboard.writeText(PUBLIC_KEY_B64); toast("公钥已复制"); }
+      catch { /* 保留可选中的公钥文本 */ }
+    } }, "复制公钥"),
+  ));
   page.append(section("ui.about.regTitle", ...licNodes));
 
  // 天珩字库版权与修改声明（作者沈天珩本人要求，法律硬约束）

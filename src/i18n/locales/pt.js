@@ -225,7 +225,7 @@ export default {
   "op.alternatingCaps.name": "Maiúsculas Alternadas",
 
  // ---- UI: topbar ----
-  "ui.brand.title": "EBCTFCodeBox",
+  "ui.brand.title": "EBCrypto",
   "ui.topbar.update": "Verificar Atualização",
   "ui.topbar.repo": "GitHub",
   "ui.topbar.theme": "Alternar Tema",
@@ -492,7 +492,7 @@ export default {
   "ui.font.loaded": "Carregado",
   "ui.font.retry": "Tentar novamente",
   "ui.font.btn": "Biblioteca de Fontes",
-  "ui.loading.title": "EBCTFCodeBox",
+  "ui.loading.title": "EBCrypto",
   "ui.loading.core": "Carregando módulos principais",
   "ui.loading.fonts": "Carregando fontes",
   "ui.loading.ui": "Inicializando interface",
@@ -1295,6 +1295,7 @@ export default {
   "ui.custom.preset": "Predefinição",
   "ui.custom.vars": "Variáveis disponíveis",
   "ui.custom.helpers": "Funções auxiliares",
+  "ui.custom.assistant": "Assistant panel",
   "ui.custom.run": "Execução de teste",
   "ui.custom.save": "Salvar",
   "ui.custom.importBtn": "Importar .js",
@@ -1321,7 +1322,6 @@ export default {
   "ui.custom.confirmDel": "Excluir o esquema «{0}»?",
   "ui.custom.sandboxWorker": "Sandbox: thread dedicado (acesso à rede e ao armazenamento removidos; pode ser encerrado à força ao exceder o tempo limite)",
   "ui.custom.sandboxMain": "Fallback: execução na thread principal (sem isolamento de thread; loops infinitos não podem ser interrompidos)",
-  "ui.custom.reset": "Redefinir para o modelo",
   "ui.custom.clear": "Apagar a implementação personalizada deste op",
   "ui.custom.lineCol": "Linha {0}, coluna {1}",
   "ui.qc.tabAsm": "Código de máquina ⇄ Assembly",

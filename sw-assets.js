@@ -1,4 +1,4 @@
-self.__EBCTF_ASSET_REV = "d1a1e444d4ca648e";
+self.__EBCTF_ASSET_REV = "734a40e9bc437b44";
 self.__EBCTF_ASSETS = [
   "./",
   "./index.html",
@@ -41,6 +41,13 @@ self.__EBCTF_ASSETS = [
   "./public/icons/sync_alt.svg",
   "./public/icons/tag.svg",
   "./public/icons/terminal.svg",
+  "./public/icons/tools/7zip.svg",
+  "./public/icons/tools/git.svg",
+  "./public/icons/tools/node.svg",
+  "./public/icons/tools/npm.svg",
+  "./public/icons/tools/openjdk.svg",
+  "./public/icons/tools/python.svg",
+  "./public/icons/tools/sagemath.svg",
   "./public/icons/translate.svg",
   "./public/icons/update.svg",
   "./public/icons/vpn_key.svg",
@@ -968,7 +975,6 @@ self.__EBCTF_ASSETS = [
   "./src/ui/textContextMenu.js",
   "./src/ui/theme.css",
   "./src/ui/themePicker.js",
-  "./src/ui/themedSelect.js",
   "./src/ui/themes-m3.css",
   "./src/ui/themes.css",
   "./src/ui/topbar-responsive.css",

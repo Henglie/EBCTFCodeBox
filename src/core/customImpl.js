@@ -657,30 +657,6 @@ return input.toUpperCase().split("").filter((ch) => MORSE[ch]).map((ch) => enc(M
   },
 ];
 
-/** 通用模板（新建时的起始代码）。一段可直接运行的最小示例，把 input / params / dir / H 各演示一次。 */
-export const CUSTOM_TEMPLATE = `// 这是一个可以直接跑的示例：把 input 转成 hex 编码。
-// 试试：左边输入 hello，点「编码」→ 得到 68656c6c6f；点「解码」→ 回到 hello。
-
-// dir 告诉你现在是在编码还是解码，各写各的逻辑就行。
-if (dir === "decode") {
-  // 解码方向：hex 字符串 → 文本
-  // H.hexDecode 把 hex 串变成字节数组，H.utf8Decode 再把它变回文本。
-  return H.utf8Decode(H.hexDecode(input));
-}
-
-// 编码方向：文本 → hex 字符串
-// input 就是左边输入框的原文，直接用。
-let text = input;
-
-// params 跟上方参数栏一模一样：参数栏加一个 reverse 参数，这里就能读 params.reverse。
-// 用途举例：把字符串倒过来再编码。
-if (params.reverse === "true") {
-  text = text.split("").reverse().join("");
-}
-
-// H.utf8Encode 把文本变成字节，H.hexEncode 把字节变成 hex 串。
-return H.hexEncode(H.utf8Encode(text));`;
-
 // ============ 预设登记（插件可注入，见 pluginContext.registerCustomImpl） ============
 
 const _extraPresets = [];

@@ -35,7 +35,7 @@ export default {
     examples: [
       { in: "DCODE", out: "⎅☊⍜⎅⟒", desc: "dCode official example" },
       { in: "⏃⌰⟟⟒⋏", out: "ALIEN", desc: "The page-title example, reversed" },
-      { in: "FUTURAMA", param: "futurama2 mode", out: "FZSMDDPP", desc: "dCode AL2 official example (autokey shift)" },
+      { in: "FUTURAMA", param: "mode=futurama2", out: "FZSMDDPP", desc: "Encode: dCode AL2 official example (autokey shift)" },
     ],
     tips: [
       "The show's AL1/AL2 glyphs are images and hobbyist fonts only; the unicode mode uses dCode's table — the only written Unicode mapping.",

@@ -225,7 +225,7 @@ export default {
   "op.alternatingCaps.name": "Alternating Caps",
 
  // ---- UI: topbar ----
-  "ui.brand.title": "EBCTFCodeBox",
+  "ui.brand.title": "EBCrypto",
   "ui.topbar.update": "Güncelleme Denetle",
   "ui.topbar.repo": "GitHub",
   "ui.topbar.theme": "Temayı Değiştir",
@@ -499,7 +499,7 @@ export default {
   "ui.font.loaded": "Yüklendi",
   "ui.font.retry": "Yeniden dene",
   "ui.font.btn": "Yazı Tipi Kütüphanesi",
-  "ui.loading.title": "EBCTFCodeBox",
+  "ui.loading.title": "EBCrypto",
   "ui.loading.core": "Çekirdek modüller yükleniyor",
   "ui.loading.fonts": "Yazı tipleri yükleniyor",
   "ui.loading.ui": "Arayüz başlatılıyor",
@@ -1307,6 +1307,7 @@ export default {
   "ui.custom.preset": "Ön ayar",
   "ui.custom.vars": "Kullanılabilir değişkenler",
   "ui.custom.helpers": "Yardımcı fonksiyonlar",
+  "ui.custom.assistant": "Assistant panel",
   "ui.custom.run": "Test çalıştır",
   "ui.custom.save": "Kaydet",
   "ui.custom.importBtn": ".js içe aktar",
@@ -1333,7 +1334,6 @@ export default {
   "ui.custom.confirmDel": "\"{0}\" şeması silinsin mi?",
   "ui.custom.sandboxWorker": "Sandbox: bağımsız iş parçacığı (ağ ve depolama erişimi kaldırıldı; zaman aşımında zorla sonlandırılabilir)",
   "ui.custom.sandboxMain": "Yedek mod: ana iş parçacığında yürütme (iş parçacığı yalıtımı yok; sonsuz döngü kesilemez)",
-  "ui.custom.reset": "Şablona sıfırla",
   "ui.custom.clear": "Bu op'un özel uygulamasını temizle",
   "ui.custom.lineCol": "Satır {0}, Sütun {1}",
   "ui.qc.tabAsm": "Makine kodu ⇄ Assembly",

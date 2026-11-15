@@ -15,7 +15,7 @@
  * 分层：本文件只管渲染与事件。执行走 core/customImplClient.js（Worker 沙箱 + 超时硬杀），
  * 持久化走 core/customImplStore.js（纯数据）。UI 层零算法实现。
  */
-import { presetsFor, CUSTOM_TEMPLATE, CUSTOM_VAR_SIGNATURES, CUSTOM_HELPER_SIGNATURES } from "../core/customImpl.js";
+import { presetsFor, CUSTOM_VAR_SIGNATURES, CUSTOM_HELPER_SIGNATURES } from "../core/customImpl.js";
 import {
   getCustomImpl, saveCustomImpl, setEnabled, clearCustomImpl,
 } from "../core/customImplStore.js";
@@ -24,7 +24,6 @@ import { icon as iconSvg } from "./icons.js";
 import { attachModalLifecycle } from "./modalLifecycle.js";
 import { codeInputExtensions } from './customCodeInput.js';
 import { enterSurface } from './expressiveMotion.js';
-import { themedSelect } from './themedSelect.js';
 
 // ---- CM6 bundle（单文件 ESM，已真浏览器验证） ----
 // ⚠ 性能审计 H2：821KB bundle 曾是顶层静态 import，随 main.js 进首屏关键路径——
@@ -76,6 +75,7 @@ const _ZH = {
   "ui.custom.preset": "预设",
   "ui.custom.vars": "可用变量",
   "ui.custom.helpers": "工具函数",
+  "ui.custom.assistant": "助手面板",
   "ui.custom.run": "测试运行",
   "ui.custom.save": "保存",
   "ui.custom.importBtn": "导入 .js",
@@ -104,7 +104,6 @@ const _ZH = {
   "ui.custom.sandboxWorker": "沙箱：独立线程（网络可用，外发与否由你的代码决定；超时可强制终止）",
   "ui.custom.sandboxMain": "降级：主线程执行（无线程隔离，死循环无法中断）",
   "ui.custom.randWarn": "取随机请用 H.randBytes / H.randHex / H.randInt；不要直接调 crypto.getRandomValues——那是裸系统随机，不受「增强随机性」控制。",
-  "ui.custom.reset": "重置为模板",
   "ui.custom.clear": "清除本 op 的自定义实现",
   "ui.custom.errLine": "第 {0} 行",
   "ui.custom.lineCol": "行 {0}，列 {1}",
@@ -225,7 +224,7 @@ const CI_CSS = `
 .ci-edit-btn .msym svg{width:18px;height:18px;}
 
 /* ============ 遮罩 + 弹窗（对齐 .ds-overlay/.ds-dialog 范本） ============ */
-.ci-mask{position:fixed;inset:0;background:color-mix(in srgb,var(--on-surface) 40%,transparent);z-index:900;display:flex;align-items:center;justify-content:center;padding:var(--sp-4);}
+.ci-mask{position:fixed;inset:0;background:rgb(0 0 0 / .58);z-index:900;display:flex;align-items:center;justify-content:center;padding:var(--sp-4);backdrop-filter:none!important;filter:none!important;}
 .ci-mask.full{padding:0;}
 .ci-dialog{--ci-fs:15px;--ci-lh:23px;position:relative;background:var(--surface-1);border:0;border-radius:var(--r-xl);max-width:1440px;width:100%;height:calc(100dvh - 32px);display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--elevation-floating,var(--el-3));touch-action:manipulation;}
 .ci-mask.full .ci-dialog{max-width:none;width:100%;height:100%;border-radius:0;border:0;animation:none;}
@@ -233,8 +232,10 @@ const CI_CSS = `
 .ci-loading-card h3,.ci-loading-card p{margin:0;overflow-wrap:anywhere;}
 .ci-loading-card progress{width:100%;height:6px;accent-color:var(--primary);}
 .ci-loading-card .btn{align-self:flex-end;min-height:44px;}
-.ci-loading-stage{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--surface-1) 92%,transparent);padding:16px;box-sizing:border-box;}
+.ci-loading-stage{position:absolute;inset:auto 16px 16px auto;z-index:20;display:flex;align-items:flex-end;justify-content:flex-end;width:min(420px,calc(100% - 32px));padding:0;box-sizing:border-box;pointer-events:none;background:transparent!important;}
+.ci-loading-stage .ci-loading-card{width:100%;padding:14px 16px;gap:10px;pointer-events:auto;}
 .ci-loading-stage[hidden]{display:none;}
+.ci-loading-mask{transition:opacity 160ms var(--ease-out);}
 
 /* ---- 头部（对齐 .ds-head：标题图标染 primary，右侧操作区靠右；全部 .ci-dialog 作用域，防泄漏污染编码图查询器同名类） ---- */
 .ci-dialog .ci-head{display:flex;align-items:center;gap:12px;padding:8px 16px;border:0;min-height:64px;flex-wrap:wrap;flex:none;}
@@ -257,7 +258,8 @@ const CI_CSS = `
 .ci-editor-toolbar{display:flex;align-items:center;gap:4px;padding:0 0 8px;border:0;background:transparent;flex-wrap:wrap;flex:none;margin:0;}
 .ci-editor-toolbar .ci-editor-title{flex:1;font-size:12px;color:var(--on-surface-var);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:60px;}
 .ci-editor-wrap{position:relative;flex:1;min-height:0;overflow:hidden;background:var(--surface);border:1px solid var(--outline-var);border-radius:var(--r-lg);margin:0;box-shadow:none;}
-.ci-editor-wrap .cm-editor{height:100%;}
+.ci-editor-wrap .cm-editor{height:100%;background:var(--surface)!important;}
+.ci-editor-wrap .cm-scroller{background:var(--surface)!important;}
 .ci-editor-wrap .cm-scroller,.ci-spanel-pre .cm-scroller{font-family:var(--mono,monospace);font-variant-ligatures:none;font-feature-settings:"liga" 0,"calt" 0;line-height:var(--ci-lh);overscroll-behavior:contain;scroll-padding-block:16px;}
 .ci-editor-wrap .cm-content{min-height:100%;padding:12px 0;}
 .ci-editor-wrap .cm-line{padding:0 10px;direction:ltr;text-align:left;}
@@ -296,6 +298,7 @@ const CI_CSS = `
 /* 错误行标记（绝对定位覆盖层 + 行号列 exclamation） */
 .ci-err-mark{position:absolute;left:0;right:0;background:color-mix(in srgb,var(--error) 20%,transparent);border-inline-start:3px solid var(--error);pointer-events:none;display:none;z-index:2;box-sizing:border-box;}
 .ci-editor-wrap .cm-gutterElement.ci-gutter-err{color:var(--error);font-weight:700;}
+.ci-editor-wrap .cm-line.ci-error-line{background:color-mix(in srgb,var(--error) 14%,transparent);box-shadow:inset 3px 0 var(--error);}
 
 /* ---- 源码面板（右半，只读）：结构与左栏完全一致——独立工具栏卡片 + 独立内容卡片（M3 统一） ---- */
 .ci-dialog .ci-spanel{flex:none;width:44%;max-width:520px;min-width:220px;display:flex;flex-direction:column;gap:var(--sp-1);}
@@ -350,7 +353,11 @@ const CI_CSS = `
 .ci-panel-filter{position:sticky;top:0;z-index:1;padding:4px 8px;border-bottom:1px solid var(--outline-var);background:var(--surface-1);}
 .ci-randwarn{display:flex;align-items:flex-start;gap:6px;margin:8px 8px 4px;padding:6px 8px;border:1px solid var(--outline-var);border-radius:var(--r-sm);color:var(--warning);font-size:11.5px;line-height:1.6;}
 .ci-randwarn .msym{flex:none;font-size:15px;}
-.ci-panel-filter input{width:100%;box-sizing:border-box;height:32px;background:var(--surface-2);border:1px solid var(--outline-var);border-radius:var(--r-sm);color:var(--on-surface);padding:0 8px;font-size:11.5px;}
+.ci-panel-filter input{width:100%;box-sizing:border-box;height:38px;background:var(--surface-2);border:1px solid var(--outline-var);border-radius:var(--r-sm);color:var(--on-surface);padding:0 10px;font-size:12px;}
+.ci-assist-tabs{display:flex;gap:4px;padding:6px 8px;background:var(--surface-1);position:sticky;top:0;z-index:2;}
+.ci-assist-tab{flex:1;min-height:36px;border:0;border-radius:var(--r-full);background:transparent;color:var(--on-surface-var);cursor:pointer;font:inherit;font-size:12px;}
+.ci-assist-tab.on,.ci-assist-tab:hover{background:var(--primary-container);color:var(--on-primary-container);}
+.ci-panel [hidden]{display:none!important;}
 .ci-chip{display:block;width:100%;min-height:36px;text-align:start;background:none;border:0;color:var(--on-surface-var);padding:8px 12px;cursor:pointer;font-family:var(--mono,monospace);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:ltr;}
 .ci-chip:hover{background:color-mix(in srgb,var(--primary) 18%,transparent);color:var(--on-primary-container);}
 .ci-builtin{padding:6px 10px;border-bottom:1px solid var(--outline-var);}
@@ -360,18 +367,24 @@ const CI_CSS = `
 .ci-builtin .btn{width:100%;justify-content:center;}
 
 /* ---- 底部按钮区 ---- */
-.ci-foot{display:flex;align-items:center;gap:8px;padding:8px 16px 12px;border:0;flex-wrap:wrap;flex:none;min-height:60px;}
+.ci-foot{display:block;padding:8px 16px 12px;border:0;flex:none;min-height:60px;}
+.ci-foot-main{display:flex;align-items:center;gap:8px;width:100%;min-width:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;}
+.ci-foot-main::-webkit-scrollbar{display:none;}
+ .ci-foot-secondary{display:flex;align-items:center;gap:8px;min-width:0;}
 .ci-foot .btn{white-space:nowrap;flex:none;min-height:44px;}
 .ci-foot .spacer{flex:1;}
 .ci-dialog .btn:not(.btn-filled):not(.btn-icon):not(.btn-outlined){background:var(--control-track);color:var(--on-surface);}
 .ci-dialog .btn-icon{width:36px;height:36px;min-width:36px;}
 .ci-dialog .btn{font-size:var(--fs-sm);}
 .ci-dialog .ci-header-close{width:44px;height:44px;}
-.ci-dialog select{background:var(--control-track);border:0;border-radius:var(--r-md);color:var(--on-surface);height:44px;box-sizing:border-box;padding:0 12px;font-size:13px;}
+.ci-dialog select{background:var(--field-bg);border:1px solid var(--outline);border-radius:var(--r-md);color:var(--on-surface);height:44px;min-height:44px;box-sizing:border-box;padding:0 12px;font-size:var(--fs-sm);cursor:pointer;}
 .ci-editor-more{position:relative;}
 .ci-editor-more>summary{list-style:none;}
 .ci-editor-more>summary::-webkit-details-marker{display:none;}
-.ci-editor-more-menu{position:absolute;inset-inline-end:0;bottom:calc(100% + 8px);width:220px;padding:8px;display:flex;flex-direction:column;gap:8px;background:var(--surface-3);border-radius:var(--r-lg);box-shadow:var(--elevation-floating,var(--el-3));z-index:10;}
+.ci-editor-more-menu{position:absolute;inset-inline-end:0;bottom:calc(100% + 8px);width:240px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--surface-3);border:1px solid var(--outline);border-radius:var(--r-lg);box-shadow:var(--elevation-floating,var(--el-3));z-index:50;}
+.ci-editor-more-menu .btn{width:100%;justify-content:flex-start;min-height:42px;background:var(--surface-2)!important;border:1px solid var(--outline-var)!important;color:var(--on-surface)!important;}
+.ci-editor-more-menu .btn:hover,.ci-editor-more-menu .btn:focus-visible{background:var(--primary-container)!important;color:var(--on-primary-container)!important;border-color:var(--primary)!important;}
+.ci-editor-more>summary{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:0 12px;background:var(--control-track);border:1px solid var(--outline-var);color:var(--on-surface);}
 .ci-editor-more:not([open])>.ci-editor-more-menu{display:none;}
 .ci-meta{display:flex;align-items:center;flex:none;min-height:26px;gap:8px;}
 .ci-meta .ci-status{flex:1;min-width:0;border:0;padding:8px 0;}
@@ -420,8 +433,6 @@ html[data-theme="light"] .ci-dialog{--ci-hl-kw:#b4501a;--ci-hl-str:#256d47;--ci-
   .ci-dialog .ci-head h3{min-width:0;}
   .ci-dialog .ci-head .ci-ops{order:3;flex:1 0 100%;margin:0;gap:4px;}
   .ci-dialog .ci-head select{flex:1 1 0;width:0;min-width:0;max-width:100%;}
-  .ci-dialog .ci-panel{position:absolute;inset-block:0;inset-inline-end:0;inset-inline-start:auto;width:min(86%,320px)!important;height:100%;border:0;flex-direction:column;overflow-y:auto;z-index:5;box-shadow:var(--el-3);}
-  .ci-dialog .ci-resize-v{display:none;}
   .ci-dialog .ci-panel .ci-psec,.ci-dialog .ci-panel .ci-builtin{min-width:0;}
   .ci-dialog .ci-panel .ci-psec.grow{flex:1;min-height:0;}
   .ci-meta .ci-sandbox{max-width:44%;}
@@ -451,14 +462,34 @@ html[data-theme="light"] .ci-dialog{--ci-hl-kw:#b4501a;--ci-hl-str:#256d47;--ci-
 @media (max-width:860px) and (max-height:640px){
   .ci-panel{height:min(var(--ci-panel-h,168px),30vh);}
 }
-/* One downward disclosure owns scrolling for all source/variable/helper items. */
-.ci-dialog .ci-panel{position:absolute;inset:auto 16px;top:var(--ci-tools-top,64px);z-index:8;width:auto!important;height:min(50dvh,360px)!important;max-height:max(80px,calc(100% - var(--ci-tools-top,64px) - 72px));min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;margin:0;box-shadow:var(--elevation-floating,var(--el-3));}
+/* ---- 底部操作行：一条基线，所有按钮同高同间距；只有按钮行在窄屏横向滚动 ---- */
+.ci-dialog .ci-foot{display:block;padding:10px 16px 12px;border:0;flex:none;}
+.ci-dialog .ci-foot-main{display:flex;align-items:center;gap:8px;width:100%;min-width:0;flex-wrap:nowrap;overflow-x:auto;overflow-y:visible;scrollbar-width:none;}
+.ci-dialog .ci-foot-main::-webkit-scrollbar{display:none;}
+.ci-dialog .ci-foot-actions{display:flex;align-items:center;gap:8px;flex:none;}
+.ci-dialog .ci-foot-sep{width:1px;height:24px;flex:none;margin-inline:4px;background:var(--outline-var);}
+.ci-dialog .ci-foot .btn{white-space:nowrap;flex:none;min-height:44px;height:44px;padding-inline:16px;font-size:var(--fs-sm);}
+.ci-dialog .ci-foot .btn-icon{width:44px;min-width:44px;padding:0;height:44px;}
+.ci-dialog .ci-foot .spacer{flex:1 1 auto;min-width:12px;}
+.ci-dialog .ci-editor-actions{display:flex;align-items:center;gap:8px;flex:none;}
+
+/* ---- 助手浮层：锚定「工具函数」按钮向上弹出，不占布局、不推挤编辑区（语言菜单同款） ---- */
+.ci-dialog .ci-panel.ci-assist-pop{position:absolute;z-index:40;display:flex;flex-direction:column;gap:0;padding:0;width:360px;max-width:calc(100% - 24px);
+  max-height:min(420px,62vh);overflow:auto;overscroll-behavior:contain;background:var(--surface-2);color:var(--on-surface);
+  border:1px solid var(--outline);border-radius:var(--r-md);box-shadow:0 8px 24px rgba(0,0,0,.28);}
+.ci-dialog .ci-panel.ci-assist-pop.open{display:flex;}
+.ci-dialog.ci-tools-hidden .ci-panel.ci-assist-pop{display:none;}
+.ci-dialog .ci-panel.ci-assist-pop .ci-builtin,.ci-dialog .ci-panel.ci-assist-pop .ci-psec{overflow:visible;flex:none;min-height:0;max-height:none;}
+.ci-dialog .ci-panel.ci-assist-pop .ci-panel-filter{position:sticky;top:0;z-index:2;}
+.ci-dialog .ci-panel.ci-assist-pop .ci-assist-tabs{position:sticky;top:47px;z-index:2;}
 .ci-dialog .ci-panel .ci-psec,.ci-dialog .ci-panel .ci-psec.grow{overflow:visible;flex:none;min-height:0;max-height:none;}
 .ci-dialog .ci-panel h4{position:static;white-space:normal;}
 .ci-dialog .ci-chip{white-space:normal;overflow-wrap:anywhere;min-height:40px;}
 .ci-dialog .ci-body{min-height:min(120px,28dvh);}
 .ci-dialog .ci-resize-v{display:none;}
-@media(max-width:860px){.ci-dialog .ci-panel{inset-inline:12px;}}
+@media(max-width:860px){
+  .ci-dialog .ci-panel.ci-assist-pop{width:min(92%,360px);}
+}
 `;
 
 // ============ 开关行（挂在 op 参数栏后） ============
@@ -582,6 +613,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   if (active?.mask?.isConnected) { active.focus?.(); return; }
   if (_pendingEditors.has(opId)) { _pendingEditors.get(opId).focus(); return; }
   let CM;
+  let releaseLoadingMask = null;
   if (_CM) CM = _CM;
   else {
     const loadingMask = el('div', { class: 'ci-mask ci-loading-mask' });
@@ -607,11 +639,19 @@ export async function openCustomImplEditor(opId, ctx = {}) {
       return;
     }
     if (cancelled || epoch !== editorEpoch) { dispose(); return; }
-    dispose();
+    releaseLoadingMask = () => {
+      loadingMask.style.opacity = '0';
+      loadingMask.style.pointerEvents = 'none';
+      requestAnimationFrame(() => {
+        lifecycle?.release();
+        if (_pendingEditors.get(opId) === ticket) _pendingEditors.delete(opId);
+        if (loadingMask.isConnected) loadingMask.remove();
+      });
+    };
   }
   if (epoch !== editorEpoch) return;
   const {
-    EditorView, EditorState, Compartment, lineNumbers,
+    EditorView, EditorState, Compartment, Decoration, lineNumbers,
     highlightActiveLine, highlightActiveLineGutter,
     openSearchPanel, closeSearchPanel,
     syntaxHighlighting, HighlightStyle, tags, javascript,
@@ -632,7 +672,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   // Testing is a preview; persistence belongs to the explicit Save action.
   const btpl = builtinTemplate(op, dir);
   const sessionDraft = _sessionDrafts.get(opId);
-  const initialCode = sessionDraft?.code ?? (saved.code || btpl || CUSTOM_TEMPLATE);
+  const initialCode = sessionDraft?.code ?? (saved.code || btpl || "");
   let closed = false, revision = 0, applyingDocument = false, running = false, runSeq = 0, lastTestRevision = null;
   let savedDocument = null;
   const sourceAbort = new AbortController();
@@ -696,14 +736,12 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   const srcToggleBtn = iconBtn("code", t("ui.custom.srcToggle"), () => toggleSource());
   srcToggleBtn.classList.add("on", "ci-src-head-toggle");
   srcToggleBtn.setAttribute("aria-pressed", "true");
-  const toolsBtn = iconBtn("menu_book", t("ui.custom.helpers"), () => {
-    const hidden = dialog.classList.toggle("ci-tools-hidden");
-    toolsBtn.setAttribute("aria-expanded", String(!hidden));
-    toolsBtn.classList.toggle("on", !hidden);
-    try { localStorage.setItem("ebctf.customImpl.tools", hidden ? "0" : "1"); } catch { /* Session preference. */ }
-    requestAnimationFrame(() => view?.requestMeasure());
-  });
-  toolsBtn.classList.add("ci-tools-toggle");
+  let toggleAssist = () => {};
+  const toolsBtn = el('button', {
+    type: 'button', class: 'btn btn-tonal ci-tools-toggle',
+    'aria-expanded': 'false', 'aria-controls': `ci-tools-${opId}`,
+    onclick: () => toggleAssist(),
+  }, el('span', { class: 'ci-tools-label' }, t('ui.custom.assistant')));
   toolsBtn.setAttribute("aria-expanded", String(!dialog.classList.contains("ci-tools-hidden")));
   const headerClose = iconBtn("close", t("ui.custom.close"), () => close());
   headerClose.classList.add("ci-header-close");
@@ -713,9 +751,8 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     el("h3", {}, t("ui.custom.editorTitle") + " · " + opId),
     draftState,
     el("div", { class: "ci-ops" },
-      themedSelect(presetSel),
+      presetSel,
       srcToggleBtn,
-      toolsBtn,
       fullBtn,
     ),
     headerClose,
@@ -895,7 +932,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   // 可拖拽分隔条（宽屏竖向改面板宽，窄屏横向改面板高）
   const resize = el("div", { class: "ci-resize-v", title: t("ui.custom.resizeHint") });
 
-  const panel = el("div", { class: "ci-panel", id: `ci-tools-${opId}`, role: 'region', 'aria-label': t('ui.custom.helpers') });
+  const panel = el("div", { class: "ci-panel ci-assist-pop", id: `ci-tools-${opId}`, role: 'region', 'aria-label': t('ui.custom.assistant') });
   toolsBtn.setAttribute('aria-controls', panel.id);
 
   // 内置实现区：默认自动内联完整依赖闭包，用户打开就是可直接运行/修改的真算法。
@@ -945,7 +982,55 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   // 显式警告：取随机必须走 H（恒烈 2026-10-11 指令）。自调 crypto.getRandomValues = 裸系统随机，
   // 会静默绕过「增强随机性」档位 —— 这类"看起来没问题"的写法正是最该提醒的。
   secHelpers.append(el("div", { class: "ci-randwarn" }, msym("warning"), el("span", {}, t("ui.custom.randWarn"))));
-  panel.append(el("div", { class: "ci-panel-filter" }, sigFilter), secVars, secHelpers);
+  const tabVars = el('button', { type: 'button', class: 'ci-assist-tab on', 'aria-selected': 'true', onclick: () => setAssistTab('vars') }, t('ui.custom.vars'));
+  const tabHelpers = el('button', { type: 'button', class: 'ci-assist-tab', 'aria-selected': 'false', onclick: () => setAssistTab('helpers') }, t('ui.custom.helpers'));
+  const assistTabs = el('div', { class: 'ci-assist-tabs', role: 'tablist' }, tabVars, tabHelpers);
+  function setAssistTab(tab) {
+    const vars = tab === 'vars';
+    secVars.hidden = !vars; secHelpers.hidden = vars;
+    tabVars.classList.toggle('on', vars); tabHelpers.classList.toggle('on', !vars);
+    tabVars.setAttribute('aria-selected', String(vars)); tabHelpers.setAttribute('aria-selected', String(!vars));
+    sigFilter.value = ''; applySigFilter('');
+  }
+  panel.append(el("div", { class: "ci-panel-filter" }, sigFilter), assistTabs, secVars, secHelpers);
+
+  // ---- 助手浮层：锚定「工具函数」按钮向上弹出；点击外部 / Esc 关闭；不占布局、不推挤编辑区 ----
+  const placeAssist = () => {
+    if (dialog.classList.contains('ci-tools-hidden') || !panel.isConnected) return;
+    const r = toolsBtn.getBoundingClientRect(), d = dialog.getBoundingClientRect();
+    const w = panel.offsetWidth, h = panel.offsetHeight;
+    const left = Math.min(Math.max(d.left + 12, r.left), Math.max(d.left + 12, d.right - w - 12));
+    let top = r.top - h - 8;
+    if (top < d.top + 12) top = Math.min(r.bottom + 8, d.bottom - h - 12);
+    panel.style.left = Math.round(left - d.left) + 'px';
+    panel.style.top = Math.round(Math.max(d.top + 12, top) - d.top) + 'px';
+  };
+  const setAssist = (open, focus) => {
+    dialog.classList.toggle('ci-tools-hidden', !open);
+    toolsBtn.setAttribute('aria-expanded', String(open));
+    toolsBtn.classList.toggle('on', open);
+    try { localStorage.setItem('ebctf.customImpl.tools', open ? '1' : '0'); } catch { /* Session preference. */ }
+    if (open) requestAnimationFrame(() => { placeAssist(); if (focus) sigFilter.focus({ preventScroll: true }); });
+    else if (focus) toolsBtn.focus({ preventScroll: true });
+    requestAnimationFrame(() => view?.requestMeasure());
+  };
+  toggleAssist = (force) => {
+    const open = typeof force === 'boolean' ? force : dialog.classList.contains('ci-tools-hidden');
+    setAssist(open, open);
+  };
+  const onAssistOutside = event => {
+    if (dialog.classList.contains('ci-tools-hidden')) return;
+    if (panel.contains(event.target) || toolsBtn.contains(event.target)) return;
+    setAssist(false, false);
+  };
+  const onAssistKey = event => {
+    if (event.key !== 'Escape' || dialog.classList.contains('ci-tools-hidden')) return;
+    event.preventDefault(); event.stopPropagation();
+    setAssist(false, true);
+  };
+  document.addEventListener('pointerdown', onAssistOutside, true);
+  document.addEventListener('keydown', onAssistKey, true);
+  window.addEventListener('resize', placeAssist);
 
   // ---- 分隔条拖拽（Pointer Events + setPointerCapture，一套代码管鼠标/触屏/笔；宽屏改面板宽，窄屏改面板高） ----
   const PANEL_MIN = 140, EDIT_MIN = 160;
@@ -1002,26 +1087,27 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     if (n !== fontIdx) { fontIdx = n; applyFont(); }
   }, { passive: false });
 
-  dialog.append(panel, body);
+  dialog.append(body);
 
   // ---- 底部按钮 ----
   const importInp = el("input", { type: "file", accept: ".js,.txt", style: "display:none" });
   const runBtn = el('button', { type: 'button', class: 'btn btn-filled', title: 'Ctrl+Enter', onclick: () => doRun() }, t('ui.custom.run'));
-  const more = el('details', { class: 'ci-editor-more' },
-    el('summary', { class: 'btn btn-tonal', title: t('ui.topbar.more'), 'aria-label': t('ui.topbar.more') }, msym('expand_more')),
-    el('div', { class: 'ci-editor-more-menu' },
-      el('button', { type: 'button', class: 'btn', onclick: () => importInp.click() }, t('ui.custom.importBtn')),
-      el('button', { type: 'button', class: 'btn', onclick: () => downloadText(getCode(), 'custom-' + opId + '.js', 'text/javascript') }, t('ui.custom.exportBtn')),
-      el('button', { type: 'button', class: 'btn', onclick: () => setCode(CUSTOM_TEMPLATE) }, t('ui.custom.reset'))));
-  more.addEventListener('click', event => { if (event.target.closest('button')) { more.open = false; } });
+  const saveBtn = el("button", { type: "button", class: "btn btn-tonal", title: 'Ctrl+S', onclick: () => doSave(false) }, t("ui.custom.save"));
+  const importBtn = el('button', { type: 'button', class: 'btn btn-tonal', onclick: () => importInp.click() }, t('ui.custom.importBtn'));
+  const exportBtn = el('button', { type: 'button', class: 'btn btn-tonal', onclick: () => downloadText(getCode(), 'custom-' + opId + '.js', 'text/javascript') }, t('ui.custom.exportBtn'));
+  // 一条横向基线：主操作 | 分隔线 | 次要操作 …… 右侧助手入口；每个按钮同高同 gap，窄屏只滚动这一行。
   const foot = el("div", { class: "ci-foot" },
-    runBtn,
-    el("button", { type: "button", class: "btn btn-tonal", title: 'Ctrl+S', onclick: () => doSave(false) }, t("ui.custom.save")),
-    more,
-    el("span", { class: "spacer" }),
-    importInp,
+    el("div", { class: "ci-foot-main" },
+      el("div", { class: "ci-foot-actions" }, runBtn, saveBtn),
+      el("span", { class: "ci-foot-sep", 'aria-hidden': 'true' }),
+      el("div", { class: "ci-editor-actions" }, importBtn, exportBtn),
+      el("span", { class: "spacer" }),
+      toolsBtn,
+      importInp),
   );
   dialog.append(foot);
+  dialog.append(panel);
+  if (!dialog.classList.contains('ci-tools-hidden')) requestAnimationFrame(placeAssist);
   dialog.append(sourceProgress);
   mask.append(dialog);
   document.body.append(mask);
@@ -1057,25 +1143,8 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   let view = null;
   let _errLn = -1;
 
-  // 错误行覆盖层（CM6 无 Decoration 导出，用绝对定位覆盖层；滚动/更新时重定位）
-  const errMark = el("div", { class: "ci-err-mark" });
-  editorWrap.append(errMark);
-  function placeErrMark() {
-    if (!view || _errLn <= 0) { errMark.style.display = "none"; return; }
-    try {
-      if (_errLn > view.state.doc.lines) { errMark.style.display = "none"; return; }
-      const line = view.state.doc.line(_errLn);
-      const a = view.coordsAtPos(line.from);
-      const b = view.coordsAtPos(Math.max(line.from, line.to - 1));
-      if (!a || !b) { errMark.style.display = "none"; return; }
-      const wrapRect = editorWrap.getBoundingClientRect();
-      const top = Math.min(a.top, b.top);
-      const bottom = Math.max(a.bottom, b.bottom);
-      errMark.style.top = (top - wrapRect.top) + "px";
-      errMark.style.height = (bottom - top) + "px";
-      errMark.style.display = "block";
-    } catch { errMark.style.display = "none"; }
-  }
+  // CodeMirror 原生行装饰：不创建覆盖层，不参与布局，不遮挡光标和选区。
+  const errComp = new Compartment();
   function applyErrGutterClass() {
     if (!view) return;
     const gutEls = view.dom.querySelectorAll(".cm-gutterElement");
@@ -1089,14 +1158,20 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     if (ln > 0 && view) {
       try {
         const line = view.state.doc.line(ln);
-        view.dispatch({ effects: EditorView.scrollIntoView(line.from, { y: "center" }) });
+        view.dispatch({ effects: [
+          EditorView.scrollIntoView(line.from, { y: "center" }),
+          errComp.reconfigure(EditorView.decorations.of(Decoration.set([
+            Decoration.line({ class: "ci-error-line" }).range(line.from),
+          ]))),
+        ] });
       } catch { /* 行号越界忽略 */ }
     }
-    requestAnimationFrame(() => { placeErrMark(); applyErrGutterClass(); });
+    applyErrGutterClass();
   }
   function clearErr() {
     _errLn = -1;
-    requestAnimationFrame(() => { placeErrMark(); applyErrGutterClass(); });
+    if (view) view.dispatch({ effects: errComp.reconfigure(EditorView.decorations.of(Decoration.none)) });
+    applyErrGutterClass();
   }
 
   // 状态条 行:列
@@ -1121,8 +1196,9 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     if (status.className !== className) status.className = className;
   }
 
+  const editorMount = document.createElement('div');
   view = new EditorView({
-    parent: editorWrap,
+    parent: editorMount,
     state: EditorState.create({
       doc: initialCode,
       ...(sessionDraft?.selection ? { selection: sessionDraft.selection } : {}),
@@ -1138,10 +1214,11 @@ export async function openCustomImplEditor(opId, ctx = {}) {
         fontComp.of(EditorView.theme({ "&": { fontSize: FONT_STEPS[fontIdx][0] + "px" } })),
         wrapComp.of([]),
         themeComp.of(themeExt()),
+        errComp.of(EditorView.decorations.of(Decoration.none)),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) {
             revision++;
-            if (_errLn > 0) { _errLn = -1; requestAnimationFrame(() => { placeErrMark(); applyErrGutterClass(); }); }
+            if (_errLn > 0) clearErr();
             updateDirty();
             if (!applyingDocument && lastTestRevision !== null && revision !== lastTestRevision) setStatus(t('ui.custom.resultStale'));
           }
@@ -1150,6 +1227,8 @@ export async function openCustomImplEditor(opId, ctx = {}) {
       ],
     }),
   });
+  editorWrap.append(...editorMount.childNodes);
+  releaseLoadingMask?.();
 
   // 编辑器尺寸变化（全屏 / 拖拽 / 窄屏翻转）时重测量
   const ro = new ResizeObserver(() => {
@@ -1165,9 +1244,6 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   });
   themeMo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   // 错误行覆盖层随滚动重定位
-  view.scrollDOM.addEventListener("scroll", () => {
-    if (_errLn > 0) requestAnimationFrame(placeErrMark);
-  });
 
   // ---- 读写代码（CM6 dispatch 整篇替换，保 undo） ----
   // ⚠ 行尾规范化：CM6 会把 \r\n / \r 规范化成 \n（doc 与 insert 均如此）。
@@ -1247,6 +1323,9 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     } else _sessionDrafts.delete(opId);
     closed = true; runSeq++; sourceAbort.abort();
     narrowMedia.removeEventListener('change', syncResponsiveWrap);
+    document.removeEventListener('pointerdown', onAssistOutside, true);
+    document.removeEventListener('keydown', onAssistKey, true);
+    window.removeEventListener('resize', placeAssist);
     lifecycle?.release(); lifecycle = null;
     try { ro.disconnect(); } catch { /* ignore */ }
     try { themeMo.disconnect(); } catch { /* ignore */ }
@@ -1453,7 +1532,7 @@ export async function openCustomImplEditor(opId, ctx = {}) {
     }
     const baseline = base0 != null ? base0 : getCode();
     if (!auto) {
-      const untouched = !baseline.trim() || baseline === normCode(btpl) || baseline === normCode(CUSTOM_TEMPLATE);
+      const untouched = !baseline.trim() || baseline === normCode(btpl);
       if (!untouched && !window.confirm(t("ui.custom.overwrite"))) return false;
     }
     _fullBuilding = true;
@@ -1516,14 +1595,10 @@ export async function openCustomImplEditor(opId, ctx = {}) {
   }
 
   function requestEditorEscape() {
-    if (more.open) { more.open = false; more.querySelector('summary').focus(); return true; }
     if ((view && closeSearchPanel(view)) || (srcView && closeSearchPanel(srcView))) { view?.focus(); return true; }
     if (!dialog.classList.contains('ci-tools-hidden')) { toolsBtn.click(); toolsBtn.focus(); return true; }
     close(); return true;
   }
-  for (const name of ['pointerdown', 'focusin']) dialog.addEventListener(name, event => {
-    if (!more.contains(event.target)) more.open = false;
-  });
   dialog.addEventListener('keydown', event => {
     if (!(event.isComposing || event.keyCode === 229)) return;
     if (event.key === 'Escape' || event.key === 'Enter' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's')) {

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
-import { statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { extname, join } from "node:path";
 import { execFileSync, execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -96,8 +96,14 @@ const EXCLUDE_RULES = [
 ];
 const isExcluded = (file) => EXCLUDE_RULES.find(([re]) => re.test(file));
 
-const kept = tracked.filter((file) => !isExcluded(file));
-const dropped = tracked.filter(isExcluded);
+// 本地删除但尚未提交的文件仍会出现在 git ls-files 里；跳过磁盘不存在的条目，
+// 否则单个删除就会让整个清单生成 ENOENT。
+const present = tracked.filter((file) => existsSync(file));
+if (present.length !== tracked.length) {
+  console.warn(`跳过 ${tracked.length - present.length} 个已从磁盘删除但仍在 git 索引中的文件`);
+}
+const kept = present.filter((file) => !isExcluded(file));
+const dropped = present.filter(isExcluded);
 
 // ---------------------------------------------------------------------------
 // T709 离线增强包清单：条目与 src/core/offlinePacks.js 的 PACKS 完全一致。

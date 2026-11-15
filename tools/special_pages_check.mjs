@@ -35,7 +35,7 @@ async function record(id) {
   }), id);
 }
 async function openBatch() {
-  await page.locator('.io-pane-input .io-tools-more > summary').click();
+  await page.locator('.batch-open').focus();
   await page.locator('.batch-open').click(); await page.locator('.batch-panel').waitFor();
   await page.locator('.batch-panel').evaluate(async n => { await n.ready; });
 }
@@ -80,13 +80,12 @@ try {
   await page.locator('.exp-save').click(); await page.locator('.exp-dialog').waitFor({ state: 'detached' });
   check(await page.locator('#fld_residues').textContent() === '2,3,2', 'expanded field saves into the correct target');
   check(await page.locator('.io-swap').isDisabled() && await page.locator('.io-chain').isDisabled(), 'structured fields have no invalid swap/chain target');
-  await page.locator('.io-pane-output .io-tools-more > summary').click();
-  await page.locator('.io-pane-output button[title="展开编辑"]').click();
+  const outputLauncher = page.locator('.io-pane-output button[title="展开编辑"]');
+  await outputLauncher.focus(); await outputLauncher.click();
   check(await page.locator('.exp-textarea').evaluate(n => n.readOnly) && await page.locator('.exp-save').count() === 0, 'expanded result is read-only and has no writeback action');
   await page.keyboard.press('Escape'); await page.locator('.exp-dialog').waitFor({ state: 'detached' });
-  check(await page.locator('.io-pane-output .io-tools-more > summary').evaluate(n => n === document.activeElement), 'expanded result returns focus to its visible launcher');
-  await page.locator('.io-pane-output .io-tools-more > summary').click();
-  await page.locator('.io-pane-output button[title="展开编辑"]').click();
+  check(await outputLauncher.evaluate(n => n === document.activeElement && n.getBoundingClientRect().width > 0), 'expanded result returns focus to its visible launcher');
+  await outputLauncher.click();
   await clearAll(); await page.locator('.exp-dialog').waitFor({ state: 'detached' });
   check(await page.locator('#ioOut').textContent() === '', 'global clear dismisses expanded result snapshots');
   await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true,
@@ -134,12 +133,21 @@ try {
         const area = n.querySelector('.io-area'), head = n.querySelector('.io-pane-head');
         const box = area.getBoundingClientRect(), toolbar = head.getBoundingClientRect();
         const padding = parseFloat(getComputedStyle(area).paddingTop);
-        const tools = [...head.querySelectorAll(':scope > .io-pane-tools > button, :scope > .io-pane-tools > details > summary')]
-          .filter(n => n.getBoundingClientRect().width);
-        return !n.querySelector('.et-toolbar') && tools.every(n => {
-          const r = n.getBoundingClientRect(); return r.left >= box.left && r.right <= box.right && r.top >= box.top && r.bottom <= box.bottom;
-        }) && toolbar.bottom <= box.top + padding && head.closest('.io-editor-frame') === area.parentElement;
+        const tools = head.querySelector(':scope > .io-pane-tools'), r = tools.getBoundingClientRect();
+        const buttons = [...tools.querySelectorAll('button')];
+        return !n.querySelector('.et-toolbar, .io-tools-more') && buttons.every(n => n.getBoundingClientRect().width >= 32)
+          && r.left >= box.left && r.right <= box.right && r.top >= box.top && r.bottom <= box.bottom
+          && toolbar.bottom <= box.top + padding && head.closest('.io-editor-frame') === area.parentElement;
       }), `${label}: ${selector} tools remain inside the editor without overlapping text`);
+      const buttons = page.locator(selector + ' .io-pane-tools button');
+      check(await buttons.count() === (selector.includes('input') ? 11 : 6), `${label}: ${selector} retains every action without duplicate/hidden launchers`);
+      for (const button of await buttons.all()) {
+        await button.focus();
+        check(await button.evaluate(n => {
+          const a = n.getBoundingClientRect(), b = n.closest('.io-pane-tools').getBoundingClientRect();
+          return n === document.activeElement && a.left >= b.left - 1 && a.right <= b.right + 1;
+        }), `${label}: each tool is keyboard-scrollable into its bounded toolbar`);
+      }
     }
     check(await page.locator('.recipe-input-block .io-editor-frame > .io-pane-head > .io-pane-tools > button[title="载入文件到链头"]').count() === 1,
       `${label}: chain-head upload uses the same embedded toolbar`);
@@ -182,8 +190,10 @@ try {
   const [recipeDownload] = await Promise.all([page.waitForEvent('download'), page.locator('.recipe-output-block button[title="导出为文件"]').click()]);
   const recipeStream = await recipeDownload.createReadStream(), recipeData = []; for await (const chunk of recipeStream) recipeData.push(chunk);
   check(Buffer.concat(recipeData).toString() === 'QQ==\nQg==', 'embedded output export preserves the final result');
-  await page.locator('.recipe-output-block .io-tools-more > summary').click();
-  await page.locator('.recipe-output-block button[title="展开编辑"]').click();
+  const recipeExpand = page.locator('.recipe-output-block button[title="展开编辑"]');
+  const recipeMore = page.locator('.recipe-output-block .io-tools-more > summary');
+  if (!await recipeExpand.isVisible() && await recipeMore.isVisible()) await recipeMore.click();
+  await recipeExpand.focus(); await recipeExpand.click();
   check(await page.locator('.exp-textarea').evaluate(n => n.readOnly), 'embedded result expansion remains read-only');
   await page.keyboard.press('Escape'); await page.locator('.exp-dialog').waitFor({ state: 'detached' });
   await page.setViewportSize({ width: 320, height: 844 }); await fit('recipe mobile'); await recipeToolsFit('mobile'); await shot('recipe-mobile');

@@ -275,7 +275,7 @@ export default {
   "op.alternatingCaps.name": "交互大文字小文字",
 
  // ---- UI: topbar ----
-  "ui.brand.title": "EBCTFCodeBox",
+  "ui.brand.title": "码小妹",
   "ui.topbar.update": "更新を確認",
   "ui.topbar.repo": "GitHub",
   "ui.topbar.theme": "テーマ切替",
@@ -585,7 +585,7 @@ export default {
   "ui.font.loaded": "読み込み済み",
   "ui.font.retry": "再試行",
   "ui.font.btn": "フォントライブラリ",
-  "ui.loading.title": "EBCTFCodeBox",
+  "ui.loading.title": "码小妹",
   "ui.loading.core": "コアモジュールを読み込み中",
   "ui.loading.fonts": "フォントを読み込み中",
   "ui.loading.ui": "UI を初期化中",
@@ -1423,6 +1423,7 @@ export default {
   "ui.custom.preset": "プリセット",
   "ui.custom.vars": "使用可能な変数",
   "ui.custom.helpers": "ヘルパー関数",
+  "ui.custom.assistant": "Assistant panel",
   "ui.custom.run": "テスト実行",
   "ui.custom.save": "保存",
   "ui.custom.importBtn": ".js をインポート",
@@ -1449,7 +1450,6 @@ export default {
   "ui.custom.confirmDel": "スキーム「{0}」を削除しますか？",
   "ui.custom.sandboxWorker": "サンドボックス：独立スレッド（ネットワークとストレージの権限を除去、タイムアウト時に強制終了可能）",
   "ui.custom.sandboxMain": "フォールバック：メインスレッドで実行（スレッド分離なし、無限ループは中断できません）",
-  "ui.custom.reset": "テンプレートに戻す",
   "ui.custom.clear": "この op のカスタム実装をクリア",
   "ui.custom.lineCol": "行 {0}、列 {1}",
   "ui.qc.tabAsm": "マシンコード ⇄ アセンブリ",

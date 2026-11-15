@@ -13,7 +13,7 @@ export function displayAppName(locale, license) {
 }
 export const LOCAL_QUOTE = Object.freeze({
   text: '往后看五年，甚至十年，未来我们中国的信安和网安的娃娃，买国产电脑，用国产系统，装国产工具，搞国产密码，打国产比赛.......我们这些基础工具更要努力了。',
-  attribution: '——2026年11月EternalBlaze在社群发表重要讲话',
+  attribution: '—— 2026 年 11 月  EternalBlaze 在社群发表重要讲话',
 });
 export function showLocalQuote(locale) { return QUOTE_LOCALES.has(localeKey(locale)); }
 export function localizedManifest(manifest, locale, license, baseUrl) {

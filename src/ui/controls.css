@@ -90,3 +90,23 @@ input[type="range"].m3-slider:disabled { cursor: not-allowed; opacity: .38; }
   .m3-segment-thumb { background: Highlight; forced-color-adjust: none; }
   .m3-segmented > button.on, .m3-segmented > button.active { color: HighlightText; }
 }
+
+/* ---- 全站统一原生下拉：对齐配方「载入预设配方…」（field-bg + outline + r-md + 原生箭头） ---- */
+select:not([multiple]) {
+  appearance: auto;
+  -webkit-appearance: auto;
+  min-height: 40px;
+  padding: 0 var(--sp-3);
+  background: var(--field-bg);
+  border: 1px solid var(--outline);
+  border-radius: var(--r-md);
+  color: var(--on-surface);
+  font-family: var(--font);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+select:not([multiple]):hover { border-color: var(--primary); }
+select:not([multiple]):focus-visible { outline: 2px solid var(--primary); outline-offset: -1px; }
+/* 紧凑场景（I/O 工具栏）保留原高度，其余外观仍由上面的统一规则决定 */
+select.io-coding-select { height: 36px; min-height: 36px; }
+@media (pointer: coarse) { select.io-coding-select { height: 44px; min-height: 44px; } }

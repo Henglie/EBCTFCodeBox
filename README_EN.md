@@ -40,7 +40,7 @@
 
 ## Quick Download
 
-> Core processing runs locally with zero upload. Download, unzip, and double-click `通用点我启动.py` (the "double-click launcher") to start — requires Python 3 on your machine. Windows can enable the local bridge; macOS / Linux automatically skip bridge-only capabilities.
+> Core processing runs locally with zero upload. Unzip and double-click `Windows点我启动.exe`, `macOS点我启动.command`, or `Linux点我启动.sh` for your platform. The native static server needs no Python; CLI / MCP still require Node.js, and Python-based tools require a local Python installation. The alternative `通用点我启动.py` launcher requires Python 3.
 
 | Cloud drive | Link | Passcode |
 |---|---|---|
@@ -71,7 +71,12 @@ Current version **v0.2.0-beta**. The source of truth is always the GitHub reposi
 ### Fixes
 
 - Fixed cramped secret inputs and overflowing expand buttons in the traditional layout; the code editor now shows real loading stages, cancellation and retry, with one editor close button.
-- Editor helpers use a downward drawer; preset/profile selectors follow the M3 theme, and decode-strength controls and algorithm lists remain scrollable.
+- The editor footer uses one action track and an assistant popover anchored to its button; presets and profiles use native selects, and the reset-to-template action is removed.
+- Decode-strength categories and operations share an aligned checkbox column with independent check graphics, tri-state categories, one scrolling body and faithful empty custom profiles.
+- One-shot results are read-only and copy the full original text; semantic colours fade inward from the right edge, with a dot-and-line navigation rail and round focus indicators.
+- Fixed the hidden expand action in the shared recipe toolbar; tools remain keyboard-accessible, scroll horizontally in narrow panels and restore focus to their visible buttons.
+- Corrected the default GoldBug A–Z table to the common Poe/dCode mapping. Select `alphabet=legacy` explicitly for ciphertext made with the previous custom table; both language explainers and examples are updated.
+- Brand and loading titles in all 20 languages follow the existing regional naming rules, with offline language-pack byte counts and content identifiers synchronized.
 - Fixed the native launcher's resource allowlist blocking official add-ons and the offline manifest, restoring dCode loading and offline resource installation.
 - Fixed native HTTP ranges, gzip / ETag negotiation and HEAD responses; the updated macOS / Linux launchers still require real-machine verification.
 - GIF frame extraction removes the 30-second wall clock and 2-second per-frame compression wait; native PNG encoding, 39ms / 59KB ZIP measured.
@@ -131,7 +136,7 @@ Current version **v0.2.0-beta**. The source of truth is always the GitHub reposi
 
 **North star:** grow from a CTF codec collection into a general cryptography toolbox for competitions, learning and everyday research. Keep the algorithm core independently reusable, with correctness traced to standards, sources and test vectors. Preserve cross-platform, local-first processing; document platform adapters, verified scope and external dependencies separately.
 
-Version 0.2.0 remains in development. The new single-executable windowed distribution, native HarmonyOS edition and further algorithm/documentation work follow their own milestones; the bilingual offline manual is paused. Repository URL migration is separate, so current links still point to the existing repository.
+Version 0.2.0 remains in development. The new single-executable windowed distribution, native HarmonyOS edition and further algorithm/documentation work follow their own milestones; the bilingual offline manual is being written and is not yet available as a complete book. Repository URL migration is separate, so current links still point to the existing repository.
 
 `EternalBlaze CTF Codebox` (EBCTFCodeBox) is a local-first toolbox built around CTF scenarios but aimed at general-purpose encoding/decoding and cryptography needs.
 
@@ -151,7 +156,7 @@ Core design:
 
 - **Local-first · zero upload**: Native ES modules, no framework, no build step. Core codecs run in-browser and never upload your input; "external link" ops only generate URLs. PWA updates fetch site assets only, the local bridge only talks to `127.0.0.1`, and external AI is only used after you configure an endpoint yourself.
 - **One-shot smart decoding**: Paste or drop content; it detects possible encoding chains and returns ranked decode candidates, with crib-based filtering and deep brute force.
-- **978 registered operations · 23 categories**: covering Base, text / transfer encodings, fancy CTF encodings, esoteric programming languages, Chinese / domestic encodings, classical ciphers, modern crypto (block / stream / asymmetric / other), hashes & checksums, radix & charsets (incl. primality testing and sieving), analysis / brute force, password attacks, compression & archives, password / archive cracking, forensics & traffic, file-format structures, data structures, images & QR codes, audio & video, steganography, plus 4 optional Windows GUI bridge entries. The complete list is generated automatically from the registry.
+- **978 registered operations · 23 categories**: covering Base, text / transfer encodings, fancy CTF encodings, esoteric programming languages, Chinese / domestic encodings, classical ciphers, modern crypto (block / stream / asymmetric / other), hashes & checksums, radix & charsets (incl. primality testing and sieving), analysis / brute force, password attacks, compression & archives, password / archive cracking, forensics & traffic, file-format structures, data structures, images & QR codes, audio & video, steganography, plus 3 optional Windows GUI bridge entries. The complete list is generated automatically from the registry; another 409 operations are available through the optional official add-on.
 - **Decoding-strength quartet** (v0.1.2): strength levels + custom algorithm pool + a **separate brute-force channel** (XOR / Caesar / dictionary / rainbow-table / HMAC / PBE / Playfair / ZIP / CRC32 / bkcrack — results are grouped separately so they don't pollute the main ranking) + **decode depth 1–3**.
 - **Lenient matching mode** (v0.1.2): at the Enhanced / Very Strong / Maximum / Custom levels, algorithms are admitted by character-class count alone, so variant-encoding challenges (a "meow" table for 0/1, emoji-as-binary) also participate; Default / Fast keep strict domain detection.
 - **Key + ciphertext one-shot attack**: given ciphertext and a key, automatically enumerates AES / DES / 3DES / RC4 / XOR / Fernet × cipher modes × encoding combinations.
@@ -252,7 +257,7 @@ Full web servers (nginx / Apache / Caddy, …) work too; two caveats:
 
    The bundled `通用点我启动.py` sends both headers by default; self-hosted servers need their own configuration. When the headers are missing, multithreaded WASM ops degrade gracefully or report unavailable — pure frontend features are unaffected.
 
-The PWA is fully wired (`manifest.json` + `sw.js`): after the first online visit it precaches 853 core runtime assets (version updates are fetched incrementally by checksum — only changed files are transferred), supports installing to the desktop, and runs core features fully offline. Large on-demand assets (the four Cheonhyeong font planes, WASM, IDS composition data, encoding charts, KaTeX) are cached on first use and then work offline as well. The "Check for updates" button in the top bar downloads the complete new version before asking you to refresh.
+The PWA is wired through `manifest.json` and `sw.js`. The current precache list contains 990 core runtime assets (the count changes with each version; updates download changed content by checksum). Core features work offline after cache installation completes; large on-demand assets (the four Cheonhyeong font planes, WASM, IDS data, encoding charts and KaTeX) must first be loaded online or installed through an offline pack. The top-bar "Check for updates" button currently opens the version page; Service Worker activation and cross-browser offline upgrades remain under verification.
 
 ## Platform Compatibility
 

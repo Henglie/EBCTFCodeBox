@@ -319,6 +319,8 @@ class LocalToolsService:
                       "metadataPaths": meta.get("paths", []), "pipAvailable": "pip" in meta["packages"],
                       "install": {"pip": bool(python_id and "pip" in meta["packages"]),
                                   "npm": bool(node_id and _npm_cli(self.nodes[node_id]) and scope_id == "managed"),
+                                  "uninstallPip": bool(python_id),
+                                  "uninstallNpm": bool(node_id and _npm_cli(self.nodes[node_id]) and scope_id == "managed"),
                                   "timeoutSeconds": INSTALL_SECONDS, "outputBytes": OUTPUT_BYTES}}
             self.cache[key] = (time.monotonic(), result)
             return result
@@ -328,31 +330,52 @@ class LocalToolsService:
     def _runtimes(self, python_id, node_id):
         out = {"python": {"status": "installed", "version": self.interpreters[python_id]["version"],
                           "path": self.interpreters[python_id]["path"]} if python_id else {"status": "missing"}}
-        probes = {"node": ([self.nodes[node_id], "--version"] if node_id else None),
-                  "java": ([_resolve("java"), "-version"] if _resolve("java") else None),
-                  "git": ([_resolve("git"), "--version"] if _resolve("git") else None),
-                  "sage": ([_resolve("sage"), "--version"] if _resolve("sage") else None)}
-        seven = _resolve("7z") or _resolve("7zz")
-        if not seven and os.name == "nt":
-            path = Path(os.environ.get("ProgramFiles", "")) / "7-Zip/7z.exe"
-            seven = str(path) if path.is_file() else None
-        probes["7z"] = [seven, "i"] if seven else None
         node = self.nodes.get(node_id)
+        out["node"] = {"status": "missing"}
+        if node:
+            try:
+                result = self.runner([node, "--version"], budget=16384)
+                match = re.search(r"\d+(?:\.\d+)+(?:[\w.+-]*)", result["output"])
+                out["node"] = {"status": "installed", "path": node,
+                               **({"version": match.group(0)} if match else {})}
+            except (OSError, subprocess.SubprocessError) as exc:
+                out["node"] = {"status": "error", "error": str(exc)[:256]}
         npm_cli = _npm_cli(node) if node else None
         # Read npm's own package metadata rather than invoke npm and load configuration.
         out["npm"] = self._npm_metadata(Path(npm_cli).parent.parent.parent, "npm") if npm_cli else {"status": "missing"}
-        for key, argv in probes.items():
-            if not argv:
-                out[key] = {"status": "missing"}
+        for item in CATALOG:
+            tid = item["id"]
+            if tid in out or item["kind"] not in ("runtime", "command"):
                 continue
+            probe = item.get("probe")
+            exe = _resolve(probe[0]) if probe else None
+            if tid == "7z" and not exe:
+                seven = _resolve("7zz")
+                if not seven and os.name == "nt":
+                    path = Path(os.environ.get("ProgramFiles", "")) / "7-Zip/7z.exe"
+                    seven = str(path) if path.is_file() else None
+                exe = seven
+            if not exe:
+                out[tid] = {"status": "missing"}
+                continue
+            argv = [exe] + list(probe[1:])
             try:
                 result = self.runner(argv, budget=16384)
-                match = re.search(r"\d+(?:\.\d+)+(?:[\w.+-]*)", result["output"])
-                out[key] = ({"status": "installed", "version": match.group(0), "path": argv[0]}
-                            if result["ok"] and match else {"status": "error", "path": argv[0],
-                            "error": result["reason"] or "Version probe failed"})
+                match = re.search(item.get("versionPattern") or r"\d+(?:\.\d+)+(?:[\w.+-]*)", result["output"])
+                entry = {"status": "installed", "path": exe}
+                if match:
+                    entry["version"] = match.group(0)
+                elif not result["ok"]:
+                    entry = {"status": "error", "path": exe, "error": result["reason"] or "Version probe failed"}
+                out[tid] = entry
+            except PermissionError as exc:
+                # Security policy / ACL denial means the probe cannot run here, not that the tool is broken.
+                out[tid] = {"status": "unavailable", "error": str(exc)[:256]}
             except (OSError, subprocess.SubprocessError) as exc:
-                out[key] = {"status": "error", "error": str(exc)[:256]}
+                if getattr(exc, "winerror", None) == 5 or getattr(exc, "errno", None) == 13:
+                    out[tid] = {"status": "unavailable", "error": str(exc)[:256]}
+                else:
+                    out[tid] = {"status": "error", "error": str(exc)[:256]}
         return out
 
     @staticmethod
@@ -362,13 +385,13 @@ class LocalToolsService:
         if any(not isinstance(value, (str, bool)) for value in req.values()):
             raise LocalToolsError("Invalid field type")
 
-    def plan(self, req):
+    def plan(self, req, uninstall=False):
         self._validate(req, {"id", "mirror", "pythonId", "nodeId", "npmScope"})
         if any(type(value) is not str for value in req.values()):
             raise LocalToolsError("Install fields must be strings")
         item = BY_ID.get(req.get("id"))
         mirror = MIRRORS.get(req.get("mirror", "default"))
-        if not item or not mirror or item["kind"] == "runtime":
+        if not item or not mirror or item["kind"] not in ("pip", "npm"):
             raise LocalToolsError("Only fixed pip/npm catalog IDs and mirror enums can be installed")
         # Only already enumerated IDs are accepted; never execute a request-supplied path.
         if item["kind"] == "pip":
@@ -377,9 +400,13 @@ class LocalToolsService:
             interpreter = self.interpreters.get(req.get("pythonId"))
             if not interpreter:
                 raise LocalToolsError("Select an enumerated Python interpreter")
-            argv = [interpreter["path"], "-I", "-m", "pip", "--isolated", "--disable-pip-version-check",
-                    "install", "--only-binary=:all:", "--no-input", "--retries", "1", "--timeout", "15",
-                    "--index-url", mirror["pip"], "--", item["package"]]
+            if uninstall:
+                argv = [interpreter["path"], "-I", "-m", "pip", "uninstall", "--yes", "--no-input",
+                        "--disable-pip-version-check", "--", item["package"]]
+            else:
+                argv = [interpreter["path"], "-I", "-m", "pip", "--isolated", "--disable-pip-version-check",
+                        "install", "--no-input", "--prefer-binary", "--retries", "1", "--timeout", "15",
+                        "--index-url", mirror["pip"], "--", item["package"]]
             target = interpreter["path"]
         else:
             if "pythonId" in req or req.get("npmScope", "managed") != "managed":
@@ -388,25 +415,31 @@ class LocalToolsService:
             cli = _npm_cli(node) if node else None
             if not cli:
                 raise LocalToolsError("Select an enumerated Node with npm")
-            argv = [node, cli, "install", "--prefix", str(self.npm_prefix), "--ignore-scripts", "--no-audit",
-                    "--no-fund", "--package-lock=false", "--save=false", "--fetch-retries=1",
-                    "--userconfig=" + str(self.npm_prefix / ".ebcrypto-user.npmrc"),
-                    "--globalconfig=" + str(self.npm_prefix / ".ebcrypto-global.npmrc"),
-                    "--fetch-timeout=15000", "--registry=" + mirror["npm"], "--", item["package"]]
+            if uninstall:
+                argv = [node, cli, "uninstall", "--prefix", str(self.npm_prefix), "--no-audit",
+                        "--no-fund", "--package-lock=false", "--save=false", "--", item["package"]]
+            else:
+                argv = [node, cli, "install", "--prefix", str(self.npm_prefix), "--ignore-scripts", "--no-audit",
+                        "--no-fund", "--package-lock=false", "--save=false", "--fetch-retries=1",
+                        "--userconfig=" + str(self.npm_prefix / ".ebcrypto-user.npmrc"),
+                        "--globalconfig=" + str(self.npm_prefix / ".ebcrypto-global.npmrc"),
+                        "--fetch-timeout=15000", "--registry=" + mirror["npm"], "--", item["package"]]
             target = str(self.npm_prefix)
-        return {"id": item["id"], "kind": item["kind"], "mirror": req.get("mirror", "default"),
-                "argv": argv, "target": target, "timeoutSeconds": INSTALL_SECONDS, "outputBytes": OUTPUT_BYTES}
+        return {"id": item["id"], "kind": item["kind"], "action": "uninstall" if uninstall else "install",
+                "mirror": req.get("mirror", "default"), "argv": argv, "target": target,
+                "timeoutSeconds": INSTALL_SECONDS, "outputBytes": OUTPUT_BYTES}
 
-    def start(self, req):
-        plan = self.plan(req)
+    def start(self, req, uninstall=False):
+        plan = self.plan(req, uninstall)
         with self.lock:
             if any(j["state"] in ("running", "cancelling") for j in self.jobs.values()):
                 raise LocalToolsError("An installation is already running", 409)
             if len(self.jobs) >= MAX_JOBS:
                 self.jobs.pop(next(iter(self.jobs)))
             job_id = uuid.uuid4().hex
-            job = {"jobId": job_id, "id": plan["id"], "state": "running", "log": "", "plan": plan,
-                   "cancel": threading.Event(), "startedAt": time.time(), "exitCode": None, "reason": ""}
+            job = {"jobId": job_id, "id": plan["id"], "action": plan["action"], "state": "running",
+                   "log": "", "plan": plan, "cancel": threading.Event(), "startedAt": time.time(),
+                   "exitCode": None, "reason": ""}
             self.jobs[job_id] = job
             worker = threading.Thread(target=self._install, args=(job,), daemon=True)
             self.workers.add(worker)
@@ -418,7 +451,7 @@ class LocalToolsService:
             with self.lock:
                 job["log"] = (job["log"] + chunk)[:OUTPUT_BYTES]
         try:
-            if job["plan"]["kind"] == "npm":
+            if job["plan"]["kind"] == "npm" and job["plan"].get("action") != "uninstall":
                 self.npm_prefix.mkdir(parents=True, exist_ok=True)
                 # Distinct paths: npm rejects loading the same null device twice.
                 # These two reserved files are app-owned, never caller-supplied.
@@ -463,6 +496,7 @@ class LocalToolsService:
 
     def dispatch(self, action, req=None):
         methods = {"detect": self.detect, "plan": self.plan, "install": self.start,
+                   "uninstall": lambda value: self.start(value, uninstall=True),
                    "job": self.job, "cancel": self.cancel}
         if action not in methods:
             raise LocalToolsError("Unknown action", 404)

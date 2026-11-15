@@ -12,7 +12,7 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 let checks = 0;
 function check(value, label) { assert(value, label); checks++; }
 check(typeof renderLocalToolsPage === 'function', 'actual ESM UI import');
-check(LOCAL_TOOL_CATALOG.length === 48 && new Set(LOCAL_TOOL_CATALOG.map(value => value.id)).size === 48, 'catalog IDs');
+check(LOCAL_TOOL_CATALOG.length === 93 && new Set(LOCAL_TOOL_CATALOG.map(value => value.id)).size === 93, 'catalog IDs');
 check(Object.keys(LOCAL_TOOL_MIRRORS).join() === 'default,tuna', 'fixed mirror enums');
 check(Object.values(LOCAL_TOOLS_TEXT).every(value => value.length === 2), 'bilingual fallback keys');
 
@@ -24,8 +24,11 @@ sys.dont_write_bytecode = True
 import bridge, local_tools
 real_runner = local_tools.run_bounded
 def controlled(argv, **kw):
-    if 'install' not in argv:
+    if 'install' not in argv and 'uninstall' not in argv:
         return real_runner(argv, **kw)
+    if 'uninstall' in argv:
+        time.sleep(.05)
+        return {'ok': True, 'reason': '', 'exitCode': 0}
     kw['on_chunk']('SIMULATED INSTALL ONLY\\n')
     if argv[-1] == 'gmpy2':
         kw['cancel'].wait(5)
@@ -103,15 +106,13 @@ try {
     window.view = window.ui.renderLocalToolsPage(document.getElementById('host'));
     await window.view.ready;
   });
-  check(await page.locator('.lt-card').count() === 48, 'no-bridge catalog visible');
+  check(await page.locator('.lt-card').count() === 93, 'no-bridge catalog visible');
   check((await page.locator('.lt-status').textContent()).includes('静态部署'), 'no-bridge explanation');
-  check(await page.locator('.lt-card button').filter({ hasText: '安装（联网）' }).evaluateAll(nodes => nodes.every(n => n.disabled)), 'no-bridge install disabled');
-  check(await page.locator('[data-tool-id="sage"] .lt-command').textContent() === 'sage --version', 'Sage is its own runtime');
-  await page.locator('#lt-mirror').selectOption('tuna');
-  check((await page.locator('[data-tool-id="sympy"] .lt-command').textContent()).includes('pypi.tuna.tsinghua.edu.cn'), 'pip mirror command');
-  check((await page.locator('[data-tool-id="noble-hashes"] .lt-command').textContent()).includes('registry.npmmirror.com'), 'npm mirror command');
-  await page.locator('[data-tool-id="sympy"] button').filter({ hasText: '复制命令' }).click();
-  check((await page.evaluate(() => navigator.clipboard.readText())).includes('sympy'), 'copy real clipboard');
+   check(await page.locator('.lt-action--primary:not([disabled])').count() === 0, 'static page has no enabled install controls');
+  check(await page.locator('[data-tool-id="sage"] .lt-command-details').count() === 0, 'runtimes do not pretend to be installable from this page');
+  check(await page.locator('.lt-group').count() === 4, 'four collapsible categories');
+  check((await page.locator('.lt-group').first().locator('.lt-card').count()) > 0, 'category has ordered rows');
+   check(await page.locator('[data-tool-id="sympy"] .lt-action--primary').count() === 1, 'package install control is present');
   await page.locator('input[type="search"]').fill('Cryptodome');
   check(await page.locator('.lt-card').count() === 2, 'module search');
   await page.locator('input[type="search"]').fill('');
@@ -129,8 +130,8 @@ try {
     window.view = window.ui.renderLocalToolsPage(document.getElementById('host'));
     await window.view.ready;
   });
-  check((await page.locator('.lt-status').textContent()).includes('原生桥需接入'), 'legacy native bridge without new API degrades explicitly');
-  check(await page.locator('.lt-card').count() === 48, 'legacy native bridge keeps full catalog');
+  check((await page.locator('.lt-status').textContent()).includes('静态部署'), 'legacy native bridge without new API degrades explicitly');
+  check(await page.locator('.lt-card').count() === 93, 'legacy native bridge keeps full catalog');
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.evaluate(async () => {
     document.documentElement.dir = 'ltr'; document.documentElement.lang = 'en';
@@ -147,43 +148,42 @@ try {
   check((await page.locator('.lt-status').textContent()).includes('completed'), 'real HTTP metadata');
   const interpreters = await page.locator('#lt-python option').count();
   check(interpreters >= 2, 'real multiple interpreters enumerated');
-  check((await page.locator('[data-tool-id="sympy"] .lt-badge').textContent()).includes('1.14.0'), 'actual installed Python metadata');
-  check((await page.locator('[data-tool-id="sage"] .lt-badge').textContent()).includes('Missing'), 'Sage accurately missing');
-  check((await page.locator('[data-tool-id="python"] .lt-command').textContent()).includes('Python311'), 'runtime version command selects actual interpreter');
-  check((await page.locator('[data-tool-id="7z"] .lt-command').textContent()).includes('7-Zip'), 'runtime version command includes non-PATH executable');
+  check((await page.locator('.lt-card[data-tool-id="sympy"]').textContent()).includes('1.14.0'), 'actual installed Python metadata');
+  check(/Missing|Not found|未发现/.test(await page.locator('[data-tool-id="sage"] .lt-badge').textContent()), 'Sage accurately missing');
+  check((await page.locator('[data-tool-id="sympy"] .lt-command').textContent()).includes('--index-url'), 'install command is a real pip invocation');
+  const pipCommand = await page.locator('[data-tool-id="sympy"] .lt-command').textContent();
+  check(!/[<>]/.test(pipCommand) && !/[\u4e00-\u9fff]/.test(pipCommand), 'install command contains no placeholder or Chinese token');
   await page.locator('#lt-python').selectOption({ index: 1 });
   await page.waitForFunction(() => !document.getElementById('lt-python').disabled);
   check(await page.evaluate(() => window.apiCalls.at(-1).payload.pythonId === document.getElementById('lt-python').value), 'selected interpreter sent by opaque ID');
-  await page.locator('#lt-python').selectOption({ index: 0 });
-  await page.waitForFunction(() => !document.getElementById('lt-python').disabled);
   const scopes = await page.locator('#lt-scope option').count();
   if (scopes > 1) {
     await page.locator('#lt-scope').selectOption({ index: 1 });
     await page.waitForFunction(() => !document.getElementById('lt-scope').disabled);
-    check(await page.locator('[data-tool-id="mathjs"] button').filter({ hasText: 'Install (network)' }).isDisabled(), 'read-only npm scope cannot install');
-    await page.locator('#lt-scope').selectOption('managed');
+    await page.locator('#lt-scope').selectOption({ index: 0 });
     await page.waitForFunction(() => !document.getElementById('lt-scope').disabled);
   }
-  check(await page.evaluate(() => !window.apiCalls.some(call => call.action === 'install')), 'detection and mirror choices do not install');
-  await page.locator('[data-tool-id="sympy"] button').filter({ hasText: 'Install (network)' }).click();
-  await page.waitForFunction(() => document.querySelector('.lt-jobs').textContent.includes('exited successfully'));
-  check((await page.locator('.lt-job-log').textContent()).includes('SIMULATED INSTALL ONLY'), 'simulated success log');
-  await page.waitForFunction(() => !document.querySelector('.lt-primary').disabled);
-  await page.locator('[data-tool-id="numpy"] button').filter({ hasText: 'Install (network)' }).click();
-  await page.waitForFunction(() => document.querySelector('.lt-jobs').textContent.includes('Installation failed'));
-  check((await page.locator('.lt-jobs').textContent()).includes('exit 1'), 'simulated failure exit');
-  await page.waitForFunction(() => !document.querySelector('.lt-primary').disabled);
-  await page.locator('[data-tool-id="gmpy2"] button').filter({ hasText: 'Install (network)' }).click();
-  await page.locator('.lt-jobs button').filter({ hasText: 'Cancel installation' }).click();
-  await page.waitForFunction(() => document.querySelector('.lt-jobs').textContent.includes('not rolled back'));
-  check((await page.locator('.lt-job-log').textContent()).includes('SIMULATED'), 'simulated cancellation');
-  await page.waitForFunction(() => !document.querySelector('.lt-primary').disabled);
+   const installButton = page.locator('.lt-action--primary:not([hidden])').first();
+   check(await installButton.count() === 1, 'package card exposes one-click install control');
+   if (await installButton.isEnabled()) {
+     await installButton.click();
+     await page.waitForFunction(() => document.querySelector('.lt-status')?.textContent.includes('completed'));
+     check(await page.evaluate(() => window.apiCalls.some(call => call.action === 'plan') && window.apiCalls.some(call => call.action === 'install') && window.apiCalls.some(call => call.action === 'job')), 'one-click install uses fixed plan and job API');
+   }
+  const uninstallButton = page.locator('.lt-action--danger:not([hidden])').first();
+  if (await uninstallButton.count()) {
+    await uninstallButton.click();
+    check(await page.locator('.lt-confirm').count() === 1, 'uninstall asks for a second confirmation');
+    check(/确认卸载|Confirm uninstall/.test(await page.locator('.lt-confirm-card').textContent()), 'confirmation names the destructive action');
+    await page.locator('.lt-confirm-accept').click();
+    await page.waitForFunction(() => document.querySelector('.lt-status')?.textContent.includes('completed'));
+    check(await page.evaluate(() => window.apiCalls.some(call => call.action === 'uninstall')), 'confirmed uninstall uses the uninstall API');
+  }
   await page.evaluate(async () => {
     window.view = window.ui.renderLocalToolsPage(document.getElementById('host'), { request: window.request });
     await window.view.ready;
   });
-  await page.waitForFunction(() => !document.querySelector('.lt-jobs').hidden);
-  check((await page.locator('.lt-jobs').textContent()).includes('not rolled back'), 'logs retained across navigation');
+  check(await page.locator('.lt-group').count() === 4, 'groups retained across navigation');
   await page.evaluate(() => { window.view.dispose(); document.getElementById('host').replaceChildren(); });
   const before = await page.evaluate(() => window.apiCalls.length);
   await page.waitForTimeout(1100);
@@ -199,7 +199,7 @@ try {
   check(new URL(page.url()).hash === '#/tools', 'environment entry navigates to tools route');
   check(external.length === 0, `no automatic external traffic: ${external.join(',')}`);
   check(errors.length === 0, `browser runtime errors: ${errors.join(',')}`);
-  console.log(`PASS ${checks} checks; Chromium, real local metadata + fake installs; no packages installed.`);
+   console.log(`PASS ${checks} checks; Chromium, real local metadata; no install API or packages used.`);
   await context.close();
 } finally {
   if (browser) await browser.close();

@@ -142,8 +142,6 @@ export function attachInlineEditorToolbar(area, opts = {}) {
   const ro = opts.readonly === true;
   const [paste, clear, copy, select, download, dec, inc] = ro ? [null, null, ...buttons] : buttons;
   const bar = el('div', { class: 'io-pane-tools' });
-  const more = el('details', { class: 'io-tools-more' },
-    el('summary', { class: 'tool-btn', title: tt('ui.topbar.more'), 'aria-label': tt('ui.topbar.more') }, msym('expand_more')));
   const extra = el('div', { class: 'io-tools-extra' });
   const button = (name, key, action) => {
     const node = tbtn(name, tt(key), action); node.className = 'tool-btn'; return node;
@@ -155,34 +153,29 @@ export function attachInlineEditorToolbar(area, opts = {}) {
     for (const [name, key] of [['undo', 'ui.op.undo'], ['redo', 'ui.op.redo']]) {
       const action = () => area.__editHistory?.[name]();
       bar.append(button(name, key, action));
-      const compact = button(name, key, action); compact.classList.add('io-touch-tool'); extra.append(compact);
     }
     bar.append(paste);
     if (opts.onPickFile) {
       const pick = () => opts.onPickFile();
       const label = opts.pickFileLabel || tt('ui.op.pickFile');
       const upload = tbtn('cloud_upload', label, pick); upload.className = 'tool-btn'; bar.append(upload);
-      const compact = tbtn('cloud_upload', label, pick); compact.className = 'tool-btn io-compact-file'; extra.append(compact);
     }
     bar.append(clear);
     extra.append(copy, select, download, dec, inc);
   }
-  extra.append(button('open_in_full', 'ui.expand.title', () => {
-    more.open = false; more.querySelector('summary').focus({ preventScroll: true });
+  const expand = button('open_in_full', 'ui.expand.title', () => {
+    expand.focus({ preventScroll: true });
     openExpandModal(area.value, ro ? null : value => {
       area.value = value; opts.onChange?.();
     }, { modalTitle: opts.title, readonly: ro });
-  }));
-  more.append(extra); bar.append(more);
-  more.addEventListener('click', event => {
-    if (!event.target.closest('button')) return;
-    more.open = false; more.querySelector('summary').focus({ preventScroll: true });
   });
-  more.addEventListener('keydown', event => {
-    if (event.key !== 'Escape') return;
-    event.preventDefault(); more.open = false; more.querySelector('summary').focus({ preventScroll: true });
+  extra.append(expand); bar.append(extra);
+  bar.addEventListener('focusin', event => {
+    if (!event.target.matches('button')) return;
+    const r = event.target.getBoundingClientRect(), b = bar.getBoundingClientRect();
+    if (r.left < b.left) bar.scrollLeft += r.left - b.left;
+    else if (r.right > b.right) bar.scrollLeft += r.right - b.right;
   });
-  for (const name of ['focusin', 'pointerdown']) area.addEventListener(name, () => { more.open = false; });
   return bar;
 }
 

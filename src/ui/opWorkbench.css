@@ -82,12 +82,16 @@
   position: absolute; z-index: 2; top: 8px; inset-inline: 17px;
   height: 32px; min-height: 32px; padding: 0; gap: 8px; flex-wrap: nowrap;
   pointer-events: none;
+  display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center;
 }
-.op-data .io-pane-tools { flex-wrap: nowrap; justify-content: flex-end; gap: 0; pointer-events: auto; }
-.op-data .io-pane-tools > .tool-btn, .op-data .io-tools-more > summary { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
+.op-data .io-pane-tools { min-width: 0; max-width: 100%; flex-wrap: nowrap; justify-content: flex-start; justify-content: safe flex-end; gap: 0; pointer-events: auto; overflow-x: auto; scrollbar-width: none; }
+.op-data .io-pane-tools::-webkit-scrollbar { display: none; }
+.op-data .io-pane-tools > :is(.tool-btn, .io-tools-extra) { flex: none; }
+.op-data .io-pane-tools .tool-btn, .op-data .io-tools-more > summary { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
 .op-data .io-pane-tools, .op-data .io-pane-title { background: var(--surface); border-radius: var(--r-sm); }
 .op-data .io-pane-output .io-pane-tools, .op-data .io-pane-output .io-pane-title { background: var(--surface-2); }
 .op-data .io-pane-title { flex: none; font-size: 13px; line-height: 1.5; padding: 0; }
+.op-data .io-pane-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .op-data .io-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 0; }
 .op-data .io-actions > .primary { grid-column: 2; grid-row: 1; min-width: 112px; justify-content: center; }
 .op-data .io-actions > .io-swap { grid-column: 1; grid-row: 1; justify-self: end; }
@@ -215,25 +219,16 @@
   .special-workbench .recipe-steps { max-height: none; }
   .op-data .io-out-media { max-height: none; overflow: visible; }
 }
-.io-tools-more { position: relative; }
-.io-tools-more > summary { display: inline-flex; align-items: center; justify-content: center; list-style: none; cursor: pointer; }
+.io-tools-more { position: static; display: contents; }
+.io-tools-more > summary { display: none; }
 .io-tools-more > summary::-webkit-details-marker { display: none; }
 .io-tools-extra {
-  display: flex; flex-wrap: wrap; position: absolute; inset-inline-end: 0; top: calc(100% + 6px);
-  width: max-content; max-width: 260px; padding: 6px; gap: 2px;
-  background: var(--surface-3); border-radius: var(--r-md); box-shadow: var(--el-2);
+  display: flex; flex-wrap: nowrap; position: static; width: auto; max-width: none; min-width: 0;
+  padding: 0; gap: 0; background: transparent; border-radius: 0; box-shadow: none;
 }
-.io-tools-more:not([open]) > .io-tools-extra { display: none; }
+.io-tools-more:not([open]) > .io-tools-extra { display: flex; }
 .io-tools-extra > .io-touch-tool { display: none; }
 .io-tools-extra > .io-compact-file { display: none; }
-@container operation-data (max-width: 340px) {
-  .op-workbench[data-input-mode="text"] .io-pane-input .io-pane-tools > .tool-btn:nth-child(-n+2) { display: none; }
-  .io-tools-extra > .io-touch-tool { display: inline-flex; }
-}
-@container operation-data (max-width: 280px) {
-  .op-workbench[data-input-mode="text"] .io-pane-input .io-pane-tools > .tool-btn:nth-child(4) { display: none; }
-  .io-tools-extra > .io-compact-file { display: inline-flex; }
-}
 .env-layout-setting { padding-block: 12px; }
 /* 两个长中文选项必须保持单行胶囊：换行会把分段控件拉成两层高的巨大胶囊。 */
 .dir-seg.env-layout-seg { display: flex; flex-wrap: nowrap; width: 100%; max-width: 100%; }
@@ -245,8 +240,8 @@
   .env-layout-seg > button { padding-inline: 4px; font-size: 12px; }
 }
 @media (pointer: coarse) {
-  .op-data .io-pane-input .io-pane-tools > .tool-btn:nth-child(-n+2) { display: none; }
-  .io-tools-extra > .io-touch-tool { display: inline-flex; }
+  .op-data .io-pane-input .io-pane-tools > .tool-btn:nth-child(-n+2) { display: inline-flex; }
+  .io-tools-extra > .io-touch-tool { display: none; }
   .op-data .io-tools-extra > .tool-btn { width: 44px; min-width: 44px; height: 44px; }
   .op-workbench[data-layout="split"] { grid-template-columns: minmax(0, var(--op-config-fr, 1fr)) 44px minmax(0, var(--op-data-fr, 1fr)); }
   .op-workbench[data-layout="split"] .fav-btn { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
@@ -255,6 +250,16 @@
   .op-config .secret-field .exp-btn { width: 44px; min-width: 44px; min-height: 44px; }
   .op-feedback-cancel { min-height: 44px; }
   .op-data .io-area { padding-top: 60px; scroll-padding-top: 60px; }
+}
+
+/* 工具栏在真正触及标题边界前保持展开；空间不足时只滚动图标行，不提前折叠。 */
+@container operation-data (max-width: 340px) {
+  .op-workbench[data-input-mode="text"] .io-pane-input .io-pane-tools > .tool-btn:nth-child(-n+2) { display: inline-flex; }
+  .io-tools-extra > .io-touch-tool { display: none; }
+}
+@container operation-data (max-width: 280px) {
+  .op-workbench[data-input-mode="text"] .io-pane-input .io-pane-tools > .tool-btn:nth-child(4) { display: inline-flex; }
+  .io-tools-extra > .io-compact-file { display: none; }
 }
 @media (max-width: 600px) {
   .op-config .param { flex-wrap: wrap; }

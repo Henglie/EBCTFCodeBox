@@ -220,7 +220,7 @@ export default {
   "op.alternatingCaps.name": "Alternating Caps",
 
  // ---- UI: topbar ----
-  "ui.brand.title": "EBCTFCodeBox",
+  "ui.brand.title": "EBCrypto",
   "ui.topbar.update": "अपडेट जाँचें",
   "ui.topbar.repo": "GitHub",
   "ui.topbar.theme": "थीम बदलें",
@@ -498,7 +498,7 @@ export default {
   "ui.font.loaded": "लोड हो गया",
   "ui.font.retry": "पुनः प्रयास",
   "ui.font.btn": "फ़ॉन्ट लाइब्रेरी",
-  "ui.loading.title": "EBCTFCodeBox",
+  "ui.loading.title": "EBCrypto",
   "ui.loading.core": "कोर मॉड्यूल लोड हो रहे हैं",
   "ui.loading.fonts": "फ़ॉन्ट लोड हो रहे हैं",
   "ui.loading.ui": "UI आरंभ हो रहा है",
@@ -1294,6 +1294,7 @@ export default {
   "ui.custom.preset": "प्रीसेट",
   "ui.custom.vars": "उपलब्ध चर",
   "ui.custom.helpers": "हेल्पर फ़ंक्शन",
+  "ui.custom.assistant": "Assistant panel",
   "ui.custom.run": "टेस्ट रन",
   "ui.custom.save": "सहेजें",
   "ui.custom.importBtn": ".js इंपोर्ट करें",
@@ -1320,7 +1321,6 @@ export default {
   "ui.custom.confirmDel": "स्कीम \"{0}\" हटाएँ?",
   "ui.custom.sandboxWorker": "सैंडबॉक्स: अलग थ्रेड (नेटवर्क और स्टोरेज क्षमताएँ हटाई गई हैं; टाइमआउट पर बलपूर्वक समाप्त किया जा सकता है)",
   "ui.custom.sandboxMain": "फ़ॉलबैक: मुख्य थ्रेड पर निष्पादन (कोई थ्रेड आइसोलेशन नहीं; अनंत लूप को बाधित नहीं किया जा सकता)",
-  "ui.custom.reset": "टेम्पलेट पर रीसेट करें",
   "ui.custom.clear": "इस op का कस्टम कार्यान्वयन हटाएँ",
   "ui.custom.lineCol": "पंक्ति {0}, स्तंभ {1}",
   "ui.qc.tabAsm": "मशीन कोड ⇄ असेंबली",

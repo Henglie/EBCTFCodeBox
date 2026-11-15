@@ -35,7 +35,7 @@ export default {
     examples: [
       { in: "DCODE", out: "⎅☊⍜⎅⟒", desc: "dCode 官方例" },
       { in: "⏃⌰⟟⟒⋏", out: "ALIEN", desc: "dCode 页面标题例，反向" },
-      { in: "FUTURAMA", param: "futurama2 档", out: "FZSMDDPP", desc: "dCode AL2 官方例（自密钥移位）" },
+      { in: "FUTURAMA", param: "mode=futurama2", out: "FZSMDDPP", desc: "编码：dCode AL2 官方例（自密钥移位）" },
     ],
     tips: [
       "Futurama 剧中的 AL1/AL2 原字形只有图片与爱好者字体，Unicode 档用的是 dCode 唯一成文的 Unicode 对照表。",

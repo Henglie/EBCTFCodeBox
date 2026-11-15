@@ -395,7 +395,7 @@ export default {
   "op.alternatingCaps.desc": "Conversion en casse alternée (texte sPoNgEbOb par exemple)",
 
  // ---- UI: topbar ----
-  "ui.brand.title": "EBCTFCodeBox",
+  "ui.brand.title": "EBCrypto",
   "ui.topbar.update": "Vérifier les Mises à Jour",
   "ui.topbar.repo": "GitHub",
   "ui.topbar.theme": "Changer de Thème",
@@ -696,7 +696,7 @@ export default {
   "ui.font.loaded": "Chargé",
   "ui.font.retry": "Réessayer",
   "ui.font.btn": "Bibliothèque de Polices",
-  "ui.loading.title": "EBCTFCodeBox",
+  "ui.loading.title": "EBCrypto",
   "ui.loading.core": "Chargement des modules principaux",
   "ui.loading.fonts": "Chargement des polices",
   "ui.loading.ui": "Initialisation de l'interface",
@@ -1931,6 +1931,7 @@ export default {
   "ui.custom.preset": "Préréglage",
   "ui.custom.vars": "Variables disponibles",
   "ui.custom.helpers": "Fonctions utilitaires",
+  "ui.custom.assistant": "Assistant panel",
   "ui.custom.run": "Test d’exécution",
   "ui.custom.save": "Enregistrer",
   "ui.custom.importBtn": "Importer .js",
@@ -1957,7 +1958,6 @@ export default {
   "ui.custom.confirmDel": "Supprimer le schéma « {0} » ?",
   "ui.custom.sandboxWorker": "Bac à sable : thread dédié (accès réseau et stockage retirés ; arrêt forcé possible en cas de dépassement du délai)",
   "ui.custom.sandboxMain": "Repli : exécution dans le thread principal (pas d’isolation de thread ; les boucles infinies ne peuvent pas être interrompues)",
-  "ui.custom.reset": "Réinitialiser au modèle",
   "ui.custom.clear": "Effacer l’implémentation personnalisée de cet op",
   "ui.custom.lineCol": "Ligne {0}, colonne {1}",
   "ui.qc.tabAsm": "Code machine ⇄ Assembleur",

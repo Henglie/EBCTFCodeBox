@@ -16,7 +16,7 @@
 
 // 动态取色：预设 + 默认 + 回退函数。ui 层平级 import；选色/清除走 window.__ebctfSetAccent / __ebctfClearAccent（main.js 暴露），不反向 import main.js。
 import { ACCENT_PRESETS, DEFAULT_ACCENT, resetAccent } from "./dynamicColor.js";
-import { icon as iconSvg } from "./icons.js";  // .msym 无字体 ligature，须 icon() 注入内联 SVG
+import { icon as iconSvg } from "./icons.js";
 import { THEME_VARIANTS } from "./themePicker.js";
 import { attachModalLifecycle } from "./modalLifecycle.js";
 import { getLocale } from "../i18n/index.js";
@@ -301,6 +301,12 @@ function renderPanelContent(state) {
       location.hash = "#/tools";
     } }, msym("build"), t("ui.env.localToolsTitle")),
     el("div", { class: "env-mode-note" }, t("ui.env.localToolsHint"))));
+  wrap.append(el("div", { class: "env-section" },
+    el("button", { type: "button", class: "act-btn", onclick: () => {
+      closeEnvPanel();
+      location.hash = "#/plugins";
+    } }, msym("hub"), t("ui.env.mcpTitle")),
+    el("div", { class: "env-mode-note" }, t("ui.env.mcpHint"))));
  // 增强随机安全区（全局随机源档位 + 配置 + 服务器测试连接）
   wrap.append(renderRandSecureSection());
   // 昼夜切换区（与强调色同属「外观」，放一起）

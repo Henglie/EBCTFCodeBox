@@ -273,7 +273,7 @@ export default {
   "op.alternatingCaps.name": "Чередующийся регистр",
 
  // ---- UI: topbar ----
-  "ui.brand.title": "EBCTFCodeBox",
+  "ui.brand.title": "EBCrypto",
   "ui.topbar.update": "Проверить обновления",
   "ui.topbar.repo": "GitHub",
   "ui.topbar.theme": "Сменить тему",
@@ -583,7 +583,7 @@ export default {
   "ui.font.loaded": "Загружено",
   "ui.font.retry": "Повторить",
   "ui.font.btn": "Библиотека шрифтов",
-  "ui.loading.title": "EBCTFCodeBox",
+  "ui.loading.title": "EBCrypto",
   "ui.loading.core": "Загрузка основных модулей",
   "ui.loading.fonts": "Загрузка шрифтов",
   "ui.loading.ui": "Инициализация интерфейса",
@@ -1420,6 +1420,7 @@ export default {
   "ui.custom.preset": "Пресет",
   "ui.custom.vars": "Доступные переменные",
   "ui.custom.helpers": "Вспомогательные функции",
+  "ui.custom.assistant": "Assistant panel",
   "ui.custom.run": "Тестовый запуск",
   "ui.custom.save": "Сохранить",
   "ui.custom.importBtn": "Импорт .js",
@@ -1446,7 +1447,6 @@ export default {
   "ui.custom.confirmDel": "Удалить схему «{0}»?",
   "ui.custom.sandboxWorker": "Песочница: отдельный поток (доступ к сети и хранилищу отключён; при тайм-ауте принудительно завершается)",
   "ui.custom.sandboxMain": "Резервный режим: выполнение в главном потоке (изоляции потока нет; бесконечный цикл прервать нельзя)",
-  "ui.custom.reset": "Сбросить к шаблону",
   "ui.custom.clear": "Очистить пользовательскую реализацию этого op",
   "ui.custom.lineCol": "Стр {0}, Стлб {1}",
   "ui.qc.tabAsm": "Машинный код ⇄ Ассемблер",

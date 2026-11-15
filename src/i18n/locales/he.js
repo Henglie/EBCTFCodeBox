@@ -220,7 +220,7 @@ export default {
   "op.alternatingCaps.name": "Alternating Caps",
 
  // ---- UI: topbar ----
-  "ui.brand.title": "EBCTFCodeBox",
+  "ui.brand.title": "EBCrypto",
   "ui.topbar.update": "בדוק עדכון",
   "ui.topbar.repo": "GitHub",
   "ui.topbar.theme": "החלף ערכת נושא",
@@ -498,7 +498,7 @@ export default {
   "ui.font.loaded": "נטען",
   "ui.font.retry": "נסה שוב",
   "ui.font.btn": "ספריית גופנים",
-  "ui.loading.title": "EBCTFCodeBox",
+  "ui.loading.title": "EBCrypto",
   "ui.loading.core": "טוען מודולי ליבה",
   "ui.loading.fonts": "טוען גופנים",
   "ui.loading.ui": "מאתחל ממשק",
@@ -1300,6 +1300,7 @@ export default {
   "ui.custom.preset": "הגדרה מוכנה",
   "ui.custom.vars": "משתנים זמינים",
   "ui.custom.helpers": "פונקציות עזר",
+  "ui.custom.assistant": "Assistant panel",
   "ui.custom.run": "הרצת בדיקה",
   "ui.custom.save": "שמירה",
   "ui.custom.importBtn": "ייבוא .js",
@@ -1326,7 +1327,6 @@ export default {
   "ui.custom.confirmDel": "למחוק את הסכימה \"{0}\"?",
   "ui.custom.sandboxWorker": "ארגז חול: חוט נפרד (יכולות הרשת והאחסון הוסרו; ניתן לסיים בכוח בעת חריגת זמן)",
   "ui.custom.sandboxMain": "מצב נסיגה: הרצה בחוט הראשי (ללא בידוד חוטים; אי אפשר להפסיק לולאות אינסופיות)",
-  "ui.custom.reset": "איפוס לתבנית",
   "ui.custom.clear": "ניקוי המימוש המותאם של op זה",
   "ui.custom.lineCol": "שורה {0}, עמודה {1}",
   "ui.qc.tabAsm": "קוד מכונה ⇄ אסמבלי",

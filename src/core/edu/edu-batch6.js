@@ -50,14 +50,15 @@ export default {
  // ============ classic: Goldbug ============
   goldbug: {
     what: "金甲虫密码——爱伦坡小说《金甲虫》里的 Kidd 船长密码，用数字和特殊符号替换字母。",
-    principle: "每个字母替换成一个单字符符号：5→A, 8→E, ‡→O, †→D, ¶→B, 3→G, 4→H, 6→I, *→N, (→R, )→T, ;→S, ?→U, 0→M, 9→F, 1→L, :→W, 2→P, .→V, —→Y，剩余 6 字母用 §!&@[] 扩展。单字符替换无歧义，直接查表可逆。小说原文是多对一（靠频率分析消歧），本工具用一对一保证严格可逆。",
-    usage: "输入字母文本点编码得到符号串；输入符号串点解码还原字母。非字母/非符号字符原样保留。",
+    principle: "默认采用 Poe/dCode 通行的完整 A-Z 教学表：A5 B2 C- D† E8 F1 G3 H4 I6 J, K7 L0 M9 N* O‡ P. Q$ R( S) T; U? V¶ W] X¢ Y: Z[。这是单表替换，并非多对一密码。来源：https://www.dcode.fr/scarabee-or-poe 。旧版兼容档保留本工具此前的自定义映射，不能与通行表混用。",
+    usage: "默认 alphabet=poe；处理本工具旧版生成的密文时选 alphabet=legacy。字母编码后解码统一大写；非字母若与密码符号或反斜杠冲突，则编码时加反斜杠转义，以保留字面值。",
     examples: [
-      { in: "HELLO", out: "4811‡", desc: "H=4, E=8, L=1, L=1, O=‡" },
-      { in: "5‡8", out: "AOE", desc: "5=A, ‡=O, 8=E" },
+      { in: "DCODE", out: "†-‡†8", desc: "编码，通行表 C=-" },
+      { in: "3‡0†", out: "GOLD", desc: "解码，通行表 0=L" },
+      { in: "HELLO", param: "alphabet=legacy", out: "4811‡", desc: "编码，显式旧版兼容表" },
     ],
-    formulas: [{ tex: "A \\to 5,\\ E \\to 8,\\ O \\to \\ddagger,\\ D \\to \\dagger,\\ B \\to \\P", caption: "部分映射（照《金甲虫》Kidd 密码）" }],
-    tips: ["小说原文是多对一不可严格往返，本工具用一对一可逆方案", "特征符号 †‡¶ 是强信号，一把梭靠这个识别", "CTF 里看到一串数字+特殊符号混合的密文，想想金甲虫"],
+    formulas: [{ tex: "A \\to 5,\\ E \\to 8,\\ O \\to \\ddagger,\\ D \\to \\dagger,\\ B \\to 2", caption: "通行表的部分映射" }],
+    tips: ["旧版密文需显式选择 alphabet=legacy，默认通行表不自动猜表", "特征符号 †‡¶ 是强信号，一把梭靠这个识别", "末尾单独的反斜杠是非法转义；字面反斜杠写成双反斜杠"],
     aka: ["GoldBug", "Kidd cipher", "金甲虫", "Poe cipher", "金甲虫密码", "the gold bug", "爱伦坡密码", "Kidd船长密码", "symbol substitution", "符号替换密码", "gold-bug cipher", "基德密码"],
   },
 

@@ -967,9 +967,31 @@ function sectionMcp() {
     } }, T("ui.plugin.mcpExport")),
   );
 
+  const httpToken = el('input', { class: 'plugin-input', type: 'password', placeholder: '留空=不要求 token', autocomplete: 'off' });
+  const httpEnabled = el('input', { type: 'checkbox' }); httpEnabled.checked = true;
+  const httpConfig = el('textarea', { class: 'plugin-prompt', rows: '7', readonly: 'readonly', spellcheck: 'false', dir: 'ltr' });
+  const updateHttpConfig = () => {
+    const token = httpToken.value;
+    httpConfig.value = JSON.stringify({ services: { mcp: {
+      enabled: httpEnabled.checked, host: '127.0.0.1', port: 8182, token,
+      workspace: '.', timeoutMs: 30000,
+    } } }, null, 2);
+  };
+  httpToken.addEventListener('input', updateHttpConfig); httpEnabled.addEventListener('change', updateHttpConfig); updateHttpConfig();
+  const copyHttp = async () => { try { await navigator.clipboard.writeText(httpConfig.value); toast('MCP HTTP 配置已复制'); } catch { httpConfig.select(); document.execCommand('copy'); } };
+  box.append(el('section', { class: 'plugin-mcp-method' },
+    el('h4', {}, '方式一：连接版 MCP'),
+    el('p', { class: 'plugin-how-intro' }, '启动器默认回环 127.0.0.1:8182；留空 token 为无令牌，填写后使用 Bearer token。配置写入 ebcrypto.config.json 的 services.mcp。'),
+    el('label', { class: 'plugin-inline-field' }, httpEnabled, '启动 HTTP MCP'),
+    el('label', { class: 'plugin-inline-field' }, 'token', httpToken),
+    httpConfig,
+    el('button', { class: 'chip-btn primary', onclick: copyHttp }, '复制连接配置'),
+  ));
+
   // 使用方法：本地 stdio 型（无网址=正常、离线可用、零外发）+ 三步接入 + 各客户端配置文件位置。
   box.append(
-    el("div", { class: "plugin-how" },
+    el("section", { class: "plugin-mcp-method" },
+      el('h4', {}, '方式二：描述版 MCP'),
       el("h5", {}, T("ui.plugin.mcpHowTitle")),
       el("p", { class: "plugin-how-intro" }, T("ui.plugin.mcpHowIntro")),
       el("ol", { class: "plugin-how-steps" },

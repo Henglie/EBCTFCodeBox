@@ -41,7 +41,7 @@ async function openEnvironment() {
   await page.locator('#btnFont').click(); await page.locator('.env-panel').waitFor(); await settle();
 }
 async function closeEnvironment() {
-  await page.locator('#envMotionSpeed').focus(); await page.keyboard.press('Escape');
+  await page.locator('.env-motion-speed select:not([multiple])').focus(); await page.keyboard.press('Escape');
   await page.locator('.env-panel').waitFor({ state: 'detached' });
   check(await page.locator('#btnFont').evaluate(n => n === document.activeElement), 'Environment Escape restores its launcher');
   if (await page.locator('#btnMoreActions').isVisible()) await page.keyboard.press('Escape');
@@ -56,18 +56,20 @@ try {
       const rect = n => { const r = n.getBoundingClientRect(); return { x: r.x, y: r.y, right: r.right, bottom: r.bottom, width: r.width, height: r.height }; };
       const sections = [...node.querySelectorAll('.env-section')].map(section => {
         const r = rect(section), title = section.querySelector('.env-section-title'), style = getComputedStyle(section);
-        return { ...r, title: rect(title), inset: parseFloat(style.paddingInlineStart), overflow: section.scrollWidth > section.clientWidth + 1 };
+        return { ...r, hasTitle: !!title, title: title ? rect(title) : null, inset: parseFloat(style.paddingInlineStart), overflow: section.scrollWidth > section.clientWidth + 1 };
       });
       const headings = [...node.querySelectorAll('.env-section-title')].map(n => rect(n).height);
       return { panel: rect(node), width: innerWidth, height: innerHeight, sections, headings, overflow: node.scrollWidth > node.clientWidth + 1,
-        actionHeights: [...node.querySelectorAll('.env-clear-io, .env-reset-btn, #envMotionSpeed')].map(n => rect(n).height) };
+        actionHeights: [...node.querySelectorAll('.env-clear-io, .env-reset-btn')].map(n => rect(n).height),
+        selectHeights: [...node.querySelectorAll('.env-motion-speed select:not([multiple])')].map(n => rect(n).height) };
     });
     evidence.push({ theme, width, height, ...m });
     check(m.panel.x >= 7 && m.panel.right <= width - 7 && m.panel.y >= 0 && m.panel.bottom <= height - 7, `Environment stays inside ${width}x${height}: ${JSON.stringify(m.panel)}`);
     check(!m.overflow && m.sections.every(s => !s.overflow), 'Environment text and settings fit horizontally');
-    check(m.sections.every(s => s.inset === 12 && Math.abs(s.title.x - s.x - 12) < 1), 'Section headings share a 12px content inset');
+    check(m.sections.filter(s => s.hasTitle).every(s => s.inset === 12 && Math.abs(s.title.x - s.x - 12) < 1), 'Section headings share a 12px content inset');
     check(m.headings.every(h => Math.abs(h - m.headings[0]) < 1), 'Icon and text-only section headings share a line height');
-    check(m.actionHeights.every(h => h >= 44), 'Settings and bottom actions share 44px minimum height');
+    check(m.actionHeights.length === 2 && m.actionHeights.every(h => h >= 44), 'Bottom actions retain 44px minimum height');
+    check(m.selectHeights.length === 1 && m.selectHeights.every(h => h >= 40), 'Browser-owned motion selector retains the shared 40px native field height');
     await paint('.env-panel'); await paint('.env-theme-box');
     await page.locator('.env-panel').evaluate(n => { n.scrollTop = 0; }); await settle();
     await shot(`environment-${theme}-${width}x${height}`);
@@ -124,9 +126,19 @@ try {
   await page.keyboard.press('Escape'); await page.locator('.family-overflow-menu').waitFor({ state: 'detached' });
   check(await page.locator('.family-more').evaluate(n => n === document.activeElement), 'Family menu Escape restores focus');
   await go('op/base64', '#ioIn');
-  await page.locator('.io-tools-more > summary').first().click();
-  await paint('.io-tools-extra'); await shot('tools-menu');
-  await page.locator('.io-tools-more > summary').first().click();
+  check(await page.locator('.io-tools-more > summary').count() === 0, 'Ordinary OP toolbars have no stale disclosure launcher');
+  for (const tools of await page.locator('.io-pane-tools').all()) {
+    const buttons = tools.locator('button');
+    check(await buttons.count() > 0, 'IO tools have real buttons');
+    for (const button of [buttons.first(), buttons.last()]) {
+      await button.focus();
+      check(await button.evaluate(n => {
+        const a = n.getBoundingClientRect(), b = n.closest('.io-pane-tools').getBoundingClientRect();
+        return n === document.activeElement && a.width > 0 && a.left >= b.left - 1 && a.right <= b.right + 1;
+      }), 'First and last toolbar buttons are visible and keyboard reachable');
+    }
+  }
+  await paint('.io-pane-input .io-pane-tools > button'); await shot('tools-menu');
   const select = await paint('.io-coding-bar select');
   check(select.height >= 44, 'Native select shell retains touch geometry');
   await page.locator('.io-coding-bar select').first().selectOption('utf-8');

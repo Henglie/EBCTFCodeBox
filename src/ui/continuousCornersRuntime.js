@@ -389,6 +389,10 @@ function setupContinuousCorners(options = {}) {
   let frame = 0, discoveryTimer = 0, disposed = false, prune = false, flushing = false;
   const schedule = () => { if (!disposed && !frame) frame = win.requestAnimationFrame(flush); };
   const inRoot = node => node.isConnected && (root.nodeType === 9 || root === node || root.contains(node));
+  const isCmInternal = node => {
+    const el = node?.nodeType === 1 ? node : node?.parentElement;
+    return !!el?.closest?.('.cm-editor') && !el.matches?.('.cm-editor');
+  };
   const nearViewport = box => box && box.width > 0 && box.height > 0 && box.bottom >= -160 && box.top <= win.innerHeight + 160
     && box.right >= -160 && box.left <= win.innerWidth + 160;
   function rememberBounds(state, bounds) {
@@ -433,6 +437,7 @@ function setupContinuousCorners(options = {}) {
     if (dirty.size) flush();
   }, { rootMargin: '160px' });
   function track(node) {
+    if (isCmInternal(node)) return;
     const existing = states.get(node);
     if (existing) {
       if (!existing.visible) {
@@ -466,6 +471,7 @@ function setupContinuousCorners(options = {}) {
   }
   function affected(node, discover = true) {
     if (!node || node.nodeType !== 1) return;
+    if (isCmInternal(node)) return;
     if (discover) scans.add(node);
     for (const state of visible) if (state.node === node || node.contains(state.node)) { state.box = null; dirty.add(state); }
     for (let parent = node.parentElement; parent; parent = parent.parentElement) {
@@ -475,6 +481,7 @@ function setupContinuousCorners(options = {}) {
   }
   const mutation = new win.MutationObserver(records => {
     for (const record of records) {
+      if (isCmInternal(record.target)) continue;
       if (record.type === 'attributes') {
         const state = states.get(record.target);
         if (record.attributeName === 'style') {
@@ -624,6 +631,7 @@ function setupContinuousCorners(options = {}) {
   const handlers = [];
   const listen = (target, event, callback) => { target.addEventListener(event, callback, { capture: true, passive: true }); handlers.push([target, event, callback]); };
   const interaction = event => {
+    if (isCmInternal(event.target)) return;
     const target = event.target, related = event.relatedTarget;
     // Hover/focus change only the two branches below their common ancestor.
     // A relatedTarget such as #workspace must never invalidate all of its cards.

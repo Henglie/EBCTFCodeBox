@@ -275,7 +275,7 @@ export default {
   "op.alternatingCaps.name": "교대 대소문자",
 
  // ---- UI: topbar ----
-  "ui.brand.title": "EBCTFCodeBox",
+  "ui.brand.title": "码小妹",
   "ui.topbar.update": "업데이트 확인",
   "ui.topbar.repo": "GitHub",
   "ui.topbar.theme": "테마 전환",
@@ -585,7 +585,7 @@ export default {
   "ui.font.loaded": "로드됨",
   "ui.font.retry": "재시도",
   "ui.font.btn": "글꼴 라이브러리",
-  "ui.loading.title": "EBCTFCodeBox",
+  "ui.loading.title": "码小妹",
   "ui.loading.core": "핵심 모듈 로드 중",
   "ui.loading.fonts": "글꼴 로드 중",
   "ui.loading.ui": "UI 초기화 중",
@@ -1424,6 +1424,7 @@ export default {
   "ui.custom.preset": "프리셋",
   "ui.custom.vars": "사용 가능한 변수",
   "ui.custom.helpers": "헬퍼 함수",
+  "ui.custom.assistant": "Assistant panel",
   "ui.custom.run": "테스트 실행",
   "ui.custom.save": "저장",
   "ui.custom.importBtn": ".js 가져오기",
@@ -1450,7 +1451,6 @@ export default {
   "ui.custom.confirmDel": "스킴 \"{0}\"을(를) 삭제할까요?",
   "ui.custom.sandboxWorker": "샌드박스: 독립 스레드(네트워크 및 스토리지 권한 제거됨, 시간 초과 시 강제 종료 가능)",
   "ui.custom.sandboxMain": "폴백: 메인 스레드 실행(스레드 격리 없음, 무한 루프 중단 불가)",
-  "ui.custom.reset": "템플릿으로 초기화",
   "ui.custom.clear": "이 op의 사용자 정의 구현 지우기",
   "ui.custom.lineCol": "행 {0}, 열 {1}",
   "ui.qc.tabAsm": "머신 코드 ⇄ 어셈블리",

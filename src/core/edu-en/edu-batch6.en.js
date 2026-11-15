@@ -44,14 +44,15 @@ export default {
  // ============ classic: Goldbug ============
   goldbug: {
     what: "The Gold-Bug cipher — Captain Kidd's cipher from Edgar Allan Poe's story 'The Gold-Bug', substituting letters with digits and special symbols.",
-    principle: "Each letter maps to a single symbol: 5→A, 8→E, ‡→O, †→D, ¶→B, 3→G, 4→H, 6→I, *→N, (→R, )→T, ;→S, ?→U, 0→M, 9→F, 1→L, :→W, 2→P, .→V, —→Y, and the remaining 6 letters use §!&@[]. Single-character substitution is unambiguous — a direct table lookup is reversible. The story's original was many-to-one (disambiguated via frequency analysis); this tool uses one-to-one to guarantee strict reversibility.",
-    usage: "Enter letter text and click encode to get the symbol string; enter a symbol string and click decode to recover the letters. Non-letter/non-symbol characters pass through unchanged.",
+    principle: "The default is the complete Poe/dCode teaching table: A5 B2 C- D† E8 F1 G3 H4 I6 J, K7 L0 M9 N* O‡ P. Q$ R( S) T; U? V¶ W] X¢ Y: Z[. This is monoalphabetic substitution, not a many-to-one cipher. Source: https://www.dcode.fr/scarabee-or-poe . The legacy mode retains this tool's former custom table and is not interchangeable with the default.",
+    usage: "Use alphabet=poe by default, or alphabet=legacy for ciphertext created by older versions of this tool. Decoded letters are uppercase. Literal symbols colliding with the selected table or a backslash are escaped with a backslash during encoding.",
     examples: [
-      { in: "HELLO", out: "4811‡", desc: "H=4, E=8, L=1, L=1, O=‡" },
-      { in: "5‡8", out: "AOE", desc: "5=A, ‡=O, 8=E" },
+      { in: "DCODE", out: "†-‡†8", desc: "Encode with the default table; C=-" },
+      { in: "3‡0†", out: "GOLD", desc: "Decode with the default table; 0=L" },
+      { in: "HELLO", param: "alphabet=legacy", out: "4811‡", desc: "Encode using the explicit legacy table" },
     ],
-    formulas: [{ tex: "A \\to 5,\\ E \\to 8,\\ O \\to \\ddagger,\\ D \\to \\dagger,\\ B \\to \\P", caption: "Partial mapping (from Kidd's cipher in 'The Gold-Bug')" }],
-    tips: ["The original story's cipher is many-to-one and not strictly round-trippable; this tool uses a reversible one-to-one scheme", "The signature symbols †‡¶ are a strong signal — recognize the cipher by them alone", "In CTF, a mixed string of digits + special symbols should make you think of the Gold-Bug"],
+    formulas: [{ tex: "A \\to 5,\\ E \\to 8,\\ O \\to \\ddagger,\\ D \\to \\dagger,\\ B \\to 2", caption: "Partial mapping of the default table" }],
+    tips: ["Select alphabet=legacy explicitly for older ciphertext; the table is not auto-detected", "The signature symbols †‡¶ are a strong signal", "A dangling backslash is invalid; a literal backslash must be doubled"],
     aka: ["GoldBug", "Kidd cipher", "金甲虫", "Poe cipher", "金甲虫密码", "the gold bug", "爱伦坡密码", "Kidd船长密码", "symbol substitution", "符号替换密码", "gold-bug cipher", "基德密码"],
   },
 

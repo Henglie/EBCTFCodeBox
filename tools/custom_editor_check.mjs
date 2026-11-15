@@ -110,13 +110,14 @@ try {
   await fixture(''); await content().press('Escape'); await page.locator('.ci-dialog').waitFor({ state: 'detached' });
   await page.locator('.ci-edit-btn').click(); await content().waitFor();
   check((await state()).text === '', 'an intentionally empty unsaved document does not revert to a template');
-  await fixture('return 123;'); await page.locator('.ci-editor-more > summary').click();
-  await page.locator('.ci-editor-more-menu button').filter({ hasText: '重置为模板' }).click();
-  check((await state()).text !== 'return 123;', 'secondary actions remain available in More');
+  await fixture('return 123;');
+  check(await page.locator('.ci-editor-actions button').count() === 2, 'bottom actions keep only import and export after template reset removal');
+  check(await page.locator('.ci-dialog').getByText('重置为模板').count() === 0, 'template reset button is removed from the editor');
+  await fixture('return 456;');
   await page.locator('.ci-editor-toolbar button[title^="撤销"]').click();
   check((await state()).text === 'return 123;', 'toolbar undo precisely restores the replaced document');
   await page.locator('.ci-editor-toolbar button[title^="重做"]').click();
-  check((await state()).text !== 'return 123;', 'toolbar redo reapplies the replacement');
+  check((await state()).text === 'return 456;', 'toolbar redo reapplies the replacement');
 
   stage = 'source comparison';
   await page.locator('.ci-src-head-toggle').click(); await page.locator('.ci-spanel .cm-content').waitFor();
@@ -176,7 +177,7 @@ try {
     await openCustomImplEditor('freqDist', { op: getOp('freqDist'), onTest: (code, done) => { window.finishCustomFixture = done; } });
   });
   await fixture('return input;'); await content().press('Control+Enter');
-  check(await page.locator('.ci-foot .btn-filled').isDisabled(), 'in-flight test blocks duplicate execution');
+  check(await page.locator('.ci-foot-main .btn-filled').isDisabled(), 'in-flight test blocks duplicate execution');
   await content().pressSequentially(' '); await page.evaluate(() => window.finishCustomFixture({ ok: false, line: 1, error: 'obsolete error' }));
   check(!(await page.locator('.ci-status-message').textContent()).includes('obsolete error'), 'late result cannot attach an error to edited code');
   await content().press('Control+Enter'); await page.locator('.ci-header-close').click();

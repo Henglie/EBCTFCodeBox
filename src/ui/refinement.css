@@ -72,7 +72,7 @@
 .act-btn.primary:hover:not(:disabled) {
   background: color-mix(in srgb, var(--on-primary) 8%, var(--primary)); filter: none;
 }
-.onekey-card { border-radius: var(--r-lg); border-block: 0; border-inline-end: 0; }
+.onekey-card { border-radius: var(--r-lg); }
 .edu-card { background: var(--surface-1); border: 0; border-radius: var(--r-xl); }
 .recipe-bar { background: var(--surface-1); border: 0; }
 .recipe-node { background: var(--surface-1); border: 0; }

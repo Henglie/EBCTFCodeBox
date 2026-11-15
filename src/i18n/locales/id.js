@@ -225,7 +225,7 @@ export default {
   "op.alternatingCaps.name": "Huruf Besar Bergantian",
 
  // ---- UI: topbar ----
-  "ui.brand.title": "EBCTFCodeBox",
+  "ui.brand.title": "EBCrypto",
   "ui.topbar.update": "Cek Pembaruan",
   "ui.topbar.repo": "GitHub",
   "ui.topbar.theme": "Ganti Tema",
@@ -492,7 +492,7 @@ export default {
   "ui.font.loaded": "Termuat",
   "ui.font.retry": "Coba lagi",
   "ui.font.btn": "Pustaka Font",
-  "ui.loading.title": "EBCTFCodeBox",
+  "ui.loading.title": "EBCrypto",
   "ui.loading.core": "Memuat modul inti",
   "ui.loading.fonts": "Memuat font",
   "ui.loading.ui": "Menginisialisasi UI",
@@ -1288,6 +1288,7 @@ export default {
   "ui.custom.preset": "Preset",
   "ui.custom.vars": "Variabel yang tersedia",
   "ui.custom.helpers": "Fungsi bantu",
+  "ui.custom.assistant": "Assistant panel",
   "ui.custom.run": "Uji coba",
   "ui.custom.save": "Simpan",
   "ui.custom.importBtn": "Impor .js",
@@ -1314,7 +1315,6 @@ export default {
   "ui.custom.confirmDel": "Hapus skema \"{0}\"?",
   "ui.custom.sandboxWorker": "Sandbox: thread terpisah (akses jaringan dan penyimpanan dihapus; dapat dihentikan paksa saat timeout)",
   "ui.custom.sandboxMain": "Fallback: eksekusi di thread utama (tanpa isolasi thread; infinite loop tidak dapat dihentikan)",
-  "ui.custom.reset": "Reset ke templat",
   "ui.custom.clear": "Hapus implementasi kustom op ini",
   "ui.custom.lineCol": "Baris {0}, Kolom {1}",
   "ui.qc.tabAsm": "Kode mesin ⇄ Assembly",

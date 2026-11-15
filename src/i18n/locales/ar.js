@@ -220,7 +220,7 @@ export default {
   "op.alternatingCaps.name": "Alternating Caps",
 
  // ---- UI: topbar ----
-  "ui.brand.title": "EBCTFCodeBox",
+  "ui.brand.title": "EBCrypto",
   "ui.topbar.update": "التحقق من التحديث",
   "ui.topbar.repo": "GitHub",
   "ui.topbar.theme": "تبديل السمة",
@@ -498,7 +498,7 @@ export default {
   "ui.font.loaded": "تم التحميل",
   "ui.font.retry": "إعادة المحاولة",
   "ui.font.btn": "مكتبة الخطوط",
-  "ui.loading.title": "EBCTFCodeBox",
+  "ui.loading.title": "EBCrypto",
   "ui.loading.core": "تحميل الوحدات الأساسية",
   "ui.loading.fonts": "تحميل الخطوط",
   "ui.loading.ui": "تهيئة الواجهة",
@@ -1300,6 +1300,7 @@ export default {
   "ui.custom.preset": "إعداد مسبق",
   "ui.custom.vars": "المتغيرات المتاحة",
   "ui.custom.helpers": "دوال مساعدة",
+  "ui.custom.assistant": "Assistant panel",
   "ui.custom.run": "تشغيل تجريبي",
   "ui.custom.save": "حفظ",
   "ui.custom.importBtn": "استيراد .js",
@@ -1326,7 +1327,6 @@ export default {
   "ui.custom.confirmDel": "حذف المخطط \"{0}\"؟",
   "ui.custom.sandboxWorker": "بيئة معزولة (Sandbox): خيط منفصل (أُزيلت قدرات الشبكة والتخزين؛ يمكن الإنهاء القسري عند انتهاء المهلة)",
   "ui.custom.sandboxMain": "وضع الاحتياط: تنفيذ على الخيط الرئيسي (لا عزل بين الخيوط؛ لا يمكن إيقاف الحلقات اللانهائية)",
-  "ui.custom.reset": "إعادة التعيين إلى القالب",
   "ui.custom.clear": "مسح التنفيذ المخصص لهذا الـ op",
   "ui.custom.lineCol": "سطر {0}، عمود {1}",
   "ui.qc.tabAsm": "كود الآلة ⇄ لغة التجميع",

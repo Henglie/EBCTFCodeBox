@@ -22075,6 +22075,7 @@ var autoCloseTags = /* @__PURE__ */ EditorView.inputHandler.of((view, from, to, 
 });
 export {
   Compartment,
+  Decoration,
   EditorState,
   EditorView,
   HighlightStyle,
