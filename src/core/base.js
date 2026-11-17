@@ -685,7 +685,10 @@ function base91Decode(text, p) {
 const B92 =
   "!#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_abcdefghijklmnopqrstuvwxyz{|}";
 function base92Encode(text, p) {
-  const D = (p && p.dict) ? validateDict(p.dict, 92, "Base92") : B92;
+  // 码表是 91 字符不是 92：算法全程以 91 取模（v%91 / floor(v/91)），v 最大 0x1fff，
+  // floor(8191/91)=90，索引只到 90；给 92 字符时末位是永不产出的死字符，
+  // 解码端还会算出 idx*91+idx>8191 的溢出组合。默认 B92 本身即 91 字符，校验必须与之一致。
+  const D = (p && p.dict) ? validateDict(p.dict, 91, "Base92") : B92;
   if (text === "") return "~";
   const bytes = te(text);
   const out = [];
@@ -710,7 +713,8 @@ function base92Encode(text, p) {
   return out.join("");
 }
 function base92Decode(text, p) {
-  const D = (p && p.dict) ? validateDict(p.dict, 92, "Base92") : B92;
+  // 与 encode 同口径：91 字符码表（见 base92Encode 处注释）
+  const D = (p && p.dict) ? validateDict(p.dict, 91, "Base92") : B92;
   // 空白允许存在（分隔/换行），其余字母表外字符显式报错；旧实现 indexOf=-1
   // 会参与数值运算产出 NaN/垃圾字节。
   const s = text.replace(/\s+/g, "");

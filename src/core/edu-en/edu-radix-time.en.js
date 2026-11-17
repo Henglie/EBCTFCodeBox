@@ -43,8 +43,9 @@ export default {
       "Why 1601? Because it's the clean start of a 400-year leap-year cycle in the Gregorian calendar, and Microsoft wanted a round starting point. To convert to the Unix epoch, first subtract the 1601→1970 difference of `11644473600` seconds. The values are enormous (a modern date is around $1.3\\times10^{17}$), so this tool uses BigInt to prevent overflow.",
     usage: "Encode direction turns ISO time into a FILETIME integer; decode direction turns a FILETIME integer back into ISO time.",
     examples: [
-      { in: "2021-01-01T00:00:00Z", out: "132539328000000000", desc: "Encode: time → FILETIME" },
-      { in: "132539616000000000", out: "2021-01-01T08:00:00Z", desc: "Decode: FILETIME → time" },
+      { in: "2021-01-01T00:00:00Z", param: "Direction: encode (ISO8601 → FILETIME, 100ns ticks since 1601)", out: "132539328000000000", desc: "Encode: time → FILETIME", run: { dir: "encode" } },
+      { in: "132539616000000000", param: "Direction: decode (FILETIME → ISO8601, UTC)", out: "2021-01-01T08:00:00Z", desc: "Decode: FILETIME → time", run: { dir: "decode" } },
+      { in: "1970-01-01T00:00:00Z", param: "Direction: encode (ISO8601 → FILETIME)", out: "116444736000000000", desc: "Unix epoch 0 = 11644473600 × 10^7 (the 100ns count from 1601 to 1970)", run: { dir: "encode" } },
     ],
     formulas: [
       { tex: "t_{unix\\_ms} = \\frac{FILETIME}{10000} - 11644473600000", caption: "Convert FILETIME (100ns) to Unix milliseconds" },

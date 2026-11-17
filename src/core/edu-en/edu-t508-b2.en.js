@@ -33,9 +33,9 @@ export default {
       "each letter is shifted by the value of the PREVIOUS CIPHERTEXT letter; decryption is $P_i = (C_i - C_{i-1} + 26) \\bmod 26$. The ciphertext is its own key — two identical adjacent symbols always decode the second one to A (difference 0).",
     usage: "unicode mode: paste letters in and out directly. futurama2 mode outputs a letter stream (the show's original glyphs exist only as images/fan fonts with no Unicode encoding — there is no standard codepoint table anywhere).",
     examples: [
-      { in: "DCODE", out: "⎅☊⍜⎅⟒", desc: "dCode official example" },
-      { in: "⏃⌰⟟⟒⋏", out: "ALIEN", desc: "The page-title example, reversed" },
-      { in: "FUTURAMA", param: "mode=futurama2", out: "FZSMDDPP", desc: "Encode: dCode AL2 official example (autokey shift)" },
+      { in: "DCODE", param: "Direction: encode (mode=unicode, the dCode documented Unicode table)", out: "⎅☊⍜⎅⟒", desc: "dCode official example", run: { dir: "encode", params: { mode: "unicode" } } },
+      { in: "⏃⌰⟟⟒⋏", param: "Direction: decode (mode=unicode)", out: "ALIEN", desc: "The page-title example, reversed", run: { dir: "decode", params: { mode: "unicode" } } },
+      { in: "FUTURAMA", param: "Direction: encode; mode=futurama2 (autokey shift: C_i = P_i + C_{i-1})", out: "FZSMDDPP", desc: "Encode: dCode AL2 official example (autokey shift)", run: { dir: "encode", params: { mode: "futurama2" } } },
     ],
     tips: [
       "The show's AL1/AL2 glyphs are images and hobbyist fonts only; the unicode mode uses dCode's table — the only written Unicode mapping.",
@@ -93,9 +93,10 @@ export default {
       "Groups are space-separated; there is NO separator between characters (runs merge across boundaries — in 1000011+1000011 the middle 11 and 1 fuse into one 111 run). Decoding walks group pairs to rebuild the bit stream, then re-slices by width.",
     usage: "Default 7-bit width (dCode/Codingame canon); if decoding fails try 8-bit. Plaintext side: 7-bit accepts only 0-127 ASCII, 8-bit up to 0-255 — out of range errors instead of silently misaligning the stream. Ciphertext may contain only zeros and whitespace — anything else errors out.",
     examples: [
-      { in: "CC", out: "0 0 00 0000 0 000 00 0000 0 00", desc: "bit stream 10000111000011: runs 1|0000|111|0000|11" },
-      { in: "%", out: "00 0 0 0 00 00 0 0 00 0 0 0", desc: "0100101, six runs" },
-      { in: "0 0 00 0000 0 000 00 0000 0 00", out: "CC", desc: "Reverse direction" },
+      { in: "CC", param: "Direction: encode; width=7 (default, 7-bit ASCII per char)", out: "0 0 00 0000 0 000 00 0000 0 00", desc: "bit stream 10000111000011: runs 1|0000|111|0000|11", run: { dir: "encode", params: { width: 7 } } },
+      { in: "%", param: "Direction: encode; width=7", out: "00 0 0 0 00 00 0 0 00 0 0 0", desc: "0100101, six runs", run: { dir: "encode", params: { width: 7 } } },
+      { in: "0 0 00 0000 0 000 00 0000 0 00", param: "Direction: decode; width=7 (reassemble bytes from 7-bit stream)", out: "CC", desc: "Reverse: run-length codewords joined back into a bit stream, then split into bytes", run: { dir: "decode", params: { width: 7 } } },
+      { in: "A", param: "Direction: encode; width=8 (8 bits per char)", out: "00 0 0 0 00 00000 0 0", desc: "8-bit mode: A=0x41=01000001 → runs 0|1|00000|1", run: { dir: "encode", params: { width: 8 } } },
     ],
     tips: [
       "Recognition: only 0s and spaces, with an even group count (prefix and count groups pair up).",

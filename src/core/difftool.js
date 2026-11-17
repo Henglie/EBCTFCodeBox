@@ -1,5 +1,5 @@
 /*
- * difftool.js — 差异对比工具（cat:'analysis'）。
+ * difftool.js — 差异对比工具（cat:'data'）。A/B 两个同等级输入。
  *
  * 定位：纯函数字节级 / 行级 diff，输出差异区间报告。CTF 找隐藏差异用
  * （两段看似相同的 hex / 文本，定位被改动的字节 / 行）。
@@ -7,21 +7,29 @@
  * 覆盖（run 单向，返回多行报告文本）：
  * diffTool 差异对比（byte 逐字节 / line 逐行，LCS 对齐，等长快速路径）
  *
- * 算法（照公开算法实现，不编造）：
- * - 等长输入：逐位置比对，连续差异聚合成块，O(n) 精确（CTF「找一个被改字节」主场景）。
- * - 不等长输入：经典 LCS 动态规划回溯，产出 equal/del/ins 操作序列；n*m 过大时
- * 回退到前缀 / 后缀公共 + 中段 del/ins 的朴素 diff（O(n+m)，防内存炸）。
- * - 输入编码：auto / hex / base64 / utf8（byte 模式按编码转字节；auto 时以 A 探测
- * 出的编码同时套用到 B，避免两边解释不一致）。line 模式按 UTF-8 文本分行，忽略编码。
+ * 输入契约：
+ * - fields.A / fields.B：同等级、可交换。每项可为
+ *     "文本"                                  → 文本槽（字面 UTF-8）
+ *     { kind:"text",  value:"…", encoding? }  → 文本槽；encoding 只接受 "utf8"
+ *     { kind:"bytes", value: Uint8Array|… }   → 字节槽
+ *     Uint8Array / ArrayBuffer / number[]     → 字节槽（简写）
+ * - 旧通道（保持不变）：主输入 = A（文本；或 params.rawBytes 作为 A 的真字节），
+ *   params.textB = B 文本。inputContract 的显式别名 params.textB → fields.textB 也照收。
+ * - 一个输入只允许一个来源：fields.A 与主输入同时给出、或 fields.B 与 params.textB
+ *   同时给出且不一致 → 直接报错，不做优先级猜测。
+ * - inputEnc（byte 模式）：auto / hex / base64 / utf8 四档语义——
+ *   auto 只按 **A 的文本视图** 探测一档（hex → base64 → utf8），同一档同时套用到 A 和 B 的
+ *   **文本槽**；字节槽绕过 inputEnc 直接参与 diff（即 params.rawBytes 通道）。
+ *   不新增「按 B 探测」「按字段猜编码」等任何隐式规则。
+ * - line 模式：文本按 /\r?\n/ 分行，忽略 inputEnc；字节槽先按 UTF-8 解码成文本再分行。
  *
  * 红线：
- * - 只新建本文件，只 import registry.js，不碰其他 core / main.js / i18n 主表。
+ * - 只 import registry.js，不碰 inputContract / main / 其他 core。
  * - 纯函数，无 DOM / 无副作用，node 可直跑。
- * - 输入设上限（每段 256KB）；LCS 乘积超 2e6 回退朴素 diff。
- *
- * 不冲突现有 op id：analysis 现有 protobufParse/msgpackParse/cborParse/bsonParse/
- * phpSerializeParse/javaSerializeIdent（serial.js）等，无 diff* id。
+ * - 输入上限（每段 256KB）按文本视图长度计（字节槽同）。
+ * - LCS 乘积超 2e6 回退朴素 diff。
  */
+
 import { register } from "./registry.js";
 
 // ---------------- 常量 ----------------
@@ -128,6 +136,74 @@ function toBytes(text, enc) {
   if (enc === "base64") return base64ToBytes(text);
   if (enc === "utf8") return utf8ToBytes(text);
   return utf8ToBytes(text);
+}
+
+// ---------------- A/B 同等级输入解析（旧通道语义不变） ----------------
+const FIELD_KEYS = ["A", "B", "textB"]; // textB = inputContract 的显式旧别名，只作 B 的兜底
+
+/** 字节槽取值：Uint8Array / ArrayBuffer / 任意视图 / number[] 一律按裸字节，不做编码解释。 */
+function asBytes(v, label) {
+  if (v instanceof Uint8Array) return v;
+  if (v instanceof ArrayBuffer) return new Uint8Array(v);
+  if (ArrayBuffer.isView(v)) return new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
+  if (Array.isArray(v)) return Uint8Array.from(v);
+  throw new Error(`字段 ${label} 的字节槽需要 Uint8Array / ArrayBuffer / 字节数组`);
+}
+
+/** 归一一个输入槽；null/undefined → null（表示「未提供」，交给旧通道）。 */
+function slotOf(v, label) {
+  if (v == null) return null;
+  if (typeof v === "string") return { kind: "text", value: v };
+  if (v instanceof Uint8Array || v instanceof ArrayBuffer || ArrayBuffer.isView(v)) {
+    return { kind: "bytes", value: asBytes(v, label) };
+  }
+  if (typeof v === "object") {
+    const kind = v.kind;
+    if (kind === "text") {
+      if (typeof v.value !== "string") throw new Error(`字段 ${label} 的文本槽 value 必须是字符串`);
+      const encoding = v.encoding ?? "utf8";
+      if (encoding !== "utf8") {
+        throw new Error(`字段 ${label} 的文本槽编码只接受 utf8（收到 ${encoding}）：字节请用字节槽，或统一走 inputEnc`);
+      }
+      return { kind: "text", value: v.value };
+    }
+    if (kind === "bytes") return { kind: "bytes", value: asBytes(v.value, label) };
+  }
+  throw new Error(`字段 ${label} 既不是文本槽也不是字节槽（拿到 ${JSON.stringify(v)}）`);
+}
+
+/**
+ * 把「fields 新通道」与「主输入 + params.textB 旧通道」归一到 { aSlot, bSlot }。
+ * 旧调用（无 fields 键）路径：A = rawBytes ?? 主输入文本，B = params.textB ?? ""。
+ */
+function resolvePair(textA, p) {
+  const fields = p && p.fields;
+  let aSlot = null;
+  let bSlot = null;
+  if (fields != null) {
+    if (typeof fields !== "object") throw new Error("fields 必须是对象");
+    for (const key of Object.keys(fields)) {
+      if (!FIELD_KEYS.includes(key)) throw new Error(`未知输入字段: ${key}（本工具只接受 A / B / textB）`);
+    }
+    aSlot = slotOf(fields.A, "A");
+    bSlot = slotOf(fields.B, "B");
+    if (!bSlot) bSlot = slotOf(fields.textB, "textB");
+    const legacyB = p.textB ?? "";
+    if (bSlot && p.textB != null && !(bSlot.kind === "text" && bSlot.value === legacyB)) {
+      throw new Error("fields.B 与 params.textB 同时给出且不一致：一个输入只允许一个来源");
+    }
+    if (aSlot && (String(textA == null ? "" : textA).length > 0 || rawBytesOf(p))) {
+      throw new Error("fields.A 与主输入同时给出：一个输入只允许一个来源");
+    }
+  }
+  if (!aSlot) {
+    const raw = rawBytesOrNull(p, textA);
+    aSlot = raw ? { kind: "bytes", value: raw } : { kind: "text", value: textA };
+  }
+  if (!bSlot) {
+    bSlot = { kind: "text", value: p.textB ?? "" };
+  }
+  return { aSlot, bSlot };
 }
 
 // ---------------- diff 核心：操作序列 {t:'eq'|'del'|'ins', i?, j?} ----------------
@@ -395,19 +471,20 @@ function renderLine(aLines, bLines, ops, context, kind) {
 
 // ---------------- run ----------------
 function diffRun(textA, p) {
-  const raw = rawBytesOrNull(p, textA);
-  const aText = raw ? TD.decode(raw) : textA;
-  const textB = p.textB ?? "";
+  const { aSlot, bSlot } = resolvePair(textA, p);
+  // 文本视图：字节槽按 UTF-8 解码成文本视图（与 rawBytes 路径的 TD.decode 一致）。
+  const aText = aSlot.kind === "bytes" ? TD.decode(aSlot.value) : aSlot.value;
+  const bText = bSlot.kind === "bytes" ? TD.decode(bSlot.value) : bSlot.value;
   const mode = p.mode || "byte";
   const context = Math.max(0, Math.floor(Number(p.context) || 0));
 
-  if (aText.length > MAX_INPUT || textB.length > MAX_INPUT) {
+  if (aText.length > MAX_INPUT || bText.length > MAX_INPUT) {
     throw new Error(`单段输入超过 ${MAX_INPUT} 字节上限，请裁剪后重试`);
   }
 
   if (mode === "line") {
     const aLines = aText.length === 0 ? [] : aText.split(/\r?\n/);
-    const bLines = textB.length === 0 ? [] : textB.split(/\r?\n/);
+    const bLines = bText.length === 0 ? [] : bText.split(/\r?\n/);
     const { ops, kind } = diffSeq(aLines, bLines);
     return renderLine(aLines, bLines, ops, context, kind);
   }
@@ -415,17 +492,21 @@ function diffRun(textA, p) {
  // byte 模式
   let enc = p.inputEnc || "auto";
   if (enc === "auto") enc = detectEnc(aText);
-  let aBytes;
-  let bBytes;
-  try {
-    aBytes = raw || toBytes(aText, enc);
-  } catch (e) {
-    throw new Error(`A 解码失败（${enc}）: ${e.message}`);
+  let aBytes = aSlot.kind === "bytes" ? aSlot.value : null;
+  let bBytes = bSlot.kind === "bytes" ? bSlot.value : null;
+  if (aBytes == null) {
+    try {
+      aBytes = toBytes(aText, enc);
+    } catch (e) {
+      throw new Error(`A 解码失败（${enc}）: ${e.message}`);
+    }
   }
-  try {
-    bBytes = toBytes(textB, enc);
-  } catch (e) {
-    throw new Error(`B 解码失败（${enc}）: ${e.message}`);
+  if (bBytes == null) {
+    try {
+      bBytes = toBytes(bText, enc);
+    } catch (e) {
+      throw new Error(`B 解码失败（${enc}）: ${e.message}`);
+    }
   }
   const { ops, kind } = diffSeq(aBytes, bBytes);
   return renderByte(aBytes, bBytes, ops, context, kind, p.inputEnc || "auto");
@@ -437,10 +518,31 @@ register({
   acceptsBytes: true,
   cat: "data",
   name: "差异对比",
-  desc: "两段输入逐字节 / 逐行 diff，定位差异区间（等长快速路径 + 不等长 LCS 对齐，CTF 找隐藏差异）",
+  desc: "两段同等级输入逐字节 / 逐行 diff，定位差异区间（等长快速路径 + 不等长 LCS 对齐，CTF 找隐藏差异）",
+ // A/B 两个同等级输入，各自可为文本槽或字节槽；fieldsJoin 不适用（两输入不拼串）。
+ // params.textB 保留为旧通道（兼容既有配方 / CSV / MCP 调用），新调用走 fields.B。
+  fieldsMode: "slots", // 各字段不拼串，原样作为 params.fields 交给 run
+  fields: [
+    {
+      key: "A",
+      label: "输入 A",
+      accepts: ["text", "bytes"],
+      placeholder: "文本；或按「输入编码」解释的 hex / base64",
+      rows: 3,
+    },
+    {
+      key: "B",
+      mirrorParam: "textB", // 旧通道同步：批处理 / 配方 / 分享链接仍按 params.textB 取 B
+      label: "输入 B",
+      accepts: ["text", "bytes"],
+      placeholder: "文本；或按「输入编码」解释的 hex / base64",
+      rows: 3,
+    },
+  ],
   params: [
     {
       key: "textB",
+      uiHidden: true, // 工作台用字段框 B；本参数只作旧调用通道
       label: "输入 B（对比基准）",
       type: "text",
       default: "",
@@ -468,4 +570,4 @@ register({
   run: diffRun,
 });
 
-export { diffSeq, lcsOps, equalLenOps, naiveOps, buildHunks, statOps, toBytes, detectEnc };
+export { diffSeq, lcsOps, equalLenOps, naiveOps, buildHunks, statOps, toBytes, detectEnc, resolvePair, slotOf };

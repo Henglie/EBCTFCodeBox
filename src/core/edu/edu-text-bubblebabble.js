@@ -19,10 +19,10 @@ export default {
       "关键点：c 是随内容滚动的校验种子，保证任何单字符篡改都会被解码端检出——这正是它「防误读」的本质。",
     usage: "输入框填文本（或 BubbleBabble 密文），点运行。encode 生成泡泡串、decode 还原。输入按 UTF-8 字节处理，中文也可用。",
     examples: [
-      { in: "ping", param: "", out: "xisak-nerek-loxix", desc: "官方规范示例" },
-      { in: "hello", param: "", out: "xipak-herek-serix", desc: "经典英文" },
-      { in: "123456789", param: "", out: "xesef-disof-gytuf-katof-movix", desc: "数字串" },
-      { in: "xisak-nerek-loxix", param: "", out: "ping", desc: "decode 还原" },
+      { in: "ping", param: "方向：编码（字节 → bubblebabble 五字符组）", out: "xisak-nerek-loxix", desc: "官方规范示例", run: { dir: "encode" } },
+      { in: "hello", param: "方向：编码", out: "xipak-herek-serix", desc: "经典英文", run: { dir: "encode" } },
+      { in: "123456789", param: "方向：编码", out: "xesef-disof-gytuf-katof-movix", desc: "数字串", run: { dir: "encode" } },
+      { in: "xisak-nerek-loxix", param: "方向：解码（- 分隔的五字符组还原字节）", out: "ping", desc: "decode 还原", run: { dir: "decode" } },
     ],
     tips: [
       "看到 `x` 开头结尾、`-` 分隔的元音辅音串（如 xisak-nerek-loxix）→ BubbleBabble。",

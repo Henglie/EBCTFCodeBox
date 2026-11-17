@@ -307,36 +307,45 @@ export default {
   scoutStick: {
     what: "童子军木棍密码——dCode 的 Code Chinois（中国码），也叫 Samurai/武士码。它把每个字母拆成「元音序号」和「该元音之后的辅音序号」两组木棍：横线代表元音，竖线代表辅音。dCode 的经典示例 `|||- ||- ---- |||- --` 解出来就是 DCODE。",
     principle:
-      "**元音序号**固定为 A=1、E=2、I=3、O=4、U=5、Y=6。编码一个辅音时，先找它前面最近的元音，再数它在该元音之后是第几个辅音：\n" +
-      "- B = A 后第 1 个辅音 → 1 横 + 1 竖；C = 第 2 个 → 1 横 + 2 竖；D = 第 3 个 → 1 横 + 3 竖。\n" +
-      "- L = I 后第 3 个辅音 → 3 横 + 3 竖（J=1、K=2、L=3）。\n" +
-      "- W = U 后第 2 个辅音 → 5 横 + 2 竖；Z = Y 后第 1 个辅音 → 6 横 + 1 竖。\n\n" +
-      "**元音本身**的辅音序号为 0：A = 1 横、E = 2 横、I = 3 横、O = 4 横、U = 5 横、Y = 6 横。Y 被当作元音，所以 Y 本身是 6 横，Z 才回到「Y 后第 1 个辅音」。\n\n" +
-      "**书写顺序**：dCode 的展示例把竖线写在前面（D = `|||-`），本工具默认 `vh` 也如此；若题目写成横线在前（D = `-|||`），把参数切到 `hv`。每个字母的横/竖线连写，字母之间用空格分隔；原文的空格用 `/` 表示。\n\n" +
-      "**Samurai 变体**：把横/竖的角色对调——横线数表示辅音序号，竖线数表示元音序号。同一段 DCODE 在 Samurai 下写成 `|--- |-- |||| |--- ||`。\n\n" +
-      "**大小写**：木棍没有大小写信息，解码统一输出大写；非字母字符原样透传。",
+      "**元音序号**固定为 A=1、E=2、I=3、O=4、U=5、Y=6。**横线数 = 元音序号**；**竖线数 = 该元音之后、按字母表顺序数的辅音序号**（元音本身为 0）。\n\n" +
+      "**完整分组**（按字母表顺序，绝不跨过下一个元音）：\n" +
+      "- A（1 横）：B=1 竖、C=2 竖、D=3 竖；\n" +
+      "- E（2 横）：F=1 竖、G=2 竖、H=3 竖；\n" +
+      "- I（3 横）：J=1 竖、K=2 竖、L=3 竖、M=4 竖、N=5 竖；\n" +
+      "- O（4 横）：P=1 竖、Q=2 竖、R=3 竖、S=4 竖、T=5 竖；\n" +
+      "- U（5 横）：V=1 竖、W=2 竖、X=3 竖；\n" +
+      "- Y（6 横）：Z=1 竖。\n\n" +
+      "**M/N 的归组边界**：M 是 I 后第 4 个辅音、N 是 I 后第 5 个辅音（3 横 + 4/5 竖），**不是**「O 后第 1/2 个」——字母表里 M、N 排在 O 之前，O 组从 P 才开始数。同理 Y 按元音算：Y 本身 = 6 横 0 竖，Z 才是「Y 后第 1 个辅音」。\n\n" +
+      "**网页折衷：原图的交叉画法 ↔ 本工具的线性写法**：dCode 网页字母表把横线和竖线画成**相交的笔画**（横线叠放给出元音序号，竖线穿过横线给出辅音序号）；本工具输出是同一规则的**线性文本写法**，因为输入框里画不出交叉。线性写法有两种顺序，语义完全相同：默认 `vh` 先竖后横（D = `|||-`，与 dCode 展示例一致），`hv` 先横后竖（D = `-|||`）。每个字母的笔画连写，字母之间用空格分隔；原文的空格用 `/` 表示。线性写法不是另一种密码，同一串解码结果必须一致。\n\n" +
+      "**Samurai 变体**：把横/竖的角色对调（等价于把经典字形旋转 90°）——竖线数表示元音序号，横线数表示辅音序号。同一段 DCODE 在 Samurai 下写成 `|--- |-- |||| |--- ||`。\n\n" +
+      "**大小写**：木棍计数不携带大小写，解码统一输出大写；非字母字符原样透传，与 `|`、`-`、`/` 冲突的字符用反斜杠转义。\n\n" +
+      "**对照图**：本项目自制「经典」「Samurai」两张 26 槽对照图（图鉴 id `scoutstickclassic` / `scoutsticksamurai`），每槽横/竖笔画数已与映射表逐槽核对；dCode 原图仅作内部对照，未复制、未描摹。",
     usage:
       "编码：输入字母文本，选择变体（classic/samurai）与书写顺序（vh/hv），输出由 `|`、`-`、空格、`/` 组成的木棍串。\n\n" +
       "解码：粘贴木棍串，选对同样的变体和顺序；每个用空格分开的 token 是一个字母，`/` 是原文空格。字母之间必须有空格，否则连在一起的 `|||-` 会被当成一个字形。\n\n" +
       "排错：报「元音序号越界」通常是变体选反了；报「字形顺序」通常是 vh/hv 选反了；报「A 后只有 3 个辅音」说明竖线数超过了该元音后实际存在的辅音数（例如 A 后不可能有第 4 个辅音）。",
     examples: [
-      { in: "DCODE", param: "classic, order=vh", out: "|||- ||- ---- |||- --", desc: "dCode 官方示例：D C O D E" },
-      { in: "L", param: "classic, order=vh", out: "|||---", desc: "L = I 后第 3 个辅音：3 竖 + 3 横" },
-      { in: "DCODE", param: "classic, order=hv", out: "-||| -|| ---- -||| --", desc: "横线在前的写法，语义完全相同" },
-      { in: "DCODE", param: "samurai, order=vh", out: "|--- |-- |||| |--- ||", desc: "Samurai 变体把横/竖角色对调" },
-      { in: "Hello, World!", param: "classic, order=vh", out: "|||-- -- |||--- |||--- ---- , / ||----- ---- |||---- |||--- |||- !", desc: "非字母透传，空格用 /；解码统一大写" },
+      { in: "DCODE", param: "classic, order=vh", out: "|||- ||- ---- |||- --", desc: "dCode 经典示例 D C O D E；默认 vh，竖线在前", run: { dir: "encode", params: { variant: "classic", order: "vh" } } },
+      { in: "DCODE", param: "classic, order=hv", out: "-||| -|| ---- -||| --", desc: "同一段文字改用横线在前的 hv，语义完全相同", run: { dir: "encode", params: { variant: "classic", order: "hv" } } },
+      { in: "DCODE", param: "samurai, order=vh", out: "|--- |-- |||| |--- ||", desc: "Samurai 变体把横/竖角色对调", run: { dir: "encode", params: { variant: "samurai", order: "vh" } } },
+      { in: "MN", param: "classic, order=vh", out: "||||--- |||||---", desc: "边界：M=3 横 4 竖、N=3 横 5 竖，两者都属 I 组", run: { dir: "encode", params: { variant: "classic", order: "vh" } } },
+      { in: "Y Z", param: "classic, order=vh", out: "------ / |------", desc: "Y=6 横 0 竖、Z=6 横 1 竖；原文空格写成 /", run: { dir: "encode", params: { variant: "classic", order: "vh" } } },
+      { in: "Hello, World!", param: "classic, order=vh", out: "|||-- -- |||--- |||--- ---- , / ||----- ---- |||---- |||--- |||- !", desc: "非字母透传、空格为 /；解码统一大写", run: { dir: "encode", params: { variant: "classic", order: "vh" } } },
+      { in: "|||||---", param: "classic, order=vh", out: "N", desc: "反向核对：3 横 5 竖解回 N，不是「O 后第 1 个辅音」", run: { dir: "decode", params: { variant: "classic", order: "vh" } } },
     ],
     formulas: [
       { tex: "\\text{letter} = \\mathrm{V}[\\,h\\,]\\text{-th consonant after } \\mathrm{V}[\\,h\\,]", caption: "经典码：h 为元音序号（1-6），v 为其后辅音序号；v=0 时就是该元音本身" },
       { tex: "\\text{Samurai}: h \\leftrightarrow v", caption: "Samurai 变体交换横/竖的角色，其余规则不变" },
     ],
     tips: [
+      "组边界速记：A→BCD、E→FGH、I→JKLMN、O→PQRST、U→VWX、Y→Z；M/N 属于 I 组（I 后第 4/5 个辅音），不是 O 组，O 组从 P 起算。",
       "认题：整段只有 `|`、`-`、空格（可能还有 `/`），且字母被空格分组，基本就是它；它和摩尔斯（点划）不同，字符是竖线和横线。",
+      "原图是横竖交叉的笔画，网页只能线性书写：`vh`（竖在前，D = `|||-`）与 `hv`（横在前，D = `-|||`）只是同一规则两种顺序，不是两种密码；解不通先换顺序或换变体。",
       "别和「算筹数字」混淆：算筹用 𝍠-𝍱 等 Unicode 棍形符号记十进制数；本 op 是 dCode 的 Code Chinois，用横竖线的数量编码字母。",
       "也别和 Scytale（密码棒）混淆：Scytale 是把布条缠在木棍上做换位；本 op 与木棍的物理形状无关，只是把木棍画成横竖线。",
       "Y 是第 6 个元音：Y 本身 = 6 横，Z = 6 横 + 1 竖。很多实现漏掉 Y/Z，看到这两个字母就能验。",
       "A 后只有 B/C/D 三个辅音、Y 后只有 Z 一个；竖线数超过上限一定不是该元音，先检查变体是否选反。",
-      "来源：dCode.fr/code-chinois 的 FAQ 与示例（2026-10 访问）；经典/Samurai 两变体、vh/hv 两种书写顺序都与页面口径一致。",
+      "来源：dCode.fr/code-chinois 的规则、示例与当前网页字母表（访问日期 2026-11-15）。原图 code-chinois.png / code-samurai.png 版权归 dCode，仅内部对照，不复制进产品；对照图为本项目按映射表自制的 SVG。",
     ],
     aka: ["童子军木棍密码", "童子军密码", "木棍密码", "棍棒密码", "棍码", "童军码",
       "中国码", "中国密码", "中国木棍密码", "武士码", "武士密码", "Samurai code", "Samurai cipher",

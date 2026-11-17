@@ -30,6 +30,8 @@ __pycache__/
 # ── 项目内部文档（恒烈红线：进度/多 agent 协作文档保留本地，不上交）──
 PROGRESS.md
 多Agent协作.md
+agent.md
+待裁决-*.md
 
 # ── 授权签发工具（红线：私钥绝密，整个目录 + license.bin 永不上传）──
 授权/
@@ -62,3 +64,7 @@ mickey_oracle.obj
 
 # ── 本地投递目录（恒烈桌面交付物中转，不入库）──
 /桌面/
+
+# ── 鸿蒙构建产物（任何人在仓库内跑 hvigor 都会生成）──
+.hvigor/
+build/

@@ -295,9 +295,12 @@
 .offline-pack-header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
 .offline-pack-title { margin: 0; font-size: var(--fs-sm); font-weight: 700; color: var(--on-surface); }
 .offline-pack-summary { margin: 0; font-size: var(--fs-xs); color: var(--on-surface-var); }
-.offline-pack-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.offline-pack-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-2); }
 .offline-pack-item {
   display: flex; flex-direction: column; gap: var(--sp-1);
+  flex: 1 1 15rem;
+  min-width: min(100%, 13rem);
+  max-width: 26rem;
   padding: var(--sp-3);
   background: var(--surface-1);
   border: 1px solid var(--outline-var);
@@ -319,7 +322,7 @@
 .offline-pack-state.is-partial { background: color-mix(in srgb, var(--primary) 16%, transparent); color: var(--primary); }
 .offline-pack-state.is-missing { background: var(--surface-3); color: var(--on-surface-var); }
 .offline-pack-meta { font-size: var(--fs-xs); color: var(--on-surface-var); }
-.offline-pack-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-1); }
+.offline-pack-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-1); }
 .offline-pack-install, .offline-pack-remove {
   height: 32px; padding: 0 var(--sp-3);
   border-radius: var(--r-full); font-size: var(--fs-xs); font-weight: 600; cursor: pointer;
@@ -350,14 +353,17 @@
 .offline-pack-degrade-fallback { color: var(--on-surface-var); }
 
 /* ============ 天珩字库区（扩展面板） ============ */
-.ext-font-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+.ext-font-list { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-2); }
 .ext-font-row {
   display: flex; align-items: center; gap: var(--sp-3);
+  flex: 1 1 16rem;
+  min-width: min(100%, 14rem);
+  max-width: 30rem;
   padding: var(--sp-2) var(--sp-3);
   background: var(--surface-1);
   border-radius: var(--r-sm);
 }
-.ext-font-row.subset { background: color-mix(in srgb, var(--success) 6%, var(--surface-1)); }
+.ext-font-row.subset { flex-basis: 100%; max-width: none; background: color-mix(in srgb, var(--success) 6%, var(--surface-1)); }
 .ext-font-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ext-font-name {
   font-size: var(--fs-sm); font-weight: 600; color: var(--on-surface);
@@ -382,6 +388,10 @@
 .ext-font-btn:disabled { opacity: .6; cursor: default; }
 .ext-font-btn.loaded { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
 .ext-font-btn.error { background: color-mix(in srgb, var(--error) 16%, transparent); color: var(--error); }
+
+@media (max-width: 640px) {
+  .offline-pack-item, .ext-font-row { flex-basis: 100%; max-width: none; }
+}
 
 @media (max-width: 520px) {
   .plugin-group-title { font-size: var(--fs-md); }

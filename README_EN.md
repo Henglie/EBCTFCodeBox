@@ -9,7 +9,7 @@
   <span>EBCrypto</span>
 </h1>
 <p align="center">
-  <span align="center">A local-first, zero-upload codec / cryptography / steganalysis toolbox: 978 registered operations across 23 categories, most running entirely in your browser; Windows can additionally enable local-bridge capabilities, while macOS / Linux ship with double-click launchers.</span>
+  <span align="center">A local-first, zero-upload codec / cryptography / steganalysis toolbox: 1000+ registered operations across 23 categories, most running entirely in your browser; Windows can additionally enable local-bridge capabilities, while macOS / Linux ship with double-click launchers.</span>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 - [Introduction](#introduction)　　　　[Features](#features)
 - [Screenshots](#screenshots)　　　　[Running](#running)
 - [Platform Compatibility](#platform-compatibility)　　[Performance Requirements](#performance-requirements)
-- [Directory Structure](#directory-structure)　　　　[Full Codec List](#full-codec-list-978-ops--23-categories)
+- [Directory Structure](#directory-structure)　　　　[Full Codec List](#full-codec-list-1000-ops--23-categories)
 - [Plugins & AI Access](#plugins--ai-access)　　[License](#license)
 - [Third-party Resources & Licenses](#third-party-resources--licenses)　　[Privacy](#privacy)
 - [Keywords](#keywords)
@@ -53,7 +53,7 @@ Current version **v0.2.0-beta**. The source of truth is always the GitHub reposi
 
 ## v0.2.0-beta (2026-11-11)
 
-> v0.2.0 beta focuses on resource limits, stability, MCP and large-output handling; the v0.1.15 UI and 978-operation baseline are preserved. Full history: [CHANGELOG.md](./CHANGELOG.md).
+> v0.2.0 beta focuses on resource limits, stability, MCP and large-output handling; the v0.1.15 UI and 1000+-operation baseline are preserved. Full history: [CHANGELOG.md](./CHANGELOG.md).
 
 ### New and improved
 
@@ -101,7 +101,7 @@ Current version **v0.2.0-beta**. The source of truth is always the GitHub reposi
 - Settings and data start equally sized; Environment offers adaptive landscape/portrait layout or an always-stacked traditional layout.
 - Page drafts survive navigation and refresh, including ordinary-operation fields, file bytes and outputs; Environment provides an input/output-only clear action separate from the full reset.
 - Eight new operations cover all-preset CRC, all checksums, six SHA-2 sizes, CTPH, all hashes, Whirlpool variants, LZ4 Frame and Enigma.
-- Nine conditional SM2/SM3/SM4/ZUC cryptanalysis operations bring the main total to 978. SM3 joins dictionary/lookup verification and SM4 joins key-and-ciphertext auto-try.
+- Nine conditional SM2/SM3/SM4/ZUC cryptanalysis operations bring the main total to 1000+. SM3 joins dictionary/lookup verification and SM4 joins key-and-ciphertext auto-try.
 - Recipes keep Run / Step at the top of the left column, with node editing below and input, output and step results stacked on the right; automatic runs, breakpoints and reordering remain.
 - Code-image lookup restores recognition on top, a vertical category rail and the thumbnail grid; clicking a thumbnail opens the full-screen viewer directly. Recognition supports cropping, restoring the original and draft recovery; the recognition panel is capped at 800px and centered.
 - The custom implementation editor adopts the current UI and input model: two-space indent, bracket pairing, selection comment, undo/redo, multi-cursor insertion, search and source comparison. Save and test are separate, and unsaved code, selection and scroll position survive within the same page session.
@@ -156,7 +156,7 @@ Core design:
 
 - **Local-first · zero upload**: Native ES modules, no framework, no build step. Core codecs run in-browser and never upload your input; "external link" ops only generate URLs. PWA updates fetch site assets only, the local bridge only talks to `127.0.0.1`, and external AI is only used after you configure an endpoint yourself.
 - **One-shot smart decoding**: Paste or drop content; it detects possible encoding chains and returns ranked decode candidates, with crib-based filtering and deep brute force.
-- **978 registered operations · 23 categories**: covering Base, text / transfer encodings, fancy CTF encodings, esoteric programming languages, Chinese / domestic encodings, classical ciphers, modern crypto (block / stream / asymmetric / other), hashes & checksums, radix & charsets (incl. primality testing and sieving), analysis / brute force, password attacks, compression & archives, password / archive cracking, forensics & traffic, file-format structures, data structures, images & QR codes, audio & video, steganography, plus 3 optional Windows GUI bridge entries. The complete list is generated automatically from the registry; another 409 operations are available through the optional official add-on.
+- **1000+ registered operations · 23 categories**: covering Base, text / transfer encodings, fancy CTF encodings, esoteric programming languages, Chinese / domestic encodings, classical ciphers, modern crypto (block / stream / asymmetric / other), hashes & checksums, radix & charsets (incl. primality testing and sieving), analysis / brute force, password attacks, compression & archives, password / archive cracking, forensics & traffic, file-format structures, data structures, images & QR codes, audio & video, steganography, plus 3 optional Windows GUI bridge entries. The complete list is generated automatically from the registry; another hundreds of operations are available through the optional official add-on.
 - **Decoding-strength quartet** (v0.1.2): strength levels + custom algorithm pool + a **separate brute-force channel** (XOR / Caesar / dictionary / rainbow-table / HMAC / PBE / Playfair / ZIP / CRC32 / bkcrack — results are grouped separately so they don't pollute the main ranking) + **decode depth 1–3**.
 - **Lenient matching mode** (v0.1.2): at the Enhanced / Very Strong / Maximum / Custom levels, algorithms are admitted by character-class count alone, so variant-encoding challenges (a "meow" table for 0/1, emoji-as-binary) also participate; Default / Fast keep strict domain detection.
 - **Key + ciphertext one-shot attack**: given ciphertext and a key, automatically enumerates AES / DES / 3DES / RC4 / XOR / Fernet × cipher modes × encoding combinations.
@@ -313,13 +313,13 @@ public/
 资料/               algorithm cross-check tables + research artifacts (dev-only; not shipped in release packages)
 ```
 
-## Full Codec List (978 ops · 23 categories)
+## Full Codec List (1000+ ops · 23 categories)
 
-> The current registry contains 978 operations. The complete generated list is in [README.md](./README.md#编解码全清单978-ops--23-分类); opId is the unique registry identifier.
+> The current registry contains 1000+ operations. The complete generated list is in [README.md](./README.md#编解码全清单一千多种--23-分类); opId is the unique registry identifier.
 
 > This English table preserves the v0.1.13 baseline (890 entries) and adds the 9 SM2/SM3/SM4/ZUC attack entries below (899 table entries). The other 79 operations added since that baseline are covered in the changelog and the complete Chinese list.
 
-### Base (30 ops)
+### Base
 
 | opId | Name | Notes |
 |---|---|---|
@@ -354,7 +354,7 @@ public/
 | crockford32 | Crockford Base32 | Human-readable Base32 (excludes I/L/O/U, o→0 i/l→1 tolerated, - ignored; optional mod 37 check digit * ~ $ = U); bitstream same convention as the Base32 op's crockford mode |
 | dxBase64 | DXBase64 | 风之暇想 DXBase64: raw deflate + random-salt repeating XOR + CRC16-checksummed Base64 variant (checksummed, ciphertext differs every run, no key needed, anti-mangling) |
 
-### Text / Transfer Encodings (42 ops)
+### Text / Transfer Encodings
 
 | opId | Name | Notes |
 |---|---|---|
@@ -401,7 +401,7 @@ public/
 | binhex | BinHex 4.0 Encode / Decode | Mac BinHex 4.0 (Yves Lempereur spec + Python binhex): 6-bit alphabet + RLE90 compression + CRC-16-CCITT. decode parses filename/type/creator/data fork/resource fork and verifies all three CRCs; encode wraps UTF-8 text into a compliant BinHex (data fork, empty resource fork) |
 | regexTool | Generic Regex Extract / Replace | Regex extract or replace: extract takes the whole match (group 0), the n-th capture group (1..n) or all groups (all, tab-joined), with optional dedupe and first-only, joined by sep; replace expands $1..$9, $&, $$ across the whole text and keeps unknown $x verbatim; empty pattern, invalid regex and zero matches always raise. A structural whitelist rejects backreferences, dangerous nested quantifiers, lookbehind and non-standard extensions before compilation. Parameters: mode + pattern + flags + group + dedupe + firstOnly + sep + replacement |
 
-### Fancy / CTF Encodings (79 ops)
+### Fancy / CTF Encodings
 
 | opId | Name | Notes |
 |---|---|---|
@@ -485,7 +485,7 @@ public/
 | emojiAes | emoji-aes Encrypt | Full emoji-aes: AES-256-CBC (OpenSSL) encryption then base64 → 65-emoji alphabet substitution (after Aaron Horler's emoji-aes) |
 | roar | Roar Translator (4-char codec) | Beast-sound roar 4-character codec variant: Unicode code point → 4-digit hex → bitwise offset → codec 2-character mapping + prefix/suffix wrapping. codec customizable (4 distinct characters). A different algorithm from yygq (就这¿/不会吧？) |
 
-### Esoteric Languages (15 ops)
+### Esoteric Languages
 
 | opId | Name | Notes |
 |---|---|---|
@@ -505,7 +505,7 @@ public/
 | braincopterDecode | Braincopter Decode | Braincopter image → Brainfuck program (classic f=(-2R+3G+B) mod 11 convention; stops at nop/terminator) |
 | braincopterEncode | Braincopter Encode | Brainfuck program → Braincopter PNG (per pixel f=(-2R+3G+B) mod 11, written with minimal edits, terminator padded to a multiple of the width; the carrier is a chosen solid color) |
 
-### Chinese / Domestic Encodings (29 ops)
+### Chinese / Domestic Encodings
 
 | opId | Name | Notes |
 |---|---|---|
@@ -539,7 +539,7 @@ public/
 | xiangyueEnc | XiangYue Encrypt | XiangYue encryption direction: plaintext → zlib + AES-CTR + ChaCha20-Poly1305 → Chinese/Japanese/Korean/pictographic/Emoji/zero-width/Base64 ciphertext, auto-recognized and restored by this toolbox's 'XiangYue' decryption (format2 fast; format1 Argon2id 64MiB, several seconds per run) |
 | yueChang | YueChang | 风之暇想 YueChang: deflate + PBKDF2-SHA256 (100k iterations) + AES-GCM-256, Base64 mapped character-by-character to Chinese onomatopoeia (prefix '唱：', empty passphrase falls back to the default YueChang) |
 
-### Classical Ciphers (75 ops)
+### Classical Ciphers
 
 | opId | Name | Notes |
 |---|---|---|
@@ -619,7 +619,7 @@ public/
 | beaufortVariant | Variant Beaufort | Variant Beaufort (the German variant of Beaufort): c = p − k (mod 26); encrypting = Vigenère decrypting, decrypting = Vigenère encrypting; not self-reciprocal (the mirror direction of the self-reciprocal standard Beaufort) |
 | redefence | Redefence (Rail Fence) | Redefence: a row-order variant of the rail fence (W-shaped zig-zag) — rows read out in a given order or by keyword. The identity order degenerates to the standard rail fence. Parameters: rails / read order order / keyword key (order or key, one of the two) |
 
-### Modern Crypto · Block (34 ops)
+### Modern Crypto · Block
 
 | opId | Name | Notes |
 |---|---|---|
@@ -658,7 +658,7 @@ public/
 | gostKeyWrap | GOST 28147-89 Key Wrap | RFC 4357 §6.1-§6.5 GOST 28147-89 Key Wrap/Unwrap: UKM(8B)\|\|CEK_ENC(32B)\|\|CEK_MAC(4B), optional CryptoPro KEK diversification, CryptoPro-A S-box; unwrap strictly checks length and MAC. |
 | bfvToy | BFV Toy Homomorphic Encryption (teaching) | Teaching implementation of BFV (ePrint 2012/144): negacyclic ring R_q, ternary secret, Δ=floor(q/t) scaling; encrypt/decrypt/homomorphic add/mul (no relinearisation, ciphertext grows to 3 components). Every step prints noise \|\|e\|\|∞ against the budget Δ/2=q/(2t); overflow fails explicitly instead of returning garbage. Teaching demo, not production: n≤16, q≤2^32, t≤2^16, no NTT/relin/mod-switch, directly breakable at this size. Parameters: op + n + q + t + m + ctA + ctB + seed |
 
-### Modern Crypto · Stream (21 ops)
+### Modern Crypto · Stream
 
 | opId | Name | Notes |
 |---|---|---|
@@ -684,7 +684,7 @@ public/
 | rc4Drop | RC4-drop / CipherSaber-2 | RC4-drop[n] (drops the first n keystream bytes, RFC 6229 offset modes, default 768 = SANS recommendation) and CipherSaber-2 (10-byte IV prefix + KSA repeated r rounds, default r=20) |
 | xsalsa20 | XSalsa20 | XSalsa20 stream cipher (Bernstein, 'Extending the Salsa20 nonce'): HSalsa20 derives a 32-byte subkey + Salsa20/20, 32-byte key, 24-byte nonce, 64-bit block counter (self-reciprocal) |
 
-### Modern Crypto · Asymmetric (128 ops)
+### Modern Crypto · Asymmetric
 
 | opId | Name | Notes |
 |---|---|---|
@@ -817,7 +817,7 @@ public/
 | sshsigVerify | OpenSSH SSHSIG verify | OpenSSH SSHSIG signature verification (PROTOCOL.sshsig v1): parses armored/binary signatures, verifies Ed25519, RSA rsa-sha2-256/512 and ECDSA P-256/384/521; checks namespace and hash_algorithm, and can anchor signer identity with an authorized_keys key or SHA-256 fingerprint. No private keys, no network, no sk-*/certificate keys/DSA. |
 | sigVerify | Unified signature verification | Detects JWT/JWS, PGP, SSHSIG, X.509 and CMS/PKCS#7 and routes to the matching verifier; reports protocol, algorithm, signer, validity, verdict and failure reason. Missing key/content/anchor → UNVERIFIED, unwired backend → BLOCKED, unknown formats fail explicitly, PASS is never faked |
 
-### Modern Crypto · Other (33 ops)
+### Modern Crypto · Other
 
 | opId | Name | Notes |
 |---|---|---|
@@ -855,7 +855,7 @@ public/
 | mpcToy | MPC Toy (teaching) | MPC teaching toy: beaver mode runs 3-party additive sharing plus a Beaver multiplication triple to compute a×b, printing each share, the masks d/e and a reconstruction self-check; ot mode simulates 1-of-2 oblivious transfer (blind → mask → open one). Teaching demo, not production: no MAC/commitment/ZK, OT is a deterministic PRF simulation (a public seed opens both), so there is no real security. Parameters: mode + a + b + seed |
 | quantumToy | Quantum Algorithm Toy (Grover / Shor) | Statevector teaching simulation: grover runs H → oracle phase flip → diffusion and prints the hit probability per round against the optimal count round(π/(4θ)-1/2) (the common ⌈π/4·√N⌉ overestimates by one for small N); shor only does the order-finding slice for N=15/21 (modular permutation + DFT + continued fractions), outputting the period and factors with a p×q=N self-check. Teaching demo, not production: n≤5, no noise/error correction, not gate-level; N≥35 is rejected as exponential. Parameters: algo + n + target + iters |
 
-### Hash / Checksum (73 ops)
+### Hash / Checksum
 
 | opId | Name | Notes |
 |---|---|---|
@@ -933,7 +933,7 @@ public/
 | poseidon2 | Poseidon2 | Poseidon2 prime-field hash (the improved Poseidon, common in ZK/Merkle trees): external full rounds use the M_E linear layer and internal partial rounds the sparse M_I (one S-box per partial round), RF=8 — a ZK hash over the prime field Z/p, NOT SHA-3 (a Keccak bit sponge). Ships BN254 t=3 and BLS12-381 t=2/3/4 instances; constants and vectors from the paper authors' official repository reference implementation |
 | xoodyakHash | Xoodyak-Hash | The hash mode of Xoodyak, a NIST Lightweight Cryptography finalist: the Xoodoo[12] permutation (384-bit state, five steps θ/ρwest/ι/χ/ρeast) + the Cyclist single-color-domain sponge with a 16-byte absorb rate, producing a 32-byte digest. Input any text or hex bytes. Verified against the full official NIST KAT |
 
-### Radix / Charsets (82 ops)
+### Radix / Charsets
 
 | opId | Name | Notes |
 |---|---|---|
@@ -1020,7 +1020,7 @@ public/
 | progCalc | Programmer's Calculator | Bitwise expression evaluator (hand-written recursive-descent parser, no eval): & \| ^ ~ << >> >>> + - * / % **, parentheses, rotl/rotr circular shifts; 8/16/32/64-bit word masks with wrap-around (BigInt throughout), signed/unsigned toggle; one shot outputs decimal/hex/octal/binary (4-digit grouping)/two's complement/popcount/leading zeros/trailing zeros |
 | objectIdTime | ObjectID Timestamp Parse | BSON ObjectId (12 bytes: 4-byte big-endian Unix seconds + 5-byte random value + 3-byte big-endian counter) parsing: 24 hex digits → creation time (UTC) + random value + counter (run, one-way report) |
 
-### Analysis / Brute Force (49 ops)
+### Analysis / Brute Force
 
 | opId | Name | Notes |
 |---|---|---|
@@ -1074,7 +1074,7 @@ public/
 | rc4Visualize | RC4 KSA/PRGA Visualizer | Step-by-step RC4 internals: KSA's i/j/swap details scrambling the S table + the final S table + the PRGA keystream generation process; for teaching and recognizing KSA/PRGA signatures in reverse engineering |
 | extractAll | Dedicated Text Extractor | Batch-extract email/url/domain/ipv4/ipv6/mac/date/filepath/hash/flag/keyValue from text; dedupe keeping first occurrence, newline-separated by default; strict false-positive boundaries for 999.1.1.1, 1.2.3.4.5, aa:bb:cc and monkey = banana; budget overruns are rejected readably. |
 
-### Password Attacks (33 ops)
+### Password Attacks
 
 | opId | Name | Notes |
 |---|---|---|
@@ -1112,7 +1112,7 @@ public/
 | prngAttack | PRNG Cracker (LCG / MT19937) | LCG parameter recovery (differencing derives a/c/m, known moduli fillable) + MT19937 state recovery (624 outputs untempered + next-value prediction, Python random standard) |
 | hashLengthExtension | Hash Length Extension (MD5) | Merkle-Damgård weakness: builds H(secret\|\|padding\|\|append) from H(secret) and len(secret) without knowing secret. MD5/SHA-1/SHA-256 all implemented in pure JS (internal state back-derivation + continued compression), no hashpump needed. Input is parsed as explicit hex; any non-hex characters are ignored |
 
-### Compression / Archives (19 ops)
+### Compression / Archives
 
 | opId | Name | Notes |
 |---|---|---|
@@ -1136,7 +1136,7 @@ public/
 | zipCreate | ZIP Create | Packs a piece of data (text/any bytes) into a single-file ZIP, with optional internal filename and compression method (Deflated/Stored); misc authoring often chains this with ZIP fake encryption (bit-set) for pseudo-encryption challenges |
 | bzip2Enc | bzip2 Compress | bzip2 (libbzip2 1.0.8 WASM) compression: block size 1..9, output base64/hex; input ≤4 MiB, full output without truncation, round-trips with bzip2Dec. |
 
-### Password / Archive Cracking (12 ops)
+### Password / Archive Cracking
 
 | opId | Name | Notes |
 |---|---|---|
@@ -1153,7 +1153,7 @@ public/
 | gcmForbidden | GCM nonce-reuse attack | AES-GCM nonce-reuse attack demo (SP 800-38D + Joux 2006 forbidden attack): two ciphertexts under the same key+nonce plus a known plaintext on one side → recover the CTR keystream and decrypt the other; ≥2 samples (aad\|ct\|tag) → solve the GHASH polynomial equation q(H)=T1⊕T2 for the authenticator H over GF(2^128) (cross-checked against E_K(0^128)) → recover the E_K(J0) mask and forge verification-passing tags for arbitrary new (aad,ct). Standalone attack op; invalid without nonce reuse, teaching demo not a production attack |
 | eccSubgroupAttack | ECDH small-subgroup / invalid-curve attack | ECDH missing-point-validation attack demo (RFC 7748 §6.8.1 + Biehl 2000 invalid curve): ① X25519 small subgroup (real parameters) — low-order point candidates go through runtime doubling-chain order determination plus a quadratic-character side test (no transcribed constants trusted); the x-only leak cap is shown honestly: the order-8 point recovers d mod 4 (2 bits), other low-order points cross-confirm, and clamping with an all-zero shared secret is the defense; ② invalid curve (toy curve p=1000003, full pipeline) — deterministic smooth-order invalid-curve search, small-order oracle queries, CRT recombination of the private key. Simulated oracle, closed loop, teaching demo not a remote attack tool, fully deterministic with zero randomness |
 
-### Forensics / Traffic (19 ops)
+### Forensics / Traffic
 
 | opId | Name | Notes |
 |---|---|---|
@@ -1177,7 +1177,7 @@ public/
 | mcTextExtract | Minecraft Text Intel Extractor | Walks Minecraft Java Edition saves' region/*.mca (Anvil, zlib NBT inside chunks) or a single .dat/.nbt, extracting signs / written books / command blocks / entity and block CustomName / item Name+Lore, aggregated by type + coordinates, with flag{...} and common variants highlighted (including a base64-decode rescan). Reuses the mcSave NBT parser, pure front-end, zero outbound |
 | mcNbtView | Minecraft NBT Tree Viewer | Browser NBTExplorer: decompresses any Minecraft Java Edition NBT (level.dat / *.dat / playerdata / structure .nbt etc., gzip/zlib/raw all fine) and dumps it fully into an indented, collapsible readable text tree. Shows each node's tag type name / key / value, List element type and length; Long/LongArray use BigInt without precision loss, large arrays truncated. Path-filter subtree locating supported. Reuses the mcSave NBT parser, pure front-end, zero outbound |
 
-### File Format / Structure (15 ops)
+### File Format / Structure
 
 | opId | Name | Notes |
 |---|---|---|
@@ -1197,7 +1197,7 @@ public/
 | kzgBlobParse | EIP-4844 blob parsing | Parses and displays EIP-4844-related fields: the blob (131072 bytes = 4096 32-byte BLS12-381 scalar field elements, per-chunk canonicality check), the transaction-side blob versioned hash list (32 bytes = version byte 0x01 + 31-byte SHA-256(commitment) truncation), and a single 48-byte KZG commitment. Parse-and-display only: no network, and commitment computation belongs to the KZG blob commitment op |
 | pkcs12Parse | PKCS#12/PFX parse | PKCS#12/PFX container parsing (RFC 7292): version/structure tree, macData integrity check, passphrase decryption of encryptedData and pkcs8ShroudedKeyBag (legacy pbeWithSHAAnd3-Key/2-KeyTripleDES, SHA/RC2-128/40 implemented per RFC 2268 official vectors, plus PBES2+PBKDF2+AES/3DES), certificate serial/subject/validity with PEM export, keys as PKCS#8 PEM (byte-exact against openssl -nodes); no certificate chain validation, passphrase stays local with zero exfiltration |
 
-### Data Structures / Serialisation (22 ops)
+### Data Structures / Serialisation
 
 | opId | Name | Notes |
 |---|---|---|
@@ -1224,7 +1224,7 @@ public/
 | unitConv | Unit Converter | Data sizes B/KB/MB/GB/TB/PB alongside KiB/MiB/GiB/TiB/PiB (SI 1000 vs IEC 60027-2 1024, all factors traceable); rates bps/Kbps/Mbps/Gbps ↔ B/s/KB/s/MB/s (bit×8); time ns~d; a pure number triggers timestamp-epoch cross-reference (Unix s/ms, FILETIME, Cocoa, Chrome μs, DOS packed, magnitude auto-sniffed); frequency Hz~GHz; angle deg/rad/gon. Data sizes use BigInt rationals throughout — zero precision loss at PB scale, exact decimals and truncation clearly marked |
 | dataConvert | JSON / CSV / XML / YAML Conversion | Beautify/minify JSON, convert JSON↔CSV and re-indent XML. CSV follows RFC 4180 (quotes, doubled quotes, line breaks inside fields). JSON→CSV supports object arrays, a single object, primitive arrays and 2D arrays; nested objects/arrays stay as JSON text in the cell. XML only re-indents and checks tag balance without changing attributes/CDATA/DOCTYPE semantics; YAML beautify/minify and JSON↔YAML are supported via js-yaml 4.1.0 with JSON_SCHEMA |
 
-### Image / QR (37 ops)
+### Image / QR
 
 | opId | Name | Notes |
 |---|---|---|
@@ -1266,7 +1266,7 @@ public/
 | gifCompose | GIF Compose | Composes multiple images into GIF89a: normalize to first frame (scale/pad) + per-frame delay + loop count; self-implemented LZW and NETSCAPE2.0 looping, median-cut quantization ≤256 colors. Inverse of GIF frame extraction |
 | spriteSheet | Sprite Sheet Converter | Sprite sheet ↔ frame sequence: slice splits an N×M grid sheet into per-frame PNGs (row-major, frame_000 onwards); merge packs frames (first frame in main input + one dataURL per line in extras) into a grid by frames-per-row, trailing empty cells transparent. Pure-JS PNG works everywhere |
 
-### Audio / Video (7 ops)
+### Audio / Video
 
 | opId | Name | Notes |
 |---|---|---|
@@ -1278,7 +1278,7 @@ public/
 | morseWav | Morse Audio Encode / Decode | Morse code audio (WAV), bidirectional (ITU-R M.1677-1). encode: plaintext or dot-dash string → synthesizes a 16-bit mono WAV per the 1/3/7 unit-time grid (base64 + downloadable morse.wav), tone/sample rate/amplitude/fade adjustable; decode: WAV audio → envelope detection → Otsu adaptive threshold → adaptive dot/dash classification → plaintext. Decoding supports integer PCM 8/16/24/32-bit, IEEE float 32/64-bit, µ-law, mono/multi-channel, any sample rate; unit duration auto-estimated, overridable by unit(ms) or wpm(PARIS); output includes dot/dash counts, SNR criteria and confidence, plus a 'decode the plaintext one layer further' reference (runs one layer through the auto-decode engine, original result unchanged) |
 | spectrogram | Audio Spectrogram (STFT) | WAV → short-time Fourier transform spectrogram PNG: Hann window + radix-2 FFT, magma colormap rendering, read frequency-domain hidden text by eye (CTF audio steganography paints flags into the spectrum). Pure front-end, no Audacity needed |
 
-### Text Steganography (13 ops)
+### Text Steganography
 
 | opId | Name | Notes |
 |---|---|---|
@@ -1296,7 +1296,7 @@ public/
 | nthChar | Nth Char Stego | Text steganography: the N-th character of each line/sentence/word joins into the hidden message (acrostic head = N1, second char = N2). encode replaces the N-th character, decode takes it |
 | wordSpacingBits | Word-Spacing Bit Stego | Text steganography: the number of spaces between words carries bits (1 space=0, 2 spaces=1). msg → UTF-8 → bits → spacing changes. The first 32 bits are a length prefix |
 
-### File Steganography (32 ops)
+### File Steganography
 
 | opId | Name | Notes |
 |---|---|---|
@@ -1345,7 +1345,7 @@ Third parties can write plugins with zero main-project changes: a plugin is a st
 
 - Developer guide: [`src/plugin/README.md`](./src/plugin/README.md)
 - Reference plugin (a live template — copy, rename, start): [`src/plugin/examples/hello-cipher/index.js`](./src/plugin/examples/hello-cipher/index.js)
-- Official extension package (shipped in releases, **disabled by default**): [`addons/dcode-extras-2026-10/`](./addons/dcode-extras-2026-10/). Enable it from the **Official extensions** section (official.json plus same-origin addons/ directory discovery); it adds no main op count, stays out of the precache, and becomes offline-available after the first online load. Current: Beta 409 ops (2026-11 batch); all 988 dCode tools are accounted for.
+- Official extension package (shipped in releases, **disabled by default**): [`addons/dcode-extras-2026-10/`](./addons/dcode-extras-2026-10/). Enable it from the **Official extensions** section (official.json plus same-origin addons/ directory discovery); it adds no main op count, stays out of the precache, and becomes offline-available after the first online load. Current: Beta hundreds of ops (2026-11 batch); all 988 dCode tools are accounted for.
 
 ### For External AI (MCP / Skills)
 

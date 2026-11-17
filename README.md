@@ -9,7 +9,7 @@
   <span>码小妹 · EBCrypto</span>
 </h1>
 <p align="center">
-  <span align="center">本地优先、零外发的编解码 / 加解密 / 隐写分析工具箱：978 个注册操作覆盖 23 类能力，绝大多数在浏览器本地运行，Windows 另可启用本地桥能力，macOS / Linux 提供双击启动器。</span>
+  <span align="center">本地优先、零外发的编解码 / 加解密 / 隐写分析工具箱：一千多种注册操作覆盖 23 类能力，绝大多数在浏览器本地运行，Windows 另可启用本地桥能力，macOS / Linux 提供双击启动器。</span>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 - [项目简介](#项目简介)　　　　[特点](#特点)
 - [界面预览](#界面预览)　　　　[运行](#运行)
 - [平台兼容性](#平台兼容性)　　[性能要求](#性能要求)
-- [目录结构](#目录结构)　　　　[编解码全清单](#编解码全清单978-ops--23-分类)
+- [目录结构](#目录结构)　　　　[编解码全清单](#编解码全清单一千多种--23-分类)
 - [插件与 AI 接入](#插件与-ai-接入)　[开源协议](#开源协议)
 - [第三方资源与许可](#第三方资源与许可)　[隐私](#隐私)
 - [关键词 / Keywords](#关键词--keywords)
@@ -53,7 +53,7 @@
 
 ## v0.2.0-beta（2026-11-11）
 
-> 0.2.0 beta 聚焦资源阈值、稳定性、MCP 与大产物处理；0.1.15 的 UI 与 978 个算法基线保留。完整历史见 [CHANGELOG.md](./CHANGELOG.md)。
+> 0.2.0 beta 聚焦资源阈值、稳定性、MCP 与大产物处理；0.1.15 的 UI 与一千多种算法基线保留。完整历史见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ### 新增与改进
 
@@ -101,7 +101,7 @@
 - 中间与右侧默认等分；环境提供“自适配排版（新版）／始终单分区（传统）”，自适配模式横屏分区、竖屏纵向。
 - 各页面输入草稿在切页与刷新后保留，支持普通算法的多字段、文件字节与输出恢复；环境提供独立于完整重置的“一键清空输入输出”。
 - 新增 CRC 全预设、全部校验和、SHA-2 六档、CTPH、全部哈希、Whirlpool 变体、LZ4 Frame、Enigma 共 8 个 op。
-- 新增 9 个有明确条件的 SM2／SM3／SM4／ZUC 攻击工具；SM3 接入字典与查表，SM4 接入一键尝试，主 op 共 978 个。
+- 新增 9 个有明确条件的 SM2／SM3／SM4／ZUC 攻击工具；SM3 接入字典与查表，SM4 接入一键尝试，主 op 一千多种。
 - 配方链在左列顶部执行 / 单步，节点编排与参数留在左列，右侧上下显示输入、输出与逐步结果；自动执行、断点与重排保留。
 - 编码图恢复顶部识图、桌面竖向分类侧栏与缩略图网格，单击缩略图直接打开全屏查看器；识图支持裁剪调整、恢复原图和草稿恢复；自动识图模块最大 800px 水平居中。
 - 自定义算法编辑器统一新版 UI 与输入体验：两空格缩进、括号配对、选区注释、撤销重做、多选插入、查找与源码对照；保存与测试分离，同页会话可恢复未保存代码、选区和滚动位置。
@@ -155,7 +155,7 @@
 
 - **本地优先 · 零外发**：原生 ES module，无框架、无构建步骤。核心编解码在浏览器本地执行，不上传用户输入；「外链」只生成 URL。PWA 更新仅下载本站资源，本地桥只访问 `127.0.0.1`，外部 AI 仅在用户主动配置 endpoint 后启用。
 - **一把梭智能解码**：粘贴或拖入内容，自动识别可能的编码链并给出候选解码结果，支持 crib 目标特征过滤与深度爆破。
-- **978 个注册操作 · 23 分类**：覆盖 Base、文本传输、花式 CTF、深奥编程语言、中文本土、古典密码、现代加密（分组 / 流 / 非对称 / 其他）、哈希校验、进制字符集（含素数判定与筛选）、分析爆破、密码攻击、压缩归档、口令与归档破解、取证流量、文件格式结构、数据结构、图像与二维码、音频音视频、隐写及 3 个可选 Windows GUI 桥入口。完整清单由 registry 自动生成；另有 409 个操作通过官方扩展包按需加载。
+- **一千多种注册操作 · 23 分类**：覆盖 Base、文本传输、花式 CTF、深奥编程语言、中文本土、古典密码、现代加密（分组 / 流 / 非对称 / 其他）、哈希校验、进制字符集（含素数判定与筛选）、分析爆破、密码攻击、压缩归档、口令与归档破解、取证流量、文件格式结构、数据结构、图像与二维码、音频音视频、隐写及 3 个可选 Windows GUI 桥入口。完整清单由 registry 自动生成；另有 数百个操作通过官方扩展包按需加载。
 - **解码强度四件套**（v0.1.2）：强度档位 + 自定义算法池 + **暴力爆破独立通道**（XOR/凯撒/字典/彩虹表/HMAC/PBE/Playfair/ZIP/CRC32/bkcrack，结果单独归组展示不污染主排序）+ **解析层数 1~3 选择**。
 - **宽松判定模式**（v0.1.2）：增强/极强/最强/自定义档只按字符种类数放行算法，变体编码题（「喵呜」表 0/1、emoji 表二进制）也能参与解码；默认/快速档保持严格定义域识别。
 - **密钥+密文一键尝试**：给定密文与密钥，自动枚举 AES/DES/3DES/RC4/XOR/Fernet × 多种模式 × 多种编码组合。
@@ -314,11 +314,11 @@ public/
 资料/              算法码表核对资料 + 研究成果（开发资料，不随发行包分发）
 ```
 
-## 编解码全清单（978 ops · 23 分类）
+## 编解码全清单（一千多种 · 23 分类）
 
 > 本节由 `node tools/gen_readme_ops.mjs` 从主入口真实 import 闭包生成；opId 即注册表唯一标识。
 
-### Base 系列（30 ops）
+### Base 系列
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -353,7 +353,7 @@ public/
 | crockford32 | Crockford Base32 | 人类可读 Base32（排 I/L/O/U，o→0 i/l→1 容错，- 忽略；可选 mod 37 校验位 * ~ $ = U）；位流与 Base32 op 的 crockford 档同口径 |
 | dxBase64 | DXBase64 | 风之暇想 DXBase64：raw deflate + 随机 salt 循环 XOR + CRC16 校验的 Base64 变体（带校验、每次密文不同、无需密钥，防和谐） |
 
-### 文本 / 传输编码（79 ops）
+### 文本 / 传输编码
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -437,12 +437,12 @@ public/
 | sqlBeautify | SQL 美化 | 缩进并美化 SQL 代码，保留 :name 绑定变量（CyberChef #383） |
 | xpathQuery | XPath 表达式 | 用 XPath 从 XML 文档中提取节点，多个结果按分隔符连接（CyberChef #496） |
 
-### 花式 / CTF 编码（79 ops）
+### 花式 / CTF 编码
 
 | opId | 名称 | 说明 |
 |---|---|---|
 | scoutStick | 童子军木棍密码 | dCode 的 Code Chinois（又称 Samurai/武士码）：横线=元音序号（A/E/I/O/U/Y=1-6），竖线=该元音之后的辅音序号；例 DCODE = `\|\|\|- \|\|- ---- \|\|\|- --`（竖线在前）。可切 Samurai 反置与横线在前写法；非字母原样透传 |
-| morse | 摩斯电码 | ITU-R M.1677（字母/数字/标点，/ 分词） |
+| morse | 摩斯电码 | ITU-R M.1677（字母/数字/标点，/ 分词）；不支持字符编码时原样保留，解码未知 token 也原样保留（不静默丢字） |
 | bacon | 培根密码 | 5 位 a/b（24/26 字母两版） |
 | yunying | 云影密码（01248） | 01248/云影密码：0 分隔字母，1/2/4/8 数字和映射 A=1..Z=26；encode 仅接受 A-Z，decode 严格校验每段数字和 1-26。 |
 | rot13 | ROT13 | 字母移位 13（自反） |
@@ -521,7 +521,7 @@ public/
 | emojiAes | emoji-aes 加密 | emoji-aes 完整版：AES-256-CBC(OpenSSL) 加密后 base64 → 65 emoji 表替换（对标 Aaron Horler emoji-aes） |
 | roar | 兽音译者（嗷呜啊~） | 兽音译者 roar 4 字符 codec 变体：Unicode 码点 → 4 位 hex → 按位偏移 → codec 2 字符映射 + 前后缀包裹。codec 可自定义（4 个不重复字符）。与 yygq（就这¿/不会吧？）是不同算法 |
 
-### 深奥编程语言（15 ops）
+### 深奥编程语言
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -541,7 +541,7 @@ public/
 | braincopterDecode | Braincopter 解码 | Braincopter 图像 → Brainfuck 程序（f=(-2R+3G+B) mod 11 经典规范；遇 nop/终止即停） |
 | braincopterEncode | Braincopter 编码 | Brainfuck 程序 → Braincopter PNG（每像素 f=(-2R+3G+B) mod 11，最小改动写入，终止符填充到宽度整数倍；载体为指定纯色） |
 
-### 中文 / 本土编码（29 ops）
+### 中文 / 本土编码
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -575,13 +575,13 @@ public/
 | xiangyueEnc | 想曰 XiangYue 加密 | 想曰加密方向：明文 → zlib + AES-CTR + ChaCha20-Poly1305 → 中文/日文/韩文/象形/Emoji/零宽/Base64 密文，可被本工具箱「想曰」解密自动识别还原（format2 快；format1 Argon2id 64MiB 单次数秒） |
 | yueChang | 曰唱 | 风之暇想 曰唱：deflate + PBKDF2-SHA256(10万次) + AES-GCM-256，Base64 逐字符映射为中文拟声字（前缀「唱：」，口令可空则用默认 YueChang） |
 
-### 古典密码（76 ops）
+### 古典密码
 
 | opId | 名称 | 说明 |
 |---|---|---|
 | railFence | 栅栏密码 | 两种走法：W 型锯齿 zigzag（可带偏移量）/ Z 型传统分栏（按列写、按行读）；参数：栏数 + 模式 + 偏移量 |
 | caesar | 凯撒密码 | 指定位移量（encode +shift，decode -shift）；mode 可切递增/递减凯撒（第 x 字符位移 shift±x）；字符集可切仅字母位移，或 ASCII 可打印区 33-126 全字符位移（处理非字母也在动的变体题） |
-| scytale | Scytale 密码棒 | 栅格转置；密钥可按栏数或每栏字数解释。编码补 \|，解码保留完整格子，不删除真实竖线；原长与补位无法自动区分。dCode 兼容三开关（补位符 _/剥非字母数字/裁尾填充）默认关闭，开启即与 dCode.fr 逐字节同口径（三源对拍 36/36） |
+| scytale | Scytale 密码棒 | 栅格转置；密钥可按栏数或每栏字数解释。编码补 \|，解码默认保留完整格子，不删除真实竖线；原长与补位无法自动区分。dCode 兼容三开关（补位符 _/剥非字母数字/裁尾填充）默认关闭，显式开启裁尾填充（dcodeTrim=true）时裁掉尾部补位，与 dCode.fr 逐字节同口径（三源对拍 36/36） |
 | vigenere | 维吉尼亚 | 字母密钥加减移位 |
 | gronsfeld | Gronsfeld | 数字密钥维吉尼亚 |
 | beaufort | Beaufort | 自反（编解码同形） |
@@ -639,7 +639,7 @@ public/
 | lorenz | Lorenz SZ40/42 密码附件 | 德国二战 Lorenz SZ40/42a/42b：χ/ψ/μ 十二轮、ITA2 五单位异或、KH/ZMUG/BREAM 图案 |
 | colossus | Colossus 计数破译机 | 英国二战 Colossus 对 Lorenz SZ40/42 密文的计数/破译仿真：KH/ZMUG/BREAM、QBus、限制、4 个预设程序与自定义开关 |
 | rotSpecial | Rot 任意位移 | 任意位移量 N 的循环移位（letters/alnum/ascii94），decode 反向 |
-| goldbug | GoldBug 金甲虫密码 | 爱伦坡《金甲虫》Kidd 密码符号替换（26 字母各一唯一符号；解码统一大写，小写不保留） |
+| goldbug | GoldBug 金甲虫密码 | Poe/dCode 通行 GoldBug 符号表；可选旧版兼容表；解码统一大写，冲突字面符号以反斜杠转义 |
 | routeCipher | 曲路密码 | 明文填入 W 列矩阵，按蛇形/垂直路由读出（置换密码） |
 | caesarBox | 凯撒箱换位 Caesar Box | 箱型（列）换位：去空格后按指定列宽逐行写入网格、再逐列读出。解密用转置列宽再走一次。注意仅当长度为列宽整数倍时可完整还原（残格时转置不是逆运算，此为算法固有性质）；空格在编码时被去除，不可还原。 |
 | curveCipher | 曲路密码 Curve Cipher | 蛇形（曲路）换位：row×col 网格按列蛇形读取，奇偶列方向相反，末尾整体反转。需 row×col = 文本长度。 |
@@ -656,7 +656,7 @@ public/
 | redefence | Redefence 栅栏 | Redefence：栅栏（W 型 zig-zag）的行序变体——按指定行序或关键词读出行。行序为恒等序时退化为标准栅栏。参数：栏数 rails / 读行序 order / 关键词 key（order 与 key 二选一） |
 | enigmaCC | Enigma（CyberChef 对齐） | CC Enigma 对齐：3/4 转子、I-VIII + Beta/Gamma、B/C/B Thin/C Thin、环设置/初始位置/插线板、Strict output（去非字母 + 5 字符分组）。 |
 
-### 现代密码·分组（35 ops）
+### 现代密码·分组
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -696,7 +696,7 @@ public/
 | gostKeyWrap | GOST 28147-89 Key Wrap | GOST 28147-89 密钥包装（RFC 4357 §6.1）：UKM(8B) \|\| CEK_ENC(32B) \|\| CEK_MAC(4B)，CryptoPro KEK 多样化可选（§6.3-6.5），S-box 为 CryptoPro-A。解包严格校验长度与 MAC，失败明示报错；固定向量 + pygost 现场对拍。 |
 | bfvToy | BFV 玩具同态加密（教学） | BFV 同态加密教学实现（Fan-Vercauteren, ePrint 2012/144）：R_q = Z_q[x]/(x^n+1) 负循环卷积 + 三元私钥 + Δ=floor(q/t) 缩放，支持加密/解密/同态加法/同态乘法（乘法不做重线性化，密文涨到 3 分量）。每次运算打印噪声 \|\|e\|\|∞ 与预算 Δ/2=q/(2t) 占用，噪声耗尽显式报错、绝不返回乱码。教学演示，非生产级：n≤16、q≤2^32、t≤2^16，无 NTT/重线性化/模切换，该规模可被直接攻破 |
 
-### 现代密码·流（21 ops）
+### 现代密码·流
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -722,14 +722,14 @@ public/
 | rc4Drop | RC4-drop / CipherSaber-2 | RC4-drop[n]（丢弃前 n 字节密钥流，RFC 6229 偏移档，默认 768=SANS 建议）与 CipherSaber-2（10 字节 IV 前置 + KSA 重复 r 轮，默认 r=20） |
 | xsalsa20 | XSalsa20 | XSalsa20 流密码（Bernstein「Extending the Salsa20 nonce」）：HSalsa20 派生 32 字节子密钥 + Salsa20，密钥 32 字节、nonce 24 字节、64 位块计数器（自反）。rounds 支持 20/12/8（默认 20；HSalsa20 与 Salsa20 同步降轮） |
 
-### 现代密码·非对称（130 ops）
+### 现代密码·非对称
 
 | opId | 名称 | 说明 |
 |---|---|---|
 | rsa | RSA | RSA 模幂加解密：加密 c=mᵉ mod n，解密 m=cᵈ mod n。支持 hex/base64 密文与明文字节串（解密直出 flag）；填 p,q 自动推 n 和 d。 |
 | rsaGenKeyPair | RSA 密钥对生成 | 本地生成 RSA 密钥对（纯 JS BigInt，素数 Miller-Rabin 复用 primeGen），输出十进制 n/e/d/p/q/dp/dq/qinv + PEM（PKCS#1 / PKCS#8 / SPKI 三选一，DER 编码按 ITU-T X.690）。私钥 / 公钥分开下载按钮（PEM 主交付，DER / JWK 次级可选）。512 位已被现实分解仅作教学，实际使用至少 2048 位；2048 位约秒级、4096 位数秒级会阻塞页面，属预期 |
 | ecdsaKeyGen | ECDSA 密钥对生成 | ECDSA 密钥对生成：secp256k1 / P-256 / P-384 / P-521 任选，输出私钥 d 与公钥（压缩 02/03‖X + 非压缩 04‖X‖Y 双格式），可选 PEM/DER/JWK 输出。随机源 crypto.getRandomValues 拒绝采样无偏。域参数：SEC 2 v2 / FIPS 186-4 D.1.2。 |
-| ecdsaSign | ECDSA 签名 | ECDSA 签名：输入消息（text/hex）+ 私钥 d，曲线 secp256k1/P-256/P-384/P-521，哈希 SHA-256/384/512/SHA-1/MD5，k 可选 RFC 6979 确定 k（可复现）或随机 k。输出 r,s 十进制+hex、DER hex、所用 k。RFC 6979 A.2.5 官方向量逐字验证。 |
+| ecdsaSign | ECDSA 签名 | ECDSA 签名：输入消息（text/hex/base64，默认 text）+ 私钥 d，曲线 secp256k1/P-256/P-384/P-521，哈希 SHA-256/384/512/SHA-1/MD5，k 可选 RFC 6979 确定 k（可复现）或随机 k。输出 r,s 十进制+hex、DER hex、所用 k。RFC 6979 A.2.5 官方向量逐字验证。 |
 | ecdsaVerify | ECDSA 验签 | ECDSA 验签：输入消息 + 公钥（压缩/非压缩/X‖Y hex 自动识别，G=生成元）+ 签名（r;s 十进制/hex 或 DER hex 自动识别）。曲线四条任选，哈希 SHA-256/384/512/SHA-1/MD5。输出 w/u1/u2/R 全过程与合法性判定。 |
 | ecdsaSigConvert | ECDSA 签名格式转换 | ECDSA 签名三格式互转：raw r;s（十进制/0x hex）↔ DER（ASN.1 SEQUENCE{r,s}，ITU-T X.690）↔ JOSE（r\|\|s 定宽 base64url，RFC 7515）。曲线参数决定 JOSE/raw-hex 的元素定宽（P-256=32B 等）。 |
 | eccCalc | ECC 点运算 | 椭圆曲线点运算计算器：点加/点减/标量乘/倍点。曲线四条预设（secp256k1/P-256/P-384/P-521）或自定义 p/a/b/Gx/Gy/n。点支持压缩 02/03‖X、非压缩 04‖X‖Y、裸 X‖Y、G（生成元）、O（无穷远点）；k 支持十进制/0x hex/负数。无穷远点输出 Infinity。 |
@@ -857,7 +857,7 @@ public/
 | hexToOid | 十六进制 → 对象标识符 | 把 ASN.1 OBJECT IDENTIFIER 的十六进制内容（不含 06/长度）解为点分十进制，首段按 40*X+Y 还原。依据 ITU-T X.690 §8.19 |
 | oidToHex | 对象标识符 → 十六进制 | 把点分十进制 OID 编码为 ASN.1 内容字节的十六进制（首段 40*X+Y + base-128 varint）。依据 ITU-T X.690 §8.19 |
 
-### 现代密码·其他（33 ops）
+### 现代密码·其他
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -895,7 +895,7 @@ public/
 | mpcToy | 安全多方计算玩具（教学） | MPC 教学玩具：beaver 模式用三方加法分享 + Beaver 1991 乘法三元组完成一次 a×b，打印各方 share、掩码值 d/e 与重建自证，并演示单方 share 看不出明文；ot 模式模拟 1-of-2 不经意传输的「盲化 → 两条掩码消息 → 只解一条」流程。教学演示，非生产级：无 MAC/承诺/零知识证明，OT 是确定性 PRF 模拟（无 RSA/DDH 陷门，公开 seed 即可解出两条），不具备真实安全性 |
 | quantumToy | 量子算法玩具（Grover / Shor） | 量子算法 statevector 教学模拟：grover 走完整的 H→oracle 相位翻转→扩散演化，逐轮打印命中概率并与理论最优轮数 round(π/(4θ)-1/2) 对拍（常用近似 ⌈π/4·√N⌉ 在小 N 会高估 1 轮）；shor 只做 N=15/21 的顺序查找切片（模幂置换 + DFT + 连分数），输出周期与因子并自证 p×q=N。教学演示，非生产级：n≤5、无噪声/退相干/纠错、模幂直接作用在状态向量上而非线路级分解，N 稍大即指数爆炸 |
 
-### 哈希 / 校验（82 ops）
+### 哈希 / 校验
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -982,7 +982,7 @@ public/
 | ctph | CTPH（模糊哈希） | Context Triggered Piecewise Hashing（Kornblum 2006，ctph.js 同算法），输出 bi:hash1:hash2。 |
 | generateAllHashes | Generate all hashes（CC 对齐） | CyberChef Generate all hashes 对齐：按 CC 同顺序输出 44 个摘要（含 Whirlpool 三变体、GOST、SSDEEP、CTPH），支持 Length (bits) 过滤与 Include names。 |
 
-### 进制 / 字符集（83 ops）
+### 进制 / 字符集
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1018,8 +1018,8 @@ public/
 | continuedFraction | 连分数 | 有理数 p/q ↔ 连分数序列 [a0; a1, ...]（可逆） |
 | sternBrocot | Stern-Brocot 路径 | 正分数 ↔ L/R 路径串（可逆） |
 | collatz | Collatz 序列 | 正整数 → Collatz 猜想序列（3n+1，run 单向） |
-| primeGen | 大素数生成 | Miller-Rabin 检验生成指定位数的大素数（确定性版本，crypto CSPRNG）（素性检验用 primeTest，四则/分解用 bigCalc） |
-| primeTest | 素性检验（Miller-Rabin） | 判定大整数是否素数并给出位长与轮数说明：n < 3.3e24 用 13 个固定质数 witness 确定性判定（FIPS 186-4 Table C.2），更大 n 按轮数（FIPS 186-5 App. B，随机基误判 < 4^-rounds） |
+| primeGen | 大素数生成 | Miller-Rabin 检验生成指定位数的大素数（crypto CSPRNG；64 位内确定性基，64 位~3.3e24 用 13 个固定基确定性判定，更大用固定基+随机基多轮）（素性检验用 primeTest，四则/分解用 bigCalc） |
+| primeTest | 素性检验（Miller-Rabin） | 判定大整数是否素数并给出位长与轮数说明：n < 2^64 用 7 个确定性基；2^64 ≤ n < 3.3e24 用 13 个固定质数 witness 确定性判定（FIPS 186-4 Table C.2）；更大 n 用 13 个固定基 + 随机基多轮（FIPS 186-5 App. B，误判 ≤ 4^-rounds） |
 | ipv4Int | IPv4 ↔ 整数 | IPv4 点分十进制 ↔ 32 位整数（支持 0x/八进制/0b 变体，inet_aton 语义） |
 | ipv6Format | IPv6 压缩/展开 | IPv6 规范压缩（RFC 5952）↔ 全展开 8 组 4 位十六进制；report=true 时输出 CyberChef Parse IPv6 address 同口径的 longhand/shorthand 与保留段报告 |
 | macFormat | MAC 地址格式互转 | MAC 冒号/连字符/点分/整数互转（48 位，自动识别输入格式） |
@@ -1070,7 +1070,7 @@ public/
 | progCalc | 程序员计算器 | 位运算表达式求值（手写递归下降解析器，无 eval）：& \| ^ ~ << >> >>> + - * / % **、括号、rotl/rotr 循环移位；8/16/32/64 位字宽掩码回绕（全程 BigInt），有/无符号切换；一次输出十进制/十六进制/八进制/二进制（4 位分组）/补码/popcount/前导零/尾随零。 |
 | objectIdTime | ObjectID 时间戳解析 | BSON ObjectId（12 字节：4 字节大端 Unix 秒 + 5 字节随机值 + 3 字节大端计数器）解析：24 位十六进制 → 生成时间(UTC) + 随机值 + 计数器（run 单向报告） |
 
-### 分析 / 爆破（50 ops）
+### 分析 / 爆破
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1125,7 +1125,7 @@ public/
 | extractAll | 专用文本提取器 | 从文本批量提取 email/url/domain/ipv4/ipv6/mac/date/filepath/hash/flag/keyValue；去重保序、默认换行分隔；对 999.1.1.1、1.2.3.4.5、aa:bb:cc、monkey = banana、compass: north 等误报边界做了严格约束；超输入/匹配/输出预算直接可读拒绝，不截断。 |
 | haversine | Haversine 球面距离 | 输入 lat1,lng1,lat2,lng2（逗号分隔四值），按 Haversine 公式与 R=6371000 m 输出两点球面距离（米）。口径同 CyberChef「Haversine distance」 |
 
-### 密码攻击（33 ops）
+### 密码攻击
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1163,7 +1163,7 @@ public/
 | sm4EcbCodebook | SM4-ECB 已知明文码本攻击 | 同一密钥下，完整 16B 明密文块组成码本，恢复目标密文中的已知块。未匹配块保留未知，不推测密钥或未知字节。主输入目标密文 hex。 |
 | sm4GcmForgery | SM4-GCM nonce 重用认证伪造 | 同一 key+nonce 的至少两条 SM4-GCM 样本 aadHex\|ctHex\|tagHex，恢复 GHASH H 与认证掩码并伪造 tag；完整 16B tag，推荐第三条样本筛候选。不恢复 SM4 key。 |
 
-### 压缩 / 归档（22 ops）
+### 压缩 / 归档
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1190,7 +1190,7 @@ public/
 | zipExtract | ZIP 条目提取 / 解密导出 | 按条目名（留空=全部）真解压 ZIP 的 Stored/Deflate 条目，逐条校验原始大小与 CRC32，返回文本预览 + 内存下载产物；ZipCrypto 条目可填 password 用 zipCrack 原语解密，伪加密自动识别；WinZip AES 条目如实报暂不支持，绝不伪造明文。路径穿越名只压平为安全下载名，不写磁盘 |
 | zipCreate | ZIP 创建（出题） | 把一段数据（文本/任意字节）打包成单文件 ZIP，可选内部文件名与压缩方式（Deflated/Stored）；出 misc 题常接 ZIP 伪加密（置位）做伪加密题 |
 
-### 口令 / 归档破解（12 ops）
+### 口令 / 归档破解
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1207,7 +1207,7 @@ public/
 | gcmForbidden | GCM nonce 重用攻击 | AES-GCM nonce 重用攻击演示（SP 800-38D + Joux 2006 forbidden attack）：①同一 key+nonce 两条密文 + 已知一侧明文 → 恢复 CTR 密钥流解另一侧；②≥2 条同 nonce 样本（aad\|ct\|tag）→ GHASH 多项式方程 q(H)=T1⊕T2 在 GF(2^128) 求根恢复认证子 H（对拍 E_K(0^128)），并恢复 E_K(J0) 掩码 → 对任意新 (aad,ct) 伪造可过验证的 tag。独立攻击 op；nonce 不重用即失效，教学演示非生产攻击 |
 | eccSubgroupAttack | ECDH 小子群/无效曲线攻击 | ECDH 点校验缺失攻击演示（RFC 7748 §6.8.1 + Biehl 2000 无效曲线）：①X25519 小子群（真参数）——低阶点候选经运行时倍点链定阶+二次特征判边（不信任转抄常数），x-only 泄露上限如实演示：阶 8 点恢复 d mod 4（2 bit）、其余低阶点交叉印证，clamping 后全零共享密钥即防御；②无效曲线（玩具曲线 p=1000003 全流程）——光滑阶无效曲线确定性搜索、小阶点预言机查询、CRT 合成私钥。模拟预言机本地闭环，教学演示非远程攻击工具，全确定性零随机 |
 
-### 取证 / 流量（30 ops）
+### 取证 / 流量
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1242,7 +1242,7 @@ public/
 | disasmArm | 反汇编 ARM | 把 ARM / Thumb / ARM64 机器码反汇编为汇编；输入 hex/base64，可设起始地址。复用内置 Capstone wasm，零外发 |
 | disasmX86 | 反汇编 x86 | 把 x86 / x86-64 机器码反汇编为汇编；输入 hex/base64，可选 Intel/AT&T 语法与起始地址。复用内置 Capstone wasm，零外发 |
 
-### 文件格式 / 结构（15 ops）
+### 文件格式 / 结构
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1262,7 +1262,7 @@ public/
 | kzgBlobParse | EIP-4844 blob 解析 | 解析 EIP-4844 相关字段并展示结构：blob（131072 字节 = 4096 个 32B BLS12-381 标量域元素，逐块规范校验）、交易侧的 blob versioned hash 列表（32 字节 = 版本字节 0x01 + SHA-256(承诺) 截断 31 字节）、单个 48B KZG 承诺。只解析展示，不联网、不计算承诺（那归 KZG blob 承诺 op） |
 | pkcs12Parse | PKCS#12/PFX 解析 | PKCS#12/PFX 容器解析（RFC 7292）：版本/结构树、macData 口令完整性校验、口令解密 encryptedData 与 pkcs8ShroudedKeyBag（传统 pbeWithSHAAnd3-Key/2-KeyTripleDES、SHA/RC2-128/40 及 PBES2+PBKDF2+AES/3DES），证书列序列号/主题/有效期并输出 PEM，私钥输出 PKCS#8 PEM；不做证书链验证，口令只在本地处理零外发 |
 
-### 数据结构 / 序列化（33 ops）
+### 数据结构 / 序列化
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1300,7 +1300,7 @@ public/
 | jsonataQuery | Jsonata 查询 | 用 Jsonata 表达式查询和转换 JSON 数据，输出 JSON 字符串（CyberChef #243） |
 | jqQuery | jq JSON 查询 | 用 jq 表达式查询 JSON（如 .foo.bar、.[] \| .name）；Raw 开时字符串结果不加引号。口径同 CyberChef「Jq」 |
 
-### 图像 / 二维码（39 ops）
+### 图像 / 二维码
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1344,7 +1344,7 @@ public/
 | gifCompose | GIF 合成 | 多张图片合成 GIF89a：等尺寸化到首帧（scale=拉伸 / pad=等比居中铺填充色）+ 每帧延时 + 循环次数；自实现 LZW 压缩与 NETSCAPE2.0 循环扩展，中位切分法量化 ≤256 色。GIF 多帧提取的反向闭环，出题/回炉两用 |
 | spriteSheet | 精灵图互转 | 精灵图（等分网格）↔ 序列帧互转：拆帧把 N 列 × M 行网格图切成逐帧 PNG（行主序，frame_000 起）；合成把多帧（主输入首帧 + 追加行每行一个 dataURL）按每行列数拼网格，末行空位补透明。纯 JS PNG 全环境可用 |
 
-### 音频 / 音视频（7 ops）
+### 音频 / 音视频
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1356,7 +1356,7 @@ public/
 | morseWav | 摩斯音频编解码 | 摩斯电码音频（WAV）双向（ITU-R M.1677-1）。encode: 明文或点划串 → 按 1/3/7 单位时间格合成 16 位单声道 WAV（base64 + 可下载 morse.wav），音调/采样率/幅度/升降沿可调；decode: WAV 音频 → 包络检测 → Otsu 自适应阈值 → 点划自适应分类 → 明文。解码支持整数 PCM 8/16/24/32 位、IEEE float 32/64 位、µ-law、单/多声道、任意采样率；单位时长自适应估计，可被 unit(ms) 或 wpm(PARIS) 覆盖；输出含点划计数、信噪判据与置信度，并附「明文再解一层」参考（复用一键解码引擎跑一层，不改变原结果）。 |
 | spectrogram | 音频频谱图（STFT） | WAV → 短时傅里叶变换频谱图 PNG：Hann 窗 + radix-2 FFT，magma 色阶渲染，肉眼读频域藏字（CTF 音频隐写把 flag 画进频谱）。纯前端免装 Audacity |
 
-### 文本隐写（13 ops）
+### 文本隐写
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1374,7 +1374,7 @@ public/
 | nthChar | 第 N 字隐写 | 文本隐写：每行/句/词第 N 字拼隐藏消息（藏头=N1，藏第2字=N2）。encode 替换第 N 字，decode 取第 N 字 |
 | wordSpacingBits | 词距位隐写 | 文本隐写：用词间空格数承载比特（1空格=0，2空格=1）。msg→UTF-8→比特→改空格数。前 32 比特为长度前缀 |
 
-### 文件隐写（32 ops）
+### 文件隐写
 
 | opId | 名称 | 说明 |
 |---|---|---|
@@ -1423,7 +1423,7 @@ public/
 
 - 开发指南：[`src/plugin/README.md`](./src/plugin/README.md)
 - 参考插件（活样板，照抄改名即起步）：[`src/plugin/examples/hello-cipher/index.js`](./src/plugin/examples/hello-cipher/index.js)
-- 官方扩展包（随发行包分发、**默认不启用**）：[`addons/dcode-extras-2026-10/`](./addons/dcode-extras-2026-10/)。在扩展面板「官方扩展」区直接点击启用（自动读取 official.json，同源 addons/ 目录发现兜底）；不进主 op 计数、不进预缓存，首次在线加载后离线可用。当前 Beta 409 op（2026-11 批次），988 个 dCode 工具已逐条入账。
+- 官方扩展包（随发行包分发、**默认不启用**）：[`addons/dcode-extras-2026-10/`](./addons/dcode-extras-2026-10/)。在扩展面板「官方扩展」区直接点击启用（自动读取 official.json，同源 addons/ 目录发现兜底）；不进主 op 计数、不进预缓存，首次在线加载后离线可用。当前 Beta 数百 op（2026-11 批次），988 个 dCode 工具已逐条入账。
 
 ### 给外部 AI 用（MCP / Skills）
 

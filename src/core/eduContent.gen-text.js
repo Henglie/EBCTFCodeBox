@@ -315,8 +315,9 @@ export default {
       "8 位编码，但字母数字的码位和 ASCII 不一样（比如 `A` 在 EBCDIC 是 0xC1 而非 0x41），字母之间还不连续。因浏览器 `TextDecoder` 不支持，工具内嵌了 037/1047 等码表做转换。",
     usage: "参数选码页（037、1047 等）。解码：EBCDIC 字节 → ASCII 文本；编码：文本 → EBCDIC 字节。",
     examples: [
-      { in: "C8C9", out: "HI", desc: "EBCDIC 里 H=0xC8 I=0xC9" },
-      { in: "flag", param: "编码方向 / cp037", out: "86938187" },
+      { in: "C8C9", param: "方向：解码；codepage=cp1047（默认），format=hex", out: "HI", desc: "EBCDIC 里 H=0xC8 I=0xC9", run: { dir: "decode", params: { codepage: "cp1047", format: "hex" } } },
+      { in: "flag", param: "方向：编码；codepage=cp037，format=hex", out: "86938187", desc: "cp037 下 f=0x86 l=0x93 a=0x81 g=0x87", run: { dir: "encode", params: { codepage: "cp037", format: "hex" } } },
+      { in: "86938187", param: "方向：解码；codepage=cp037，format=hex", out: "flag", desc: "编码方向的反向，验证 hex 往返", run: { dir: "decode", params: { codepage: "cp037", format: "hex" } } },
     ],
     tips: [
       "字母出现在 0xC1~0xE9 高位区、`A`=0xC1，是 EBCDIC 的强特征。",

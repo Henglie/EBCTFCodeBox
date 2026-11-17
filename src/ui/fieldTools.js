@@ -1,11 +1,13 @@
 import { attachEditorToolbar } from './editorToolbar.js';
 import { openExpandModal } from './expandableInput.js';
 import { icon } from './icons.js';
+import { bytesToHex } from '../core/bytesIo.js';
 
-export function attachFieldTools(area, label, { getEpoch = () => 0 } = {}) {
+export function attachFieldTools(area, label, { getEpoch = () => 0, acceptsBytes = false } = {}) {
   const t = key => window.__ebctfT?.(key) || key;
   const changed = () => area.dispatchEvent(new Event('input', { bubbles: true }));
-  area.addEventListener('input', () => { area._loadSeq = (area._loadSeq || 0) + 1; });
+  // 手动编辑后框内文本才是事实，载入文件留下的真字节随即作废。
+  area.addEventListener('input', () => { area._loadSeq = (area._loadSeq || 0) + 1; if (!area._settingBytes) delete area._rawBytes; });
   const toolbar = attachEditorToolbar(area, { onChange: changed, exportName: `${area.id}.txt` });
   toolbar.classList.add('io-field-tools');
   const [, clear, ...secondary] = [...toolbar.children];
@@ -29,8 +31,15 @@ export function attachFieldTools(area, label, { getEpoch = () => 0 } = {}) {
     try {
       const bytes = await fileValue.arrayBuffer();
       if (epoch !== getEpoch() || seq !== area._loadSeq || !area.isConnected) return;
-      area.value = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
-      changed();
+      let text = null;
+      try { text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes); }
+      catch (error) { if (!acceptsBytes) throw error; }
+      if (text !== null) { area.value = text; changed(); return; }
+      // 非 UTF-8 文件：框内显示 hex，调用时交真字节。
+      const raw = new Uint8Array(bytes);
+      area._settingBytes = true;
+      try { area.value = bytesToHex(raw); area._rawBytes = raw; changed(); }
+      finally { area._settingBytes = false; }
     } catch (error) { if (epoch === getEpoch() && seq === area._loadSeq && area.isConnected) window.__ebctfToast?.(error.message); }
     finally { file.value = ''; }
   }

@@ -74,8 +74,8 @@ export default {
       "Break the exponent into binary and process it bit by bit with 'square-and-multiply': each step squares the base and takes the modulus, and on each 1 bit of the exponent multiplies once more. This way even a dozens-of-digits e needs only dozens of multiplications, and intermediate results stay bounded by mod.",
     usage: "Fill in base, exp and mod (decimal); outputs $\\mathrm{base}^{\\mathrm{exp}} \\bmod m$.",
     examples: [
-      { in: "", param: "base=65, exp=17, mod=3233", out: "=== 大数快速幂 ===\nbase = 65\nexp  = 17\nmod  = 3233\n\n✓ base^exp mod mod = 2790", desc: "RSA encryption: m=65 → c=2790; verbatim from the parameter boxes" },
-      { in: "", param: "base=2790, exp=2753, mod=3233", out: "=== 大数快速幂 ===\nbase = 2790\nexp  = 2753\nmod  = 3233\n\n✓ base^exp mod mod = 65", desc: "private-key decryption restores m" },
+      { in: "", param: "base=65, exp=17, mod=3233 (RSA encryption m^e mod n)", out: "=== 大数快速幂 ===\nbase = 65\nexp  = 17\nmod  = 3233\n\n✓ base^exp mod mod = 2790", desc: "This tool only computes modular exponentiation a^b mod m; it does not recover exponents or solve discrete logs. RSA encryption m=65 → c=2790", run: { dir: "run", params: {"base": "65", "exp": "17", "mod": "3233"} } },
+      { in: "", param: "base=2790, exp=2753, mod=3233 (private decryption c^d mod n)", out: "=== 大数快速幂 ===\nbase = 2790\nexp  = 2753\nmod  = 3233\n\n✓ base^exp mod mod = 65", desc: "Private decryption restores m; still just modular exponentiation, cannot derive the private exponent", run: { dir: "run", params: {"base": "2790", "exp": "2753", "mod": "3233"} } },
     ],
     formulas: [
       { tex: "c = m^e \\bmod n,\\qquad m = c^d \\bmod n", caption: "RSA encryption/decryption is modular exponentiation" },

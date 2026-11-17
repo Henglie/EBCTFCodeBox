@@ -47,9 +47,9 @@ export default {
       "每 5 个 bit 查一次去掉 a/i/l/o 的特制 base32 表，拼成字符串。字符越多、精度越高。",
     usage: "填 `纬度,经度`（如 `39.9042,116.4074`）编码，或填 geohash 串解码。可选精度位数。",
     examples: [
-      { in: "39.9042,116.4074", param: "precision=11", out: "wx4g0bm6c40", desc: "北京天安门坐标" },
-      { in: "48.669,-4.329", param: "precision=8", out: "gbsuv7zt", desc: "8 位精度约 ±19m" },
-      { in: "wx4g0bm6c40", out: "39.904201,116.4074", desc: "反解回坐标" },
+      { in: "39.9042,116.4074", param: "方向：编码；precision=11（±0.06m）", out: "wx4g0bm6c40", desc: "北京天安门坐标", run: { dir: "encode", params: { precision: "11" } } },
+      { in: "48.669,-4.329", param: "方向：编码；precision=8（±19m）", out: "gbsuv7zt", desc: "8 位精度约 ±19m", run: { dir: "encode", params: { precision: "8" } } },
+      { in: "wx4g0bm6c40", param: "方向：解码（11 位 geohash → 格子中心点，非原始坐标）", out: "39.904201,116.4074", desc: "反解回坐标", run: { dir: "decode" } },
     ],
     tips: [
       "前缀相同的 geohash 地理位置相邻，所以能拿来做「附近的人」检索。",

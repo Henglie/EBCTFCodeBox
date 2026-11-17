@@ -83,7 +83,7 @@ export default {
       "The DEFLATE body = LZ77 sliding-window matching + Huffman coding. Raw deflate is just the pure compressed data, without zlib's 2-byte header or gzip's 10-byte header and checksum trailer. The tool processes both directions using the browser.",
     usage: "Paste bare deflate data to decompress to the original; the reverse compresses.",
     examples: [
-      { in: "raw deflate bytes", out: "the decompressed original" },
+      { in: "raw deflate bytes (raw deflate of Hello, hex f348cdc9c90700)", param: "Direction: decode (raw deflate → original), no zlib/gzip header", out: "Hello", desc: "raw deflate has no zlib header; RFC 1951 defines the deflate stream, RFC 1950 is the wrapped zlib format; do not confuse them", run: { dir: "decode", inputHex: "f348cdc9c90700" } },
     ],
     tips: ["No 1F8B (gzip) and no 78 (zlib) header, but you suspect it's compressed → try raw deflate. It's what the compressed data stored inside a ZIP is."],
     aka: ["raw deflate", "裸deflate", "deflate", "deflate raw", "裸压缩流", "无头deflate", "DEFLATE解压", "LZ77+Huffman", "inflate", "raw inflate", "deflate解码", "裸压缩数据"],

@@ -304,7 +304,7 @@ export default {
       "加密：字母在外盘定位到索引 i → 取内盘 $[(i + shift) \\bmod 26]$；解密反查。每处理 period 个字母，累计偏移 $shift \\mathrel{+}= periodicShift$——这就是「转动内盘」，让同一明文字母在不同位置映射到不同密文，是多表替换。periodicShift=0 时退化为单表。",
     usage: "参数：内盘 26 字母混合表（默认 QWERTZUIOPASDFGHJKLYXCVBNM）、初始偏移、周期转动步数（0=单表）、每几个字母转一次。非字母原样保留。",
     examples: [
-      { in: "HELLO", param: "内盘默认 shift=0 转动=0", out: "按内盘单表替换的结果", desc: "转动=0 即单表" },
+      { in: "HELLO", param: "内盘默认表 QWERTZUIOPASDFGHJKLYXCVBNM，initialShift=0，periodicShift=0（转动=0 即单表）", out: "ITSSG", desc: "本工具是「密钥字母表+周期移位」变体，没有 dCode 经典盘式的 stabilis/mobilis+increment 概念，官方例不可直接复现", run: { dir: "encode", params: {"cipherAlphabet": "QWERTZUIOPASDFGHJKLYXCVBNM", "initialShift": 0, "periodicShift": 0} } },
     ],
     tips: ["Alberti 是多表替换的祖师爷，比 Vigenère 早几十年，圆盘转动就是换表。", "转动步数设 0 就成了简单替换密码；设了才有多表强度。"],
     aka: ["alberti", "阿尔伯蒂圆盘", "alberti cipher", "圆盘密码", "阿尔伯蒂密码", "cipher disk",
@@ -387,7 +387,7 @@ export default {
       "因为变换对称，encode 和 decode 是同一个函数——自反。字母表可选 I/J 合并或省略 Q，明文奇数补 X。",
     usage: "填关键词1、关键词2、排列方向（纵排/横排）、字母表约定。编码解码同一操作（自反）。",
     examples: [
-      { in: "HELP", param: "key1=EXAMPLE key2=KEYWORD 纵排", out: "双字母替换结果", desc: "再跑一遍还原" },
+      { in: "HELP", param: "key1=EXAMPLE key2=KEYWORD，纵排（vertical），字母表 ij 档", out: "HECM", desc: "双字母替换；dCode 官方例网格去 W 留 IJ，本工具仅 ij/noq 两档，官方例不可直接复现；注意与 Two-square/Four-square 等变体区分", run: { dir: "encode", params: {"key1": "EXAMPLE", "key2": "KEYWORD", "orientation": "vertical", "alphabet": "ij"} } },
     ],
     tips: ["自反：同一参数下编码结果再编码一次就回到原文，不确定方向直接再跑一遍。", "纵排同列 / 横排同行的字母对会原样保留，这是 Two-square 的固有特性。"],
     aka: ["two-square", "twosquare", "双方密码", "two square cipher", "double playfair", "双方形密码",

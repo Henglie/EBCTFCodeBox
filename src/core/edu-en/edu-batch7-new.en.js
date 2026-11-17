@@ -320,36 +320,45 @@ export default {
   scoutStick: {
     what: "Scout stick cipher — dCode's Code Chinois (Chinese code), also called Samurai / samurai code. It splits every letter into two stick counts: the vowel index and the consonant index after that vowel; horizontal bars stand for vowels, vertical bars for consonants. dCode's classic example `|||- ||- ---- |||- --` decodes to DCODE.",
     principle:
-      "**Vowel index** is fixed as A=1, E=2, I=3, O=4, U=5, Y=6. To encode a consonant, find the nearest vowel before it, then count which consonant it is after that vowel:\n" +
-      "- B = 1st consonant after A → 1 horizontal + 1 vertical; C = 2nd → 1 horizontal + 2 vertical; D = 3rd → 1 horizontal + 3 vertical.\n" +
-      "- L = 3rd consonant after I → 3 horizontal + 3 vertical (J=1, K=2, L=3).\n" +
-      "- W = 2nd consonant after U → 5 horizontal + 2 vertical; Z = 1st consonant after Y → 6 horizontal + 1 vertical.\n\n" +
-      "**Vowels themselves** have consonant index 0: A = 1 horizontal, E = 2 horizontal, I = 3 horizontal, O = 4 horizontal, U = 5 horizontal, Y = 6 horizontal. Y counts as a vowel, so Y itself is 6 horizontal bars, and only then does Z fall back to being the 1st consonant after Y.\n\n" +
-      "**Writing order**: dCode's displayed examples put the vertical bars first (D = `|||-`), and this tool's default `vh` does the same; if a challenge writes horizontal bars first (D = `-|||`), switch the parameter to `hv`. The horizontal/vertical bars of each letter are written consecutively, letters are separated by spaces, and spaces in the plaintext are shown as `/`.\n\n" +
-      "**Samurai variant**: swap the roles of horizontal and vertical bars — the number of horizontal bars now gives the consonant index and the number of vertical bars the vowel index. The same DCODE becomes `|--- |-- |||| |--- ||` under Samurai.\n\n" +
-      "**Letter case**: the sticks carry no case information, so decoding always outputs uppercase; non-letter characters pass through unchanged.",
+      "**Vowel index** is fixed as A=1, E=2, I=3, O=4, U=5, Y=6. **Horizontal bars = vowel index**; **vertical bars = the consonant's ordinal after that vowel in the alphabet** (0 for the vowel itself).\n\n" +
+      "**Full groups** (alphabetical order, never crossing the next vowel):\n" +
+      "- A (1 horizontal): B=1 vertical, C=2, D=3;\n" +
+      "- E (2 horizontal): F=1, G=2, H=3;\n" +
+      "- I (3 horizontal): J=1, K=2, L=3, M=4, N=5;\n" +
+      "- O (4 horizontal): P=1, Q=2, R=3, S=4, T=5;\n" +
+      "- U (5 horizontal): V=1, W=2, X=3;\n" +
+      "- Y (6 horizontal): Z=1.\n\n" +
+      "**The M/N boundary**: M is the 4th consonant after I and N the 5th (3 horizontal + 4/5 vertical), **not** the 1st/2nd after O — M and N sit before O in the alphabet, so the O group starts counting at P. Likewise Y counts as a vowel: Y itself is 6 horizontal and 0 vertical, and only Z is the 1st consonant after Y.\n\n" +
+      "**Web compromise: crossing glyphs vs. this tool's linear text**: dCode's alphabet draws the bars as **crossing strokes** (stacked horizontal bars give the vowel index, vertical bars crossing them give the consonant index). This tool's output is a **linear text notation of the same rule**, because a text box cannot draw crossings. There are two orders, both meaning exactly the same: the default `vh` writes vertical bars first (D = `|||-`, matching dCode's displayed example), `hv` writes horizontal bars first (D = `-|||`). Each letter's bars are written consecutively, letters are separated by spaces, and spaces in the plaintext become `/`. The linear form is not a different cipher; decoding must return the same letters.\n\n" +
+      "**Samurai variant**: swap the roles of horizontal and vertical bars (equivalent to rotating the classic glyph by 90°) — vertical bars now give the vowel index and horizontal bars the consonant index. The same DCODE becomes `|--- |-- |||| |--- ||`.\n\n" +
+      "**Letter case**: the bar counts carry no case information, so decoding always outputs uppercase; non-letters pass through unchanged, and characters that clash with `|`, `-` or `/` are backslash-escaped.\n\n" +
+      "**Figures**: two self-made 26-slot charts for the classic and Samurai forms (gallery ids `scoutstickclassic` / `scoutsticksamurai`); every slot's bar counts were checked against the mapping table. The dCode originals are kept for internal comparison only — not copied, not traced.",
     usage:
       "Encoding: enter letter text, choose the variant (classic/samurai) and the writing order (vh/hv); the output is a stick string made of `|`, `-`, spaces and `/`.\n\n" +
       "Decoding: paste the stick string and pick the same variant and order; each space-separated token is one letter and `/` is a space in the plaintext. Letters must be separated by spaces, otherwise a run such as `|||-` is read as a single glyph.\n\n" +
       "Troubleshooting: a \"vowel index out of range\" error usually means the variant is inverted; a \"glyph order\" error usually means vh/hv is inverted; an error like \"only 3 consonants after A\" means the vertical-bar count exceeds the consonants that actually exist after that vowel (for example there can never be a 4th consonant after A).",
     examples: [
-      { in: "DCODE", param: "classic, order=vh", out: "|||- ||- ---- |||- --", desc: "dCode's official example: D C O D E" },
-      { in: "L", param: "classic, order=vh", out: "|||---", desc: "L = 3rd consonant after I: 3 vertical + 3 horizontal" },
-      { in: "DCODE", param: "classic, order=hv", out: "-||| -|| ---- -||| --", desc: "Horizontal-first notation, exactly the same meaning" },
-      { in: "DCODE", param: "samurai, order=vh", out: "|--- |-- |||| |--- ||", desc: "The Samurai variant swaps the roles of horizontal and vertical bars" },
-      { in: "Hello, World!", param: "classic, order=vh", out: "|||-- -- |||--- |||--- ---- , / ||----- ---- |||---- |||--- |||- !", desc: "Non-letters pass through and spaces become /; decoding always outputs uppercase" },
+      { in: "DCODE", param: "classic, order=vh", out: "|||- ||- ---- |||- --", desc: "dCode's classic example D C O D E; default vh, vertical bars first", run: { dir: "encode", params: { variant: "classic", order: "vh" } } },
+      { in: "DCODE", param: "classic, order=hv", out: "-||| -|| ---- -||| --", desc: "Same text in horizontal-first hv; exactly the same meaning", run: { dir: "encode", params: { variant: "classic", order: "hv" } } },
+      { in: "DCODE", param: "samurai, order=vh", out: "|--- |-- |||| |--- ||", desc: "The Samurai variant swaps the roles of horizontal and vertical bars", run: { dir: "encode", params: { variant: "samurai", order: "vh" } } },
+      { in: "MN", param: "classic, order=vh", out: "||||--- |||||---", desc: "Boundary: M = 3 horizontal + 4 vertical, N = 3 horizontal + 5 vertical, both in the I group", run: { dir: "encode", params: { variant: "classic", order: "vh" } } },
+      { in: "Y Z", param: "classic, order=vh", out: "------ / |------", desc: "Y = 6 horizontal + 0 vertical, Z = 6 horizontal + 1 vertical; the plaintext space becomes /", run: { dir: "encode", params: { variant: "classic", order: "vh" } } },
+      { in: "Hello, World!", param: "classic, order=vh", out: "|||-- -- |||--- |||--- ---- , / ||----- ---- |||---- |||--- |||- !", desc: "Non-letters pass through and spaces become /; decoding always outputs uppercase", run: { dir: "encode", params: { variant: "classic", order: "vh" } } },
+      { in: "|||||---", param: "classic, order=vh", out: "N", desc: "Reverse check: 3 horizontal + 5 vertical decodes to N, not the 1st consonant after O", run: { dir: "decode", params: { variant: "classic", order: "vh" } } },
     ],
     formulas: [
       { tex: "\\text{letter} = \\mathrm{V}[\\,h\\,]\\text{-th consonant after } \\mathrm{V}[\\,h\\,]", caption: "Classic code: h is the vowel index (1-6) and v the consonant index after it; v=0 means the vowel itself" },
       { tex: "\\text{Samurai}: h \\leftrightarrow v", caption: "The Samurai variant swaps the roles of horizontal and vertical bars; everything else is unchanged" },
     ],
     tips: [
+      "Group shortcut: A→BCD, E→FGH, I→JKLMN, O→PQRST, U→VWX, Y→Z; M/N belong to I (its 4th and 5th consonants), not to O, and the O group starts counting at P.",
       "Recognition: the whole string contains only `|`, `-` and spaces (maybe `/`), with letters grouped by spaces — that is almost certainly this cipher; unlike Morse (dots and dashes), the characters here are vertical and horizontal bars.",
+      "The original figure draws crossing bars, but a web page can only write them linearly: `vh` (vertical first, D = `|||-`) and `hv` (horizontal first, D = `-|||`) are two orders of one rule, not two ciphers; if it will not decode, switch the order or the variant first.",
       "Do not confuse it with counting-rod numerals: those use Unicode rod symbols such as 𝍠-𝍱 to record decimal numbers, whereas this op is dCode's Code Chinois, which encodes letters by the counts of horizontal and vertical bars.",
       "Also do not confuse it with the Scytale (cipher rod): the Scytale wraps a strip of cloth around a stick to transpose the letters; this op has nothing to do with the physical shape of a stick, it merely draws sticks as horizontal and vertical lines.",
       "Y is the 6th vowel: Y itself = 6 horizontal bars, Z = 6 horizontal + 1 vertical. Many implementations miss Y/Z, so these two letters make a good check.",
       "Only B/C/D follow A and only Z follows Y; a vertical-bar count above that limit cannot belong to the vowel, so first check whether the variant is inverted.",
-      "Source: the FAQ and examples on dCode.fr/code-chinois (visited 2026-10); both variants (classic/Samurai) and both writing orders (vh/hv) match the page's conventions.",
+      "Source: rules, examples and the current web alphabet on dCode.fr/code-chinois (visited 2026-11-15). The original code-chinois.png / code-samurai.png remain dCode copyright, internal comparison only; the charts are self-made SVGs built from the mapping table.",
     ],
     aka: ["童子军木棍密码", "童子军密码", "木棍密码", "棍棒密码", "棍码", "童军码",
       "中国码", "中国密码", "中国木棍密码", "武士码", "武士密码", "Samurai code", "Samurai cipher",

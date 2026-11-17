@@ -20,9 +20,7 @@ export default {
       "（含注释在文件里的字节偏移）。完全无注释时明确说「未发现任何注释域」；\n" +
       "非 ZIP/EOCD 被截断/条目数与目录不符/RAR/ZIP64 均中文报错。",
     examples: [
-      { in: "（拖入）2 条目 ZIP：a.txt 条目注释 flag{zip_entry_comment}，b.txt 无注释，档案注释 see the EOCD", param: "", out: "flag{zip_entry_comment}", desc: "条目注释与档案注释同时提取，报告含两者与偏移" },
-      { in: "（拖入）无注释 ZIP", param: "", out: "未发现任何注释域", desc: "空注释是正常状态，明示而非报错" },
-      { in: "（拖入）JPEG 头 + 带注释 ZIP 拼接文件", param: "", out: "拼接", desc: "EOCD 相对偏移自动修正并告警（图片隐写常用布局）" },
+      { in: "带档案注释的 ZIP（示例 125 字节）", param: "输入 ZIP 字节，提取 EOCD 档案注释与条目注释", out: "see the EOCD", desc: "注释按 ZIP APNOTE 6.3.x 的编码处理：EOCD 标志位决定 CP437 或 UTF-8；本例为 ASCII 兼容字节", run: { dir: "run", inputHex: "504b0304140000000000c141715d86a61036050000000500000005000000612e74787468656c6c6f504b01021400140000000000c141715d86a610360500000005000000050000000000000000000000800100000000612e747874504b0506000000000100010033000000280000000c007365652074686520454f4344", match: "contains" } },
     ],
     formulas: [
       { tex: "\\text{EOCD}+20 = \\text{len}_{\\text{archComment}}(2,\\text{LE}),\\ \\text{EOCD}+22 = \\text{comment}", caption: "档案注释定位（APPNOTE §4.3.16）" },

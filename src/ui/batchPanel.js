@@ -30,6 +30,7 @@
 
 import { connectSpecialDraft, newDraftIdentity } from './workspaceDrafts.js';
 import { withLimitContext } from '../core/limitGuard.js';
+import { batchCsvSection } from './batchCsvSection.js';
 
 const FALLBACK = {
   "ui.batch.title": "批量处理",
@@ -137,6 +138,14 @@ function ensureStyles() {
     ".batch-panel .bp-fail{color:var(--error)}",
     ".batch-panel .bp-skip{color:var(--on-surface-var)}",
     ".batch-panel .bp-err{font-size:var(--fs-xs,13px);color:var(--on-surface-var);word-break:break-all}",
+    ".batch-panel .bp-csv{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--outline-var);border-radius:var(--r-lg,16px);background:var(--surface-1)}",
+    ".batch-panel .bp-csv-title{font-weight:600;font-size:14px}",
+    ".batch-panel .bp-csv-errors{display:flex;flex-direction:column;gap:2px;max-height:120px;overflow:auto;white-space:pre-wrap}",
+    ".batch-panel .bp-csv-errors:empty{display:none}",
+    ".batch-panel .bp-csv-files{word-break:break-all}",
+    ".batch-panel .bp-csv-timeout-label{display:inline-flex;align-items:center;gap:6px}",
+    ".batch-panel .bp-csv-timeout{font:inherit;width:84px;min-height:40px;padding:4px 10px;border-radius:var(--r-md,12px);border:1px solid var(--outline-var);background:var(--surface-1);color:var(--on-surface)}",
+    ".batch-panel .bp-csv-timeout:disabled{opacity:.4}",
     ".batch-dialog{max-width:min(1040px,96vw)}",
     ".batch-dialog .batch-panel{overflow:auto;min-height:0;max-height:calc(82vh - 92px);padding-right:2px}",
   ].join("\n");
@@ -266,6 +275,31 @@ export function batchPanel(ctx) {
     fileInput,
     dirInput,
   );
+
+  // CSV 批量任务（可选）：依赖由 main.js 注入；缺依赖时整块不出现，退回纯文件批处理。
+  let csvNode = null;
+  if (typeof c.tasksFromCsv === "function" && typeof c.runTasks === "function" && typeof c.buildTemplate === "function") {
+    try {
+      csvNode = batchCsvSection({
+        op: c.opSpec || c.op || null,
+        buildTemplate: c.buildTemplate,
+        tasksFromCsv: c.tasksFromCsv,
+        resultsToCsv: c.resultsToCsv,
+        resultsToJson: c.resultsToJson,
+        collectArtifacts: c.collectArtifacts,
+        artifactsToZipEntries: c.artifactsToZipEntries,
+        runTasks: c.runTasks,
+        cancelRun: c.cancelRun,
+        buildZip: c.buildZip,
+        download: downloadBytes,
+        t: dict,
+      });
+      // 放在拖入区之前：CSV 是「按行下发任务」，与「多文件同一 op」并列而非替代。
+      root.insertBefore(csvNode, drop);
+    } catch (e) {
+      note("CSV 区块初始化失败：" + ((e && e.message) ? e.message : String(e)));
+    }
+  }
 
   function renderNotes() {
     notesBox.textContent = notes.join("\n");
@@ -488,7 +522,11 @@ export function batchPanel(ctx) {
     const params = Object.assign({}, c.params || {});
     if (allowAllRun) params._allowLimitOverride = true;
     const wantDecode = params.__dir === "decode";
-    const fn = (typeof op.run === "function") ? op.run : (wantDecode ? op.decode : op.encode);
+    // 明确的方向优先于 run：双向算法保留的兼容 run 不得把「加密」带去解密。
+    const dir = op.direction || params.__dir;
+    const directed = dir === "encode" ? op.encode : dir === "decode" ? op.decode : null;
+    const fn = (typeof directed === "function") ? directed
+      : (typeof op.run === "function") ? op.run : (wantDecode ? op.decode : op.encode);
     if (typeof fn !== "function") return { bytes, text: "", note: t("ui.batch.noOp") };
     let input = "";
     if (op.acceptsBytes) {
@@ -702,7 +740,8 @@ export function batchPanel(ctx) {
     if (busy) return Promise.resolve();
     return addDataTransfer(dt);
   };
-  root.isBusy = () => busy;
+  // CSV 批次在途也算忙：否则关窗会悄悄丢掉正在跑的整批结果。
+  root.isBusy = () => busy || !!(csvNode && typeof csvNode.isBusy === "function" && csvNode.isBusy());
   root.getState = () => ({
     entries: entries.map((e) => ({
       id: e.id, name: e.name, size: e.size, status: e.status, reason: e.reason, ms: e.ms,
@@ -735,6 +774,6 @@ export function batchPanel(ctx) {
     clear: clearQueue,
   });
   root.ready = draft.ready;
-  root.dispose = () => { allowAllRun = false; draft.dispose(); disposed = true; generation++; token?.cancel(t('ui.batch.cancelReason')); };
+  root.dispose = () => { allowAllRun = false; draft.dispose(); disposed = true; generation++; token?.cancel(t('ui.batch.cancelReason')); csvNode?.dispose?.(); };
   return root;
 }

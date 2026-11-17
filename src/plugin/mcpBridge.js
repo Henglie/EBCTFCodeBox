@@ -534,7 +534,9 @@ function clampJsonResult(obj) {
       isError: true,
     };
   }
-  if (text.length <= MAX_RESULT_JSON_CHARS) return { text, isError: false };
+  // 预截断已经发生（text/content 被切过）时同样必须判错，否则调用方拿到残缺字段却以为成功。
+  const preTruncated = copy.textTruncated === true || copy.contentTruncated === true;
+  if (text.length <= MAX_RESULT_JSON_CHARS) return { text, isError: preTruncated };
 
   for (const field of ["text", "content"]) {
     if (typeof copy[field] !== "string") continue;
@@ -547,7 +549,8 @@ function clampJsonResult(obj) {
     copy[`${field}Truncated`] = true;
     copy[`${field}Length`] = originalLen;
     text = JSON.stringify(copy, null, 2);
-    if (text.length <= MAX_RESULT_JSON_CHARS) return { text, isError: false };
+    // 已发生截断：必须显式判错，避免调用方拿到残缺数据却以为成功。
+    if (text.length <= MAX_RESULT_JSON_CHARS) return { text, isError: true };
   }
 
   // 极端情况：文件元数据本身过大。base64 是本可重取的派生内容，优先省略并标记。
@@ -562,7 +565,8 @@ function clampJsonResult(obj) {
     copy.inlineOmittedReason =
       `结果 JSON 超过 ${MAX_RESULT_JSON_CHARS} 字符上限，已省略 base64；请使用 outputDir 落盘后读取路径。`;
     text = JSON.stringify(copy, null, 2);
-    if (text.length <= MAX_RESULT_JSON_CHARS) return { text, isError: false };
+    // base64 被省略同属结果残缺，仍要判错，只把落盘路径作为恢复方式。
+    if (text.length <= MAX_RESULT_JSON_CHARS) return { text, isError: true };
   }
 
   return {
@@ -628,7 +632,12 @@ function structuredErrorPayload(e, { allowOverLimit = false } = {}) {
 // @returns {Promise<{content:{type:string,text:string}[], isError?:boolean}>}
 // ---------------------------------------------------------------------------
 async function dispatchMcpTool(name, args = {}) {
-  const wrap = (text, isError = false) => ({ content: [{ type: "text", text: clampText(text) }], isError });
+  const wrap = (text, isError = false) => {
+    const raw = String(text);
+    const out = clampText(raw);
+    // 文本被截断（长度变化）时置 isError，避免「成功但结果残缺」。
+    return { content: [{ type: "text", text: out }], isError: isError || out.length !== raw.length };
+  };
   const json = (obj, isError = false) => {
     const capped = clampJsonResult(obj);
     return { content: [{ type: "text", text: capped.text }], isError: isError || capped.isError };

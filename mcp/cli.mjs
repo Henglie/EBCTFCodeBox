@@ -19,8 +19,8 @@
  *      --timeout <ms> 单次调用总超时（默认 30s；0=不限时；也可设 EBCTF_MCP_CALL_TIMEOUT_MS）。
  * 退出码：0 成功；1 工具返回 isError；2 用法错误。
  */
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { resolve, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const BRIDGE = new URL("../src/plugin/mcpBridge.js", import.meta.url);
@@ -39,6 +39,7 @@ function usage() {
                           [--direction encode|decode|run] [--param k=v ...]
                           [--out <目录>] [--base64] [--allow-over-limit]
                           产物 >128KB 时必须给 --out，否则显式报错（不静默丢内容）
+                          带 --out 时文本结果同时写入 <目录>/result.txt
   read     读本地文件      --file <路径> [--max-bytes N] [--encoding auto|utf8|hex|base64]
 
 全局：--json（原始 MCP JSON 输出）
@@ -66,8 +67,8 @@ function parseArgs(argv) {
       if (eq < 0) throw new Error(`--param 需要 key=value：${val}`);
       const k = val.slice(0, eq);
       let v = val.slice(eq + 1);
-      if (/^-?\d+(\.\d+)?$/.test(v)) v = Number(v);
-      else if (v === "true" || v === "false") v = v === "true";
+      // --param 是字符串协议，类型由 op schema 决定（避免 key=123 被强转成数字后
+      // 让文本参数 op 崩溃，也保证与 stdio/HTTP 入口行为一致）。
       out.params[k] = v;
     } else {
       out[key] = val;
@@ -96,10 +97,30 @@ function printResult(r) {
   if (r && r.isError) process.exitCode = 1;
 }
 
+/*
+ * --out 时把同一条文本结果落到 <out>/result.txt。
+ * - 内容 = 与标准输出完全一致的 text 片段（多段用 "\n" 连接），UTF-8 无 BOM，末尾不额外补换行。
+ * - 不带 --out 的行为不变；--json 保持纯 JSON 输出，不落盘（避免破坏机器可读契约）。
+ * - 执行失败（含文本超限报错）不落盘，避免留下一份被截断却看似完整的结果文件。
+ */
+async function persistTextResult(r, outDir) {
+  const parts = (r && Array.isArray(r.content) ? r.content : [])
+    .filter((c) => c && c.type === "text")
+    .map((c) => String(c.text ?? ""));
+  if (!parts.length || (r && r.isError)) return;
+  const dir = resolve(outDir);
+  await mkdir(dir, { recursive: true });
+  const file = join(dir, "result.txt");
+  await writeFile(file, parts.join("\n"), "utf8");
+  process.stdout.write(`[--out] 文本结果已写入 ${file}\n`);
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const cmd = argv.shift();
-  if (!cmd || cmd === "-h" || cmd === "--help") { usage(); return; }
+  // 空调用属用法错误，按惯例 exit 2；显式 -h/--help 是主动求助，保持 exit 0。
+  if (!cmd) { usage(); process.exitCode = 2; return; }
+  if (cmd === "-h" || cmd === "--help") { usage(); return; }
   let args;
   try { args = parseArgs(argv); } catch (e) { process.stderr.write(String(e.message) + "\n"); usage(); process.exitCode = 2; return; }
 
@@ -161,6 +182,23 @@ async function main() {
   process.once("SIGINT", interrupt);
   process.once("SIGTERM", interrupt);
   try {
+    // 真正执行前按 ebctf_op_schema 的 param.type 一次性转型（复用同一 worker，不新起进程），
+    // 与 GUI 表单和 MCP 客户端保持同一套类型语义。
+    if (cmd === "run" && payload && payload.params && Object.keys(payload.params).length) {
+      try {
+        const sres = await runner.run("ebctf_op_schema", { opId: payload.opId }, { timeoutMs: resolveCallTimeoutMs(args.timeout) });
+        const schema = JSON.parse(sres.content?.[0]?.text ?? "{}");
+        const types = new Map((schema.params || []).map((p) => [p.key, p.type]));
+        for (const [k, v] of Object.entries(payload.params)) {
+          const t = types.get(k);
+          if (t === "number") payload.params[k] = Number(v);
+          else if (t === "bool" || t === "boolean") payload.params[k] = (v === true || v === "true");
+          else payload.params[k] = typeof v === "string" ? v : String(v);
+        }
+      } catch {
+        // schema 取不到时保持字符串：宁可让 op 自己兜底，也不要猜类型。
+      }
+    }
     r = await runner.run(tool, payload, { timeoutMs: resolveCallTimeoutMs(args.timeout), signal: controller.signal });
   } catch (e) {
     if (e && e.code === "EBCTF_TIMEOUT") r = timeoutToolResult(e);
@@ -172,7 +210,10 @@ async function main() {
     await runner.close();
   }
   if (args.json) process.stdout.write(JSON.stringify(r, null, 2) + "\n");
-  else printResult(r);
+  else {
+    printResult(r);
+    if (cmd === "run" && args.out) await persistTextResult(r, args.out);
+  }
   if (r && r.isError) process.exitCode = 1;
 }
 

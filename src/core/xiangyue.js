@@ -26,7 +26,7 @@
  *
  * 注：原始实现仅含解密方向（无 encrypt 函数），故本 op 单向 decode。
  */
-import { register } from "./registry.js";
+import { register, registerAlias } from "./registry.js";
 import { argon2id } from "./argon2id.js";
 import { chacha20Poly1305Decrypt, chacha20Poly1305Encrypt } from "./poly1305.js";
 import { aesDecrypt, aesEncrypt } from "./modern.js";
@@ -267,31 +267,6 @@ async function xiangyueDecode(text, password) {
   return { plaintext, kind, used };
 }
 
-// ============ 注册 ============
-register({
-  id: "xiangyue",
-  cat: "cn",
-  name: "想曰 XiangYue",
-  desc: "想曰全流程解密：中文/Emoji/零宽/日/韩/象形密文 → Argon2id/PBKDF2 + ChaCha20-Poly1305 + AES-CTR + zlib（默认口令内置；format1 派生较慢约数秒）",
-  family: "xiangyue",
-  familyLabel: "decrypt",
-  // Argon2id 64MiB 派生单次约 8-10 秒，且需用户显式提供口令，不适合自动穷举——
-  // 排除出一键解码的批量遍历，仅在用户主动选择时运行。
-  noAuto: true,
-  params: [
-    { sensitive: true, key: "password", label: "口令", type: "password", default: DEFAULT_PASSWORD, placeholder: "解密口令（默认内置）" },
-    { key: "showMeta", label: "附带识别信息", type: "bool", default: false },
-  ],
-  run: async (t, p) => {
-    const text = (t || "").trim();
-    if (!text) return "";
-    const password = (p && typeof p.password === "string" && p.password) || DEFAULT_PASSWORD;
-    const { plaintext, kind, used } = await xiangyueDecode(text, password);
-    if (p && p.showMeta) return `[映射:${kind} 格式:${used}]\n${plaintext}`;
-    return plaintext;
-  },
-});
-
 // ============ 加密方向（：严格逆推上方解密链，零新密码学代码） ============
 // 明文 → zlib deflate（RFC1950，解密 inflateThenUtf8 先试 raw 失败后试 deflate）
 // → AES-CTR → ChaCha20-Poly1305 → salt(16)‖nonce(12)‖ct‖tag(16)（format2）
@@ -449,15 +424,62 @@ async function encryptXiangyue(text, password, opts) {
   return b64ToMapped(bytesToB64(data), mapId, variant);
 }
 
-// ============ 注册：加密方向（与解密同族——族滑块「解密/加密」两档） ============
+// ============ 注册（单一双向算法 + 旧入口兼容） ============
+// 合并形态：一个 id=xiangyue 同时提供 encode（加密）与 decode（解密）；
+// 参数按方向显隐（label 注明「仅加密/仅解密」），算法层零改动。
+// 旧 id 兼容：xiangyueEnc 作为别名保留（不进列表），run 与 xiangyue.encode 为同一函数引用；
+// 旧调用 xiangyue.run（解密）保留，语义与合并前逐字节一致。
+async function xyDecodeRun(t, p) {
+  const text = (t || "").trim();
+  if (!text) return "";
+  const password = (p && typeof p.password === "string" && p.password) || DEFAULT_PASSWORD;
+  const { plaintext, kind, used } = await xiangyueDecode(text, password);
+  if (p && p.showMeta) return `[映射:${kind} 格式:${used}]\n${plaintext}`;
+  return plaintext;
+}
+async function xyEncodeRun(t, p) {
+  const text = t || "";
+  const password = (p && typeof p.password === "string" && p.password) || DEFAULT_PASSWORD;
+  const format = p && p.format === "1" ? 1 : 2;
+  const mapId = (p && p.mapId) || "zh";
+  const variant = p && p.randomPick ? "random" : "first";
+  return encryptXiangyue(text, password, { format, mapId, variant });
+}
+
 register({
-  id: "xiangyueEnc",
+  id: "xiangyue",
   cat: "cn",
-  name: "想曰 XiangYue 加密",
-  desc: "想曰加密方向：明文 → zlib + AES-CTR + ChaCha20-Poly1305 → 中文/日文/韩文/象形/Emoji/零宽/Base64 密文，可被本工具箱「想曰」解密自动识别还原（format2 快；format1 Argon2id 64MiB 单次数秒）",
-  family: "xiangyue",
-  familyLabel: "encrypt",
+  name: "想曰 XiangYue",
+  desc: "想曰双向：明文 → zlib + AES-CTR + ChaCha20-Poly1305 → 中文/日文/韩文/象形/Emoji/零宽/Base64 密文；反向自动识别映射并按 Argon2id/PBKDF2 解密（默认口令内置；format1 派生较慢约数秒）",
+  // Argon2id 64MiB 派生单次约 1.5 秒，且需用户显式提供口令，不适合自动穷举——
+  // 排除出一键解码的批量遍历，仅在用户主动选择时运行。
   noAuto: true,
+  params: [
+    { sensitive: true, key: "password", label: "口令（加密/解密通用）", type: "password", default: DEFAULT_PASSWORD, placeholder: "加解密口令（默认内置；两侧须一致）" },
+    { key: "format", label: "密文格式（仅加密方向）", type: "select", default: "2", options: [
+      { value: "2", label: "format2 · PBKDF2（快，推荐）" },
+      { value: "1", label: "format1 · Argon2id 64MiB（慢，单次数秒）" },
+    ] },
+    { key: "mapId", label: "密文外观（仅加密方向）", type: "select", default: "zh", options: [
+      { value: "zh", label: "中文" }, { value: "jp", label: "日文" }, { value: "kr", label: "韩文" },
+      { value: "pict", label: "象形文字" }, { value: "emoji", label: "Emoji" },
+      { value: "zw", label: "零宽字符" }, { value: "b64", label: "Base64" },
+    ] },
+    { key: "randomPick", label: "候选字符随机（仅加密方向）", type: "bool", default: false },
+    { key: "showMeta", label: "附带识别信息（仅解密方向）", type: "bool", default: false },
+  ],
+  encode: xyEncodeRun,
+  decode: xyDecodeRun,
+  run: xyDecodeRun, // 旧入口兼容：合并前 xiangyue.run 即解密
+});
+
+// 旧 id 别名：收藏 / 深链 / 配方 / 命令行里的 xiangyueEnc 继续可用，行为与合并前一致（run = 加密）。
+// 别名不进算法列表；界面打开它时跳到「想曰」并切到加密方向。
+registerAlias({
+  id: "xiangyueEnc",
+  aliasOf: "xiangyue",
+  dir: "encode",
+  name: "想曰 XiangYue 加密",
   params: [
     { sensitive: true, key: "password", label: "口令", type: "password", default: DEFAULT_PASSWORD, placeholder: "加密口令（默认内置；解密须用同一口令）" },
     { key: "format", label: "密文格式", type: "select", default: "2", options: [
@@ -471,15 +493,7 @@ register({
     ] },
     { key: "randomPick", label: "候选字符随机", type: "bool", default: false },
   ],
-  run: async (t, p) => {
-    const text = t || "";
-    const password = (p && typeof p.password === "string" && p.password) || DEFAULT_PASSWORD;
-    const format = p && p.format === "1" ? 1 : 2;
-    const mapId = (p && p.mapId) || "zh";
-    const variant = p && p.randomPick ? "random" : "first";
-    const cipher = await encryptXiangyue(text, password, { format, mapId, variant });
-    return cipher; // 纯密文输出：可直接复制回「想曰」解密（闭环），不掺说明行
-  },
+  run: xyEncodeRun,
 });
 
 export { xiangyueDecode, encryptXiangyue, ciphertextToBase64 };

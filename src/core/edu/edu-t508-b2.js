@@ -33,9 +33,9 @@ export default {
       "即每个字母加上「前一个密文字母」的值；解密 $P_i = (C_i - C_{i-1} + 26) \\bmod 26$。密钥就是密文自身，故相邻两个相同符号必然解出后者为 A（差为 0）。",
     usage: "unicode 档直接粘字母编解码；futurama2 档输出的是移位后的字母流（剧中原字形是图片/专用字体，没有 Unicode 编码——别处也查不到标准码位）。",
     examples: [
-      { in: "DCODE", out: "⎅☊⍜⎅⟒", desc: "dCode 官方例" },
-      { in: "⏃⌰⟟⟒⋏", out: "ALIEN", desc: "dCode 页面标题例，反向" },
-      { in: "FUTURAMA", param: "mode=futurama2", out: "FZSMDDPP", desc: "编码：dCode AL2 官方例（自密钥移位）" },
+      { in: "DCODE", param: "方向：编码（mode=unicode，dCode 成文 Unicode 表）", out: "⎅☊⍜⎅⟒", desc: "dCode 官方例", run: { dir: "encode", params: { mode: "unicode" } } },
+      { in: "⏃⌰⟟⟒⋏", param: "方向：解码（mode=unicode）", out: "ALIEN", desc: "dCode 页面标题例，反向", run: { dir: "decode", params: { mode: "unicode" } } },
+      { in: "FUTURAMA", param: "方向：编码；mode=futurama2（自密钥移位：C_i = P_i + C_{i-1}）", out: "FZSMDDPP", desc: "编码：dCode AL2 官方例（自密钥移位）", run: { dir: "encode", params: { mode: "futurama2" } } },
     ],
     tips: [
       "Futurama 剧中的 AL1/AL2 原字形只有图片与爱好者字体，Unicode 档用的是 dCode 唯一成文的 Unicode 对照表。",
@@ -93,9 +93,10 @@ export default {
       "组与组之间空格分隔，字符之间没有分隔（游程跨界合并——1000011+1000011 中间的 11 和 1 并成一个 111 游程）。解码按组对还原位流再按宽度切字符。",
     usage: "默认 7 位宽度（dCode/Codingame 口径），密文若解不动换 8 位试试。明文侧 7 位只收 0-127 的 ASCII、8 位收到 0-255——超界报错而不是静默错位。密文只含 0 和空白，其他字符一律报错。",
     examples: [
-      { in: "CC", out: "0 0 00 0000 0 000 00 0000 0 00", desc: "位流 10000111000011：1|0000|111|0000|11 五游程" },
-      { in: "%", out: "00 0 0 0 00 00 0 0 00 0 0 0", desc: "0100101 六游程" },
-      { in: "0 0 00 0000 0 000 00 0000 0 00", out: "CC", desc: "反向" },
+      { in: "CC", param: "方向：编码；width=7（默认，逐字符 7 位 ASCII）", out: "0 0 00 0000 0 000 00 0000 0 00", desc: "位流 10000111000011：1|0000|111|0000|11 五游程", run: { dir: "encode", params: { width: 7 } } },
+      { in: "%", param: "方向：编码；width=7", out: "00 0 0 0 00 00 0 0 00 0 0 0", desc: "0100101 六游程", run: { dir: "encode", params: { width: 7 } } },
+      { in: "0 0 00 0000 0 000 00 0000 0 00", param: "方向：解码；width=7（按 7 位重组字节）", out: "CC", desc: "反向：一元码游程拼回位流再切字节", run: { dir: "decode", params: { width: 7 } } },
+      { in: "A", param: "方向：编码；width=8（每字符 8 位）", out: "00 0 0 0 00 00000 0 0", desc: "8 位档：A=0x41=01000001 → 0|1|00000|1 四游程", run: { dir: "encode", params: { width: 8 } } },
     ],
     tips: [
       "识别特征：纯 0 + 空格，且组数是偶数（前缀组与数量组成对出现）。",

@@ -36,8 +36,8 @@ export default {
       "不足 5 字节时补 0 并用 `=` 填充，所以 base32 串长度是 8 的倍数，结尾常见一串 `=`。",
     usage: "粘 base32 文本一键解码；编码方向把原文转 base32。支持自定义码表。",
     examples: [
-      { in: "NBSWY3DP", out: "hello", desc: "全大写+数字，典型 base32 长相" },
-      { in: "JBSWY3DPEBLW64TMMQ======", out: "Hello World", desc: "结尾一长串 = 是它的标志" },
+      { in: "NBSWY3DP", param: "方向：解码", out: "hello", desc: "全大写+数字，典型 base32 长相；RFC 4648 默认档", run: { dir: "decode" } },
+      { in: "JBSWY3DPEBLW64TMMQ======", param: "方向：解码", out: "Hello World", desc: "结尾一长串 = 是它的标志", run: { dir: "decode" } },
     ],
     tips: [
       "只有大写字母 A-Z 和数字 2-7（没有 0/1/8/9），结尾常带多个 =，基本就是 base32。",
@@ -83,7 +83,8 @@ export default {
       "Ascii85 常用 `<~ ~>` 包裹，全零的 4 字节可压成一个 `z`。",
     usage: "粘 base85/Ascii85 文本解码；编码方向反向。Z85 变体见单独的 z85 功能。",
     examples: [
-      { in: "<~87cURDZ~>", out: "Hello", desc: "<~ ~> 是 Ascii85 的包裹标记" },
+      { in: "<~87cURDZ~>", param: "方向：解码；alphabet=Standard（Adobe Ascii85），输入带 <~ ~> 包裹", out: "Hello", desc: "<~ ~> 是 Ascii85 的包裹标记", run: { dir: "decode", params: { alphabet: "Standard", includeDelimiter: true } } },
+      { in: "Hello", param: "方向：编码；alphabet=Standard，includeDelimiter=true（输出带 <~ ~>）", out: "<~87cURDZ~>", desc: "编码方向即第一条的反向", run: { dir: "encode", params: { alphabet: "Standard", includeDelimiter: true } } },
     ],
     tips: ["出现 <~ ~> 包裹，或字符范围很宽（含标点符号）密度又高，考虑 base85。"],
     aka: ["ascii85", "base 85", "a85", "Base85", "Ascii85", "base85编码", "Adobe ASCII85", "Z85", "base85 encode", "八十五进制"],
@@ -94,7 +95,8 @@ export default {
     principle: "变长分组（每组 13 或 14 位），查 91 字符表。字符集包含大量标点，长相比较杂。",
     usage: "粘 basE91 文本解码，编码方向反向。支持自定义码表。",
     examples: [
-      { in: "fPNKd", out: "test", desc: "含标点、密度高" },
+      { in: "fPNKd", param: "方向：解码（默认 91 字符表）", out: "test", desc: "含标点、密度高", run: { dir: "decode" } },
+      { in: "test", param: "方向：编码（默认 91 字符表）", out: "fPNKd", desc: "编码方向即反向；5 字符对 4 字节", run: { dir: "encode" } },
     ],
     aka: ["base 91", "basE91", "Base91", "base91编码", "basE91编码", "b91", "base91 encode", "九十一进制", "高密度编码", "base91解码"],
   },
@@ -103,7 +105,10 @@ export default {
     what: "只用字母数字（0-9A-Za-z）的 base 编码，没有任何符号，常用于短链接和 ID。",
     principle: "把字节当大整数反复除 62 取余查表。字符集干净（无 +/=），URL 里可直接用。",
     usage: "粘 base62 串解码；编码方向反向。支持自定义码表。",
-    examples: [{ in: "AAwf93rvy4aWQVw", out: "hello world" }],
+    examples: [
+      { in: "AAwf93rvy4aWQVw", param: "方向：解码（0-9A-Za-z 码表，按大整数还原字节）", out: "hello world", desc: "纯字母数字、无符号无补齐", run: { dir: "decode" } },
+      { in: "hello world", param: "方向：编码（0-9A-Za-z 码表）", out: "AAwf93rvy4aWQVw", desc: "编码方向即反向", run: { dir: "encode" } },
+    ],
     tips: ["纯字母数字、没有任何符号也没有 = 补齐，长度不定，考虑 base62。"],
     aka: ["base 62", "b62", "Base62", "base62编码", "base62 encode", "六十二进制", "字母数字编码", "短链接编码", "0-9A-Za-z", "base62解码"],
   },

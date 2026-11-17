@@ -20,10 +20,10 @@ export default {
       "Key point: c is a content-rolling checksum seed, so any single-character tampering is detected at decode time — that is the essence of its misreading resistance.",
     usage: "Enter text (or BubbleBabble ciphertext) and run. encode produces the bubble string, decode restores. Input is processed as UTF-8 bytes; Chinese works.",
     examples: [
-      { in: "ping", param: "", out: "xisak-nerek-loxix", desc: "Official spec example" },
-      { in: "hello", param: "", out: "xipak-herek-serix", desc: "Classic English" },
-      { in: "123456789", param: "", out: "xesef-disof-gytuf-katof-movix", desc: "Digits" },
-      { in: "xisak-nerek-loxix", param: "", out: "ping", desc: "decode restores" },
+      { in: "ping", param: "Direction: encode (bytes → five-char bubblebabble groups)", out: "xisak-nerek-loxix", desc: "Official spec example", run: { dir: "encode" } },
+      { in: "hello", param: "Direction: encode", out: "xipak-herek-serix", desc: "Classic English", run: { dir: "encode" } },
+      { in: "123456789", param: "Direction: encode", out: "xesef-disof-gytuf-katof-movix", desc: "Digits", run: { dir: "encode" } },
+      { in: "xisak-nerek-loxix", param: "Direction: decode (hyphen-separated five-char groups back to bytes)", out: "ping", desc: "decode restores", run: { dir: "decode" } },
     ],
     tips: [
       "Vowel-consonant string starting and ending with 'x', hyphen-grouped (e.g. xisak-nerek-loxix) → BubbleBabble.",

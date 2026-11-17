@@ -14,10 +14,10 @@ export default {
       "计数可变长（`12W` = 12 个 W）或定长 N 位（`04A`）。变长模式下重复字符本身是数字会产生二义性（`121` 读不出 12 个 1 还是 1 个 21），定长 / 打包式才能无损承载纯数字数据（dCode 页面示例：11111111111122 → 12-1,2-2）。压缩率 $\\frac{原长-编码长}{原长}$，无重复时为负。",
     usage: "默认计前式 + 变长计数。解密选同一格式即可；数字密文请切「定长计数」或「打包式」。超长行程（>10^N-1）在定长档会自动分段（300 个 A → 99A+99A+99A+3A）。",
     examples: [
-      { in: "DDDDDCCCCOOODDE", param: "计后式（dCode 官方例）", out: "D5C4O3D2E1", desc: "15 字符压成 10 字符，压缩率 33%" },
-      { in: "D5C4O3D2E1", param: "计后式解密", out: "DDDDDCCCCOOODDE", desc: "往返无损" },
-      { in: "WWWWWWWWWWWWABC", param: "计前式", out: "12W1A1B1C", desc: "变长计数 12W" },
-      { in: "AABBB", param: "打包式", out: "02410342", desc: "hex：02 41 | 03 42（计数+值字节对）" },
+      { in: "DDDDDCCCCOOODDE", param: "计后式（charFirst，dCode 官方例）：字符+计数", out: "D5C4O3D2E1", desc: "15 字符压成 10 字符，变长计数；本工具支持计后式(charFirst)与计前式(countFirst)两档", run: { dir: "encode", params: {"fmt": "charFirst", "countMode": "var"} } },
+      { in: "D5C4O3D2E1", param: "计后式解码", out: "DDDDDCCCCOOODDE", desc: "往返无损", run: { dir: "decode", params: {"fmt": "charFirst", "countMode": "var"} } },
+      { in: "WWWWWWWWWWWWABC", param: "计前式（countFirst）：计数+字符", out: "12W1A1B1C", desc: "变长计数 12W", run: { dir: "encode", params: {"fmt": "countFirst", "countMode": "var"} } },
+      { in: "AABBB", param: "打包式（packed）：hex 计数+值字节对", out: "02410342", desc: "hex：02 41 | 03 42（计数+值字节对）", run: { dir: "encode", params: {"fmt": "packed"} } },
     ],
     tips: [
       "密文形如「数字与字母交替、数字多为一两位」优先怀疑 RLE；纯数字密文则需定长/打包口径。",

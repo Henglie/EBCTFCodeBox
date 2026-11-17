@@ -1,0 +1,292 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="1052" viewBox="0 0 1120 1052" role="img" aria-labelledby="ttl dsc">
+  <title id="ttl">童子军木棍密码 · Samurai 变体（横竖角色对调）</title>
+  <desc id="dsc">Samurai 变体：横竖角色对调，竖线数 = 元音序号，横线数 = 该元音之后第几个辅音；逐槽计数与经典码互为横竖互换。 本图为本项目按映射表逐槽自制，未复制任何外部图片。</desc>
+  <style>
+    svg { color: #111; }
+    @media (prefers-color-scheme: dark) { svg { color: #f2f2f2; } }
+    .card { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-opacity: .45; }
+    .hbar, .vbar { fill: currentColor; }
+    text { fill: currentColor; font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
+    .title { font-size: 26px; font-weight: 700; }
+    .sub { font-size: 13px; opacity: .82; }
+    .group { font-size: 14px; font-weight: 600; opacity: .9; }
+    .letter { font-size: 22px; font-weight: 700; }
+    .count { font-size: 10.5px; opacity: .66; font-family: ui-monospace, Consolas, monospace; }
+    .foot { font-size: 11px; opacity: .6; }
+  </style>
+  <text class="title" x="40" y="40">童子军木棍密码 · Samurai 变体（横竖角色对调）</text>
+  <text class="sub" x="40" y="70">竖线数 = 元音序号（A/E/I/O/U/Y = 1–6）；横线数 = 该元音之后第几个辅音（元音本身为 0）。</text>
+  <text class="sub" x="40" y="90">图中横竖笔画交叉排布；本工具文本输出是同一规则的线性写法——默认 vh 先竖后横，可选 hv 先横后竖。</text>
+  <text class="group" x="40" y="128">A 组 · 元音 A = 1 竖线；横线序号 B=1 · C=2 · D=3</text>
+  <g class="slot" data-letter="A" data-mode="samurai" data-h="0" data-v="1">
+    <rect class="card" x="40" y="140" width="160" height="104" rx="10"/>
+    <text class="letter" x="54" y="167">A</text>
+    <text class="count" x="188" y="165" text-anchor="end">0 横 · 1 竖</text>
+    <rect class="vbar" x="118" y="180" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="B" data-mode="samurai" data-h="1" data-v="1">
+    <rect class="card" x="216" y="140" width="160" height="104" rx="10"/>
+    <text class="letter" x="230" y="167">B</text>
+    <text class="count" x="364" y="165" text-anchor="end">1 横 · 1 竖</text>
+    <rect class="hbar" x="268" y="206" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="294" y="180" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="C" data-mode="samurai" data-h="2" data-v="1">
+    <rect class="card" x="392" y="140" width="160" height="104" rx="10"/>
+    <text class="letter" x="406" y="167">C</text>
+    <text class="count" x="540" y="165" text-anchor="end">2 横 · 1 竖</text>
+    <rect class="hbar" x="444" y="201.5" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="444" y="210.5" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="470" y="180" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="D" data-mode="samurai" data-h="3" data-v="1">
+    <rect class="card" x="568" y="140" width="160" height="104" rx="10"/>
+    <text class="letter" x="582" y="167">D</text>
+    <text class="count" x="716" y="165" text-anchor="end">3 横 · 1 竖</text>
+    <rect class="hbar" x="620" y="197" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="620" y="206" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="620" y="215" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="646" y="180" width="4" height="56" rx="1"/>
+  </g>
+  <text class="group" x="40" y="280">E 组 · 元音 E = 2 竖线；横线序号 F=1 · G=2 · H=3</text>
+  <g class="slot" data-letter="E" data-mode="samurai" data-h="0" data-v="2">
+    <rect class="card" x="40" y="292" width="160" height="104" rx="10"/>
+    <text class="letter" x="54" y="319">E</text>
+    <text class="count" x="188" y="317" text-anchor="end">0 横 · 2 竖</text>
+    <rect class="vbar" x="113.5" y="332" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="122.5" y="332" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="F" data-mode="samurai" data-h="1" data-v="2">
+    <rect class="card" x="216" y="292" width="160" height="104" rx="10"/>
+    <text class="letter" x="230" y="319">F</text>
+    <text class="count" x="364" y="317" text-anchor="end">1 横 · 2 竖</text>
+    <rect class="hbar" x="268" y="358" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="289.5" y="332" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="298.5" y="332" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="G" data-mode="samurai" data-h="2" data-v="2">
+    <rect class="card" x="392" y="292" width="160" height="104" rx="10"/>
+    <text class="letter" x="406" y="319">G</text>
+    <text class="count" x="540" y="317" text-anchor="end">2 横 · 2 竖</text>
+    <rect class="hbar" x="444" y="353.5" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="444" y="362.5" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="465.5" y="332" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="474.5" y="332" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="H" data-mode="samurai" data-h="3" data-v="2">
+    <rect class="card" x="568" y="292" width="160" height="104" rx="10"/>
+    <text class="letter" x="582" y="319">H</text>
+    <text class="count" x="716" y="317" text-anchor="end">3 横 · 2 竖</text>
+    <rect class="hbar" x="620" y="349" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="620" y="358" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="620" y="367" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="641.5" y="332" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="650.5" y="332" width="4" height="56" rx="1"/>
+  </g>
+  <text class="group" x="40" y="432">I 组 · 元音 I = 3 竖线；横线序号 J=1 · K=2 · L=3 · M=4 · N=5（M/N 属 I 组，不属 O 组）</text>
+  <g class="slot" data-letter="I" data-mode="samurai" data-h="0" data-v="3">
+    <rect class="card" x="40" y="444" width="160" height="104" rx="10"/>
+    <text class="letter" x="54" y="471">I</text>
+    <text class="count" x="188" y="469" text-anchor="end">0 横 · 3 竖</text>
+    <rect class="vbar" x="109" y="484" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="118" y="484" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="127" y="484" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="J" data-mode="samurai" data-h="1" data-v="3">
+    <rect class="card" x="216" y="444" width="160" height="104" rx="10"/>
+    <text class="letter" x="230" y="471">J</text>
+    <text class="count" x="364" y="469" text-anchor="end">1 横 · 3 竖</text>
+    <rect class="hbar" x="268" y="510" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="285" y="484" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="294" y="484" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="303" y="484" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="K" data-mode="samurai" data-h="2" data-v="3">
+    <rect class="card" x="392" y="444" width="160" height="104" rx="10"/>
+    <text class="letter" x="406" y="471">K</text>
+    <text class="count" x="540" y="469" text-anchor="end">2 横 · 3 竖</text>
+    <rect class="hbar" x="444" y="505.5" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="444" y="514.5" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="461" y="484" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="470" y="484" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="479" y="484" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="L" data-mode="samurai" data-h="3" data-v="3">
+    <rect class="card" x="568" y="444" width="160" height="104" rx="10"/>
+    <text class="letter" x="582" y="471">L</text>
+    <text class="count" x="716" y="469" text-anchor="end">3 横 · 3 竖</text>
+    <rect class="hbar" x="620" y="501" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="620" y="510" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="620" y="519" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="637" y="484" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="646" y="484" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="655" y="484" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="M" data-mode="samurai" data-h="4" data-v="3">
+    <rect class="card" x="744" y="444" width="160" height="104" rx="10"/>
+    <text class="letter" x="758" y="471">M</text>
+    <text class="count" x="892" y="469" text-anchor="end">4 横 · 3 竖</text>
+    <rect class="hbar" x="796" y="496.5" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="796" y="505.5" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="796" y="514.5" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="796" y="523.5" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="813" y="484" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="822" y="484" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="831" y="484" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="N" data-mode="samurai" data-h="5" data-v="3">
+    <rect class="card" x="920" y="444" width="160" height="104" rx="10"/>
+    <text class="letter" x="934" y="471">N</text>
+    <text class="count" x="1068" y="469" text-anchor="end">5 横 · 3 竖</text>
+    <rect class="hbar" x="972" y="492" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="972" y="501" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="972" y="510" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="972" y="519" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="972" y="528" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="989" y="484" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="998" y="484" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="1007" y="484" width="4" height="56" rx="1"/>
+  </g>
+  <text class="group" x="40" y="584">O 组 · 元音 O = 4 竖线；横线序号 P=1 · Q=2 · R=3 · S=4 · T=5</text>
+  <g class="slot" data-letter="O" data-mode="samurai" data-h="0" data-v="4">
+    <rect class="card" x="40" y="596" width="160" height="104" rx="10"/>
+    <text class="letter" x="54" y="623">O</text>
+    <text class="count" x="188" y="621" text-anchor="end">0 横 · 4 竖</text>
+    <rect class="vbar" x="104.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="113.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="122.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="131.5" y="636" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="P" data-mode="samurai" data-h="1" data-v="4">
+    <rect class="card" x="216" y="596" width="160" height="104" rx="10"/>
+    <text class="letter" x="230" y="623">P</text>
+    <text class="count" x="364" y="621" text-anchor="end">1 横 · 4 竖</text>
+    <rect class="hbar" x="268" y="662" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="280.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="289.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="298.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="307.5" y="636" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="Q" data-mode="samurai" data-h="2" data-v="4">
+    <rect class="card" x="392" y="596" width="160" height="104" rx="10"/>
+    <text class="letter" x="406" y="623">Q</text>
+    <text class="count" x="540" y="621" text-anchor="end">2 横 · 4 竖</text>
+    <rect class="hbar" x="444" y="657.5" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="444" y="666.5" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="456.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="465.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="474.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="483.5" y="636" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="R" data-mode="samurai" data-h="3" data-v="4">
+    <rect class="card" x="568" y="596" width="160" height="104" rx="10"/>
+    <text class="letter" x="582" y="623">R</text>
+    <text class="count" x="716" y="621" text-anchor="end">3 横 · 4 竖</text>
+    <rect class="hbar" x="620" y="653" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="620" y="662" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="620" y="671" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="632.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="641.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="650.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="659.5" y="636" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="S" data-mode="samurai" data-h="4" data-v="4">
+    <rect class="card" x="744" y="596" width="160" height="104" rx="10"/>
+    <text class="letter" x="758" y="623">S</text>
+    <text class="count" x="892" y="621" text-anchor="end">4 横 · 4 竖</text>
+    <rect class="hbar" x="796" y="648.5" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="796" y="657.5" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="796" y="666.5" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="796" y="675.5" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="808.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="817.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="826.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="835.5" y="636" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="T" data-mode="samurai" data-h="5" data-v="4">
+    <rect class="card" x="920" y="596" width="160" height="104" rx="10"/>
+    <text class="letter" x="934" y="623">T</text>
+    <text class="count" x="1068" y="621" text-anchor="end">5 横 · 4 竖</text>
+    <rect class="hbar" x="972" y="644" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="972" y="653" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="972" y="662" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="972" y="671" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="972" y="680" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="984.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="993.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="1002.5" y="636" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="1011.5" y="636" width="4" height="56" rx="1"/>
+  </g>
+  <text class="group" x="40" y="736">U 组 · 元音 U = 5 竖线；横线序号 V=1 · W=2 · X=3</text>
+  <g class="slot" data-letter="U" data-mode="samurai" data-h="0" data-v="5">
+    <rect class="card" x="40" y="748" width="160" height="104" rx="10"/>
+    <text class="letter" x="54" y="775">U</text>
+    <text class="count" x="188" y="773" text-anchor="end">0 横 · 5 竖</text>
+    <rect class="vbar" x="100" y="788" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="109" y="788" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="118" y="788" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="127" y="788" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="136" y="788" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="V" data-mode="samurai" data-h="1" data-v="5">
+    <rect class="card" x="216" y="748" width="160" height="104" rx="10"/>
+    <text class="letter" x="230" y="775">V</text>
+    <text class="count" x="364" y="773" text-anchor="end">1 横 · 5 竖</text>
+    <rect class="hbar" x="268" y="814" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="276" y="788" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="285" y="788" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="294" y="788" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="303" y="788" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="312" y="788" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="W" data-mode="samurai" data-h="2" data-v="5">
+    <rect class="card" x="392" y="748" width="160" height="104" rx="10"/>
+    <text class="letter" x="406" y="775">W</text>
+    <text class="count" x="540" y="773" text-anchor="end">2 横 · 5 竖</text>
+    <rect class="hbar" x="444" y="809.5" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="444" y="818.5" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="452" y="788" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="461" y="788" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="470" y="788" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="479" y="788" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="488" y="788" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="X" data-mode="samurai" data-h="3" data-v="5">
+    <rect class="card" x="568" y="748" width="160" height="104" rx="10"/>
+    <text class="letter" x="582" y="775">X</text>
+    <text class="count" x="716" y="773" text-anchor="end">3 横 · 5 竖</text>
+    <rect class="hbar" x="620" y="805" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="620" y="814" width="56" height="4" rx="1"/>
+    <rect class="hbar" x="620" y="823" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="628" y="788" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="637" y="788" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="646" y="788" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="655" y="788" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="664" y="788" width="4" height="56" rx="1"/>
+  </g>
+  <text class="group" x="40" y="888">Y 组 · 元音 Y = 6 竖线；横线序号 Z=1</text>
+  <g class="slot" data-letter="Y" data-mode="samurai" data-h="0" data-v="6">
+    <rect class="card" x="40" y="900" width="160" height="104" rx="10"/>
+    <text class="letter" x="54" y="927">Y</text>
+    <text class="count" x="188" y="925" text-anchor="end">0 横 · 6 竖</text>
+    <rect class="vbar" x="95.5" y="940" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="104.5" y="940" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="113.5" y="940" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="122.5" y="940" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="131.5" y="940" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="140.5" y="940" width="4" height="56" rx="1"/>
+  </g>
+  <g class="slot" data-letter="Z" data-mode="samurai" data-h="1" data-v="6">
+    <rect class="card" x="216" y="900" width="160" height="104" rx="10"/>
+    <text class="letter" x="230" y="927">Z</text>
+    <text class="count" x="364" y="925" text-anchor="end">1 横 · 6 竖</text>
+    <rect class="hbar" x="268" y="966" width="56" height="4" rx="1"/>
+    <rect class="vbar" x="271.5" y="940" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="280.5" y="940" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="289.5" y="940" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="298.5" y="940" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="307.5" y="940" width="4" height="56" rx="1"/>
+    <rect class="vbar" x="316.5" y="940" width="4" height="56" rx="1"/>
+  </g>
+  <text class="foot" x="40" y="1032">26 槽逐格核对映射表；dCode 原图仅作内部对照，未复制、未描摹。笔画只使用 currentColor，浅色与深色背景均可读。</text>
+</svg>

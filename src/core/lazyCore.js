@@ -11,7 +11,7 @@
  * 与主线程注册集合最终一致（单一事实源=registerAll 清单）。
  */
 import { OP_FILE_MAP, LAZY_FILE_ORDER } from "./lazyTables.generated.js";
-import { OPS } from "./registry.js";
+import { OPS, canonicalOpId } from "./registry.js";
 import { applyDetectPatches as replay1 } from "./detectExt.js";
 import { applyDetectPatches as replay2 } from "./detectExt2.js";
 import { applyDetectPatches as replay3 } from "./detectExt3.js";
@@ -39,8 +39,9 @@ function importFile(file) {
 
 /** 确保 op 已加载（stub 已升级为真实 op）。加载失败抛原始错误（调用方负责提示/重试）。 */
 export async function ensureOp(id) {
+  id = canonicalOpId(id); // 旧 id 按承接算法定位源文件
   const f = OP_FILE_MAP[id];
-  if (!f) return; // 未知 id（插件/旧 id）交给 getOp 的 LEGACY 兜底
+  if (!f) return; // 未知 id（插件）交给 getOp 兜底
   const op = OPS.find((o) => o.id === id);
   if (op && !op.__stub) return;
   await importFile(f);

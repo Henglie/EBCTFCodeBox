@@ -7,8 +7,8 @@ export default {
       "开头的零字节对应开头的 `0`，其余按大整数展开。没有分组、没有 padding，长度不固定。",
     usage: "解码：粘 base36 串还原原文。编码：把原文转成 base36。可自定义 36 字符码表。",
     examples: [
-      { in: "eax", out: "Hi" },
-      { in: "flag", param: "编码方向", out: "sf2tlz", desc: "反过来把明文编码" },
+      { in: "eax", param: "方向：解码；本工具编码方向是「字节串→大整数→36 进制文本」，解码即 36 进制串还原字节", out: "Hi", desc: "注意：dCode 的 base36 是「文本当 36 进制数→十进制」，与本工具方向相反，不要混用", run: { dir: "decode" } },
+      { in: "flag", param: "方向：编码（字节串→36 进制）", out: "sf2tlz", desc: "反过来把明文编码", run: { dir: "encode" } },
     ],
     tips: ["只有小写字母数字、没有大写也没有符号，长度不定，考虑 base36。", "它和 base16/62 一样是大整数进制编码，不是按块切位。"],
     aka: ["base 36", "b36", "36进制", "base36编码", "三十六进制", "36进制编码",
@@ -22,8 +22,9 @@ export default {
       "剩单个字节时用 2 位表示。字母表是 `0-9A-Z` 再加 ` $%*+-./:` 这 9 个符号，正好 45 个。",
     usage: "粘 base45 文本解码；编码方向把原文转 base45。注意空格是合法字符（码表第 37 位），不要随手删。",
     examples: [
-      { in: "BB8", out: "AB", desc: "2 字节 → 3 字符" },
-      { in: ".69", out: "Hi" },
+      { in: "BB8", param: "方向：解码（默认 RFC 9285 码表）", out: "AB", desc: "2 字节 → 3 字符", run: { dir: "decode" } },
+      { in: ".69", param: "方向：解码（默认码表）", out: "Hi", desc: "单字节 → 2 字符档", run: { dir: "decode" } },
+      { in: "AB", param: "方向：编码（默认码表）", out: "BB8", desc: "编码方向：2 字节 → 3 字符，与第一条互逆", run: { dir: "encode" } },
     ],
     formulas: [
       { tex: "n = b_0 \\times 256 + b_1,\\quad n = c_0 + c_1\\times 45 + c_2\\times 45^2", caption: "2 字节 ↔ 3 字符（小端 45 进制）" },
@@ -40,8 +41,9 @@ export default {
       "末尾不足的段按 6 位输出一个字符。空输入约定输出 `~`。",
     usage: "粘 base92 文本解码；编码方向反向。支持自定义码表。",
     examples: [
-      { in: "8q", out: "A", desc: "1 字节 8 位 → 末段 6 位规则" },
-      { in: ";L*", out: "Hi" },
+      { in: "8q", param: "方向：解码（默认 92 字符表）", out: "A", desc: "1 字节 8 位 → 末段 6 位规则", run: { dir: "decode" } },
+      { in: ";L*", param: "方向：解码（默认 92 字符表）", out: "Hi", desc: "两字符按 13 位段拼回", run: { dir: "decode" } },
+      { in: "A", param: "方向：编码（默认 92 字符表）", out: "8q", desc: "编码方向：单字节走末段 6 位，与第一条互逆", run: { dir: "encode" } },
     ],
     tips: ["字符范围很宽（含各种标点），密度又高，长度没有明显规律，考虑 base92。", "单独一个 `~` 代表空串，别当成乱码。"],
     aka: ["base 92", "b92", "92进制", "base92编码", "九十二进制", "高密度编码",

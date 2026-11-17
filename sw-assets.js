@@ -1,4 +1,4 @@
-self.__EBCTF_ASSET_REV = "734a40e9bc437b44";
+self.__EBCTF_ASSET_REV = "3b6518f1cf8881bd";
 self.__EBCTF_ASSETS = [
   "./",
   "./index.html",
@@ -135,7 +135,13 @@ self.__EBCTF_ASSETS = [
   "./src/core/barcodeGen.js",
   "./src/core/base.js",
   "./src/core/baseExt.js",
+  "./src/core/batchCsv.js",
   "./src/core/batchRun.js",
+  "./src/core/batchTaskContract.js",
+  "./src/core/batchTaskExecution.js",
+  "./src/core/batchTaskExport.js",
+  "./src/core/batchTaskRunner.js",
+  "./src/core/batchTaskWorker.js",
   "./src/core/bazeries.js",
   "./src/core/bcrypt.js",
   "./src/core/beaufortVariant.js",
@@ -502,6 +508,7 @@ self.__EBCTF_ASSETS = [
   "./src/core/imagefix.js",
   "./src/core/imgFft.js",
   "./src/core/imgMeta.js",
+  "./src/core/inputContract.js",
   "./src/core/invisibles.js",
   "./src/core/ioCoding.js",
   "./src/core/jefferson.js",
@@ -899,6 +906,7 @@ self.__EBCTF_ASSETS = [
   "./src/ui/allOpsView.js",
   "./src/ui/app.css",
   "./src/ui/appBranding.js",
+  "./src/ui/batchCsvSection.js",
   "./src/ui/batchPanel.js",
   "./src/ui/codeImageViewer.css",
   "./src/ui/codeImageViewer.js",

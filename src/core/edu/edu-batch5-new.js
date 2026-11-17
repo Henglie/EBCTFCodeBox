@@ -60,7 +60,7 @@ export default {
       "用一个数字密钥（如 81257）驱动两件事：\n\n1. 把数字念成英文单词（num2words），取其字母顺序构造一张 5×5 密钥方阵（I/J 合并）。\n2. 明文先按数字的各位分组、每组内部字母顺序反转，再用方阵做 Polybius 坐标替换。\n\n解密逆序还原。",
     usage: "填数字密钥（如 `81257`）。encode 加密、decode 解密。仅处理字母，非字母透传。密钥含 0 会导致分组异常，工具会拦截报错。",
     examples: [
-      { in: "HELLO", param: "key=81257", out: "cggmd", desc: "方阵替换 + 分组反转（输出可能带分组尾空格，trim 后可逆）" },
+      { in: "HELLO", param: "key=81257（分组反转+方阵替换）", out: "cggmd ", desc: "本工具数字转词用英文（TWENTY-THREE 等）；dCode/原版用法文（VINGT-TROIS），官方例不可直接复现；out 末尾空格是真实输出的一部分（exact match）", run: { dir: "encode", params: {"key": "81257"} } },
     ],
     tips: ["Bazeries 是「换位 + 替换」的混合密码，比纯替换难用频率分析直接打穿。"],
     aka: ["Bazeries", "巴泽里斯密码", "Bazeries cipher", "巴泽里密码", "Étienne Bazeries", "波利比奥斯变体", "Polybius变体", "数字分组反转", "换位替换混合密码", "法国密码", "巴泽利斯", "方阵替换密码"],

@@ -28,6 +28,9 @@ import { runMagic, cancelMagic, pauseMagic, resumeMagic } from "./core/magic/mag
 import { createResultToc } from "./ui/resultToc.js"; // 一键解码结果右侧浮动缩略目录
 import { batchPanel } from "./ui/batchPanel.js"; // 批处理面板（多文件 / 目录 + ZIP）
 import { planBatch as batchPlanBatch, runBatch as batchRunBatch, buildZip as batchBuildZip, makeCancelToken as batchMakeCancelToken } from "./core/batchRun.js"; // 批处理内核
+import { buildTemplate as csvBuildTemplate, tasksFromCsv as csvTasksFromCsv } from "./core/batchCsv.js"; // CSV 批量任务：模板与逐行解析
+import { resultsToCsv as csvResultsToCsv, resultsToJson as csvResultsToJson, collectArtifacts as csvCollectArtifacts, artifactsToZipEntries as csvArtifactsToZipEntries } from "./core/batchTaskExport.js"; // CSV 批量任务：结果导出
+import { createBatchTaskRunner } from "./core/batchTaskRunner.js"; // CSV 批量任务：独立 Worker 队列
 // fileAnalysis / imageAnalysis / audioAnalysis（智能分析三链，含 QR·pcap·inflate·音频子树）已改懒载，见 ensureAnalysisChains()
 import { loadLicense, OPENSOURCE_LICENSE, PUBLIC_KEY_B64 } from "./core/license.js";
 import { prepareLicenseBranding, resolveLicenseBranding } from './core/licenseBranding.js';
@@ -355,6 +358,23 @@ function exportTextAsFile(text, fname) {
  * 输出区以 ✗ 开头即记 status=error 并原样保留错误信息。
  * 报告可能含敏感数据，下载前走 cloudWarnGate 同款提示（云端部署时）。
  */
+/**
+ * 多输入框 → 一次调用的 (text, params)。
+ * 默认按 op.fieldsJoin 拼成单一输入串；op.fieldsMode === "slots" 的算法各输入同等级、不拼串，
+ * 原样放进 params.fields，并把声明了 mirrorParam 的字段同步到旧参数通道（批处理 / 配方 / 分享链接仍读它）。
+ */
+function fieldInvocation(op, values, params, areas = []) {
+  if (op.fieldsMode !== "slots") return { text: values.join(op.fieldsJoin ?? "\n"), params };
+  const next = { ...params, fields: {} };
+  op.fields.forEach((f, i) => {
+    // 字段框里是载入的二进制文件时，交真字节（框内 hex 只是显示）。
+    const raw = areas[i] && areas[i]._rawBytes;
+    next.fields[f.key] = raw ? { kind: "bytes", value: raw } : values[i];
+    if (f.mirrorParam) { state.params[f.mirrorParam] = values[i]; delete next[f.mirrorParam]; }
+  });
+  return { text: "", params: next };
+}
+
 function buildOpReport(op) {
   const inEl = document.getElementById("ioIn");
   const outEl = document.getElementById("ioOut");
@@ -371,7 +391,7 @@ function buildOpReport(op) {
     .filter(([, v]) => v !== undefined && v !== null && String(v) !== "")
     .map(([k, v]) => [k, String(v)]);
   const catName = (CATEGORIES.find((c) => c.id === op.cat) || {}).name || op.cat;
-  const dirLabel = op.run ? "run" : (state.dir === "encode" ? "encode" : "decode");
+  const dirLabel = op.run && !(op.encode || op.decode) ? "run" : (state.dir === "encode" ? "encode" : "decode");
   const ts = new Date().toISOString();
   const json = {
     app: "EBCTF CodeBox",
@@ -1015,6 +1035,8 @@ function selectOp(id) {
     ensureOp(id).then(() => { if (location.hash === "#/op/" + id) selectOp(id); }).catch((e) => toast(String((e && e.message) || e)));
     return;
   }
+  const alias = op.__aliasOf;
+  if (alias) { selectOp(alias.id); applyAliasDirection(alias); return; }
   state.view = "op";
   state.opId = id;
   state.params = defaultParams(op);
@@ -1123,6 +1145,12 @@ function applyRoute() {
   }
 }
 // 与 selectOp 相同，但不再回写 hash（本身就是被 hash 驱动进来的），防循环
+/** 旧 id 别名带方向：承接算法已选中后，把方向切到别名原本的语义（如 xiangyueEnc → 加密）。 */
+function applyAliasDirection(alias) {
+  const op = getOp(alias.id);
+  if (!op || op.__stub || state.opId !== alias.id) return;
+  if (alias.dir && typeof op[alias.dir] === "function" && state.dir !== alias.dir) { state.dir = alias.dir; renderWorkspace(); }
+}
 function selectOpFromRoute(id) {
   const op = getOp(id);
   if (!op) return;
@@ -1131,6 +1159,7 @@ function selectOpFromRoute(id) {
     ensureOp(id).then(() => { if (location.hash === "#/op/" + id) selectOpFromRoute(id); }).catch((e) => toast(String((e && e.message) || e)));
     return;
   }
+  if (op.__aliasOf) { selectOp(op.__aliasOf.id); applyAliasDirection(op.__aliasOf); return; }
   state.view = "op";
   state.opId = id;
   state.params = defaultParams(op);
@@ -1416,6 +1445,12 @@ function openBatchDialog(dt, opts) {
   document.body.append(overlay);
 
   let panel;
+  // CSV 批量任务的独立 runner：首次真正执行时才建 Worker，关窗时释放（取消在途任务）。
+  let csvRunner = null;
+  const ensureCsvRunner = () => {
+    if (!csvRunner) csvRunner = createBatchTaskRunner({ concurrency: 2, timeoutMs: 60000 });
+    return csvRunner;
+  };
   try {
     panel = batchPanel({
       planBatch: batchPlanBatch,
@@ -1423,8 +1458,21 @@ function openBatchDialog(dt, opts) {
       buildZip: batchBuildZip,
       makeCancelToken: batchMakeCancelToken,
       op: o.op || null,
+      // CSV 需要完整 op 定义（params/fields/方向能力），currentBatchOp 只是执行包装。
+      opSpec: (o.op && o.op.id) ? (getOp(o.op.id) || null) : null,
       params: o.params || {},
       t,
+      buildTemplate: csvBuildTemplate,
+      tasksFromCsv: csvTasksFromCsv,
+      resultsToCsv: csvResultsToCsv,
+      resultsToJson: csvResultsToJson,
+      collectArtifacts: csvCollectArtifacts,
+      artifactsToZipEntries: csvArtifactsToZipEntries,
+      runTasks: (tasks, runOpts) => ensureCsvRunner().run(tasks, {
+        timeoutMs: runOpts && Number.isSafeInteger(runOpts.timeoutMs) ? runOpts.timeoutMs : 60000,
+        onProgress: runOpts && typeof runOpts.onProgress === "function" ? runOpts.onProgress : undefined,
+      }),
+      cancelRun: () => { try { csvRunner?.cancel("用户取消"); } catch { /* 已释放 */ } },
       download: (bytes, name, mime) => cloudWarnGate(() => downloadBytes(bytes, name, mime)),
     });
   } catch (e) {
@@ -1446,6 +1494,9 @@ function openBatchDialog(dt, opts) {
     }
     closed = true;
     panel.dispose?.();
+    // CSV runner 随窗口释放：dispose 会取消在途批次并终止其 Worker，不残留后台任务。
+    try { csvRunner?.dispose(); } catch { /* 已释放 */ }
+    csvRunner = null;
     overlay.classList.add("exp-closing");
     if (life) life.release();
     setTimeout(() => {
@@ -3898,7 +3949,7 @@ function renderOp() {
  // 参数栏
   if (op.params.length) {
     const bar = el("div", { class: "op-params" });
-     for (const d of op.params) bar.append(renderParam(op, d));
+     for (const d of op.params) if (!d.uiHidden) bar.append(renderParam(op, d));
     config.append(bar);
   }
 
@@ -3958,6 +4009,11 @@ function renderOp() {
   const ioMode = inferIoMode(op);
   let showInput = ioMode !== "none" || ciSelfOn || hasFields || !!op.acceptsBytes;
   const noInputNote = el("div", { class: "io-none-hint op-no-input-note" }, msym("info"), t("ui.workbench.noInput"));
+  // 无主输入的算法没有输入窗格，批处理入口随窗格一起隐藏；这里单独留一个入口。
+  const noInputBatch = el("button", {
+    class: "chip-btn batch-open", type: "button", title: t("ui.workbench.batch"),
+    onclick: () => openBatchDialog(null, { op: currentBatchOp(), params: { ...state.params } }),
+  }, msym("layers"), el("span", {}, t("ui.workbench.batch")));
   // Whitespace programs require literal spaces, tabs and line feeds, not rich-text DOM.
   const inArea = op.verbatimInput
     ? el("textarea", { class: "io-area", placeholder: t("ui.op.inPlaceholder"), spellcheck: "false" })
@@ -3980,6 +4036,8 @@ function renderOp() {
         "aria-label": f.label,
       });
       ta.id = "fld_" + f.key;
+      // 旧通道里已有的值（草稿 / 分享链接 / 配方带来的参数）回填到对应字段框。
+      if (f.mirrorParam && typeof state.params[f.mirrorParam] === "string" && state.params[f.mirrorParam]) ta.value = state.params[f.mirrorParam];
       ta.style.fontSize = state.ioFont + "px";
       ta.addEventListener("keydown", (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); triggerConvert(); }
@@ -3987,7 +4045,7 @@ function renderOp() {
       fieldAreas.push(el("div", { class: "io-field" },
         el("div", { class: "io-field-head" },
           el("label", { class: "io-field-label", for: ta.id }, f.label),
-          attachFieldTools(ta, f.label, { getEpoch: () => workspaceDrafts.epoch })),
+          attachFieldTools(ta, f.label, { getEpoch: () => workspaceDrafts.epoch, acceptsBytes: Array.isArray(f.accepts) && f.accepts.includes("bytes") })),
         ta,
       ));
     }
@@ -4029,11 +4087,12 @@ function renderOp() {
       try {
         // 与 convert() 同口径：acceptsBytes op 的拖入真字节经 params.rawBytes 透传。
         // 否则 Worker 按钮只拿到占位文案 → 空输入（流量轨迹图等产物通道失败）。
-        const runParams = (op.acceptsBytes && !hasFields && inArea && inArea._rawBytes)
+        let runParams = (op.acceptsBytes && !hasFields && inArea && inArea._rawBytes)
           ? { ...state.params, rawBytes: inArea._rawBytes, rawFileName: inArea._rawFileName }
           : { ...state.params };
         const ioCtl = inArea && inArea.__ioCoding;
-        let runInput = hasFields ? fieldAreas.map(w => w.querySelector('.io-field-area').value).join(op.fieldsJoin || '\n') : inArea.value;
+        let runInput = inArea.value;
+        if (hasFields) ({ text: runInput, params: runParams } = fieldInvocation(op, fieldAreas.map(w => w.querySelector('.io-field-area').value), runParams, fieldAreas.map(w => w.querySelector('.io-field-area'))));
         if (ioCtl) {
           const prepared = ioCtl.prepareInput(runInput, {
             params: runParams,
@@ -4263,7 +4322,7 @@ function renderOp() {
     }
     workbench.dataset.inputMode = showInput ? (hasFields ? "fields" : "text") : "none";
     io.querySelector('.io-pane-input').hidden = !showInput;
-    if (showInput) noInputNote.remove(); else head.append(noInputNote);
+    if (showInput) { noInputNote.remove(); noInputBatch.remove(); } else head.append(noInputNote, noInputBatch);
     for (const button of [swapAct, chainAct]) button.disabled = !showInput || hasFields;
     for (const button of io.querySelectorAll(".io-pane:first-child .io-pane-tools button")) button.disabled = !showInput;
     const inputToolbar = inArea.__ioCoding?.element;
@@ -5039,12 +5098,14 @@ async function convert(src) {
   }
   const ioViewIsText = ioEffectiveView === "text";
   let text;
+  let fieldValues = null;
   if (hasFields) {
     const vals = op.fields.map((f) => (document.getElementById("fld_" + f.key)?.value ?? ""));
  // 全空则清空输出（等价单框空输入）
     if (vals.every((v) => v === "") && (op.encode || op.decode)) { outArea.value = ""; outArea.__opFeedback?.set("idle"); renderOutMedia(document.getElementById("ioOutMedia"), ""); return; }
  // 修复：run 单向 op（keygen 类无输入）空输入是合法调用，不放行会被上面的清空分支吞掉。
-    text = vals.join(op.fieldsJoin ?? "\n");
+    fieldValues = vals;
+    text = op.fieldsMode === "slots" ? "" : vals.join(op.fieldsJoin ?? "\n");
   } else if (inArea) {
     text = inArea.value;
     // hex/base64/escaped 视图下空串是合法字节输入，不能按「空输入」早退。
@@ -5072,6 +5133,7 @@ async function convert(src) {
  // 通过 params.rawBytes 传给执行层（如 PNG 等需要真字节而非 hex 文本的 op）。
  // 未声明的 op 完全不受影响，params 里不注入 rawBytes。
   let callParams = { ...state.params };
+  if (fieldValues && op.fieldsMode === "slots") callParams = fieldInvocation(op, fieldValues, callParams, op.fields.map((f) => document.getElementById("fld_" + f.key))).params;
   if (op.acceptsBytes && !hasFields && inArea && inArea._rawBytes) {
     callParams = { ...state.params, rawBytes: inArea._rawBytes, rawFileName: inArea._rawFileName };
   }

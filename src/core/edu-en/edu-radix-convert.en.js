@@ -47,9 +47,9 @@ export default {
       "Every 5 bits is looked up in a special base32 table that drops a/i/l/o, building up a string. More characters means higher precision.",
     usage: "Enter `lat,lon` (e.g. `39.9042,116.4074`) to encode, or enter a geohash string to decode. Precision (number of digits) is optional.",
     examples: [
-      { in: "39.9042,116.4074", param: "precision=11", out: "wx4g0bm6c40", desc: "Tiananmen, Beijing" },
-      { in: "48.669,-4.329", param: "precision=8", out: "gbsuv7zt", desc: "8-digit precision ≈ ±19m" },
-      { in: "wx4g0bm6c40", out: "39.904201,116.4074", desc: "decode back to coordinates" },
+      { in: "39.9042,116.4074", param: "Direction: encode; precision=11 (±0.06m)", out: "wx4g0bm6c40", desc: "Tiananmen, Beijing", run: { dir: "encode", params: { precision: "11" } } },
+      { in: "48.669,-4.329", param: "Direction: encode; precision=8 (±19m)", out: "gbsuv7zt", desc: "8-digit precision ≈ ±19m", run: { dir: "encode", params: { precision: "8" } } },
+      { in: "wx4g0bm6c40", param: "Direction: decode (11-char geohash → cell centre, not the original point)", out: "39.904201,116.4074", desc: "decode back to coordinates", run: { dir: "decode" } },
     ],
     tips: [
       "Geohashes with the same prefix are geographically adjacent, which is why they're used for \"nearby people\" lookups.",

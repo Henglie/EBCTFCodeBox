@@ -1,6 +1,6 @@
 {
   "note": "图形编码对照表，人肉对照解码用。另 4 张 .svg（polybius/tapcode/adfgx/adfgvx）为本项目自制，补古典密码常用对照表缺口。",
-  "count": 253,
+  "count": 255,
   "images": [
     {
       "id": "25paircolorcode",
@@ -3023,6 +3023,40 @@
       "file": "codeimages/cosmicuniversal.png",
       "w": 1140,
       "h": 605,
+      "lineart": true
+    },
+    {
+      "id": "scoutstickclassic",
+      "en": "Scout stick cipher (classic)",
+      "cn": "童子军木棍密码（经典）",
+      "alias": [
+        "Code Chinois",
+        "中国码",
+        "中国木棍密码",
+        "童子军密码",
+        "木棍密码",
+        "棍码"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/scoutstickclassic.svg",
+      "w": 1120,
+      "h": 1052,
+      "lineart": true
+    },
+    {
+      "id": "scoutsticksamurai",
+      "en": "Scout stick cipher (Samurai)",
+      "cn": "童子军木棍密码（Samurai）",
+      "alias": [
+        "Samurai code",
+        "武士码",
+        "武士密码",
+        "横竖互换变体"
+      ],
+      "cat": "symbol",
+      "file": "codeimages/scoutsticksamurai.svg",
+      "w": 1120,
+      "h": 1052,
       "lineart": true
     }
   ]

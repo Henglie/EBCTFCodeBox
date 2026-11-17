@@ -54,4 +54,8 @@ export default {
   pollux: { src: "public/codeimages/pollux.svg", cap: "Pollux 密码符号映射（点/划/分隔 三组符号集）" },
   morbit: { src: "public/codeimages/morbit.svg", cap: "Morbit 密码符号对 ↔ 数字对照（9 字符密钥定秩）" },
   straddleCheckerboard: { src: "public/codeimages/straddle-checkerboard.svg", cap: "跨棋盘密码 3×10 棋盘（首行 8 高频字母 + 两空列前缀）" },
+  scoutStick: [
+    { src: "public/codeimages/scoutstickclassic.svg", cap: "童子军木棍密码·经典 26 槽对照（横=元音序号，竖=其后第几个辅音；原图为横竖交叉画法）" },
+    { src: "public/codeimages/scoutsticksamurai.svg", cap: "童子军木棍密码·Samurai 变体 26 槽对照（横竖互换）" },
+  ],
 };

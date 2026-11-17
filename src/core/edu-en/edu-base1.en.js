@@ -7,8 +7,8 @@ export default {
       "Leading zero bytes produce leading `0` characters; the rest unfold from the integer. No grouping, no padding — output length varies.",
     usage: "Decode: paste a base36 string to recover the original. Encode: convert text to base36. Custom 36-char alphabets are supported.",
     examples: [
-      { in: "eax", out: "Hi" },
-      { in: "flag", param: "Encode direction", out: "sf2tlz", desc: "Encodes plaintext to base36" },
+      { in: "eax", param: "Direction: decode; this tool encodes bytes→bigint→base36 text, so decode restores bytes", out: "Hi", desc: "dCode base36 interprets text as a base36 number→decimal, the opposite direction; do not mix them", run: { dir: "decode" } },
+      { in: "flag", param: "Direction: encode (bytes→base36)", out: "sf2tlz", desc: "Encodes plaintext to base36", run: { dir: "encode" } },
     ],
     tips: [
       "Lowercase letters + digits only, no uppercase, no symbols, variable length → suspect base36.",
@@ -24,8 +24,9 @@ export default {
       "A lone trailing byte becomes 2 digits. The alphabet is `0-9A-Z` plus ` $%*+-./:` — exactly 45 characters. Space is a valid alphabet character (index 36).",
     usage: "Paste base45 text to decode. Encode direction converts input to base45. Do NOT strip spaces — space is a valid character (alphabet index 36).",
     examples: [
-      { in: "BB8", out: "AB", desc: "2 bytes → 3 chars" },
-      { in: ".69", out: "Hi" },
+      { in: "BB8", param: "Direction: decode (default RFC 9285 alphabet)", out: "AB", desc: "2 bytes → 3 chars", run: { dir: "decode" } },
+      { in: ".69", param: "Direction: decode (default alphabet)", out: "Hi", desc: "Single-byte → 2-char case", run: { dir: "decode" } },
+      { in: "AB", param: "Direction: encode (default alphabet)", out: "BB8", desc: "Encode side: 2 bytes → 3 chars, inverse of the first row", run: { dir: "encode" } },
     ],
     formulas: [
       { tex: "n = b_0 \\times 256 + b_1,\\quad n = c_0 + c_1\\times 45 + c_2\\times 45^2", caption: "2 bytes ↔ 3 chars (little-endian base 45)" },
@@ -44,8 +45,9 @@ export default {
       "A trailing partial chunk of ≤12 bits is encoded as one 6-bit character. Empty input encodes as `~`.",
     usage: "Paste base92 text to decode; encode direction reverses. Custom alphabets are supported.",
     examples: [
-      { in: "8q", out: "A", desc: "1-byte trailing 6-bit rule" },
-      { in: ";L*", out: "Hi" },
+      { in: "8q", param: "Direction: decode (default 92-character alphabet)", out: "A", desc: "1-byte trailing 6-bit rule", run: { dir: "decode" } },
+      { in: ";L*", param: "Direction: decode (default 92-character alphabet)", out: "Hi", desc: "Two chars packed from a 13-bit group", run: { dir: "decode" } },
+      { in: "A", param: "Direction: encode (default 92-character alphabet)", out: "8q", desc: "Encode side: a single byte takes the trailing 6-bit path, inverse of the first row", run: { dir: "encode" } },
     ],
     tips: [
       "Wide character set (including punctuation), high density, no obvious length pattern → suspect base92.",

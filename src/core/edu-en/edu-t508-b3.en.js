@@ -14,10 +14,10 @@ export default {
       "Counts can be variable-length (`12W` = twelve W's) or fixed N digits (`04A`). In variable mode a repeated DIGIT character is ambiguous (`121` is unreadable), so digit payloads need fixed-width or packed mode (dCode example: 11111111111122 → 12-1,2-2). Compression ratio $\\frac{\\text{orig}-\\text{coded}}{\\text{orig}}$ goes negative with no repeats.",
     usage: "Defaults: count-first + variable counts. Decode with the same format; for digit-only ciphertext switch to fixed-width or packed mode. Over-long runs auto-split in fixed mode (300 A's → 99A+99A+99A+3A).",
     examples: [
-      { in: "DDDDDCCCCOOODDE", param: "char-first (dCode official example)", out: "D5C4O3D2E1", desc: "15 chars down to 10, ratio 33%" },
-      { in: "D5C4O3D2E1", param: "char-first decode", out: "DDDDDCCCCOOODDE", desc: "Lossless round trip" },
-      { in: "WWWWWWWWWWWWABC", param: "count-first", out: "12W1A1B1C", desc: "Variable count 12W" },
-      { in: "AABBB", param: "packed", out: "02410342", desc: "hex: 02 41 | 03 42 (count+value byte pairs)" },
+      { in: "DDDDDCCCCOOODDE", param: "char-first (charFirst, dCode official): char+count", out: "D5C4O3D2E1", desc: "15 chars down to 10; this tool supports both charFirst and countFirst", run: { dir: "encode", params: {"fmt": "charFirst", "countMode": "var"} } },
+      { in: "D5C4O3D2E1", param: "char-first decode", out: "DDDDDCCCCOOODDE", desc: "Lossless round trip", run: { dir: "decode", params: {"fmt": "charFirst", "countMode": "var"} } },
+      { in: "WWWWWWWWWWWWABC", param: "count-first (countFirst): count+char", out: "12W1A1B1C", desc: "Variable count 12W", run: { dir: "encode", params: {"fmt": "countFirst", "countMode": "var"} } },
+      { in: "AABBB", param: "packed: hex count+value byte pairs", out: "02410342", desc: "hex: 02 41 | 03 42 (count+value byte pairs)", run: { dir: "encode", params: {"fmt": "packed"} } },
     ],
     tips: [
       "Ciphertext that alternates digits and letters with small counts screams RLE; digit-only ciphertext needs the fixed/packed dialect.",

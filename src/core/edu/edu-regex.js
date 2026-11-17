@@ -33,12 +33,12 @@ export default {
       "**边界**：pattern ≤ 256 字符、输入 ≤ 100000 字符、最多 5000 条匹配/替换。空模式、非法正则、**零匹配一律显式报错**——" +
       "这是有意的：链式配方里「替换没命中就原样透传」会把上游错误藏起来，宁可中断并告诉你没匹配到。",
     examples: [
-      { in: "flag{a1b2} and flag{c3d4}", out: "flag{a1b2}\nflag{c3d4}", desc: "extract：pattern=flag\\{[0-9a-z]+\\}，默认 group=0，一条一行" },
-      { in: "k1=v1;k2=v2", out: "k1\nk2", desc: "extract：pattern=([a-z0-9]+)=([a-z0-9]+)，group=1 只取键" },
-      { in: "k1=v1", out: "k1\tv1", desc: "extract：group=all，一次匹配的全部组用制表符连接" },
-      { in: "a b a c", out: "a\nb\nc", desc: "extract：pattern=[a-c]，dedupe=true 去重且保首次顺序" },
-      { in: "2026-10-26", out: "26/10/2026", desc: "replace：pattern=(\\d{4})-(\\d{2})-(\\d{2})，replacement=$3/$2/$1" },
-      { in: "abc", out: "a[b]c", desc: "replace：pattern=b，replacement=[$&]，$& 代表整段匹配" },
+      { in: "flag{a1b2} and flag{c3d4}", param: "extract：pattern=flag\\{[0-9a-z]+\\}，默认 group=0，一条一行", out: "flag{a1b2}\nflag{c3d4}", desc: "提取模式", run: { dir: "run", params: {"mode": "extract", "pattern": "flag\\{[0-9a-z]+\\}", "group": "0"} } },
+      { in: "k1=v1;k2=v2", param: "extract：pattern=([a-z0-9]+)=([a-z0-9]+)，group=1 只取键", out: "k1\nk2", desc: "分组提取", run: { dir: "run", params: {"mode": "extract", "pattern": "([a-z0-9]+)=([a-z0-9]+)", "group": "1"} } },
+      { in: "k1=v1", param: "extract：group=all，一次匹配的全部组用制表符连接", out: "k1\tv1", desc: "全部组", run: { dir: "run", params: {"mode": "extract", "pattern": "([a-z0-9]+)=([a-z0-9]+)", "group": "all"} } },
+      { in: "a b a c", param: "extract：pattern=[a-c]，dedupe=true 去重且保首次顺序", out: "a\nb\nc", desc: "去重", run: { dir: "run", params: {"mode": "extract", "pattern": "[a-c]", "dedupe": true} } },
+      { in: "2026-10-26", param: "replace：pattern=(\\d{4})-(\\d{2})-(\\d{2})，replacement=$3/$2/$1", out: "26/10/2026", desc: "替换模式", run: { dir: "run", params: {"mode": "replace", "pattern": "(\\d{4})-(\\d{2})-(\\d{2})", "replacement": "$3/$2/$1", "replaceMode": "regex"} } },
+      { in: "abc", param: "replace：pattern=b，replacement=[$&]，$& 代表整段匹配", out: "a[b]c", desc: "整段匹配引用", run: { dir: "run", params: {"mode": "replace", "pattern": "b", "replacement": "[$&]", "replaceMode": "regex"} } },
     ],
     formulas: [
       { tex: "\\text{extract}(s,p,g)=\\mathrm{join}(\\mathit{sep},\\ \\{m[g]\\mid m\\in\\mathrm{exec}_{g}(p,s)\\})", caption: "提取 = 逐次全局匹配后按 group 取值，用 sep 连接" },

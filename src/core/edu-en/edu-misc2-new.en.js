@@ -308,7 +308,7 @@ export default {
       "Encrypt: locate a letter's index i on the outer disk → take the inner disk's $[(i + shift) \\bmod 26]$; decrypt reverses. Every period letters, the accumulated offset $shift \\mathrel{+}= periodicShift$ — this is 「turning the inner disk」, mapping the same plaintext letter to different ciphertext at different positions, i.e. polyalphabetic substitution. With periodicShift=0 it degenerates to monoalphabetic.",
     usage: "Params: inner disk mixed 26-letter alphabet (default QWERTZUIOPASDFGHJKLYXCVBNM), initial offset, periodic rotation step (0 = monoalphabetic), and how many letters per rotation. Non-letters pass through unchanged.",
     examples: [
-      { in: "HELLO", param: "default inner disk, shift=0, rotation=0", out: "result of monoalphabetic substitution by the inner disk", desc: "rotation=0 means monoalphabetic" },
+      { in: "HELLO", param: "default inner disk QWERTZUIOPASDFGHJKLYXCVBNM, initialShift=0, periodicShift=0 (rotation=0 → monoalphabetic)", out: "ITSSG", desc: "This tool is the keyed-alphabet + periodic-shift variant; it has no dCode classic disk stabilis/mobilis+increment, so the official example cannot be reproduced directly", run: { dir: "encode", params: {"cipherAlphabet": "QWERTZUIOPASDFGHJKLYXCVBNM", "initialShift": 0, "periodicShift": 0} } },
     ],
     tips: ["Alberti is the grandfather of polyalphabetic substitution, decades before Vigenère; disk rotation is table-switching.", "Set rotation step to 0 and it becomes a simple substitution cipher; set it and you get polyalphabetic strength."],
     aka: ["alberti", "阿尔伯蒂圆盘", "alberti cipher", "圆盘密码", "阿尔伯蒂密码", "cipher disk",
@@ -391,7 +391,7 @@ export default {
       "Because the transform is symmetric, encode and decode are the same function — reciprocal. The alphabet can merge I/J or omit Q; odd-length plaintext is padded with X.",
     usage: "Fill in keyword1, keyword2, arrangement direction (vertical/horizontal), and alphabet convention. Encode and decode are the same operation (reciprocal).",
     examples: [
-      { in: "HELP", param: "key1=EXAMPLE key2=KEYWORD vertical", out: "digraph substitution result", desc: "Run it again to recover" },
+      { in: "HELP", param: "key1=EXAMPLE key2=KEYWORD, vertical, alphabet ij", out: "HECM", desc: "Digraph substitution; dCode official grid drops W and keeps IJ while this tool has ij/noq only, so the official example cannot be reproduced directly", run: { dir: "encode", params: {"key1": "EXAMPLE", "key2": "KEYWORD", "orientation": "vertical", "alphabet": "ij"} } },
     ],
     tips: ["Reciprocal: under the same params, encoding a result again returns the original, so if unsure of direction just run it again.", "Vertical same-column / horizontal same-row letter pairs pass through unchanged — an inherent property of Two-square."],
     aka: ["two-square", "twosquare", "双方密码", "two square cipher", "double playfair", "双方形密码",

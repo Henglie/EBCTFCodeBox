@@ -201,10 +201,49 @@ export function register(op) {
 // 旧 op id 兼容映射：id 撤销后，深链（#/op=）/收藏（localStorage ebctf_favorites）/
 // 配方（recipes.js）里的旧 id 仍解析到承接 op。先例：hexView 深链迁移、
 // C7-QR qrDecodeReport 并入 qrDecode。
-const LEGACY_OP_IDS = { qrParse: "qrScanImage" };
+// xiangyueEnc：算法文件加载后由 registerAlias 接管（保留「run = 加密」的旧行为）；
+// 加载前按本表落到承接算法的占位，供惰载定位源文件。
+const LEGACY_OP_IDS = { qrParse: "qrScanImage", xiangyueEnc: "xiangyue" };
+
+// 旧 id 别名：能被 getOp 取到并执行，但不进 OPS（列表 / 搜索 / 计数 / 一键解码都看不到）。
+const _aliases = new Map();
+
+/**
+ * 登记一个旧 id 别名。alias = { id, aliasOf, dir?, name?, params?, run?/encode?/decode? }。
+ * 未给的元数据沿用承接算法；dir 表示界面打开该旧 id 时应切到承接算法的哪个方向。
+ */
+export function registerAlias(alias) {
+  if (!alias || typeof alias.id !== "string" || !alias.id || typeof alias.aliasOf !== "string" || !alias.aliasOf) {
+    throw new Error("别名必须有非空字符串 id 与 aliasOf");
+  }
+  const target = _byId.get(alias.aliasOf);
+  if (!target || target.__stub) throw new Error(`别名 ${alias.id} 的承接算法未注册: ${alias.aliasOf}`);
+  const existed = _byId.get(alias.id);
+  if (existed && !existed.__stub) throw new Error(`别名 id 与已注册算法冲突: ${alias.id}`);
+  if (existed) { // 旧惰载表里还留着这个 id 的占位：撤掉，别名不占列表位
+    const i = OPS.indexOf(existed);
+    if (i >= 0) OPS.splice(i, 1);
+    _byId.delete(alias.id);
+  }
+  if (_aliases.has(alias.id)) throw new Error(`重复登记别名: ${alias.id}`);
+  if (!alias.run && !alias.encode && !alias.decode) throw new Error(`别名 ${alias.id} 必须至少有 encode / decode / run 之一`);
+  const { aliasOf, dir, ...rest } = alias;
+  const op = { cat: target.cat, name: target.name, desc: target.desc, noAuto: target.noAuto, acceptsBytes: target.acceptsBytes,
+    sourceFile: target.sourceFile, ...rest, params: alias.params || [], __aliasOf: { id: aliasOf, dir: dir || null } };
+  bindParamLabels(op.params);
+  _aliases.set(op.id, op);
+  return op;
+}
+
+/** 旧 id → 现用 id（不是旧 id 时原样返回）。 */
+export function canonicalOpId(id) {
+  if (_byId.has(id) && !_aliases.has(id) && !LEGACY_OP_IDS[id]) return id;
+  const alias = _aliases.get(id);
+  return (alias && alias.__aliasOf.id) || LEGACY_OP_IDS[id] || id;
+}
 
 export function getOp(id) {
-  return _byId.get(id) || (LEGACY_OP_IDS[id] && _byId.get(LEGACY_OP_IDS[id])) || undefined;
+  return _aliases.get(id) || _byId.get(id) || (LEGACY_OP_IDS[id] && _byId.get(LEGACY_OP_IDS[id])) || undefined;
 }
 
 export function opsByCat(catId) {

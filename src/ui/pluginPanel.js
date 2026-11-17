@@ -957,15 +957,16 @@ function sectionMcp() {
   const box = el("div", { class: "plugin-sect" });
   box.append(
     el("p", { class: "plugin-empty" }, T("ui.plugin.mcpNote")),
-    el("button", { class: "chip-btn", onclick: () => {
-      const manifest = exportManifest();
-      const blob = new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" });
-      const a = el("a", { href: URL.createObjectURL(blob), download: "ebctf-mcp-manifest.json" });
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-      toast(T("ui.plugin.mcpExported"));
-    } }, T("ui.plugin.mcpExport")),
   );
+  // 导出能力清单属于「描述版 MCP」：按钮在下方方式二分组内渲染。
+  const exportBtn = el("button", { class: "chip-btn", onclick: () => {
+    const manifest = exportManifest();
+    const blob = new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" });
+    const a = el("a", { href: URL.createObjectURL(blob), download: "ebctf-mcp-manifest.json" });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast(T("ui.plugin.mcpExported"));
+  } }, T("ui.plugin.mcpExport"));
 
   const httpToken = el('input', { class: 'plugin-input', type: 'password', placeholder: '留空=不要求 token', autocomplete: 'off' });
   const httpEnabled = el('input', { type: 'checkbox' }); httpEnabled.checked = true;
@@ -994,6 +995,7 @@ function sectionMcp() {
       el('h4', {}, '方式二：描述版 MCP'),
       el("h5", {}, T("ui.plugin.mcpHowTitle")),
       el("p", { class: "plugin-how-intro" }, T("ui.plugin.mcpHowIntro")),
+      exportBtn,
       el("ol", { class: "plugin-how-steps" },
         el("li", {}, T("ui.plugin.mcpHowStep1")),
         el("li", {}, T("ui.plugin.mcpHowStep2")),

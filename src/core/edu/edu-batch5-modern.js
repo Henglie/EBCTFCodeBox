@@ -49,8 +49,8 @@ export default {
       "重排后相同上下文的字符会聚到一起（如 `banana` → `nnbaaa`），便于后续 RLE/MTF 压缩。逆变换用 LF-mapping：从 primary 出发，按「最后一列→第一列」的对应关系迭代还原。另可选 `$` 哨兵模式——末尾加一个小于所有字符的 `$`，primary 隐含为 `$` 在 BWT 串中的位置，输出无需带索引。",
     usage: "encode：输入文本→输出 `BWT串|primary`（分隔符可配）；哨兵模式输出含 `$` 的 BWT 串。decode：输入同格式→还原。注意哨兵模式要求原文不含 `$`。",
     examples: [
-      { in: "banana", param: "无哨兵（分隔符 |）", out: "nnbaaa|3", desc: "BWT 串=nnbaaa，primary=3；decode 还原 banana" },
-      { in: "banana", param: "哨兵模式（加 $）", out: "annb$aa", desc: "$ 位置即隐含 primary，decode 去掉末尾 $" },
+      { in: "banana", param: "无哨兵（分隔符 |）：输出=BWT 串|primary", out: "nnbaaa|3", desc: "BWT 串=nnbaaa，primary=3；本工具输出含分隔符与索引，常见在线工具多只给 BWT 串，方向口径不同", run: { dir: "encode", params: {"eofSentinel": false, "separator": "|"} } },
+      { in: "banana", param: "哨兵模式（加 $）", out: "annb$aa", desc: "$ 位置即隐含 primary，解码去掉末尾 $；与 dCode 无索引口径相比，本工具带哨兵/索引信息", run: { dir: "encode", params: {"eofSentinel": true} } },
     ],
     tips: [
       "可逆不加密——CTF 里常作为压缩或隐写的前置层，看到 `nnbaaa|数字` 这种「乱序串+索引」长相就是它。",

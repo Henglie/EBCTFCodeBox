@@ -51,15 +51,16 @@ const clean = (value) => String(value || "")
   .replace(/\s+/g, " ")
   .trim();
 const categories = CATEGORIES.filter((cat) => cat.id !== "home");
+// 公开文档不写精确 op 计数（统一「一千多种」）；分类数仍按真实分类输出。
 const lines = [
-  `## 编解码全清单（${OPS.length} ops · ${categories.length} 分类）`,
+  `## 编解码全清单（一千多种 · ${categories.length} 分类）`,
   "",
   "> 本节由 `node tools/gen_readme_ops.mjs` 从主入口真实 import 闭包生成；opId 即注册表唯一标识。",
   "",
 ];
 for (const cat of categories) {
   const ops = OPS.filter((op) => op.cat === cat.id);
-  lines.push(`### ${clean(cat.name)}（${ops.length} ops）`, "", "| opId | 名称 | 说明 |", "|---|---|---|");
+  lines.push(`### ${clean(cat.name)}`, "", "| opId | 名称 | 说明 |", "|---|---|---|");
   for (const op of ops) lines.push(`| ${clean(op.id)} | ${clean(op.name || op.id)} | ${clean(op.desc)} |`);
   lines.push("");
 }
@@ -69,6 +70,6 @@ const start = readme.indexOf("## 编解码全清单");
 const end = readme.indexOf("## 插件与 AI 接入", start);
 if (start < 0 || end < 0) throw new Error("README 清单边界不存在");
 readme = readme.slice(0, start) + lines.join("\n") + "\n" + readme.slice(end);
-readme = readme.replace(/- \[编解码全清单\]\([^\n]+\)/, `- [编解码全清单](#编解码全清单${OPS.length}-ops--${categories.length}-分类)`);
+readme = readme.replace(/- \[编解码全清单\]\([^\n]+\)/, `- [编解码全清单](#编解码全清单一千多种--${categories.length}-分类)`);
 writeFileSync(readmePath, readme);
 console.log(`README.md: ${OPS.length} ops / ${categories.length} categories`);

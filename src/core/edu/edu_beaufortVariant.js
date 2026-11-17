@@ -17,10 +17,10 @@ export default {
       "编码：明文 → 密文；解码：密文 → 明文。**方向不能省**——它不是自反的，用错方向得到的是一串看似合理的乱码。非字母字符默认丢弃（与项目内标准 Beaufort 一致）；选「保留非字母原位」时标点空格原地不动且不消耗密钥位。\n\n" +
       "默认参数（密钥 CLE）配输入 DCODE 可直接复现官方算例 BRKBT，便于自检。",
     examples: [
-      { in: "DCODE", param: "key=CLE", out: "BRKBT", desc: "官方算例：3−2=1(B)、2−11=−9+26=17(R)、14−4=10(K)、3−2=1(B)、4−11=−7+26=19(T)" },
-      { in: "BRKBT", param: "key=CLE（解码方向）", out: "DCODE", desc: "解密 = 把密文与密钥相加再取模" },
-      { in: "ATTACKATDAWN", param: "key=FORTIFICATION", out: "VFCHUFSRDHOZ", desc: "长密钥循环；注意非自反：对结果再编码一次不会回到明文" },
-      { in: "MEET ME AT DAWN!", param: "key=key, chars=keep", out: "CAGJ IG QP FQSP!", desc: "保留非字母原位（空格与感叹号不动、不消耗密钥位）；解码即回 MEET ME AT DAWN!" },
+      { in: "DCODE", param: "方向：编码；key=CLE，chars=letters（非字母丢弃）", out: "BRKBT", desc: "官方算例：3−2=1(B)、2−11=−9+26=17(R)、14−4=10(K)、3−2=1(B)、4−11=−7+26=19(T)", run: { dir: "encode", params: { key: "CLE", chars: "letters" } } },
+      { in: "BRKBT", param: "方向：解码；key=CLE，chars=letters（解密=C+K）", out: "DCODE", desc: "解密 = 把密文与密钥相加再取模", run: { dir: "decode", params: { key: "CLE", chars: "letters" } } },
+      { in: "ATTACKATDAWN", param: "方向：编码；key=FORTIFICATION（循环使用），chars=letters", out: "VFCHUFSRDHOZ", desc: "长密钥循环；注意非自反：对结果再编码一次不会回到明文", run: { dir: "encode", params: { key: "FORTIFICATION", chars: "letters" } } },
+      { in: "MEET ME AT DAWN!", param: "方向：编码；key=key，chars=keep（标点空格原位、不消耗密钥位）", out: "CAGJ IG QP FQSP!", desc: "保留非字母原位；解码即回 MEET ME AT DAWN!", run: { dir: "encode", params: { key: "key", chars: "keep" } } },
     ],
     formulas: [
       { tex: "c_i = (p_i - k_{i \\bmod L}) \\bmod 26", caption: "加密：明文减密钥（L 为密钥长度）" },

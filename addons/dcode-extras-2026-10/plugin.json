@@ -1,0 +1,10 @@
+{
+  "id": "dcode-extras-2026-10",
+  "name": "dCode 扩展包 Beta · 2026-11 · 409 op",
+  "version": "2026.11.0-beta.1",
+  "entry": "index.js",
+  "description": "dCode.fr 风格纯 JS 算法扩展包 Beta：988 个工具逐条入账，409 op；2026-11 批次取消参数边输边算，数学/数论移除人为小上限，阶乘改分治大数并按内存预算展开。覆盖缺口见 COVERAGE.md。",
+  "author": "恒烈CTF编码工具箱",
+  "apiVersion": 1,
+  "homepage": "https://github.com/Henglie/EBCTFCodeBox"
+}

@@ -43,8 +43,9 @@ export default {
       "为什么是 1601？因为它是格里高利历一个 400 年闰年周期的整起点，微软图个整。换算到 Unix 纪元要先减掉 1601→1970 的差值 `11644473600` 秒。数值极大（现代日期约 $1.3\\times10^{17}$），本工具用 BigInt 算防溢出。",
     usage: "编码方向把 ISO 时间转成 FILETIME 整数；解码方向把 FILETIME 整数转回 ISO 时间。",
     examples: [
-      { in: "2021-01-01T00:00:00Z", out: "132539328000000000", desc: "编码：时间→FILETIME" },
-      { in: "132539616000000000", out: "2021-01-01T08:00:00Z", desc: "解码：FILETIME→时间" },
+      { in: "2021-01-01T00:00:00Z", param: "方向：编码（ISO8601 → FILETIME，1601 纪元 100ns）", out: "132539328000000000", desc: "编码：时间→FILETIME", run: { dir: "encode" } },
+      { in: "132539616000000000", param: "方向：解码（FILETIME → ISO8601，UTC）", out: "2021-01-01T08:00:00Z", desc: "解码：FILETIME→时间", run: { dir: "decode" } },
+      { in: "1970-01-01T00:00:00Z", param: "方向：编码（ISO8601 → FILETIME）", out: "116444736000000000", desc: "Unix 纪元 0 秒 = 11644473600 × 10^7（1601→1970 的 100ns 数）", run: { dir: "encode" } },
     ],
     formulas: [
       { tex: "t_{unix\\_ms} = \\frac{FILETIME}{10000} - 11644473600000", caption: "FILETIME(100ns) 换算到 Unix 毫秒" },

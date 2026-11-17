@@ -83,7 +83,7 @@ export default {
       "DEFLATE 本体 = LZ77 滑窗匹配 + Huffman 编码。raw deflate 就是纯压缩数据，不带 zlib 的 2 字节头也不带 gzip 的 10 字节头和校验尾。工具浏览器实测双向。",
     usage: "粘裸 deflate 数据，解压得原文；反向可压缩。",
     examples: [
-      { in: "raw deflate 字节", out: "解压后的原文" },
+      { in: "raw deflate 字节（Hello 的 raw deflate，hex f348cdc9c90700）", param: "方向：解码（raw deflate → 原文），无 zlib/gzip 头", out: "Hello", desc: "raw deflate 没有 zlib 头；RFC 1951 定义 deflate 流，RFC 1950 才是带头的 zlib 包装，勿混称", run: { dir: "decode", inputHex: "f348cdc9c90700" } },
     ],
     tips: ["没有 1F8B(gzip) 也没有 78(zlib) 头、但怀疑是压缩的 → 试 raw deflate。ZIP 里存的压缩数据就是它。"],
     aka: ["raw deflate", "裸deflate", "deflate", "deflate raw", "裸压缩流", "无头deflate", "DEFLATE解压", "LZ77+Huffman", "inflate", "raw inflate", "deflate解码", "裸压缩数据"],

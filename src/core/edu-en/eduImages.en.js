@@ -60,4 +60,8 @@ export default {
   pollux: { src: "public/codeimages/pollux.svg", cap: "Pollux cipher symbol mapping (dot/dash/separator symbol sets)" },
   morbit: { src: "public/codeimages/morbit.svg", cap: "Morbit cipher symbol-pair ↔ digit reference (rank from 9-char key)" },
   straddleCheckerboard: { src: "public/codeimages/straddle-checkerboard.svg", cap: "Straddle checkerboard 3×10 board (top row 8 high-frequency letters + two blank-column prefixes)" },
+  scoutStick: [
+    { src: "public/codeimages/scoutstickclassic.svg", cap: "Scout stick cipher, classic 26-slot chart (horizontal = vowel index, vertical = n-th consonant after it; drawn as crossed strokes)" },
+    { src: "public/codeimages/scoutsticksamurai.svg", cap: "Scout stick cipher, Samurai variant 26-slot chart (horizontal and vertical swapped)" },
+  ],
 };

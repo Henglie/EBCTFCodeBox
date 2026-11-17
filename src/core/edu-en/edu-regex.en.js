@@ -34,12 +34,12 @@ export default {
       "**Bounds**: pattern ≤ 256 chars, input ≤ 100000 chars, at most 5000 matches/replacements. Empty pattern, invalid regex and **zero matches always raise explicitly** — " +
       "deliberately: in a recipe chain, \"no match so pass the text through\" hides an upstream error, so we stop and tell you nothing matched.",
     examples: [
-      { in: "flag{a1b2} and flag{c3d4}", out: "flag{a1b2}\nflag{c3d4}", desc: "extract: pattern=flag\\{[0-9a-z]+\\}, default group=0, one per line" },
-      { in: "k1=v1;k2=v2", out: "k1\nk2", desc: "extract: pattern=([a-z0-9]+)=([a-z0-9]+), group=1 keeps only the keys" },
-      { in: "k1=v1", out: "k1\tv1", desc: "extract: group=all joins every group of one match with tabs" },
-      { in: "a b a c", out: "a\nb\nc", desc: "extract: pattern=[a-c], dedupe=true removes duplicates keeping first order" },
-      { in: "2026-10-26", out: "26/10/2026", desc: "replace: pattern=(\\d{4})-(\\d{2})-(\\d{2}), replacement=$3/$2/$1" },
-      { in: "abc", out: "a[b]c", desc: "replace: pattern=b, replacement=[$&] where $& is the whole match" },
+      { in: "flag{a1b2} and flag{c3d4}", param: "extract: pattern=flag\\{[0-9a-z]+\\}, default group=0, one per line", out: "flag{a1b2}\nflag{c3d4}", desc: "extract mode", run: { dir: "run", params: {"mode": "extract", "pattern": "flag\\{[0-9a-z]+\\}", "group": "0"} } },
+      { in: "k1=v1;k2=v2", param: "extract: pattern=([a-z0-9]+)=([a-z0-9]+), group=1 keeps only the keys", out: "k1\nk2", desc: "group extraction", run: { dir: "run", params: {"mode": "extract", "pattern": "([a-z0-9]+)=([a-z0-9]+)", "group": "1"} } },
+      { in: "k1=v1", param: "extract: group=all joins every group of one match with tabs", out: "k1\tv1", desc: "all groups", run: { dir: "run", params: {"mode": "extract", "pattern": "([a-z0-9]+)=([a-z0-9]+)", "group": "all"} } },
+      { in: "a b a c", param: "extract: pattern=[a-c], dedupe=true removes duplicates keeping first order", out: "a\nb\nc", desc: "dedupe", run: { dir: "run", params: {"mode": "extract", "pattern": "[a-c]", "dedupe": true} } },
+      { in: "2026-10-26", param: "replace: pattern=(\\d{4})-(\\d{2})-(\\d{2}), replacement=$3/$2/$1", out: "26/10/2026", desc: "replace mode", run: { dir: "run", params: {"mode": "replace", "pattern": "(\\d{4})-(\\d{2})-(\\d{2})", "replacement": "$3/$2/$1", "replaceMode": "regex"} } },
+      { in: "abc", param: "replace: pattern=b, replacement=[$&] where $& is the whole match", out: "a[b]c", desc: "whole match reference", run: { dir: "run", params: {"mode": "replace", "pattern": "b", "replacement": "[$&]", "replaceMode": "regex"} } },
     ],
     formulas: [
       { tex: "\\text{extract}(s,p,g)=\\mathrm{join}(\\mathit{sep},\\ \\{m[g]\\mid m\\in\\mathrm{exec}_{g}(p,s)\\})", caption: "extract = repeated global matches, take group g from each, join by sep" },

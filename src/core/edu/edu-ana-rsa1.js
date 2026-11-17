@@ -74,8 +74,8 @@ export default {
       "把指数拆成二进制，用「平方-乘」逐位处理：每一步都对底数平方并取模，遇到指数的 1 位就额外乘一次。这样 e 有几十位也只需几十次乘法，且中间结果始终被 mod 压在范围内。",
     usage: "参数框填 base、exp、mod（十进制），输出 $\\mathrm{base}^{\\mathrm{exp}} \\bmod m$。",
     examples: [
-      { in: "", param: "base=65, exp=17, mod=3233", out: "=== 大数快速幂 ===\nbase = 65\nexp  = 17\nmod  = 3233\n\n✓ base^exp mod mod = 2790", desc: "RSA 加密：m=65 → c=2790；参数框实跑原文" },
-      { in: "", param: "base=2790, exp=2753, mod=3233", out: "=== 大数快速幂 ===\nbase = 2790\nexp  = 2753\nmod  = 3233\n\n✓ base^exp mod mod = 65", desc: "私钥解密还原 m" },
+      { in: "", param: "base=65, exp=17, mod=3233（RSA 加密 m^e mod n）", out: "=== 大数快速幂 ===\nbase = 65\nexp  = 17\nmod  = 3233\n\n✓ base^exp mod mod = 2790", desc: "本工具只做模幂 a^b mod m，不求指数、不做离散对数；RSA 加密 m=65 → c=2790", run: { dir: "run", params: {"base": "65", "exp": "17", "mod": "3233"} } },
+      { in: "", param: "base=2790, exp=2753, mod=3233（私钥解密 c^d mod n）", out: "=== 大数快速幂 ===\nbase = 2790\nexp  = 2753\nmod  = 3233\n\n✓ base^exp mod mod = 65", desc: "私钥解密还原 m；同样只是模幂，不能用来求私钥指数", run: { dir: "run", params: {"base": "2790", "exp": "2753", "mod": "3233"} } },
     ],
     formulas: [
       { tex: "c = m^e \\bmod n,\\qquad m = c^d \\bmod n", caption: "RSA 加解密即模幂" },

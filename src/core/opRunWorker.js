@@ -17,7 +17,7 @@
  * 回传主线程展示，不崩线程。本通道只调度显式触发白名单（explicitRun）与爆破池成员，
  * 均为纯计算 op，DOM 类 op 正常走主线程 convert() 旧路径。
  */
-import { getOp } from "./registry.js";
+import { getOp, canonicalOpId } from "./registry.js";
 import { withLimitContext } from "./limitGuard.js";
 import { OP_FILE_MAP } from "./lazyTables.generated.js";
 
@@ -26,7 +26,7 @@ let _fallbackAll = null;
 async function loadOp(opId) {
   const op = getOp(opId);
   if (op) return op;
-  const file = OP_FILE_MAP[opId];
+  const file = OP_FILE_MAP[opId] || OP_FILE_MAP[canonicalOpId(opId)];
   if (file) {
     try {
       await import(file);

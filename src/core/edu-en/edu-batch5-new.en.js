@@ -64,7 +64,7 @@ export default {
       "A numeric key (e.g. 81257) drives two things:\n\n1. Spell the number as an English word (num2words) and use its letter order to build a 5×5 key square (I/J merged).\n2. First group the plaintext by the digits of the number, reverse the letter order within each group, then apply Polybius coordinate substitution using the square.\n\nDecryption reverses the order to restore.",
     usage: "Enter the numeric key (e.g. `81257`). encode encrypts, decode decrypts. Only letters are processed; non-letters pass through. A key containing 0 causes grouping anomalies, and the tool blocks it with an error.",
     examples: [
-      { in: "HELLO", param: "key=81257", out: "cggmd", desc: "Square substitution + group reversal (output may carry a trailing group space, reversible after trim)" },
+      { in: "HELLO", param: "key=81257 (group reversal + square substitution)", out: "cggmd ", desc: "This tool converts numbers to English words (TWENTY-THREE etc.); dCode/original uses French (VINGT-TROIS), so the official example cannot be reproduced directly; the trailing space is part of the real output (exact match)", run: { dir: "encode", params: {"key": "81257"} } },
     ],
     tips: ["Bazeries is a mixed 'transposition + substitution' cipher, harder to crack directly with frequency analysis than pure substitution."],
     aka: ["Bazeries", "巴泽里斯密码", "Bazeries cipher", "巴泽里密码", "Étienne Bazeries", "波利比奥斯变体", "Polybius变体", "数字分组反转", "换位替换混合密码", "法国密码", "巴泽利斯", "方阵替换密码", "Polybius variant"],
@@ -141,8 +141,8 @@ export default {
       "After rearrangement, characters with the same context cluster together (e.g. `banana` → `nnbaaa`), aiding subsequent RLE/MTF compression. The inverse uses LF-mapping: starting from primary, iteratively restore by the \"last column → first column\" correspondence. There's also an optional `$` sentinel mode — append a `$` smaller than all characters to the end, so primary is implicitly the position of `$` in the BWT string, and the output needs no index.",
     usage: "encode: input text → output `BWTstring|primary` (separator configurable); sentinel mode outputs a BWT string containing `$`. decode: input the same format → restore. Note sentinel mode requires the original text not contain `$`.",
     examples: [
-      { in: "banana", param: "no sentinel (separator |)", out: "nnbaaa|3", desc: "BWT string=nnbaaa, primary=3; decode restores banana" },
-      { in: "banana", param: "sentinel mode (add $)", out: "annb$aa", desc: "The position of $ is the implicit primary; decode drops the trailing $" },
+      { in: "banana", param: "no sentinel (separator |): output = BWT string|primary", out: "nnbaaa|3", desc: "BWT string=nnbaaa, primary=3; this tool appends separator and index, unlike sites that output only the BWT string", run: { dir: "encode", params: {"eofSentinel": false, "separator": "|"} } },
+      { in: "banana", param: "sentinel mode (add $)", out: "annb$aa", desc: "The position of $ is the implicit primary; decode drops the trailing $", run: { dir: "encode", params: {"eofSentinel": true} } },
     ],
     tips: [
       "Reversible, not encrypting — in CTF it's often a preprocessing layer for compression or steganography; a \"shuffled string + index\" look like `nnbaaa|number` is it.",

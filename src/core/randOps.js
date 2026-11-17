@@ -40,7 +40,7 @@ export const RAND_OPS = Object.freeze(new Set([
   // —— 随机数工具本体 ——
   "randomSeed", "generateUuid",
   // —— 自研 / 复古编码 / 分析工具中带随机成分（2026-10-11 已统一接入 randSource）——
-  "elgamal", "knapsack", "xiangyueEnc", "foyu", "bigCalc", "bb84Qkd", "primeInspector", "hajimiCode",
+  "elgamal", "knapsack", "xiangyue", "xiangyueEnc", "foyu", "bigCalc", "bb84Qkd", "primeInspector", "hajimiCode",
 ]));
 
 /**

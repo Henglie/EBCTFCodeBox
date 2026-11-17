@@ -572,7 +572,7 @@ function opDirs(op) {
   const dirs = [];
   if (op.encode) dirs.push("encode");
   if (op.decode) dirs.push("decode");
-  if (op.run) dirs.push("run");
+  if (op.run && !(op.encode && op.decode)) dirs.push("run");
   return dirs;
 }
 function dirLabel(d) {
