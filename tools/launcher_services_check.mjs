@@ -5,7 +5,7 @@ import net from 'node:net';
 import { resolve } from 'node:path';
 import { freePort, request, stopLauncher } from './launcher_test_helpers.mjs';
 const exeAt = process.argv.indexOf('--exe');
-const executable = resolve(exeAt < 0 ? 'Windows点我启动.exe' : process.argv[exeAt + 1]);
+const executable = resolve(exeAt < 0 ? 'Start-Windows.exe' : process.argv[exeAt + 1]);
 let checks = 0;
 for (const token of ['', 'test-local-token']) {
   const port = await freePort(), mcp = await freePort();

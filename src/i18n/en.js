@@ -1691,7 +1691,7 @@ export default {
   "ui.plugin.mcpExported": "MCP descriptors exported (JSON file)",
   "ui.plugin.mcpHowTitle": "How to connect (local stdio)",
   "ui.plugin.mcpHowIntro": "This toolbox's MCP is a local stdio service: your AI client launches it as a local process per the config, so having no URL in the config is expected. Fully local, offline-capable, zero outbound traffic.",
-  "ui.plugin.mcpHowStep1": "In the toolbox install directory, run: py 通用点我启动.py --mcp-config — it prints a ready-to-use config JSON with absolute local paths filled in",
+  "ui.plugin.mcpHowStep1": "In the toolbox install directory, run: py start.py --mcp-config — it prints a ready-to-use config JSON with absolute local paths filled in",
   "ui.plugin.mcpHowStep2": "Paste the printed mcpServers JSON verbatim into your AI client's MCP config",
   "ui.plugin.mcpHowStep3": "Restart the client; 6 ebctf_* tools appearing means you're connected",
   "ui.plugin.mcpHowClients": "Config file locations: Claude Code = .mcp.json at project root; Cursor = .cursor/mcp.json (or the MCP settings panel); Trae = MCP settings panel; Codex / Cline = their MCP config files; Claude Desktop = claude_desktop_config.json",
@@ -1701,8 +1701,8 @@ export default {
   "ui.plugin.mcpPromptCopied": "Copied — paste it to your AI client",
   "ui.plugin.mcpPromptHead": "Please connect the \"Henglie CTF Encoding Toolbox\" to your MCP:",
   "ui.plugin.mcpPromptDirFilled": "1) Its install directory on this machine: {0}",
-  "ui.plugin.mcpPromptDirAuto": "1) First locate its install directory on this machine (hint: 通用点我启动.py and mcp/server.mjs sit in the same folder; ask me if not found or if there are several)",
-  "ui.plugin.mcpPromptRest": "2) In that directory run `py 通用点我启动.py --mcp-config`, write the mcpServers JSON from its output verbatim into your MCP config (.mcp.json / claude_desktop_config.json etc.), and restart — you should see 6 ebctf_* tools.\n3) It is a local stdio service: fully local, zero outbound.\nTool cheatsheet: ebctf_list_categories lists categories | ebctf_list_ops lists ops by keyword/category | ebctf_op_schema shows the param schema | ebctf_detect detects encodings | ebctf_run_op runs an op | ebctf_magic_decode one-click multi-layer decode.",
+  "ui.plugin.mcpPromptDirAuto": "1) First locate its install directory on this machine (hint: start.py and mcp/server.mjs sit in the same folder; ask me if not found or if there are several)",
+  "ui.plugin.mcpPromptRest": "2) In that directory run `py start.py --mcp-config`, write the mcpServers JSON from its output verbatim into your MCP config (.mcp.json / claude_desktop_config.json etc.), and restart — you should see 6 ebctf_* tools.\n3) It is a local stdio service: fully local, zero outbound.\nTool cheatsheet: ebctf_list_categories lists categories | ebctf_list_ops lists ops by keyword/category | ebctf_op_schema shows the param schema | ebctf_detect detects encodings | ebctf_run_op runs an op | ebctf_magic_decode one-click multi-layer decode.",
 
   // ---- Browser extension · local bridge ----
  // --- Code Image Viewer ----

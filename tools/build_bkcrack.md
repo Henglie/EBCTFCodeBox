@@ -118,7 +118,7 @@ Cross-Origin-Embedder-Policy: require-corp
 正确做法：
 
 ```bat
-python 通用点我启动.py
+python start.py
 ```
 
 它默认在 `127.0.0.1:8180` 起静态服务，`end_headers` 已对每个响应下发上面两个头。

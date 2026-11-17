@@ -6425,7 +6425,7 @@ initLocale().then(async (loc) => {
   if (loc && loc !== "zh") { applyStaticI18n(); renderNav(); renderWorkspace(); }
 }).catch(() => { /* 语言包加载失败静默留 zh 回退 */ });
 function HOT_FILE_OF(id) { return OP_FILE_MAP[id]; } // 热点 op → 源文件
-// 区分本地版 vs 服务器版。判据 = bridge 是否在线（通用点我启动.py 本地部署会同进程自启桥）。
+// 区分本地版 vs 服务器版。判据 = bridge 是否在线（start.py 本地部署会同进程自启桥）。
 // 本地版：桥在 → 页面加载完后后台渐进拉全量天珩 4 平面（补冷僻字，不阻塞首屏）。
 // 服务器版：桥不在 → 只留首屏子集，全量 31MB 不自动拉（省带宽/加速首屏），留环境面板手动加载。
 // ---------- M3 动态取色（种子色 → tonal 语义变量，本地纯计算零外发）----------

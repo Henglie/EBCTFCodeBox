@@ -9,7 +9,7 @@ const args = process.argv.slice(2);
 const option = name => { const i = args.indexOf(name); return i < 0 ? undefined : args[i + 1]; };
 const section = option('--section') || 'fields';
 const report = { section, checks: 0, stdout: '', stderr: '', cases: [] };
-const { child, port } = await startLauncher(resolve('Windows点我启动.exe'), resolve('.'), report);
+const { child, port } = await startLauncher(resolve('Start-Windows.exe'), resolve('.'), report);
 const browser = await chromium.launch({ headless: true, channel: 'chrome' });
 const context = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 1366, height: 900 } });
 await context.route(/^https?:\/\/(127\.0\.0\.1|localhost):8181\//, r => r.fulfill({ status: 503, body: '{}' }));

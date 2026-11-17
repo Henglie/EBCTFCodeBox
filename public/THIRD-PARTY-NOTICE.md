@@ -50,7 +50,7 @@
 
 ### A4. Mongoose 7.23（GPL-2.0-only）— 三平台原生启动器的 HTTP 基座
 
-- **随包文件**：`Windows点我启动.exe`、`bin/Linux启动器`、`bin/macOS启动器`；这些是原生启动器，不包含在根项目的 Apache-2.0 授权内。
+- **随包文件**：`Start-Windows.exe`、`bin/launcher-linux`、`bin/launcher-macos`；这些是原生启动器，不包含在根项目的 Apache-2.0 授权内。
 - **上游**：https://github.com/cesanta/mongoose ，固定 commit `02bdbb9ed6f0a8f7c42228c6e7cb35d748b60551`（7.23）。版权：© 2004–2013 Sergey Lyubka；© 2013–2026 Cesanta Software Limited。
 - **许可证**：采用上游 GPLv2 选项；GPLv2 全文随包位于 `public/wasm/steghide/COPYING.txt`。上游另提供商业双许可，本项目未据此声明商业授权。
 - **对应源码**：Mongoose 上游源码见上述 commit；本项目宿主代码、构建脚本及完整对应源码的公开下载渠道仍待补齐，不能把上游链接视为完整启动器源码交付。

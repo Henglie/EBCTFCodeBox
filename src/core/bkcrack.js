@@ -20,7 +20,7 @@
  * 性能提示（desc + 输出均标注）：攻击 CPU 密集，典型耗时几分钟~几十分钟
  * 峰值内存 300-500MB（密钥表）。wasm 是多线程 pthread（bkcrack attack
  * 无条件 std::thread，关不掉），部署需 COOP/COEP 头启用 SharedArrayBuffer
- * （通用点我启动.py 的 end_headers 已下发 same-origin + require-corp）。
+ * （start.py 的 end_headers 已下发 same-origin + require-corp）。
  *
  * 明文语义提示：ZipCrypto 加密的是**压缩后**字节。method=0(stored) 时已知明文=原文；
  * method=8(deflate) 时已知明文需是 deflate 后的字节（对已知原文做同参数 deflate 再取）。
@@ -270,7 +270,7 @@ async function bkcrackRun(text, p) {
     lines.push("  1) 用下发 COOP/COEP 响应头的服务器打开本页：");
     lines.push("       Cross-Origin-Opener-Policy: same-origin");
     lines.push("       Cross-Origin-Embedder-Policy: require-corp");
-    lines.push("     推荐：运行仓库根目录 `python 通用点我启动.py`（其 end_headers 已下发这两项）。");
+    lines.push("     推荐：运行仓库根目录 `python start.py`（其 end_headers 已下发这两项）。");
     lines.push("     ⚠ bridge.py 是纯 API 桥，不托管页面；用 python -m http.server / 普通静态服务器");
     lines.push("       打开 UI 时不会带这两个头，bkcrack 必然停在这里（这是浏览器安全限制，不是工具 bug）。");
     lines.push("     自检: DevTools Console 执行 crossOriginIsolated，必须返回 true。");

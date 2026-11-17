@@ -35,13 +35,13 @@ git switch -c feat/ui-refinement
 Windows：
 
 ```powershell
-py -3.11 通用点我启动.py
+py -3.11 start.py
 ```
 
 macOS / Linux：
 
 ```bash
-python3 通用点我启动.py
+python3 start.py
 ```
 
 也可使用项目根目录的原生启动器。浏览器验证优先用项目启动器，确保 `.mjs` 的 JavaScript MIME 与跨源隔离响应头正确；Windows 的通用 `http.server` 会受系统 MIME 表影响。

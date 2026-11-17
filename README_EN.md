@@ -40,7 +40,7 @@
 
 ## Quick Download
 
-> Core processing runs locally with zero upload. Unzip and double-click `Windows点我启动.exe`, `macOS点我启动.command`, or `Linux点我启动.sh` for your platform. The native static server needs no Python; CLI / MCP still require Node.js, and Python-based tools require a local Python installation. The alternative `通用点我启动.py` launcher requires Python 3.
+> Core processing runs locally with zero upload. Unzip and double-click `Start-Windows.exe`, `Start-macOS.command`, or `Start-Linux.sh` for your platform. The native static server needs no Python; CLI / MCP still require Node.js, and Python-based tools require a local Python installation. The alternative `start.py` launcher requires Python 3.
 
 | Cloud drive | Link | Passcode |
 |---|---|---|
@@ -165,40 +165,40 @@ Core design:
 - **Cross-linked explainer cards**: when an explainer mentions an algorithm this toolbox implements, the name links to that op page in a new tab; only high-confidence names/aliases qualify, and book titles, code, formulas, and generic words are skipped.
 - **Material 3 warm-red theme**, light / dark toggle, 20 languages.
 
-> For the full feature walkthrough and scenario demos, see [`介绍文章.md`](./介绍文章.md) (Chinese).
+> For the full feature walkthrough and scenario demos, see [`docs/introduction.md`](./docs/introduction.md) (Chinese).
 
 ## Screenshots
 
 <p align="center">
-  <img src="介绍图片/一把梭界面.png" alt="One-shot smart decoding" width="80%" />
+  <img src="docs/images/one-click-decode.png" alt="One-shot smart decoding" width="80%" />
 </p>
 
 <p align="center"><i>One-shot smart decoding: paste text and get ranked decode chains automatically</i></p>
 
 <p align="center">
-  <img src="介绍图片/解析文件演示.gif" alt="File analysis demo" width="80%" />
+  <img src="docs/images/file-parse-demo.gif" alt="File analysis demo" width="80%" />
 </p>
 
 <p align="center"><i>Drop a file to auto-detect its type and strip appended data</i></p>
 
 <p align="center">
-  <img src="介绍图片/配方链演示.gif" alt="Recipe chain demo" width="80%" />
+  <img src="docs/images/recipe-chain-demo.gif" alt="Recipe chain demo" width="80%" />
 </p>
 
 <p align="center"><i>Recipe chains: wire multiple algorithms into a visual pipeline</i></p>
 
 <table>
   <tr>
-    <td><img src="介绍图片/编码图片.png" alt="Encoding chart gallery" /></td>
-    <td><img src="介绍图片/Edu演示.png" alt="Crypto explainer card" /></td>
+    <td><img src="docs/images/code-image-gallery.png" alt="Encoding chart gallery" /></td>
+    <td><img src="docs/images/edu-card-demo.png" alt="Crypto explainer card" /></td>
   </tr>
   <tr>
     <td align="center"><i>Encoding chart gallery · 253 reference tables</i></td>
     <td align="center"><i>Every algorithm ships with an edu explainer card</i></td>
   </tr>
   <tr>
-    <td><img src="介绍图片/关于页面-白.png" alt="Light theme" /></td>
-    <td><img src="介绍图片/关于页面-暗.png" alt="Dark theme" /></td>
+    <td><img src="docs/images/about-light.png" alt="Light theme" /></td>
+    <td><img src="docs/images/about-dark.png" alt="Dark theme" /></td>
   </tr>
   <tr>
     <td align="center"><i>Light theme</i></td>
@@ -211,8 +211,8 @@ Core design:
 Pure static — any static server works. The bundled script is recommended (double-click or command line):
 
 ```bash
-py 通用点我启动.py     # Windows (use py, not python3)
-python3 通用点我启动.py # macOS / Linux
+py start.py     # Windows (use py, not python3)
+python3 start.py # macOS / Linux
 ```
 
 The script starts the static server and the local bridge (bridge.py, fixed port 8181, real capabilities on Windows only) together, then opens your default browser. The bridge runs in a background thread of the same process — no second window.
@@ -223,14 +223,14 @@ Equivalent to the "double-click the exe" flow on Windows. Only the **double-clic
 
 | File | Platform | How to use |
 |---|---|---|
-| `Windows点我启动.exe` | Windows | **Double-click** (32-bit single file, works on 64-bit and ARM64 Windows) |
-| `macOS点我启动.command` | macOS | **Double-click** in Finder → Terminal opens and the control panel runs |
-| `Linux点我启动.sh` | Linux | KDE (Dolphin): **double-click**; GNOME (Nautilus): right-click → Run (or tick "Allow executing as program" in Properties, then double-click) |
-| `bin/macOS启动器` | macOS | universal2 single file (Apple Silicon + Intel), invoked by the .command above — no need to click directly |
-| `bin/Linux启动器` | Linux | x86_64 ELF, invoked by the .sh above — no need to click directly |
+| `Start-Windows.exe` | Windows | **Double-click** (32-bit single file, works on 64-bit and ARM64 Windows) |
+| `Start-macOS.command` | macOS | **Double-click** in Finder → Terminal opens and the control panel runs |
+| `Start-Linux.sh` | Linux | KDE (Dolphin): **double-click**; GNOME (Nautilus): right-click → Run (or tick "Allow executing as program" in Properties, then double-click) |
+| `bin/launcher-macos` | macOS | universal2 single file (Apple Silicon + Intel), invoked by the .command above — no need to click directly |
+| `bin/launcher-linux` | Linux | x86_64 ELF, invoked by the .sh above — no need to click directly |
 
 - macOS uses `.command` because Finder won't open a terminal for a bare binary; Linux desktop environments disagree on double-click behaviour for raw binaries, so `.sh` + the executable bit is the portable choice.
-- **First use**: if double-clicking does nothing after unzipping, grant the executable bit once (`chmod +x macOS点我启动.command bin/macOS启动器 Linux点我启动.sh bin/Linux启动器`). The launchers are unsigned — if Gatekeeper blocks the first open on macOS, click "Open Anyway" in System Settings → Privacy & Security, or right-click → Open.
+- **First use**: if double-clicking does nothing after unzipping, grant the executable bit once (`chmod +x Start-macOS.command bin/launcher-macos Start-Linux.sh bin/launcher-linux`). The launchers are unsigned — if Gatekeeper blocks the first open on macOS, click "Open Anyway" in System Settings → Privacy & Security, or right-click → Open.
 - **Feature parity with Windows**: same C source; the control panel is 1 restart service / 2 free the occupied port / 3 local-bridge settings / 4 open browser / 5 refresh status / 0 exit (keyboard-driven line menu on Linux/macOS — no mouse hover highlighting, a terminal capability difference); local bridge, MCP, pyc decompile, and environment probing all work. Windows-only GUI tool launching and system accent colour degrade gracefully with a notice on these platforms. Both artifacts have passed static acceptance (architecture / linked dependencies / branch fingerprints / endpoint strings); real-machine acceptance is ongoing.
 
 Or point any static server at the project root. There is no build step: edit and refresh.
@@ -255,7 +255,7 @@ Full web servers (nginx / Apache / Caddy, …) work too; two caveats:
    Cross-Origin-Embedder-Policy: require-corp
    ```
 
-   The bundled `通用点我启动.py` sends both headers by default; self-hosted servers need their own configuration. When the headers are missing, multithreaded WASM ops degrade gracefully or report unavailable — pure frontend features are unaffected.
+   The bundled `start.py` sends both headers by default; self-hosted servers need their own configuration. When the headers are missing, multithreaded WASM ops degrade gracefully or report unavailable — pure frontend features are unaffected.
 
 The PWA is wired through `manifest.json` and `sw.js`. The current precache list contains 990 core runtime assets (the count changes with each version; updates download changed content by checksum). Core features work offline after cache installation completes; large on-demand assets (the four Cheonhyeong font planes, WASM, IDS data, encoding charts and KaTeX) must first be loaded online or installed through an offline pack. The top-bar "Check for updates" button currently opens the version page; Service Worker activation and cross-browser offline upgrades remain under verification.
 
@@ -263,10 +263,10 @@ The PWA is wired through `manifest.json` and `sw.js`. The current precache list 
 
 | Platform | Frontend features | Local bridge (exe tools) | Launch |
 |---|---|---|---|
-| Windows | Full (primary platform) | JPHS / OpenPuff / OurSecret (GUI launch) + pyc/exe local decompile + system accent colour sync | `py 通用点我启动.py` |
-| macOS | Full | Unavailable (no .exe); the bridge is auto-skipped and related ops grey out with a notice | Double-click `macOS点我启动.command`, or `python3 通用点我启动.py` |
-| Linux | Full | Same as macOS, bridge auto-skipped | Double-click `Linux点我启动.sh`, or `python3 通用点我启动.py` |
-| ChromeOS | Full (via the Crostini Linux container) | Same as Linux | `python3 通用点我启动.py` (inside Crostini) |
+| Windows | Full (primary platform) | JPHS / OpenPuff / OurSecret (GUI launch) + pyc/exe local decompile + system accent colour sync | `py start.py` |
+| macOS | Full | Unavailable (no .exe); the bridge is auto-skipped and related ops grey out with a notice | Double-click `Start-macOS.command`, or `python3 start.py` |
+| Linux | Full | Same as macOS, bridge auto-skipped | Double-click `Start-Linux.sh`, or `python3 start.py` |
+| ChromeOS | Full (via the Crostini Linux container) | Same as Linux | `python3 start.py` (inside Crostini) |
 | HarmonyOS / Android / iOS | Full (PWA, touch-responsive) | Unavailable (no exe on mobile) | Open the deployed URL in a browser; optionally "Add to Home Screen" |
 
 Notes:
@@ -296,7 +296,7 @@ The project is a pure frontend application — regular computation happens in th
 | Network | connection needed for first load | stable connection | Input is never uploaded; core features work offline after PWA install |
 | Architecture | x86 / x64 / ARM all fine | same | The browser abstracts the architecture; WASM runs across them |
 
-Multithreaded WASM (`SharedArrayBuffer`) needs the cross-origin isolation headers (COOP/COEP); `通用点我启动.py` sends them by default, and without them multithreaded ops fall back to single-thread or report unavailable, without affecting anything else. First paint uses HTTP/1.1 keep-alive, an early ES module entry, and lazy font loading; the complete offline assets are installed by the Service Worker in the background after the page loads.
+Multithreaded WASM (`SharedArrayBuffer`) needs the cross-origin isolation headers (COOP/COEP); `start.py` sends them by default, and without them multithreaded ops fall back to single-thread or report unavailable, without affecting anything else. First paint uses HTTP/1.1 keep-alive, an early ES module entry, and lazy font loading; the complete offline assets are installed by the Service Worker in the background after the page loads.
 
 ## Directory Structure
 

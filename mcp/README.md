@@ -79,11 +79,11 @@ stdio 协议要求 stdout 只承载 JSON-RPC 消息。core 模块加载期的诊
 
 ## 一键接入（推荐）
 
-项目根 `通用点我启动.py` 已内置 MCP 两个模式，无需手抄路径：
+项目根 `start.py` 已内置 MCP 两个模式，无需手抄路径：
 
 ```
-py 通用点我启动.py --mcp-config   # 打印各客户端接入配置（已填好本机绝对路径），照抄即可
-py 通用点我启动.py --mcp          # 直接跑 MCP stdio server（供手动调试 / 客户端 command 指本脚本）
+py start.py --mcp-config   # 打印各客户端接入配置（已填好本机绝对路径），照抄即可
+py start.py --mcp          # 直接跑 MCP stdio server（供手动调试 / 客户端 command 指本脚本）
 ```
 
 `--mcp-config` 会输出 Claude Code / Cursor / Trae / Codex / Cline / Claude Desktop 通用的

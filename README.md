@@ -40,7 +40,7 @@
 
 ## 快速下载
 
-> 核心处理本地运行、零外发。下载解压后按平台双击 `Windows点我启动.exe`、`macOS点我启动.command` 或 `Linux点我启动.sh`。原生静态服务无需 Python；CLI / MCP 仍需 Node.js，Python 工具功能另需本机 Python。也可使用 `通用点我启动.py`（需 Python 3）。
+> 核心处理本地运行、零外发。下载解压后按平台双击 `Start-Windows.exe`、`Start-macOS.command` 或 `Start-Linux.sh`。原生静态服务无需 Python；CLI / MCP 仍需 Node.js，Python 工具功能另需本机 Python。也可使用 `start.py`（需 Python 3）。
 
 | 网盘 | 链接 | 提取码 |
 |---|---|---|
@@ -164,40 +164,40 @@
 - **科普卡算法互链**：科普正文提到本工具已有的算法时，自动链到对应 op 页（新标签页打开）；只认高置信名称/别名，跳过书名、代码、公式与泛词。
 - **Material 3 温和红主题**，暗/亮色切换，20 种语言。
 
-> 想看完整的功能介绍与场景演示，见 [`介绍文章.md`](./介绍文章.md)。
+> 想看完整的功能介绍与场景演示，见 [`docs/introduction.md`](./docs/introduction.md)。
 
 ## 界面预览
 
 <p align="center">
-  <img src="介绍图片/一把梭界面.png" alt="一把梭 · 智能解码" width="80%" />
+  <img src="docs/images/one-click-decode.png" alt="一把梭 · 智能解码" width="80%" />
 </p>
 
 <p align="center"><i>一把梭 · 智能解码：粘进去自动识别编码链并给出候选结果</i></p>
 
 <p align="center">
-  <img src="介绍图片/解析文件演示.gif" alt="文件解析演示" width="80%" />
+  <img src="docs/images/file-parse-demo.gif" alt="文件解析演示" width="80%" />
 </p>
 
 <p align="center"><i>拖入文件自动识别类型 + 剥离附加数据</i></p>
 
 <p align="center">
-  <img src="介绍图片/配方链演示.gif" alt="配方链演示" width="80%" />
+  <img src="docs/images/recipe-chain-demo.gif" alt="配方链演示" width="80%" />
 </p>
 
 <p align="center"><i>配方链：把多个算法串成一条可视化流水线</i></p>
 
 <table>
   <tr>
-    <td><img src="介绍图片/编码图片.png" alt="图形编码图鉴" /></td>
-    <td><img src="介绍图片/Edu演示.png" alt="密码学教学科普卡" /></td>
+    <td><img src="docs/images/code-image-gallery.png" alt="图形编码图鉴" /></td>
+    <td><img src="docs/images/edu-card-demo.png" alt="密码学教学科普卡" /></td>
   </tr>
   <tr>
     <td align="center"><i>图形编码图鉴 · 253 张对照表</i></td>
     <td align="center"><i>每个算法附带 edu 科普卡</i></td>
   </tr>
   <tr>
-    <td><img src="介绍图片/关于页面-白.png" alt="亮色主题" /></td>
-    <td><img src="介绍图片/关于页面-暗.png" alt="暗色主题" /></td>
+    <td><img src="docs/images/about-light.png" alt="亮色主题" /></td>
+    <td><img src="docs/images/about-dark.png" alt="暗色主题" /></td>
   </tr>
   <tr>
     <td align="center"><i>亮色主题</i></td>
@@ -210,8 +210,8 @@
 纯静态，任意静态服务器即可。推荐用附带脚本（双击或命令行）：
 
 ```bash
-py 通用点我启动.py     # Windows（用 py，不用 python3）
-python3 通用点我启动.py # macOS / Linux
+py start.py     # Windows（用 py，不用 python3）
+python3 start.py # macOS / Linux
 ```
 
 脚本会同时起静态服务器 + 本地桥（bridge.py，固定 8181，仅 Windows 有实际能力），并用系统默认浏览器打开。桥在同进程后台线程内运行，不弹第二个窗口。
@@ -222,14 +222,14 @@ python3 通用点我启动.py # macOS / Linux
 
 | 文件 | 平台 | 用法 |
 |---|---|---|
-| `Windows点我启动.exe` | Windows | **双击**即可（32 位单文件，兼容 64 位与 ARM64 Windows） |
-| `macOS点我启动.command` | macOS | Finder 里**双击**它 → 自动打开「终端」并进入控制面板 |
-| `Linux点我启动.sh` | Linux | KDE（Dolphin）直接**双击**；GNOME（Nautilus）右键 → 运行（或属性里勾选「允许作为程序执行」后双击） |
-| `bin/macOS启动器` | macOS | universal2 单文件（Apple Silicon + Intel 双架构），由上面的 .command 调起，无需直接点击 |
-| `bin/Linux启动器` | Linux | x86_64 ELF，由上面的 .sh 调起，无需直接点击 |
+| `Start-Windows.exe` | Windows | **双击**即可（32 位单文件，兼容 64 位与 ARM64 Windows） |
+| `Start-macOS.command` | macOS | Finder 里**双击**它 → 自动打开「终端」并进入控制面板 |
+| `Start-Linux.sh` | Linux | KDE（Dolphin）直接**双击**；GNOME（Nautilus）右键 → 运行（或属性里勾选「允许作为程序执行」后双击） |
+| `bin/launcher-macos` | macOS | universal2 单文件（Apple Silicon + Intel 双架构），由上面的 .command 调起，无需直接点击 |
+| `bin/launcher-linux` | Linux | x86_64 ELF，由上面的 .sh 调起，无需直接点击 |
 
 - macOS 用 `.command` 是因为 Finder 双击裸二进制不会打开终端；Linux 各桌面对裸二进制双击行为不一致，`.sh` + 可执行位是通用做法。
-- **首次使用**：解压后双击无反应先赋一次执行权限（`chmod +x macOS点我启动.command bin/macOS启动器 Linux点我启动.sh bin/Linux启动器`）；启动器未签名，macOS 首开被 Gatekeeper 拦时在「系统设置 → 隐私与安全性」点「仍要打开」或右键 → 打开。
+- **首次使用**：解压后双击无反应先赋一次执行权限（`chmod +x Start-macOS.command bin/launcher-macos Start-Linux.sh bin/launcher-linux`）；启动器未签名，macOS 首开被 Gatekeeper 拦时在「系统设置 → 隐私与安全性」点「仍要打开」或右键 → 打开。
 - **功能与 Windows 一致**：同一套 C 源码，控制面板同为 1 重启服务 / 2 清除占用端口 / 3 本地桥设置 / 4 打开浏览器 / 5 刷新状态 / 0 退出（Linux/macOS 为键盘行式菜单，无鼠标点击与悬停高亮，属终端能力差异）；本地桥、MCP、pyc 反编、环境探测全可用。Windows 专属的 GUI 工具拉起与系统强调色在这两个平台自动降级提示。两份产物已过静态验收（架构/链接依赖/分支指纹/端点串），真机运行验收持续进行。
 
 或直接用任意静态服务器指向项目根目录。首版无需 build，改完刷新即生效。
@@ -254,7 +254,7 @@ nginx / Apache / Caddy 等正式 Web 服务器同样可用，需注意两点：
    Cross-Origin-Embedder-Policy: require-corp
    ```
 
-   附带的 `通用点我启动.py` 已默认下发这两个头；自建服务器需自行配置。缺失这两个头时，多线程 WASM op 会优雅降级或提示不可用，纯前端功能不受影响。
+   附带的 `start.py` 已默认下发这两个头；自建服务器需自行配置。缺失这两个头时，多线程 WASM op 会优雅降级或提示不可用，纯前端功能不受影响。
 
 PWA 已接线（`manifest.json` + `sw.js`）：当前预缓存清单含 990 项核心运行资源（随版本变化，更新时按校验和增量下载），完成缓存安装后支持核心功能离线使用；大体积按需资产（天珩字库四平面、WASM、IDS 拼字数据、编码对照图、KaTeX）需先在线加载或安装对应离线包。顶栏“检查更新”目前打开版本页面；Service Worker 的版本激活与跨浏览器离线升级仍持续验证。
 
@@ -262,10 +262,10 @@ PWA 已接线（`manifest.json` + `sw.js`）：当前预缓存清单含 990 项�
 
 | 平台 | 前端功能 | 本地桥（exe 工具） | 启动方式 |
 |---|---|---|---|
-| Windows | 全功能（主平台） | JPHS / OpenPuff / OurSecret（GUI 启动）+ pyc/exe 本地反编 + 系统强调色同步 | `py 通用点我启动.py` |
-| macOS | 全功能 | 不可用（无 .exe），桥自动跳过，相关 op 灰置提示 | 双击 `macOS点我启动.command`，或 `python3 通用点我启动.py` |
-| Linux | 全功能 | 同 macOS，桥自动跳过 | 双击 `Linux点我启动.sh`，或 `python3 通用点我启动.py` |
-| ChromeOS | 全功能（经 Crostini Linux 容器） | 同 Linux | `python3 通用点我启动.py`（Crostini 内） |
+| Windows | 全功能（主平台） | JPHS / OpenPuff / OurSecret（GUI 启动）+ pyc/exe 本地反编 + 系统强调色同步 | `py start.py` |
+| macOS | 全功能 | 不可用（无 .exe），桥自动跳过，相关 op 灰置提示 | 双击 `Start-macOS.command`，或 `python3 start.py` |
+| Linux | 全功能 | 同 macOS，桥自动跳过 | 双击 `Start-Linux.sh`，或 `python3 start.py` |
+| ChromeOS | 全功能（经 Crostini Linux 容器） | 同 Linux | `python3 start.py`（Crostini 内） |
 | 鸿蒙 / Android / iOS | 全功能（PWA，触屏响应式） | 不可用（移动端无法运行 exe） | 浏览器打开部署地址，可选「添加到主屏幕」 |
 
 说明：
@@ -295,7 +295,7 @@ PWA 已接线（`manifest.json` + `sw.js`）：当前预缓存清单含 990 项�
 | OS 位数 | 32 位可用 | 64 位 | 64 位浏览器可寻址更大内存，利于大文件分析 |
 | 架构 | x86 / x64 / ARM 均可 | 同左 | 浏览器抽象底层架构，WASM 跨架构运行 |
 
-WASM 多线程（`SharedArrayBuffer`）需跨源隔离头（COOP/COEP），`通用点我启动.py` 已默认下发；缺失时多线程 op 降级为单线程或提示不可用，不影响其余功能。首屏使用 HTTP/1.1 keep-alive、ES module 入口前置和字库懒加载；完整离线资源由 Service Worker 在页面加载后后台安装。
+WASM 多线程（`SharedArrayBuffer`）需跨源隔离头（COOP/COEP），`start.py` 已默认下发；缺失时多线程 op 降级为单线程或提示不可用，不影响其余功能。首屏使用 HTTP/1.1 keep-alive、ES module 入口前置和字库懒加载；完整离线资源由 Service Worker 在页面加载后后台安装。
 
 ## 目录结构
 

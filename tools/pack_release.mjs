@@ -61,7 +61,7 @@ const INCLUDE_FILES = [
   "README_EN.md",
   "CHANGELOG.md",
   "LICENSE",
-  "通用点我启动.py",
+  "start.py",
   "bridge.py",
   "local_tools.py",
   "runtime_services.py",
@@ -69,9 +69,9 @@ const INCLUDE_FILES = [
   "HenglieICO.png",
   // 2026-09-27 恒烈指缺补录：各平台双击启动器（v0.1.8-beta 首包漏收）
   // 2026-10-11 恒烈裁定：Windows 只发 32 位一个（x86 兼容 x64/ARM64），三合一改名
-  "Windows点我启动.exe",
-  "Linux点我启动.sh",
-  "macOS点我启动.command",
+  "Start-Windows.exe",
+  "Start-Linux.sh",
+  "Start-macOS.command",
 ];
 
 // 整目录递归（src 含 core/ui/i18n/plugin/main.js；public 含 fonts/th 五个 woff2
@@ -126,10 +126,10 @@ const FORBIDDEN_PREFIXES = [
   "授权/",
   "工具/",
   "资料/",
-  "介绍图片/",
+  "docs/images/",
   "PROGRESS.md",
   "多Agent协作.md",
-  "介绍文章.md",
+  "docs/introduction.md",
 ];
 // 授权工程文件名（出现在白名单里任何位置都不行，双保险）
 const FORBIDDEN_NAMES = ["private_key.enc", "keygen.mjs", "sign.mjs", "encrypt_key.mjs"];
