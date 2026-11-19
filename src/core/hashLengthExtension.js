@@ -341,11 +341,11 @@ function hashLengthExtensionRun(text, p) {
   const appendEnc = (p && p.appendEnc) || "auto";
 
   if (!originalHash) {
-    lines.push("✗ 未填「原哈希」参数。请填 H(secret) 的 hex 值。");
+    lines.push("✗ 未填「原哈希（Hex）」。");
     return lines.join("\n");
   }
   if (origLen <= 0) {
-    lines.push("✗ 未填「secret 字节长度」或为 0。");
+    lines.push("✗ 未填「原始数据总长度（字节）」或为 0。");
     return lines.join("\n");
   }
 
@@ -377,7 +377,7 @@ function hashLengthExtensionRun(text, p) {
 
   lines.push("算法: " + algo.toUpperCase());
   lines.push("原哈希: " + originalHash);
-  lines.push("secret 长度: " + origLen + " 字节");
+  lines.push("原始数据总长度: " + origLen + " 字节");
   lines.push("append 数据: " + appendData.length + " 字节（" + appendEnc + " 解码）");
   lines.push("");
 
@@ -452,8 +452,8 @@ register({
         { value: "sha256", label: "SHA-256（纯 JS）" },
       ],
     },
-    { key: "originalHash", label: "原哈希 H(secret)（hex）", type: "text", default: "", placeholder: "32 hex (MD5) / 40 hex (SHA1) / 64 hex (SHA256)" },
-    { key: "originalLength", label: "secret 字节长度", type: "number", default: 0, placeholder: "secret 的字节数（必填）" },
+    { key: "originalHash", label: "原哈希（Hex）", labelKey: "op.hashLengthExtension.param.originalHash", type: "text", default: "", placeholder: "32 hex (MD5) / 40 hex (SHA1) / 64 hex (SHA256)" },
+    { key: "originalLength", label: "原始数据总长度（字节）", labelKey: "op.hashLengthExtension.param.originalLength", type: "number", default: 0 },
     {
       key: "appendEnc", label: "append 数据编码", type: "select", default: "auto",
       options: [

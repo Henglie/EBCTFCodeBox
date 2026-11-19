@@ -81,9 +81,9 @@ export const PACKS = [
   },
   {
     id: "edu-en",
-    bytes: 1467142,
+    bytes: 1467155,
     entries: [
-      { name: "/src/core/edu-en/edu-ana-crypto-new.en.js", bytes: 34324 },
+      { name: "/src/core/edu-en/edu-ana-crypto-new.en.js", bytes: 34337 },
       { name: "/src/core/edu-en/edu-ana-freq.en.js", bytes: 16830 },
       { name: "/src/core/edu-en/edu-ana-geffe.en.js", bytes: 586 },
       { name: "/src/core/edu-en/edu-ana-more.en.js", bytes: 8143 },

@@ -211,7 +211,7 @@ export default {
       "Merkle-Damgård hashes iteratively compress a message in 64-byte blocks, and the final internal state is the hash output.\n\n" +
       "The attacker reverses the hash back into the internal state (for MD5, 4 little-endian 32-bit words), treats it as the \"initial state\" of the compression function, and continues compressing the append data to obtain $H(\\text{secret}\\Vert\\text{padding}\\Vert\\text{append})$ — never needing to know secret.\n\n" +
       "The key is the glue padding: the original message's padding = `0x80` + some `0x00` bytes + a 64-bit message length, where the bit count in the length field is computed from $\\text{len(secret)}$. This op's MD5 is implemented in pure JS; SHA1/SHA256 go through WebCrypto which does not expose internal state, so it degrades with a hashpump hint.",
-    usage: "Fill in the hex of the original hash H(secret), the secret byte length, and the data to append (input box, decoded per appendEnc). Output is the new hash new_hash + the new message suffix (padding‖append) as hex/base64.",
+    usage: "Total original data length means the byte count of the data represented by the original digest, not the character count or the key length alone. This tool demonstrates a property of hash functions; use HMAC for message authentication.",
     examples: [
       { in: "append=admin", param: "originalHash=<md5>, originalLength=14", out: "new_hash + padding‖append", desc: "MD5 length extension" },
     ],

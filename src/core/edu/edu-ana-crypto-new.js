@@ -211,7 +211,7 @@ export default {
       "Merkle-Damgård 哈希把消息按 64 字节块迭代压缩，最终内部 state 就是 hash 输出。\n\n" +
       "攻击者把 hash 反推回内部 state（MD5 是 4 个 32 位小端字），把它当作压缩函数的「初始 state」继续压缩 append 数据，就得到 $H(\\text{secret}\\Vert\\text{padding}\\Vert\\text{append})$——全程不需要知道 secret。\n\n" +
       "关键是 glue padding：原消息的填充 = `0x80` + 若干 `0x00` + 64 位消息长度，长度域里的比特数按 $\\text{len(secret)}$ 算。本 op 的 MD5 用纯 JS 落地；SHA1/SHA256 因走 WebCrypto 不暴露内部 state，给 hashpump 降级提示。",
-    usage: "填原哈希 H(secret) 的 hex、secret 字节长度、要追加的数据（输入框，按 appendEnc 解码）。输出新哈希 new_hash + 新消息后缀（padding‖append）的 hex/base64。",
+    usage: "「原始数据总长度」是原哈希对应数据的总字节数，不是字符数，也不是单独的密钥长度。此工具用于理解哈希的长度扩展性质；实际消息认证请使用 HMAC。",
     examples: [
       { in: "append=admin", param: "originalHash=<md5>, originalLength=14", out: "new_hash + padding‖append", desc: "MD5 长度扩展" },
     ],
