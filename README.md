@@ -1463,6 +1463,7 @@ AI 的联网出口只有可选的 `aiClient`，且必须用户自备 endpoint + 
 - 橙子：提出多个 Misc 逻辑代码修复。
 - Tokeii：贡献改版图标，项目下游优化作者。
 - Jason：提出增加国密攻击工具。
+- [星记 (starnotes-xj)](https://github.com/starnotes-xj)：反馈哈希长度扩展的长度参数问题并提交修正建议（[#9](https://github.com/Henglie/EBCTFCodeBox/pull/9)）。
 
 ## Community
 

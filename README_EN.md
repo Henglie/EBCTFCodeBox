@@ -1385,6 +1385,7 @@ The list below follows the order of the "Authors & Contributors" section of the 
 - 橙子 (Chengzi): proposed multiple Misc logic fixes.
 - Tokeii: contributed the redesigned icon and downstream optimizations.
 - Jason: proposed adding cryptanalysis tools for Chinese cryptographic standards.
+- [星记 (starnotes-xj)](https://github.com/starnotes-xj): reported the hash length-extension parameter issue and proposed a fix ([#9](https://github.com/Henglie/EBCTFCodeBox/pull/9)).
 
 ## Community
 

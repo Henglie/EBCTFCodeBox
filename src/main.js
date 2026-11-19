@@ -6120,6 +6120,7 @@ function renderAbout(host) {
     { name: "Tokeii", tierKey: "ui.about.tierContributor", note: String(getLocale()).toLowerCase().startsWith("zh") ? "贡献改版图标，提供各类识别模型权重支持，项目下游优化作者" : "Contributed the redesigned icon and downstream direction suggestions" },
     { name: "江北", tierKey: "ui.about.tierFeeder", note: String(getLocale()).toLowerCase().startsWith("zh") ? "提供海量词元用于项目开发" : "Provided massive token credits for project development" },
     { name: "Jason", tierKey: "ui.about.tierContributor", noteKey: "ui.about.contribJason" },
+    { name: "星记 (starnotes-xj)", tierKey: "ui.about.tierContributor", note: String(getLocale()).toLowerCase().startsWith("zh") ? "反馈哈希长度扩展的长度参数问题并提交修正建议" : "Reported the hash length-extension parameter issue and proposed a fix" },
   ];
   for (const c of OTHER_CONTRIBUTORS) {
     const cap = el("span", { class: c.avatar ? "about-capsule about-capsule-founder" : "about-capsule" });
