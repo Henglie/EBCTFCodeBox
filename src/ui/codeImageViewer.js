@@ -246,7 +246,7 @@ export async function renderCodeImageViewer(container) {
     if (!im) return;
     ciState.selected = im.id;
     rec.changed();
-    openModal(im);
+    openCodeImagePreview({ src: IMG_BASE + im.file, title: cnName(im), catalogItem: im });
   }
 
   const cardById = new Map();
@@ -701,19 +701,20 @@ function closeModal(immediate = false) {
   setTimeout(() => { if (ov.isConnected) ov.remove(); }, 250 * (Number(document.documentElement.dataset.motionSpeed) || 1) + 80);
 }
 
-function openModal(im) {
+export function openCodeImagePreview({ src, title, catalogItem }) {
   closeModal(true);
   const previousFocus = document.activeElement;
 
-  const unconf = /（待确认）$/.test(im.cn);
-  const aliasStr = (im.alias || []).join("、");
+  const unconf = catalogItem && /（待确认）$/.test(catalogItem.cn);
+  const label = (title || tt("ui.ci.title")).replace(/（待确认）$/, "");
+  const aliasStr = (catalogItem?.alias || []).join("、");
 
   let scale = 1;
   let tx = 0, ty = 0;
   const MIN = 0.5, MAX = 5, STEP = 0.0015;
 
   const big = el("img", {
-    class: "ci-modal-img", alt: cnName(im), src: IMG_BASE + im.file,
+    class: "ci-modal-img", alt: title || label, src,
     draggable: "false",
   });
   big.addEventListener("error", () => big.classList.add("ci-thumb-err"));
@@ -779,25 +780,28 @@ function openModal(im) {
     onclick: () => closeModal(),
   }, msym("close"));
 
+  const meta = catalogItem && el("div", { class: "ci-modal-meta",
+    title: [catalogItem.en, aliasStr, `${catalogItem.w}×${catalogItem.h}`, catLabel(catalogItem.cat)].filter(Boolean).join(" · "),
+  },
+    catalogItem.en ? el("span", { class: "ci-modal-en" }, catalogItem.en) : null,
+    aliasStr ? el("span", { class: "ci-modal-alias" }, tt("ui.ci.alias") + "：" + aliasStr) : null,
+    el("span", { class: "ci-modal-dim" }, catalogItem.w + "×" + catalogItem.h),
+    el("span", { class: "ci-modal-cat" }, catLabel(catalogItem.cat)),
+  );
   const head = el("div", { class: "ci-modal-head" },
     el("div", { class: "ci-modal-titles" },
       el("div", { class: "ci-modal-title" },
-        cnName(im).replace(/（待确认）$/, ""),
+        label,
         unconf ? el("span", { class: "ci-badge" }, tt("ui.ci.unconfirmed")) : null,
       ),
-      el("div", { class: "ci-modal-meta", title: [im.en, aliasStr, `${im.w}×${im.h}`, catLabel(im.cat)].filter(Boolean).join(" · ") },
-        im.en ? el("span", { class: "ci-modal-en" }, im.en) : null,
-        aliasStr ? el("span", { class: "ci-modal-alias" }, tt("ui.ci.alias") + "：" + aliasStr) : null,
-        el("span", { class: "ci-modal-dim" }, im.w + "×" + im.h),
-        el("span", { class: "ci-modal-cat" }, catLabel(im.cat)),
-      ),
+      meta,
     ),
     closeBtn,
   );
 
   const dialog = el("div", {
     class: "ci-modal-dialog", role: "dialog", "aria-modal": "true",
-    "aria-label": cnName(im).replace(/（待确认）$/, ""),
+    "aria-label": label,
     onclick: (e) => e.stopPropagation(),
   }, head, stage,
     el("div", { class: "ci-modal-hint" },

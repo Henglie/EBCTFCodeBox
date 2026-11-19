@@ -193,7 +193,7 @@ function disposeStegSolveView() {
     _stegSolveMod.then((m) => { if (!stillOnPage()) m.disposeStegSolvePage(); }).catch(() => {});
   }
 }
-import { renderCodeImageViewer, disposeCodeImageViewer } from "./ui/codeImageViewer.js"; // 编码图鉴查询器（图形编码对照图）
+import { renderCodeImageViewer, disposeCodeImageViewer, openCodeImagePreview } from "./ui/codeImageViewer.js"; // 编码图鉴查询器（图形编码对照图）
 import { renderAllOpsView } from "./ui/allOpsView.js"; // 全部算法平铺矩阵页
 import { refreshMobileDrawerLabels } from "./ui/mobileDrawer.js"; // ≤860px 导航抽屉：自注入汉堡/遮罩；navRail() 窄屏返回 false 配合完整导航
 import { synonymsOf, expandAliases } from "./ui/searchSynonyms.js"; // 图像/视频/编码等同义词检索（只改检索，不改 op 名）
@@ -4478,7 +4478,7 @@ function renderEduCard(opId) {
         class: "edu-img-open", type: "button", title: t("ui.file.viewTitle"),
         "aria-label": im.cap || t("ui.file.viewTitle"),
         "aria-haspopup": "dialog",
-        onclick: () => openImageLightbox(im.src, im.cap),
+        onclick: () => openCodeImagePreview({ src: im.src, title: im.cap || t("ui.edu.chart") }),
       }, img));
       if (im.cap) fig.append(el("figcaption", { class: "edu-img-cap" }, im.cap));
       gal.append(fig);
