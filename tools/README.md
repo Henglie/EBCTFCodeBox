@@ -29,6 +29,7 @@ fork 后想复现构建、自己打包发行，看这里。日常开发用不到
 | `expressive_check.mjs` | M3排版/对比度、稳定按压、展开反向、浮层中断、三档节奏、减少动效、结果有效性、IME及触屏 | 三引擎；`--capture before/after --screenshots-dir <已有目录>` 获取同视口明暗截图 |
 | `drafts_check.mjs` | 切页/刷新草稿、文件字节、多字段、图像恢复、跨标签清空与完整重置 | 草稿持久化、清空和启动路由修改后，使用隔离浏览器上下文 |
 | `feedback_check.mjs` | 工作台运行/错误/取消/恢复、只读键盘语义、密码框尾端动作和 44px 触屏工具 | 本地静态服务器；支持 `--browser`、`--channel`、`--screenshots-dir`，Playwright 仅开发依赖 |
+| `hash_length_extension_check.mjs` | MD5/SHA-1/SHA-256 长度扩展的完整消息 hex 与新签名独立对拍 | Node 原生 OpenSSL 参考实现 |
 | `sm2_attack_check.mjs` / `sm2_attack_reference.py` | SM2 nonce 误用攻击独立对拍与异常样本 | Node + Windows `py -3.11` + 开发依赖 `gmssl==3.2.2`；运行时无需 Python |
 | `sm_attack_check.mjs` | SM3 长度扩展/HMAC、SM4 攻击与一键尝试差分回归 | Node OpenSSL 需提供 SM3、SM4 ECB/CBC/CTR/OFB/GCM |
 | `sm_attack_ui_check.mjs` | 9 个国密攻击 op 的真实执行、科普、文件产物与别名导航 | 本地服务器 + Playwright；前端测试将可选原生桥设为不可用 |

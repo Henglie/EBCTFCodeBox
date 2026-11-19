@@ -1,9 +1,9 @@
 /*
  * hashLengthExtension.js — 哈希长度扩展攻击（cat:'crypto'，run 型）。
  *
- * 定位：CTF web/crypto 高频题。给定 H(secret) 和 len(secret)，构造
- * H(secret || padding || append) 而不需要知道 secret——MD5/SHA1/SHA256 等
- * Merkle-Damgård 结构哈希的固有弱点。对应 ctf-wiki crypto/hash/attack。
+ * 定位：CTF web/crypto 高频题。给定 H(secret || original_message) 和原始总长度，
+ * 构造 H(secret || original_message || padding || append) 而不需要知道 secret——
+ * MD5/SHA1/SHA256 等 Merkle-Damgård 结构哈希的固有弱点。对应 ctf-wiki crypto/hash/attack。
  *
  * 原理：Merkle-Damgård 哈希把消息分 64 字节块压缩，最终 state 即 hash 输出。
  * 攻击者从 hash 反推内部 state，把它当压缩函数的"初始 state"，继续压缩 append
@@ -17,14 +17,15 @@
  *
  * 输入：
  * - originalHash：32 hex（MD5）/ 40 hex（SHA1）/ 64 hex（SHA256）
- * - originalLength：secret 字节数
+ * - originalMessage：已知原消息，不含 secret（按 originalMessageEnc 解码）
+ * - originalLength：secret || originalMessage 的总字节数
  * - appendData：要追加的数据（按 appendEnc 解码）
- * - algo：md5（默认）/ sha1 / sha256（后两者降级提示）
+ * - algo：md5（默认）/ sha1 / sha256
  *
  * 输出：
  * - newHash：构造出的新哈希 hex
- * - newMessage：secret_padding_append 的字节串（hex/base64，UI 给 base64 便于复制）
- * - 注：actual secret 未知，newMessage 中 secret 部分用占位符标注
+ * - newMessage：originalMessage || padding || append 的完整消息 hex（不含未知 secret）
+ * - newMessageSuffix：padding || append 的 hex/base64
  *
  * 红线：
  * - 算法层零 UI 依赖（仅 registry）。
@@ -68,6 +69,22 @@ function bytesToB64(bytes) {
   let bin = "";
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin);
+}
+
+function decodeData(raw, enc) {
+  const text = String(raw || "");
+  const trimmed = text.trim();
+  if (enc === "hex") return hexToBytes(trimmed);
+  if (enc === "utf8") return new TextEncoder().encode(text);
+  if (enc === "base64") {
+    const bin = atob(trimmed.replace(/\s/g, ""));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+  const stripped = trimmed.replace(/\s/g, "");
+  if (/^[0-9a-fA-F]+$/.test(stripped) && stripped.length % 2 === 0) return hexToBytes(trimmed);
+  return new TextEncoder().encode(text);
 }
 
 // MD5 K/S 表（RFC 1321，与 hash.js 一致）
@@ -337,39 +354,35 @@ function hashLengthExtensionRun(text, p) {
   const algo = (p && p.algo) || "md5";
   const originalHash = String((p && p.originalHash) || "").trim();
   const origLen = parseInt((p && p.originalLength) || "0", 10) || 0;
+  const originalRaw = String((p && p.originalMessage) || "");
+  const originalEnc = (p && p.originalMessageEnc) || "auto";
   const appendRaw = String(text || "");
   const appendEnc = (p && p.appendEnc) || "auto";
 
   if (!originalHash) {
-    lines.push("✗ 未填「原哈希」参数。请填 H(secret) 的 hex 值。");
+    lines.push("✗ 未填「原哈希」参数。请填 H(secret || original_message) 的 hex 值。");
     return lines.join("\n");
   }
   if (origLen <= 0) {
-    lines.push("✗ 未填「secret 字节长度」或为 0。");
+    lines.push("✗ 未填「原始总字节数（含 secret）」或为 0。");
     return lines.join("\n");
   }
 
- // 解码 appendData
+  let originalData;
+  try {
+    originalData = decodeData(originalRaw, originalEnc);
+  } catch (e) {
+    lines.push("✗ 原消息解析失败: " + (e.message || String(e)));
+    return lines.join("\n");
+  }
+  if (origLen < originalData.length) {
+    lines.push("✗ 原始总字节数不能小于原消息长度。");
+    return lines.join("\n");
+  }
+
   let appendData;
   try {
-    const s = appendRaw.trim();
-    if (appendEnc === "hex") {
-      appendData = hexToBytes(s);
-    } else if (appendEnc === "utf8") {
-      appendData = new TextEncoder().encode(appendRaw);
-    } else if (appendEnc === "base64") {
-      const bin = atob(s.replace(/\s/g, ""));
-      appendData = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) appendData[i] = bin.charCodeAt(i);
-    } else {
- // auto: hex 优先（偶数+全 hex 字符），否则 utf8
-      const stripped = s.replace(/\s/g, "");
-      if (/^[0-9a-fA-F]+$/.test(stripped) && stripped.length % 2 === 0) {
-        appendData = hexToBytes(s);
-      } else {
-        appendData = new TextEncoder().encode(appendRaw);
-      }
-    }
+    appendData = decodeData(appendRaw, appendEnc);
   } catch (e) {
     lines.push("✗ append 数据解析失败: " + (e.message || String(e)));
     return lines.join("\n");
@@ -377,28 +390,34 @@ function hashLengthExtensionRun(text, p) {
 
   lines.push("算法: " + algo.toUpperCase());
   lines.push("原哈希: " + originalHash);
-  lines.push("secret 长度: " + origLen + " 字节");
+  lines.push("原始总长度（含 secret）: " + origLen + " 字节");
+  lines.push("原消息: " + originalData.length + " 字节（" + originalEnc + " 解码）");
   lines.push("append 数据: " + appendData.length + " 字节（" + appendEnc + " 解码）");
   lines.push("");
 
   if (algo === "md5") {
     try {
       const r = md5LengthExtension(originalHash, origLen, appendData);
+      const newMessage = new Uint8Array(originalData.length + r.newMessageSuffix.length);
+      newMessage.set(originalData);
+      newMessage.set(r.newMessageSuffix, originalData.length);
       lines.push("--- 构造结果 ---");
       lines.push("新哈希 new_hash = " + r.newHashHex);
+      lines.push("");
+      lines.push("完整新消息 new_message = original_message || padding || append（不含 secret，" + newMessage.length + " 字节）:");
+      lines.push("  hex: " + bytesToHex(newMessage));
       lines.push("");
       lines.push("新消息后缀 new_message_suffix = padding || append（" + r.newMessageSuffix.length + " 字节）:");
       lines.push("  hex: " + bytesToHex(r.newMessageSuffix));
       lines.push("  base64: " + bytesToB64(r.newMessageSuffix));
       lines.push("");
-      lines.push("完整新消息: secret || padding || append（secret 未知，用真实 secret 前置即可）");
       lines.push("  glue padding: " + bytesToHex(r.paddingBytes) + "（" + r.paddingBytes.length + " 字节）");
       lines.push("");
       lines.push("用法：");
       lines.push("  · 服务器校验 H(secret || msg) == 你提交的 new_hash 时，");
-      lines.push("    把 msg 替换为 padding || append，hash 用 new_hash，即可绕过 secret 校验。");
-      lines.push("  · new_message_suffix 是后缀，发送时前置 secret（服务器自动拼）即可。");
-      lines.push("  · 验证：H(secret || new_message_suffix) 应等于 new_hash（用本工具箱 MD5 op 对拍）。");
+      lines.push("    把 msg 替换为 new_message，hash 用 new_hash，即可绕过 secret 校验。");
+      lines.push("  · new_message 不含未知 secret；服务器校验时会自行前置 secret。");
+      lines.push("  · 验证：H(secret || new_message) 应等于 new_hash（用本工具箱 MD5 op 对拍）。");
     } catch (e) {
       lines.push("✗ " + (e.message || String(e)));
     }
@@ -411,21 +430,26 @@ function hashLengthExtensionRun(text, p) {
       : { name: "SHA-256", words: 8, compress: sha256CompressBlock };
     try {
       const r = beLengthExtension(originalHash, origLen, appendData, cfg);
+      const newMessage = new Uint8Array(originalData.length + r.newMessageSuffix.length);
+      newMessage.set(originalData);
+      newMessage.set(r.newMessageSuffix, originalData.length);
       lines.push("--- 构造结果 ---");
       lines.push("新哈希 new_hash = " + r.newHashHex);
+      lines.push("");
+      lines.push("完整新消息 new_message = original_message || padding || append（不含 secret，" + newMessage.length + " 字节）:");
+      lines.push("  hex: " + bytesToHex(newMessage));
       lines.push("");
       lines.push("新消息后缀 new_message_suffix = padding || append（" + r.newMessageSuffix.length + " 字节）:");
       lines.push("  hex: " + bytesToHex(r.newMessageSuffix));
       lines.push("  base64: " + bytesToB64(r.newMessageSuffix));
       lines.push("");
-      lines.push("完整新消息: secret || padding || append（secret 未知，用真实 secret 前置即可）");
       lines.push("  glue padding: " + bytesToHex(r.paddingBytes) + "（" + r.paddingBytes.length + " 字节）");
       lines.push("");
       lines.push("用法：");
       lines.push("  · 服务器校验 " + cfg.name + "(secret || msg) == 你提交的 new_hash 时，");
-      lines.push("    把 msg 替换为 padding || append，hash 用 new_hash，即可绕过 secret 校验。");
-      lines.push("  · new_message_suffix 是后缀，发送时前置 secret（服务器自动拼）即可。");
-      lines.push("  · 验证：" + cfg.name + "(secret || new_message_suffix) 应等于 new_hash（用本工具箱 " + cfg.name + " op 对拍）。");
+      lines.push("    把 msg 替换为 new_message，hash 用 new_hash，即可绕过 secret 校验。");
+      lines.push("  · new_message 不含未知 secret；服务器校验时会自行前置 secret。");
+      lines.push("  · 验证：" + cfg.name + "(secret || new_message) 应等于 new_hash（用本工具箱 " + cfg.name + " op 对拍）。");
     } catch (e) {
       lines.push("✗ " + (e.message || String(e)));
     }
@@ -442,7 +466,7 @@ register({
   id: "hashLengthExtension",
   cat: "crypto",
   name: "哈希长度扩展攻击（MD5/SHA1/SHA256）",
-  desc: "Merkle-Damgård 弱点：从 H(secret) 和 len(secret) 构造 H(secret||padding||append) 而不知 secret。MD5/SHA-1/SHA-256 全部纯 JS 落地（内部 state 反推 + 续压），无需 hashpump。输入按显式 hex 解析，任意非 hex 字符显式报错",
+  desc: "Merkle-Damgård 弱点：从 H(secret||original_message) 和原始总长度构造新哈希及 original_message||padding||append，无需知道 secret。MD5/SHA-1/SHA-256 全部纯 JS 落地，无需 hashpump。输入按显式 hex 解析，任意非 hex 字符显式报错",
   params: [
     {
       key: "algo", label: "算法", type: "select", default: "md5",
@@ -452,8 +476,18 @@ register({
         { value: "sha256", label: "SHA-256（纯 JS）" },
       ],
     },
-    { key: "originalHash", label: "原哈希 H(secret)（hex）", type: "text", default: "", placeholder: "32 hex (MD5) / 40 hex (SHA1) / 64 hex (SHA256)" },
-    { key: "originalLength", label: "secret 字节长度", type: "number", default: 0, placeholder: "secret 的字节数（必填）" },
+    { key: "originalHash", label: "原哈希 H(secret || 原消息)（hex）", type: "text", default: "", placeholder: "32 hex (MD5) / 40 hex (SHA1) / 64 hex (SHA256)" },
+    { key: "originalMessage", label: "原消息 original_message（不含 secret）", type: "text", default: "", placeholder: "已知原始消息，用于输出完整 new_message" },
+    {
+      key: "originalMessageEnc", label: "原消息编码", type: "select", default: "auto",
+      options: [
+        { value: "auto", label: "自动（hex/utf8）" },
+        { value: "hex", label: "Hex" },
+        { value: "utf8", label: "UTF-8 文本" },
+        { value: "base64", label: "Base64" },
+      ],
+    },
+    { key: "originalLength", label: "原始总字节数（含 secret）", type: "number", default: 0, placeholder: "len(secret || original_message)，必填" },
     {
       key: "appendEnc", label: "append 数据编码", type: "select", default: "auto",
       options: [
