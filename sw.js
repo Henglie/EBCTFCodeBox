@@ -1,4 +1,4 @@
-// BUILD-STAMP: 8e7876ead83b8015
+// BUILD-STAMP: 09d7d6a9707c1cd8
 importScripts("./sw-assets.js", "./sw-packs.js");
 
 // The asset generator synchronizes BUILD-STAMP with the resource revision.
@@ -60,11 +60,14 @@ async function installPack(msg, port, source) {
     send({ type: "cache-pack-error", id, reason: "未知离线包: " + String(id) });
     return;
   }
-  if (msg.rev !== pack.rev) {
+  // Only the worker has the generated content revision. The page declares the
+  // files it expects; never compare the content hash to a page-derived hash.
+  if (Array.isArray(msg.entries) && (msg.entries.length !== pack.entries.length
+    || !pack.entries.every((entry, i) => entry === msg.entries[i]))) {
     send({
       type: "cache-pack-error",
       id,
-      reason: "清单版本不一致（页面 " + String(msg.rev) + " / 缓存 " + pack.rev + "），请刷新页面后重试",
+      reason: "离线包文件清单不一致，请更新页面后重试",
     });
     return;
   }

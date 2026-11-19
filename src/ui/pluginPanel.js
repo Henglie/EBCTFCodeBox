@@ -35,7 +35,6 @@ const _ZH = {
   "ui.env.packsOffline": "当前处于离线状态，无法下载离线包；已安装的包仍可使用。",
   "ui.env.packsQuota": "配额不足：需要 {0}，当前可用 {1}。可先移除占空间较大的包或清理站点数据。",
   "ui.env.packsTimeout": "离线服务未响应（可能已休眠），请重试。",
-  "ui.env.packsNoCrypto": "当前环境不支持版本校验（crypto.subtle 不可用），无法安装离线包。",
   "ui.env.packsPartial": "部分安装：{0}/{1} 项失败，首个失败 {2} ({3})。已下载的条目已保留，可继续安装。",
   "ui.env.packsCachedMissing": "缓存中未找到该包，可能已被浏览器清理，请重新安装。",
   "ui.env.packsStatusFailed": "无法读取缓存状态：{0}",
@@ -449,7 +448,6 @@ function sectionPlugins(rerender) {
 
 const PACK_STATE_KEY = "ebctf.offlinePacks.v1";
 const PACK_COMMAND_IDLE_MS = 30000;
-const _packRevCache = new Map();
 
 function readOfflinePackState() {
   try {
@@ -500,18 +498,6 @@ function persistPackFailure(id, reason) {
   writeOfflinePackState(next);
   if (_extPacksPanel) _extPacksPanel.refresh(next);
   return next;
-}
-
-async function packRevision(pack) {
-  const cached = _packRevCache.get(pack.id);
-  if (cached) return cached;
-  const subtle = typeof crypto !== "undefined" && crypto.subtle;
-  if (!subtle) throw new Error(T("ui.env.packsNoCrypto"));
-  const text = pack.entries.map((e) => `${e.name}\u0000${e.bytes}`).join("");
-  const digest = await subtle.digest("SHA-256", new TextEncoder().encode(text));
-  const rev = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("").slice(0, 8);
-  _packRevCache.set(pack.id, rev);
-  return rev;
 }
 
 // 向当前 SW 发一条带 MessageChannel 的命令；进度消息走 onMessage，终态由 Promise 返回。
@@ -589,12 +575,11 @@ async function installOfflinePack(id, panel, onProgress) {
   // 尽力申请持久化；Safari 会返回 false，不阻塞安装。
   try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch { /* 忽略 */ }
 
-  const rev = await packRevision(pack);
   if (panel && panel.setProgress) panel.setProgress(id, T("ui.env.packsPreparing"), 0);
 
   let result;
   try {
-    result = await sendPackCommand({ type: "cache-pack", id, rev }, (data) => {
+    result = await sendPackCommand({ type: "cache-pack", id, entries: pack.entries.map(e => e.name) }, (data) => {
       if (data.type === "cache-pack-progress") {
         const ratio = data.total ? data.done / data.total : 0;
         const text = `${data.done}/${data.total}（${fmtBytes(data.bytesDone || 0)}）`;

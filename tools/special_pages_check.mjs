@@ -79,7 +79,7 @@ try {
   await first.locator('button[title="展开编辑"]').click(); await page.locator('.exp-textarea').fill('2,3,2');
   await page.locator('.exp-save').click(); await page.locator('.exp-dialog').waitFor({ state: 'detached' });
   check(await page.locator('#fld_residues').textContent() === '2,3,2', 'expanded field saves into the correct target');
-  check(await page.locator('.io-swap').isDisabled() && await page.locator('.io-chain').isDisabled(), 'structured fields have no invalid swap/chain target');
+  check(await page.locator('.io-chain').isDisabled(), 'structured fields have no invalid chain target');
   const outputLauncher = page.locator('.io-pane-output button[title="展开编辑"]');
   await outputLauncher.focus(); await outputLauncher.click();
   check(await page.locator('.exp-textarea').evaluate(n => n.readOnly) && await page.locator('.exp-save').count() === 0, 'expanded result is read-only and has no writeback action');

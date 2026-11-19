@@ -216,7 +216,6 @@ try {
       const card = ws.querySelector(":scope > .edu-card"), output = document.getElementById("ioOut");
       const frames = io?.querySelectorAll(".io-editor-frame"), report = data.querySelector(".io-report");
       const heads = [...(io?.querySelectorAll(".io-pane-head") || [])];
-      const outputCoding = panes?.[1]?.querySelector(".io-coding-bar");
       const direction = config.querySelector("#dirSeg");
       return { direct: wb.parentElement === ws, display: getComputedStyle(wb).display, direction: getComputedStyle(wb).direction, layout: wb.dataset.layout,
         ordered: config.nextElementSibling === split && split.nextElementSibling === data,
@@ -233,7 +232,7 @@ try {
         reportOutsideActions: !!report && !actions?.contains(report),
         reportAfterOutput: !!report && !!output && !!(output.compareDocumentPosition(report) & Node.DOCUMENT_POSITION_FOLLOWING),
         reportBelowOutput: !!report && !!output && report.getBoundingClientRect().top >= output.getBoundingClientRect().bottom - 2,
-        outputCodingAfterEditor: !outputCoding || !!(output?.compareDocumentPosition(outputCoding) & Node.DOCUMENT_POSITION_FOLLOWING),
+        codingInParams: !!config.querySelector('.op-params [data-scope="output"] .io-coding-bar') && !data.querySelector('.io-coding-bar'),
         directionWidth: direction?.getBoundingClientRect().width,
         input: panes?.[0] ? rect(panes[0]) : null, output: panes?.[1] ? rect(panes[1]) : null, actions: actions ? rect(actions) : null,
         edu: card ? rect(card) : null, eduAfter: card ? !!(wb.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING) : false };
@@ -245,7 +244,7 @@ try {
     check((result.noInput ? result.inputHidden : result.output.y >= result.input.bottom - 2 && result.actions.y >= result.input.bottom - 2)
       && result.actions.bottom <= result.output.y + 2, `${label}: input / actions / output stay vertical`);
     check(result.frames === 2 && result.inputFramed && result.outputFramed && result.fieldsFramed && result.toolsFramed, `${label}: titles/tools live inside editor frames with absolute heads`);
-    check(result.reportOutsideActions && result.reportAfterOutput && result.reportBelowOutput && result.outputCodingAfterEditor, `${label}: report/output coding follow the output editor`);
+    check(result.reportOutsideActions && result.reportAfterOutput && result.reportBelowOutput && result.codingInParams, `${label}: report follows output, coding settings stay in config`);
     if (result.directionWidth) check(result.directionWidth < result.config.width - 20, `${label}: direction control has intrinsic width instead of filling config`);
     if (expected === "split") check((result.direction === "rtl" ? result.config.x >= result.data.right - 2 : result.data.x >= result.config.right - 2)
       && Math.abs(result.data.y - result.config.y) <= 4, `${label}: split geometry`);
@@ -553,9 +552,9 @@ try {
         const rect = node => { const r = node.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, height: r.height }; };
         const frames = [...document.querySelectorAll(".op-data .io-editor-frame")].map(rect);
         const output = document.querySelector(".io-pane-output"), frame = output.querySelector(".io-editor-frame");
-        const coding = output.querySelector(".io-coding-mount"), footer = output.querySelector(".io-report-footer"), report = output.querySelector(".io-report");
-        const gaps = (parseFloat(getComputedStyle(output).rowGap) || 0) * 2;
-        const reportBudget = frame.getBoundingClientRect().bottom + (coding?.getBoundingClientRect().height || 0) + footer.getBoundingClientRect().height + gaps <= bounds.bottom + 1;
+        const footer = output.querySelector(".io-report-footer"), report = output.querySelector(".io-report");
+        const gap = parseFloat(getComputedStyle(output).rowGap) || 0;
+        const reportBudget = frame.getBoundingClientRect().bottom + footer.getBoundingClientRect().height + gap <= bounds.bottom + 1;
         const config = document.querySelector(".op-config"), data = document.querySelector(".op-data");
         return { bounds, frames, scrollTop: ws.scrollTop, documentScroll: [scrollX, scrollY], reportBudget, report: rect(report),
           configWidth: config.getBoundingClientRect().width, dataWidth: data.getBoundingClientRect().width,
@@ -584,7 +583,7 @@ try {
     await run(`laptop ${width}x${height}: real AES descriptors use 2-3 parameter columns`, async () => {
       await page.setViewportSize({ width, height }); await go("op/aes");
       const grid = await page.locator(".op-config .op-params").evaluate(node => {
-        const css = getComputedStyle(node), selects = [...node.querySelectorAll("select")].filter(select => select.getBoundingClientRect().width > 0);
+        const css = getComputedStyle(node), selects = [...node.querySelectorAll(".param select")].filter(select => select.getBoundingClientRect().width > 0);
         return { display: css.display, columns: (css.gridTemplateColumns.match(/[\d.]+px/g) || []).length,
           selects: selects.length, usedColumns: new Set(selects.map(select => Math.round(select.closest(".param").getBoundingClientRect().left))).size };
       });
@@ -657,13 +656,9 @@ try {
     check(r.op.id === "base64" && r.input.text === "hello" && r.output.text === "aGVsbG8=", "Report contains actual input/output after split");
     await action("chain").click();
     check(await read("#ioIn") === "aGVsbG8=", "Chain moves actual output into input");
+    await output(/^YUdWc2JHOD0=$/);
     await page.locator("#dirSeg button").nth(1).click(); await output(/^hello$/);
-    await action("swap").click(); await page.waitForTimeout(350);
-    check(await read("#ioIn") === "hello" && await read("#ioOut") === "aGVsbG8=", "True swap exchanges panes without automatically decoding");
-    const swapped = await report();
-    check(swapped.input.text === "hello" && swapped.output.text === "aGVsbG8=", "Report records swapped values without conversion");
-    await action("swap").click(); await page.waitForTimeout(350);
-    check(await read("#ioIn") === "aGVsbG8=" && await read("#ioOut") === "hello", "Second swap restores both original panes without conversion");
+    check(await action("swap").count() === 0, "Chain is the only transfer action");
     await capture("desktop");
     const before = await page.locator(".op-config").evaluate(node => node.getBoundingClientRect().width);
     const separator = page.locator(".op-splitter");
@@ -858,10 +853,10 @@ try {
     await go("op/trafficReadable"); await contract("trafficReadable", "split");
     for (const encoding of ["hex", "base64"]) {
       // text view intentionally UTF-8 encodes acceptsBytes input; select the real byte representation.
-      await page.locator(`.io-pane:first-child .io-coding-view[data-view="${encoding}"]`).click();
+      await page.locator(`.io-coding-mount[data-scope="input"] .io-coding-view[data-view="${encoding}"]`).click();
       await page.locator("#ioIn").fill(fixture.toString(encoding)); await convert(); await output(/flag\{workbench_fixture\}/, `trafficReadable ${encoding}`);
     }
-    await page.locator('.io-pane:first-child .io-coding-view[data-view="text"]').click();
+    await page.locator('.io-coding-mount[data-scope="input"] .io-coding-view[data-view="text"]').click();
     const [chosen] = await Promise.all([page.waitForEvent("filechooser"), inputTool("选择文件").click()]);
     await chosen.setFiles({ name: "workbench-http.pcap", mimeType: "application/vnd.tcpdump.pcap", buffer: fixture });
     await page.waitForFunction(() => document.getElementById("ioIn")?.value.includes("workbench-http.pcap"));
@@ -928,7 +923,7 @@ try {
     await page.setViewportSize({ width: 1600, height: 1000 }); await go("op/rsaCrt");
     await contract("rsaCrt-desktop", "split");
     check(await page.locator("#ioIn").count() === 0 && await page.locator(".op-data .io-field-area").count() === 2, "Two real fields replace the single main input");
-    check(await action("chain").isDisabled() && await action("swap").isDisabled(), "Multi-field chain and swap are disabled pending product policy");
+    check(await action("chain").isDisabled() && await action("swap").count() === 0, "Multi-field chain is disabled and swap is absent");
     await page.locator("#fld_residues").fill("2, 3, 2"); await page.locator("#fld_moduli").fill("3, 5, 7");
     await page.locator("#fld_moduli").press("Control+Enter"); await output(/x = 23/);
     await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(350);
@@ -971,7 +966,7 @@ try {
     await page.setViewportSize({ width: 1600, height: 1000 });
     await go("op/rsaEgcd"); await contract("rsaEgcd", "split");
     check(await page.locator("#ioIn").count() === 0 && await page.locator(".op-config .op-no-input-note").isVisible(), "No fake main input for a parameter-only operation");
-    check(await action("chain").isDisabled() && await action("swap").isDisabled(), "No-input chain and swap are disabled");
+    check(await action("chain").isDisabled(), "No-input chain is disabled");
     await (await parameter("a")).fill("30"); await (await parameter("b")).fill("18");
     await convert(); await output(/gcd\(a, b\) = 6/);
   });
@@ -1009,7 +1004,7 @@ try {
       await page.locator("#ioIn").waitFor();
       check(await page.locator(".io-none-hint").count() === 0, "Custom override replaces the no-input hint immediately");
       await page.locator("#ioIn").fill("retained"); await convert(); await output(/^custom:retained$/);
-      check(await action("chain").isEnabled() && await action("swap").isEnabled(), "Custom input enables data actions");
+      check(await action("chain").isEnabled(), "Custom input enables chaining");
       await page.locator('label.switch[for="ci_enable_rsaEgcd"]').click();
       check(await page.locator("#ioIn").count() === 0 && await page.locator(".io-none-hint").isVisible(), "Disabling custom restores semantic no-input mode");
       await page.locator('label.switch[for="ci_enable_rsaEgcd"]').click();

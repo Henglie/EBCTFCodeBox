@@ -241,6 +241,15 @@ html.reduce-motion .batch-panel button:active { transform: none; }
   .search-shortcut { display: none; }
   .topbar-search-input { padding-inline-end: 12px; }
 }
+@media (min-width: 601px) {
+  .topbar-actions > #btnTheme {
+    flex: none; width: 40px; height: 40px; padding: 0; justify-content: center;
+    border-radius: 50%; corner-shape: round;
+  }
+}
+@media (min-width: 601px) and (pointer: coarse) {
+  .topbar-actions > #btnTheme { width: 44px; height: 44px; }
+}
 @media (max-width: 860px) {
   .topbar-actions .update-copy { display: none; }
   .nav-drawer-mask { inset-block-start: var(--topbar-height); }

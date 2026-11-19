@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
-import { existsSync, statSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { extname, join } from "node:path";
 import { execFileSync, execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -107,17 +107,25 @@ const dropped = present.filter(isExcluded);
 
 // ---------------------------------------------------------------------------
 // T709 离线增强包清单：条目与 src/core/offlinePacks.js 的 PACKS 完全一致。
-// rev = 包内 (name + "\0" + **文件实际内容**) 逐条拼接后的 sha256 前 8 位；缓存名带 rev，
-// 条目或内容一变旧包缓存即失效。声明 bytes 只用于体积漂移校验，不能代替内容哈希。
+// rev 按条目名和文件内容计算。JS 统一为 Git 的 LF 形式，避免不同工作区换行改变包体积或版本；
+// 二进制逐字节读取。声明 bytes 只用于体积漂移校验，不能代替内容哈希。
 // 包条目不在预缓存清单里，只在用户点安装时由 SW 下载。
 // ---------------------------------------------------------------------------
 const packRev = async (p) => {
   const h = createHash("sha256");
+  let bytes = 0;
   for (const e of p.entries) {
+    const raw = await readFile(join(process.cwd(), e.name.slice(1)));
+    const content = e.name.endsWith(".js") ? Buffer.from(raw.toString("utf8").replace(/\r\n/g, "\n")) : raw;
+    if (content.length !== e.bytes) {
+      throw new Error(`离线包体积漂移：${e.name} 声明 ${e.bytes}，实际 ${content.length}`);
+    }
+    bytes += content.length;
     h.update(e.name);
     h.update("\0");
-    h.update(await readFile(join(process.cwd(), e.name.slice(1))));
+    h.update(content);
   }
+  if (p.bytes !== bytes) throw new Error(`离线包总大小不一致：${p.id} 声明 ${p.bytes}，实际 ${bytes}`);
   return h.digest("hex").slice(0, 8);
 };
 const packsOut = await Promise.all(PACKS.map(async (p) => ({
@@ -135,16 +143,6 @@ const leaked = PACKS.flatMap((p) => p.entries.map((e) => e.name.slice(1)))
 if (leaked.length) {
   throw new Error(`离线包条目仍在预缓存清单（EXCLUDE_RULES 失配）：${leaked.join(", ")}`);
 }
-// ② 声明字节必须等于磁盘实际（防止资产更新后 PACKS 数字过期）
-for (const p of PACKS) {
-  for (const e of p.entries) {
-    const actual = statSync(join(process.cwd(), e.name.slice(1))).size;
-    if (actual !== e.bytes) {
-      throw new Error(`离线包体积漂移：${e.name} 声明 ${e.bytes}，实际 ${actual}（请重跑 collect_packs.mjs 并更新 PACKS）`);
-    }
-  }
-}
-
 const assets = ["./", "./index.html", "./manifest.json", "./sw.js", "./sw-assets.js", "./sw-packs.js"]
   .concat(kept.map((file) => `./${file.replaceAll("\\", "/")}`));
 

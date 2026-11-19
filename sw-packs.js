@@ -1,9 +1,9 @@
-self.__EBCTF_PACK_REV = "wasm:f6f4e0de,fonts:6adb1f38,locales:b449f46c,edu-en:ef2119ca,ocr:33614b92";
+self.__EBCTF_PACK_REV = "wasm:5f416c08,fonts:6adb1f38,locales:b449f46c,edu-en:ef2119ca,ocr:33614b92";
 self.__EBCTF_PACKS = [
   {
     "id": "wasm",
-    "rev": "f6f4e0de",
-    "bytes": 9490456,
+    "rev": "5f416c08",
+    "bytes": 9485980,
     "entries": [
       "/public/wasm/7zz.js",
       "/public/wasm/7zz.wasm",

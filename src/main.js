@@ -3946,12 +3946,13 @@ function renderOp() {
     config.append(seg);
   }
 
- // 参数栏
-  if (op.params.length) {
-    const bar = el("div", { class: "op-params" });
-     for (const d of op.params) if (!d.uiHidden) bar.append(renderParam(op, d));
-    config.append(bar);
-  }
+  // 算法参数和输入、输出的格式设置使用同一面板。
+  const paramBar = el("div", { class: "op-params" });
+  for (const d of op.params) if (!d.uiHidden) paramBar.append(renderParam(op, d));
+  const inputCodingMount = el("div", { class: "io-coding-mount", "data-scope": "input", hidden: true });
+  const outputCodingMount = el("div", { class: "io-coding-mount", "data-scope": "output" });
+  paramBar.append(el("div", { class: "io-coding-settings" }, inputCodingMount, outputCodingMount));
+  config.append(paramBar);
 
  // 增强随机安全（每 op 内嵌勾选框，默认不勾）。
  // 只对「会取随机字节」的 op 显示（白名单见 core/randOps.js）——Base64/摩斯/哈希等
@@ -4154,22 +4155,14 @@ function renderOp() {
     runAct.classList.add("pending-run");
     outArea.__opFeedback?.set("pending");
   }
-  const chainAct = el("button", { class: "act-btn io-chain", title: t("ui.op.chainToInput"), "aria-label": t("ui.op.chainToInput") },
+  const chainAct = el("button", { class: "act-btn io-chain", type: "button", title: t("ui.op.chainToInput"), "aria-label": t("ui.op.chainToInput") },
     msym("swap_vert"));
-  chainAct.addEventListener("click", () => { inArea.value = outAreaFullText(outArea); invalidateFileBytes(inArea); convert(); });
-
-  const swapAct = el("button", { class: "act-btn io-swap", title: t("ui.op.swap"), "aria-label": t("ui.op.swap") }, msym("sync_alt"));
-  swapAct.addEventListener("click", () => {
-    const input = inArea.value, output = outAreaFullText(outArea);
-    _convSeq++;
-    _lastOpOutput = null;
-    cancelOpRun();
+  chainAct.addEventListener("click", () => {
+    const output = outAreaFullText(outArea);
+    if (!output || _lastOpOutput?.opId !== op.id || outArea.classList.contains("error")) return;
     inArea.value = output;
     invalidateFileBytes(inArea);
-    rememberOpOutput(op.id, input, input, null, { ...state.params });
-    applyOpOutput(_lastOpOutput);
-    outArea.__opFeedback?.set("idle");
-    inArea.__ioCoding?.refresh();
+    runAct.click();
   });
 
  // 导出报告：把本次运行的 op/参数/输入/输出/错误原样落成 MD（内嵌 JSON），不推断未验证结论。
@@ -4227,14 +4220,12 @@ function renderOp() {
     const delta = rect.left < bounds.left ? rect.left - bounds.left : Math.max(0, rect.right - bounds.right);
     if (delta) tools.scrollBy({ left: delta, behavior: 'instant' });
   };
-  const inputCodingMount = el("div", { class: "io-coding-mount io-coding-above" });
-  const outputCodingMount = el("div", { class: "io-coding-mount io-coding-below" });
   const feedback = createOpFeedback(outArea, runAct, { getInputIdentity: () => JSON.stringify([
     inArea.value, fieldAreas.map(w => w.querySelector('.io-field-area').value),
     state.params, state.dir, inArea._rawFileName || null, inArea.__ioCoding?.getState(),
   ]) });
   const markEditedResult = event => {
-    if (event.target === outArea || event.target.closest('.io-pane-output')) return;
+    if (event.target === outArea || event.target.closest('.io-pane-output, .io-coding-mount[data-scope="output"]')) return;
     if (feedback.matchesInput()) return;
     if (feedback.element.dataset.state === 'running') {
       _convSeq++; cancelOpRun(); feedback.set('pending');
@@ -4251,7 +4242,7 @@ function renderOp() {
   outArea.__opFeedback = feedback;
   const io = el("div", { class: "io io-vert" },
   // 输入
-    el("div", { class: "io-pane io-pane-input" }, inputCodingMount,
+    el("div", { class: "io-pane io-pane-input" },
       createIoEditorFrame(t('ui.op.inTitle'),
         el("div", { class: "io-pane-tools", onfocusin: keepToolVisible },
           hasFields ? null : toolBtn("undo", t("ui.op.undo"), () => inArea.__editHistory?.undo()),
@@ -4264,8 +4255,8 @@ function renderOp() {
       inputBody,
       ),
     ),
- // 动作条（居中）：转换 / 配方链 / 导出报告
-    el("div", { class: "io-actions" }, swapAct, runAct, chainAct),
+  // 动作条（居中）：转换 / 输出接下一轮输入
+    el("div", { class: "io-actions" }, runAct, chainAct),
  // 输出
     el("div", { class: "io-pane io-pane-output" },
       createIoEditorFrame(t('ui.op.outTitle'),
@@ -4276,7 +4267,6 @@ function renderOp() {
         ),
       outArea,
       ),
-      outputCodingMount,
       el("div", { class: "io-report-footer" }, feedback.element, reportAct),
  // 出图类 op 的图片预览区（convert 检测输出中的 data:image URL 后填充，可预览+下载）。
       el("div", { class: "io-out-media", id: "ioOutMedia" }),
@@ -4284,29 +4274,13 @@ function renderOp() {
   );
   data.append(io);
 
-  // 全局 I/O 编码工具栏：只在主输入框存在时挂；输出框引用交给 controller 统一格式化。
-  function attachCoding() {
-    if (hasFields || !showInput) return;
-    if (inArea.__ioCoding) {
-      if (!inArea.__ioCoding.element.isConnected) inputCodingMount.append(inArea.__ioCoding.element);
-      inArea.__ioCoding.element.hidden = false;
-      return;
-    }
-    attachIoCodingToolbar(inArea, {
-      mount: inputCodingMount,
-      outArea,
-      onChange: () => triggerConvert(),
-      getOp: () => op,
-      getParams: () => state.params,
-    });
-    attachIoCodingToolbar(outArea, {
-      mount: outputCodingMount,
-      scope: "output",
-      onChange: () => rerenderOpOutput(),
-      getOp: () => op,
-      getParams: () => state.params,
-    });
-  }
+  attachIoCodingToolbar(outArea, {
+    mount: outputCodingMount,
+    scope: "output",
+    onChange: () => rerenderOpOutput(),
+    getOp: () => op,
+    getParams: () => state.params,
+  });
   function syncInputVisibility() {
     if (!hasFields) {
       const current = getCustomImpl(op.id);
@@ -4314,21 +4288,22 @@ function renderOp() {
       if (next !== showInput) {
         showInput = next;
         if (showInput) inputBody.replaceChildren(inArea);
-        else {
-          inputBody.replaceChildren();
-          // The controller toolbar lives beside its editor and must follow its visibility.
-        }
+        else inputBody.replaceChildren();
       }
     }
     workbench.dataset.inputMode = showInput ? (hasFields ? "fields" : "text") : "none";
     io.querySelector('.io-pane-input').hidden = !showInput;
     if (showInput) { noInputNote.remove(); noInputBatch.remove(); } else head.append(noInputNote, noInputBatch);
-    for (const button of [swapAct, chainAct]) button.disabled = !showInput || hasFields;
+    chainAct.disabled = !showInput || hasFields;
     for (const button of io.querySelectorAll(".io-pane:first-child .io-pane-tools button")) button.disabled = !showInput;
-    const inputToolbar = inArea.__ioCoding?.element;
-    if (inputToolbar) inputToolbar.hidden = !showInput;
-    inputCodingMount.hidden = !showInput;
-    attachCoding();
+    inputCodingMount.hidden = !showInput || hasFields;
+    if (!inputCodingMount.hidden && !inArea.__ioCoding) attachIoCodingToolbar(inArea, {
+      mount: inputCodingMount,
+      outArea,
+      onChange: () => triggerConvert(),
+      getOp: () => op,
+      getParams: () => state.params,
+    });
   }
   syncInputVisibility();
 
@@ -4488,7 +4463,7 @@ function renderEduCard(opId) {
   if (edu.what) section("ui.edu.what", paras(edu.what));
   if (edu.principle) section("ui.edu.principle", paras(edu.principle));
 
- // 对照图（图鉴里能被本 op 解析的编码，挂对照表图；纯装饰，缺图静默跳过）
+  // 对照图可打开原图；缺图静默跳过。
   const eduImg = EDU_IMAGES[opId];
   if (eduImg) {
     const imgs = Array.isArray(eduImg) ? eduImg : [eduImg];
@@ -4499,7 +4474,12 @@ function renderEduCard(opId) {
         class: "edu-img", src: im.src, alt: im.cap || "", loading: "lazy",
       });
       img.addEventListener("error", () => fig.remove());
-      fig.append(img);
+      fig.append(el("button", {
+        class: "edu-img-open", type: "button", title: t("ui.file.viewTitle"),
+        "aria-label": im.cap || t("ui.file.viewTitle"),
+        "aria-haspopup": "dialog",
+        onclick: () => openImageLightbox(im.src, im.cap),
+      }, img));
       if (im.cap) fig.append(el("figcaption", { class: "edu-img-cap" }, im.cap));
       gal.append(fig);
     }

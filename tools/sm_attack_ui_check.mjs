@@ -79,7 +79,7 @@ try {
   for await (const chunk of stream) chunks.push(chunk);
   const bytes = Buffer.concat(chunks);
   check(bytes.length === 38 && bytes.toString("ascii") === flag, "Downloaded 38-byte plaintext is exact");
-  check(await page.locator(".io-pane-input .io-coding-view").count() === 4, "Exactly four input views, no hidden extra menu");
+  check(await page.locator('.io-coding-mount[data-scope="input"] .io-coding-view').count() === 4, "Exactly four input views, no hidden extra menu");
   check(errors.length === 0, `No page errors: ${errors.join(";")}`);
   console.log(JSON.stringify({ engine, checks, operations: Object.keys(fixtures).length, verdict: "PASS" }));
 } catch (error) { console.error(await page.evaluate(() => ({ route: location.hash, input: document.getElementById("ioIn")?.value, output: document.getElementById("ioOut")?.value, fields: [...document.querySelectorAll('.op-config input[id^="p_"],.op-config textarea,.op-config select')].map(n => [n.id,n.value]) }))); throw error; }

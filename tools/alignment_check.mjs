@@ -20,24 +20,29 @@ async function context(touch = false) {
 async function measure(page) {
   await page.waitForTimeout(400);
   if (page.viewportSize().width >= 1024) await page.waitForFunction(() => {
-    const controls = [...document.querySelectorAll('.op-data .io-area, .op-data .io-coding-bar select')];
+    const controls = [...document.querySelectorAll('.op-data .io-area, .op-config .io-coding-bar select')];
     return controls.length >= 4 && controls.every(node => node.hasAttribute('data-cc-rendered'));
   }, null, { timeout: 10000 });
   return page.evaluate(async () => {
     const api = (await import(new URL('src/ui/continuousCorners.js', document.baseURI).href)).setupContinuousCorners();
     const rect = n => { const r = n.getBoundingClientRect(); return { x: r.x, y: r.y, right: r.right, bottom: r.bottom, width: r.width, height: r.height }; };
     return { profile: api.stats().profile, overflow: document.getElementById('workspace').scrollWidth > document.getElementById('workspace').clientWidth + 1,
+      settings: document.querySelectorAll('.op-config .op-params .io-coding-bar').length,
       panes: [...document.querySelectorAll('.op-data .io-pane')].map(pane => {
-        const bar = pane.querySelector('.io-coding-bar'), frame = pane.querySelector('.io-editor-frame');
+        const scope = pane.classList.contains('io-pane-input') ? 'input' : 'output';
+        const bar = document.querySelector(`.op-params [data-scope="${scope}"] .io-coding-bar`), frame = pane.querySelector('.io-editor-frame');
         const select = bar.querySelector('select'), segment = bar.querySelector('.io-coding-seg');
         const title = frame.querySelector('.io-pane-title'), area = frame.querySelector('.io-area'), style = getComputedStyle(area);
+        const tools = frame.querySelector('.io-pane-tools'), toolBounds = rect(tools);
         const a = rect(area), f = rect(frame), b = rect(bar), s = rect(select), g = rect(segment);
-        return { frame: f, bar: b, select: s, segment: g,
-          gap: pane.classList.contains('io-pane-input') ? f.y - b.bottom : b.y - f.bottom,
+        return { frame: f, bar: b, select: s, segment: g, tools: toolBounds,
+          bom: !!bar.querySelector('.io-coding-bom input'), slider: !!segment.querySelector('.m3-segment-thumb'),
+          toolsWidth: [...tools.querySelectorAll('button')].reduce((sum, button) => sum + rect(button).width, 0),
           contentInset: a.x + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft), titleX: rect(title).x,
           viewCount: segment.querySelectorAll('button').length, viewValues: [...segment.querySelectorAll('button')].map(n => n.dataset.view),
           viewFits: [...segment.querySelectorAll('button')].every(n => { const r = rect(n); return r.x >= g.x - 1 && r.right <= g.right + 1; }),
-          painted: api.inspect(area)?.applied && api.inspect(select)?.applied && api.inspect(segment)?.reason === 'pill',
+          painted: api.inspect(area)?.applied && api.inspect(select)?.applied &&
+            (api.inspect(segment)?.applied || api.inspect(segment)?.reason === 'pill'),
         };
       }),
     };
@@ -51,18 +56,24 @@ try {
     const m = await measure(page); evidence.push({ theme, width, ...m });
     check(!m.overflow, `${theme}/${width}: workspace fits`);
     check(m.profile === 'apple-continuous-measured', 'All engines use the measured shared profile');
+    check(m.settings === 2, 'Both coding groups are in the parameter panel');
     for (const [i, p] of m.panes.entries()) {
-      check(Math.abs(p.gap - 8) < 1, `${theme}/${width}/${i}: editor-to-coding gap is 8px (${p.gap})`);
-      check(Math.abs(p.select.x - p.segment.x) < 1, 'Charset and view controls share the start edge');
+      check(p.bom && p.slider, `${theme}/${width}/${i}: shared slider and BOM in each group`);
       check(Math.abs(p.select.height - p.segment.height) < 1, `Charset/view control heights match (${p.select.height}/${p.segment.height})`);
       check(Math.abs(p.titleX - p.contentInset) < 1, 'Editor title and text share the content inset');
       check(JSON.stringify(p.viewValues) === JSON.stringify(['text','hex','base64','escaped']) && p.viewFits, 'Exactly four fully visible views');
-      check(p.painted, 'Editor/select use the shared curve; M3 view capsule stays native');
+      check(p.tools.width <= p.toolsWidth + 1 && p.tools.right <= p.frame.right, 'Editor toolbar never covers more than the tools need');
+      check(p.painted, 'Editor/select use the shared curve; the view capsule keeps its rounded profile');
     }
     check(Math.abs(m.panes[0].frame.x - m.panes[1].frame.x) < 1 && Math.abs(m.panes[0].frame.right - m.panes[1].frame.right) < 1, 'Input/output frame edges align');
     if (shots && width === 1366) await page.screenshot({ path: join(shots, `alignment-${engine}-${theme}-desktop.png`) });
   }
   await page.setViewportSize({ width: 1366, height: 900 });
+  await page.locator('#btnTheme').hover();
+  check(await page.locator('#btnTheme').evaluate(node => {
+    const bounds = node.getBoundingClientRect(), css = getComputedStyle(node);
+    return Math.abs(bounds.width - bounds.height) < 1 && css.borderRadius === '50%' && css.backgroundColor !== 'rgba(0, 0, 0, 0)';
+  }), 'Theme hover background is a circle');
   // Both old draft representations migrate to a visible Hex view without changing bytes.
   for (const [view, text, order, expected] of [['bits','10000010','lsb','41'],['base32','IE======','msb','41']]) {
     const result = await page.locator('#ioIn').evaluate((node, [view,text,order]) => {
@@ -81,11 +92,31 @@ try {
   });
   check(editor.frame && editor.cm && editor.outline >= 2, `Code editor frame, content clip and focus outline unified: ${JSON.stringify(editor)}`);
   if (shots) await page.screenshot({ path: join(shots, `alignment-${engine}-code-editor.png`) });
-  await page.keyboard.press('Escape'); await page.locator('.ci-dialog').waitFor({ state: 'detached' });
+  await page.locator('.ci-header-close').click(); await page.locator('.ci-dialog').waitFor({ state: 'detached' });
+  await page.goto(new URL('#/op/base64', base).href);
+  await page.locator('.io-coding-mount[data-scope="input"] [data-view="text"]').click();
+  await page.locator('#dirSeg button').first().click();
+  await page.locator('#ioIn').fill('hello');
+  await page.locator('.io-actions > .primary').click();
+  await page.waitForFunction(() => document.querySelector('#ioOut')?.value === 'aGVsbG8=');
+  await page.locator('.io-chain').click();
+  await page.waitForFunction(() => document.querySelector('#ioOut')?.value === 'YUdWc2JHOD0=');
+  check(await page.locator('#ioIn').evaluate(node => node.value === 'aGVsbG8=') && await page.locator('.io-swap').count() === 0, 'Only chaining remains and it runs the next conversion');
+  await page.goto(new URL('#/op/bacon', base).href);
+  const imageTrigger = page.locator('.edu-img-open').first();
+  const thumbnail = imageTrigger.locator('img');
+  await thumbnail.scrollIntoViewIfNeeded();
+  await page.waitForFunction(() => document.querySelector('.edu-img-open img')?.naturalWidth > 0);
+  await imageTrigger.press('Enter');
+  const lightbox = page.locator('.img-lightbox');
+  await lightbox.waitFor();
+  check(await lightbox.locator('img').getAttribute('src') === await thumbnail.getAttribute('src'), 'Education lightbox opens the original image');
+  await page.keyboard.press('Escape'); await lightbox.waitFor({ state: 'detached' });
+  check(await imageTrigger.evaluate(node => document.activeElement === node), 'Closing the lightbox restores keyboard focus');
   const mobile = await context(true);
   await mobile.goto(new URL('#/op/chacha20Poly1305', base).href); await mobile.locator('#ioOut').waitFor();
   const m = await measure(mobile);
-  check(!m.overflow && m.panes.every(p => p.viewFits && Math.abs(p.gap - 8) < 1 && p.select.height >= 44 && p.select.height === p.segment.height), '320px touch: 8px gaps, four views, equal 44px controls');
+  check(!m.overflow && m.panes.every(p => p.viewFits && p.select.height >= 44 && p.select.height === p.segment.height), '320px touch: four views and equal 44px controls');
   if (shots) await mobile.screenshot({ path: join(shots, `alignment-${engine}-mobile.png`) });
   check(errors.length === 0, `No page errors: ${errors.join(';')}`);
   console.log(JSON.stringify({ verdict: 'PASS', engine, checks, measuredLayouts: evidence.length, pageErrors: errors }));

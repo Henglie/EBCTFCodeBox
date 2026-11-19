@@ -38,7 +38,7 @@
 .op-feedback { gap: 8px; }
 .op-feedback [role="status"] { line-height: 1.5; }
 .op-data .io-actions > .primary { min-height: 48px; padding-inline: 24px; gap: 8px; font-weight: 600; }
-.op-data .io-actions > :is(.io-swap, .io-chain) { background: var(--surface-1); color: var(--on-surface-var); }
+.op-data .io-actions > .io-chain { background: var(--surface-1); color: var(--on-surface-var); }
 .op-data .io-report { font-weight: 500; }
 
 /* Nested reading surfaces have one quiet tonal step rather than extra frames. */
@@ -100,7 +100,7 @@
 
 @media (hover: hover) and (pointer: fine) {
   .home-tool-card:hover { background-color: var(--surface-selection); }
-  .op-data .io-actions > :is(.io-swap, .io-chain):hover:not(:disabled) { background: var(--surface-2); color: var(--on-surface); }
+  .op-data .io-actions > .io-chain:hover:not(:disabled) { background: var(--surface-2); color: var(--on-surface); }
 }
 @media (max-width: 600px) {
   .op-config .op-params { padding: 16px; }

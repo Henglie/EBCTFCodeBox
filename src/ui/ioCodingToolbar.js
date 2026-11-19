@@ -2,7 +2,7 @@
  * ioCodingToolbar.js — 全局输入/输出编码工具栏（文本 / 字节双模）。
  *
  * 职责：
- *   1. 在输入框上方提供 charset（auto + CHARSETS）、视图（text/hex/base64/escaped）、
+ *   1. 为输入或输出提供 charset（auto + CHARSETS）、视图（text/hex/base64/escaped）、
  *      BOM 保留三组控件；op 自身的参数仍可覆盖（见 resolveOptions）。
  *   2. 把「输入表现文本」显式解析成 op 执行层需要的 text / bytes：
  *      · text 视图：文本原样交给 op，不重新编码；只有 op 声明 acceptsBytes 时才按所选
@@ -14,7 +14,7 @@
  *
  * 设计边界：
  *   · 零新依赖，只 import core/ioCoding.js；零网络、零随机、零存储。
- *   · 不改 ioArea 的 .value 代理、撤销、粘贴、A-/A+；工具条只是插在输入框前的一行 DOM。
+ *   · 不改 ioArea 的 .value 代理、撤销、粘贴、A-/A+。
  *   · 不自动改写 outArea.value：main.js 需在输出落框前调用 controller.formatOutput()，
  *     否则无法区分「op 返回的文本」与「加载中占位 / 错误文案」。精确接线见
  *     开发档案 main-hook.md。
@@ -227,16 +227,15 @@ function ensureStyles() {
   style.id = STYLE_ID;
   style.textContent = `
 .io-coding-bar {
-  display: grid; grid-template-columns: max-content minmax(0, 1fr);
+  display: grid; grid-template-columns: minmax(0, 1fr);
   align-items: center; gap: var(--sp-2); padding: 0; min-width: 0;
   font-size: var(--fs-sm); color: var(--on-surface-var);
 }
-.io-coding-field { display: contents; }
-.io-coding-field[hidden] { display: none; }
-.io-coding-label { grid-column: 1; white-space: nowrap; font-size: var(--fs-xs); line-height: 1.5; color: var(--on-surface-var); }
-.io-coding-field > :not(.io-coding-label) { grid-column: 2; min-width: 0; max-width: 100%; }
+.io-coding-heading { font-weight: 600; color: var(--on-surface); }
+.io-coding-options, .io-coding-field { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); min-width: 0; }
+.io-coding-label { font-size: var(--fs-xs); line-height: 1.5; }
 .io-coding-select {
-  height: 36px; width: min(190px, 100%); padding: 0 var(--sp-3);
+  height: 36px; width: min(160px, 100%); padding: 0 var(--sp-3);
   background: var(--field-bg); color: var(--on-surface);
   border: 1px solid var(--outline); border-radius: var(--r-sm);
   font: inherit; font-size: var(--fs-sm); min-width: 0;
@@ -251,17 +250,18 @@ function ensureStyles() {
   height: 26px; padding: 0 var(--sp-2); border-radius: var(--r-full);
   font-size: var(--fs-xs); color: var(--on-surface-var); white-space: nowrap;
 }
+.io-coding-seg.m3-segmented > button { flex: 1 0 auto; }
 .io-coding-seg button.on { background: var(--primary); color: var(--on-primary); font-weight: 600; }
 .io-coding-seg.m3-segmented { flex-shrink: 1; }
 .io-coding-bom {
-  grid-column: 2; display: inline-flex; align-items: center; justify-self: start;
+  display: inline-flex; align-items: center;
   gap: var(--sp-2); min-height: 24px; white-space: nowrap;
   font-size: var(--fs-xs); cursor: pointer; user-select: none;
 }
 .io-coding-bom input { margin: 0; accent-color: var(--primary); }
 .io-coding-bom.disabled { opacity: .5; cursor: not-allowed; }
 .io-coding-status {
-  grid-column: 2; min-width: 0; overflow-wrap: anywhere;
+  min-width: 0; overflow-wrap: anywhere;
   white-space: normal; font-size: var(--fs-xs); line-height: 1.5; color: var(--on-surface-var);
 }
 .io-coding-status.warn { color: var(--warning, #8a6d00); }
@@ -278,7 +278,7 @@ function ensureStyles() {
 /* ============================== 主入口 ============================== */
 
 /**
- * 在 area 前挂一行 I/O 编码工具栏。
+ * 在指定容器挂载 I/O 编码设置，未指定容器时放在编辑框前。
  *
  * @param {HTMLElement} area 输入编辑框（ioArea 的 div 或 textarea，需支持 .value）
  * @param {object} [opts]
@@ -299,7 +299,8 @@ export function attachIoCodingToolbar(area, opts = {}) {
 
   const stateScope = opts.scope === "output" ? "output" : "input";
   const state = { ...(stateScope === "output" ? globalOutputState : globalState) };
-  const bar = el("div", { class: "io-coding-bar", role: "group", "aria-label": t(stateScope === "output" ? "ui.io.aria.output" : "ui.io.aria.group") });
+  const heading = t(stateScope === "output" ? "ui.op.outTitle" : "ui.op.inTitle");
+  const bar = el("div", { class: "io-coding-bar", role: "group", "aria-label": heading });
 
   const charsetSel = el("select", { class: "io-coding-select", "aria-label": t("ui.io.charset") });
   charsetSel.append(el("option", { value: "auto", title: t("ui.io.charsetAutoHint") }, t("ui.io.charsetAuto")));
@@ -330,15 +331,15 @@ export function attachIoCodingToolbar(area, opts = {}) {
   const status = el("span", { class: "io-coding-status", role: "status", "aria-live": "polite" });
 
   bar.append(
-    el("span", { class: "io-coding-field" },
-      el("span", { class: "io-coding-label" }, t("ui.io.charset")),
-      charsetSel,
+    el("span", { class: "io-coding-heading" }, heading),
+    viewSeg,
+    el("div", { class: "io-coding-options" },
+      el("label", { class: "io-coding-field" },
+        el("span", { class: "io-coding-label" }, t("ui.io.charset")),
+        charsetSel,
+      ),
+      bomLabel,
     ),
-    el("span", { class: "io-coding-field" },
-      el("span", { class: "io-coding-label" }, t("ui.io.view")),
-      viewSeg,
-    ),
-    bomLabel,
     status,
   );
 
@@ -447,7 +448,7 @@ export function attachIoCodingToolbar(area, opts = {}) {
       const k = String(x.key);
       return inputEncKeys.test(k) || (/^outEnc$/i.test(k) && decodeDir);
     });
-    if (selfEncoded && viewSource === "toolbar" && normalizeViewChoice(viewRaw) !== "text") {
+    if (stateScope === "input" && selfEncoded && viewSource === "toolbar" && normalizeViewChoice(viewRaw) !== "text") {
       viewRaw = "text";
       viewSource = "op-selfenc";
     }

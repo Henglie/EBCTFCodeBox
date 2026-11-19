@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { statSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const require = createRequire(import.meta.url);
@@ -34,7 +35,8 @@ const { PACKS } = await import("../src/core/offlinePacks.js");
 const locales = PACKS.find(pack => pack.id === "locales");
 let localeBytes = 0;
 for (const entry of locales.entries) {
-  const bytes = statSync(new URL(`..${entry.name}`, import.meta.url)).size;
+  const text = await readFile(new URL(`..${entry.name}`, import.meta.url), "utf8");
+  const bytes = Buffer.byteLength(text.replace(/\r\n/g, "\n"));
   check(bytes === entry.bytes, `Offline pack byte size: ${entry.name} (${bytes} != ${entry.bytes})`);
   localeBytes += bytes;
 }

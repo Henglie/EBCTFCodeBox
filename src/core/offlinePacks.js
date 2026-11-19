@@ -23,17 +23,17 @@
 export const PACKS = [
   {
     id: "wasm",
-    bytes: 9490456,
+    bytes: 9485980,
     entries: [
       { name: "/public/wasm/7zz.js", bytes: 82904 },
       { name: "/public/wasm/7zz.wasm", bytes: 1651931 },
       { name: "/public/wasm/bkcrack.js", bytes: 89305 },
       { name: "/public/wasm/bkcrack.wasm", bytes: 378700 },
       { name: "/public/wasm/outguess/outguess-client.js", bytes: 4805 },
-      { name: "/public/wasm/outguess/outguess.js", bytes: 62458 },
+      { name: "/public/wasm/outguess/outguess.js", bytes: 62456 },
       { name: "/public/wasm/outguess/outguess.wasm", bytes: 181940 },
       { name: "/public/wasm/outguess/outguess.worker.js", bytes: 3624 },
-      { name: "/public/wasm/steghide/steghide.js", bytes: 149186 },
+      { name: "/public/wasm/steghide/steghide.js", bytes: 144712 },
       { name: "/public/wasm/steghide/steghide.wasm", bytes: 1017408 },
       { name: "/public/wasm/steghide/steghide.worker.js", bytes: 2450 },
       { name: "/public/wasm/vendor/asm/asm-glue.js", bytes: 44716 },

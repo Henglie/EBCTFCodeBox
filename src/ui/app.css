@@ -1325,8 +1325,11 @@ button.ok-expand:focus-visible { outline: 2px solid var(--primary); outline-offs
 /* op 科普卡对照图（图鉴里能被本 op 解析的编码对照表） */
 .edu-imgs { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
 .edu-img-fig { margin: 0; display: flex; flex-direction: column; gap: var(--sp-1); max-width: 100%; }
+.edu-img-open { align-self: center; max-width: 100%; padding: 0; border-radius: var(--r-sm); cursor: zoom-in; }
+.edu-img-open:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .edu-img {
-  max-width: 320px;
+  display: block;
+  max-width: min(320px, 100%);
   max-height: 320px;
   width: auto;
   height: auto;
