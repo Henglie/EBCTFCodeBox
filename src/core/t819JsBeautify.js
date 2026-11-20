@@ -19,7 +19,7 @@ async function mods() {
 
 register({
   id: "jsBeautify",
-  cat: "text",
+  cat: "textProcessing",
   name: "JavaScript 美化",
   desc: "解析并美化 JavaScript 代码，支持缩进、引号、分号与注释选项（CyberChef #239）",
   params: [

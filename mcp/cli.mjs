@@ -99,7 +99,7 @@ function printResult(r) {
 
 /*
  * --out 时把同一条文本结果落到 <out>/result.txt。
- * - 内容 = 与标准输出完全一致的 text 片段（多段用 "\n" 连接），UTF-8 无 BOM，末尾不额外补换行。
+ * - 内容 = 标准输出中的 text 片段（多段用 "\n" 连接），UTF-8 无 BOM，末尾不额外补换行。
  * - 不带 --out 的行为不变；--json 保持纯 JSON 输出，不落盘（避免破坏机器可读契约）。
  * - 执行失败（含文本超限报错）不落盘，避免留下一份被截断却看似完整的结果文件。
  */
@@ -112,7 +112,7 @@ async function persistTextResult(r, outDir) {
   await mkdir(dir, { recursive: true });
   const file = join(dir, "result.txt");
   await writeFile(file, parts.join("\n"), "utf8");
-  process.stdout.write(`[--out] 文本结果已写入 ${file}\n`);
+  process.stderr.write(`[--out] 文本结果已写入 ${file}\n`);
 }
 
 async function main() {
@@ -223,4 +223,3 @@ try {
   process.stderr.write(`cli: ${e && e.message ? e.message : e}\n`);
   process.exitCode = 1;
 }
-

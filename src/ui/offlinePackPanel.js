@@ -98,7 +98,7 @@ export function offlinePackPanel(ctx = {}) {
     }
   }
 
-  function renderPack(pack) {
+  function renderPack(pack, degrade) {
     const error = collectError(pack.id);
     const busy = pending === pack.id;
     const installed = pack.state === "installed";
@@ -106,6 +106,19 @@ export function offlinePackPanel(ctx = {}) {
     const installLabel = pack.state === "partial"
       ? tr("ui.offlinePack.continue", "继续安装")
       : tr("ui.offlinePack.install", "安装");
+    // Degradation lives inside the pack card: one clamped reason line plus a
+    // collapsed impact detail, so a long OCR fallback no longer stretches a
+    // separate list (or the card) for every other pack.
+    const degradeBlock = degrade
+      ? el("div", { class: "offline-pack-degrade", "data-degraded-pack": pack.id },
+          el("p", { class: "offline-pack-degrade-reason", text: degrade.reason, title: degrade.reason }),
+          el("details", { class: "offline-pack-degrade-detail" },
+            el("summary", { class: "offline-pack-degrade-toggle", text: tr("ui.offlinePack.impact", "影响说明") }),
+            el("p", { class: "offline-pack-degrade-fallback-full", text: degrade.reason }),
+            el("p", { class: "offline-pack-degrade-fallback-full", text: degrade.fallback }),
+          ),
+        )
+      : null;
 
     return el("li", { class: "offline-pack-item", "data-pack-id": pack.id, "data-state": pack.state },
       el("div", { class: "offline-pack-head" },
@@ -116,6 +129,7 @@ export function offlinePackPanel(ctx = {}) {
       el("div", { class: "offline-pack-meta", text: `${pack.entries.length} 项`
         + (pack.state === "partial" ? `，缺 ${pack.missingCount} 项（${formatBytes(pack.missingBytes)}）` : "")
         + (pack.state === "installed" ? `，已装 ${formatBytes(pack.installedBytes)}` : "") }),
+      degradeBlock,
       el("div", { class: "offline-pack-actions" },
         el("button", {
           type: "button",
@@ -142,7 +156,7 @@ export function offlinePackPanel(ctx = {}) {
             text: job.text,
           })
         : null,
-      error
+      error && !(degrade && degrade.reason.includes(error))
         ? el("p", { class: "offline-pack-error", role: "alert", text: `${tr("ui.offlinePack.failed", "安装失败")}：${error}` })
         : null,
     );
@@ -152,6 +166,7 @@ export function offlinePackPanel(ctx = {}) {
     const plan = packPlan(state);
     const readiness = offlineReadiness(state);
     const installedBytes = plan.packs.reduce((n, p) => n + p.installedBytes, 0);
+    const degraded = new Map(readiness.degradations.map((item) => [item.packId, item]));
 
     const notice = el("div", { class: "offline-pack-notice", "data-role": "offline-pack-notice" });
     const stateError = state && state.errors && state.errors._state;
@@ -168,15 +183,11 @@ export function offlinePackPanel(ctx = {}) {
     if (readiness.ready) {
       notice.append(el("p", { class: "offline-pack-ready", text: tr("ui.offlinePack.allReady", "离线包齐全：断网后上述功能均可用。") }));
     } else {
-      const list = el("ul", { class: "offline-pack-degradations" });
-      for (const item of readiness.degradations) {
-        list.append(el("li", { "data-degraded-pack": item.packId },
-          el("strong", { text: `${tr(`ui.offlinePack.pack.${item.packId}.name`, item.feature)}：` }),
-          el("span", { class: "offline-pack-degrade-reason", text: item.reason }),
-          el("span", { class: "offline-pack-degrade-fallback", text: ` → ${tr(`ui.offlinePack.degrade.${item.packId}.fallback`, item.fallback)}` }),
-        ));
-      }
-      notice.append(list);
+      const count = readiness.degradations.length;
+      notice.append(el("p", {
+        class: "offline-pack-offline-hint",
+        text: tr("ui.offlinePack.degradedInCards", "有 {n} 个离线包未就绪，影响说明见对应卡片。").replace("{n}", String(count)),
+      }));
     }
 
     root.replaceChildren(
@@ -186,7 +197,7 @@ export function offlinePackPanel(ctx = {}) {
       ),
       el("ul", { class: "offline-pack-list" }, PACKS.map((p) => {
         const planned = plan.packs.find((x) => x.id === p.id);
-        return renderPack(planned);
+        return renderPack(planned, degraded.get(p.id));
       })),
       notice,
     );

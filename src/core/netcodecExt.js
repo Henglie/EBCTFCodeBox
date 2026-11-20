@@ -320,7 +320,7 @@ function parseUriReport(input) {
 
 // 1. URL query 解析（run 单向）
 register({
-  id: "urlQueryParse", cat: "text", name: "URL Query 解析",
+  id: "urlQueryParse", cat: "textProcessing", name: "URL Query 解析",
   desc: "解析 URL 查询串（? 后的 k=v&k=v），percent-decode + '+' 转空格，逐行列出键值。支持传入完整 URL；mode=uri 时同 CyberChef Parse URI 输出协议/认证/主机/端口/路径/参数/锚点。",
   params: [
     { key: "mode", label: "模式", type: "select", default: "query", options: [
@@ -334,7 +334,7 @@ register({
 
 // 2. Cookie 解析（run 单向）
 register({
-  id: "cookieParse", cat: "text", name: "Cookie 解析",
+  id: "cookieParse", cat: "textProcessing", name: "Cookie 解析",
   desc: "解析 Cookie 请求头（多 name=value）或 Set-Cookie 响应头（键值 + 属性）。自动去 Cookie:/Set-Cookie: 前缀。",
   params: [],
   run: (t) => parseCookie(t),
@@ -374,7 +374,7 @@ register({
 
 // 5. magnet 链接解析（run 单向）
 register({
-  id: "magnetParse", cat: "text", name: "Magnet 链接解析",
+  id: "magnetParse", cat: "textProcessing", name: "Magnet 链接解析",
   desc: "解析 magnet:? 链接：xt 精确主题（提取 BTIH 哈希）、dn 显示名、tr Tracker 列表、xl 文件大小等。",
   params: [],
   run: (t) => parseMagnet(t),

@@ -1067,7 +1067,7 @@ function fileTree(input, p) {
 // ============================================================
 const TEXT_UTILS_OPS = [
   {
-    id: "textSort", cat: "text", sourceFile: SRC,
+    id: "textSort", cat: "textProcessing", sourceFile: SRC,
     name: "排序 (Sort)", desc: "按分隔符排序（字母大小写敏感/不敏感、IP、数值、16 进制数值、长度；可倒序）",
     params: [
       { key: "delim", label: "分隔符", type: "select", default: "Line feed", options: INPUT_DELIM_OPTIONS },
@@ -1084,7 +1084,7 @@ const TEXT_UTILS_OPS = [
     run: textSort,
   },
   {
-    id: "textUnique", cat: "text", sourceFile: SRC,
+    id: "textUnique", cat: "textProcessing", sourceFile: SRC,
     name: "去重 (Unique)", desc: "按分隔符保序去重；可选显示每项出现次数",
     params: [
       { key: "delim", label: "分隔符", type: "select", default: "Line feed", options: INPUT_DELIM_OPTIONS },
@@ -1093,7 +1093,7 @@ const TEXT_UTILS_OPS = [
     run: textUnique,
   },
   {
-    id: "textSplit", cat: "text", sourceFile: SRC,
+    id: "textSplit", cat: "textProcessing", sourceFile: SRC,
     name: "拆分/重组 (Split)", desc: "按拆分分隔符切开，再用连接分隔符拼回（支持 \\n \\t \\xHH 转义）",
     params: [
       { key: "splitDelim", label: "拆分分隔符", type: "text", default: "," },
@@ -1102,7 +1102,7 @@ const TEXT_UTILS_OPS = [
     run: textSplit,
   },
   {
-    id: "textHead", cat: "text", sourceFile: SRC,
+    id: "textHead", cat: "textProcessing", sourceFile: SRC,
     name: "取前 N 项 (Head)", desc: "按分隔符取前 N 项（N 为负则保留除末尾 |N| 项外的全部）",
     params: [
       { key: "delim", label: "分隔符", type: "select", default: "Line feed", options: INPUT_DELIM_OPTIONS },
@@ -1111,7 +1111,7 @@ const TEXT_UTILS_OPS = [
     run: textHead,
   },
   {
-    id: "textTail", cat: "text", sourceFile: SRC,
+    id: "textTail", cat: "textProcessing", sourceFile: SRC,
     name: "取后 N 项 (Tail)", desc: "按分隔符取后 N 项（N 为负则跳过前 |N| 项）",
     params: [
       { key: "delim", label: "分隔符", type: "select", default: "Line feed", options: INPUT_DELIM_OPTIONS },
@@ -1120,7 +1120,7 @@ const TEXT_UTILS_OPS = [
     run: textTail,
   },
   {
-    id: "takeNthBytes", cat: "text", sourceFile: SRC, acceptsBytes: true,
+    id: "takeNthBytes", cat: "textProcessing", sourceFile: SRC, acceptsBytes: true,
     name: "每隔 N 字节取样 (Take nth bytes)", desc: "从起始位置起每隔 N 字节取 1 字节（可逐行应用）",
     params: [
       { key: "every", label: "每隔", type: "number", default: 4 },
@@ -1130,7 +1130,7 @@ const TEXT_UTILS_OPS = [
     run: takeNthBytes,
   },
   {
-    id: "dropBytes", cat: "text", sourceFile: SRC, acceptsBytes: true,
+    id: "dropBytes", cat: "textProcessing", sourceFile: SRC, acceptsBytes: true,
     name: "删除字节 (Drop bytes)", desc: "从 Start 起切掉 Length 个字节（支持负值；可逐行应用）",
     params: [
       { key: "start", label: "起始位置", type: "number", default: 0 },
@@ -1140,7 +1140,7 @@ const TEXT_UTILS_OPS = [
     run: dropBytes,
   },
   {
-    id: "dropNthBytes", cat: "text", sourceFile: SRC, acceptsBytes: true,
+    id: "dropNthBytes", cat: "textProcessing", sourceFile: SRC, acceptsBytes: true,
     name: "每隔 N 字节删除 (Drop nth bytes)", desc: "从起始位置起每隔 N 字节删 1 字节（可逐行应用）",
     params: [
       { key: "every", label: "每隔", type: "number", default: 4 },
@@ -1150,7 +1150,7 @@ const TEXT_UTILS_OPS = [
     run: dropNthBytes,
   },
   {
-    id: "removeWhitespace", cat: "text", sourceFile: SRC,
+    id: "removeWhitespace", cat: "textProcessing", sourceFile: SRC,
     name: "删除空白 (Remove whitespace)", desc: "可选删除空格 / CR / LF / Tab / FF / 句点",
     params: [
       { key: "spaces", label: "空格", type: "bool", default: true },
@@ -1163,19 +1163,19 @@ const TEXT_UTILS_OPS = [
     run: removeWhitespace,
   },
   {
-    id: "removeNullBytes", cat: "text", sourceFile: SRC, acceptsBytes: true,
+    id: "removeNullBytes", cat: "textProcessing", sourceFile: SRC, acceptsBytes: true,
     name: "删除 NUL 字节 (Remove null bytes)", desc: "删除所有 0x00 字节",
     params: [],
     run: removeNullBytes,
   },
   {
-    id: "removeAnsiEscapeCodes", cat: "text", sourceFile: SRC,
+    id: "removeAnsiEscapeCodes", cat: "textProcessing", sourceFile: SRC,
     name: "删除 ANSI 转义 (Remove ANSI Escape Codes)", desc: "删除 ANSI 转义序列（CSI）",
     params: [],
     run: removeAnsiEscapeCodes,
   },
   {
-    id: "addLineNumbers", cat: "text", sourceFile: SRC,
+    id: "addLineNumbers", cat: "textProcessing", sourceFile: SRC,
     name: "添加行号 (Add line numbers)", desc: "为每行添加行号（可设偏移）",
     params: [
       { key: "offset", label: "偏移", type: "number", default: 0 },
@@ -1183,13 +1183,13 @@ const TEXT_UTILS_OPS = [
     run: addLineNumbers,
   },
   {
-    id: "removeLineNumbers", cat: "text", sourceFile: SRC,
+    id: "removeLineNumbers", cat: "textProcessing", sourceFile: SRC,
     name: "删除行号 (Remove line numbers)", desc: "删除可被简单识别的行首行号",
     params: [],
     run: removeLineNumbers,
   },
   {
-    id: "padLines", cat: "text", sourceFile: SRC,
+    id: "padLines", cat: "textProcessing", sourceFile: SRC,
     name: "行补齐 (Pad lines)", desc: "在每行起始/末尾补齐指定字符",
     params: [
       { key: "position", label: "位置", type: "select", default: "Start", options: [
@@ -1202,7 +1202,7 @@ const TEXT_UTILS_OPS = [
     run: padLines,
   },
   {
-    id: "toUpperCase", cat: "text", sourceFile: SRC,
+    id: "toUpperCase", cat: "textProcessing", sourceFile: SRC,
     name: "转大写 (To Upper case)", desc: "转大写；可限定作用域：全部 / 每词 / 每句 / 每段",
     params: [
       { key: "scope", label: "作用域", type: "select", default: "All", options: [
@@ -1215,19 +1215,19 @@ const TEXT_UTILS_OPS = [
     run: toUpperCaseOp,
   },
   {
-    id: "toLowerCase", cat: "text", sourceFile: SRC,
+    id: "toLowerCase", cat: "textProcessing", sourceFile: SRC,
     name: "转小写 (To Lower case)", desc: "全部转小写",
     params: [],
     run: toLowerCaseOp,
   },
   {
-    id: "swapCase", cat: "text", sourceFile: SRC,
+    id: "swapCase", cat: "textProcessing", sourceFile: SRC,
     name: "大小写互换 (Swap case)", desc: "大写转小写、小写转大写",
     params: [],
     run: swapCase,
   },
   {
-    id: "toCamelCase", cat: "text", sourceFile: SRC,
+    id: "toCamelCase", cat: "textProcessing", sourceFile: SRC,
     name: "转驼峰 (To Camel case)", desc: "转 camelCase；context aware 模式仅转换代码中的变量名",
     params: [
       { key: "smart", label: "上下文感知（仅改变量名）", type: "bool", default: false },
@@ -1235,7 +1235,7 @@ const TEXT_UTILS_OPS = [
     run: toCamelCaseOp,
   },
   {
-    id: "toSnakeCase", cat: "text", sourceFile: SRC,
+    id: "toSnakeCase", cat: "textProcessing", sourceFile: SRC,
     name: "转下划线 (To Snake case)", desc: "转 snake_case；context aware 模式仅转换代码中的变量名",
     params: [
       { key: "smart", label: "上下文感知（仅改变量名）", type: "bool", default: false },
@@ -1243,7 +1243,7 @@ const TEXT_UTILS_OPS = [
     run: toSnakeCaseOp,
   },
   {
-    id: "toKebabCase", cat: "text", sourceFile: SRC,
+    id: "toKebabCase", cat: "textProcessing", sourceFile: SRC,
     name: "转短横线 (To Kebab case)", desc: "转 kebab-case；context aware 模式仅转换代码中的变量名",
     params: [
       { key: "smart", label: "上下文感知（仅改变量名）", type: "bool", default: false },
@@ -1251,7 +1251,7 @@ const TEXT_UTILS_OPS = [
     run: toKebabCaseOp,
   },
   {
-    id: "countOccurrences", cat: "text", sourceFile: SRC,
+    id: "countOccurrences", cat: "textProcessing", sourceFile: SRC,
     name: "出现次数 (Count occurrences)", desc: "统计搜索串出现次数（正则 / 转义扩展 / 纯文本）",
     params: [
       { key: "mode", label: "模式", type: "select", default: "Simple string", options: [
@@ -1264,7 +1264,7 @@ const TEXT_UTILS_OPS = [
     run: countOccurrencesOp,
   },
   {
-    id: "expandAlphabetRange", cat: "text", sourceFile: SRC,
+    id: "expandAlphabetRange", cat: "textProcessing", sourceFile: SRC,
     name: "展开字母表范围 (Expand alphabet range)", desc: "把 a-z 之类范围展开为字符列表（可用连接符）",
     params: [
       { key: "delim", label: "连接分隔符", type: "text", default: "" },
@@ -1272,7 +1272,7 @@ const TEXT_UTILS_OPS = [
     run: expandAlphabetRangeOp,
   },
   {
-    id: "textWrap", cat: "text", sourceFile: SRC,
+    id: "textWrap", cat: "textProcessing", sourceFile: SRC,
     name: "折行 (Wrap)", desc: "按指定宽度折行（\\n 分隔）",
     params: [
       { key: "width", label: "行宽", type: "number", default: 64 },
@@ -1288,13 +1288,13 @@ const TEXT_UTILS_OPS = [
     run: xmlMinify,
   },
   {
-    id: "htmlToText", cat: "text", sourceFile: SRC,
+    id: "htmlToText", cat: "textProcessing", sourceFile: SRC,
     name: "HTML 转文本 (HTML To Text)", desc: "把 HTML 输出转为纯字符串（CyberChef 中为类型转换，语义等价于恒等）",
     params: [],
     run: htmlToText,
   },
   {
-    id: "stripHtmlTags", cat: "text", sourceFile: SRC,
+    id: "stripHtmlTags", cat: "textProcessing", sourceFile: SRC,
     name: "剥离 HTML 标签 (Strip HTML tags)", desc: "删除所有 HTML 标签（可选去缩进、去多余空行）",
     params: [
       { key: "removeIndentation", label: "删除缩进", type: "bool", default: true },
@@ -1319,7 +1319,7 @@ const TEXT_UTILS_OPS = [
     run: generateUuid,
   },
   {
-    id: "fileTree", cat: "text", sourceFile: SRC,
+    id: "fileTree", cat: "textProcessing", sourceFile: SRC,
     name: "文件树 (File Tree)", desc: "把文件路径列表渲染为树形结构",
     params: [
       { key: "fileDelim", label: "路径分隔符", type: "text", default: "/" },

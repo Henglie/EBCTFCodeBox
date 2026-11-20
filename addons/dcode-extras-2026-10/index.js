@@ -28,6 +28,7 @@ import { OPS as MATH_MORE } from "./ops/mathmore.js";
 import { OPS as TEXT_MORE } from "./ops/textmore.js";
 import { OPS as NUM_MORE } from "./ops/numeralmore.js";
 import { OPS as CIPHER_MORE } from "./ops/ciphermore.js";
+import { applyFieldPatch } from "./fieldPatches.js"; // T957 游戏求解器多字段输入补丁（注册时注入，不改 ops 源文件）
 
 const CATS = [
   { id: "dcode-extras-2026-10/cat-math", name: "dcode·数学", icon: "calculate" },
@@ -57,7 +58,7 @@ export default async function setup(ctx) {
   let n = 0;
   for (const op of STATIC_OPS) {
     ctx.registerOp({
-      ...op,
+      ...applyFieldPatch(op),
       since: op.since || "2026.10.0",
       addedIn: op.addedIn || "v0.1.12-beta",
       autoRun: false,
@@ -70,7 +71,7 @@ export default async function setup(ctx) {
       for (const raw of mod.OPS || []) {
         const base = String(raw.id || "").startsWith("dcode-extras-2026-10/") ? raw : { ...raw, id: "dcode-extras-2026-10/" + raw.id };
         const op = {
-          ...base,
+          ...applyFieldPatch(base),
           since: base.since || "2026.10.3",
           addedIn: base.addedIn || "v0.1.12-beta",
           autoRun: false,

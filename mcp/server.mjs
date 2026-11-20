@@ -603,14 +603,16 @@ function isMainModule() {
 if (isMainModule()) {
   if (ARGV.includes("--help") || ARGV.includes("-h")) {
     process.stderr.write("MCP (Node required): node mcp/server.mjs [--stdio | --http] [--timeout ms]\n" +
-      "HTTP: --config path --enabled true|false --host 127.0.0.1 --port 8182 --token value --workspace path\n" +
+      "HTTP: --config path --enabled true|false --host 127.0.0.1|::1|lan|<private IPv4> --port 8182 --token value --workspace path\n" +
       "HTTP defaults: stateless JSON, http://127.0.0.1:8182/mcp, no token, workspace=current directory.\n" +
+      "Server mode: host=lan (or a private IPv4 literal) also listens on loopback, never 0.0.0.0/public; token >= 16 chars is required.\n" +
       "Config: ebcrypto.config.json / services.mcp. Env: EBCRYPTO_MCP_ENABLED/HOST/PORT/TOKEN/WORKSPACE/TIMEOUT_MS.\n");
   } else if (ARGV.includes("--http")) {
     import("./http-server.mjs").then(async ({ startMcpHttpService }) => {
       const service = await startMcpHttpService({ argv: ARGV });
       if (service) {
         process.stderr.write(`[ebctf] MCP ${service.url} (stateless JSON; token ${service.config.token ? "enabled" : "disabled"})\n`);
+        if (service.config.tokenAuto) process.stderr.write(`[ebctf] LAN token (generated for this process; set services.mcp.token to keep it): ${service.config.token}\n`);
         const shutdown = async () => { await service.close(); };
         process.once("SIGINT", shutdown);
         process.once("SIGTERM", shutdown);

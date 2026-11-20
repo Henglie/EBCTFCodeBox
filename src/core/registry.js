@@ -31,6 +31,7 @@ export const CATEGORIES = [
   { id: "home",    name: "首页 · 一把梭", icon: "bolt",           pinned: true },
   { id: "base",    name: "Base 系列",     icon: "tag" },
   { id: "text",    name: "文本 / 传输编码", icon: "translate" },
+  { id: "textProcessing", name: "文本处理", icon: "text_fields" },
   { id: "fancy",   name: "花式 / CTF 编码", icon: "auto_awesome" },
   { id: "esolang", name: "深奥编程语言", icon: "terminal" },
   { id: "cn",      name: "中文 / 本土编码", icon: "language" },

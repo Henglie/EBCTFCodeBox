@@ -11,17 +11,17 @@ export const chapters = {
 ## 1.2 Windows
 解压到当前用户可写目录，保留完整目录结构，双击 Start-Windows.exe。浏览器打开后先用 Base64 解码 Zm9v，应得到 foo。若包中附有新的独立窗口入口，按该包启动说明使用；本书不凭文件名承诺其已经发行或免除 WebView 运行时要求。
 
-没有对应原生启动器时，可在完整源码目录运行 py start.py；也可使用已有 Python 的 python start.py。这里的 Python 命令取决于本机安装方式，不保证每台机器都有 py。不要为了普通文本编码先安装所有外部工具。需要桥接的工具会明确标注，缺桥时不能把界面能打开当成功执行。
+没有对应原生启动器时，可在完整源码目录运行 py GenericStart.py；也可使用已有 Python 的 python GenericStart.py。这里的 Python 命令取决于本机安装方式，不保证每台机器都有 py。不要为了普通文本编码先安装所有外部工具。需要桥接的工具会明确标注，缺桥时不能把界面能打开当成功执行。
 
 GIF 拍摄位 INSTALL-WIN：完整解压→启动→首次 Base64 成功→关闭；不要录入个人目录和真实授权对象。
 
 ## 1.3 macOS
 保留 Start-macOS.command 与 bin/launcher-macos 的相对位置。终端进入解压目录，必要时执行 chmod +x Start-macOS.command bin/launcher-macos，再运行 ./Start-macOS.command。Finder 的首次打开行为由系统安全策略和发行签名状态决定；查看系统给出的来源信息，不把未公证产物描述成已公证。
 
-替代入口为 python3 start.py（须本机已有 Python）。Apple Silicon 与 Intel 的实际可运行结论需对应机器验收，交叉编译文件存在不等于已真机运行。GIF INSTALL-MAC 待两种架构各一次实际启动记录。
+替代入口为 python3 GenericStart.py（须本机已有 Python）。Apple Silicon 与 Intel 的实际可运行结论需对应机器验收，交叉编译文件存在不等于已真机运行。GIF INSTALL-MAC 待两种架构各一次实际启动记录。
 
 ## 1.4 Linux
-保留 Start-Linux.sh 与 bin/launcher-linux；按需 chmod +x Start-Linux.sh bin/launcher-linux，运行 ./Start-Linux.sh。文件管理器是否允许双击脚本取决于桌面设置；终端执行不依赖该选项。缺匹配架构/动态加载器时，使用本机已有 Python 的 python3 start.py。不要把一个 x86-64 二进制称作所有发行版与架构都兼容。GIF INSTALL-LINUX 记录发行版、架构、浏览器和首次转换。
+保留 Start-Linux.sh 与 bin/launcher-linux；按需 chmod +x Start-Linux.sh bin/launcher-linux，运行 ./Start-Linux.sh。文件管理器是否允许双击脚本取决于桌面设置；终端执行不依赖该选项。缺匹配架构/动态加载器时，使用本机已有 Python 的 python3 GenericStart.py。不要把一个 x86-64 二进制称作所有发行版与架构都兼容。GIF INSTALL-LINUX 记录发行版、架构、浏览器和首次转换。
 
 ## 1.5 Android、iOS/iPadOS、ChromeOS
 Android 用现代浏览器访问已经部署的 HTTP(S) 应用；浏览器提供安装/添加主屏幕时可安装 PWA。iPhone/iPad 使用 Safari 分享菜单的「添加到主屏幕」。ChromeOS 可使用 Chrome 网站/PWA；Linux 容器中自行起服务是另一路径，不要求先启用容器。
@@ -129,13 +129,13 @@ The footer identifies the runtime version of this snapshot. A browser client is 
 ## 1.2 Windows
 Extract into a writable folder and open Start-Windows.exe. Decode Zm9v with Base64 and check for foo before installing optional tools. If a later package includes a standalone-window launcher, follow that package's instructions; this reference does not promise that it has already shipped or that WebView requirements disappear.
 
-With an existing Python installation, py start.py or python start.py is an alternative; the command depends on the local installation. A visible bridge-dependent page does not prove that its external tool can run. GIF slot INSTALL-WIN: extraction, startup, the first verified conversion, and close; exclude personal paths and license subjects.
+With an existing Python installation, py GenericStart.py or python GenericStart.py is an alternative; the command depends on the local installation. A visible bridge-dependent page does not prove that its external tool can run. GIF slot INSTALL-WIN: extraction, startup, the first verified conversion, and close; exclude personal paths and license subjects.
 
 ## 1.3 macOS
-Keep Start-macOS.command beside bin/launcher-macos. In the extracted directory, use chmod +x Start-macOS.command bin/launcher-macos if needed, then ./Start-macOS.command. First-open behavior depends on system policy and the actual signing/notarization state. A cross-compiled file is not evidence of execution on Intel or Apple Silicon. An existing Python installation can run python3 start.py. INSTALL-MAC awaits real startup recordings for the relevant architectures.
+Keep Start-macOS.command beside bin/launcher-macos. In the extracted directory, use chmod +x Start-macOS.command bin/launcher-macos if needed, then ./Start-macOS.command. First-open behavior depends on system policy and the actual signing/notarization state. A cross-compiled file is not evidence of execution on Intel or Apple Silicon. An existing Python installation can run python3 GenericStart.py. INSTALL-MAC awaits real startup recordings for the relevant architectures.
 
 ## 1.4 Linux
-Keep Start-Linux.sh and bin/launcher-linux together. If needed, run chmod +x Start-Linux.sh bin/launcher-linux, then ./Start-Linux.sh. File-manager script execution is desktop-dependent; the terminal route does not depend on that option. If architecture or loader requirements do not match, use python3 start.py with an already installed Python. One x86-64 binary does not cover every distribution and architecture. INSTALL-LINUX must record distribution, architecture, browser and the first conversion.
+Keep Start-Linux.sh and bin/launcher-linux together. If needed, run chmod +x Start-Linux.sh bin/launcher-linux, then ./Start-Linux.sh. File-manager script execution is desktop-dependent; the terminal route does not depend on that option. If architecture or loader requirements do not match, use python3 GenericStart.py with an already installed Python. One x86-64 binary does not cover every distribution and architecture. INSTALL-LINUX must record distribution, architecture, browser and the first conversion.
 
 ## 1.5 Android, iOS/iPadOS and ChromeOS
 Open a deployed HTTP(S) application in a modern browser. Android and ChromeOS can install a PWA when the browser offers it. On iOS/iPadOS, Safari's Share menu offers Add to Home Screen. A ChromeOS Linux container is an optional hosting route, not a prerequisite for the website.

@@ -12,7 +12,7 @@ async function terser() {
 
 register({
   id: "jsMinify",
-  cat: "text",
+  cat: "textProcessing",
   name: "JavaScript 压缩",
   desc: "用 terser 压缩 JavaScript 代码，移除空白并缩短局部变量名（CyberChef #240）",
   params: [],

@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
-import { createMcpHttpService, loadMcpHttpConfig, normalizeMcpHttpConfig } from "../mcp/http-server.mjs";
+import { createMcpHttpService, loadMcpHttpConfig, normalizeMcpHttpConfig, lanIPv4Addresses } from "../mcp/http-server.mjs";
 import { createWorkerToolRunner } from "../mcp/server.mjs";
 import { MCP_TOOLS, listMcpResources } from "../mcp/ebctf-core-adapter.mjs";
 import { OPS } from "../src/core/registry.js";
@@ -247,13 +247,46 @@ export async function runChecks() {
       assert.equal((await exchange(secured.url, request(2, "tools/list"), { Authorization: "Bearer local-test-token" })).status, 200);
       const saved = secured.url; await secured.close(); assert(await portClosed(saved));
     });
+    await check("HTTP server mode: LAN bind requires strong token and shares one port with loopback", async () => {
+      const auto = normalizeMcpHttpConfig({ host: "lan" });
+      assert.equal(auto.tokenAuto, true);
+      assert(auto.token.length >= 16);
+      assert.equal(normalizeMcpHttpConfig({ host: "lan", token: "x".repeat(24) }).tokenAuto, false);
+      assert.throws(() => normalizeMcpHttpConfig({ host: "lan", token: "short" }), /at least 16/);
+      assert.throws(() => normalizeMcpHttpConfig({ host: "0.0.0.0", token: "x".repeat(24) }), /private LAN/);
+      assert.throws(() => normalizeMcpHttpConfig({ host: "8.8.8.8", token: "x".repeat(24) }), /private LAN/);
+      const lan = lanIPv4Addresses();
+      if (!lan.length) return; // machine without a private IPv4 NIC: validation checks still ran
+      const token = "server-mode-token-0123456789";
+      const svc = createMcpHttpService({ host: "lan", port: 0, token, workspace });
+      services.push(svc); await svc.start();
+      const port = Number(new URL(svc.url).port);
+      const loopUrl = `http://127.0.0.1:${port}/mcp`;
+      const lanUrl = `http://${lan[0]}:${port}/mcp`;
+      assert.equal(svc.config.serverMode, true);
+      assert.deepEqual(svc.config.bindHosts, ["127.0.0.1", ...lan]);
+      assert.equal((await exchange(loopUrl, init)).status, 401);
+      assert.equal((await exchange(lanUrl, init)).status, 401);
+      assert.equal((await exchange(loopUrl, init, { Authorization: `Bearer ${token}` })).status, 200);
+      assert.equal((await exchange(lanUrl, init, { Authorization: `Bearer ${token}` })).status, 200);
+      assert.equal((await exchange(loopUrl, init, { Authorization: `Bearer ${token}`, Host: `evil.example:${port}` })).status, 403);
+      const saved = svc.url; await svc.close(); assert(await portClosed(saved));
+      // Server mode without a configured token generates one for the process.
+      const autoSvc = createMcpHttpService({ host: "lan", port: 0, workspace });
+      services.push(autoSvc); await autoSvc.start();
+      assert.equal(autoSvc.config.tokenAuto, true);
+      assert(autoSvc.config.token.length >= 16);
+      assert.equal((await exchange(autoSvc.url, init)).status, 401);
+      assert.equal((await exchange(autoSvc.url, init, { Authorization: `Bearer ${autoSvc.config.token}` })).status, 200);
+      const autoUrl = autoSvc.url; await autoSvc.close(); assert(await portClosed(autoUrl));
+    });
     await check("Config file/env/args/launcher override precedence and disabled service", async () => {
       const configPath = path.join(run, "ebcrypto.config.json");
       await writeFile(configPath, JSON.stringify({ services: { mcp: { enabled: false, port: 8183, workspace: "workspace", token: "file" } } }));
       const c = await loadMcpHttpConfig({ configPath, env: { EBCRYPTO_MCP_PORT: "8184", EBCRYPTO_MCP_TOKEN: "env" }, argv: ["--http", "--port=8185", "--token", ""], overrides: { port: 8186 } });
       assert.equal(c.port, 8186); assert.equal(c.token, ""); assert.equal(c.workspace, workspace); assert.equal(c.enabled, false);
       assert.equal(await createMcpHttpService(c).start(), null);
-      for (const bad of [{ host: "0.0.0.0" }, { host: "192.168.1.2" }, { port: -1 }, { timeoutMs: 0 }, { token: "bad\n" }, { enabled: "yes" }]) assert.throws(() => normalizeMcpHttpConfig(bad));
+      for (const bad of [{ host: "0.0.0.0" }, { host: "8.8.8.8" }, { host: "lan", token: "short" }, { port: -1 }, { timeoutMs: 0 }, { token: "bad\n" }, { enabled: "yes" }]) assert.throws(() => normalizeMcpHttpConfig(bad));
     });
     await check("HTTP port conflict reports EADDRINUSE and leaves existing server usable", async () => {
       const conflict = createMcpHttpService({ port: Number(new URL(url).port), workspace }); services.push(conflict);

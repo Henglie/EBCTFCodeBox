@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "id": "00000000-0000-7000-8000-000000000000",
+  "version": "0.1.15",
+  "entry": "index.html",
+  "script": "app.js",
+  "style": "app.css",
+  "name": "恒烈 CTF 编码工具箱 · L 站版",
+  "permissions": ["theme.read", "storage.read", "storage.write", "clipboard.read", "clipboard.write"]
+}

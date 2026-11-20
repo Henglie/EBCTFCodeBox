@@ -204,7 +204,7 @@ CTF 里常出现系统字体渲染不出来的生僻汉字、古文字、小语�
 
 ## 十一、开源地址与协议
 
-- **仓库**:<https://github.com/Henglie/EBCTFCodeBox>
+- **仓库**:<https://github.com/Henglie/EBCrypto>
 - **协议**:采用 **Apache License 2.0**,可自由使用、修改与再分发,详见仓库根目录 `LICENSE` 全文。
 - 第三方组件(Material Symbols 图标、各 WASM 库、天珩字库等)各自遵循其原始许可证;天珩全字库为非商业授权,本项目仅作开源、非商业的本地显示用途。
 

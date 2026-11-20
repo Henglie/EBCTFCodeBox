@@ -61,7 +61,7 @@ const INCLUDE_FILES = [
   "README_EN.md",
   "CHANGELOG.md",
   "LICENSE",
-  "start.py",
+  "GenericStart.py",
   "bridge.py",
   "local_tools.py",
   "runtime_services.py",

@@ -28,7 +28,9 @@ if (global.__EBCTFContinuousCorners) return;
  * image sources and OS-owned popup contents retain authored rendering and are
  * reported by inspect()/stats(). Replaced media uses an explicit matching clip;
  * container hosts and their floating children are never clipped by this module.
- * M3 circles, capsules and range track/thumb retain authored circular arcs.
+ * M3 circles keep authored arcs. Full-round capsules keep their circular cap
+ * through the apex; only the line/arc junction gets a short curvature ramp so
+ * the 0-to-1/r jump disappears. Micro pills below 16px stay native.
  * Generated SVGs contain paint/geometry only, never field text.
  */
 
@@ -140,6 +142,85 @@ function insetBox(width, height, radii, edges) {
   return continuousCornerPath(width - l - r, height - t - b, inner, l, t);
 }
 
+/**
+ * Curvature-continuous capsule: the cap stays circular through the apex, while a
+ * monotone 0→1/R curvature ramp replaces the hard 0→1/r jump where the straight
+ * edge meets the semicircle. The ramp travels a hair more than the circle for
+ * the same join angle, so the cap radius shrinks by that difference (typically
+ * 0.03-0.08px); width, height and apex stay put and the straight edges stay at
+ * y=0, with no bulge outside the stadium.
+ *
+ * This is deliberately not the Apple corner profile: the cap is not flattened
+ * into a rounded rectangle. Micro pills below 16px keep native arcs.
+ */
+const CAPSULE_BLEND_ANGLE = 0.28; // 16 degrees of cap arc; the remaining 148 degrees stay circular
+const CAPSULE_RAMP_STEPS = 8;
+const CAPSULE_RAMP_CACHE = new Map();
+
+function isCapsuleShape(width, height, radii) {
+  const half = Math.min(width, height) / 2;
+  return Math.min(width, height) >= 16 && radii.every(([rx, ry]) => rx >= half - 1e-6 && ry >= half - 1e-6);
+}
+
+/** Monotone 0→1/R curvature ramp for a cap of radius R; sampled as a polyline. */
+function capsuleTransition(R) {
+  const key = n(R);
+  const hit = CAPSULE_RAMP_CACHE.get(key);
+  if (hit) return hit;
+  const phi = CAPSULE_BLEND_ANGLE, length = 2 * R * phi, step = length / CAPSULE_RAMP_STEPS;
+  let theta = 0, px = 0, py = 0;
+  const points = [[0, 0]];
+  for (let i = 0; i < CAPSULE_RAMP_STEPS; i++) {
+    const t = (i + .5) / CAPSULE_RAMP_STEPS;
+    const k = (3 * t * t - 2 * t * t * t) / R;
+    const mid = theta + k * step / 2;
+    px += Math.cos(mid) * step;
+    py += Math.sin(mid) * step;
+    theta += k * step;
+    points.push([px, py]);
+  }
+  const result = { points, endX: px, endY: py };
+  if (CAPSULE_RAMP_CACHE.size > 64) CAPSULE_RAMP_CACHE.clear();
+  CAPSULE_RAMP_CACHE.set(key, result);
+  return result;
+}
+
+function capsulePath(width, height, x = 0, y = 0) {
+  if (!(width > 0 && height > 0)) return '';
+  const vertical = height > width + .5;
+  const w = vertical ? height : width, h = vertical ? width : height;
+  const point = (u, v) => vertical ? `${n(x + v)} ${n(y + u)}` : `${n(x + u)} ${n(y + v)}`;
+  if (Math.abs(w - h) < .5) {
+    return `M${point(h, 0)}A${n(h / 2)} ${n(h / 2)} 0 0 1 ${point(h, h)}A${n(h / 2)} ${n(h / 2)} 0 0 1 ${point(h, 0)}Z`;
+  }
+  const r = h / 2, phi = CAPSULE_BLEND_ANGLE;
+  // A monotone curvature ramp from 0 to 1/R keeps the junction G2 but drops a
+  // hair more than the cap circle for the same join angle. Shrinking the cap
+  // radius by that difference (a few hundredths of a pixel) absorbs it, so the
+  // straight edges stay at y=0 and the apex stays exactly at x=w.
+  let R = r, ramp;
+  for (let i = 0; i < 4; i++) {
+    ramp = capsuleTransition(Math.max(1, R));
+    const joinY = r - R * Math.cos(phi);
+    R = Math.max(1, R - (ramp.endY - joinY));
+  }
+  ramp = capsuleTransition(Math.max(1, R));
+  const sin = Math.sin(phi), cos = Math.cos(phi);
+  const joinX = w - R + R * sin, joinY = r - R * cos;
+  const sx = joinX - ramp.points[ramp.points.length - 1][0];
+  const seq = list => list.map(([u, v]) => `L${point(u, v)}`).join('');
+  const top = ramp.points.slice(1).map(([u, v]) => [sx + u, v]);
+  const bottom = ramp.points.map(([u, v]) => [sx + u, h - v]).reverse();
+  const leftBottom = bottom.map(([u, v]) => [w - u, v]).reverse();
+  const leftTop = top.map(([u, v]) => [w - u, v]).reverse();
+  return `M${point(w - sx, 0)}L${point(sx, 0)}${seq(top)}A${n(R)} ${n(R)} 0 0 1 ${point(joinX, h - joinY)}${seq(bottom)}L${point(w - sx, h)}${seq(leftBottom)}A${n(R)} ${n(R)} 0 0 1 ${point(w - joinX, joinY)}${seq(leftTop)}Z`;
+}
+
+function capsuleInsetPath(width, height, edges) {
+  const [t, r, b, l] = edges;
+  return capsulePath(width - l - r, height - t - b, l, t);
+}
+
 function parseShadows(value) {
   if (!value || value === 'none') return [];
   return splitCSS(value).map(part => {
@@ -227,7 +308,10 @@ function createCornerSVG(paint) {
   const border = paint.border || [0, 0, 0, 0];
   const colors = paint.borderColors || Array(4).fill('transparent');
   const styles = paint.borderStyles || Array(4).fill('solid');
-  const outer = continuousCornerPath(w, h, radii), inner = insetBox(w, h, radii, border);
+  const capsule = isCapsuleShape(w, h, radii);
+  const shape = (ww, hh, rr, xx = 0, yy = 0) => capsule ? capsulePath(ww, hh, xx, yy) : continuousCornerPath(ww, hh, rr, xx, yy);
+  const inset = (ww, hh, rr, edges) => capsule ? capsuleInsetPath(ww, hh, edges) : insetBox(ww, hh, rr, edges);
+  const outer = shape(w, h, radii), inner = inset(w, h, radii, border);
   const shadows = parseShadows(paint.shadow);
   const outlineWidth = paint.outlineStyle && paint.outlineStyle !== 'none' ? Math.max(0, paint.outlineWidth || 0) : 0;
   const outlineOffset = paint.outlineOffset || 0;
@@ -242,15 +326,15 @@ function createCornerSVG(paint) {
     const margin = Math.ceil(Math.max(Math.abs(s.x), Math.abs(s.y)) + s.blur * 1.5 + Math.abs(s.spread) + 2);
     if (margin > 192) throw new Error('shadow-budget');
     const spread = s.inset ? -s.spread : s.spread;
-    const shape = continuousCornerPath(w + spread * 2, h + spread * 2, radii.map(r => r.map(v => Math.max(0, v + spread))), -spread + s.x, -spread + s.y);
+    const shadowShape = shape(w + spread * 2, h + spread * 2, radii.map(r => r.map(v => Math.max(0, v + spread))), -spread + s.x, -spread + s.y);
     defs += `<filter id="s${i}" filterUnits="userSpaceOnUse" x="${-margin}" y="${-margin}" width="${w + margin * 2}" height="${h + margin * 2}" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="${n(s.blur / 2)}"/></filter>`;
     if (s.inset) {
-      defs += `<mask id="i${i}" maskUnits="userSpaceOnUse">${maskRect}<path d="${shape}" fill="black" filter="url(#s${i})"/></mask>`;
+      defs += `<mask id="i${i}" maskUnits="userSpaceOnUse">${maskRect}<path d="${shadowShape}" fill="black" filter="url(#s${i})"/></mask>`;
       inside = `<path d="${inner}" fill="${xml(s.color)}" mask="url(#i${i})"/>` + inside;
-    } else outside = `<g mask="url(#outside)"><path d="${shape}" fill="${xml(s.color)}" filter="url(#s${i})"/></g>` + outside;
+    } else outside = `<g mask="url(#outside)"><path d="${shadowShape}" fill="${xml(s.color)}" filter="url(#s${i})"/></g>` + outside;
   }
   const clipEdges = paint.clip === 'padding-box' ? border : paint.clip === 'content-box' ? border.map((v, i) => v + (paint.padding?.[i] || 0)) : [0, 0, 0, 0];
-  const backgroundPath = insetBox(w, h, radii, clipEdges);
+  const backgroundPath = inset(w, h, radii, clipEdges);
   let fill = `<path d="${backgroundPath}" fill="${xml(paint.background || 'transparent')}"/>`;
   const images = !paint.image || paint.image === 'none' ? [] : splitCSS(paint.image);
   for (let i = images.length - 1; i >= 0; i--) {
@@ -274,7 +358,7 @@ function createCornerSVG(paint) {
     if (![rx, ry].every(mode => ['repeat', 'no-repeat'].includes(mode))) throw new Error('background-repeat');
     defs += gradient(images[i], `g${i}`, tileW, tileH, [0, 0]);
     defs += `<pattern id="p${i}" patternUnits="userSpaceOnUse" x="${n(tx)}" y="${n(ty)}" width="${n(tileW)}" height="${n(tileH)}"><rect width="${n(tileW)}" height="${n(tileH)}" fill="url(#g${i})"/></pattern>`;
-    const layerPath = insetBox(w, h, radii, layerClip);
+    const layerPath = inset(w, h, radii, layerClip);
     if (rx === 'repeat' && ry === 'repeat') fill += `<path d="${layerPath}" fill="url(#p${i})"/>`;
     else {
       defs += `<clipPath id="tile${i}"><rect x="${n(rx === 'repeat' ? 0 : tx)}" y="${n(ry === 'repeat' ? 0 : ty)}" width="${n(rx === 'repeat' ? w : tileW)}" height="${n(ry === 'repeat' ? h : tileH)}"/></clipPath>`;
@@ -288,7 +372,7 @@ function createCornerSVG(paint) {
     const patterned = styles.some((style, i) => border[i] && ['dashed', 'dotted'].includes(style));
     if (patterned) {
       if (!border.every(v => v === border[0]) || !styles.every(v => v === styles[0]) || !colors.every(v => v === colors[0])) throw new Error('mixed-pattern-border');
-      const bw = border[0], middle = insetBox(w, h, radii, Array(4).fill(bw / 2));
+      const bw = border[0], middle = inset(w, h, radii, Array(4).fill(bw / 2));
       stroke = `<path d="${middle}" fill="none" stroke="${xml(colors[0])}" stroke-width="${bw}" stroke-dasharray="${styles[0] === 'dotted' ? `0 ${bw * 2}` : `${bw * 3} ${bw * 2}`}" stroke-linecap="${styles[0] === 'dotted' ? 'round' : 'butt'}"/>`;
     } else if (colors.every(c => c === colors[0])) stroke = `<path d="${ring}" fill-rule="evenodd" fill="${xml(colors[0])}"/>`;
     else {
@@ -302,7 +386,7 @@ function createCornerSVG(paint) {
   let indicator = '';
   let outline = '';
   if (outlineWidth) {
-    const expanded = amount => continuousCornerPath(w + amount * 2, h + amount * 2, radii.map(pair => pair.map(v => Math.max(0, v + amount))), -amount, -amount);
+    const expanded = amount => shape(w + amount * 2, h + amount * 2, radii.map(pair => pair.map(v => Math.max(0, v + amount))), -amount, -amount);
     outline = `<path data-outline="true" d="${expanded(outlineOffset + outlineWidth)}${expanded(outlineOffset)}" fill-rule="evenodd" fill="${xml(paint.outlineColor || 'currentColor')}"/>`;
   }
   if (paint.select?.gutter > 0) {
@@ -316,6 +400,7 @@ function createCornerSVG(paint) {
   return { svg, outset };
 }
 
+const outlinePathFor = paint => isCapsuleShape(paint.width, paint.height, normalizeRadii(paint.width, paint.height, paint.radii)) ? capsulePath(paint.width, paint.height) : continuousCornerPath(paint.width, paint.height, paint.radii);
 const dataImage = svg => `url("data:image/svg+xml,${encodeURIComponent(svg).replace(/'/g, '%27')}")`;
 function resolveRadius(value, width, height) {
   const parts = value.trim().split(/\s+/);
@@ -358,10 +443,12 @@ function skipReason(node, paint) {
   if (paint.display === 'inline' || paint.display.startsWith('table') || paint.display === 'contents') return 'fragmented-box';
   if (!paint.radii.some(pair => pair.every(v => v > 0))) return 'square';
   if (Math.abs(paint.width - paint.height) < .5 && paint.radii.every(([rx, ry]) => rx >= paint.width / 2 && ry >= paint.height / 2)) return 'circle';
-  // CSS full-round M3 controls are already circular arcs/capsules. Preserve
-  // their authored shape instead of forcing the Apple rectangle profile.
+  // Full-round M3 controls (buttons, chips, segmented shells, switches) keep
+  // their circular cap; only the line/arc junction gets a curvature ramp in
+  // capsulePath(). Sub-16px pills (range tracks, scrollbar thumbs, micro badges)
+  // keep authored arcs: the ramp is below the visible threshold there.
   const half = Math.min(paint.width, paint.height) / 2;
-  if (paint.radii.every(([rx, ry]) => rx >= half && ry >= half)) return 'pill';
+  if (paint.radii.every(([rx, ry]) => rx >= half && ry >= half) && Math.min(paint.width, paint.height) < 16) return 'pill-micro';
   if (paint.borderImage !== 'none') return 'authored-border-image';
   if (!['border-box', 'padding-box', 'content-box'].includes(paint.clip)) return 'background-clip';
   if (paint.image !== 'none' && splitCSS(paint.blend).some(mode => mode !== 'normal')) return 'background-blend';
@@ -615,10 +702,10 @@ function setupContinuousCorners(options = {}) {
           }
           node.setAttribute(ATTR, ''); state.applied = true; state.reason = '';
           if (/^(IMG|VIDEO|CANVAS)$/.test(node.tagName)) {
-            node.style.setProperty('--cc-clip', `path('${continuousCornerPath(paint.width, paint.height, paint.radii)}')`);
+            node.style.setProperty('--cc-clip', `path('${outlinePathFor(paint)}')`);
             node.setAttribute('data-cc-media', '');
           } else if (node.matches('.ci-editor-wrap > .cm-editor, .ci-spanel-pre > .cm-editor')) {
-            node.style.setProperty('--cc-clip', `path('${continuousCornerPath(paint.width, paint.height, paint.radii)}')`);
+            node.style.setProperty('--cc-clip', `path('${outlinePathFor(paint)}')`);
             node.setAttribute('data-cc-content', '');
           }
         }
@@ -729,6 +816,6 @@ function setupContinuousCorners(options = {}) {
 }
 
 global.__EBCTFContinuousCorners = Object.freeze({ CORNER_PROFILE, APPLE_CORNER_EXTENT, APPLE_CORNER_COMMANDS,
-  cornerCubics, continuousCornerPath, createCornerSVG, normalizeRadii, splitCSS, setupContinuousCorners });
+  cornerCubics, continuousCornerPath, createCornerSVG, normalizeRadii, splitCSS, setupContinuousCorners, capsulePath, isCapsuleShape, capsuleTransition });
 if (global.document?.currentScript) setupContinuousCorners();
 })(globalThis);

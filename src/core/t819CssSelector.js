@@ -19,7 +19,7 @@ async function mods() {
 
 register({
   id: "cssSelector",
-  cat: "text",
+  cat: "textProcessing",
   io: "text",
   name: "CSS 选择器",
   desc: "用 CSS 选择器从 HTML 文档中提取节点，多个结果按分隔符连接（CyberChef #54）",

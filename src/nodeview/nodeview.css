@@ -1,0 +1,546 @@
+/*
+ * nodeview.css — 节点画布外观（T952 候选）。
+ *
+ * 约定：
+ *   1. 颜色一律走主题变量（--primary / --surface-* / --on-surface* / --outline* / --error），
+ *      缺变量时回落到 CSS 系统色（Canvas / CanvasText / GrayText / Highlight），不写死色值；
+ *      demo 直接引用现用 src/ui/theme.css，因此候选落地到产品里不会换色。
+ *   2. 尺寸令牌 --nv-head-h / --nv-row-h 必须与 canvasModel.js 的 GEO 常量一致。
+ *   3. 布局用逻辑属性（inset-inline-*、margin-inline-start），RTL 自动翻转。
+ *   4. 节点是真实 DOM 文本，不加 user-select:none 到正文，正文可选中。
+ */
+
+.nv-canvas {
+  --nv-head-h: 30px;
+  --nv-row-h: 22px;
+  --nv-edge: color-mix(in srgb, var(--outline, GrayText) 72%, transparent);
+  --nv-edge-hi: var(--primary, Highlight);
+  --nv-surface-node: var(--surface-1, Canvas);
+  --nv-surface-head: color-mix(in srgb, var(--surface-2, Canvas) 72%, transparent);
+  --nv-surface-group: color-mix(in srgb, var(--surface-3, Canvas) 46%, transparent);
+  --nv-border: var(--outline-var, color-mix(in srgb, CanvasText 26%, transparent));
+  --nv-fg: var(--on-surface, CanvasText);
+  --nv-fg-dim: var(--on-surface-var, color-mix(in srgb, CanvasText 72%, transparent));
+  --nv-accent: var(--primary, Highlight);
+  --nv-accent-fg: var(--on-primary, HighlightText);
+  --nv-danger: var(--error, Mark);
+  --nv-radius: var(--r-md, 12px);
+  --nv-radius-sm: var(--r-sm, 8px);
+  --nv-shadow: var(--el-2, 0 2px 6px color-mix(in srgb, CanvasText 22%, transparent));
+  --nv-dur: var(--dur-short, 150ms);
+  --nv-ease: var(--ease, ease);
+
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  overflow: hidden;
+  background: var(--surface, Canvas);
+  color: var(--nv-fg);
+  font-family: var(--font, system-ui, sans-serif);
+  font-size: var(--fs-sm, 13px);
+  border-radius: var(--nv-radius);
+  isolation: isolate;
+}
+
+.nv-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  outline: none;
+  cursor: default;
+  background-image: radial-gradient(circle at 1px 1px,
+      color-mix(in srgb, var(--outline-var, GrayText) 62%, transparent) 1px,
+      transparent 0);
+  background-size: 24px 24px;
+  background-position: 0 0;
+}
+.nv-viewport:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--nv-accent);
+}
+.nv-canvas.is-space .nv-viewport { cursor: grab; }
+.nv-canvas.is-panning .nv-viewport { cursor: grabbing; }
+.nv-canvas.is-connecting .nv-viewport { cursor: crosshair; }
+
+/* ---------------------------------------------------------------- 世界层 */
+
+.nv-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.nv-groups,
+.nv-nodes {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+}
+.nv-nodes { z-index: 3; }
+.nv-groups { z-index: 1; }
+
+.nv-edges {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  z-index: 2;
+  pointer-events: none;
+  /* 独立合成层：拖动节点时只重绘连线层，避免整块世界层重绘（实测 24fps → 120fps） */
+  will-change: transform;
+}
+
+/* ---------------------------------------------------------------- 连线 */
+
+.nv-edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 16;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+.nv-edge-line {
+  fill: none;
+  stroke: var(--nv-edge);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  transition: stroke var(--nv-dur) var(--nv-ease), stroke-width var(--nv-dur) var(--nv-ease);
+}
+.nv-edge:hover .nv-edge-line { stroke: var(--nv-fg-dim); }
+.nv-edge.is-selected .nv-edge-line {
+  stroke: var(--nv-accent);
+  stroke-width: 2.4;
+}
+.nv-edge-preview {
+  fill: none;
+  stroke: var(--nv-accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+  pointer-events: none;
+}
+.nv-edge-preview.is-invalid { stroke: var(--nv-danger); }
+.nv-edge-endpoint {
+  fill: var(--surface, Canvas);
+  stroke: var(--nv-accent);
+  stroke-width: 2;
+  cursor: grab;
+  pointer-events: all;
+}
+.nv-edge-endpoint:hover { fill: var(--nv-accent); }
+
+/* ---------------------------------------------------------------- 节点 */
+
+.nv-node {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+  background: var(--nv-surface-node);
+  border: 1px solid var(--nv-border);
+  border-radius: var(--nv-radius);
+  color: var(--nv-fg);
+  font-size: var(--fs-xs, 12px);
+  line-height: 1.25;
+  cursor: default;
+  user-select: none;
+  contain: layout style;
+  pointer-events: auto;
+  box-shadow: var(--nv-shadow);
+}
+.nv-node:hover { border-color: color-mix(in srgb, var(--nv-accent) 55%, var(--nv-border)); }
+.nv-node:focus-visible {
+  outline: 2px solid var(--nv-accent);
+  outline-offset: 2px;
+}
+.nv-node.is-selected {
+  outline: 2px solid var(--nv-accent);
+  outline-offset: 1px;
+  border-color: var(--nv-accent);
+}
+.nv-canvas.is-dragging .nv-node { cursor: grabbing; }
+/* 拖动中的选中节点单独成层：避免整块 300 节点层因一次 transform 变化重绘 */
+.nv-canvas.is-dragging .nv-node.is-selected { will-change: transform; }
+.nv-node.is-disabled {
+  opacity: .55;
+  border-style: dashed;
+}
+.nv-node.is-disabled .nv-node-title { text-decoration: line-through; }
+
+.nv-node-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1, 4px);
+  flex: 0 0 var(--nv-head-h);
+  height: var(--nv-head-h);
+  padding-inline: 6px;
+  background: var(--nv-surface-head);
+  border-bottom: 1px solid color-mix(in srgb, var(--nv-border) 70%, transparent);
+  border-start-start-radius: calc(var(--nv-radius) - 1px);
+  border-start-end-radius: calc(var(--nv-radius) - 1px);
+}
+.nv-node.is-collapsed .nv-node-head {
+  border-bottom-color: transparent;
+  border-end-start-radius: calc(var(--nv-radius) - 1px);
+  border-end-end-radius: calc(var(--nv-radius) - 1px);
+}
+
+.nv-node-toggle {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-full, 999px);
+  background: transparent;
+  color: var(--nv-fg-dim);
+  cursor: pointer;
+}
+.nv-node-toggle:hover { background: color-mix(in srgb, var(--nv-accent) 14%, transparent); color: var(--nv-fg); }
+.nv-node-toggle:focus-visible { outline: 2px solid var(--nv-accent); outline-offset: 1px; }
+.nv-chev {
+  width: 7px;
+  height: 7px;
+  border-inline-end: 1.6px solid currentColor;
+  border-block-end: 1.6px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform var(--nv-dur) var(--nv-ease);
+}
+.nv-node.is-collapsed .nv-chev { transform: rotate(-45deg); }
+
+.nv-node-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nv-node-dir {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--nv-fg-dim);
+  letter-spacing: .02em;
+}
+
+.nv-body {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-content: start;
+  padding-block: 6px;
+  min-height: 0;
+}
+.nv-col { min-width: 0; display: flex; flex-direction: column; }
+.nv-col-out { align-items: stretch; }
+
+.nv-port-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--nv-row-h);
+  padding-inline: 15px 6px;
+  min-width: 0;
+}
+.nv-port-row-out {
+  flex-direction: row-reverse;
+  padding-inline: 6px 15px;
+}
+.nv-port-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nv-fg-dim);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 10.5px;
+}
+.nv-port-row:has(.nv-port[data-required]) .nv-port-label { color: var(--nv-fg); }
+
+.nv-port {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: -9px;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  border-radius: var(--r-full, 999px);
+  cursor: crosshair;
+  z-index: 2;
+}
+.nv-port-row-out .nv-port {
+  inset-inline-start: auto;
+  inset-inline-end: -9px;
+}
+.nv-port::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--surface-3, Canvas);
+  border: 1.5px solid var(--outline, GrayText);
+  transition: transform var(--nv-dur) var(--nv-ease), background var(--nv-dur) var(--nv-ease), border-color var(--nv-dur) var(--nv-ease);
+}
+.nv-port:hover::before { transform: scale(1.25); border-color: var(--nv-accent); }
+.nv-port:focus-visible { outline: 2px solid var(--nv-accent); outline-offset: 0; }
+.nv-port.is-candidate::before {
+  background: var(--nv-accent);
+  border-color: var(--nv-accent);
+  transform: scale(1.18);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--nv-accent) 22%, transparent);
+}
+.nv-port.is-hover-ok::before {
+  background: var(--nv-accent);
+  border-color: var(--nv-accent);
+  transform: scale(1.55);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--nv-accent) 30%, transparent);
+}
+.nv-port.is-hover-bad::before {
+  background: var(--nv-danger);
+  border-color: var(--nv-danger);
+  transform: scale(1.35);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--nv-danger) 26%, transparent);
+}
+
+/* ---------------------------------------------------------------- 便签 */
+
+.nv-node.nv-note {
+  background: color-mix(in srgb, var(--warning, Mark) 14%, var(--nv-surface-node));
+  border-color: color-mix(in srgb, var(--warning, Mark) 40%, var(--nv-border));
+  border-radius: var(--nv-radius-sm);
+}
+.nv-note-head {
+  flex: 0 0 var(--nv-head-h);
+  display: flex;
+  align-items: center;
+  padding-inline: 10px;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--warning-text, var(--nv-fg));
+  border-bottom: 1px solid color-mix(in srgb, var(--warning, Mark) 26%, transparent);
+}
+.nv-note-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  cursor: text;
+  color: var(--nv-fg);
+}
+
+/* ---------------------------------------------------------------- 分组 */
+
+.nv-group {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  background: var(--nv-surface-group);
+  border: 1px dashed var(--nv-border);
+  border-radius: var(--nv-radius);
+  pointer-events: auto;
+}
+.nv-group.is-selected { border-color: var(--nv-accent); border-style: solid; }
+.nv-group-head {
+  height: 26px;
+  display: flex;
+  align-items: center;
+  padding-inline: 10px;
+  cursor: grab;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--nv-fg-dim);
+  border-bottom: 1px solid color-mix(in srgb, var(--nv-border) 60%, transparent);
+}
+.nv-group-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nv-group-resize {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-end: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, color-mix(in srgb, var(--nv-border) 90%, transparent) 50%);
+  border-end-end-radius: var(--nv-radius);
+}
+.nv-canvas[dir="rtl"] .nv-group-resize { cursor: nesw-resize; }
+
+/* ---------------------------------------------------------------- 覆盖层 */
+
+.nv-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  overflow: hidden;
+}
+.nv-marquee {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: 1px solid var(--nv-accent);
+  background: color-mix(in srgb, var(--nv-accent) 12%, transparent);
+  border-radius: 2px;
+}
+.nv-guide {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: var(--nv-accent);
+  opacity: .8;
+}
+.nv-guide-x { width: 1px; height: 100%; }
+.nv-guide-y { height: 1px; width: 100%; }
+
+/* ---------------------------------------------------------------- HUD */
+
+.nv-hud {
+  position: absolute;
+  inset-block-end: 10px;
+  inset-inline-end: 10px;
+  z-index: 6;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-2, 8px);
+  max-width: calc(100% - 20px);
+}
+.nv-zoom {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: color-mix(in srgb, var(--surface-2, Canvas) 92%, transparent);
+  border: 1px solid var(--nv-border);
+  border-radius: var(--r-full, 999px);
+  box-shadow: var(--nv-shadow);
+}
+.nv-zoom-btn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--r-full, 999px);
+  background: transparent;
+  color: var(--nv-fg);
+  font: inherit;
+  font-size: var(--fs-sm, 13px);
+  cursor: pointer;
+}
+.nv-zoom-btn:hover { background: color-mix(in srgb, var(--nv-accent) 16%, transparent); }
+.nv-zoom-btn:focus-visible { outline: 2px solid var(--nv-accent); outline-offset: 1px; }
+.nv-zoom-btn-text { font-size: 15px; }
+[data-nv-zoom-label] { min-width: 42px; text-align: center; font-variant-numeric: tabular-nums; }
+
+.nv-minimap {
+  width: 176px;
+  height: 112px;
+  padding: 4px;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--surface-2, Canvas) 90%, transparent);
+  border: 1px solid var(--nv-border);
+  border-radius: var(--nv-radius-sm);
+  box-shadow: var(--nv-shadow);
+  cursor: crosshair;
+  touch-action: none;
+}
+.nv-mm-svg { width: 100%; height: 100%; display: block; }
+.nv-mm-node { fill: color-mix(in srgb, var(--nv-fg) 34%, transparent); }
+.nv-mm-node.is-selected { fill: var(--nv-accent); }
+.nv-mm-group { fill: color-mix(in srgb, var(--nv-fg) 10%, transparent); stroke: var(--nv-border); stroke-width: 1; }
+.nv-mm-view {
+  fill: color-mix(in srgb, var(--nv-accent) 12%, transparent);
+  stroke: var(--nv-accent);
+  stroke-width: 1.5;
+}
+
+/* ---------------------------------------------------------------- 提示 */
+
+.nv-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.nv-connect-reason {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 8;
+  max-width: 240px;
+  padding: 6px 10px;
+  font-size: var(--fs-xs, 12px);
+  line-height: 1.4;
+  color: var(--nv-fg);
+  background: var(--surface-4, Canvas);
+  border: 1px solid var(--nv-danger);
+  border-radius: var(--nv-radius-sm);
+  box-shadow: var(--nv-shadow);
+  pointer-events: none;
+}
+.nv-hint {
+  position: absolute;
+  inset-block-end: 10px;
+  inset-inline-start: 12px;
+  z-index: 5;
+  max-width: 46ch;
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--nv-fg-dim);
+  background: color-mix(in srgb, var(--surface-2, Canvas) 88%, transparent);
+  border-radius: var(--r-full, 999px);
+  border: 1px solid color-mix(in srgb, var(--nv-border) 70%, transparent);
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- 窄屏 */
+
+@media (max-width: 520px) {
+  .nv-minimap { width: 104px; height: 72px; }
+  .nv-hint { display: none; }
+  .nv-zoom-btn { min-width: 26px; height: 26px; padding: 0 6px; }
+  [data-nv-zoom-label] { min-width: 34px; font-size: 11px; }
+  .nv-hud { inset-block-end: 6px; inset-inline-end: 6px; gap: 4px; }
+}
+
+@media (max-width: 400px) {
+  .nv-minimap { width: 88px; height: 60px; }
+  .nv-node { font-size: 11px; }
+  .nv-port-label { font-size: 10px; }
+}
+
+/* ---------------------------------------------------------------- 动效 */
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-canvas * { transition: none !important; }
+}
+
+.nv-canvas [hidden] { display: none !important; }

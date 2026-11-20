@@ -28,6 +28,14 @@ server 版本 `0.2.0-beta`，对外可见 op 978 个。`ebctf_list_categories` �
 
 配置文件名为 `ebcrypto.config.json`；空 token 默认不鉴权，设置可打印无空白 ASCII 令牌后，客户端需传 `Authorization: Bearer <token>`。HTTP 文件输入/读取/产物限定在 workspace 内，拒绝链接和特殊文件；stdio/CLI 继续使用原有本地文件能力。HTTP 请求、并发、结果和单次作业都有预算，超时/取消会终止执行 Worker。
 
+**服务器模式（局域网共享）**：`host` 设为 `"lan"` 或本机私有 IPv4 字面量（如 `"192.168.1.20"`）时，同一端口会同时监听回环与局域网地址，供局域网内其他设备接入；**不会**监听 `0.0.0.0`、公网地址或任意主机名，`host` 头/`Origin` 也只接受实际绑定的地址。服务器模式**强制要求 token**（至少 16 个可见 ASCII 字符），缺失或过短会拒绝启动；回环模式仍可空 token。示例：
+
+```json
+{ "services": { "mcp": { "host": "lan", "port": 8182, "token": "replace-with-16+-chars", "workspace": "." } } }
+```
+
+`host: "lan"` 会绑定本机全部私有 IPv4 网卡（含虚拟网卡）；只想开放某一块网卡时填该网卡的私有 IPv4 字面量。跨公网暴露不在支持范围，需要时请自行置于带 TLS 与访问控制的反向代理之后。
+
 手动启动：`node mcp/server.mjs --http`；参数与环境覆盖见 `node mcp/server.mjs --help`。启动器退出/重启会回收它拥有的 HTTP 服务。当前 CLI 包装脚本为 `bin/ebcrypto.cmd`、`sh bin/ebcrypto.sh`，六个命令仍需 Node.js，不属于免运行时独立二进制。
 
 ## 文件
@@ -79,11 +87,11 @@ stdio 协议要求 stdout 只承载 JSON-RPC 消息。core 模块加载期的诊
 
 ## 一键接入（推荐）
 
-项目根 `start.py` 已内置 MCP 两个模式，无需手抄路径：
+项目根 `GenericStart.py` 已内置 MCP 两个模式，无需手抄路径：
 
 ```
-py start.py --mcp-config   # 打印各客户端接入配置（已填好本机绝对路径），照抄即可
-py start.py --mcp          # 直接跑 MCP stdio server（供手动调试 / 客户端 command 指本脚本）
+py GenericStart.py --mcp-config   # 打印各客户端接入配置（已填好本机绝对路径），照抄即可
+py GenericStart.py --mcp          # 直接跑 MCP stdio server（供手动调试 / 客户端 command 指本脚本）
 ```
 
 `--mcp-config` 会输出 Claude Code / Cursor / Trae / Codex / Cline / Claude Desktop 通用的

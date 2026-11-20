@@ -20,7 +20,7 @@ process.stdin.resume();
 try {
   service = await startMcpHttpService({ argv, cwd: process.cwd() });
   if (stopping) await service?.close();
-  process.stdout.write(JSON.stringify({ ok: true, enabled: !!service, url: service?.url || '', tokenRequired: !!service?.config.token }) + '\n');
+  process.stdout.write(JSON.stringify({ ok: true, enabled: !!service, url: service?.url || '', tokenRequired: !!service?.config.token, token: service?.config.token || '', tokenAuto: !!service?.config.tokenAuto }) + '\n');
   if (!service) await stop();
 } catch (error) {
   process.stdout.write(JSON.stringify({ ok: false, error: error.message }) + '\n');

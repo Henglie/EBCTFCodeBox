@@ -149,6 +149,7 @@ export default {
   "cat.home": "首页 · 一把梭",
   "cat.base": "Base 系列",
   "cat.text": "文本 / 传输编码",
+  "cat.textProcessing": "文本处理",
   "cat.fancy": "花式 / CTF 编码",
   "cat.cn": "中文 / 本土编码",
   "cat.classic": "古典密码",
@@ -1702,7 +1703,7 @@ export default {
   "ui.plugin.mcpExported": "MCP 工具描述已导出（JSON 文件）",
   "ui.plugin.mcpHowTitle": "使用方法（本地 stdio 型）",
   "ui.plugin.mcpHowIntro": "本工具箱的 MCP 是本地 stdio 服务：由 AI 客户端按配置自行拉起本地进程，配置里没有网址属正常；纯本地、离线可用、零外发。",
-  "ui.plugin.mcpHowStep1": "在本工具箱安装目录运行：py start.py --mcp-config —— 会打印已填好本机绝对路径的接入配置 JSON",
+  "ui.plugin.mcpHowStep1": "在本工具箱安装目录运行：py GenericStart.py --mcp-config —— 会打印已填好本机绝对路径的接入配置 JSON",
   "ui.plugin.mcpHowStep2": "把打印出的 mcpServers JSON 原样填进你的 AI 客户端配置",
   "ui.plugin.mcpHowStep3": "重启客户端，工具列表出现 6 个 ebctf_* 工具即接入成功",
   "ui.plugin.mcpHowClients": "配置文件位置：Claude Code＝项目根 .mcp.json；Cursor＝.cursor/mcp.json（或设置里的 MCP 面板）；Trae＝MCP 设置面板；Codex / Cline＝各自 MCP 配置；Claude Desktop＝claude_desktop_config.json",
@@ -1712,8 +1713,8 @@ export default {
   "ui.plugin.mcpPromptCopied": "已复制，粘贴给你的 AI 客户端即可",
   "ui.plugin.mcpPromptHead": "请把「恒烈CTF编码工具箱」接入你的 MCP：",
   "ui.plugin.mcpPromptDirFilled": "1) 它在本机的安装目录：{0}",
-  "ui.plugin.mcpPromptDirAuto": "1) 请先在本机定位它的安装目录（特征：start.py 与 mcp/server.mjs 在同一目录；找不到或多份时问我）",
-  "ui.plugin.mcpPromptRest": "2) 在该目录运行 `py start.py --mcp-config`，把输出里的 mcpServers JSON 原样写入你的 MCP 配置（.mcp.json / claude_desktop_config.json 等），重启后应出现 6 个 ebctf_* 工具。\n3) 这是本地 stdio 服务，纯本地、零外发。\n工具速查：ebctf_list_categories 列全部分类｜ebctf_list_ops 按关键词/分类列算法｜ebctf_op_schema 查参数 schema｜ebctf_detect 智能识别编码｜ebctf_run_op 跑指定算法｜ebctf_magic_decode 一键智能解码（支持多层链式）。",
+  "ui.plugin.mcpPromptDirAuto": "1) 请先在本机定位它的安装目录（特征：GenericStart.py 与 mcp/server.mjs 在同一目录；找不到或多份时问我）",
+  "ui.plugin.mcpPromptRest": "2) 在该目录运行 `py GenericStart.py --mcp-config`，把输出里的 mcpServers JSON 原样写入你的 MCP 配置（.mcp.json / claude_desktop_config.json 等），重启后应出现 6 个 ebctf_* 工具。\n3) 这是本地 stdio 服务，纯本地、零外发。\n工具速查：ebctf_list_categories 列全部分类｜ebctf_list_ops 按关键词/分类列算法｜ebctf_op_schema 查参数 schema｜ebctf_detect 智能识别编码｜ebctf_run_op 跑指定算法｜ebctf_magic_decode 一键智能解码（支持多层链式）。",
 
   // ---- 浏览器扩展 · 本地桥 ----
  // --- 编码图查询器 ----

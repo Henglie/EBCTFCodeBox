@@ -2,8 +2,9 @@
    variables and attributes. Container overflow/containing blocks and children
    are untouched. Replaced media alone gets a matching clip. Outline/focus paint
    uses the same SVG curve; author border and outline widths survive.
-   Unsupported paint, semantic circles and full-round M3 capsules never receive
-   data-cc-rendered. Their authored circular arcs remain the only shape.
+   Unsupported paint and semantic circles never receive data-cc-rendered; M3
+   capsules keep their circular cap and only ease the line/arc junction, while
+   sub-16px pills keep authored circular arcs.
    Source paint states are sampled atomically; spatial CSS motion stays native. */
 @media screen and (forced-colors: none) {
   [data-cc-rendered], [data-cc-measure] {

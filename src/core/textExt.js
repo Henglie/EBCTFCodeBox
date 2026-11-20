@@ -621,7 +621,7 @@ register({
 });
 
 register({
-  id: "mixHexOctBin", cat: "text", name: "混排进制解码",
+  id: "mixHexOctBin", cat: "textProcessing", name: "混排进制解码",
   desc: "0x/0b/0o/0d 前缀混排数字串解码为字符",
   run: mixHexOctBinRun,
 });
@@ -666,7 +666,7 @@ register({
 });
 
 register({
-  id: "asciiControl", cat: "text", name: "ASCII 控制字符",
+  id: "asciiControl", cat: "textProcessing", name: "ASCII 控制字符",
   desc: "控制字符名称 ↔ ASCII 值 + Unicode 符号",
   params: [
     { key: "mode", label: "模式", type: "select", default: "name",

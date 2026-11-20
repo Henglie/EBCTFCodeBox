@@ -481,7 +481,7 @@ function escapeRegex(s) {
 
 register({
   id: "regexTool",
-  cat: "text",
+  cat: "textProcessing",
   name: "通用正则提取 / 替换",
   desc:
     "按正则做提取或替换。preset 提供常用提取预设（Email / URL / 域名 / IPv4 / IPv6 / MAC / 日期 / 文件路径 / 哈希 / flag / key=value），选中后自动填正则与捕获组，custom 使用自定义正则；" +

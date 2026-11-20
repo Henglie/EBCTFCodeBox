@@ -19,7 +19,7 @@
 - **第 3 章 启动与安装**
   - 3.1 Windows：双击 `Start-Windows.exe`
   - 3.2 macOS / Linux：`.command` / `.sh` 双击与首开权限
-  - 3.3 通用脚本：`start.py`（起服务 + 本地桥）
+  - 3.3 通用脚本：`GenericStart.py`（起服务 + 本地桥）
   - 3.4 无 Python 部署：`npx serve` / `php -S` / nginx / WASM 两个头（COOP/COEP）
   - 3.5 PWA 安装（移动端 / 鸿蒙）与离线能力
   - 3.6 更新机制：检查更新 → 下载 → 刷新切换

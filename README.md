@@ -13,14 +13,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Henglie/EBCTFCodeBox/stargazers"><img src="https://img.shields.io/github/stars/Henglie/EBCTFCodeBox?style=flat-square" alt="GitHub Repo stars" /></a>
-  <a href="https://github.com/Henglie/EBCTFCodeBox/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Henglie/EBCTFCodeBox?style=flat-square" alt="GitHub License" /></a>
-  <a href="https://github.com/Henglie/EBCTFCodeBox/releases"><img src="https://img.shields.io/github/v/release/Henglie/EBCTFCodeBox?style=flat-square" alt="GitHub Release" /></a>
+  <a href="https://github.com/Henglie/EBCrypto/stargazers"><img src="https://img.shields.io/github/stars/Henglie/EBCrypto?style=flat-square" alt="GitHub Repo stars" /></a>
+  <a href="https://github.com/Henglie/EBCrypto/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Henglie/EBCrypto?style=flat-square" alt="GitHub License" /></a>
+  <a href="https://github.com/Henglie/EBCrypto/releases"><img src="https://img.shields.io/github/v/release/Henglie/EBCrypto?style=flat-square" alt="GitHub Release" /></a>
 </p>
 <p align="center">
-  <a href="https://github.com/Henglie/EBCTFCodeBox/issues"><img src="https://img.shields.io/github/issues/Henglie/EBCTFCodeBox?style=flat-square" alt="GitHub Issues" /></a>
-  <a href="https://github.com/Henglie/EBCTFCodeBox/pulls"><img src="https://img.shields.io/github/issues-pr/Henglie/EBCTFCodeBox?style=flat-square" alt="GitHub Pull Requests" /></a>
-  <a href="https://github.com/Henglie/EBCTFCodeBox/network/members"><img src="https://img.shields.io/github/forks/Henglie/EBCTFCodeBox?style=flat-square" alt="GitHub forks" /></a>
+  <a href="https://github.com/Henglie/EBCrypto/issues"><img src="https://img.shields.io/github/issues/Henglie/EBCrypto?style=flat-square" alt="GitHub Issues" /></a>
+  <a href="https://github.com/Henglie/EBCrypto/pulls"><img src="https://img.shields.io/github/issues-pr/Henglie/EBCrypto?style=flat-square" alt="GitHub Pull Requests" /></a>
+  <a href="https://github.com/Henglie/EBCrypto/network/members"><img src="https://img.shields.io/github/forks/Henglie/EBCrypto?style=flat-square" alt="GitHub forks" /></a>
 </p>
 
 > [!WARNING]
@@ -40,14 +40,14 @@
 
 ## 快速下载
 
-> 核心处理本地运行、零外发。下载解压后按平台双击 `Start-Windows.exe`、`Start-macOS.command` 或 `Start-Linux.sh`。原生静态服务无需 Python；CLI / MCP 仍需 Node.js，Python 工具功能另需本机 Python。也可使用 `start.py`（需 Python 3）。
+> 核心处理本地运行、零外发。下载解压后按平台双击 `Start-Windows.exe`、`Start-macOS.command` 或 `Start-Linux.sh`。原生静态服务无需 Python；CLI / MCP 仍需 Node.js，Python 工具功能另需本机 Python。也可使用 `GenericStart.py`（需 Python 3）。
 
 | 网盘 | 链接 | 提取码 |
 |---|---|---|
 | 百度网盘 | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
 | 夸克网盘 | https://pan.quark.cn/s/3b7e573b19c0 | 无 |
 
-当前版本 **v0.2.0-beta**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox)。
+当前版本 **v0.2.0-beta**。源码始终以 GitHub 仓库为准：[github.com/Henglie/EBCrypto](https://github.com/Henglie/EBCrypto)。
 
 ## 更新日志
 
@@ -210,8 +210,8 @@
 纯静态，任意静态服务器即可。推荐用附带脚本（双击或命令行）：
 
 ```bash
-py start.py     # Windows（用 py，不用 python3）
-python3 start.py # macOS / Linux
+py GenericStart.py     # Windows（用 py，不用 python3）
+python3 GenericStart.py # macOS / Linux
 ```
 
 脚本会同时起静态服务器 + 本地桥（bridge.py，固定 8181，仅 Windows 有实际能力），并用系统默认浏览器打开。桥在同进程后台线程内运行，不弹第二个窗口。
@@ -254,7 +254,7 @@ nginx / Apache / Caddy 等正式 Web 服务器同样可用，需注意两点：
    Cross-Origin-Embedder-Policy: require-corp
    ```
 
-   附带的 `start.py` 已默认下发这两个头；自建服务器需自行配置。缺失这两个头时，多线程 WASM op 会优雅降级或提示不可用，纯前端功能不受影响。
+   附带的 `GenericStart.py` 已默认下发这两个头；自建服务器需自行配置。缺失这两个头时，多线程 WASM op 会优雅降级或提示不可用，纯前端功能不受影响。
 
 PWA 已接线（`manifest.json` + `sw.js`）：当前预缓存清单含 990 项核心运行资源（随版本变化，更新时按校验和增量下载），完成缓存安装后支持核心功能离线使用；大体积按需资产（天珩字库四平面、WASM、IDS 拼字数据、编码对照图、KaTeX）需先在线加载或安装对应离线包。顶栏“检查更新”目前打开版本页面；Service Worker 的版本激活与跨浏览器离线升级仍持续验证。
 
@@ -262,10 +262,10 @@ PWA 已接线（`manifest.json` + `sw.js`）：当前预缓存清单含 990 项�
 
 | 平台 | 前端功能 | 本地桥（exe 工具） | 启动方式 |
 |---|---|---|---|
-| Windows | 全功能（主平台） | JPHS / OpenPuff / OurSecret（GUI 启动）+ pyc/exe 本地反编 + 系统强调色同步 | `py start.py` |
-| macOS | 全功能 | 不可用（无 .exe），桥自动跳过，相关 op 灰置提示 | 双击 `Start-macOS.command`，或 `python3 start.py` |
-| Linux | 全功能 | 同 macOS，桥自动跳过 | 双击 `Start-Linux.sh`，或 `python3 start.py` |
-| ChromeOS | 全功能（经 Crostini Linux 容器） | 同 Linux | `python3 start.py`（Crostini 内） |
+| Windows | 全功能（主平台） | JPHS / OpenPuff / OurSecret（GUI 启动）+ pyc/exe 本地反编 + 系统强调色同步 | `py GenericStart.py` |
+| macOS | 全功能 | 不可用（无 .exe），桥自动跳过，相关 op 灰置提示 | 双击 `Start-macOS.command`，或 `python3 GenericStart.py` |
+| Linux | 全功能 | 同 macOS，桥自动跳过 | 双击 `Start-Linux.sh`，或 `python3 GenericStart.py` |
+| ChromeOS | 全功能（经 Crostini Linux 容器） | 同 Linux | `python3 GenericStart.py`（Crostini 内） |
 | 鸿蒙 / Android / iOS | 全功能（PWA，触屏响应式） | 不可用（移动端无法运行 exe） | 浏览器打开部署地址，可选「添加到主屏幕」 |
 
 说明：
@@ -295,7 +295,7 @@ PWA 已接线（`manifest.json` + `sw.js`）：当前预缓存清单含 990 项�
 | OS 位数 | 32 位可用 | 64 位 | 64 位浏览器可寻址更大内存，利于大文件分析 |
 | 架构 | x86 / x64 / ARM 均可 | 同左 | 浏览器抽象底层架构，WASM 跨架构运行 |
 
-WASM 多线程（`SharedArrayBuffer`）需跨源隔离头（COOP/COEP），`start.py` 已默认下发；缺失时多线程 op 降级为单线程或提示不可用，不影响其余功能。首屏使用 HTTP/1.1 keep-alive、ES module 入口前置和字库懒加载；完整离线资源由 Service Worker 在页面加载后后台安装。
+WASM 多线程（`SharedArrayBuffer`）需跨源隔离头（COOP/COEP），`GenericStart.py` 已默认下发；缺失时多线程 op 降级为单线程或提示不可用，不影响其余功能。首屏使用 HTTP/1.1 keep-alive、ES module 入口前置和字库懒加载；完整离线资源由 Service Worker 在页面加载后后台安装。
 
 ## 目录结构
 
@@ -1463,7 +1463,7 @@ AI 的联网出口只有可选的 `aiClient`，且必须用户自备 endpoint + 
 - 橙子：提出多个 Misc 逻辑代码修复。
 - Tokeii：贡献改版图标，项目下游优化作者。
 - Jason：提出增加国密攻击工具。
-- [星记 (starnotes-xj)](https://github.com/starnotes-xj)：反馈哈希长度扩展的长度参数问题并提交修正建议（[#9](https://github.com/Henglie/EBCTFCodeBox/pull/9)）。
+- [星记 (starnotes-xj)](https://github.com/starnotes-xj)：反馈哈希长度扩展的长度参数问题并提交修正建议（[#9](https://github.com/Henglie/EBCrypto/pull/9)）。
 
 ## Community
 

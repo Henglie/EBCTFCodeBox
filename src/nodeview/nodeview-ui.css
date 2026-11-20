@@ -1,0 +1,245 @@
+/* nodeview-ui.css — 节点库/卡片/检查器样式（T953 候选，从 demo.html <style> 提取）。
+ * MT810 接线：组件样式逐字保留；仅将 demo 的硬编码深色 :root 与 html/body 全局规则
+ * 替换为 .nv-app 作用域内的主题变量映射（走产品 --primary/--surface/--on-surface，
+ * 支持明暗与 M3），避免硬编码色值与全站污染。
+ */
+.nv-app {
+  --nv-bg: var(--surface, Canvas);
+  --nv-panel: var(--surface-1, var(--surface, Canvas));
+  --nv-panel-2: var(--surface-2, var(--surface, Canvas));
+  --nv-line: var(--outline-var, color-mix(in srgb, CanvasText 26%, transparent));
+  --nv-text: var(--on-surface, CanvasText);
+  --nv-dim: var(--on-surface-var, color-mix(in srgb, CanvasText 72%, transparent));
+  --nv-accent: var(--primary, Highlight);
+  --nv-ok: var(--nv-accent, #46c07a);
+  --nv-warn: color-mix(in srgb, var(--error, Mark) 60%, #d9a13b);
+  --nv-err: var(--error, Mark);
+  --nv-radius: var(--r-md, 10px);
+  --nv-surface-head: var(--surface-2, var(--surface, Canvas));
+  color: var(--nv-text);
+  background: var(--nv-bg);
+}
+
+.nv-top {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px 14px; border-bottom: 1px solid var(--nv-line); background: var(--nv-panel);
+  }
+  .nv-top h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  .nv-top .nv-sub { color: var(--nv-dim); font-size: 12px; }
+  .nv-top .spacer { flex: 1; }
+  .nv-btn {
+    border: 1px solid var(--nv-line); background: var(--nv-panel-2); color: var(--nv-text);
+    border-radius: 8px; padding: 5px 10px; cursor: pointer;
+  }
+  .nv-btn:hover { border-color: var(--nv-accent); }
+  .nv-btn[aria-pressed="true"] { border-color: var(--nv-accent); color: var(--nv-accent); }
+  .nv-layout {
+    display: grid; grid-template-columns: 300px minmax(0, 1fr) 350px;
+    gap: 10px; padding: 10px; height: calc(100% - 55px);
+  }
+  @media (max-width: 1100px) { .nv-layout { grid-template-columns: 260px minmax(0,1fr) 310px; } }
+
+  /* ---- 节点库 ---- */
+  .nv-library {
+    display: flex; flex-direction: column; min-height: 0;
+    background: var(--nv-panel); border: 1px solid var(--nv-line); border-radius: var(--nv-radius);
+  }
+  .nv-lib-head { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px 6px; }
+  .nv-lib-head h3 { margin: 0; font-size: 13px; font-weight: 600; }
+  .nv-count { color: var(--nv-dim); font-size: 11px; margin-left: auto; }
+  .nv-lib-search {
+    margin: 0 10px 8px; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--nv-line);
+    background: var(--nv-panel-2); color: var(--nv-text); outline: none;
+  }
+  .nv-lib-search:focus { border-color: var(--nv-accent); }
+  .nv-lib-compat {
+    margin: 0 10px 8px; padding: 6px 8px; border-radius: 8px; font-size: 11px;
+    border: 1px dashed var(--nv-warn); color: var(--nv-warn);
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  }
+  .nv-lib-compat[hidden] { display: none; }
+  .nv-lib-body { flex: 1; overflow: auto; padding: 0 6px 6px; min-height: 0; }
+  .nv-lib-cat { margin-bottom: 2px; }
+  .nv-lib-cat-toggle {
+    width: 100%; display: flex; align-items: center; gap: 8px; text-align: left;
+    background: transparent; border: 0; padding: 6px 8px; border-radius: 6px; cursor: pointer;
+    color: var(--nv-dim); font-size: 12px;
+  }
+  .nv-lib-cat-toggle:hover { background: var(--nv-panel-2); color: var(--nv-text); }
+  .nv-lib-cat-toggle[aria-expanded="true"]::before { content: "\25be"; }
+  .nv-lib-cat-toggle[aria-expanded="false"]::before { content: "\25b8"; }
+  .nv-lib-cat-count { margin-left: auto; font-size: 10px; opacity: .7; }
+  .nv-lib-item {
+    width: 100%; display: flex; align-items: center; gap: 8px; text-align: left;
+    background: transparent; border: 0; border-radius: 6px; padding: 5px 8px 5px 20px;
+    cursor: pointer; color: var(--nv-text);
+  }
+  .nv-lib-item:hover { background: var(--nv-panel-2); }
+  .nv-lib-item.is-active { background: rgba(78,161,255,.18); outline: 1px solid var(--nv-accent); }
+  .nv-lib-item code { margin-left: auto; color: var(--nv-dim); font-size: 10px; }
+  .nv-lib-item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nv-lib-results-head { font-size: 11px; color: var(--nv-dim); padding: 4px 8px; }
+  .nv-lib-empty { color: var(--nv-dim); font-size: 12px; padding: 10px; }
+  .nv-lib-hint { border-top: 1px solid var(--nv-line); color: var(--nv-dim); font-size: 11px; padding: 6px 10px; }
+  .nv-link-btn {
+    background: transparent; border: 0; color: var(--nv-accent); cursor: pointer; padding: 0; font-size: 11px;
+  }
+
+  /* ---- 画布 ---- */
+  .nv-canvas-wrap {
+    display: flex; flex-direction: column; min-height: 0;
+    background: var(--nv-panel); border: 1px solid var(--nv-line); border-radius: var(--nv-radius);
+  }
+  .nv-canvas-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--nv-line); flex-wrap: wrap; }
+  .nv-canvas-head h3 { margin: 0; font-size: 13px; }
+  .nv-canvas-head .nv-drop { color: var(--nv-dim); font-size: 11px; }
+  .nv-canvas-head .spacer { flex: 1; }
+  .nv-canvas {
+    position: relative; flex: 1; overflow: auto; padding: 12px;
+    background-image: radial-gradient(rgba(255,255,255,.06) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+  .nv-canvas.is-drop { outline: 2px dashed var(--nv-accent); outline-offset: -6px; }
+  .nv-canvas-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; color: var(--nv-dim); font-size: 11px; }
+  .nv-fake-ports { display: flex; gap: 8px; margin-bottom: 10px; }
+  .nv-fake-port {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 11px;
+    border: 1px dashed var(--nv-line); background: var(--nv-panel-2); border-radius: 999px;
+    padding: 3px 10px; cursor: grab; color: var(--nv-dim);
+  }
+  .nv-fake-port::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--nv-ok); }
+  .nv-fake-port[data-port-type="bytes"]::before { background: var(--nv-warn); }
+  .nv-card {
+    position: relative; width: 305px; margin: 0 10px 10px 0; display: inline-block; vertical-align: top;
+    background: var(--nv-panel-2); border: 1px solid var(--nv-line); border-radius: var(--nv-radius);
+    padding: 8px 10px 10px;
+  }
+  .nv-card:focus, .nv-card.is-selected { border-color: var(--nv-accent); box-shadow: 0 0 0 1px var(--nv-accent) inset; }
+  .nv-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .nv-card-title { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+  .nv-card-name { margin: 0; font-size: 13px; font-weight: 600; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nv-card-id { color: var(--nv-dim); font-size: 10px; }
+  .nv-card-dir { display: inline-flex; border: 1px solid var(--nv-line); border-radius: 7px; overflow: hidden; }
+  .nv-card-dir[hidden] { display: none; }
+  .nv-dir-btn { border: 0; background: transparent; padding: 2px 8px; font-size: 11px; cursor: pointer; color: var(--nv-dim); }
+  .nv-dir-btn[aria-pressed="true"] { background: rgba(78,161,255,.2); color: var(--nv-accent); }
+  .nv-badge { margin-left: auto; font-size: 10px; border-radius: 999px; padding: 2px 8px; border: 1px solid var(--nv-line); color: var(--nv-dim); }
+  .nv-badge.nv-status-running { color: var(--nv-accent); border-color: var(--nv-accent); }
+  .nv-badge.nv-status-success { color: var(--nv-ok); border-color: var(--nv-ok); }
+  .nv-badge.nv-status-error { color: var(--nv-err); border-color: var(--nv-err); }
+  .nv-badge.nv-status-blocked { color: var(--nv-warn); border-color: var(--nv-warn); }
+  .nv-badge.nv-status-disabled { opacity: .55; }
+  .nv-ports { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+  .nv-ports[hidden] { display: none; }
+  .nv-port {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 10px;
+    border: 1px solid var(--nv-line); border-radius: 999px; padding: 1px 7px; color: var(--nv-dim);
+  }
+  .nv-port-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--nv-accent); }
+  .nv-port[data-port-dir="out"] .nv-port-dot { background: var(--nv-ok); }
+  .nv-port[data-port-type="bytes"] .nv-port-dot { background: var(--nv-warn); }
+  .nv-port-name { color: var(--nv-text); }
+  .nv-port-id { font-size: 10px; }
+  .nv-port-type { font-size: 9px; opacity: .65; }
+  .nv-card-body { border-top: 1px solid var(--nv-line); padding-top: 6px; }
+  .nv-card-meta { display: flex; gap: 6px; align-items: center; font-size: 11px; color: var(--nv-dim); }
+  .nv-out-wrap { margin-top: 6px; }
+  .nv-out-head { display: flex; justify-content: space-between; font-size: 11px; color: var(--nv-dim); }
+  .nv-out {
+    margin: 4px 0 0; padding: 6px 8px; min-height: 42px; max-height: 220px; overflow: auto;
+    background: #0b0e12; border: 1px solid var(--nv-line); border-radius: 8px;
+    font: 11px/1.45 Consolas, "Cascadia Mono", monospace; white-space: pre-wrap; word-break: break-all;
+  }
+  .nv-error {
+    margin: 6px 0 0; padding: 6px 8px; border-radius: 8px; color: var(--nv-err);
+    background: rgba(226,96,92,.08); border: 1px solid rgba(226,96,92,.4);
+    font: 11px/1.45 Consolas, "Cascadia Mono", monospace; white-space: pre-wrap;
+  }
+  .nv-error[hidden] { display: none; }
+  .nv-special .nv-card-name { color: var(--nv-warn); }
+  .nv-field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
+  .nv-field[hidden] { display: none; }
+  .nv-field-label { font-size: 11px; color: var(--nv-dim); }
+  .nv-input, .nv-select, .nv-textarea {
+    width: 100%; background: #0b0e12; color: var(--nv-text); border: 1px solid var(--nv-line);
+    border-radius: 7px; padding: 5px 7px; outline: none; font: inherit;
+  }
+  .nv-input:focus, .nv-select:focus, .nv-textarea:focus { border-color: var(--nv-accent); }
+  .nv-textarea { min-height: 64px; resize: vertical; font: 12px/1.5 Consolas, monospace; }
+  .nv-textarea.is-masked { -webkit-text-security: disc; }
+  .nv-file-name { font-size: 11px; color: var(--nv-dim); }
+
+  /* ---- 检查器 ---- */
+  .nv-inspector {
+    display: flex; flex-direction: column; min-height: 0;
+    background: var(--nv-panel); border: 1px solid var(--nv-line); border-radius: var(--nv-radius);
+  }
+  .nv-insp-head { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px 6px; flex-wrap: wrap; }
+  .nv-insp-title { margin: 0; font-size: 13px; }
+  .nv-insp-op { color: var(--nv-dim); font-size: 11px; }
+  .nv-insp-list { flex: 1; overflow: auto; padding: 0 10px 10px; min-height: 0; }
+  .nv-insp-param { border-top: 1px solid var(--nv-line); padding: 8px 0; }
+  .nv-insp-row-head { display: flex; align-items: center; gap: 8px; }
+  .nv-insp-label { font-size: 12px; color: var(--nv-text); display: flex; align-items: center; gap: 6px; }
+  .nv-tag { font-size: 9px; color: var(--nv-warn); border: 1px solid var(--nv-warn); border-radius: 999px; padding: 0 6px; }
+  .nv-promote-btn {
+    margin-left: auto; font-size: 10px; padding: 2px 8px; border-radius: 999px;
+    border: 1px solid var(--nv-line); background: transparent; color: var(--nv-dim); cursor: pointer;
+  }
+  .nv-promote-btn[aria-pressed="true"] { border-color: var(--nv-accent); color: var(--nv-accent); background: rgba(78,161,255,.14); }
+  .nv-insp-ctl { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+  .nv-insp-ctl .nv-input, .nv-insp-ctl .nv-select, .nv-insp-ctl .nv-textarea { flex: 1; }
+  .nv-input-num { max-width: 110px; flex: none; }
+  .nv-step-btn {
+    width: 24px; height: 26px; border-radius: 6px; border: 1px solid var(--nv-line);
+    background: var(--nv-panel-2); color: var(--nv-text); cursor: pointer;
+  }
+  .nv-eye-btn {
+    width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--nv-line);
+    background: var(--nv-panel-2); color: var(--nv-dim); cursor: pointer;
+  }
+  .nv-eye-btn[aria-pressed="true"] { color: var(--nv-warn); }
+  .nv-switch { position: relative; display: inline-flex; align-items: center; width: 38px; height: 20px; }
+  .nv-switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  .nv-switch-track { position: absolute; inset: 0; border-radius: 999px; background: var(--nv-line); transition: background .15s; }
+  .nv-switch-knob { position: absolute; width: 14px; height: 14px; border-radius: 50%; background: #fff; left: 3px; transition: transform .15s; }
+  .nv-switch input:checked ~ .nv-switch-track { background: var(--nv-accent); }
+  .nv-switch input:checked ~ .nv-switch-knob { transform: translateX(18px); }
+  .nv-insp-meta { font-size: 10px; color: var(--nv-dim); margin-top: 3px; }
+  .nv-insp-meta[hidden] { display: none; }
+  .nv-insp-hint { font-size: 10px; color: var(--nv-warn); margin-top: 3px; }
+  .nv-insp-hint[hidden] { display: none; }
+  .nv-insp-param[data-invalid="true"] .nv-input,
+  .nv-insp-param[data-invalid="true"] .nv-select { border-color: var(--nv-warn); }
+  .nv-insp-empty { padding: 12px; color: var(--nv-dim); font-size: 12px; }
+  .nv-insp-empty[hidden] { display: none; }
+  .nv-reset-btn { opacity: .7; margin-top: 2px; }
+  .nv-drop-hint {
+    position: fixed; pointer-events: none; z-index: 40; padding: 4px 8px; border-radius: 6px;
+    background: rgba(78,161,255,.9); color: #06101c; font-size: 11px; transform: translate(10px, 10px);
+  }
+  .nv-edge-line { font-size: 10px; color: var(--nv-ok); padding: 2px 0; }
+  #probeHost { position: absolute; left: -10000px; top: 0; width: 340px; }
+
+
+/* ---- MT810 集成页 shell 布局（非候选，接线新增） ---- */
+.nv-host { display: flex; height: 100%; min-height: 0; }
+.nv-app { display: flex; flex-direction: column; height: 100%; min-height: 0; width: 100%; }
+.nv-toolbar { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-block-end: 1px solid var(--nv-line); flex-wrap: wrap; background: var(--nv-panel); }
+.nv-tool-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 var(--sp-3); border: 1px solid var(--nv-line); border-radius: var(--r-full); background: var(--nv-panel); color: var(--nv-text); cursor: pointer; font: inherit; font-size: var(--fs-xs); }
+.nv-tool-btn .msym { width: 18px; height: 18px; font-size: 18px; line-height: 1; pointer-events: none; }
+.nv-tool-btn:hover { background: color-mix(in srgb, var(--nv-accent) 12%, transparent); }
+.nv-tool-btn:focus-visible { outline: 2px solid var(--nv-accent); outline-offset: 2px; }
+.nv-toolbar .nv-status { margin-inline-start: auto; font-size: var(--fs-xs); color: var(--nv-dim); }
+.nv-cols { display: flex; flex: 1; min-height: 0; }
+.nv-lib-host { flex: 0 0 240px; min-width: 0; overflow: auto; border-inline-end: 1px solid var(--nv-line); }
+.nv-canvas-host { flex: 1; min-width: 0; min-height: 0; position: relative; }
+.nv-side { flex: 0 0 300px; min-width: 0; display: flex; flex-direction: column; border-inline-start: 1px solid var(--nv-line); }
+.nv-insp-host { flex: 1; min-height: 0; overflow: auto; }
+.nv-out-host { flex: 0 0 auto; max-height: 30%; overflow: auto; border-block-start: 1px solid var(--nv-line); }
+.nv-run-output { margin: 0; padding: 8px 10px; font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; word-break: break-all; }
+@media (max-width: 720px) {
+  .nv-cols { flex-direction: column; }
+  .nv-lib-host, .nv-side { flex: 0 0 auto; max-height: 200px; border: 0; border-block-end: 1px solid var(--nv-line); }
+  .nv-canvas-host { min-height: 320px; }
+}

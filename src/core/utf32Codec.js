@@ -78,7 +78,7 @@ function bytesToHex(b) { return Array.from(b).map((x) => x.toString(16).padStart
 
 register({
   id: "utf32",
-  cat: "text",
+  cat: "textProcessing",
   name: "UTF-32 LE/BE",
   desc: "UTF-32 编解码（每码位固定 4 字节）：LE（FF FE 00 00 BOM，x86 常见）/ BE（00 00 FE FF BOM）。解码自动识别 BOM，无 BOM 按所选端序；严格模式——长度非 4 倍数、代理区 D800-DFFF、超 0x10FFFF 显式报错（不静默 U+FFFD）。与 UTF-16 BOM 的区分靠第 3/4 字节 00 00",
   params: [

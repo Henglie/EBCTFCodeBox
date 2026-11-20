@@ -1016,7 +1016,7 @@ export function exportManifest() {
       version: SERVER_VERSION,
       description: "恒烈CTF编码工具箱 · 编解码/加解密/智能识别/一键智能解码能力面",
       vendor: "Henglie / EBCTFCodeBox",
-      homepage: "https://github.com/Henglie/EBCTFCodeBox",
+      homepage: "https://github.com/Henglie/EBCrypto",
     },
     capabilities: { tools: {}, resources: {} },
     tools: MCP_TOOLS,

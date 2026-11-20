@@ -9,7 +9,7 @@ import { register } from "./registry.js";
 
 register({
   id: "removeDiacritics",
-  cat: "text",
+  cat: "textProcessing",
   name: "去除变音符号",
   desc: "Unicode NFD 分解后删除 U+0300–U+036F 组合附加符号，把带重音的拉丁字符还原为基字符。口径同 CyberChef「Remove Diacritics」",
   params: [],

@@ -3,8 +3,8 @@
 """
 bridge.py — 外部 exe 本地桥（独立本地服务，仅 Windows）。
 
-为什么独立服务而非改 start.py：
-  - 不碰 start.py，作为独立进程运行，可选启用。
+为什么独立服务而非改 GenericStart.py：
+  - 不碰 GenericStart.py，作为独立进程运行，可选启用。
   - 独立进程，可选启用；不起则前端 op 灰置提示，不影响纯前端功能。
 
 安全红线（见库根安全约定）：
@@ -146,7 +146,7 @@ MAX_TOOL_OUTPUT_HARD = _env_int("EBCTF_BRIDGE_MAX_TOOL_OUTPUT_HARD", 64 * 1024 *
 if MAX_TOOL_OUTPUT_SOFT > MAX_TOOL_OUTPUT_HARD:
     MAX_TOOL_OUTPUT_SOFT = MAX_TOOL_OUTPUT_HARD
 MAX_TOOL_OUTPUT = MAX_TOOL_OUTPUT_SOFT  # 兼容旧名：默认软上限
-# 前端页面端口不固定（start.py 8180 起，用户也可能自己起别的端口），且可能用 127.0.0.1 或 localhost 打开。
+# 前端页面端口不固定（GenericStart.py 8180 起，用户也可能自己起别的端口），且可能用 127.0.0.1 或 localhost 打开。
 # 故按请求 Origin 反射放行：只认本机来源（localhost/127.0.0.1/::1 任意端口），外部站点一律拒绝。
 ALLOWED_ORIGIN_HOSTS = {"localhost", "127.0.0.1", "::1"}
 # 大请求/大输出放行头：仅放宽到硬上限，不能越过硬上限。

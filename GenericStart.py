@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-start.py — 一键启动脚本（Python 版，只用标准库，跨平台）。
+GenericStart.py — 一键启动脚本（Python 版，只用标准库，跨平台）。
 
-双击本脚本（或 `py start.py`）：
+双击本脚本（或 `py GenericStart.py`）：
   1. 起一个本地静态服务器（默认 8180），用正确的 MIME 提供文件；
   2. 在同一进程的后台线程内拉起本地桥（bridge.py 的服务，固定 8181，仅 Windows）；
   3. 用系统默认浏览器打开工具箱；
@@ -30,14 +30,14 @@ start.py — 一键启动脚本（Python 版，只用标准库，跨平台）。
 零外发红线：静态服务与桥都只监听 127.0.0.1、桥只调白名单本地工具、绝不外发用户数据。
 
 用法：
-  py start.py            # 默认端口 8180，起服务 + 桥并自动开浏览器，然后进控制面板
-  py start.py 9000       # 指定静态服务端口（桥仍固定 8181）
-  py start.py --no-open  # 不自动开浏览器（远程/无头环境）
-  py start.py --no-bridge# 不起本地桥（仅纯前端静态服务）
-  py start.py --no-panel # 不进控制面板（旧行为：打印信息后阻塞在服务上）
-  py start.py --panel    # 强制进控制面板（stdin 非终端也可，供脚本/CI 驱动）
-  py start.py --mcp-config# 打印各本地 AI 客户端的 MCP 接入配置（已填好本机绝对路径）
-  py start.py --mcp       # 直接跑 MCP stdio server（供客户端拉起/手动调试）
+  py GenericStart.py            # 默认端口 8180，起服务 + 桥并自动开浏览器，然后进控制面板
+  py GenericStart.py 9000       # 指定静态服务端口（桥仍固定 8181）
+  py GenericStart.py --no-open  # 不自动开浏览器（远程/无头环境）
+  py GenericStart.py --no-bridge# 不起本地桥（仅纯前端静态服务）
+  py GenericStart.py --no-panel # 不进控制面板（旧行为：打印信息后阻塞在服务上）
+  py GenericStart.py --panel    # 强制进控制面板（stdin 非终端也可，供脚本/CI 驱动）
+  py GenericStart.py --mcp-config# 打印各本地 AI 客户端的 MCP 接入配置（已填好本机绝对路径）
+  py GenericStart.py --mcp       # 直接跑 MCP stdio server（供客户端拉起/手动调试）
 """
 
 import sys

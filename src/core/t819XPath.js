@@ -19,7 +19,7 @@ async function mods() {
 
 register({
   id: "xpathQuery",
-  cat: "text",
+  cat: "textProcessing",
   io: "text",
   name: "XPath 表达式",
   desc: "用 XPath 从 XML 文档中提取节点，多个结果按分隔符连接（CyberChef #496）",

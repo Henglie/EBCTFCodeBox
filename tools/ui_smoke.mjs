@@ -116,8 +116,8 @@ try {
   check(curve.applied && curve.profile === "apple-continuous-measured", "Shared Apple-style continuous profile applied");
   check(await page.locator(".magic-run").evaluate(async node => {
     const api = (await import(new URL('src/ui/continuousCorners.js', document.baseURI).href)).setupContinuousCorners();
-    return !node.hasAttribute('data-cc-rendered') && api.inspect(node)?.reason === 'pill';
-  }), "M3 full-round action retains its native capsule");
+    return node.hasAttribute('data-cc-rendered') && !api.inspect(node)?.reason;
+  }), "M3 full-round action uses the continuous capsule profile");
 
   // Composition commits must not start decoding. The regular Enter path must work.
   await page.locator(".home-input").fill("ZmxhZ3t1aV9zbW9rZX0=");

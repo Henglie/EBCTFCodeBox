@@ -31,7 +31,7 @@ const SMART_MAP = new Map([
 
 register({
   id: "escapeSmartChars",
-  cat: "text",
+  cat: "textProcessing",
   name: "转义智能字符",
   desc: "把智能引号、长短破折号、省略号、©®™、箭头、书名号等排版字符转为 ASCII；无法映射的非 ASCII 字符可选保留/删除/替换为点",
   params: [

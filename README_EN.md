@@ -13,14 +13,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Henglie/EBCTFCodeBox/stargazers"><img src="https://img.shields.io/github/stars/Henglie/EBCTFCodeBox?style=flat-square" alt="GitHub Repo stars" /></a>
-  <a href="https://github.com/Henglie/EBCTFCodeBox/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Henglie/EBCTFCodeBox?style=flat-square" alt="GitHub License" /></a>
-  <a href="https://github.com/Henglie/EBCTFCodeBox/releases"><img src="https://img.shields.io/github/v/release/Henglie/EBCTFCodeBox?style=flat-square" alt="GitHub Release" /></a>
+  <a href="https://github.com/Henglie/EBCrypto/stargazers"><img src="https://img.shields.io/github/stars/Henglie/EBCrypto?style=flat-square" alt="GitHub Repo stars" /></a>
+  <a href="https://github.com/Henglie/EBCrypto/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Henglie/EBCrypto?style=flat-square" alt="GitHub License" /></a>
+  <a href="https://github.com/Henglie/EBCrypto/releases"><img src="https://img.shields.io/github/v/release/Henglie/EBCrypto?style=flat-square" alt="GitHub Release" /></a>
 </p>
 <p align="center">
-  <a href="https://github.com/Henglie/EBCTFCodeBox/issues"><img src="https://img.shields.io/github/issues/Henglie/EBCTFCodeBox?style=flat-square" alt="GitHub Issues" /></a>
-  <a href="https://github.com/Henglie/EBCTFCodeBox/pulls"><img src="https://img.shields.io/github/issues-pr/Henglie/EBCTFCodeBox?style=flat-square" alt="GitHub Pull Requests" /></a>
-  <a href="https://github.com/Henglie/EBCTFCodeBox/network/members"><img src="https://img.shields.io/github/forks/Henglie/EBCTFCodeBox?style=flat-square" alt="GitHub forks" /></a>
+  <a href="https://github.com/Henglie/EBCrypto/issues"><img src="https://img.shields.io/github/issues/Henglie/EBCrypto?style=flat-square" alt="GitHub Issues" /></a>
+  <a href="https://github.com/Henglie/EBCrypto/pulls"><img src="https://img.shields.io/github/issues-pr/Henglie/EBCrypto?style=flat-square" alt="GitHub Pull Requests" /></a>
+  <a href="https://github.com/Henglie/EBCrypto/network/members"><img src="https://img.shields.io/github/forks/Henglie/EBCrypto?style=flat-square" alt="GitHub forks" /></a>
 </p>
 
 > [!WARNING]
@@ -40,14 +40,14 @@
 
 ## Quick Download
 
-> Core processing runs locally with zero upload. Unzip and double-click `Start-Windows.exe`, `Start-macOS.command`, or `Start-Linux.sh` for your platform. The native static server needs no Python; CLI / MCP still require Node.js, and Python-based tools require a local Python installation. The alternative `start.py` launcher requires Python 3.
+> Core processing runs locally with zero upload. Unzip and double-click `Start-Windows.exe`, `Start-macOS.command`, or `Start-Linux.sh` for your platform. The native static server needs no Python; CLI / MCP still require Node.js, and Python-based tools require a local Python installation. The alternative `GenericStart.py` launcher requires Python 3.
 
 | Cloud drive | Link | Passcode |
 |---|---|---|
 | Baidu Netdisk | https://pan.baidu.com/s/1Uqq_ONMBG9qA0dJvUG53Og?pwd=0000 | 0000 |
 | Quark | https://pan.quark.cn/s/3b7e573b19c0 | none |
 
-Current version **v0.2.0-beta**. The source of truth is always the GitHub repository: [github.com/Henglie/EBCTFCodeBox](https://github.com/Henglie/EBCTFCodeBox).
+Current version **v0.2.0-beta**. The source of truth is always the GitHub repository: [github.com/Henglie/EBCrypto](https://github.com/Henglie/EBCrypto).
 
 ## Changelog
 
@@ -211,8 +211,8 @@ Core design:
 Pure static — any static server works. The bundled script is recommended (double-click or command line):
 
 ```bash
-py start.py     # Windows (use py, not python3)
-python3 start.py # macOS / Linux
+py GenericStart.py     # Windows (use py, not python3)
+python3 GenericStart.py # macOS / Linux
 ```
 
 The script starts the static server and the local bridge (bridge.py, fixed port 8181, real capabilities on Windows only) together, then opens your default browser. The bridge runs in a background thread of the same process — no second window.
@@ -255,7 +255,7 @@ Full web servers (nginx / Apache / Caddy, …) work too; two caveats:
    Cross-Origin-Embedder-Policy: require-corp
    ```
 
-   The bundled `start.py` sends both headers by default; self-hosted servers need their own configuration. When the headers are missing, multithreaded WASM ops degrade gracefully or report unavailable — pure frontend features are unaffected.
+   The bundled `GenericStart.py` sends both headers by default; self-hosted servers need their own configuration. When the headers are missing, multithreaded WASM ops degrade gracefully or report unavailable — pure frontend features are unaffected.
 
 The PWA is wired through `manifest.json` and `sw.js`. The current precache list contains 990 core runtime assets (the count changes with each version; updates download changed content by checksum). Core features work offline after cache installation completes; large on-demand assets (the four Cheonhyeong font planes, WASM, IDS data, encoding charts and KaTeX) must first be loaded online or installed through an offline pack. The top-bar "Check for updates" button currently opens the version page; Service Worker activation and cross-browser offline upgrades remain under verification.
 
@@ -263,10 +263,10 @@ The PWA is wired through `manifest.json` and `sw.js`. The current precache list 
 
 | Platform | Frontend features | Local bridge (exe tools) | Launch |
 |---|---|---|---|
-| Windows | Full (primary platform) | JPHS / OpenPuff / OurSecret (GUI launch) + pyc/exe local decompile + system accent colour sync | `py start.py` |
-| macOS | Full | Unavailable (no .exe); the bridge is auto-skipped and related ops grey out with a notice | Double-click `Start-macOS.command`, or `python3 start.py` |
-| Linux | Full | Same as macOS, bridge auto-skipped | Double-click `Start-Linux.sh`, or `python3 start.py` |
-| ChromeOS | Full (via the Crostini Linux container) | Same as Linux | `python3 start.py` (inside Crostini) |
+| Windows | Full (primary platform) | JPHS / OpenPuff / OurSecret (GUI launch) + pyc/exe local decompile + system accent colour sync | `py GenericStart.py` |
+| macOS | Full | Unavailable (no .exe); the bridge is auto-skipped and related ops grey out with a notice | Double-click `Start-macOS.command`, or `python3 GenericStart.py` |
+| Linux | Full | Same as macOS, bridge auto-skipped | Double-click `Start-Linux.sh`, or `python3 GenericStart.py` |
+| ChromeOS | Full (via the Crostini Linux container) | Same as Linux | `python3 GenericStart.py` (inside Crostini) |
 | HarmonyOS / Android / iOS | Full (PWA, touch-responsive) | Unavailable (no exe on mobile) | Open the deployed URL in a browser; optionally "Add to Home Screen" |
 
 Notes:
@@ -296,7 +296,7 @@ The project is a pure frontend application — regular computation happens in th
 | Network | connection needed for first load | stable connection | Input is never uploaded; core features work offline after PWA install |
 | Architecture | x86 / x64 / ARM all fine | same | The browser abstracts the architecture; WASM runs across them |
 
-Multithreaded WASM (`SharedArrayBuffer`) needs the cross-origin isolation headers (COOP/COEP); `start.py` sends them by default, and without them multithreaded ops fall back to single-thread or report unavailable, without affecting anything else. First paint uses HTTP/1.1 keep-alive, an early ES module entry, and lazy font loading; the complete offline assets are installed by the Service Worker in the background after the page loads.
+Multithreaded WASM (`SharedArrayBuffer`) needs the cross-origin isolation headers (COOP/COEP); `GenericStart.py` sends them by default, and without them multithreaded ops fall back to single-thread or report unavailable, without affecting anything else. First paint uses HTTP/1.1 keep-alive, an early ES module entry, and lazy font loading; the complete offline assets are installed by the Service Worker in the background after the page loads.
 
 ## Directory Structure
 
@@ -1385,7 +1385,7 @@ The list below follows the order of the "Authors & Contributors" section of the 
 - 橙子 (Chengzi): proposed multiple Misc logic fixes.
 - Tokeii: contributed the redesigned icon and downstream optimizations.
 - Jason: proposed adding cryptanalysis tools for Chinese cryptographic standards.
-- [星记 (starnotes-xj)](https://github.com/starnotes-xj): reported the hash length-extension parameter issue and proposed a fix ([#9](https://github.com/Henglie/EBCTFCodeBox/pull/9)).
+- [星记 (starnotes-xj)](https://github.com/starnotes-xj): reported the hash length-extension parameter issue and proposed a fix ([#9](https://github.com/Henglie/EBCrypto/pull/9)).
 
 ## Community
 

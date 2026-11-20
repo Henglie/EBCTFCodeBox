@@ -81,6 +81,7 @@ docs/manual/
   README.md            ← 本立项书（目标 / 口径 / 工作流）
   00-outline.md         ← 全书大纲（章节树 + op 分类映射）
   entry-template.md     ← op 条目标准模板（含 Rabbit 实战样章）
+  entries/              ← 已入库 op 条目正文（<opId>.zh.md / .en.md）；首批 10 op × 中英 20 篇（T948，36/36 用例 PASS）
   （后续）卷一…卷七/   ← 按卷落稿，文件名 = 章节号 + 标题
   （后续）ctf-case-index.md  ← 真题 ↔ op ↔ 网盘索引总表
 ```

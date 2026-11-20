@@ -1,13 +1,40 @@
 // MCP Streamable HTTP, stateless application/json mode (no SSE or sessions).
 import http from "node:http";
+import net from "node:net";
+import os from "node:os";
 import path from "node:path";
 import { readFile, realpath, stat } from "node:fs/promises";
-import { timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createMcpServer, createWorkerToolRunner, SUPPORTED_PROTOCOL_VERSIONS } from "./server.mjs";
 import { validateEnvelope, validateToolCall, requestBudget, prepareHttpToolArgs, policyError, isObject, validId } from "./http-policy.mjs";
 
 export const HTTP_PROTOCOL_VERSIONS = SUPPORTED_PROTOCOL_VERSIONS.filter((v) => v !== "2024-11-05");
 export const MCP_HTTP_DEFAULTS = Object.freeze({ enabled: true, host: "127.0.0.1", port: 8182, token: "", timeoutMs: 30000, maxRequestBytes: 1024 * 1024, maxPending: 16 });
+
+const LOOPBACK = new Set(["127.0.0.1", "::1"]);
+const TOKEN_MIN_LENGTH = 16;
+
+/** RFC1918 / link-local / CGNAT IPv4 literals only; public hosts stay unreachable by design. */
+export function isPrivateIPv4(value) {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(String(value));
+  if (!m) return false;
+  const [a, b] = [Number(m[1]), Number(m[2])];
+  if ([...m].slice(1).some((part) => Number(part) > 255)) return false;
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254) || (a === 100 && b >= 64 && b <= 127);
+}
+
+/** Non-internal private IPv4 addresses of this host, stable order, de-duplicated. */
+export function lanIPv4Addresses() {
+  const list = [];
+  for (const entries of Object.values(os.networkInterfaces())) {
+    for (const entry of entries || []) {
+      if (entry.internal) continue;
+      if (entry.family !== "IPv4" && entry.family !== 4) continue;
+      if (isPrivateIPv4(entry.address)) list.push(entry.address);
+    }
+  }
+  return [...new Set(list)];
+}
 
 function integer(value, name, min, max) {
   const n = typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value;
@@ -25,13 +52,37 @@ export function normalizeMcpHttpConfig(input = {}, cwd = process.cwd()) {
   if (!isObject(input)) throw new Error("services.mcp must be an object");
   const c = { ...MCP_HTTP_DEFAULTS, workspace: cwd, ...input };
   c.enabled = boolean(c.enabled);
-  if (!["127.0.0.1", "::1", "localhost"].includes(c.host)) throw new Error("HTTP MCP host must be a loopback literal or localhost");
+  if (typeof c.host !== "string" || !c.host) throw new Error("HTTP MCP host must be a loopback literal, localhost, \"lan\", or a private LAN IPv4 address");
   if (c.host === "localhost") c.host = "127.0.0.1";
+  let bindHosts;
+  if (LOOPBACK.has(c.host)) {
+    bindHosts = [c.host];
+  } else if (c.host === "lan") {
+    const lan = lanIPv4Addresses();
+    if (!lan.length) throw new Error("No private IPv4 LAN address is available for HTTP MCP host \"lan\"");
+    bindHosts = ["127.0.0.1", ...lan];
+  } else if (net.isIPv4(c.host) && isPrivateIPv4(c.host)) {
+    // A literal LAN address also keeps the loopback listener; never bind 0.0.0.0.
+    bindHosts = ["127.0.0.1", c.host];
+  } else {
+    throw new Error("HTTP MCP host must be a loopback literal, localhost, \"lan\", or a private LAN IPv4 address (0.0.0.0 and public addresses are refused)");
+  }
+  c.bindHosts = [...new Set(bindHosts)];
+  c.serverMode = c.bindHosts.some((host) => !LOOPBACK.has(host));
   c.port = integer(c.port, "port", 0, 65535);
   c.timeoutMs = integer(c.timeoutMs, "timeoutMs", 1, 120000);
   c.maxRequestBytes = integer(c.maxRequestBytes, "maxRequestBytes", 256, 8 * 1024 * 1024);
   c.maxPending = integer(c.maxPending, "maxPending", 1, 64);
   if (typeof c.token !== "string" || /[^\x21-\x7e]/.test(c.token) || c.token.length > 4096) throw new Error("token must be empty or visible ASCII (up to 4096 bytes)");
+  // Server mode never starts unauthenticated: an empty token becomes a fresh
+  // 192-bit token for this process. Callers are told via tokenAuto so the
+  // launcher can print it once; persist services.mcp.token to keep it stable.
+  c.tokenAuto = false;
+  if (c.serverMode && !c.token) {
+    c.token = randomBytes(24).toString("base64url");
+    c.tokenAuto = true;
+  }
+  if (c.serverMode && c.token.length < TOKEN_MIN_LENGTH) throw new Error(`HTTP MCP server mode token must be at least ${TOKEN_MIN_LENGTH} visible ASCII characters`);
   if (typeof c.workspace !== "string" || !c.workspace || c.workspace.includes("\0")) throw new Error("workspace must be a directory path");
   c.workspace = path.resolve(cwd, c.workspace);
   return c;
@@ -97,19 +148,26 @@ export function createMcpHttpService(options = {}) {
   const activeIds = new Map();
   let runner, mcp, root, url = null, startTask = null, closing = null, stopped = false;
   let activePosts = 0;
-  const server = http.createServer({ maxHeaderSize: 16 * 1024, requestTimeout: 10000, headersTimeout: 5000 }, (req, res) => {
-    handle(req, res).catch((e) => fail(res, e));
-  });
-  server.maxRequestsPerSocket = 100;
-  server.on("connection", (socket) => { sockets.add(socket); socket.once("close", () => sockets.delete(socket)); });
-  // Reject Expect before Node can send 100 Continue, using the same admission policy.
-  server.on("checkContinue", (req, res) => { handle(req, res, true).catch((e) => fail(res, e)); });
-  server.on("checkExpectation", (req, res) => fail(res, policyError("Expect is not supported", 417)));
+  const listeners = [];
+  const makeServer = () => {
+    const server = http.createServer({ maxHeaderSize: 16 * 1024, requestTimeout: 10000, headersTimeout: 5000 }, (req, res) => {
+      handle(req, res).catch((e) => fail(res, e));
+    });
+    server.maxRequestsPerSocket = 100;
+    server.on("connection", (socket) => { sockets.add(socket); socket.once("close", () => sockets.delete(socket)); });
+    // Reject Expect before Node can send 100 Continue, using the same admission policy.
+    server.on("checkContinue", (req, res) => { handle(req, res, true).catch((e) => fail(res, e)); });
+    server.on("checkExpectation", (req, res) => fail(res, policyError("Expect is not supported", 417)));
+    return server;
+  };
 
   function admission(req) {
     if (stopped || !mcp) throw policyError("Service is stopping", 503);
-    const port = server.address().port;
-    const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
+    const hosts = new Set();
+    for (const { host, port } of listeners) {
+      hosts.add(`${host.includes(":") ? `[${host}]` : host}:${port}`);
+      if (host === "127.0.0.1") hosts.add(`localhost:${port}`);
+    }
     const singleton = new Set(["host", "origin", "authorization", "content-type", "mcp-protocol-version"]);
     const seen = new Set();
     for (let i = 0; i < req.rawHeaders.length; i += 2) {
@@ -218,14 +276,30 @@ export function createMcpHttpService(options = {}) {
         env: { ...process.env, EBCTF_MCP_UNSAFE: "0", EBCTF_MCP_WORKSPACE: root, EBCTF_MCP_RESTRICT: "1", EBCTF_MCP_ALLOW_OUTSIDE: "0" },
       });
       mcp = createMcpServer({ toolRunner: runner, timeoutMs: config.timeoutMs, writeLine: () => {} });
-      await new Promise((resolve, reject) => {
-        const onError = (e) => { server.off("listening", onListen); reject(e); };
-        const onListen = () => { server.off("error", onError); resolve(); };
-        server.once("error", onError);
-        server.once("listening", onListen);
-        server.listen(config.port, config.host);
-      });
-      url = `http://${config.host === "::1" ? "[::1]" : config.host}:${server.address().port}/mcp`;
+      // Bind loopback first; reuse its resolved port for every LAN listener so
+      // mixed local/LAN clients share one endpoint. Never bind 0.0.0.0.
+      let port = config.port;
+      const started = [];
+      try {
+        for (const host of config.bindHosts) {
+          const server = makeServer();
+          await new Promise((resolve, reject) => {
+            const onError = (e) => { server.off("listening", onListen); reject(e); };
+            const onListen = () => { server.off("error", onError); resolve(); };
+            server.once("error", onError);
+            server.once("listening", onListen);
+            server.listen(port, host);
+          });
+          port = server.address().port;
+          started.push({ server, host, port });
+        }
+      } catch (e) {
+        for (const { server } of started) await new Promise((resolve) => { if (!server.listening) return resolve(); server.close(resolve); for (const socket of sockets) socket.destroy(); });
+        throw e;
+      }
+      listeners.push(...started);
+      const preferred = listeners.find(({ host }) => !LOOPBACK.has(host)) || listeners[0];
+      url = `http://${preferred.host.includes(":") ? `[${preferred.host}]` : preferred.host}:${preferred.port}/mcp`;
       return service;
       } catch (e) { await runner?.close(); throw e; }
     })();
@@ -238,13 +312,14 @@ export function createMcpHttpService(options = {}) {
     closing = (async () => {
       await startTask?.catch(() => {});
       const workerClosed = mcp?.close();
-      await new Promise((resolve) => {
+      await Promise.all(listeners.map(({ server }) => new Promise((resolve) => {
         if (!server.listening) return resolve();
         server.close(resolve);
-        for (const socket of sockets) socket.destroy();
-      });
+      })));
+      for (const socket of sockets) socket.destroy();
       await workerClosed;
       await runner?.close();
+      listeners.length = 0;
       url = null;
     })();
     return closing;

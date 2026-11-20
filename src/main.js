@@ -766,6 +766,7 @@ function renderNav() {
         el("span", { class: "nav-label" }, t("ui.nav.quickconv")),
       );
       $nav.append(quickconvItem);
+
     }
 
  // 二级菜单：展开态且非折叠时，列出该分类全部 op
@@ -5903,7 +5904,7 @@ function catNameById(catId) {
 // ---- 关于页：顶栏「关于」→ 居中 modal ----
 // 内容：项目名 / 作者(EternalBlaze) / 版本 / op 统计 / 技术栈 / 零外发声明 /
 // GitHub 仓库入口 / 依赖致谢 / 参考项目 / 许可。
-const REPO_URL = "https://github.com/Henglie/EBCTFCodeBox";
+const REPO_URL = "https://github.com/Henglie/EBCrypto";
 // 参考项目：写明引用/借鉴内容与地址。
 const REFERENCE_PROJECTS = [
   {
@@ -6406,7 +6407,7 @@ initLocale().then(async (loc) => {
   if (loc && loc !== "zh") { applyStaticI18n(); renderNav(); renderWorkspace(); }
 }).catch(() => { /* 语言包加载失败静默留 zh 回退 */ });
 function HOT_FILE_OF(id) { return OP_FILE_MAP[id]; } // 热点 op → 源文件
-// 区分本地版 vs 服务器版。判据 = bridge 是否在线（start.py 本地部署会同进程自启桥）。
+// 区分本地版 vs 服务器版。判据 = bridge 是否在线（GenericStart.py 本地部署会同进程自启桥）。
 // 本地版：桥在 → 页面加载完后后台渐进拉全量天珩 4 平面（补冷僻字，不阻塞首屏）。
 // 服务器版：桥不在 → 只留首屏子集，全量 31MB 不自动拉（省带宽/加速首屏），留环境面板手动加载。
 // ---------- M3 动态取色（种子色 → tonal 语义变量，本地纯计算零外发）----------

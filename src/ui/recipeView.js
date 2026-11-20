@@ -2419,17 +2419,22 @@ function onGlobalRecipeKey(e) {
 // 内部 mutation 函数均无参调用 renderRecipe，此前 host 为 null 直接 return → DOM 不重建。
 let _recipeHost = null;
 let _recipeWorkbench = null;
-export function disposeRecipeView() { _recipeWorkbench?.dispose(); _recipeWorkbench = null; closeRecipeHelp(); }
+// Keep the graph for this page session, outside the canvas lifecycle. Inputs may be sensitive.
+let _nodeWorkspaceGraph = null;
+export function disposeRecipeView() {
+  try { if (_recipeHost && _recipeHost.firstChild && _recipeHost.firstChild._recipeUnmountNode) _recipeHost.firstChild._recipeUnmountNode(); } catch { /* 忽略 */ }
+  _recipeWorkbench?.dispose(); _recipeWorkbench = null; closeRecipeHelp();
+}
 export function renderRecipe(container) {
   const host = container || _recipeHost || document.getElementById("recipeHost");
   if (!host) return;
+  disposeRecipeView();
   _recipeHost = host;   // 记住首次拿到的 host，供后续无参调用复用
   ensureNodeUids();
   ensureRecipeStyle();
   ensureGlobalKeyHandler();
   _focusedNodeIndex = _focusedNodeUid ? rState.nodes.findIndex((n) => n.uid === _focusedNodeUid) : -1;
   restoreOnce();
-  disposeRecipeView();
   host.innerHTML = "";
 
   const wrap = el("div", { class: "recipe-view" });
@@ -2454,6 +2459,52 @@ export function renderRecipe(container) {
       onclick: showRecipeHelp,
     }, msym("info"), el("span", {}, tt("ui.recipe.helpShort"))),
   ));
+
+ // 视图切换滑块：流式视图（原配方链）/ 节点视图（MT810）。节点视图首次切入才动态 import。
+  const viewSwitch = el("div", { class: "dir-seg recipe-view-switch", role: "tablist", "aria-label": "视图切换" });
+  const flowTab = el("button", { type: "button", role: "tab", class: "on", "aria-selected": "true", "data-view": "flow" }, msym("account_tree"), el("span", {}, "流式视图"));
+  const nodeTab = el("button", { type: "button", role: "tab", class: "", "aria-selected": "false", "data-view": "node" }, msym("hub"), el("span", {}, "节点视图"));
+  const nodePane = el("div", { class: "recipe-node-pane" });
+  let nodeHandle = null, nodeLoading = null;
+  function unmountNodes() {
+    nodeLoading?.abort();
+    nodeLoading = null;
+    const handle = nodeHandle;
+    nodeHandle = null;
+    if (handle) {
+      try { _nodeWorkspaceGraph = handle.getGraph(); }
+      finally { handle.destroy(); }
+    }
+    nodePane.replaceChildren();
+  }
+  async function switchView(which) {
+    const isNode = which === "node";
+    flowTab.classList.toggle("on", !isNode); nodeTab.classList.toggle("on", isNode);
+    flowTab.setAttribute("aria-selected", String(!isNode)); nodeTab.setAttribute("aria-selected", String(isNode));
+    wrap.classList.toggle("node-mode", isNode);
+    if (!isNode) { unmountNodes(); return; }
+    if (nodeHandle || nodeLoading) return;
+    nodePane.replaceChildren();
+    const attempt = new AbortController();
+    nodeLoading = attempt;
+    try {
+      const mod = await import("../nodeview/index.js");
+      if (attempt.signal.aborted || !wrap.isConnected) return;
+      const lang = (window.__ebctfLang && window.__ebctfLang() === "en") ? "en" : "zh";
+      const handle = await mod.mountNodeView(nodePane, { lang, graph: _nodeWorkspaceGraph, signal: attempt.signal });
+      if (attempt.signal.aborted || !wrap.isConnected) { handle?.destroy(); return; }
+      nodeHandle = handle;
+    } catch (e) {
+      if (attempt.signal.aborted || !wrap.isConnected) return;
+      nodePane.appendChild(el("p", { role: "alert", class: "recipe-node-err" }, "节点视图加载失败：" + (e && e.message || e)));
+      console.error("[nodeview] 挂载失败：", e);
+    } finally { if (nodeLoading === attempt) nodeLoading = null; }
+  }
+  flowTab.addEventListener("click", () => switchView("flow"));
+  nodeTab.addEventListener("click", () => switchView("node"));
+  viewSwitch.append(flowTab, nodeTab);
+  wrap._recipeUnmountNode = unmountNodes;
+  wrap.append(viewSwitch, nodePane);
 
  // 工具条：按「构建 / 执行 / 编辑 / 管理」分行，避免所有按钮挤成一排
   const bar = el("div", { class: "recipe-bar" });

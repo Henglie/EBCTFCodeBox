@@ -13,7 +13,7 @@ async function format() {
 
 register({
   id: "sqlBeautify",
-  cat: "text",
+  cat: "textProcessing",
   io: "text",
   name: "SQL 美化",
   desc: "缩进并美化 SQL 代码，保留 :name 绑定变量（CyberChef #383）",

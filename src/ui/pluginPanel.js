@@ -49,6 +49,8 @@ const _ZH = {
   "ui.offlinePack.failed": "安装失败",
   "ui.offlinePack.offlineNow": "当前处于离线状态，以下能力取决于已安装的离线包。",
   "ui.offlinePack.allReady": "离线包齐全：断网后上述功能均可用。",
+  "ui.offlinePack.degradedInCards": "有 {n} 个离线包未就绪，影响说明见对应卡片。",
+  "ui.offlinePack.impact": "影响说明",
   "ui.offlinePack.installedVolume": "已装",
   "ui.offlinePack.totalVolume": "总计",
   "ui.offlinePack.state.installed": "已安装",
@@ -955,21 +957,44 @@ function sectionMcp() {
 
   const httpToken = el('input', { class: 'plugin-input', type: 'password', placeholder: '留空=不要求 token', autocomplete: 'off' });
   const httpEnabled = el('input', { type: 'checkbox' }); httpEnabled.checked = true;
-  const httpConfig = el('textarea', { class: 'plugin-prompt', rows: '7', readonly: 'readonly', spellcheck: 'false', dir: 'ltr' });
+  const httpHost = el('select', { class: 'plugin-input' },
+    el('option', { value: '127.0.0.1' }, '仅本机（回环 127.0.0.1）'),
+    el('option', { value: 'lan' }, '局域网 + 回环（强制 token）'),
+  );
+  const randomToken = () => {
+    const bytes = crypto.getRandomValues(new Uint8Array(24));
+    let raw = '';
+    for (const b of bytes) raw += String.fromCharCode(b);
+    return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  };
+  const httpConfig = el('textarea', { class: 'plugin-prompt', rows: '9', readonly: 'readonly', spellcheck: 'false', dir: 'ltr' });
   const updateHttpConfig = () => {
     const token = httpToken.value;
     httpConfig.value = JSON.stringify({ services: { mcp: {
-      enabled: httpEnabled.checked, host: '127.0.0.1', port: 8182, token,
+      enabled: httpEnabled.checked, host: httpHost.value, port: 8182, token,
       workspace: '.', timeoutMs: 30000,
     } } }, null, 2);
   };
-  httpToken.addEventListener('input', updateHttpConfig); httpEnabled.addEventListener('change', updateHttpConfig); updateHttpConfig();
-  const copyHttp = async () => { try { await navigator.clipboard.writeText(httpConfig.value); toast('MCP HTTP 配置已复制'); } catch { httpConfig.select(); document.execCommand('copy'); } };
+  const fillToken = () => { httpToken.value = randomToken(); updateHttpConfig(); };
+  const ensureLanToken = () => { if (httpHost.value === 'lan' && !httpToken.value.trim()) fillToken(); };
+  httpToken.addEventListener('input', updateHttpConfig);
+  httpEnabled.addEventListener('change', updateHttpConfig);
+  httpHost.addEventListener('change', () => { ensureLanToken(); updateHttpConfig(); });
+  updateHttpConfig();
+  const copyHttp = async () => {
+    ensureLanToken();
+    try { await navigator.clipboard.writeText(httpConfig.value); toast('MCP HTTP 配置已复制'); } catch { httpConfig.select(); document.execCommand('copy'); }
+  };
   box.append(el('section', { class: 'plugin-mcp-method' },
     el('h4', {}, '方式一：连接版 MCP'),
-    el('p', { class: 'plugin-how-intro' }, '启动器默认回环 127.0.0.1:8182；留空 token 为无令牌，填写后使用 Bearer token。配置写入 ebcrypto.config.json 的 services.mcp。'),
+    el('p', { class: 'plugin-how-intro' }, '启动器默认回环 127.0.0.1:8182；留空 token 为无令牌，填写后使用 Bearer token。切到局域网模式会强制 token：留空时自动生成 192 位随机 token（仅本次进程有效），建议复制配置后固定到 services.mcp.token。配置写入 ebcrypto.config.json。'),
     el('label', { class: 'plugin-inline-field' }, httpEnabled, '启动 HTTP MCP'),
-    el('label', { class: 'plugin-inline-field' }, 'token', httpToken),
+    el('label', { class: 'plugin-inline-field' }, 'host', httpHost),
+    el('div', { class: 'plugin-token-row' },
+      el('span', { class: 'plugin-token-label' }, 'token'),
+      httpToken,
+      el('button', { class: 'chip-btn', type: 'button', onclick: () => { fillToken(); toast('已生成随机 token'); } }, '随机生成'),
+    ),
     httpConfig,
     el('button', { class: 'chip-btn primary', onclick: copyHttp }, '复制连接配置'),
   ));

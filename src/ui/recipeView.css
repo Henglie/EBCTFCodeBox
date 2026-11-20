@@ -504,3 +504,12 @@
   font-size: 11px;
   color: var(--on-surface-var);
 }
+
+/* ---- 视图切换滑块：流式视图 / 节点视图（MT810） ---- */
+.recipe-view-switch { align-items: center; }
+.recipe-view-switch button { display: inline-flex; align-items: center; gap: 6px; }
+.recipe-view-switch .msym { width: 18px; height: 18px; font-size: 18px; line-height: 1; pointer-events: none; }
+.recipe-node-pane { display: none; }
+.recipe-view.node-mode > :not(.recipe-head):not(.recipe-view-switch):not(.recipe-node-pane) { display: none !important; }
+.recipe-view.node-mode > .recipe-node-pane { display: block; height: 100%; min-height: 60vh; }
+.recipe-node-err { color: var(--error, Mark); padding: 12px; }

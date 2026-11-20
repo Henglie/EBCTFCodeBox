@@ -1,0 +1,18 @@
+{
+  "name": "henglie-ctf-mapp",
+  "version": "0.1.15",
+  "private": true,
+  "type": "module",
+  "description": "恒烈 CTF 编码工具箱 · Linux.do 微应用版 L0.1.15",
+  "scripts": {
+    "select": "node build/select.mjs",
+    "build": "node build/build.mjs",
+    "pack:official": "node build/pack-official.mjs",
+    "dev": "node build/build.mjs --dev && node build/dev-server.mjs",
+    "smoke": "node build/build.mjs --dev && node build/smoke.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "playwright-core": "^1.50.0"
+  }
+}

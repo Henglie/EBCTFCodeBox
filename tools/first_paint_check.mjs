@@ -14,7 +14,7 @@ try {
   const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
   const fixture = new URL('__first_paint__', base).href;
   await page.route(fixture, route => route.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head>
-    <style>*{box-sizing:border-box}body{margin:0;background:white}.panel{width:160px;height:96px;border-radius:32px;background:#2468ac;margin:20px}.pill{width:180px;height:44px;border-radius:999px;background:#2468ac}.circle{width:44px;height:44px;border-radius:50%;background:#2468ac}.hidden{display:none}</style>
+    <style>*{box-sizing:border-box}body{margin:0;background:white}.panel{width:160px;height:96px;border-radius:32px;background:#2468ac;margin:20px}.pill{width:180px;height:44px;border:0;border-radius:999px;background:#2468ac}.circle{width:44px;height:44px;border-radius:50%;background:#2468ac}.hidden{display:none}</style>
     <link rel="stylesheet" href="${new URL('src/ui/continuousCorners.css', base)}">
     <script src="${new URL('src/ui/continuousCornersRuntime.js', base)}"></script>
     <script>window.framesSeen=[];function observeFrame(){for(const n of document.querySelectorAll('.panel,.pill,.circle')){const r=n.getBoundingClientRect();if(r.width&&r.height)window.framesSeen.push({id:n.id,paint:n.hasAttribute('data-cc-rendered'),reason:window.__EBCTFContinuousCorners.setupContinuousCorners().inspect(n)?.reason});}requestAnimationFrame(observeFrame)}requestAnimationFrame(observeFrame);</script>
@@ -30,7 +30,8 @@ try {
     const samples = frames.filter(f => f.id === id);
     check(samples.length > 0 && samples.every(f => f.paint), `${id}: every visible frame, including first, is already drawn: ${JSON.stringify(samples)} errors=${JSON.stringify(errors)}`);
   }
-  for (const id of ['pill', 'circle']) check(frames.filter(f => f.id === id).every(f => !f.paint && ['pill', 'circle'].includes(f.reason)), `${id}: authored M3 shape is never replaced`);
+  for (const id of ['pill']) check(frames.filter(f => f.id === id).every(f => f.paint), `${id}: M3 capsule now uses the continuous cap profile`);
+  for (const id of ['circle']) check(frames.filter(f => f.id === id).every(f => !f.paint && f.reason === 'circle'), `${id}: semantic circle is never replaced`);
   if (shots) await page.screenshot({ path: join(shots, `first-paint-${engine}-fixture.png`) });
 
   // Delay the entire application module graph. The static shell must still have
@@ -48,7 +49,7 @@ try {
           if (!/[1-9]/.test(s.borderRadius) && !n.hasAttribute('data-cc-media')) continue;
           firstPaintSeen.add(selector);
           const state = api?.inspect(n);
-          if (!state?.applied && !['pill', 'circle'].includes(state?.reason)) firstPaintFailures.push({ selector, reason: state?.reason || 'untracked' });
+          if (!state?.applied && !['pill-micro', 'circle'].includes(state?.reason)) firstPaintFailures.push({ selector, reason: state?.reason || 'untracked' });
         }
       }
       requestAnimationFrame(sample);

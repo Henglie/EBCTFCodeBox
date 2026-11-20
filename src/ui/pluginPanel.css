@@ -172,6 +172,9 @@
 .plugin-mcp-http { background: transparent; padding: 0; }
 .plugin-inline-field { display: flex; align-items: center; gap: 10px; min-height: 44px; color: var(--on-surface); font-size: var(--fs-sm); }
 .plugin-inline-field input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--primary); }
+.plugin-token-row { display: flex; align-items: center; gap: 10px; min-height: 44px; flex-wrap: wrap; color: var(--on-surface); font-size: var(--fs-sm); }
+.plugin-token-row .plugin-input { flex: 1 1 14rem; min-width: 0; }
+.plugin-token-label { flex: none; }
 .plugin-mcp-method .plugin-prompt { margin-top: 0; }
 .plugin-how h5 {
   margin: 0;
@@ -347,10 +350,23 @@
 .offline-pack-notice:empty { display: none; }
 .offline-pack-ready { margin: 0; font-size: var(--fs-xs); font-weight: 600; color: var(--success); }
 .offline-pack-offline-hint { margin: 0; font-size: var(--fs-xs); color: var(--on-surface-var); }
-.offline-pack-degradations { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: var(--sp-1); }
-.offline-pack-degradations li { font-size: var(--fs-xs); color: var(--on-surface-var); line-height: 1.5; }
-.offline-pack-degradations strong { color: var(--on-surface); }
-.offline-pack-degrade-fallback { color: var(--on-surface-var); }
+.offline-pack-degrade {
+  display: flex; flex-direction: column; gap: 2px;
+  margin-top: var(--sp-1);
+}
+.offline-pack-degrade-reason {
+  margin: 0; font-size: var(--fs-xs); color: var(--on-surface-var);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.offline-pack-degrade-detail > summary {
+  display: inline-block; cursor: pointer; list-style: none;
+  font-size: var(--fs-xs); font-weight: 600; color: var(--primary);
+}
+.offline-pack-degrade-detail > summary::-webkit-details-marker { display: none; }
+.offline-pack-degrade-detail[open] > summary { margin-bottom: 2px; }
+.offline-pack-degrade-fallback-full {
+  margin: 0; font-size: var(--fs-xs); line-height: 1.55; color: var(--on-surface-var);
+}
 
 /* ============ 天珩字库区（扩展面板） ============ */
 .ext-font-list { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-2); }

@@ -9,7 +9,7 @@ import { register } from "./registry.js";
 
 register({
   id: "fromCiRegex",
-  cat: "text",
+  cat: "textProcessing",
   io: "text",
   name: "还原大小写不敏感正则",
   desc: "把 [sS] 这类大小写展开字符类折叠成单字母（不保证还原原始大小写）；[Gg]、[0-9] 等非两字母类原样保留。口径同 CyberChef「From Case Insensitive Regex」",

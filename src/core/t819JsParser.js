@@ -12,7 +12,7 @@ async function esprima() {
 
 register({
   id: "jsParser",
-  cat: "text",
+  cat: "textProcessing",
   name: "JavaScript 解析",
   desc: "解析 JavaScript 代码并输出抽象语法树（AST）JSON（CyberChef #241）",
   params: [

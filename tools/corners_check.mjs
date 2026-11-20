@@ -104,7 +104,7 @@ if (!base) {
     <link rel="stylesheet" href="${new URL('src/ui/continuousCorners.css', base).href}">
     <style>
     *{box-sizing:border-box}html,body{margin:0;background:white;color:black;font:14px sans-serif}
-    :root{--primary:#8f3d33;--surface-2:#eee;--range-track:#aaa;--test-fill:#2468ac;--r-full:999px;--fs-sm:14px;--control-track:#ddd;--dur-short:0ms;--dur-3:0ms}
+    :root{--primary:#8f3d33;--surface-2:#eee;--range-track:#aaa;--test-fill:#2468ac;--r-full:999px;--r-md:20px;--fs-sm:14px;--control-track:#ddd;--dur-short:0ms;--dur-3:0ms}
     html.dark{--test-fill:#21354a;--primary:#f0b3a7;--surface-2:#333;--range-track:#666}
     @supports(corner-shape:superellipse(1.5)){*{corner-shape:superellipse(1.5)}.cc-circle{corner-shape:round}}
     #fixture{position:relative;width:1100px;min-height:900px}
@@ -128,8 +128,8 @@ if (!base) {
     #tiles{position:absolute;left:400px;top:400px;width:160px;height:64px;border-radius:20px;background-image:linear-gradient(to right,#2468ac 50%,#aabbcc 50%);background-size:16px 16px;background-position:8px 0px}
     #dense{position:absolute;left:600px;top:280px;width:320px;height:240px;overflow:auto;display:grid;grid-template-columns:repeat(2,1fr);gap:4px}
     .cc-dense{height:60px;min-height:60px;background:#ddd;border-radius:16px}
-    .cc-select{appearance:auto;position:absolute;top:600px;width:200px;height:64px;border:0;border-radius:28px;padding:12px;background:var(--test-fill);color:#008800;font:14px sans-serif}
-    .cc-select:focus{outline:3px solid #008800;outline-offset:3px}
+    select.cc-select{appearance:auto;position:absolute;top:600px;width:200px;height:64px;border:0;border-radius:28px;padding:12px;background:var(--test-fill);color:#008800;font:14px sans-serif}
+    select.cc-select:focus{outline:3px solid #008800;outline-offset:3px}
     #select{left:40px}#select-rtl{left:280px}#select-disabled{left:520px;opacity:.4}#select-auto{left:760px;width:auto;height:auto}
     #select-list{left:40px;top:700px}#select-image{left:280px;top:700px;background:radial-gradient(#2468ac,#aabbcc)}
     #select-custom{left:520px;top:700px;appearance:none;padding-right:32px;background-image:linear-gradient(45deg,transparent 50%,#008800 50%),linear-gradient(135deg,#008800 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat}
@@ -272,7 +272,7 @@ if (!base) {
     const scrolled = await rect('#scrolled'); image = await pixels();
     check(blue(image.at(scrolled.x + 12, scrolled.y + 12)), 'Scrolled curve remains aligned in actual pixels');
     await page.locator('.m3-segment-thumb').evaluate(node => { node.style.transform = 'translateX(120px)'; node.style.width = '120px'; }); await settle();
-    check(await page.locator('.m3-segment-thumb').evaluate(node => !node.hasAttribute('data-cc-rendered') && window.cornerTest.inspect(node)?.reason === 'pill'), 'Dynamic M3 segmented thumb retains its authored capsule');
+    check(await page.locator('.m3-segment-thumb').evaluate(node => node.hasAttribute('data-cc-rendered') && !window.cornerTest.inspect(node)?.reason), 'Dynamic M3 segmented thumb uses the continuous capsule profile');
     const range = await rect('#range'); image = await pixels();
     const selected = image.at(range.x + 24, range.y + 22), unselected = image.at(range.x + 200, range.y + 22);
     check(selected[0] > 100 && selected[1] < 100 && unselected.slice(0, 3).every(v => v >= 155 && v <= 180), 'Actual native M3 range retains selected/unselected paint');
