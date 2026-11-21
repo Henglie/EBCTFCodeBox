@@ -536,10 +536,8 @@ public/
 | pietExec | Piet 执行 | Piet 图形语言解释器（DP/CC 状态机执行→输出）。支持真图像输入（PNG 拖入/粘贴 base64，codel 尺寸自动探测）与色块网格文本（色码 Rl/Y/Gd/C/B/M + K黑 W白 或 6 位 hex）。执行语义对齐 npiet v1.3；带步数上限、墙钟超时与输出后停顿检测，死循环强制终止并保留已输出内容。 |
 | blub | Blub! | BrainFuck 的 Ook 同族方言（Blub. Blub? Blub! 三 token，两两组合映射 8 指令）。encode 生成 / decode 执行。 |
 | cow | COW / MOO | COW 深奥语言（Sean Heber，12 指令 moo/mOo/moO/mOO/Moo/MOo/MoO/MOO/OOO/MMM/oom/OOM，含循环+寄存器+自解释 mOO，步数上限 500 万）。encode 生成 / decode 执行。 |
-| brainlollerDecode | Brainloller 解码 | Brainloller 图像 → Brainfuck 程序（bftools 实测色表 + 蛇形路径；终止色 firebrick，转向标记占格） |
-| brainlollerEncode | Brainloller 编码 | Brainfuck 程序 → Brainloller PNG（蛇形布局，行容量 W-2，行容量随宽度可调） |
-| braincopterDecode | Braincopter 解码 | Braincopter 图像 → Brainfuck 程序（f=(-2R+3G+B) mod 11 经典规范；遇 nop/终止即停） |
-| braincopterEncode | Braincopter 编码 | Brainfuck 程序 → Braincopter PNG（每像素 f=(-2R+3G+B) mod 11，最小改动写入，终止符填充到宽度整数倍；载体为指定纯色） |
+| brainloller | Brainloller | Brainfuck 程序与蛇形彩色 PNG 双向转换 |
+| braincopter | Braincopter | Brainfuck 程序与像素模 11 PNG 双向转换 |
 
 ### 中文 / 本土编码
 

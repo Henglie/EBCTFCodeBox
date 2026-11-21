@@ -48,6 +48,7 @@ const tracked = (await gitLsFiles())
 //   清单变动时必跑：node 工具/rt_browser_ids.mjs（⑤ 断网段验证回填生效）。
 // ---------------------------------------------------------------------------
 const EXCLUDE_RULES = [
+  [/^public\/license-verifier\//, "独立授权验证器（不随产品分发）"],
   // 天珩全量四平面 th-p0/p1/p2/p16（envPanel 点按钮才 loadFontPlane；正则不匹配首屏子集
   // th-ctf-subset.woff2 —— 它被 fonts.css @font-face 直接引用，必须留在预缓存）
   [/^public\/fonts\/th\/th-p\d+\.woff2$/, "天珩全量字库平面（懒 loadFontPlane）"],

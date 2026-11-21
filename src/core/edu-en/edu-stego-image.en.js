@@ -71,11 +71,11 @@ export default {
     what: "Image difference comparison: takes two images and runs a per-pixel operation (XOR/difference/add/and/or) to force out the layer hidden in the 'difference between the two images'.",
     principle:
       "Some challenges hide the flag in the difference between 'original vs. modified image', or scatter it across two seemingly identical images. Per-pixel XOR zeros out identical parts and highlights differences; difference/bitwise ops do the same. The identical background cancels out and the hidden layer surfaces.",
-    usage: "Upload two same-size images (pass the second via p.image2), choose an operation (XOR/diff/add/and/or), and output the result image.",
+    usage: "Use the separate Image A and Image B fields for files, Base64, or data URLs. Choose an operation to produce the result image. Legacy calls still accept image2 for image B.",
     examples: [
       { in: "image A + image B", param: "XOR", out: "difference image of the two, hidden layer revealed", desc: "Identical pixels XOR to 0 (black)" },
     ],
-    tips: ["A challenge gives 'two nearly identical images' → nine times out of ten it wants you to XOR/subtract to find the difference. Sizes must match to align pixel by pixel."],
+    tips: ["Images of different sizes align at the top left, and only their common rectangle is processed."],
     aka: ["图像差异", "image diff", "图像异或", "双图对比", "图像对比", "image xor", "图片差异", "逐像素对比", "图像差值", "两图异或"],
   },
 

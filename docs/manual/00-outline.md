@@ -54,7 +54,7 @@
 - **第 8 章 Base 系列（30）** — base16 … dxBase64
 - **第 9 章 文本 / 传输编码（39）** — url … binhex
 - **第 10 章 花式 / CTF 编码（77）** — morse … roar
-- **第 11 章 深奥编程语言（15）** — brainfuck … braincopter
+- **第 11 章 深奥编程语言（13）** — brainfuck … braincopter
 - **第 12 章 中文 / 本土编码（20）** — 当铺密码 … 曰唱
 
 ## 第三卷 · 古典密码（71 op + 分析工具链）

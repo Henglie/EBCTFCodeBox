@@ -3,7 +3,10 @@
 export const LOCAL_TOOLS_SCHEMA = 1;
 export const LOCAL_TOOL_MIRRORS = {
   "default": {"label":"PyPI / npm","pip":"https://pypi.org/simple","npm":"https://registry.npmjs.org","source":"https://pip.pypa.io/en/stable/topics/package-indexes/","npmSource":"https://docs.npmjs.com/using-npm/registry"},
-  "tuna": {"label":"TUNA (pip) / npmmirror (npm)","pip":"https://pypi.tuna.tsinghua.edu.cn/simple","npm":"https://registry.npmmirror.com","source":"https://mirrors.tuna.tsinghua.edu.cn/help/pypi/","npmSource":"https://npmmirror.com"}
+  "tuna": {"label":"TUNA (pip) / npmmirror (npm)","pip":"https://pypi.tuna.tsinghua.edu.cn/simple","npm":"https://registry.npmmirror.com","source":"https://mirrors.tuna.tsinghua.edu.cn/help/pypi/","npmSource":"https://npmmirror.com"},
+  "aliyun": {"label":"阿里云 (pip) / npmmirror (npm)","pip":"https://mirrors.aliyun.com/pypi/simple/","npm":"https://registry.npmmirror.com","source":"https://developer.aliyun.com/mirror/pypi","npmSource":"https://npmmirror.com"},
+  "ustc": {"label":"中科大 (pip) / npmmirror (npm)","pip":"https://pypi.mirrors.ustc.edu.cn/simple/","npm":"https://registry.npmmirror.com","source":"https://mirrors.ustc.edu.cn/help/pypi.html","npmSource":"https://npmmirror.com"},
+  "tencent": {"label":"腾讯云 (pip) / 腾讯 npm","pip":"https://mirrors.cloud.tencent.com/pypi/simple/","npm":"https://mirrors.cloud.tencent.com/npm/","source":"https://cloud.tencent.com/document/product/440/61810","npmSource":"https://cloud.tencent.com/document/product/1365/67996"}
 };
 export const LOCAL_TOOL_CATALOG = [
   {"id":"python","name":"Python","kind":"runtime","category":"runtime","level":"common","package":"Python","modules":[],"url":"https://www.python.org/downloads/","purpose":"Python 解释器与 pip 库环境","purposeEn":"Python interpreter and pip environment","command":"python --version","probe":["python","--version"]},

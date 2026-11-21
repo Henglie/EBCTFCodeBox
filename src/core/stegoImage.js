@@ -605,7 +605,93 @@ async function bitplaneSlicingOp(text, p = {}) {
   return imageDataToDataURL(bitplaneSlicingTransform(imageData, p));
 }
 
+// ============ imageDiff 双图输入归一（fields 新通道 / 主输入 + params.image2 旧通道） ============
+// 与已落位的 diffTool 同口径：字段缺省才读旧通道；A 与主输入并存即冲突（不比相等）。
+// 图像 B 是必填数据（没有「空图」语义）：显式空串 / 空字节直接报错，不回退 image2。
+const IMAGE_DIFF_FIELD_KEYS = ["imageA", "imageB", "image2"]; // image2 = 旧别名，只作 B 兜底
+
+function imageDiffRawBytes(v, label) {
+  if (v instanceof Uint8Array) return v;
+  if (v instanceof ArrayBuffer) return new Uint8Array(v);
+  if (ArrayBuffer.isView(v)) return new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
+  if (Array.isArray(v)) return Uint8Array.from(v);
+  throw new Error(`字段 ${label} 的字节槽需要 Uint8Array / ArrayBuffer / 字节数组`);
+}
+
+/** 归一一个图片槽；null/undefined → null（表示「未提供」，交给旧通道）。 */
+function imageDiffSlotOf(v, label) {
+  if (v == null) return null;
+  if (typeof v === "string") return { kind: "text", value: v };
+  if (v instanceof Uint8Array || v instanceof ArrayBuffer || ArrayBuffer.isView(v)) {
+    return { kind: "bytes", value: imageDiffRawBytes(v, label) };
+  }
+  if (typeof v === "object") {
+    if (v.kind === "text") {
+      if (typeof v.value !== "string") throw new Error(`字段 ${label} 的文本槽 value 必须是字符串`);
+      const encoding = v.encoding ?? "utf8";
+      if (encoding !== "utf8") throw new Error(`字段 ${label} 的文本槽编码只接受 utf8（收到 ${encoding}）：字节请用字节槽`);
+      return { kind: "text", value: v.value };
+    }
+    if (v.kind === "bytes") return { kind: "bytes", value: imageDiffRawBytes(v.value, label) };
+  }
+  throw new Error(`字段 ${label} 既不是文本槽也不是字节槽（拿到 ${JSON.stringify(v)}）`);
+}
+
+/** 槽 → 图片字节：字节槽原样（不重编码、不改名）；文本槽按 hex / base64 / dataURL 解释。 */
+function imageDiffSlotBytes(slot, label) {
+  const where = label === "imageA" ? "图像 A" : "第二张图片（图像 B）";
+  if (slot.kind === "bytes") {
+    if (!slot.value.length) throw new Error(`${where}显式为空：请选择图片文件或填入 base64/dataURL`);
+    return slot.value;
+  }
+  const bytes = _imageInputBytes(slot.value, {});
+  if (!bytes || !bytes.length) throw new Error(`${where}解析失败：请选择图片文件或填入有效的 base64/dataURL`);
+  return bytes;
+}
+
+/** @returns {null|{a:null|object,b:object,bSource:string}} null = 旧通道（无 fields 键） */
+function resolveImageDiffPair(text, p) {
+  const fields = p && p.fields;
+  if (fields == null) return null;
+  if (typeof fields !== "object" || Array.isArray(fields)) throw new Error("fields 必须是对象");
+  for (const key of Object.keys(fields)) {
+    if (!IMAGE_DIFF_FIELD_KEYS.includes(key)) throw new Error(`未知输入字段: ${key}（本算法只接受 imageA / imageB）`);
+  }
+  let a = imageDiffSlotOf(fields.imageA, "imageA");
+  let b = imageDiffSlotOf(fields.imageB, "imageB");
+  let bSource = b ? "field" : "none";
+  if (!b) { b = imageDiffSlotOf(fields.image2, "image2"); if (b) bSource = "field-alias"; }
+  const primaryText = String(text || "");
+  if (a && (primaryText.length > 0 || (p && p.rawBytes != null))) {
+    throw new Error("fields.imageA 与主输入同时给出：一个输入只允许一个来源");
+  }
+  if (a && a.kind === "text" && a.value.trim() === "") throw new Error("图像 A 显式为空：请选择图片文件或填入 base64/dataURL");
+  const legacy2 = p && p.image2 != null ? String(p.image2) : "";
+  if (b) {
+    if (b.kind === "text" && b.value.trim() === "") throw new Error("图像 B（imageB）显式为空：请选择图片文件或填入 base64/dataURL");
+    if (b.kind === "bytes" && !b.value.length) throw new Error("图像 B（imageB）显式为空：请选择图片文件或填入 base64/dataURL");
+    if (legacy2.trim() !== "" && !(b.kind === "text" && b.value.trim() === legacy2.trim())) {
+      throw new Error("fields.imageB 与 params.image2 同时给出且不一致：一个输入只允许一个来源");
+    }
+  } else if (legacy2.trim() !== "") {
+    b = { kind: "text", value: legacy2 }; bSource = "legacy-image2";
+  }
+  if (!b) throw new Error("缺少第二张图：请在图像 B 选择图片，或填入 params.image2（base64/dataURL）");
+  return { a, b, bSource };
+}
+
+async function imageDiffFieldRun(text, p) {
+  const pair = resolveImageDiffPair(text, p);
+  if (!pair) return null;
+  const imageData = pair.a
+    ? await _decodeImageToImageData(imageDiffSlotBytes(pair.a, "imageA"), p)
+    : await _inputImageData(text, p);
+  const image2 = await _decodeImageToImageData(imageDiffSlotBytes(pair.b, "imageB"), p);
+  return imageDataToDataURL(imageDiffTransform(imageData, { ...p, image2 }));
+}
+
 async function imageDiffOp(text, p = {}) {
+  if (p && p.fields != null) return imageDiffFieldRun(text, p);
   const imageData = await _inputImageData(text, p);
   const img2src = p && p.image2 ? String(p.image2).trim() : "";
   if (!img2src) throw new Error("请在「第二张图」参数中粘贴第二张图片的 base64/dataURL");
@@ -1466,7 +1552,29 @@ register({
 
 register({
   id: "imageDiff", cat: "image", name: "图像差异对比",
-  desc: "双图逐像素运算（XOR/差值/加/与/或），找隐藏层；第二张图从参数栏粘贴 base64/dataURL",
+  desc: "分别输入两张图，逐像素执行 XOR、差值、加法、AND 或 OR",
+  // 两张图同等级、不拼串，原样作为 params.fields 交给 run；旧 params.image2 仍作图 B 的兜底。
+  fieldsMode: "slots",
+  fields: [
+    {
+      key: "imageA",
+      label: "图像 A",
+      labelKey: "op.imageDiff.field.a",
+      legacyArea: "ioIn:0",
+      accepts: ["text", "bytes"],
+      placeholderKey: "op.imageDiff.field.hint",
+      rows: 2,
+    },
+    {
+      key: "imageB",
+      mirrorParam: "image2", // 旧通道同步：批处理 / 配方 / 分享链接仍按 params.image2 取 B
+      label: "图像 B",
+      labelKey: "op.imageDiff.field.b",
+      accepts: ["text", "bytes"],
+      placeholderKey: "op.imageDiff.field.hint",
+      rows: 2,
+    },
+  ],
   params: [
     { key: "mode", label: "运算", type: "select", default: "xor",
       options: [
@@ -1477,7 +1585,7 @@ register({
         { value: "or", label: "OR" },
       ],
     },
-    { key: "image2", label: "第二张图", type: "text", default: "", placeholder: "第二张图片的 base64/dataURL" },
+    { key: "image2", uiHidden: true, label: "第二张图", type: "text", default: "", placeholder: "第二张图片的 base64/dataURL" },
   ],
   run: imageDiffOp,
   acceptsBytes: true,
@@ -1496,4 +1604,6 @@ export {
   exifExtractRun,
   bitplaneSlicingTransform,
   imageDiffTransform,
+  resolveImageDiffPair,
+  imageDiffSlotOf,
 };

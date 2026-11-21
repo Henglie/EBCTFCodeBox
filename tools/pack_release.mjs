@@ -82,6 +82,7 @@ const INCLUDE_DIRS = ["src", "public", "tools", "mcp", "skills", "bin", "addons"
 // 白名单目录内部的清扫（PROGRESS 表明确排除项）。
 // rel 为相对项目根的 posix 路径（目录本身也会被问询，rel 形如 "src" / ""）。
 const DIR_EXCLUDE = (rel) =>
+  rel === "public/license-verifier" || rel.startsWith("public/license-verifier/") ||
   rel.split("/").includes("__pycache__") || rel.endsWith(".pyc") ||
   // 工程残留防复发（MT717 2026-10-12）：.d.ts 类型标注 / .js.map sourcemap / .orig 补丁冲突
   // 残留 / .bak* 备份——运行时零引用（material-color vendor 的 TS 标注与 map 共 90 个 ≈ -864KB）。
@@ -137,6 +138,7 @@ const FORBIDDEN_NAMES = ["private_key.enc", "keygen.mjs", "sign.mjs", "encrypt_k
 // bridge.py 运行必需的扩展桥/CLI 文件。缺任何一个，发行包里的桥要么起不来要么降级，
 // stage/verify 都必须直接报错（2026-11 修复：旧清单把 mcp/extension_* 排除了）。
 const REQUIRED_RUNTIME_FILES = [
+  "src/core/licenseVerifier.js",
   "bridge.py",
   "bridge_cli.py",
   "mcp/extension_bridge.py",
@@ -204,7 +206,7 @@ function assertRuntimeFiles(files, label) {
   const set = new Set(files);
   const missing = REQUIRED_RUNTIME_FILES.filter((f) => !set.has(f));
   if (missing.length) {
-    throw new Error(`${label}缺少 bridge.py 运行必需文件：${missing.join(", ")}`);
+    throw new Error(`${label}缺少运行必需文件：${missing.join(", ")}`);
   }
 }
 
@@ -473,6 +475,7 @@ function usage() {
   node tools/pack_release.mjs stage [--channel <渠道名>]
   node tools/pack_release.mjs verify <目录> [--channel <渠道名>]
   node tools/pack_release.mjs version
+  node tools/pack_release.mjs list [--channel <渠道名>]
 
 渠道名（授权/成品授权/ 动态扫描）：${listChannels().join(" / ") || "（目录空）"}`);
 }
@@ -500,6 +503,7 @@ let code;
 if (cmd === "stage" && rest.length === 0) code = cmdStage(channel);
 else if (cmd === "verify" && rest.length === 1) code = await cmdVerify(rest[0], channel);
 else if (cmd === "version" && rest.length === 0) code = cmdVersion();
+else if (cmd === "list" && rest.length === 0) { console.log(JSON.stringify(listIncludeFiles(channel))); code = 0; }
 else {
   usage();
   code = 2;

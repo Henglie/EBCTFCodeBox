@@ -126,6 +126,19 @@ export function legacyInvocation(op, normalized) {
       delete p.textB;
     }
     if (Object.keys(slots).length) p.fields = slots;
+  } else if (op.fieldsMode === 'slots' && Array.isArray(op.fields) && names.length) {
+    const allowed = new Map(op.fields.map(field => [field.key, field]));
+    const slots = {};
+    for (const key of names) {
+      const descriptor = allowed.get(key), value = fields[key];
+      if (!descriptor) fail('INPUT_FIELD_UNKNOWN', 'Unknown structured field: ' + key);
+      if (!descriptor.accepts?.includes(value.kind) || (value.kind === 'text' && value.encoding !== 'utf8')) {
+        fail('INPUT_FIELD_ADAPTER', 'Unsupported slot type or encoding: ' + key);
+      }
+      slots[key] = value.kind === 'text' ? { kind: 'text', value: value.value }
+        : { kind: 'bytes', value: inputBytes(value.value), name: value.name, mime: value.mime };
+    }
+    p.fields = slots;
   } else if (Array.isArray(op.fields) && names.length) {
     const keys = op.fields.map(f => f.key), join = op.fieldsJoin ?? '\n';
     if (names.some(key => !keys.includes(key))) fail('INPUT_FIELD_UNKNOWN', 'Unknown structured field');

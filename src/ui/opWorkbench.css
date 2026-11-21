@@ -12,6 +12,8 @@
 .op-config .param > label:not(.switch) { font-weight: 500; line-height: 1.5; }
 .op-config .param:focus-within > label:not(.switch) { color: var(--primary); }
 .op-config .op-params { padding: 16px; background: var(--surface-1); border-radius: var(--r-lg); }
+.op-params [data-op-direction][hidden] { display: none; }
+.io-field[data-field-mode][hidden] { display: none; }
 .op-config .io-coding-settings { display: grid; flex: 1 1 100%; grid-column: 1 / -1; gap: 12px; min-width: 0; }
 .op-config .io-coding-mount + .io-coding-mount { border-top: 1px solid var(--outline-var); padding-top: 12px; }
 .op-config .io-coding-mount[hidden] { display: none; }

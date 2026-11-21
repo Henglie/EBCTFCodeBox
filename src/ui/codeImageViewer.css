@@ -390,7 +390,16 @@
   border-radius: var(--r-md);
   background: var(--surface-2);
 }
-.ci-rec-hit { border-inline-start: 4px solid var(--primary); }
+.ci-rec-hit {
+  --result-edge: var(--primary);
+  --result-tint: 32%;
+  --result-mid-tint: 14%;
+  border: 1px solid color-mix(in srgb, var(--result-edge) 28%, var(--outline-var));
+  background-image: linear-gradient(to left,
+    color-mix(in srgb, var(--result-edge) var(--result-tint), transparent) 0%,
+    color-mix(in srgb, var(--result-edge) var(--result-mid-tint), transparent) 30%,
+    transparent 80%);
+}
 .ci-rec-block-title {
   display: flex;
   align-items: center;

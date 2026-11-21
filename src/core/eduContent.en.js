@@ -276,5 +276,30 @@ Object.assign(EDU_EN, E_EN_TOKEN_SIGNING);
 Object.assign(EDU_EN, EDU_EN_OPENSSL);
 Object.assign(EDU_EN, EDU_EN_T796);
 Object.assign(EDU_EN, EDU_EN_SM_ATTACKS);
+EDU_EN.brainloller = {
+  what: "Brainloller stores Brainfuck instructions as colors in a PNG.",
+  principle: "This variant follows the bftools palette and a serpentine path. The black start and turn markers are not instructions; the firebrick pixel ends decoding.",
+  usage: "Encode Brainfuck text to brainloller.png. Width defaults to 16 pixels (minimum 4). Decode a PNG or a PNG data URL. Execution is off by default.",
+  examples: [{ in: "+++.", param: "Encode, width=16", out: "brainloller.png (16×1)" }],
+  tips: ["Decoding that file returns +++. without running it.", "Other Brainloller palettes are not interchangeable with this variant."],
+  aka: ["Brainloller", "Brainloller encode", "Brainloller decode", "Brainloller PNG", "Brainloller image", "Brainfuck to Brainloller", "Brainloller to Brainfuck", "bftools Brainloller", "serpentine Brainfuck PNG", "color-coded Brainfuck image", "Brainloller color palette"],
+};
+EDU_EN.braincopter = {
+  what: "Braincopter maps a PNG pixel to a Brainfuck instruction using its RGB values.",
+  principle: "The Esolang convention computes $f=(-2R+3G+B)\\bmod 11$. Values 0–7 map to instructions; the other values stop ordinary decoding. An optional gap mode can resume once.",
+  usage: "Encode to braincopter.png using a solid carrier (64×48 pixels by default, base color #804020). Decode a PNG or PNG data URL. Execution is off by default.",
+  examples: [{ in: "+++++[>+++++<-]>.", param: "Encode, default carrier", out: "braincopter.png (64×48)" }],
+  tips: ["Carrier capacity is finite. Use a larger carrier if the program does not fit.", "PNG preserves the exact pixel values used by the decoder."],
+  aka: ["Braincopter", "Braincopter encode", "Braincopter decode", "Braincopter PNG", "Braincopter image", "Brainfuck to Braincopter", "Braincopter to Brainfuck", "bftools Braincopter", "modulo-11 Brainfuck PNG", "RGB Brainfuck steganography", "Braincopter pixel formula"],
+};
+EDU_EN.ssdeep = {
+  ...EDU_EN.ssdeep,
+  what: "SSDEEP creates context-triggered piecewise hashes and compares their signatures.",
+  principle: "A rolling hash finds block boundaries. The signature has the form blocksize:hash1:hash2; comparison scores compatible signatures from 0 to 100.",
+  usage: "Generate mode reads data or a file in A. Compare mode displays independent signature fields A and B. B may be blank if A contains two lines. Legacy calls still accept textB.",
+  examples: [{ in: "Also called fuzzy hashes, Ctph can match inputs that have homologies.", param: "mode=hash, inputEnc=utf8", out: "3:AXGBicFlgVNhBGcL6wCrFQEv:AXGHsNhxLsr2C" }],
+  tips: ["Similarity scores are not proof of integrity or identity. Reference: ssdeep fuzzy.c and Kornblum (2006)."],
+  aka: ["SSDEEP", "CTPH", "context-triggered piecewise hashing", "fuzzy hash", "ssdeep signature", "ssdeep compare", "SpamSum", "rolling hash similarity", "piecewise hash comparison", "approximate file matching"],
+};
 registerEduEn(EDU_EN);
 export default EDU_EN;

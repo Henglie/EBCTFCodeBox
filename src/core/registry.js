@@ -204,7 +204,11 @@ export function register(op) {
 // C7-QR qrDecodeReport 并入 qrDecode。
 // xiangyueEnc：算法文件加载后由 registerAlias 接管（保留「run = 加密」的旧行为）；
 // 加载前按本表落到承接算法的占位，供惰载定位源文件。
-const LEGACY_OP_IDS = { qrParse: "qrScanImage", xiangyueEnc: "xiangyue" };
+const LEGACY_OP_IDS = {
+  qrParse: "qrScanImage", xiangyueEnc: "xiangyue",
+  brainlollerEncode: "brainloller", brainlollerDecode: "brainloller",
+  braincopterEncode: "braincopter", braincopterDecode: "braincopter",
+};
 
 // 旧 id 别名：能被 getOp 取到并执行，但不进 OPS（列表 / 搜索 / 计数 / 一键解码都看不到）。
 const _aliases = new Map();

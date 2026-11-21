@@ -266,15 +266,25 @@
 
 /* 节点卡 */
 .recipe-node {
-  background: var(--surface-1);
-  border: 1px solid var(--outline-var);
-  border-inline-start: 3px solid var(--primary);
+  --result-edge: var(--primary);
+  --result-tint: 32%;
+  --result-mid-tint: 14%;
+  background-color: var(--surface-1);
+  background-image: linear-gradient(to left,
+    color-mix(in srgb, var(--result-edge) var(--result-tint), transparent) 0%,
+    color-mix(in srgb, var(--result-edge) var(--result-mid-tint), transparent) 30%,
+    transparent 80%);
+  border: 1px solid color-mix(in srgb, var(--result-edge) 28%, var(--outline-var));
   border-radius: var(--r-md);
   padding: var(--sp-3);
 }
 .recipe-node.error {
-  border-color: var(--error);
-  border-inline-start-color: var(--error);
+  --result-edge: var(--error);
+  background-image: linear-gradient(to left,
+    color-mix(in srgb, var(--result-edge) var(--result-tint) , transparent) 0%,
+    color-mix(in srgb, var(--result-edge) var(--result-mid-tint), transparent) 30%,
+    transparent 80%);
+  border: 1px solid color-mix(in srgb, var(--result-edge) 38%, var(--outline-var));
   color: var(--error);
   padding: var(--sp-3);
 }

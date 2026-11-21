@@ -1,5 +1,5 @@
 // Display projection only: callers must supply the successfully verified loadLicense result.
-import "../../public/license-verifier/verifier.js";
+import "./licenseVerifier.js";
 const engine = globalThis.EBCryptoLicense;
 export const { LIMITS: LICENSE_LIMITS, inspectRaster, validateRasterDataUrl, validateRasterContent,
   resolveBranding: resolveLicenseBranding, prepareBranding: prepareLicenseBranding } = engine;

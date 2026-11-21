@@ -32,7 +32,7 @@ import { buildTemplate as csvBuildTemplate, tasksFromCsv as csvTasksFromCsv } fr
 import { resultsToCsv as csvResultsToCsv, resultsToJson as csvResultsToJson, collectArtifacts as csvCollectArtifacts, artifactsToZipEntries as csvArtifactsToZipEntries } from "./core/batchTaskExport.js"; // CSV 批量任务：结果导出
 import { createBatchTaskRunner } from "./core/batchTaskRunner.js"; // CSV 批量任务：独立 Worker 队列
 // fileAnalysis / imageAnalysis / audioAnalysis（智能分析三链，含 QR·pcap·inflate·音频子树）已改懒载，见 ensureAnalysisChains()
-import { loadLicense, OPENSOURCE_LICENSE, PUBLIC_KEY_B64 } from "./core/license.js";
+import { loadLicense, OPENSOURCE_LICENSE, PUBLIC_KEY_B64, licensePublicKeyFingerprint } from "./core/license.js";
 import { prepareLicenseBranding, resolveLicenseBranding } from './core/licenseBranding.js';
 import { displayAppName, showLocalQuote, LOCAL_QUOTE } from './core/branding.js';
 import { refreshManifestBranding } from './ui/appBranding.js';
@@ -108,20 +108,6 @@ function opNameBi(op) {
   return tBilingual("op." + op.id + ".name", op.name);
 }
 
-let _licenseVerifierPromise = null;
-function ensureLicenseVerifier() {
-  if (globalThis.EBCryptoLicense?.verifyLicense) return Promise.resolve(globalThis.EBCryptoLicense);
-  if (_licenseVerifierPromise) return _licenseVerifierPromise;
-  _licenseVerifierPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = new URL('../public/license-verifier/verifier.js', import.meta.url).href;
-    script.onload = () => globalThis.EBCryptoLicense?.verifyLicense
-      ? resolve(globalThis.EBCryptoLicense) : reject(new Error('离线验证器未导出'));
-    script.onerror = () => reject(new Error('离线验证器加载失败'));
-    document.head.append(script);
-  });
-  return _licenseVerifierPromise;
-}
 // 暴露给独立视图模块（recipeView / exhaustiveView）复用，避免它们反向 import main.js
 if (typeof window !== "undefined") {
   window.__ebctfOpName = opName;
@@ -367,6 +353,7 @@ function fieldInvocation(op, values, params, areas = []) {
   if (op.fieldsMode !== "slots") return { text: values.join(op.fieldsJoin ?? "\n"), params };
   const next = { ...params, fields: {} };
   op.fields.forEach((f, i) => {
+    if (f.mode && f.mode !== params.mode) return;
     // 字段框里是载入的二进制文件时，交真字节（框内 hex 只是显示）。
     const raw = areas[i] && areas[i]._rawBytes;
     next.fields[f.key] = raw ? { kind: "bytes", value: raw } : values[i];
@@ -1150,7 +1137,10 @@ function applyRoute() {
 function applyAliasDirection(alias) {
   const op = getOp(alias.id);
   if (!op || op.__stub || state.opId !== alias.id) return;
-  if (alias.dir && typeof op[alias.dir] === "function" && state.dir !== alias.dir) { state.dir = alias.dir; renderWorkspace(); }
+  if (alias.dir && typeof op[alias.dir] === "function" && state.dir !== alias.dir) {
+    state.dir = alias.dir;
+    updateDirSeg();
+  }
 }
 function selectOpFromRoute(id) {
   const op = getOp(id);
@@ -1302,6 +1292,8 @@ function renderWorkspace() {
   const bindDraft = () => {
     if (generation !== _wsRenderGeneration) return;
     let direction = state.dir;
+    const fields = view === "op" ? getOp(opId)?.fields : null;
+    const previousKeys = Object.fromEntries((fields || []).filter(f => f.legacyArea).map(f => [`fld_${f.key}:0`, f.legacyArea]));
     workspaceDrafts.bind(view === "op" ? `op:${opId}` : view, () => {
       if (state.view === view && state.opId === opId) direction = state.dir;
       return {
@@ -1311,7 +1303,7 @@ function renderWorkspace() {
         inspect: view === "inspect" ? _inspectLoaded?.getUniversalViewerDraft() : undefined,
         quickconv: view === "quickconv" ? _quickConvLoaded?.getQuickConvDraft() : undefined,
       };
-    });
+    }, previousKeys);
   };
   if (rendered?.then) rendered.then(bindDraft); else bindDraft();
   _wsMotionSeen = true;
@@ -1602,7 +1594,6 @@ function renderHome() {
     class: "io-area home-input", placeholder: t("ui.home.placeholder"),
   });
   input.setAttribute("aria-labelledby", "homeInputLabel");
-  input.setAttribute("aria-describedby", "homeInputHint");
   input.value = state.homeInput || "";              // 恢复上次输入，切菜单再回来进度不丢
   const fileReport = el("div", { class: "file-report" });
   const outWrap = el("div", { class: "onekey-out" });
@@ -1724,7 +1715,6 @@ function renderHome() {
       homeToolbar,
     ),
     topBanner, input,
-    el("div", { class: "home-input-hint", id: "homeInputHint" }, t("ui.home.inputHint")),
     toolbar, actions,
     el("div", { class: "home-keyboard-hint" }, t("ui.home.keyboardHint")),
   );
@@ -3940,8 +3930,8 @@ function renderOp() {
    const isDual = op.encode && op.decode;
    if (isDual) {
      const seg = el("div", { class: "dir-seg" },
-        el("button", { class: state.dir === "encode" ? "on" : "", onclick: () => { state.dir = "encode"; convert(); updateDirSeg(); } }, t("ui.op.encode")),
-        el("button", { class: state.dir === "decode" ? "on" : "", onclick: () => { state.dir = "decode"; convert(); updateDirSeg(); } }, t("ui.op.decode")),
+         el("button", { class: state.dir === "encode" ? "on" : "", onclick: () => { state.dir = "encode"; updateDirSeg(); convert(); } }, t("ui.op.encode")),
+         el("button", { class: state.dir === "decode" ? "on" : "", onclick: () => { state.dir = "decode"; updateDirSeg(); convert(); } }, t("ui.op.decode")),
     );
     seg.id = "dirSeg";
     config.append(seg);
@@ -3949,7 +3939,15 @@ function renderOp() {
 
   // 算法参数和输入、输出的格式设置使用同一面板。
   const paramBar = el("div", { class: "op-params" });
-  for (const d of op.params) if (!d.uiHidden) paramBar.append(renderParam(op, d));
+  for (const d of op.params) {
+    if (d.uiHidden) continue;
+    const control = renderParam(op, d);
+    if (isDual && (d.dir === "encode" || d.dir === "decode")) {
+      control.dataset.opDirection = d.dir;
+      control.hidden = state.dir !== d.dir;
+    }
+    paramBar.append(control);
+  }
   const inputCodingMount = el("div", { class: "io-coding-mount", "data-scope": "input", hidden: true });
   const outputCodingMount = el("div", { class: "io-coding-mount", "data-scope": "output" });
   paramBar.append(el("div", { class: "io-coding-settings" }, inputCodingMount, outputCodingMount));
@@ -4032,10 +4030,11 @@ function renderOp() {
   const fieldAreas = [];
   if (hasFields) {
     for (const f of op.fields) {
+      const label = f.labelKey ? t(f.labelKey) : f.label;
       const ta = ioArea({
         class: "io-area io-field-area",
-        placeholder: f.placeholder || "",
-        "aria-label": f.label,
+        placeholder: f.placeholderKey ? t(f.placeholderKey) : (f.placeholder || ""),
+        "aria-label": label,
       });
       ta.id = "fld_" + f.key;
       // 旧通道里已有的值（草稿 / 分享链接 / 配方带来的参数）回填到对应字段框。
@@ -4044,12 +4043,14 @@ function renderOp() {
       ta.addEventListener("keydown", (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); triggerConvert(); }
       });
-      fieldAreas.push(el("div", { class: "io-field" },
+      const field = el("div", { class: "io-field" },
         el("div", { class: "io-field-head" },
-          el("label", { class: "io-field-label", for: ta.id }, f.label),
-          attachFieldTools(ta, f.label, { getEpoch: () => workspaceDrafts.epoch, acceptsBytes: Array.isArray(f.accepts) && f.accepts.includes("bytes") })),
+          el("label", { class: "io-field-label", for: ta.id }, label),
+          attachFieldTools(ta, label, { getEpoch: () => workspaceDrafts.epoch, acceptsBytes: Array.isArray(f.accepts) && f.accepts.includes("bytes") })),
         ta,
-      ));
+      );
+      if (f.mode) { field.dataset.fieldMode = f.mode; field.hidden = f.mode !== state.params.mode; }
+      fieldAreas.push(field);
     }
   }
 
@@ -4670,6 +4671,9 @@ function updateDirSeg() {
   const [enc, dec] = seg.querySelectorAll("button");
   enc.className = state.dir === "encode" ? "on" : "";
   dec.className = state.dir === "decode" ? "on" : "";
+  for (const control of document.querySelectorAll("#opConfig [data-op-direction]")) {
+    control.hidden = control.dataset.opDirection !== state.dir;
+  }
   // The shared segmented controller observes selection and updates its indicator.
 }
 
@@ -4768,7 +4772,13 @@ function renderParam(op, d) {
     const sel = el("select", { id });
     for (const o of d.options || []) sel.append(el("option", { value: o.value ?? o }, ptext(o)));
     sel.value = state.params[d.key];
-    sel.addEventListener("change", () => { state.params[d.key] = sel.value; convert("param"); });
+    sel.addEventListener("change", () => {
+      state.params[d.key] = sel.value;
+      if (d.key === "mode") for (const field of document.querySelectorAll("#workspace [data-field-mode]")) {
+        field.hidden = field.dataset.fieldMode !== sel.value;
+      }
+      convert("param");
+    });
     wrap.append(el("label", { for: id }, plabel(d)), sel);
   } else if (d.type === "number") {
  // M3 stepper 自实现，替代浏览器原生 spinner。[−][input][＋] flex 容器。
@@ -6009,7 +6019,7 @@ function renderAbout(host) {
   );
 
   page.append(el("div", { class: "about-hero" }, logo, title, ver, intro, repoBtn, docBtns));
-  if (showLocalQuote(getLocale())) page.append(el('blockquote', { class: 'about-local-quote' },
+  if (showLocalQuote(getLocale())) page.append(el('blockquote', { class: 'about-local-quote', lang: 'zh-CN', dir: 'ltr' },
     el('p', {}, '“' + LOCAL_QUOTE.text + '”'), el('footer', {}, LOCAL_QUOTE.attribution)));
 
  // 通用小节工厂
@@ -6205,13 +6215,26 @@ function renderAbout(host) {
   } else {
     licNodes.push(pill("oss", t("ui.about.regSourceGithub"), null));
   }
+  const copyLicenseText = async (value) => {
+    try { await navigator.clipboard.writeText(value); toast(t("ui.about.keyCopied")); }
+    catch { /* The selectable value remains available for manual copying. */ }
+  };
+  const keyRow = (label, value, button) => el("div", { class: "about-key-item" },
+    el("div", { class: "about-public-key-label" }, t(label)),
+    el("div", { class: "about-key-line" }, value, button),
+  );
+  const fpNode = el("code", { class: "about-public-key-value about-public-key-fp", dir: "ltr", "aria-live": "polite" }, t("ui.about.fingerprintPending"));
+  const fpButton = el("button", { type: "button", class: "chip-btn about-key-copy",
+    onclick: () => copyLicenseText(fpNode.textContent) }, t("ui.about.copyFingerprint"));
+  fpButton.disabled = true;
+  licensePublicKeyFingerprint().then((fp) => {
+    fpNode.textContent = fp;
+    fpButton.disabled = false;
+  }).catch(() => { fpNode.textContent = t("ui.about.fingerprintUnavailable"); });
   licNodes.push(el("div", { class: "about-public-key" },
-    el("div", { class: "about-public-key-label" }, "离线验签公钥（SPKI Base64）"),
-    el("code", { class: "about-public-key-value", dir: "ltr" }, PUBLIC_KEY_B64),
-    el("button", { type: "button", class: "chip-btn", onclick: async () => {
-      try { await navigator.clipboard.writeText(PUBLIC_KEY_B64); toast("公钥已复制"); }
-      catch { /* 保留可选中的公钥文本 */ }
-    } }, "复制公钥"),
+    keyRow("ui.about.publicKey", el("code", { class: "about-public-key-value", dir: "ltr" }, PUBLIC_KEY_B64),
+      el("button", { type: "button", class: "chip-btn about-key-copy", onclick: () => copyLicenseText(PUBLIC_KEY_B64) }, t("ui.about.copyPublicKey"))),
+    keyRow("ui.about.fingerprint", fpNode, fpButton),
   ));
   page.append(section("ui.about.regTitle", ...licNodes));
 

@@ -1,5 +1,5 @@
 // ECDSA P-256 / SHA-256, IEEE-P1363. The shared engine has no DOM or Node dependency.
-import "../../public/license-verifier/verifier.js";
+import "./licenseVerifier.js";
 const engine = globalThis.EBCryptoLicense;
 export const { PUBLIC_KEY_B64, verifyLicense, fingerprint: licensePublicKeyFingerprint } = engine;
 

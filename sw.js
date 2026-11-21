@@ -1,4 +1,4 @@
-// BUILD-STAMP: 5ec8fc4ed3a09881
+// BUILD-STAMP: cce38dc9d39d000b
 importScripts("./sw-assets.js", "./sw-packs.js");
 
 // The asset generator synchronizes BUILD-STAMP with the resource revision.
@@ -394,6 +394,10 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  const SCOPE_DIR = new URL(self.registration.scope).pathname.replace(/\/+$/, "");
+  const siteRel = url.pathname.startsWith(SCOPE_DIR + "/") ? url.pathname.slice(SCOPE_DIR.length) : url.pathname;
+  // The standalone utility never enters the app's navigation fallback or asset caches.
+  if (siteRel === "/public/license-verifier" || siteRel.startsWith("/public/license-verifier/")) return;
 
   if (request.mode === "navigate") {
     event.respondWith((async () => {
@@ -421,8 +425,6 @@ self.addEventListener("fetch", (event) => {
   // 门槛比较用「站点相对路径」：本地/RAR 根路径部署 scope='/'，GitHub Pages 挂在
   // 子路径 scope='/EBCTFCodeBox/'——拿绝对 pathname 直接比对会全体失配，按需回填
   // 整链断（在线用过≠离线可用，含语言包/字库/WASM）。剥掉 scope 目录前缀后两种部署同判。
-  const SCOPE_DIR = new URL(self.registration.scope).pathname.replace(/\/+$/, "");
-  const siteRel = url.pathname.startsWith(SCOPE_DIR + "/") ? url.pathname.slice(SCOPE_DIR.length) : url.pathname;
   event.respondWith((async () => {
     const cached = await caches.match(request);
     // 204/空响应是 Chromium 对 .bin + force-cache 的下载处理产物，不能当真值返回，

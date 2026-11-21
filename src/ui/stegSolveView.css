@@ -193,7 +193,7 @@
 
 .stegsolve-btn.primary {
   background: var(--primary);
-  border-color: transparent;
+  border-color: color-mix(in srgb, var(--result-edge) 36%, var(--outline-var));
   color: var(--on-primary);
 }
 
@@ -317,8 +317,15 @@
 }
 
 .stegsolve-cand.has-flag {
-  border-color: var(--flag-hit, #ffd54f);
-  box-shadow: inset 3px 0 0 var(--flag-hit, #ffd54f);
+  --result-edge: var(--flag-hit, #ffd54f);
+  --result-tint: 32%;
+  --result-mid-tint: 14%;
+  border-color: transparent;
+  background-image: linear-gradient(to left,
+    color-mix(in srgb, var(--result-edge) var(--result-tint), transparent) 0%,
+    color-mix(in srgb, var(--result-edge) var(--result-mid-tint), transparent) 30%,
+    transparent 80%);
+  box-shadow: none;
 }
 
 .stegsolve-cand-head {

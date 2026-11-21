@@ -160,14 +160,14 @@ export function createWorkspaceDrafts(root, { onClear, onRestore, onStorageError
     }
   }
   const release = () => { save(); binding = null; observer.disconnect(); };
-  function bind(id, getMeta) {
+  function bind(id, getMeta, previousKeys = {}) {
     binding = { id, getMeta };
     const record = records.get(id);
     suspended = true;
     try {
       const saved = new Map((record?.areas || []).map(area => [area.key, area]));
       for (const { key, node } of areas(root)) {
-        const entry = saved.get(key); if (!entry) continue;
+        const entry = saved.get(key) ?? saved.get(previousKeys[key]); if (!entry) continue;
         if ('value' in node) node.value = entry.text; else node.textContent = entry.text;
         node.classList.toggle('error', !!entry.error);
         if (entry.stale) node.setAttribute('data-result-stale', 'true'); else node.removeAttribute('data-result-stale');

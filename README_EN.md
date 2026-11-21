@@ -500,10 +500,8 @@ public/
 | pietExec | Piet Execution | Piet graphical-language interpreter (DP/CC state-machine execution → output). Accepts real images (PNG drop / base64 paste, npiet-completed paths) and color-block grid text (color codes Rl/Y/Gd/C/B/M + K black W white or 6-digit hex). Execution semantics aligned with npiet v1.3, execution only |
 | blub | Blub! | Ook-family BrainFuck dialect (Blub. Blub? Blub! three tokens, pairwise combinations map to the 8 instructions). encode generates / decode executes |
 | cow | COW / MOO | COW esoteric language (Sean Heber, 12 instructions moo/mOo/moO/mOO/Moo/MOo/MoO/MOO/OOO/MMM/oom/OOM, with loops + registers + the self-interpreting mOO, 5-million-step limit). encode generates / decode executes |
-| brainlollerDecode | Brainloller Decode | Brainloller image → Brainfuck program (bftools-tested color table + serpentine path; terminating color firebrick, turn markers occupy a cell) |
-| brainlollerEncode | Brainloller Encode | Brainfuck program → Brainloller PNG (serpentine layout, row capacity W-2, row capacity adjustable with width) |
-| braincopterDecode | Braincopter Decode | Braincopter image → Brainfuck program (classic f=(-2R+3G+B) mod 11 convention; stops at nop/terminator) |
-| braincopterEncode | Braincopter Encode | Brainfuck program → Braincopter PNG (per pixel f=(-2R+3G+B) mod 11, written with minimal edits, terminator padded to a multiple of the width; the carrier is a chosen solid color) |
+| brainloller | Brainloller | Convert between Brainfuck programs and serpentine color PNGs |
+| braincopter | Braincopter | Convert between Brainfuck programs and modulo-11 pixel PNGs |
 
 ### Chinese / Domestic Encodings
 

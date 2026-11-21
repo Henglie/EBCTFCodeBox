@@ -33,11 +33,83 @@
  * 输入：hash 档 = hex / base64 / 原样 UTF-8（inputEnc 可指定；纯文本请选 utf8，
  *   auto 档会把偶长的纯 hex 字符串当 hex）；compare 档 = 两行签名，或签名 A 进
  *   主输入 + 签名 B 填参数 textB（仿 diffTool 双输入形态）。
+ *   两签名现另有同等级字段通道 fields.sigA / fields.sigB（fieldsMode:"slots"）；
+ *   字段缺省才读旧通道（主输入、params.textB、两行格式），显式空 sigB 表示「不给 B」。
  *
  * 红线：算法照 ssdeep 官方 C 源逐行移植不发明；加载期自检 IIFE 跑官方向量，
  *   任一失败抛错防错表静默运行。纯本地零外发；core 层零 UI 依赖（仅 registry）。
  */
 import { register } from "./registry.js";
+
+// ============================================================
+// 双签名槽归一（fields 新通道 / 主输入 + params.textB 旧通道）
+// 规则（与已落位的 diffTool 同口径，只在缺省时才读旧通道）：
+//   - sigA 缺省 → 主输入文本（或拖入的 rawBytes）；sigA 与主输入同时给出即冲突（不比相等）。
+//   - sigB 缺省 → params.textB（→ inputContract 的 fields.textB 别名）；非空则用。
+//   - sigB 显式空串 = 「明确不给 B」：抑制旧 textB，回退「签名 A 两行」旧规则，不静默择一。
+//   - sigB 与 textB 同时给出且不一致 → 冲突报错；相等接受。
+//   - 未知字段键报错，避免拼错键被静默忽略。
+// ============================================================
+const SIG_FIELD_KEYS = ["sigA", "sigB", "textB"]; // textB = inputContract 的显式旧别名，只作 B 兜底
+
+function sigBytesOf(v, label) {
+  if (v instanceof Uint8Array) return v;
+  if (v instanceof ArrayBuffer) return new Uint8Array(v);
+  if (ArrayBuffer.isView(v)) return new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
+  if (Array.isArray(v)) return Uint8Array.from(v);
+  throw new Error(`字段 ${label} 的字节槽需要 Uint8Array / ArrayBuffer / 字节数组`);
+}
+
+/** 归一一个签名槽；null/undefined → null（表示「未提供」，交给旧通道）。 */
+function sigSlotOf(v, label) {
+  if (v == null) return null;
+  if (typeof v === "string") return { kind: "text", value: v };
+  if (v instanceof Uint8Array || v instanceof ArrayBuffer || ArrayBuffer.isView(v)) {
+    return { kind: "bytes", value: sigBytesOf(v, label) };
+  }
+  if (typeof v === "object") {
+    if (v.kind === "text") {
+      if (typeof v.value !== "string") throw new Error(`字段 ${label} 的文本槽 value 必须是字符串`);
+      const encoding = v.encoding ?? "utf8";
+      if (encoding !== "utf8") throw new Error(`字段 ${label} 的文本槽编码只接受 utf8（收到 ${encoding}）：字节请用字节槽，或统一走 inputEnc`);
+      return { kind: "text", value: v.value };
+    }
+    if (v.kind === "bytes") return { kind: "bytes", value: sigBytesOf(v.value, label) };
+  }
+  throw new Error(`字段 ${label} 既不是文本槽也不是字节槽（拿到 ${JSON.stringify(v)}）`);
+}
+
+/** @returns {{a:{kind:string,value:any}, b:null|{kind:string,value:any}, bSource:string}} */
+function resolveSigPair(text, p) {
+  const fields = p && p.fields;
+  const primaryText = String(text || "");
+  const raw = p && p.rawBytes != null ? sigBytesOf(p.rawBytes, "rawBytes") : null;
+  const legacyB = p && p.textB != null ? String(p.textB) : "";
+  let a = null, b = null, bSource = "none";
+  if (fields != null) {
+    if (typeof fields !== "object" || Array.isArray(fields)) throw new Error("fields 必须是对象");
+    for (const key of Object.keys(fields)) {
+      if (!SIG_FIELD_KEYS.includes(key)) throw new Error(`未知输入字段: ${key}（本算法只接受 sigA / sigB）`);
+    }
+    a = sigSlotOf(fields.sigA, "sigA");
+    b = sigSlotOf(fields.sigB, "sigB");
+    if (!b) b = sigSlotOf(fields.textB, "textB");
+    if (a && (primaryText.length > 0 || raw)) throw new Error("fields.sigA 与主输入同时给出：一个输入只允许一个来源");
+    if (b) {
+      if (b.kind === "text" && b.value === "") {
+        b = null; bSource = "field-empty"; // 显式空：抑制旧 textB，回退两行
+      } else {
+        if (legacyB !== "" && !(b.kind === "text" && b.value === legacyB)) {
+          throw new Error("fields.sigB 与 params.textB 同时给出且不一致：一个输入只允许一个来源");
+        }
+        bSource = "field";
+      }
+    }
+  }
+  if (!a) a = raw ? { kind: "bytes", value: raw } : { kind: "text", value: primaryText };
+  if (!b && bSource === "none" && legacyB !== "") { b = { kind: "text", value: legacyB }; bSource = "legacy-textB"; }
+  return { a, b, bSource };
+}
 
 // ============================================================
 // 常量（照 fuzzy.c）
@@ -411,9 +483,15 @@ function ssdeepInputToBytes(text, p) {
 function ssdeepRun(text, p) {
   const mode = (p && p.mode) || "hash";
   if (mode === "compare") {
-    const a = String(text || "").trim();
-    const bParam = String((p && p.textB) || "").trim();
-    let sigA = a, sigB = bParam;
+    const pair = resolveSigPair(text, p?.fields == null ? { ...p, rawBytes: null } : p);
+    if (pair.a.kind !== "text") throw new Error("ssdeep 比对：签名 A 只接受文本槽（字节输入请走「生成签名」档）");
+    const a = pair.a.value.trim();
+    let sigB = "";
+    if (pair.b) {
+      if (pair.b.kind !== "text") throw new Error("ssdeep 比对：签名 B 只接受文本槽");
+      sigB = pair.b.value.trim();
+    }
+    let sigA = a;
     if (!sigB) {
       const lines = a.split(/\r?\n/).map((x) => x.trim()).filter((x) => x.length > 0);
       if (lines.length !== 2) throw new Error("ssdeep 比对需要两条签名：每行一条，或签名 B 填入参数 textB");
@@ -423,8 +501,10 @@ function ssdeepRun(text, p) {
     if (!sigA) throw new Error("ssdeep 比对缺少签名 A");
     return String(ssdeepCompare(sigA, sigB));
   }
-  // hash 档
-  const bytes = ssdeepInputToBytes(text, p);
+  // hash 档：字节槽原样入算法（不做 hex/base64 往返）；文本槽仍按 inputEnc / auto 解释。
+  if (p?.fields == null) return ssdeepHash(ssdeepInputToBytes(text, p));
+  const { a } = resolveSigPair(text, p);
+  const bytes = a.kind === "bytes" ? a.value : ssdeepInputToBytes(a.value, { inputEnc: p.inputEnc });
   return ssdeepHash(bytes);
 }
 
@@ -470,6 +550,29 @@ register({
   cat: "hash",
   name: "SSDEEP 模糊哈希",
   desc: "CTPH 上下文触发分段哈希（ssdeep 同源）：数据 → blocksize:hash1:hash2 签名，两签名比对出 0-100 相似度；找同源/变种样本（改几个字节分数仍高）。算法逐行对照 ssdeep 官方 fuzzy.c，过 C 库官方向量",
+  // 两签名同等级、不拼串，原样作为 params.fields 交给 run；旧 params.textB 仍作签名 B 的兜底。
+  fieldsMode: "slots",
+  fields: [
+    {
+      key: "sigA",
+      label: "输入 A（数据 / 签名 A）",
+      labelKey: "op.ssdeep.field.a",
+      legacyArea: "ioIn:0",
+      accepts: ["text", "bytes"],
+      placeholderKey: "op.ssdeep.field.hintA",
+      rows: 3,
+    },
+    {
+      key: "sigB",
+      mirrorParam: "textB", // 旧通道同步：批处理 / 配方 / 分享链接仍按 params.textB 取 B
+      label: "输入 B（签名 B）",
+      labelKey: "op.ssdeep.field.b",
+      accepts: ["text"],
+      mode: "compare",
+      placeholderKey: "op.ssdeep.field.hintB",
+      rows: 3,
+    },
+  ],
   params: [
     {
       key: "mode",
@@ -483,6 +586,7 @@ register({
     },
     {
       key: "textB",
+      uiHidden: true, // 工作台用字段框 B；本参数只作旧调用通道
       label: "签名 B（比对模式；留空则读输入第 2 行）",
       type: "text",
       default: "",
@@ -505,4 +609,4 @@ register({
   acceptsBytes: true,
 });
 
-export { ssdeepRun, ssdeepHash, ssdeepCompare, fuzzyNew, fuzzyUpdate, fuzzyDigest, fuzzySetTotalInputLength, sumHash, scoreStrings, editDistn, hasCommonSubstring, B64, SPAMSUM_LENGTH, MIN_BLOCKSIZE };
+export { ssdeepRun, ssdeepHash, ssdeepCompare, fuzzyNew, fuzzyUpdate, fuzzyDigest, fuzzySetTotalInputLength, sumHash, scoreStrings, editDistn, hasCommonSubstring, B64, SPAMSUM_LENGTH, MIN_BLOCKSIZE, resolveSigPair, sigSlotOf };

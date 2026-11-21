@@ -48,10 +48,11 @@
 
 /* 分类分组 */
 .exhaust-cat {
-  border: 1px solid var(--outline-var);
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--outline-var));
   border-radius: var(--r-lg);
   overflow: hidden;
-  background: var(--surface-1);
+  background-color: var(--surface-1);
+  background-image: linear-gradient(to left, color-mix(in srgb, var(--primary) 18%, transparent), transparent 78%);
 }
 .exhaust-cat-head {
   display: flex;
@@ -137,7 +138,8 @@
   min-height: 52px;
   padding: var(--sp-3) var(--sp-4);
   cursor: pointer;
-  background: var(--surface-1);
+   background-color: var(--surface-1);
+   background-image: linear-gradient(to left, color-mix(in srgb, var(--primary) 14%, transparent), transparent 78%);
   list-style: none;
   transition: background var(--dur-short) var(--ease);
 }

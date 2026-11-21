@@ -23,7 +23,7 @@ export const LOCAL_TOOLS_TEXT = {
   cancel: ['取消', 'Cancel'], confirm: ['确认卸载', 'Uninstall'],
   metadataNote: ['元数据版本不代表模块可导入或 ABI 兼容。npm 逐个读取所选目录的 package.json，不运行 npm list / require。SageMath 仅检测本机 sage 命令，不把同名 pip 包算作已装。', 'Metadata versions do not prove importability or ABI compatibility. npm detection reads package.json without npm list / require. SageMath requires a local sage command.'],
   searchEmpty: ['输入关键词过滤', 'Type to filter'],
-  version: ['版本', 'Version'], mirror: ['镜像', 'Mirror'], defaultMirror: ['官方源', 'Official'], tunaMirror: ['清华镜像', 'TUNA mirror'],
+  version: ['版本', 'Version'], mirror: ['镜像', 'Mirror'], defaultMirror: ['官方源', 'Official'], tunaMirror: ['清华镜像', 'TUNA mirror'], aliyunMirror: ['阿里云镜像', 'Aliyun mirror'], ustcMirror: ['中科大镜像', 'USTC mirror'], tencentMirror: ['腾讯云镜像', 'Tencent Cloud mirror'], path: ['路径', 'Path'], copyPath: ['复制路径', 'Copy path'],
 };
 
 function text(key) {
@@ -56,6 +56,8 @@ function icon(name, cls = 'lt-icon') {
 }
 const CATEGORY_ICON = { runtime: 'computer', crypto: 'key', math: 'calculate', general: 'extension' };
 function toolIcon(item) {
+  const brand = { python:'python.svg', node:'node.svg', npm:'npm.svg', git:'git.svg', java:'openjdk.svg', '7z':'7zip.svg', sage:'sagemath.svg' }[item.id];
+  if (brand) return el('img', { class: `lt-icon lt-brand-icon lt-brand-icon--${item.id}`, src: `public/icons/tools/${brand}`, alt: '', 'aria-hidden': 'true' });
   const name = item.kind === 'command' ? 'terminal' : CATEGORY_ICON[item.category] || 'extension';
   return icon(name, `lt-icon lt-icon--${item.category}`);
 }
@@ -116,7 +118,7 @@ export function renderLocalToolsPage(host, options = {}) {
   const python = field(text('python'), 'lt-python', [['', text('none')]]);
   const node = field(text('node'), 'lt-node', [['', text('none')]]);
   const scope = field(text('scope'), 'lt-scope', [['managed', text('managed')]]);
-  const mirrorField = field(localLabel('mirror'), 'lt-mirror', [['default', localLabel('defaultMirror')], ['tuna', localLabel('tunaMirror')]]);
+  const mirrorField = field(localLabel('mirror'), 'lt-mirror', [['default', localLabel('defaultMirror')], ['tuna', localLabel('tunaMirror')], ['aliyun', localLabel('aliyunMirror')], ['ustc', localLabel('ustcMirror')], ['tencent', localLabel('tencentMirror')]]);
   mirrorField.value = mirror;
   mirrorField.addEventListener('change', () => { mirror = mirrorField.value || 'default'; });
   const search = el('input', { type: 'search', placeholder: text('search'), 'aria-label': text('search') });
@@ -274,7 +276,7 @@ export function renderLocalToolsPage(host, options = {}) {
           el('code', { class: 'lt-meta-value', dir: 'ltr' }, item.package)),
         info?.version ? el('div', { class: 'lt-card-meta' }, el('span', { class: 'lt-meta-key' }, localLabel('version')), el('code', { class: 'lt-meta-value', dir: 'ltr' }, info.version)) : null,
         item.modules.length ? el('div', { class: 'lt-card-meta' }, el('span', { class: 'lt-meta-key' }, localLabel('modules')), el('code', { class: 'lt-meta-value', dir: 'ltr' }, item.modules.join(', '))) : null,
-        info?.path ? el('div', { class: 'lt-card-meta' }, el('span', { class: 'lt-meta-key' }, 'path'), el('code', { class: 'lt-meta-value lt-meta-path', dir: 'ltr', title: info.path }, info.path)) : null,
+         info?.path ? el('div', { class: 'lt-card-meta lt-card-meta--copyable', title: text('copyPath') }, el('span', { class: 'lt-meta-key' }, localLabel('path')), el('button', { class: 'lt-meta-value lt-meta-path', type: 'button', onclick: () => copyText(info.path), 'aria-label': `${localLabel('path')}: ${info.path}` }, info.path)) : null,
         info?.error ? el('p', { class: 'lt-error' }, info.error) : null,
         el('div', { class: 'lt-card-actions' },
           link(localLabel('website'), item.url),

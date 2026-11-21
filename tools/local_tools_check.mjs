@@ -13,7 +13,7 @@ let checks = 0;
 function check(value, label) { assert(value, label); checks++; }
 check(typeof renderLocalToolsPage === 'function', 'actual ESM UI import');
 check(LOCAL_TOOL_CATALOG.length === 93 && new Set(LOCAL_TOOL_CATALOG.map(value => value.id)).size === 93, 'catalog IDs');
-check(Object.keys(LOCAL_TOOL_MIRRORS).join() === 'default,tuna', 'fixed mirror enums');
+check(Object.keys(LOCAL_TOOL_MIRRORS).join() === 'default,tuna,aliyun,ustc,tencent', 'fixed mirror enums');
 check(Object.values(LOCAL_TOOLS_TEXT).every(value => value.length === 2), 'bilingual fallback keys');
 
 // A real HTTP handler with real local detection and a strict fake installer.
@@ -113,6 +113,7 @@ try {
   check(await page.locator('.lt-group').count() === 4, 'four collapsible categories');
   check((await page.locator('.lt-group').first().locator('.lt-card').count()) > 0, 'category has ordered rows');
    check(await page.locator('[data-tool-id="sympy"] .lt-action--primary').count() === 1, 'package install control is present');
+   check(await page.locator('[data-tool-id="sympy"] .lt-meta-path').count() === 0, 'path absent in static mode');
   await page.locator('input[type="search"]').fill('Cryptodome');
   check(await page.locator('.lt-card').count() === 2, 'module search');
   await page.locator('input[type="search"]').fill('');
@@ -149,6 +150,8 @@ try {
   const interpreters = await page.locator('#lt-python option').count();
   check(interpreters >= 2, 'real multiple interpreters enumerated');
   check((await page.locator('.lt-card[data-tool-id="sympy"]').textContent()).includes('1.14.0'), 'actual installed Python metadata');
+  check(await page.locator('.lt-card[data-tool-id="sympy"][data-state="installed"] .lt-badge--installed').count() === 1, 'installed state has explicit green badge target');
+  check(await page.locator('[data-tool-id="sympy"] .lt-meta-path').count() === 1 || await page.locator('[data-tool-id="python"] .lt-meta-path').count() === 1, 'path is a copy control');
   check(/Missing|Not found|未发现/.test(await page.locator('[data-tool-id="sage"] .lt-badge').textContent()), 'Sage accurately missing');
   check((await page.locator('[data-tool-id="sympy"] .lt-command').textContent()).includes('--index-url'), 'install command is a real pip invocation');
   const pipCommand = await page.locator('[data-tool-id="sympy"] .lt-command').textContent();

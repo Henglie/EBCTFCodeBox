@@ -69,7 +69,7 @@ try {
     await page.locator('.about-license-pill.is-verified').waitFor();
     const labels = await page.locator('.about-license-status').allTextContents();
     check(labels.includes('授权给') && labels.includes('来源自') && labels.includes('授权日期'), 'literal license labels in actual about page');
-    check(await page.locator('a[href="public/license-verifier/index.html"]').count() === 1, 'offline verifier entry connected');
+    check(await page.locator('.about-page a[href*="license-verifier"], .about-page input[type="file"], .about-page .about-license-verify-action').count() === 0, 'no standalone verifier link or upload controls in About');
   } else if (section === 'strength') {
     await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
     await page.locator('.magic-strength-btn').click();

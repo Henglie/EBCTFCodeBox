@@ -57,8 +57,8 @@
   --control-track: color-mix(in srgb, var(--primary) 12%, var(--surface-1));
   --range-track: color-mix(in srgb, var(--primary) 70%, var(--surface-1));
   --motion-scale: 1;
-  --nav-item-height: 48px;
-  --topbar-height: var(--nav-item-height);
+  --nav-item-height: 36px;
+  --topbar-height: 48px;
 
  /* ---- 间距 ---- */
   --sp-1: 4px;

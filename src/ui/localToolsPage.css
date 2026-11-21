@@ -93,6 +93,14 @@
 .lt-card-head .lt-icon { width: 38px; height: 38px; flex: none; display: inline-flex; align-items: center; justify-content: center;
   border-radius: 12px; background: color-mix(in srgb, var(--primary) 16%, transparent); color: var(--primary) !important; }
 .lt-card-head .lt-icon svg { width: 22px; height: 22px; fill: currentColor; }
+.lt-brand-icon {
+  object-fit: contain;
+  padding: 0;
+  background: transparent !important;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / .45)) drop-shadow(0 0 2px rgb(255 255 255 / .22));
+}
+.lt-brand-icon--python { padding: 0; }
+.lt-brand-icon--openjdk { padding: 0; }
 .lt-icon--math { background: color-mix(in srgb, var(--tertiary, #d0bcff) 18%, transparent) !important; color: var(--tertiary, #d0bcff) !important; }
 .lt-icon--crypto { background: color-mix(in srgb, var(--primary) 16%, transparent) !important; color: var(--primary) !important; }
 .lt-icon--general { background: color-mix(in srgb, var(--secondary, #ccc2dc) 18%, transparent) !important; color: var(--secondary, #ccc2dc) !important; }
@@ -104,6 +112,20 @@
 .lt-badge { flex: none; max-width: 58%; font-size: var(--lt-fs-tiny); line-height: 1.4; padding: 3px 9px; border-radius: var(--r-full, 999px);
   background: var(--control-track, #3a312d); color: var(--on-surface-var); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lt-badge--installed { background: color-mix(in srgb, var(--primary) 22%, transparent); color: var(--on-surface); }
+.lt-card[data-state="installed"] {
+  --result-edge: var(--success);
+  --result-tint: 32%;
+  --result-mid-tint: 14%;
+  border: 1px solid color-mix(in srgb, var(--result-edge) 28%, var(--outline-var));
+  box-shadow: none;
+  background-color: var(--surface-1);
+  background-image: linear-gradient(to left,
+    color-mix(in srgb, var(--result-edge) var(--result-tint), transparent) 0%,
+    color-mix(in srgb, var(--result-edge) var(--result-mid-tint), transparent) 30%,
+    transparent 80%);
+}
+.lt-card[data-state="installed"] .lt-card-head .lt-icon:not(.lt-brand-icon) { background: var(--grad-primary, var(--primary)) !important; }
+.lt-card[data-state="installed"] .lt-badge--installed { background: #39c56e; color: #fff; font-weight: 700; }
 .lt-badge--missing { background: color-mix(in srgb, var(--on-surface) 8%, transparent); }
 .lt-badge--error { background: color-mix(in srgb, var(--error) 18%, transparent); color: var(--error); }
 .lt-badge--unavailable { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
@@ -112,6 +134,7 @@
 .lt-card-meta { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin-block-start: 6px; font-size: var(--lt-fs-tiny); }
 .lt-meta-key { flex: none; color: var(--on-surface-var); }
 .lt-meta-value { min-width: 0; font-family: var(--font-mono, monospace); color: var(--on-surface-var); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lt-meta-value.lt-meta-path { display: block; max-width: 100%; padding: 0; border: 0; background: none; text-align: start; cursor: copy; color: var(--primary); font: inherit; }
 .lt-meta-path { direction: ltr; }
 .lt-error { margin: 8px 0 0; color: var(--error); font-size: var(--lt-fs-tiny); line-height: 1.5; overflow-wrap: anywhere; }
 .lt-card-actions { display: flex; align-items: center; gap: 8px; margin-block-start: auto; padding-block-start: 12px; flex-wrap: wrap; }

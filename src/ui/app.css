@@ -187,7 +187,7 @@ label.switch,
   display: flex;
   align-items: center;
   gap: 11px;
-  height: 49px;
+  height: 36px;
   padding: 0 11px;
   border-radius: var(--r-full);
   color: var(--on-surface-var);
@@ -202,7 +202,7 @@ label.switch,
 .nav-item.on { background: var(--primary-container); color: var(--on-primary-container); font-weight: 600; }
 .nav-item.expanded:not(.on) { color: var(--on-surface); }
 .nav-item .msym { font-size: 20px; flex: none; }
-.nav-item.pinned { margin-bottom: 7px; }
+.nav-item.pinned { margin-bottom: 5px; }
 /* 本地桥分类一级菜单：主题色高亮（二级项恢复原色，仅 EXE 徽章保留区分） */
 .nav-item.bridge { color: var(--accent); }
 .nav-item.bridge:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
@@ -249,7 +249,7 @@ label.switch,
 @keyframes navSubIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 .nav-subitem {
   display: flex; align-items: center;
-  min-height: 36px; padding-block: var(--sp-1); padding-inline: 24px var(--sp-3);
+  min-height: 27px; padding-block: 2px; padding-inline: 24px var(--sp-3);
   border-radius: var(--r-sm);
   font-size: 14px; color: var(--on-surface-var);
   cursor: pointer; user-select: none;
@@ -279,7 +279,7 @@ label.switch,
   padding: 3px 7px; border-radius: 999px;
   background: var(--primary-container, var(--surface-3)); color: var(--on-primary-container, var(--primary));
 }
-.nav-subitem { display: flex; align-items: center; gap: var(--sp-1); }
+.nav-subitem { display: flex; align-items: center; gap: var(--sp-1); min-height: 27px; }
 
 /* 主输入隐藏提示条：io=none 的 op 用细提示替代巨型输入框 */
 .io-none-hint {
@@ -1447,9 +1447,14 @@ button.ok-expand:focus-visible { outline: 2px solid var(--primary); outline-offs
 .about-license-verify-action { min-height: 44px; border: 1px dashed var(--outline-var); border-radius: var(--r-md); background: var(--surface-1); color: var(--on-surface); cursor: pointer; }
 .about-license-verify-action.is-dragover { border-color: var(--primary); background: var(--primary-container); }
 .about-license-verify-result { max-width: 100%; max-height: 240px; overflow: auto; padding: 12px; background: var(--surface-1); border-radius: var(--r-sm); font: 12px/1.5 var(--mono); white-space: pre-wrap; }
-.about-public-key { display: grid; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-subtle); }
+.about-public-key { display: grid; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-subtle); }
+.about-key-item { display: grid; gap: 6px; }
+.about-key-line { display: flex; align-items: flex-start; gap: var(--sp-2); }
+.about-key-line > .about-public-key-value { flex: 1 1 auto; min-width: 0; margin: 0; }
+.about-key-copy { flex: none; min-height: 44px; white-space: nowrap; }
 .about-public-key-label { font-size: var(--fs-sm); color: var(--on-surface-var); }
 .about-public-key-value { display: block; max-height: 84px; overflow: auto; padding: 10px; background: var(--surface-1); border-radius: var(--r-sm); color: var(--on-surface); font: 11px/1.5 var(--mono); word-break: break-all; user-select: all; }
+.about-public-key-fp { color: var(--primary); }
 .about-ver {
   font-family: var(--mono);
   font-size: var(--fs-xs);
@@ -2076,8 +2081,8 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
   .recipe-mini-btn { width: 44px; height: 44px; }
   /* 环境面板小按钮补高 */
   .env-font-btn, .env-accent-reset, .env-theme-btn { min-height: 44px; }
-  /* 导航二级项行高补到 44（触控可点区） */
-  .nav-subitem { min-height: 44px; }
+  /* 导航二级项保留 75% 紧凑视觉；整行仍由父级触摸抽屉处理点击。 */
+  .nav-subitem { min-height: 27px; }
   /* 折叠开关 35→44 */
   .nav-toggle { height: 44px; }
   /* 图鉴/字符表单元格：保证复选框/可点区够大 */

@@ -81,7 +81,7 @@ export const PACKS = [
   },
   {
     id: "edu-en",
-    bytes: 1467155,
+    bytes: 1470042,
     entries: [
       { name: "/src/core/edu-en/edu-ana-crypto-new.en.js", bytes: 34337 },
       { name: "/src/core/edu-en/edu-ana-freq.en.js", bytes: 16830 },
@@ -160,7 +160,7 @@ export const PACKS = [
       { name: "/src/core/edu-en/edu-regex.en.js", bytes: 7809 },
       { name: "/src/core/edu-en/edu-steghide.en.js", bytes: 69 },
       { name: "/src/core/edu-en/edu-stego-detect.en.js", bytes: 5873 },
-      { name: "/src/core/edu-en/edu-stego-image.en.js", bytes: 21105 },
+      { name: "/src/core/edu-en/edu-stego-image.en.js", bytes: 21071 },
       { name: "/src/core/edu-en/edu-stego-qr-audio.en.js", bytes: 13032 },
       { name: "/src/core/edu-en/edu-stego-text.en.js", bytes: 7840 },
       { name: "/src/core/edu-en/edu-t359.en.js", bytes: 3631 },
@@ -192,7 +192,7 @@ export const PACKS = [
       { name: "/src/core/edu-en/edu-token-signing.en.js", bytes: 7907 },
       { name: "/src/core/edu-en/edu-unified-misc.en.js", bytes: 11852 },
       { name: "/src/core/edu-en/eduImages.en.js", bytes: 5948 },
-      { name: "/src/core/eduContent.en.js", bytes: 15739 },
+      { name: "/src/core/eduContent.en.js", bytes: 18660 },
       { name: "/src/core/edu-en/edu-openssl.en.js", bytes: 5036 },
       { name: "/src/core/edu-en/edu-supplement-a.en.js", bytes: 8426 },
       { name: "/src/core/edu-en/edu-supplement-b.en.js", bytes: 9769 },

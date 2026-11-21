@@ -5,7 +5,7 @@
  *  - braincopter：经典 esolangs 规范 f = (-2R+3G+B) mod 11，0..7→><+-.,[]，8/9/10=nop/终止。
  * 纯 JS、零 UI 依赖；PNG 解码复用 stegoPixels.decodePNG，PNG 写出为内置最小编码器（RGBA + stored-deflate zlib）。
  */
-import { register } from "./registry.js";
+import { register, registerAlias } from "./registry.js";
 import { decodePNG } from "./stegoPixels.js";
 import { bfRun } from "./bfDialects.js";
 
@@ -180,60 +180,121 @@ function toPngBytes(p) {
   throw new Error("请拖入 PNG 图片（或粘贴 data:image/png;base64,… 图片数据）");
 }
 
-// ============ op 注册 ============
+// ============ 方向执行器（核心函数不动，只做参数取值与方向隔离） ============
+// encode 只读 width/height/baseColor；decode 只读 exec/allowGap。
+// 另一方向的专用参数即使被调用方一并传入，也不参与本方向计算。
+// 旧 data URL 兼容：老 op 从 p.text 取图；UI/MCP 主流路径把文本放在首参，这里无损回填到 p.text。
+function pngParams(p, text) {
+  const t = typeof text === "string" ? text : "";
+  if (p && p.rawBytes && p.rawBytes.length) return p;
+  if (p && p.text != null) return p;
+  if (/^data:image\/png;base64,/i.test(t.trim())) return { ...p, text: t };
+  return p;
+}
+function blEncodeRun(text, p = {}) {
+  const png = brainlollerEncode(text, Number(p.width) || 16);
+  return { text: "已生成 Brainloller PNG（" + String(text).replace(/[^><+\-.,\[\]]/g, "").length + " 指令）", files: [{ name: "brainloller.png", mime: "image/png", bytes: png }] };
+}
+function programText(text, params) {
+  if (params?.rawBytes == null) return text;
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(params.rawBytes)); }
+  catch { throw new Error("Brainfuck program files must contain UTF-8 text"); }
+}
+function blDecodeRun(_t, p = {}) {
+  const prog = brainlollerDecode(toPngBytes(pngParams(p, _t)));
+  if (p.exec) {
+    const out = bfRun(prog);
+    return "BF 程序（" + prog.length + " 指令）：\n" + prog + "\n\n执行输出：\n" + out;
+  }
+  return prog;
+}
+function bcEncodeRun(text, p = {}) {
+  const W = Math.max(4, Number(p.width) || 64), H = Math.max(2, Number(p.height) || 48);
+  const m = /^#?([0-9a-fA-F]{6})$/.test(String(p.baseColor || "")) ? /^#?([0-9a-fA-F]{6})$/.exec(String(p.baseColor))[1] : "804020";
+  const base = solidBase(W, H, [parseInt(m.slice(0, 2), 16), parseInt(m.slice(2, 4), 16), parseInt(m.slice(4, 6), 16)]);
+  const png = braincopterEncode(text, base, W, H);
+  return { text: "已生成 Braincopter PNG（" + String(text).replace(/[^><+\-.,\[\]]/g, "").length + " 指令，载体 " + W + "×" + H + "）", files: [{ name: "braincopter.png", mime: "image/png", bytes: png }] };
+}
+function bcDecodeRun(_t, p = {}) {
+  const prog = braincopterDecode(toPngBytes(pngParams(p, _t)), !!p.allowGap);
+  if (p.exec) {
+    const out = bfRun(prog);
+    return "BF 程序（" + prog.length + " 指令）：\n" + prog + "\n\n执行输出：\n" + out;
+  }
+  return prog;
+}
+
+// ============ op 注册（单算法单入口 + 内置方向切换；旧 4 id 保留为别名） ============
+// 每个算法只保留一个列表入口：encode/decode 同时存在 → 工作区自动渲染方向切换。
+// 参数按方向分组（dir 仅作接入提示）；执行器已做方向隔离，见上方 bl/bc*Run。
+// 默认 exec=false，解码只产出 BF 文本，不执行程序。
 register({
-  id: "brainlollerDecode", family: "brainloller", familyLabel: "decode", cat: "esolang", name: "Brainloller 解码",
-  desc: "Brainloller 图像 → Brainfuck 程序（bftools 实测色表 + 蛇形路径；终止色 firebrick，转向标记占格）",
-  params: [{ key: "exec", label: "解码后执行 BF 并输出运行结果", type: "bool", default: false }],
-  run(_t, p = {}) {
-    const prog = brainlollerDecode(toPngBytes(p));
-    if (p.exec) {
-      const out = bfRun(prog);
-      return "BF 程序（" + prog.length + " 指令）：\n" + prog + "\n\n执行输出：\n" + out;
-    }
-    return prog;
-  },
+  id: "brainloller", cat: "esolang", name: "Brainloller",
+  desc: "Brainloller 双向：编码 BF 程序 → 蛇形彩色 PNG（行容量=宽-2，默认宽 16）；解码 PNG/旧 data URL → BF 程序（bftools 实测色表，firebrick 终止，转向标记占格）",
   acceptsBytes: true,
+  params: [
+    { key: "width", dir: "encode", labelKey: "op.brainloller.param.width", label: "图像宽度", type: "number", default: 16 },
+    { key: "exec", dir: "decode", labelKey: "op.brainloller.param.exec", label: "解码后执行 Brainfuck", type: "bool", default: false },
+  ],
+  encode: (text, params) => blEncodeRun(programText(text, params), params),
+  decode: blDecodeRun,
 });
 register({
-  id: "brainlollerEncode", family: "brainloller", familyLabel: "encode", cat: "esolang", name: "Brainloller 编码",
+  id: "braincopter", cat: "esolang", name: "Braincopter",
+  desc: "Braincopter 双向：编码 BF 程序 → 纯色载体 PNG（每像素 f=(-2R+3G+B) mod 11，最小改动，默认 64×48/#804020）；解码 PNG/旧 data URL → BF 程序（遇 nop/终止即停，可选长图容错）",
+  acceptsBytes: true,
+  params: [
+    { key: "width", dir: "encode", labelKey: "op.brainloller.param.width", label: "载体宽度", type: "number", default: 64 },
+    { key: "height", dir: "encode", labelKey: "op.braincopter.param.height", label: "载体高度", type: "number", default: 48 },
+    { key: "baseColor", dir: "encode", labelKey: "op.braincopter.param.baseColor", label: "载体基色（十六进制）", type: "text", default: "#804020", placeholder: "#RRGGBB" },
+    { key: "exec", dir: "decode", labelKey: "op.brainloller.param.exec", label: "解码后执行 Brainfuck", type: "bool", default: false },
+    { key: "allowGap", dir: "decode", labelKey: "op.braincopter.param.allowGap", label: "跳过一段空操作后继续", type: "bool", default: false },
+  ],
+  encode: (text, params) => bcEncodeRun(programText(text, params), params),
+  decode: bcDecodeRun,
+});
+
+// 旧 id 兼容（不进入 OPS：列表/搜索/计数只保留两个新入口）。
+// 原调用方式：
+//  - *Encode 过去只有 encode；这里 encode 与 run 指向同一函数，兼顾批处理/MCP 默认 run。
+//  - *Decode 过去只有 run；这里 run 与 decode 指向同一函数，兼顾显式 direction=decode。
+// params 与旧 op 逐项同值，保证旧配方/CSV/MCP schema 的默认值不变。
+registerAlias({
+  id: "brainlollerEncode", aliasOf: "brainloller", dir: "encode",
+  name: "Brainloller 编码",
   desc: "Brainfuck 程序 → Brainloller PNG（蛇形布局，行容量 W-2，行容量随宽度可调）",
   params: [{ key: "width", label: "图像宽度", type: "number", default: 16, placeholder: "≥4，每行指令容量=宽-2" }],
-  encode(text, p = {}) {
-    const png = brainlollerEncode(text, Number(p.width) || 16);
-    return { text: "已生成 Brainloller PNG（" + String(text).replace(/[^><+\-.,\[\]]/g, "").length + " 指令）", files: [{ name: "brainloller.png", mime: "image/png", bytes: png }] };
-  },
+  acceptsBytes: false,
+  encode: blEncodeRun, run: blEncodeRun,
 });
-register({
-  id: "braincopterDecode", family: "braincopter", familyLabel: "decode", cat: "esolang", name: "Braincopter 解码",
-  desc: "Braincopter 图像 → Brainfuck 程序（f=(-2R+3G+B) mod 11 经典规范；遇 nop/终止即停）",
-  params: [
-    { key: "exec", label: "解码后执行 BF 并输出运行结果", type: "bool", default: false },
-    { key: "allowGap", label: "exe 长图容错（跳过一段 nop 续读）", type: "bool", default: false },
-  ],
-  run(_t, p = {}) {
-    const prog = braincopterDecode(toPngBytes(p), !!p.allowGap);
-    if (p.exec) {
-      const out = bfRun(prog);
-      return "BF 程序（" + prog.length + " 指令）：\n" + prog + "\n\n执行输出：\n" + out;
-    }
-    return prog;
-  },
+registerAlias({
+  id: "brainlollerDecode", aliasOf: "brainloller", dir: "decode",
+  name: "Brainloller 解码",
+  desc: "Brainloller 图像 → Brainfuck 程序（bftools 实测色表 + 蛇形路径；终止色 firebrick，转向标记占格）",
+  params: [{ key: "exec", label: "解码后执行 BF 并输出运行结果", type: "bool", default: false }],
   acceptsBytes: true,
+  decode: blDecodeRun, run: blDecodeRun,
 });
-register({
-  id: "braincopterEncode", family: "braincopter", familyLabel: "encode", cat: "esolang", name: "Braincopter 编码",
+registerAlias({
+  id: "braincopterEncode", aliasOf: "braincopter", dir: "encode",
+  name: "Braincopter 编码",
   desc: "Brainfuck 程序 → Braincopter PNG（每像素 f=(-2R+3G+B) mod 11，最小改动写入，终止符填充到宽度整数倍；载体为指定纯色）",
   params: [
     { key: "width", label: "载体宽度", type: "number", default: 64 },
     { key: "height", label: "载体高度", type: "number", default: 48 },
     { key: "baseColor", label: "载体基色（hex）", type: "text", default: "#804020", placeholder: "#RRGGBB" },
   ],
-  encode(text, p = {}) {
-    const W = Math.max(4, Number(p.width) || 64), H = Math.max(2, Number(p.height) || 48);
-    const m = /^#?([0-9a-fA-F]{6})$/.test(String(p.baseColor || "")) ? /^#?([0-9a-fA-F]{6})$/.exec(String(p.baseColor))[1] : "804020";
-    const base = solidBase(W, H, [parseInt(m.slice(0, 2), 16), parseInt(m.slice(2, 4), 16), parseInt(m.slice(4, 6), 16)]);
-    const png = braincopterEncode(text, base, W, H);
-    return { text: "已生成 Braincopter PNG（" + String(text).replace(/[^><+\-.,\[\]]/g, "").length + " 指令，载体 " + W + "×" + H + "）", files: [{ name: "braincopter.png", mime: "image/png", bytes: png }] };
-  },
+  acceptsBytes: false,
+  encode: bcEncodeRun, run: bcEncodeRun,
+});
+registerAlias({
+  id: "braincopterDecode", aliasOf: "braincopter", dir: "decode",
+  name: "Braincopter 解码",
+  desc: "Braincopter 图像 → Brainfuck 程序（f=(-2R+3G+B) mod 11 经典规范；遇 nop/终止即停）",
+  params: [
+    { key: "exec", label: "解码后执行 BF 并输出运行结果", type: "bool", default: false },
+    { key: "allowGap", label: "exe 长图容错（跳过一段 nop 续读）", type: "bool", default: false },
+  ],
+  acceptsBytes: true,
+  decode: bcDecodeRun, run: bcDecodeRun,
 });
